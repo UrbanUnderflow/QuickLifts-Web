@@ -3,7 +3,7 @@ import React, { FC } from 'react';
 const Terms: FC = () => (
   <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-12" style={{color: '#E0FE10', backgroundColor: '#192126'}}>
     <h1 className="text-3xl font-bold mb-6">Terms of Use</h1>
-    <p className="mb-4">By using our app you agree to all of <a href="https://www.apple.com/legal/internet-services/itunes/dev/stdeula/" target="_blank" style={{color: 'blue', textDecoration: 'underline'}}>Apple's Standard Terms(EULA)</a></p>
+    <p className="mb-4">By using our app you agree to all of <a href="https://www.apple.com/legal/internet-services/itunes/dev/stdeula/" rel="noreferrer" target="_blank" style={{color: 'blue', textDecoration: 'underline'}}>Apple's Standard Terms(EULA)</a></p>
     
     <h2 className="text-2xl font-bold mb-4">Apple's Terms</h2>
     <ol className="mb-4">
