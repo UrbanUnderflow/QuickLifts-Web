@@ -18,7 +18,7 @@ const Home = () => (
       <div className="text-white text-center space-y-2">
         <p>© {new Date().getFullYear()} QuickLifts. All rights reserved.</p>
         <div className="flex justify-center space-x-4">
-          <a href="/terms" className="text-blue-400 hover:text-blue-600">Terms & Conditions</a>
+          <a href="/terms" className="text-blue-400 hover:text-blue-600">Terms of Use</a>
           <a href="/privacyPolicy" className="text-blue-400 hover:text-blue-600">Privacy Policy</a>
         </div>
       </div>
