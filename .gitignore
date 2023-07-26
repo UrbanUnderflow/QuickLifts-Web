@@ -1,0 +1,6 @@
+
+*.pack
+*.pack
+*.pack
+node_modules/.cache/default-development/index.pack.old
+node_modules/.cache/default-development/index.pack
