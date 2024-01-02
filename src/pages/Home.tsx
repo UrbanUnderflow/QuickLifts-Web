@@ -15,7 +15,7 @@ const Home = () => (
       <div className="sm:pl-48 pt-10 font-bold text-white text-4xl sm:text-5xl">
         Beat Your Best,<br />Share Your Victoy<br />
         <div className="mt-10">
-          <button className="px-8 py-2 h-12 text-sm bg-blue-600 text-white font-bold rounded">
+          <button className="px-8 py-2 h-12 text-sm bg-[#E0FE10] text-black font-bold rounded">
             Download Now
           </button>
         </div>
