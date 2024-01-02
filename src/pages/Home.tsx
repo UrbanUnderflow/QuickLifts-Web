@@ -22,11 +22,11 @@ const Home = () => (
       </div>
       <div className="mt-10 sm:mt-0">
         <img src="/pulse-phone-mobile.png" alt="Phone Mobile" className="w-full md:hidden h-auto" />
-        <img src="/pulse-phone.png" alt="Phone" className="hidden md:block w-full md:w-[1048px] h-auto" />
+        <img src="/pulse-phone.png" alt="Phone" className="hidden md:block w-full md:w-[700px] h-auto" />
       </div>
     </div>
 
-    <footer className="absolute bottom-0 z-20 w-full h-20 bg-black bg-opacity-50 flex items-center justify-center">
+    <footer className="absolute bottom-0 z-20 w-full h-20 bg-black flex items-center justify-center">
       <div className="text-white text-center space-y-2">
         <p>© {new Date().getFullYear()} Pulse Fitness. All rights reserved.</p>
         <div className="flex justify-center space-x-4">
