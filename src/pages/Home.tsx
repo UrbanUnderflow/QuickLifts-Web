@@ -13,7 +13,7 @@ const Home = () => (
 
     <div className="flex flex-col sm:flex-row p-6 sm:p-20">
       <div className="sm:pl-48 pt-10 font-bold text-white text-4xl sm:text-5xl">
-        Beat Your Best,<br />Share Your Victoy<br />
+        Beat Your Best,<br />Share Your Victory<br />
         <div className="mt-10">
           <button className="px-8 py-2 h-12 text-sm bg-[#E0FE10] text-black font-bold rounded">
             Download Now
