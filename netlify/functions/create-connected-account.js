@@ -3,11 +3,21 @@
 const Stripe = require('stripe');
 const admin = require('firebase-admin'); // Install this 
 
-var serviceAccount = require("./serviceAccountKey.json");
-
 // Initialize Firebase (replace with your project's config)
 admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount)
+  credential: admin.credential.cert({
+    "type": "service_account",
+    "project_id": "quicklifts-dd3f1",
+    "private_key_id": process.env.FIREBASE_PRIVATE_KEY,
+    "private_key": process.env.FIREBASE_SECRET_KEY,
+    "client_email": "firebase-adminsdk-1qxb0@quicklifts-dd3f1.iam.gserviceaccount.com",
+    "client_id": "111494077667496751062",
+    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+    "token_uri": "https://oauth2.googleapis.com/token",
+    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+    "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-1qxb0%40quicklifts-dd3f1.iam.gserviceaccount.com",
+    "universe_domain": "googleapis.com"
+  })
 });
 
 const db = admin.firestore(); 
@@ -28,7 +38,7 @@ const handler = async (event) => {
     if (!userId) {
       return { statusCode: 400, body: 'Missing userId' };
     }
-
+    
     const account = await stripe.accounts.create({
       type: 'express',
       country: 'US', // Replace with appropriate country
