@@ -4,6 +4,8 @@ const Stripe = require('stripe');
 const admin = require('firebase-admin'); // Install this 
 
 // Initialize Firebase (replace with your project's config)
+console.log("Private Key:", process.env.FIREBASE_PRIVATE_KEY);
+
 admin.initializeApp({
   credential: admin.credential.cert({
     "type": "service_account",
@@ -19,6 +21,7 @@ admin.initializeApp({
     "universe_domain": "googleapis.com"
   })
 });
+
 
 const db = admin.firestore(); 
 
