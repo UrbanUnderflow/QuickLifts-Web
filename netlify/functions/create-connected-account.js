@@ -28,7 +28,7 @@ const db = admin.firestore();
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 
 async function updateOnboardingLink(userId, link, expiration) {
-  const userRef = db.collection("users").document(userId);
+  const userRef = db.collection("users").doc(userId);
   await userRef.update({
     'creator.onboardingLink': link, 
     'creator.onboardingExpirationDate': expiration
