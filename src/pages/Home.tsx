@@ -6,6 +6,31 @@ const Home = () => {
     <div className="home">
         <div className="h-screen relative flex flex-col"
               style={{backgroundColor: ''}}>
+          <div className="relative w-full">
+
+            <img src="/splashImage.png" alt="Splash" className="w-full h-[1000px] object-cover" />
+
+            <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-[528px]">
+                <img src="/phone.png" alt="phone" className="w-full" />
+            </div>
+
+            <div className="absolute top-0 left-0 w-full h-full flex flex-col justify-center items-center text-center p-12">
+                <h1 className="text-white text-4xl font-bold mb-4">
+                    BECOME A MASTER OF YOUR BODY
+                </h1>
+                <p className="text-white text-2xl mb-8">
+                    join the fitness collective
+                </p>
+                <button className="bg-yellow-400 hover:bg-yellow-300 text-black font-bold py-2 px-4 rounded-full flex items-center">
+                    JOIN COMMUNITY
+                    <svg className="ml-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7-7 7"></path></svg>
+                </button>
+                <p className="text-white mt-8">
+                    JOIN THOUSANDS OF LIKE-MINDED INDIVIDUALS IN OUR GLOBAL FITNESS FAMILY.
+                </p>
+            </div>
+        </div>
+
           <div className="pt-10 px-6 sm:px-24 flex justify-between">
             <div className="flex items-center text-white font-bold">
               <img src="/pulse-logo.png" alt="Pulse Logo" className="h-12" />
@@ -139,15 +164,44 @@ const Home = () => {
           </div>
 
       
-          <footer className="z-20 w-full h-20 bg-black flex items-center justify-center">
-            <div className="text-white text-center space-y-2">
+          <footer className="bg-white py-10">
+            {/* <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col lg:flex-row justify-between items-center">
+              <div className="mb-6 lg:mb-0">
+                <img src="/pulse-logo.svg" alt="Pulse Logo" className="h-12" />
+              </div>
+              <div className="flex flex-wrap justify-center gap-8">
+                <div className="text-center">
+                  <h5 className="font-bold uppercase">Product</h5>
+                  <ul className="mt-4 space-y-2">
+                    <li><a href="#" className="text-gray-600 hover:text-gray-900">Integrations</a></li>
+                    <li><a href="#" className="text-gray-600 hover:text-gray-900">Pricing</a></li>
+                    <li><a href="#" className="text-gray-600 hover:text-gray-900">Documentation</a></li>
+                    <li><a href="#" className="text-gray-600 hover:text-gray-900">Changelog</a></li>
+                    <li><a href="#" className="text-gray-600 hover:text-gray-900">Security</a></li>
+                  </ul>
+                </div>
+              </div>
+              <div className="flex mt-6 lg:mt-0">
+                <a href="https://twitter.com" className="text-gray-600 hover:text-gray-900 mx-2">
+                  <svg viewBox="0 0 24 24" fill="currentColor" className="h-6 w-6"><path d="..."></path></svg>
+                </a>
+                <a href="https://facebook.com" className="text-gray-600 hover:text-gray-900 mx-2">
+                  <svg viewBox="0 0 24 24" fill="currentColor" className="h-6 w-6"><path d="..."></path></svg>
+                </a>
+                <a href="https://linkedin.com" className="text-gray-600 hover:text-gray-900 mx-2">
+                  <svg viewBox="0 0 24 24" fill="currentColor" className="h-6 w-6"><path d="..."></path></svg>
+                </a>
+              </div>
+            </div> */}
+            <div className="border-t border-gray-200 mt-10 pt-6 text-gray-600 text-center text-sm">
               <p>© {new Date().getFullYear()} Pulse Fitness. All rights reserved.</p>
               <div className="flex justify-center space-x-4">
-                <a href="/terms" className="text-blue-400 hover:text-blue-600">Terms of Use</a>
-                <a href="/privacy" className="text-blue-400 hover:text-blue-600">Privacy Policy</a>
+                <a href="/privacy" className="hover:text-gray-900">Privacy</a>
+                <a href="/terms" className="hover:text-gray-900">Terms</a>
               </div>
             </div>
           </footer>
+
         </div>
     </div>
 );
