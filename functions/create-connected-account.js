@@ -1,30 +1,34 @@
+// Docs on event and context https://docs.netlify.com/functions/build/#code-your-function-2
+
 const Stripe = require('stripe');
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 
-exports.handler = async function (event, context) {
-  // You might want to retrieve the user's information from an authenticated request
-  const email = event.body.email; 
-
+const handler = async (event) => {
   try {
     const account = await stripe.accounts.create({
       type: 'express',
       country: 'US', // Replace with appropriate country
-      email: email,
       capabilities: {
         card_payments: { requested: true },
         transfers: { requested: true },
       },
     });
 
+    const accountLink = await stripe.accountLinks.create({
+      account: account.id,
+      refresh_url: "https://your-website.com/reauth",
+      return_url: "https://your-website.com/dashboard",
+      type: "account_onboarding",
+    });
+
     return {
       statusCode: 200,
-      body: JSON.stringify({ success: true, accountId: account.id }),
+      body: JSON.stringify({ success: true, accountId: accountLink }),
     };
   } catch (error) {
-    console.error(error);
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ error: error.message }),
-    };
+    console.error(error); // Important for debugging!
+    return { statusCode: 500, body: error.message }; // Use error.message for security
   }
 };
+
+module.exports = { handler };
