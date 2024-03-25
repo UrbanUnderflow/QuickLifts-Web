@@ -8,13 +8,13 @@ const Home = () => {
               style={{backgroundColor: ''}}>
           <div className="relative w-full">
 
-            <img src="/splashImage.png" alt="Splash" className="w-full h-[1000px] object-cover" />
+            {/* <img src="/splashImage.png" alt="Splash" className="w-full h-[1000px] object-cover" />
 
             <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-[528px]">
                 <img src="/phone.png" alt="phone" className="w-full" />
-            </div>
+            </div> */}
 
-            <div className="absolute top-0 left-0 w-full h-full flex flex-col justify-center items-center text-center p-12">
+            {/* <div className="absolute top-0 left-0 w-full h-full flex flex-col justify-center items-center text-center p-12">
                 <h1 className="text-white text-4xl font-bold mb-4">
                     BECOME A MASTER OF YOUR BODY
                 </h1>
@@ -28,7 +28,7 @@ const Home = () => {
                 <p className="text-white mt-8">
                     JOIN THOUSANDS OF LIKE-MINDED INDIVIDUALS IN OUR GLOBAL FITNESS FAMILY.
                 </p>
-            </div>
+            </div> */}
         </div>
 
           <div className="pt-10 px-6 sm:px-24 flex justify-between">
