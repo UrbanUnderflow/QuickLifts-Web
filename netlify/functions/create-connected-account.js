@@ -22,7 +22,6 @@ admin.initializeApp({
   })
 });
 
-
 const db = admin.firestore(); 
 
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
