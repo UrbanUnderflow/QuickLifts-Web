@@ -7,28 +7,6 @@ const Home = () => {
         <div className="h-screen relative flex flex-col"
               style={{backgroundColor: ''}}>
           <div className="relative w-full">
-
-            {/* <img src="/splashImage.png" alt="Splash" className="w-full h-[1000px] object-cover" />
-
-            <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-[528px]">
-                <img src="/phone.png" alt="phone" className="w-full" />
-            </div> */}
-
-            {/* <div className="absolute top-0 left-0 w-full h-full flex flex-col justify-center items-center text-center p-12">
-                <h1 className="text-white text-4xl font-bold mb-4">
-                    BECOME A MASTER OF YOUR BODY
-                </h1>
-                <p className="text-white text-2xl mb-8">
-                    join the fitness collective
-                </p>
-                <button className="bg-yellow-400 hover:bg-yellow-300 text-black font-bold py-2 px-4 rounded-full flex items-center">
-                    JOIN COMMUNITY
-                    <svg className="ml-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7-7 7"></path></svg>
-                </button>
-                <p className="text-white mt-8">
-                    JOIN THOUSANDS OF LIKE-MINDED INDIVIDUALS IN OUR GLOBAL FITNESS FAMILY.
-                </p>
-            </div> */}
         </div>
 
           <div className="pt-10 px-6 sm:px-24 flex justify-between">
