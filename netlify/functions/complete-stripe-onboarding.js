@@ -18,17 +18,12 @@ if (admin.apps.length === 0) { // Prevents reinitializing the app
       "universe_domain": "googleapis.com"
     })
   });
-}
+} 
 
 const db = admin.firestore();
 
 // Handler function for Netlify
 exports.handler = async (event) => {
-  // Check for HTTP method
-  if (event.httpMethod !== "POST") {
-    return { statusCode: 405, body: "Method Not Allowed" };
-  }
-
   try {
     // Parse userId from the request body
     const { userId } = JSON.parse(event.body);
