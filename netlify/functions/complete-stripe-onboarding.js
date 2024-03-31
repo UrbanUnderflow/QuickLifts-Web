@@ -22,20 +22,22 @@ if (admin.apps.length === 0) { // Prevents reinitializing the app
 
 const db = admin.firestore();
 
+async function updateOnboardingStatus(userId) {
+  const userRef = db.collection("users").doc(userId);
+  await userRef.update({
+    'creator.onboardingStatus': 'complete', 
+  });
+}
+
 // Handler function for Netlify
 exports.handler = async (event) => {
   try {
-    // Parse userId from the request body
-    const { userId } = JSON.parse(event.body);
+    const userId = event.queryStringParameters.userId; // Get userId from query string
     if (!userId) {
       return { statusCode: 400, body: 'Missing userId' };
     }
 
-    // Update the user document in Firestore
-    const userRef = db.collection("users").doc(userId);
-    await userRef.update({
-      'creator.isOnBoardingCompleteForPayout': true
-    });
+    await updateOnboardingStatus(userId); // Assuming you have the userId
 
     // Return a success response
     return {
