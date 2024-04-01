@@ -18,7 +18,7 @@ const CompletedOnboarding = () => {
 
     const updateOnboardingStatus = async () => {
       try {
-        const response = await fetch(`https://your-website.com/.netlify/functions/complete-stripe-onboarding?userId=${userId}`, {
+        const response = await fetch(`https://fitwithpulse.ai/.netlify/functions/complete-stripe-onboarding?userId=${userId}`, {
           method: 'POST', // Adjust according to your endpoint method
           headers: {
             'Content-Type': 'application/json',
