@@ -53,7 +53,7 @@ const handler = async (event) => {
     const accountLink = await stripe.accountLinks.create({
       account: account.id,
       refresh_url: "https://your-website.com/reauth",
-      return_url: "https://quicklifts.page.link/?link=https%3A%2F%2Fwww%2Equickliftsapp%2Ecom%2F%3FlinkType%3DStripeOnboardingCompletion&ibi=Tremaine%2EQuickLifts&isi=6451497729",
+      return_url: "https://fitwithpulse.ai/completeOnboarding",
       type: "account_onboarding",
     });
 
