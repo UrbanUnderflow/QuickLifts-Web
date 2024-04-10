@@ -17,7 +17,7 @@ admin.initializeApp({
   })
 });
 
-// Initialize Cloud Messaging
+// Initialize Cloud Messaging1
 const messaging = admin.messaging();
 
 exports.sendWorkoutNotification = functions.https.onRequest(async (req, res) => {
