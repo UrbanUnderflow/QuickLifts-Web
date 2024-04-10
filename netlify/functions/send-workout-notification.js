@@ -1,5 +1,7 @@
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
+const { GoogleAuth } = require('google-auth-library');
+
 
 // Ensure Firebase Admin SDK is initialized only once
 if (admin.apps.length === 0) {
@@ -19,24 +21,39 @@ if (admin.apps.length === 0) {
   });
 }
 
+const auth = new GoogleAuth({
+  credentials: {
+    client_email: 'firebase-adminsdk-1qxb0@quicklifts-dd3f1.iam.gserviceaccount.com',
+    private_key: process.env.FIREBASE_PRIVATE_KEY,
+  },
+  scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+});
+
 const messaging = admin.messaging();
 
 // Define the Cloud Function handler
 async function sendWorkoutNotification(fcmToken) {
+  const messaging = admin.messaging();
+
+  // Get an access token
+  const accessToken = await auth.getAccessToken();
+
   const payload = {
     notification: {
       title: 'You have a new workout!',
-      body: 'A new workout has been sent to you.'
-    }
+      body: 'A new workout has been sent to you.',
+    },
   };
 
   try {
-    const response = await messaging.sendToDevice(fcmToken, payload);
+    const response = await messaging.sendToDevice(fcmToken, payload, {
+      accessToken: accessToken.token,
+    });
     console.log('Successfully sent notification:', response);
     return { success: true, message: 'Notification sent successfully.' };
   } catch (error) {
     console.error('Error sending notification:', error);
-    throw error; // Rethrow the error to be caught by the calling function
+    throw error;
   }
 }
 
