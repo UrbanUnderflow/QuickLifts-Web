@@ -106,7 +106,7 @@ const Home = () => {
                   <h2 className="text-4xl font-bold mb-10">Frequently <br />Ask Questions</h2>
                   <FAQItem 
                     question="What is the Fitness Collective?"
-                    answer="The Fitness Collective transcends a typical fitness community. While communities foster connection and support, a collective goes further, empowering its members to shape the very thing they're a part of. They contribute with user-generated content(exercies, videos, workouts), democrtotized influence, shared knowledge. <br /><br /><b>Think of it this way:</b> A community consumes, a collective creates. The Fitness Collective is where fitness lovers can not only find support and inspiration but also leave their own unique mark on the platform they love." 
+                    answer="The Fitness Collective transcends a typical fitness community. While communities foster connection and support, a collective goes further, empowering its members to shape the very thing they're a part of. They contribute with user-generated content(exercies, videos, workouts), democratized influence, shared knowledge. <br /><br /><b>Think of it this way:</b> A community consumes, a collective creates. The Fitness Collective is where fitness lovers can not only find support and inspiration but also leave their own unique mark on the platform they love." 
                   />
                    <FAQItem 
                     question="How does Pulse track my progress?"
