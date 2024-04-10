@@ -22,33 +22,36 @@ if (admin.apps.length === 0) {
 const messaging = admin.messaging();
 
 // Define the Cloud Function handler
-const sendWorkoutNotificationHandler = async (req, res) => {
+async function sendWorkoutNotification(fcmToken) {
+  const payload = {
+    notification: {
+      title: 'You have a new workout!',
+      body: 'A new workout has been sent to you.'
+    }
+  };
+
+  try {
+    const response = await messaging.sendToDevice(fcmToken, payload);
+    console.log('Successfully sent notification:', response);
+    return { success: true, message: 'Notification sent successfully.' };
+  } catch (error) {
+    console.error('Error sending notification:', error);
+    throw error; // Rethrow the error to be caught by the calling function
+  }
+}
+
+// Cloud Function to handle HTTP request
+exports.sendNotification = functions.https.onRequest(async (req, res) => {
+  try {
     const fcmToken = req.query.fcmToken;
-
     if (!fcmToken) {
-        console.log('No FCM token provided.');
-        return res.status(400).send('No FCM token provided.');
+      return res.status(400).send('Missing FCM token.');
     }
 
-    const payload = {
-        notification: {
-            title: 'You have a new workout!',
-            body: 'A new workout has been sent to you.'
-        },
-        token: fcmToken,
-    };
-
-    try {
-        const response = await messaging.send(payload);
-        console.log('Successfully sent notification:', response);
-        res.status(200).send({ success: true, message: 'Notification sent successfully.' });
-    } catch (error) {
-        console.error('Error sending notification:', error);
-        res.status(500).send({ success: false, error: error.message });
-    }
-};
-
-// Export the function
-exports.sendWorkoutNotification = functions.https.onRequest(sendWorkoutNotificationHandler);
-
+    const result = await sendWorkoutNotification(fcmToken);
+    res.status(200).send(result);
+  } catch (error) {
+    res.status(500).send({ success: false, message: error.message });
+  }
+});
 
