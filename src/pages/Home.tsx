@@ -55,7 +55,7 @@ const Home = () => {
                 </div>
                 <div className="text-left pb-10">
                 <h3 className="text-4xl font-extrabold">
-                  Experience the benefits of belonging,<br />support, and personal growth
+                  A User-Driven Fitness Community: <br />Collective Content, Support, and Growth
                 </h3>
                 </div>
               </div>
@@ -70,7 +70,7 @@ const Home = () => {
                   </div>
                   <div className="sm:w-1/3 mb-6 sm:mb-0">
                       <h4 className="text-xl font-semibold mb-2">We show up</h4>
-                      <p>60 percent of the battle is simply just showing up. If we can get in the room, we can achieve our best, so we pledge to workout, share, and encourage others along the way.</p>
+                      <p>60 percent of the battle is simply just showing up at the gym with a plan. If we can get in the room, we can achieve our best, so we pledge to workout, share, and encourage others along the way.</p>
                   </div>
                   <div className="px-10">
                     <img src="/astricks.svg" alt="astricks" className="hidden md:block w-[22px] md:w-[22px] h-[176px]" />
