@@ -60,14 +60,27 @@ const chunkHasJs = (chunk, chunkGraph) => {
 		: false;
 };
 
+/**
+ * @param {Module} module a module
+ * @param {string} code the code
+ * @returns {string} generated code for the stack
+ */
 const printGeneratedCodeForStack = (module, code) => {
 	const lines = code.split("\n");
 	const n = `${lines.length}`.length;
 	return `\n\nGenerated code for ${module.identifier()}\n${lines
-		.map((line, i, lines) => {
-			const iStr = `${i + 1}`;
-			return `${" ".repeat(n - iStr.length)}${iStr} | ${line}`;
-		})
+		.map(
+			/**
+			 * @param {string} line the line
+			 * @param {number} i the index
+			 * @param {string[]} lines the lines
+			 * @returns {string} the line with line number
+			 */
+			(line, i, lines) => {
+				const iStr = `${i + 1}`;
+				return `${" ".repeat(n - iStr.length)}${iStr} | ${line}`;
+			}
+		)
 		.join("\n")}`;
 };
 
@@ -443,7 +456,10 @@ class JavascriptModulesPlugin {
 							context.__webpack_require__
 						);
 					} catch (e) {
-						e.stack += printGeneratedCodeForStack(options.module, code);
+						e.stack += printGeneratedCodeForStack(
+							options.module,
+							/** @type {string} */ (code)
+						);
 						throw e;
 					}
 				});
@@ -663,8 +679,8 @@ class JavascriptModulesPlugin {
 		return strictHeader
 			? new ConcatSource(strictHeader, source, ";")
 			: renderContext.runtimeTemplate.isModule()
-			? source
-			: new ConcatSource(source, ";");
+				? source
+				: new ConcatSource(source, ";");
 	}
 
 	/**
@@ -735,7 +751,7 @@ class JavascriptModulesPlugin {
 			inlinedModules
 				? allModules.filter(
 						m => !(/** @type {Set<Module>} */ (inlinedModules).has(m))
-				  )
+					)
 				: allModules,
 			module => this.renderModule(module, chunkRenderContext, hooks, true),
 			prefix
@@ -821,14 +837,14 @@ class JavascriptModulesPlugin {
 					let iife = innerStrict
 						? "it need to be in strict mode."
 						: inlinedModules.size > 1
-						? // TODO check globals and top-level declarations of other entries and chunk modules
-						  // to make a better decision
-						  "it need to be isolated against other entry modules."
-						: chunkModules
-						? "it need to be isolated against other modules in the chunk."
-						: exports && !webpackExports
-						? `it uses a non-standard name for the exports (${m.exportsArgument}).`
-						: hooks.embedInRuntimeBailout.call(m, renderContext);
+							? // TODO check globals and top-level declarations of other entries and chunk modules
+								// to make a better decision
+								"it need to be isolated against other entry modules."
+							: chunkModules
+								? "it need to be isolated against other modules in the chunk."
+								: exports && !webpackExports
+									? `it uses a non-standard name for the exports (${m.exportsArgument}).`
+									: hooks.embedInRuntimeBailout.call(m, renderContext);
 					let footer;
 					if (iife !== undefined) {
 						startupSource.add(
@@ -1007,6 +1023,9 @@ class JavascriptModulesPlugin {
 		const useRequire =
 			requireFunction || interceptModuleExecution || moduleUsed;
 
+		/**
+		 * @type {{startup: string[], beforeStartup: string[], header: string[], afterStartup: string[], allowInlineStartup: boolean}}
+		 */
 		const result = {
 			header: [],
 			beforeStartup: [],
@@ -1291,14 +1310,14 @@ class JavascriptModulesPlugin {
 					`${RuntimeGlobals.interceptModuleExecution}.forEach(function(handler) { handler(execOptions); });`,
 					"module = execOptions.module;",
 					"execOptions.factory.call(module.exports, module, module.exports, execOptions.require);"
-			  ])
+				])
 			: runtimeRequirements.has(RuntimeGlobals.thisAsExports)
-			? Template.asString([
-					`__webpack_modules__[moduleId].call(module.exports, module, module.exports, ${RuntimeGlobals.require});`
-			  ])
-			: Template.asString([
-					`__webpack_modules__[moduleId](module, module.exports, ${RuntimeGlobals.require});`
-			  ]);
+				? Template.asString([
+						`__webpack_modules__[moduleId].call(module.exports, module, module.exports, ${RuntimeGlobals.require});`
+					])
+				: Template.asString([
+						`__webpack_modules__[moduleId](module, module.exports, ${RuntimeGlobals.require});`
+					]);
 		const needModuleId = runtimeRequirements.has(RuntimeGlobals.moduleId);
 		const needModuleLoaded = runtimeRequirements.has(
 			RuntimeGlobals.moduleLoaded
@@ -1311,7 +1330,7 @@ class JavascriptModulesPlugin {
 				? Template.indent([
 						"if (cachedModule.error !== undefined) throw cachedModule.error;",
 						"return cachedModule.exports;"
-				  ])
+					])
 				: Template.indent("return cachedModule.exports;"),
 			"}",
 			"// Create a new module (and put it into the cache)",
@@ -1334,27 +1353,27 @@ class JavascriptModulesPlugin {
 							"if(threw) delete __webpack_module_cache__[moduleId];"
 						]),
 						"}"
-				  ])
+					])
 				: outputOptions.strictModuleErrorHandling
-				? Template.asString([
-						"// Execute the module function",
-						"try {",
-						Template.indent(moduleExecution),
-						"} catch(e) {",
-						Template.indent(["module.error = e;", "throw e;"]),
-						"}"
-				  ])
-				: Template.asString([
-						"// Execute the module function",
-						moduleExecution
-				  ]),
+					? Template.asString([
+							"// Execute the module function",
+							"try {",
+							Template.indent(moduleExecution),
+							"} catch(e) {",
+							Template.indent(["module.error = e;", "throw e;"]),
+							"}"
+						])
+					: Template.asString([
+							"// Execute the module function",
+							moduleExecution
+						]),
 			needModuleLoaded
 				? Template.asString([
 						"",
 						"// Flag the module as loaded",
 						`${RuntimeGlobals.moduleLoaded} = true;`,
 						""
-				  ])
+					])
 				: "",
 			"// Return the exports of the module",
 			"return module.exports;"

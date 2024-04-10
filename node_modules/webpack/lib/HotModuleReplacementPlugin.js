@@ -189,6 +189,10 @@ class HotModuleReplacementPlugin {
 			return true;
 		};
 
+		/**
+		 * @param {JavascriptParser} parser the parser
+		 * @returns {void}
+		 */
 		const applyModuleHot = parser => {
 			parser.hooks.evaluateIdentifier.for("module.hot").tap(
 				{
@@ -221,6 +225,10 @@ class HotModuleReplacementPlugin {
 				.tap(PLUGIN_NAME, createHMRExpressionHandler(parser));
 		};
 
+		/**
+		 * @param {JavascriptParser} parser the parser
+		 * @returns {void}
+		 */
 		const applyImportMetaHot = parser => {
 			parser.hooks.evaluateIdentifier
 				.for("import.meta.webpackHot")
@@ -439,7 +447,7 @@ class HotModuleReplacementPlugin {
 								: compilation.codeGenerationResults.getHash(
 										module,
 										chunk.runtime
-								  );
+									);
 							if (records.chunkModuleHashes[key] !== hash) {
 								updatedModules.add(module, chunk);
 							}
@@ -563,7 +571,7 @@ class HotModuleReplacementPlugin {
 											: compilation.codeGenerationResults.getHash(
 													module,
 													newRuntime
-											  );
+												);
 										if (hash !== oldHash) {
 											if (module.type === WEBPACK_MODULE_TYPE_RUNTIME) {
 												newRuntimeModules = newRuntimeModules || [];
@@ -727,7 +735,7 @@ To fix this, make sure to include [runtime] in the output.hotUpdateMainFilename 
 												Array.from(removedModules, m =>
 													chunkGraph.getModuleId(m)
 												)
-										  )
+											)
 							};
 
 							const source = new RawSource(JSON.stringify(hotUpdateMainJson));
