@@ -41,17 +41,26 @@ async function sendWorkoutNotification(fcmToken) {
 }
 
 // Cloud Function to handle HTTP request
-exports.sendNotification = functions.https.onRequest(async (req, res) => {
+exports.handler = async (event, context) => {
   try {
-    const fcmToken = req.query.fcmToken;
+    const fcmToken = event.queryStringParameters.fcmToken;
     if (!fcmToken) {
-      return res.status(400).send('Missing FCM token.');
+      return {
+        statusCode: 400,
+        body: 'Missing FCM token.'
+      };
     }
 
     const result = await sendWorkoutNotification(fcmToken);
-    res.status(200).send(result);
+    return {
+      statusCode: 200,
+      body: JSON.stringify(result)
+    };
   } catch (error) {
-    res.status(500).send({ success: false, message: error.message });
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ success: false, message: error.message })
+    };
   }
-});
+};
 
