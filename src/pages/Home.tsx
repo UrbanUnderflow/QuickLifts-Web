@@ -115,7 +115,7 @@ const Home = () => {
                   
                   <FAQItem 
                     question="Is Pulse available for both iOS and Android?"
-                    answer="No, currently we are only on iOS, but Android is coming soon!" 
+                    answer="We are currently only on iOS, but Android is coming soon!" 
                   />
                   <FAQItem 
                     question="How do I get started?"
