@@ -24,7 +24,7 @@ if (admin.apps.length === 0) {
 const auth = new GoogleAuth({
   credentials: {
     client_email: 'firebase-adminsdk-1qxb0@quicklifts-dd3f1.iam.gserviceaccount.com',
-    private_key: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+    private_key: process.env.FIREBASE_SECRET_KEY.replace(/\\n/g, '\n'),
   },
   scopes: ['https://www.googleapis.com/auth/cloud-platform'],
 });
