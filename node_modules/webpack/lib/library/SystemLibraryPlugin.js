@@ -59,7 +59,7 @@ class SystemLibraryPlugin extends AbstractLibraryPlugin {
 			);
 		}
 		return {
-			name: /** @type {string=} */ (name)
+			name: /** @type {string} */ (name)
 		};
 	}
 
@@ -187,7 +187,7 @@ class SystemLibraryPlugin extends AbstractLibraryPlugin {
 								.join(",\n")
 						),
 						"],"
-				  ]);
+					]);
 
 		return new ConcatSource(
 			Template.asString([
