@@ -52,7 +52,7 @@ const handler = async (event) => {
 
     const accountLink = await stripe.accountLinks.create({
       account: account.id,
-      refresh_url: "https://your-website.com/reauth",
+      refresh_url: "https://fitwithpulse.ai",
       return_url: `https://fitwithpulse.ai/completeOnboarding?userId=${userId}`, // Include userId as query parameter
       type: "account_onboarding",
     });
