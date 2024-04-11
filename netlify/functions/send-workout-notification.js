@@ -60,9 +60,7 @@ async function sendWorkoutNotification(fcmToken) {
       },
     };
 
-    const response = await messaging.send(message, {
-      accessToken: accessToken.token,
-    });
+    const response = await messaging.send(message);
     console.log('Successfully sent notification:', response);
     return { success: true, message: 'Notification sent successfully.' };
   } catch (error) {
