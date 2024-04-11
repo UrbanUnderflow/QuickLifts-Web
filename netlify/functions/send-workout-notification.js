@@ -6,7 +6,7 @@ if (admin.apps.length === 0) {
     credential: admin.credential.cert({
       type: "service_account",
       project_id: "quicklifts-dd3f1",
-      private_key_id: "e3c94fe778b8c225bc80c50fd7a18360e436f4a8",
+      private_key_id: process.env.FIREBASE_PRIVATE_KEY_ALT,
       private_key: process.env.FIREBASE_SECRET_KEY_ALT.replace(/\\n/g, '\n'),
       client_email: "firebase-adminsdk-1qxb0@quicklifts-dd3f1.iam.gserviceaccount.com",
       client_id: "111494077667496751062",
