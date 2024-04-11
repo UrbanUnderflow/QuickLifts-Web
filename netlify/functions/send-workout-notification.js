@@ -1,6 +1,6 @@
-const { getMessagingModule } = require('firebase-admin/messaging');
 const admin = require('firebase-admin');
 const { GoogleAuth } = require('google-auth-library');
+const { getMessagingModule } = require('firebase-admin/app'); // Updated import path
 
 
 // Ensure Firebase Admin SDK is initialized only once
