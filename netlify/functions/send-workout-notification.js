@@ -31,10 +31,12 @@ const auth = new GoogleAuth({
 async function sendWorkoutNotification(fcmToken) {
   const messaging = admin.messaging();
 
-  // Get an access token
-  const accessToken = await auth.getAccessToken();
-
-  const payload = {
+  const message = {
+    token: fcmToken,
+    notification: {
+      title: 'You have a new workout!',
+      body: 'A new workout has been sent to you.',
+    },
     apns: {
       payload: {
         aps: {
@@ -49,17 +51,6 @@ async function sendWorkoutNotification(fcmToken) {
   };
 
   try {
-    const message = {
-      token: fcmToken,
-      payload,
-      apns: {
-        headers: {
-          'apns-priority': '10',
-        },
-        payload: payload.apns.payload,
-      },
-    };
-
     const response = await messaging.send(message);
     console.log('Successfully sent notification:', response);
     return { success: true, message: 'Notification sent successfully.' };
