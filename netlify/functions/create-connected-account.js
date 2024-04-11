@@ -3,6 +3,7 @@
 const Stripe = require('stripe');
 const admin = require('firebase-admin'); // Install this 
 
+if (admin.apps.length === 0) { // Prevents reinitializing the app
 admin.initializeApp({
   credential: admin.credential.cert({
     "type": "service_account",
@@ -18,6 +19,7 @@ admin.initializeApp({
     "universe_domain": "googleapis.com"
   })
 });
+}
 
 const db = admin.firestore(); 
 
