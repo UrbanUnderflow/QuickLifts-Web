@@ -1,7 +1,5 @@
 const admin = require('firebase-admin');
 const { GoogleAuth } = require('google-auth-library');
-const { getMessagingModule } = require('firebase-admin/app'); // Updated import path
-
 
 // Ensure Firebase Admin SDK is initialized only once
 if (admin.apps.length === 0) {
@@ -31,7 +29,7 @@ const auth = new GoogleAuth({
 
 // Define the Cloud Function handler
 async function sendWorkoutNotification(fcmToken) {
-  const messaging = getMessagingModule(admin);
+  const messaging = admin.messaging();
 
   // Get an access token
   const accessToken = await auth.getAccessToken();
@@ -51,7 +49,18 @@ async function sendWorkoutNotification(fcmToken) {
   };
 
   try {
-    const response = await messaging.sendToDevice(fcmToken, payload, {
+    const message = {
+      token: fcmToken,
+      payload,
+      apns: {
+        headers: {
+          'apns-priority': '10',
+        },
+        payload: payload.apns.payload,
+      },
+    };
+
+    const response = await messaging.send(message, {
       accessToken: accessToken.token,
     });
     console.log('Successfully sent notification:', response);
