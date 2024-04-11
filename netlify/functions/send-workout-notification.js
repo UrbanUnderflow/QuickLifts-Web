@@ -1,4 +1,4 @@
-const functions = require('firebase-functions');
+const { getMessagingModule } = require('firebase-admin/messaging');
 const admin = require('firebase-admin');
 const { GoogleAuth } = require('google-auth-library');
 
@@ -31,15 +31,22 @@ const auth = new GoogleAuth({
 
 // Define the Cloud Function handler
 async function sendWorkoutNotification(fcmToken) {
-  const messaging = admin.messaging();
+  const messaging = getMessagingModule(admin);
 
   // Get an access token
   const accessToken = await auth.getAccessToken();
 
   const payload = {
-    notification: {
-      title: 'You have a new workout!',
-      body: 'A new workout has been sent to you.',
+    apns: {
+      payload: {
+        aps: {
+          alert: {
+            title: 'You have a new workout!',
+            body: 'A new workout has been sent to you.',
+          },
+          badge: 1,
+        },
+      },
     },
   };
 
