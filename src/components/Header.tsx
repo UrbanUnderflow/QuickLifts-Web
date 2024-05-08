@@ -1,5 +1,4 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { MenuIcon, XIcon } from '@heroicons/react/outline';
 
 // Define the types of sections available
 export type Section = 'home' | 'creator' | 'subscribe' | 'support' | 'contact';
@@ -8,11 +7,11 @@ export type Section = 'home' | 'creator' | 'subscribe' | 'support' | 'contact';
 interface HeaderProps {
   onSectionChange: (section: Section) => void;
   currentSection: Section;
+  toggleMobileMenu: () => void;
 }
 
-const Header: React.FC<HeaderProps> = ({ onSectionChange, currentSection }) => {
+const Header: React.FC<HeaderProps> = ({ onSectionChange, currentSection, toggleMobileMenu }) => {
   const [underlineStyle, setUnderlineStyle] = useState({ left: 0, width: 0 });
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const homeRef = useRef<HTMLButtonElement>(null);
   const creatorRef = useRef<HTMLButtonElement>(null);
   const subscribeRef = useRef<HTMLButtonElement>(null);
@@ -35,10 +34,6 @@ const Header: React.FC<HeaderProps> = ({ onSectionChange, currentSection }) => {
     }
   }, [currentSection]);
 
-  const toggleMobileMenu = () => {
-    setIsMobileMenuOpen(!isMobileMenuOpen);
-  };
-
   return (
     <div className="pt-10 px-6 sm:px-24 flex justify-between">
       <div className="flex items-center text-white font-bold">
@@ -49,29 +44,18 @@ const Header: React.FC<HeaderProps> = ({ onSectionChange, currentSection }) => {
         <button ref={homeRef} className="text-zinc-800 text-base font-medium capitalize" onClick={() => onSectionChange('home')}>Features</button>
         <button ref={creatorRef} className="text-gray-700 text-base font-medium capitalize" onClick={() => onSectionChange('creator')}>Creators</button>
         <button ref={subscribeRef} className="text-gray-700 text-base font-medium capitalize" onClick={() => onSectionChange('subscribe')}>Subscribe</button>
-        {/* <button ref={supportRef} className="text-gray-700 text-base font-medium capitalize" onClick={() => onSectionChange('support')}>Support</button> */}
         <a ref={contactRef} href="mailto:pulsefitnessapp@gmail.com" className="text-gray-700 text-base font-medium capitalize">Contact Us</a>
 
         {/* Underline */}
         <div className="absolute bottom-0 h-[1.80px] bg-black transition-all duration-300 ease-in-out" style={{ ...underlineStyle }}></div>
       </div>
 
-      {/* Mobile Menu */}
+      {/* Mobile Menu Toggle */}
       <div className="sm:hidden flex items-center">
         <button onClick={toggleMobileMenu} aria-label="Toggle Mobile Menu">
-          {isMobileMenuOpen ? <XIcon className="h-8 w-8 text-white" /> : <MenuIcon className="h-8 w-8 text-white" />}
+          <img src="/menu-icon.svg" alt="Menu" className="h-12" />
         </button>
       </div>
-
-      {isMobileMenuOpen && (
-        <div className="sm:hidden absolute top-16 left-0 right-0 bg-white shadow-md p-4 flex flex-col items-center gap-6">
-          <button className="text-zinc-800 text-base font-medium capitalize" onClick={() => { onSectionChange('home'); toggleMobileMenu(); }}>Features</button>
-          <button className="text-gray-700 text-base font-medium capitalize" onClick={() => { onSectionChange('creator'); toggleMobileMenu(); }}>Creators</button>
-          <button className="text-gray-700 text-base font-medium capitalize" onClick={() => { onSectionChange('subscribe'); toggleMobileMenu(); }}>Subscribe</button>
-          {/* <button className="text-gray-700 text-base font-medium capitalize" onClick={() => { onSectionChange('support'); toggleMobileMenu(); }}>Support</button> */}
-          <a href="mailto:pulsefitnessapp@gmail.com" className="text-gray-700 text-base font-medium capitalize" onClick={toggleMobileMenu}>Contact Us</a>
-        </div>
-      )}
     </div>
   );
 };
