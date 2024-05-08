@@ -15,3 +15,17 @@ code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
 }
+
+@font-face {
+  font-family: 'Thunder';
+  src: url('../public/fonts/Thunder-LC.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'HK Grotesk';
+  src: url('../public/fonts/HKGrotesk-Regular.otf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
