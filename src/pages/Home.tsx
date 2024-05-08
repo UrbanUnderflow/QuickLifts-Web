@@ -4,7 +4,7 @@ import HomeContent from '../pages/HomeContent';
 import Footer from '../components/Footer';
 import Creator from '../pages/Creator';
 import Subscribe from './Subscribe';
-import Support from './Support';
+// import Support from './Support';
 
 const Home: React.FC = () => {
   // State to keep track of the selected section
