@@ -218,7 +218,7 @@ const Creators = () => {
                 <img src="/analytics-dashboard-phone.png" alt="Feature 2" className="w-full h-full object-cover" />
               </div>
               <div className="text-black text-[22.5px] font-bold font-['HK Grotesk'] leading-loose">Analytics Dashboard</div>
-              <div className="w-[319px] text-neutral-600 text-base font-normal font-['HK Grotesk'] leading-tight">Get insights on how your doing. Know who exactly is engaging with your content, and your compensation for the engagement is broken down. Monthly payputs are issued through here once your wallet is holding $25 or higher</div>
+              <div className="w-[319px] text-neutral-600 text-base font-normal font-['HK Grotesk'] leading-tight">Get insights on how your doing. Know who exactly is engaging with your content, and your compensation for the engagement is broken down. Monthly payouts are issued through here once your wallet is holding $25 or higher</div>
             </div>
 
             {/* Third Feature */}

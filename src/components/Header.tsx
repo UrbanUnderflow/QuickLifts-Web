@@ -17,16 +17,17 @@ const Header: React.FC<HeaderProps> = ({ onSectionChange, currentSection }) => {
   const supportRef = useRef<HTMLButtonElement>(null);
   const contactRef = useRef<HTMLAnchorElement>(null);
 
-  // Mapping section names to their corresponding refs
-  const sectionToRefMap: Record<Section, React.RefObject<HTMLButtonElement | HTMLAnchorElement>> = {
-    home: homeRef,
-    creator: creatorRef,
-    subscribe: subscribeRef,
-    support: supportRef,
-    contact: contactRef,
-  };
+
 
   useEffect(() => {
+      // Mapping section names to their corresponding refs
+    const sectionToRefMap: Record<Section, React.RefObject<HTMLButtonElement | HTMLAnchorElement>> = {
+      home: homeRef,
+      creator: creatorRef,
+      subscribe: subscribeRef,
+      support: supportRef,
+      contact: contactRef,
+    };
     const selectedRef = sectionToRefMap[currentSection].current;
     if (selectedRef) {
       const { offsetLeft, offsetWidth } = selectedRef;
