@@ -29,7 +29,7 @@ const handler = async (event) => {
     const data = JSON.parse(event.body);
     const email = data.email;
 
-    const docRef = db.collection('contacts').doc(); // Create a new document
+    const docRef = db.collection('contacts').doc(); 
     await docRef.set({ email });
 
     return {
