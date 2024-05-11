@@ -2,6 +2,13 @@ import React from 'react';
 import FAQ from '../components/FAQ';
 
 const Creators = () => {
+    const [videoPlaying, setVideoPlaying] = React.useState(false);
+
+    const handleVideoPlay = () => {
+        setVideoPlaying(true);
+        const videoElement = document.getElementById("creatorVideo") as HTMLVideoElement;
+        videoElement.play();
+    };
 
     const faqData = [
         {
@@ -42,18 +49,23 @@ const Creators = () => {
             <span className="text-black text-[56px] sm:text-[93.93px] font-normal font-['Thunder'] leading-[60px] sm:leading-[107.08px] tracking-wide"> and earn money</span>
           </div>
 
-          {/* New Box Section with Play Button */}
-          <div className="relative max-w-[787.5px] min-h-[200px] sm:h-[361.14px] mx-auto mt-10 bg-zinc-100 rounded-xl border-2 border-black/opacity-5 p-4 sm:p-0">
-            {/* Play Button */}
-            <div className="absolute inset-0 flex items-center justify-center">
-              <button className="w-12 sm:w-16 h-12 sm:h-16 bg-white rounded-full border border-black/opacity-5 shadow-lg flex items-center justify-center">
-                <svg className="w-6 sm:w-8 h-6 sm:h-8 text-black" fill="currentColor" viewBox="0 0 24 24">
-                  <polygon points="9.5,7.5 16.5,12 9.5,16.5" />
-                </svg>
-              </button>
-            </div>
+          {/* New Box Section with Play Button and Video */}
+          <div className="relative max-w-[887.5px] h-[561.14px] mx-auto mt-0 mb-64 bg-zinc-100 rounded-xl border-2 border-black/opacity-5 overflow-hidden">
+              {!videoPlaying && (
+                  <button onClick={handleVideoPlay} className="absolute inset-0 w-full h-full flex items-center justify-center z-10 cursor-pointer focus:outline-none">
+                      <div className="w-16 h-16 bg-white rounded-full border border-black/opacity-5 shadow-lg flex items-center justify-center">
+                          <svg className="w-8 h-8 text-black" fill="currentColor" viewBox="0 0 24 24">
+                              <polygon points="9.5,7.5 16.5,12 9.5,16.5" />
+                          </svg>
+                      </div>
+                  </button>
+              )}
+              <video id="creatorVideo" className="absolute inset-0 w-full h-full object-cover" style={{ filter: videoPlaying ? 'none' : 'blur(8px)' }} loop>
+                  <source src="/ShootAndWorkoutPhone.mp4" type="video/mp4" />
+                  Your browser does not support the video tag.
+              </video>
+              {!videoPlaying && <div className="absolute inset-0 bg-black opacity-25"></div>}
           </div>
-        </div>
 
         {/* New Section: Why Become a Partner */}
         <div className="w-full max-w-[1240px] mx-auto flex flex-col gap-8 sm:gap-10 mb-40">
@@ -240,6 +252,8 @@ const Creators = () => {
 
         </div>
       </div>
+      </div>
+
     </div>
   );
 };
