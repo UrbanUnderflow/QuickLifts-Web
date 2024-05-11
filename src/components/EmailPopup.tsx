@@ -11,7 +11,7 @@ const EmailPopup: React.FC<Props> = ({ isOpen, closePopup }) => {
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     try {
-      const response = await fetch('/.netlify/functions/addEmail', {
+      const response = await fetch('https://fitwithpulse.ai/.netlify/functions/add-email-to-mailing-list', {
         method: 'POST',
         body: JSON.stringify({ email }),
         headers: {
