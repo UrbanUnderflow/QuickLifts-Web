@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import Header, { Section } from '../components/Header';
 import HomeContent from './HomeContent';
-import Footer from '../components/Footer';
+import Footer from '../components/Footer/Footer';
 import Creator from './Creator';
 import Subscribe from './Subscribe';
 
