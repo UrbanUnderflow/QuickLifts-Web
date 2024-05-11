@@ -10,13 +10,10 @@ const EmailPopup: React.FC<Props> = ({ isOpen, closePopup }) => {
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    const url = `https://fitwithpulse.ai/.netlify/functions/add-email-to-mailing-list?email=${encodeURIComponent(email)}`;
     try {
-      const response = await fetch('https://fitwithpulse.ai/.netlify/functions/add-email-to-mailing-list', {
-        method: 'POST',
-        body: JSON.stringify({ email }),
-        headers: {
-          'Content-Type': 'application/json'
-        }
+      const response = await fetch(url, {
+        method: 'GET'  // Changed to GET since we're passing data in the URL
       });
       const data = await response.json();
       console.log('Submission success:', data);
