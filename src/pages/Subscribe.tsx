@@ -117,93 +117,90 @@ const Subscribe: React.FC = () => {
         </div>
 
 
-        {/* App Features Section */}
-        <div className="flex flex-col gap-8 items-center justify-center mb-64">
-          {/* Container for Title and Grid */}
-          <div className="w-full max-w-[1052.76px] flex flex-col gap-8">
-            {/* Section Title */}
-            <div className="flex flex-col gap-4 sm:gap-6">
-              <div className="text-zinc-600 text-3xl sm:text-4xl font-normal font-['Thunder'] uppercase leading-9">Our users are most excited about</div>
-              <div className="w-full max-w-[791.1px] text-black text-[40px] sm:text-[64px] font-medium font-['Thunder'] leading-[45px] sm:leading-[79px]">Here are some of the stand out features that Pulse has to offer</div>
-            </div>
+{/* App Features Section */}
+<div className="flex flex-col gap-8 items-center justify-center mb-64 px-4 sm:px-0">
+  {/* Container for Title and Grid */}
+  <div className="w-full max-w-[1052.76px] flex flex-col gap-8">
+    {/* Section Title */}
+    <div className="flex flex-col gap-4 sm:gap-6">
+      <div className="text-zinc-600 text-3xl sm:text-4xl font-normal font-['Thunder'] uppercase leading-9">Our users are most excited about</div>
+      <div className="w-full max-w-[791.1px] text-black text-[40px] sm:text-[64px] font-medium font-['Thunder'] leading-[45px] sm:leading-[79px]">Here are some of the stand out features that Pulse has to offer</div>
+    </div>
 
-            {/* Grid for App Features */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8">
-              {/* First Feature */}
-              <div className="flex flex-col gap-2">
-                <div className="w-5 h-5"></div>
-                {/* Feature Image Placeholder */}
-                <div className="w-[305px] h-[373.87px] bg-gray-50">
-                  <img src="/choose-body-parts-phone.png" alt="Feature 1" />
-                </div>
-                <div className="text-black text-[22.5px] font-bold font-['HK Grotesk'] leading-loose">Body Part Selection</div>
-                <div className="w-[319px] text-neutral-600 text-base font-normal font-['HK Grotesk'] leading-tight">You can select exactly which body parts you want to workout, and you will instantly be delivered a list of complinetary exercises for your workout.</div>
-              </div>
-
-              {/* Second Feature */}
-              <div className="flex flex-col gap-2">
-                <div className="w-5 h-5"></div>
-                {/* Feature Image Placeholder */}
-                <div className="w-[305px] h-[373.87px] bg-gray-50">
-                  <img src="/discover-exercise-phone.png" alt="Feature 2" />
-                </div>
-                <div className="text-black text-[22.5px] font-bold font-['HK Grotesk'] leading-loose">Exercise Discovery</div>
-                <div className="w-[319px] text-neutral-600 text-base font-normal font-['HK Grotesk'] leading-tight">Find your exercise, and create workouts that compliment each other based off of coole exercise that you discover. In our vast database of community driven exercises, the selection is endless.</div>
-              </div>
-
-              {/* Third Feature */}
-              <div className="flex flex-col gap-2">
-                <div className="w-5 h-5"></div>
-                {/* Feature Image Placeholder */}
-                <div className="w-[305px] h-[373.87px] bg-gray-50">
-                  <img src="/progress-log.png" alt="Feature 3" />
-                </div>
-                <div className="text-black text-[22.5px] font-bold font-['HK Grotesk'] leading-loose">Progress Logs</div>
-                <div className="w-[319px] text-neutral-600 text-base font-normal font-['HK Grotesk'] leading-tight">Logging reps, sets, and weight allows you to view your history of every workout, so you never have to guess your weights again.</div>
-              </div>
-            </div>
-
-             {/* Grid for App Features */}
-             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8">
-              {/* First Feature */}
-              <div className="flex flex-col gap-2">
-                <div className="w-5 h-5"></div>
-                {/* Feature Image Placeholder */}
-                <div className="w-[305px] h-[373.87px] bg-gray-50">
-                  <img src="/workout-log-phone.png" alt="workout log" />
-                </div>
-                <div className="text-black text-[22.5px] font-bold font-['HK Grotesk'] leading-loose">Workout Logging</div>
-                <div className="w-[319px] text-neutral-600 text-base font-normal font-['HK Grotesk'] leading-tight">Log your sets, reps, and weight to achieve results through progressive overload. Use your workout score to help you push further each workout.</div>
-              </div>
-
-              {/* Second Feature */}
-              <div className="flex flex-col gap-2">
-                <div className="w-5 h-5"></div>
-                {/* Feature Image Placeholder */}
-                <div className="w-[305px] h-[373.87px] bg-gray-50">
-                  <img src="/record-exercise-phone.png" alt="record exercise" />
-                </div>
-                <div className="text-black text-[22.5px] font-bold font-['HK Grotesk'] leading-loose">Record Your Exercise</div>
-                <div className="w-[319px] text-neutral-600 text-base font-normal font-['HK Grotesk'] leading-tight">Whether it's to track your progress, or inspire others, you can record yourself performing each of your workouts and and then edit the videos for optimal results.</div>
-              </div>
-
-              {/* Third Feature */}
-              <div className="flex flex-col gap-2">
-                <div className="w-5 h-5"></div>
-                {/* Feature Image Placeholder */}
-                <div className="w-[305px] h-[373.87px] bg-gray-50">
-                  <img src="/exercise-vault-phone.png" alt="exercise vault" />
-                </div>
-                <div className="text-black text-[22.5px] font-bold font-['HK Grotesk'] leading-loose">The Exercise Vault</div>
-                <div className="w-[319px] text-neutral-600 text-base font-normal font-['HK Grotesk'] leading-tight">Search accross our database of exercises we call "The Exercise Vault" in order to quickly find the exercises you are looing for.</div>
-              </div>
-            </div>
-
-            <div>
-              <FAQ title="Frequently Asked Questions" items={faqData} />
-            </div>
-          </div>
+    {/* Grid for App Features */}
+    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8">
+      {/* First Feature */}
+      <div className="flex flex-col gap-2">
+        <div className="w-5 h-5"></div>
+        {/* Feature Image Placeholder */}
+        <div className="w-[305px] h-[373.87px] bg-gray-50">
+          <img src="/choose-body-parts-phone.png" alt="Feature 1" />
         </div>
+        <div className="text-black text-[22.5px] font-bold font-['HK Grotesk'] leading-loose">Body Part Selection</div>
+        <div className="w-[319px] text-neutral-600 text-base font-normal font-['HK Grotesk'] leading-tight">You can select exactly which body parts you want to workout, and you will instantly be delivered a list of complimentary exercises for your workout.</div>
+      </div>
+
+      {/* Second Feature */}
+      <div className="flex flex-col gap-2">
+        <div className="w-5 h-5"></div>
+        {/* Feature Image Placeholder */}
+        <div className="w-[305px] h-[373.87px] bg-gray-50">
+          <img src="/discover-exercise-phone.png" alt="Feature 2" />
+        </div>
+        <div className="text-black text-[22.5px] font-bold font-['HK Grotesk'] leading-loose">Exercise Discovery</div>
+        <div className="w-[319px] text-neutral-600 text-base font-normal font-['HK Grotesk'] leading-tight">Find your exercise, and create workouts that complement each other based off of cool exercise that you discover. In our vast database of community driven exercises, the selection is endless.</div>
+      </div>
+
+      {/* Third Feature */}
+      <div className="flex flex-col gap-2">
+        <div className="w-5 h-5"></div>
+        {/* Feature Image Placeholder */}
+        <div className="w-[305px] h-[373.87px] bg-gray-50">
+          <img src="/progress-log.png" alt="Feature 3" />
+        </div>
+        <div className="text-black text-[22.5px] font-bold font-['HK Grotesk'] leading-loose">Progress Logs</div>
+        <div className="w-[319px] text-neutral-600 text-base font-normal font-['HK Grotesk'] leading-tight">Logging reps, sets, and weight allows you to view your history of every workout, so you never have to guess your weights again.</div>
+      </div>
+    </div>
+
+    {/* Additional Features (Second Grid) */}
+    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8">
+      {/* Fourth Feature */}
+      <div className="flex flex-col gap-2">
+        <div className="w-5 h-5"></div>
+        {/* Feature Image Placeholder */}
+        <div className="w-[305px] h-[373.87px] bg-gray-50">
+          <img src="/workout-log-phone.png" alt="workout log" />
+        </div>
+        <div className="text-black text-[22.5px] font-bold font-['HK Grotesk'] leading-loose">Workout Logging</div>
+        <div className="w-[319px] text-neutral-600 text-base font-normal font-['HK Grotesk'] leading-tight">Log your sets, reps, and weight to achieve results through progressive overload. Use your workout score to help you push further each workout.</div>
+      </div>
+
+      {/* Fifth Feature */}
+      <div className="flex flex-col gap-2">
+        <div className="w-5 h-5"></div>
+        {/* Feature Image Placeholder */}
+        <div className="w-[305px] h-[373.87px] bg-gray-50">
+          <img src="/record-exercise-phone.png" alt="record exercise" />
+        </div>
+        <div className="text-black text-[22.5px] font-bold font-['HK Grotesk'] leading-loose">Record Your Exercise</div>
+        <div className="w-[319px] text-neutral-600 text-base font-normal font-['HK Grotesk'] leading-tight">Whether it's to track your progress, or inspire others, you can record yourself performing each of your workouts and then edit the videos for optimal results.</div>
+      </div>
+
+      {/* Sixth Feature */}
+      <div className="flex flex-col gap-2">
+        <div className="w-5 h-5"></div>
+        {/* Feature Image Placeholder */}
+        <div className="w-[305px] h-[373.87px] bg-gray-50">
+          <img src="/exercise-vault-phone.png" alt="exercise vault" />
+        </div>
+        <div className="text-black text-[22.5px] font-bold font-['HK Grotesk'] leading-loose">The Exercise Vault</div>
+        <div className="w-[319px] text-neutral-600 text-base font-normal font-['HK Grotesk'] leading-tight">Search across our database of exercises we call "The Exercise Vault" to quickly find the exercises you are looking for.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
 
       </div>
     </div>
