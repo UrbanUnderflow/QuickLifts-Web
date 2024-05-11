@@ -83,7 +83,7 @@ const Creators = () => {
               <div className="self-stretch text-black text-base font-normal font-['HK Grotesk'] leading-normal">Monetize your content and earn revenue based on your contributions.</div>
             </div>
 
-            <div className="px-5">
+            <div className="px-5 hidden sm:block">
                 <img src="/astricks.svg" alt="astricks" className="w-[120px] h-[120px] " />
             </div>
 
@@ -93,7 +93,7 @@ const Creators = () => {
               <div className="self-stretch text-black text-base font-normal font-['HK Grotesk'] leading-normal">Work on your own schedule and create content that resonates with your audience.</div>
             </div>
 
-            <div className="px-5">
+            <div className="px-5 hidden sm:block">
                 <img src="/astricks.svg" alt="astricks" className="w-[120px] h-[120px] " />
             </div>
 
@@ -113,7 +113,7 @@ const Creators = () => {
             </div>
             <div className="hidden sm:block w-[22.83px] h-44"></div>
 
-            <div className="px-5">
+            <div className="px-5 hidden sm:block">
                 <img src="/astricks.svg" alt="astricks" className="w-[120px] h-[120px] " />
             </div>
 
@@ -126,7 +126,7 @@ const Creators = () => {
 
           {/* Call to Action: Join as a Partner */}
           <div className="w-full sm:w-[249px] h-auto p-4 sm:p-6 rounded-[32px] border border-black flex justify-center items-center gap-4 sm:gap-6">
-            <div className="text-black text-sm sm:text-base font-semibold font-['Inter'] uppercase">Join as a partner</div>
+            <div className="text-black text-sm sm:text-base font-semibold font-['HK Grotesk'] uppercase">Join as a partner</div>
             <img src="/arrow-up-right.svg" alt="Arrow Up Right" className="w-4 h-4" />
           </div>
         </div>
@@ -161,7 +161,7 @@ const Creators = () => {
             </div>
             <div className="hidden sm:block w-[22.83px] h-44"></div>
 
-            <div className="px-5">
+            <div className="px-5 hidden sm:block">
                 <img src="/astricks.svg" alt="astricks" className="w-[120px] h-[120px] " />
             </div>
 
@@ -171,7 +171,7 @@ const Creators = () => {
             </div>
             <div className="hidden sm:block w-[22.83px] h-44"></div>
 
-            <div className="px-5">
+            <div className="px-5 hidden sm:block">
                 <img src="/astricks.svg" alt="astricks" className="w-[120px] h-[120px] " />
             </div>
 
@@ -188,7 +188,7 @@ const Creators = () => {
               <div className="self-stretch text-black text-base font-normal font-['HK Grotesk'] leading-normal">Have a passion for fitness! Your genuine love for health and wellness should shine through in your content.</div>
             </div>
             
-            <div className="px-5">
+            <div className="px-5 hidden sm:block">
                 <img src="/astricks.svg" alt="astricks" className="w-[120px] h-[120px] " />
             </div>
 
