@@ -56,30 +56,30 @@ const Subscribe: React.FC = () => {
       </div>
 
       {/* Feature List */}
-      <div className="flex flex-col space-y-6 max-w-[500px] mx-auto text-left mt-8 mb-40">
-        <div className="flex items-center gap-4">
-          <span className="text-black text-xl font-medium font-['HK Grotesk'] leading-7">Unlock your potential with:</span>
-        </div>
-        <div className="flex items-center gap-4">
-          <img src="/orange-check.png" alt="Check" className="w-[22px] h-[22px] object-cover" />
-          <span className="text-black text-xl font-medium font-['HK Grotesk'] leading-7">Quick and easy access to workouts when you need them.</span>
-        </div>
+      <div className="flex flex-col space-y-6 max-w-[500px] mx-auto text-left mt-8 mb-40 px-4 sm:px-0">
+  <div className="flex items-center gap-4">
+    <span className="text-black text-xl font-medium font-['HK Grotesk'] leading-7">Unlock your potential with:</span>
+  </div>
+  <div className="flex items-center gap-4">
+    <img src="/orange-check.png" alt="Check" className="w-[22px] h-[22px] object-cover" />
+    <span className="text-black text-xl font-medium font-['HK Grotesk'] leading-7">Quick and easy access to workouts when you need them.</span>
+  </div>
 
-        <div className="flex items-center gap-4">
-          <img src="/orange-check.png" alt="Check" className="w-[22px] h-[22px] object-cover" />
-          <span className="text-black text-xl font-medium font-['HK Grotesk'] leading-7">Videos from community members that makes your exercies selection, endless.</span>
-        </div>
+  <div className="flex items-center gap-4">
+    <img src="/orange-check.png" alt="Check" className="w-[22px] h-[22px] object-cover" />
+    <span className="text-black text-xl font-medium font-['HK Grotesk'] leading-7">Videos from community members that makes your exercises selection, endless.</span>
+  </div>
 
-        <div className="flex items-center gap-4">
-          <img src="/orange-check.png" alt="Check" className="w-[22px] h-[22px] object-cover" />
-          <span className="text-black text-xl font-medium font-['HK Grotesk'] leading-7">Intelligent workout tracking using AI, to create deep insight into your workouts</span>
-        </div>
+  <div className="flex items-center gap-4">
+    <img src="/orange-check.png" alt="Check" className="w-[22px] h-[22px] object-cover" />
+    <span className="text-black text-xl font-medium font-['HK Grotesk'] leading-7">Intelligent workout tracking using AI, to create deep insight into your workouts</span>
+  </div>
 
-        <div className="flex items-center gap-4">
-          <img src="/orange-check.png" alt="Check" className="w-[22px] h-[22px] object-cover" />
-          <span className="text-black text-xl font-medium font-['HK Grotesk'] leading-7">You get 30 days free trial on us!</span>
-        </div>
-      </div>
+  <div className="flex items-center gap-4">
+    <img src="/orange-check.png" alt="Check" className="w-[22px] h-[22px] object-cover" />
+    <span className="text-black text-xl font-medium font-['HK Grotesk'] leading-7">You get 30 days free trial on us!</span>
+  </div>
+</div>
 
           
         {/* Subscription Cards */}
