@@ -44,7 +44,7 @@ const Home: React.FC = () => {
               <div className="p-4 flex flex-col gap-6">
                 <button className={getMenuItemClassName('home')} onClick={() => handleSectionChange('home')}>Features</button>
                 <button className={getMenuItemClassName('creator')} onClick={() => handleSectionChange('creator')}>Creators</button>
-                <button className={getMenuItemClassName('subscribe')} onClick={() => handleSectionChange('subscribe')}>Subscribe</button>
+                {/* <button className={getMenuItemClassName('subscribe')} onClick={() => handleSectionChange('subscribe')}>Subscribe</button> */}
                 <button className={getMenuItemClassName('contact')} onClick={() => { setIsMobileMenuOpen(false); window.location.href = 'mailto:pulsefitnessapp@gmail.com'; }}>Contact Us</button>
               </div>
             </div>
