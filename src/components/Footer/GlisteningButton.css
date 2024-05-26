@@ -1,19 +1,18 @@
 .glisteningButton {
-    background: linear-gradient(270deg, #ffd700, #ffcc33, #ffd700, #ffcc33);
-    background-size: 600% 600%;
-    animation: glistening 8s linear infinite;
-    color: white;
-    padding: 10px 20px;
-    border: none;
-    border-radius: 30px;
-    cursor: pointer;
-    font-weight: bold;
-    outline: none;
-  }
-  
-  @keyframes glistening {
-    0% { background-position: 0% 50%; }
-    50% { background-position: 100% 50%; }
-    100% { background-position: 0% 50%; }
-  }
-  
+  background: linear-gradient(270deg, #14B8A6, #16C7B2, #14B8A6, #16C7B2);
+  background-size: 600% 600%;
+  animation: glistening 8s linear infinite;
+  color: white;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 30px;
+  cursor: pointer;
+  font-weight: bold;
+  outline: none;
+}
+
+@keyframes glistening {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
