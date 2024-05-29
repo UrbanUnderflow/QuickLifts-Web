@@ -65,7 +65,21 @@ const PartnerJoinModal: React.FC<Props> = ({ isOpen, closeModal }) => {
         {submissionStatus === 'success' ? (
           <>
             <h2 className="text-2xl font-bold mb-4">Success!</h2>
-            <p className="text-green-600">Your request to join as a partner has been submitted successfully.</p>
+            <p className="text-green-600 mb-4">Your request to join as a partner has been submitted successfully.</p>
+            <h3 className="text-xl font-bold mb-2">So, What's Next?</h3>
+            <ol className="list-decimal list-inside mb-4">
+              <li className="mb-2">Use the link below to download the app.</li>
+              <li className="mb-2">Create an account and make sure you use the same email you used previously.</li>
+              <li>Once you sign up you should be able to access the app without paying the subscription.</li>
+            </ol>
+            <a
+              href="https://download-link-to-app.com"
+              className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:bg-blue-700"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Download the App
+            </a>
           </>
         ) : (
           <>
