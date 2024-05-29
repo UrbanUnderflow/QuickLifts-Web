@@ -157,10 +157,12 @@ const Creators = () => {
             </div>
 
             {/* Circle Button */}
+            <a href="https://buy.stripe.com/6oE5kY2anbv25bO5km" className="flex items-center w-64 h-16 sm:h-24 bg-black rounded-full justify-between">
             <div className="flex items-center w-64 h-16 sm:h-24 bg-black rounded-full justify-between">
                 <span className="text-white ml-10">Start Enrollment</span>
                 <img src="/arrow-down-left.svg" alt="Arrow Down Left" className="w-6 sm:w-8 h-6 sm:h-8 text-white mr-10" />
             </div>
+            </a>
         </div>
 
         {/* New Section: Sweat Equity Partner Criteria */}
