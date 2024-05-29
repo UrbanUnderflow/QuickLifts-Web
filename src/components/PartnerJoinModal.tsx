@@ -16,7 +16,7 @@ const PartnerJoinModal: React.FC<Props> = ({ isOpen, closeModal }) => {
     if (redemptionCode === 'CREATORINVITED01') {
       const url = `https://fitwithpulse.ai/.netlify/functions/add-partner-to-beta?email=${encodeURIComponent(email)}`;
       try {
-        const response = await fetch(url, { method: 'GET' });
+        const response = await fetch(url, { method: 'POST' });
         if (!response.ok) {
           const errorData = await response.json();
           throw new Error(errorData.message || 'An unknown error occurred');
