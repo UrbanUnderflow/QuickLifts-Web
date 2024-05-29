@@ -14,7 +14,7 @@ const PartnerJoinModal: React.FC<Props> = ({ isOpen, closeModal }) => {
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (redemptionCode === 'CREATORINVITED01') {
-      const url = `https://fitwithpulse.ai/.netlify/functions/add-partner-to-beta?email=${encodeURIComponent(email)}`;
+      const url = `https://fitwithpulse.ai/.netlify/functions/add-partner-to-beta-list?email=${encodeURIComponent(email)}`;
       try {
         const response = await fetch(url, { method: 'GET' });
         if (!response.ok) {
