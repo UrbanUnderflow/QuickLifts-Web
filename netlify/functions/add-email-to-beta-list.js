@@ -23,7 +23,7 @@ if (admin.apps.length === 0) {
 const db = admin.firestore();
 
 async function addPartnerToBeta(email) {
-  const partnerRef = db.collection('beta').doc(email);
+  const partnerRef = db.collection("beta'").doc(email);
   await partnerRef.set({
     'isApproved': 'true' 
   });
