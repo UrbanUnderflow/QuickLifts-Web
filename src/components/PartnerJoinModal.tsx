@@ -76,7 +76,7 @@ const PartnerJoinModal: React.FC<Props> = ({ isOpen, closeModal }) => {
               <li>Once you sign up you should be able to access the app without paying the subscription.</li>
             </ol>
             <a
-              href="https://download-link-to-app.com"
+              href="https://apps.apple.com/ca/app/pulse-community-workouts/id6451497729"
               className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:bg-blue-700"
               target="_blank"
               rel="noopener noreferrer"
