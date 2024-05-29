@@ -27,7 +27,7 @@ const PartnerJoinModal: React.FC<Props> = ({ isOpen, closeModal }) => {
       } catch (error) {
         console.error('Error submitting partner:', error);
         if (error instanceof Error) {
-          setErrorMessage(error.message);
+          setErrorMessage(error.message + "Here here");
         } else {
           setErrorMessage('An unknown error occurred');
         }
