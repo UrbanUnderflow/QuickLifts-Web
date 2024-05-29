@@ -1,13 +1,21 @@
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const axios = require('axios');
+const getRawBody = require('raw-body');
 
 exports.handler = async (event) => {
   const sig = event.headers['stripe-signature'];
   const endpointSecret = process.env.STRIPE_ENDPOINT_SECRET;
+
   let stripeEvent;
 
   try {
-    stripeEvent = stripe.webhooks.constructEvent(event.body, sig, endpointSecret);
+    const rawBody = await getRawBody(event.body, {
+      length: event.headers['content-length'],
+      limit: '1mb',
+      encoding: 'utf-8',
+    });
+
+    stripeEvent = stripe.webhooks.constructEvent(rawBody, sig, endpointSecret);
   } catch (err) {
     console.error(`⚠️  Webhook signature verification failed.`, err.message);
     return {
@@ -18,15 +26,25 @@ exports.handler = async (event) => {
 
   const eventType = stripeEvent.type;
   const eventObject = stripeEvent.data.object;
-  
+
+  console.log(`Received event: ${eventType}`);
+
   let message;
 
   switch (eventType) {
     case 'invoice.payment_succeeded':
-      const customer = await stripe.customers.retrieve(eventObject.customer);
-      message = {
-        text: `🎉 A new subscription was purchased by ${customer.email}!`,
-      };
+      try {
+        const customer = await stripe.customers.retrieve(eventObject.customer);
+        message = {
+          text: `🎉 A new subscription was purchased by ${customer.email}!`,
+        };
+      } catch (err) {
+        console.error('Error retrieving customer:', err);
+        return {
+          statusCode: 500,
+          body: 'Internal Server Error',
+        };
+      }
       break;
 
     // Add cases for all other event types you are listening to
@@ -103,8 +121,11 @@ exports.handler = async (event) => {
       break;
   }
 
+  console.log(`Sending message to Slack: ${JSON.stringify(message)}`);
+
   try {
     await axios.post("https://hooks.slack.com/services/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", message);
+    console.log('Message sent to Slack successfully.');
   } catch (err) {
     console.error('Error sending message to Slack:', err);
     return {
