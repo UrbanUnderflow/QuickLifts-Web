@@ -24,7 +24,7 @@ const db = admin.firestore();
 
 async function addPartnerToBeta(email) {
     console.log(`Adding partner to beta with email: ${email}`);
-    const partnerRef = db.collection('beta').doc(email);
+    const partnerRef = db.collection('beta').doc();
     await partnerRef.set({
       email,
       'isApproved': true 
