@@ -23,32 +23,40 @@ if (admin.apps.length === 0) {
 const db = admin.firestore();
 
 async function addPartnerToBeta(email) {
-  const partnerRef = db.collection("beta'").doc(email);
-  await partnerRef.set({
-    'isApproved': 'true' 
-  });
-}
-
-// Handler function for Netlify
-exports.handler = async (event) => {
-  try {
-    const email = event.queryStringParameters.email;
-    if (!email) {
+    console.log(`Adding partner to beta with email: ${email}`);
+    const partnerRef = db.collection('beta').doc(email);
+    await partnerRef.set({
+      email,
+      'isApproved': true 
+    });
+    console.log('Partner added to beta successfully');
+  }
+  
+  // Handler function for Netlify
+  exports.handler = async (event) => {
+    try {
+      console.log('Received event:', event);
+      const email = event.queryStringParameters.email;
+      console.log(`Extracted email: ${email}`);
+      if (!email) {
+        return {
+          statusCode: 400,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ success: false, message: 'Missing email parameter' }),
+        };
+      }
+      await addPartnerToBeta(email);
       return {
-        statusCode: 400,
-        body: JSON.stringify({ success: false, message: 'Missing email parameter' }),
+        statusCode: 200,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ success: true, message: 'Partner added to beta successfully.' }),
+      };
+    } catch (error) {
+      console.error('Error adding partner to beta:', error);
+      return {
+        statusCode: 500,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ success: false, error: error.message }),
       };
     }
-    await addPartnerToBeta(email);
-    return {
-      statusCode: 200,
-      body: JSON.stringify({ success: true, message: 'Partner added to beta successfully.' }),
-    };
-  } catch (error) {
-    console.error(error);
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ success: false, error: error.message }),
-    };
-  }
-};
+  };
