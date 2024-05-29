@@ -17,17 +17,20 @@ const PartnerJoinModal: React.FC<Props> = ({ isOpen, closeModal }) => {
       const url = `https://quickliftsapp.com/.netlify/functions/add-email-to-beta-list?email=${encodeURIComponent(email)}`;
       try {
         const response = await fetch(url, { method: 'GET' });
-        if (!response.ok) {
+
+        // Check the response status
+        if (response.ok) {
+          const data = await response.json();
+          console.log('Submission success:', data);
+          setSubmissionStatus('success');
+        } else {
           const errorData = await response.json();
           throw new Error(errorData.message || 'An unknown error occurred');
         }
-        const data = await response.json();
-        console.log('Submission success:', data);
-        setSubmissionStatus('success');
       } catch (error) {
         console.error('Error submitting partner:', error);
         if (error instanceof Error) {
-          setErrorMessage(error.message + "Here here");
+          setErrorMessage(error.message + " Here here");
         } else {
           setErrorMessage('An unknown error occurred');
         }
