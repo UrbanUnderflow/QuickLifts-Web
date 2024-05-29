@@ -104,7 +104,7 @@ exports.handler = async (event) => {
   }
 
   try {
-    await axios.post(process.env.SLACK_WEBHOOK_URL, message);
+    await axios.post("https://hooks.slack.com/services/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", message);
   } catch (err) {
     console.error('Error sending message to Slack:', err);
     return {
