@@ -8,7 +8,8 @@ interface Props {
 const PartnerJoinModal: React.FC<Props> = ({ isOpen, closeModal }) => {
   const [email, setEmail] = useState<string>('');
   const [redemptionCode, setRedemptionCode] = useState<string>('');
-  const [submissionStatus, setSubmissionStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [submissionStatus, setSubmissionStatus] = useState<'idle' | 'success' | 'error' | 'invalid-code'>('idle');
+  const [errorMessage, setErrorMessage] = useState<string>('');
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -16,15 +17,24 @@ const PartnerJoinModal: React.FC<Props> = ({ isOpen, closeModal }) => {
       const url = `https://fitwithpulse.ai/.netlify/functions/add-partner-to-beta?email=${encodeURIComponent(email)}`;
       try {
         const response = await fetch(url, { method: 'GET' });
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'An unknown error occurred');
+        }
         const data = await response.json();
         console.log('Submission success:', data);
         setSubmissionStatus('success');
       } catch (error) {
         console.error('Error submitting partner:', error);
+        if (error instanceof Error) {
+          setErrorMessage(error.message);
+        } else {
+          setErrorMessage('An unknown error occurred');
+        }
         setSubmissionStatus('error');
       }
     } else {
-      setSubmissionStatus('error');
+      setSubmissionStatus('invalid-code');
     }
   };
 
@@ -88,8 +98,11 @@ const PartnerJoinModal: React.FC<Props> = ({ isOpen, closeModal }) => {
                   placeholder="Enter redemption code"
                   required
                 />
-                {submissionStatus === 'error' && (
+                {submissionStatus === 'invalid-code' && (
                   <p className="text-red-600 mt-2">Invalid redemption code. Please try again.</p>
+                )}
+                {submissionStatus === 'error' && (
+                  <p className="text-red-600 mt-2">{errorMessage}</p>
                 )}
               </div>
               <div className="flex justify-end">
