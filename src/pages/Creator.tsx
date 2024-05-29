@@ -1,8 +1,19 @@
-import React from 'react';
+import React, { useState } from 'react';
 import FAQ from '../components/FAQ';
+import PartnerJoinModal from '../components/PartnerJoinModal';
 
 const Creators = () => {
     const [videoPlaying, setVideoPlaying] = React.useState(false);
+
+    const [isModalOpen, setModalOpen] = useState(false);
+
+    const openModal = () => {
+      setModalOpen(true);
+    };
+
+    const closeModal = () => {
+      setModalOpen(false);
+    };
 
     const handleVideoPlay = () => {
         setVideoPlaying(true);
@@ -60,9 +71,15 @@ const Creators = () => {
                       </div>
                   </button>
               )}
-              <video id="creatorVideo" className="absolute inset-0 w-full h-full object-cover" style={{ filter: videoPlaying ? 'none' : 'blur(8px)' }} loop>
-                  <source src="/ShootAndWorkoutPhone.mp4" type="video/mp4" />
-                  Your browser does not support the video tag.
+              <video
+                id="creatorVideo"
+                className="absolute inset-0 w-full h-full object-cover"
+                style={{ filter: videoPlaying ? 'none' : 'blur(8px)' }}
+                loop
+                poster="/ThisIsPulseThumb.png"
+              >
+                <source src="/ThisIsPulse.mp4" type="video/mp4" />
+                Your browser does not support the video tag.
               </video>
               {!videoPlaying && <div className="absolute inset-0 bg-black opacity-25"></div>}
           </div>
@@ -125,7 +142,7 @@ const Creators = () => {
           </div>
 
           {/* Call to Action: Join as a Partner */}
-          <div className="w-full sm:w-[249px] h-auto p-4 sm:p-6 rounded-[32px] border border-black flex justify-center items-center gap-4 sm:gap-6">
+          <div className="w-full sm:w-[249px] h-auto p-4 sm:p-6 rounded-[32px] border border-black flex justify-center items-center gap-4 sm:gap-6" onClick={openModal}>
             <div className="text-black text-sm sm:text-base font-semibold font-['HK Grotesk'] uppercase">Join as a partner</div>
             <img src="/arrow-up-right.svg" alt="Arrow Up Right" className="w-4 h-4" />
           </div>
@@ -254,7 +271,10 @@ const Creators = () => {
       </div>
       </div>
 
+      <PartnerJoinModal isOpen={isModalOpen} closeModal={closeModal} />
+
     </div>
+    
   );
 };
 
