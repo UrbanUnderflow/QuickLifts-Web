@@ -14,40 +14,47 @@ const Support: React.FC = () => {
           </div>
         </div>
 
-        {/* Support Content Section */}
-        <div className="max-w-[1052.76px] mx-auto flex flex-col sm:flex-row gap-8">
-          {/* FAQ Section */}
-          <div className="flex-1">
-            <h2 className="text-black text-2xl font-bold font-['HK Grotesk']">Frequently Asked Questions</h2>
-            <ul className="mt-4 space-y-2">
-              <li><a href="#faq1" className="text-blue-500 hover:underline">How do I create a workout?</a></li>
-              <li><a href="#faq2" className="text-blue-500 hover:underline">Can I share my workout progress?</a></li>
-              <li><a href="#faq3" className="text-blue-500 hover:underline">Where can I find the best workouts?</a></li>
-              <li><a href="#faq4" className="text-blue-500 hover:underline">Is the app available on all platforms?</a></li>
-            </ul>
-          </div>
+        <div className="flex justify-center">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8">
+            {/* Fourth Feature */}
+            <a href="https://www.youtube.com/shorts/jZ46ZxA6UJI" target="_blank" rel="noreferrer" className="flex flex-col gap-2">
+              <div className="flex flex-col gap-2">
+                <div className="w-5 h-5"></div>
+                {/* Feature Image Placeholder */}
+                <div className="w-[305px] h-[373.87px] bg-gray-50">
+                  <img src="/creators-hub-phone.png" alt="creators hub" />
+                </div>
+                <div className="text-black text-[22.5px] font-bold font-['HK Grotesk'] leading-loose">How to create content</div>
+                <div className="w-[319px] text-neutral-600 text-base font-normal font-['HK Grotesk'] leading-tight">Use the creators hub to record videos, create workouts, and add exercises to the exercise vault.</div>
+              </div>
+            </a>
 
-          {/* Video Guides Section */}
-          <div className="flex-1">
-            <h2 className="text-black text-2xl font-bold font-['HK Grotesk']">Video Guides</h2>
-            <ul className="mt-4 space-y-2">
-              <li><a href="#guide1" className="text-blue-500 hover:underline">Getting Started</a></li>
-              <li><a href="#guide2" className="text-blue-500 hover:underline">Navigating the Community</a></li>
-              <li><a href="#guide3" className="text-blue-500 hover:underline">Tracking Your Progress</a></li>
-              <li><a href="#guide4" className="text-blue-500 hover:underline">Creating a Custom Workout</a></li>
-            </ul>
-          </div>
-        </div>
+            {/* Fifth Feature */}      
+            <a href="https://www.youtube.com/shorts/57TVY4CIGbI" target="_blank" rel="noreferrer" className="flex flex-col gap-2">
+              <div className="flex flex-col gap-2">
+                <div className="w-5 h-5"></div>
+                {/* Feature Image Placeholder */}
+                <div className="w-[305px] h-[373.87px] bg-gray-50">
+                  <img src="/discover-exercise-phone.png" alt="record exercise" />
+                </div>
+                <div className="text-black text-[22.5px] font-bold font-['HK Grotesk'] leading-loose">Discover new exercises</div>
+                <div className="w-[319px] text-neutral-600 text-base font-normal font-['HK Grotesk'] leading-tight">Learn how to discover new exercises recorded and added to the Exercise Vault by our members of the collective.</div>
+              </div>
+            </a>
 
-        {/* Additional Support Resources */}
-        <div className="max-w-[1052.76px] mx-auto mt-16">
-          <h2 className="text-black text-2xl font-bold font-['HK Grotesk']">Additional Support Resources</h2>
-          <ul className="mt-4 space-y-2">
-            <li><a href="#resource1" className="text-blue-500 hover:underline">In-Depth User Guide</a></li>
-            <li><a href="#resource2" className="text-blue-500 hover:underline">Troubleshooting Issues</a></li>
-            <li><a href="#resource3" className="text-blue-500 hover:underline">Contact Support</a></li>
-            <li><a href="#resource4" className="text-blue-500 hover:underline">Feedback & Suggestions</a></li>
-          </ul>
+            {/* Sixth Feature */}
+            <a href="https://www.youtube.com/shorts/2ILiNpRCg3c" target="_blank" rel="noreferrer" className="flex flex-col gap-2">
+              <div className="flex flex-col gap-2">
+                <div className="w-5 h-5"></div>
+                {/* Feature Image Placeholder */}
+                <div className="w-[305px] h-[373.87px] bg-gray-50">
+                  <img src="/workout-log-phone.png" alt="workout log" />
+                </div>
+                <div className="text-black text-[22.5px] font-bold font-['HK Grotesk'] leading-loose">How to start a workout</div>
+                <div className="w-[319px] text-neutral-600 text-base font-normal font-['HK Grotesk'] leading-tight">Starting a workout is as easy as just selecting the body parts you want to workout. Learn how here.</div>
+              </div>
+            </a>
+          </div>
         </div>
       </div>
     </div>
