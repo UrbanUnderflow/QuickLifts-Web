@@ -25,6 +25,7 @@ const Header: React.FC<HeaderProps> = ({ onSectionChange, currentSection, toggle
         <button className={getClassName('home')} onClick={() => onSectionChange('home')}>Features</button>
         <button className={getClassName('creator')} onClick={() => onSectionChange('creator')}>Creators</button>
         {/* <button className={getClassName('subscribe')} onClick={() => onSectionChange('subscribe')}>Subscribe</button> */}
+        <button className={getClassName('support')} onClick={() => onSectionChange('support')}>Support</button>
         <a href="mailto:pulsefitnessapp@gmail.com" className={getClassName('contact')}>Contact Us</a>
       </div>
 
