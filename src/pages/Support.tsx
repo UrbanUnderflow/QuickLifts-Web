@@ -48,7 +48,7 @@ const Support: React.FC = () => {
                 <div className="w-5 h-5"></div>
                 {/* Feature Image Placeholder */}
                 <div className="w-[305px] h-[373.87px] bg-gray-50">
-                  <img src="/workout-log-phone.png" alt="workout log" />
+                  <img src="/choose-body-parts-phone.png" alt="workout log" />
                 </div>
                 <div className="text-black text-[22.5px] font-bold font-['HK Grotesk'] leading-loose">How to start a workout</div>
                 <div className="w-[319px] text-neutral-600 text-base font-normal font-['HK Grotesk'] leading-tight">Starting a workout is as easy as just selecting the body parts you want to workout. Learn how here.</div>
