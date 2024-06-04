@@ -1,9 +1,8 @@
 import admin from 'firebase-admin';
 import fetch from 'node-fetch';
-import ffmpeg from 'fluent-ffmpeg';
-import ffmpegPath from 'ffmpeg-static';
 import fs from 'fs';
 import path from 'path';
+import { createFFmpeg, fetchFile } from '@ffmpeg/ffmpeg';
 
 // Initialize Firebase Admin SDK
 if (admin.apps.length === 0) {
@@ -18,13 +17,14 @@ if (admin.apps.length === 0) {
       "auth_uri": "https://accounts.google.com/o/oauth2/auth",
       "token_uri": "https://oauth2.googleapis.com/token",
       "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-      "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-1qxb0%40quicklifts-dd3f1.iam.gserviceaccount.com",
+      "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-1qxb0@quicklifts-dd3f1.iam.gserviceaccount.com",
       "universe_domain": "googleapis.com"
     }),
   });
 }
 
 const db = admin.firestore();
+const ffmpeg = createFFmpeg({ log: true });
 
 async function downloadVideo(videoURL, filePath) {
   const res = await fetch(videoURL);
@@ -37,18 +37,11 @@ async function downloadVideo(videoURL, filePath) {
 }
 
 async function generateGIF(videoPath, gifPath) {
-  return new Promise((resolve, reject) => {
-    ffmpeg(videoPath)
-      .setFfmpegPath(ffmpegPath)
-      .output(gifPath)
-      .outputOptions([
-        '-vf', 'fps=10,scale=320:-1:flags=lanczos',
-        '-c:v', 'gif'
-      ])
-      .on('end', resolve)
-      .on('error', reject)
-      .run();
-  });
+  await ffmpeg.load();
+  ffmpeg.FS('writeFile', 'input.mp4', await fetchFile(videoPath));
+  await ffmpeg.run('-i', 'input.mp4', '-vf', 'fps=10,scale=320:-1:flags=lanczos', 'output.gif');
+  const data = ffmpeg.FS('readFile', 'output.gif');
+  fs.writeFileSync(gifPath, data);
 }
 
 async function uploadGIF(gifPath, destination) {
@@ -104,7 +97,7 @@ async function processAllExerciseVideos() {
 }
 
 // Handler function for Netlify
-exports.handler = async (event) => {
+export async function handler(event) {
   try {
     await processAllExerciseVideos();
     return {
@@ -120,4 +113,4 @@ exports.handler = async (event) => {
       body: JSON.stringify({ success: false, error: error.message }),
     };
   }
-};
+}
