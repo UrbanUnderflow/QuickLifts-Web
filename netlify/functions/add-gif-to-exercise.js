@@ -1,31 +1,30 @@
 const admin = require('firebase-admin');
 const fetch = require('node-fetch');
+const ffmpeg = require('fluent-ffmpeg');
+const ffmpegPath = require('ffmpeg-static');
 const fs = require('fs');
-const { Storage } = require('@google-cloud/storage');
-const { exec } = require('child_process');
 const path = require('path');
 
 // Initialize Firebase Admin SDK
 if (admin.apps.length === 0) {
   admin.initializeApp({
     credential: admin.credential.cert({
-        "type": "service_account",
-        "project_id": "quicklifts-dd3f1",
-        "private_key_id": process.env.FIREBASE_PRIVATE_KEY,
-        "private_key": process.env.FIREBASE_SECRET_KEY.replace(/\\n/g, '\n'),
-        "client_email": "firebase-adminsdk-1qxb0@quicklifts-dd3f1.iam.gserviceaccount.com",
-        "client_id": "111494077667496751062",
-        "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-        "token_uri": "https://oauth2.googleapis.com/token",
-        "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-        "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-1qxb0%40quicklifts-dd3f1.iam.gserviceaccount.com",
-        "universe_domain": "googleapis.com"
+      "type": "service_account",
+      "project_id": "quicklifts-dd3f1",
+      "private_key_id": process.env.FIREBASE_PRIVATE_KEY,
+      "private_key": process.env.FIREBASE_SECRET_KEY.replace(/\\n/g, '\n'),
+      "client_email": "firebase-adminsdk-1qxb0@quicklifts-dd3f1.iam.gserviceaccount.com",
+      "client_id": "111494077667496751062",
+      "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+      "token_uri": "https://oauth2.googleapis.com/token",
+      "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+      "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-1qxb0%40quicklifts-dd3f1.iam.gserviceaccount.com",
+      "universe_domain": "googleapis.com"
     }),
   });
 }
 
 const db = admin.firestore();
-const storage = new Storage();
 
 async function downloadVideo(videoURL, filePath) {
   const res = await fetch(videoURL);
@@ -39,27 +38,27 @@ async function downloadVideo(videoURL, filePath) {
 
 async function generateGIF(videoPath, gifPath) {
   return new Promise((resolve, reject) => {
-    const command = `ffmpeg -i ${videoPath} -vf "fps=10,scale=320:-1:flags=lanczos" -c:v gif -f gif ${gifPath}`;
-    exec(command, (error, stdout, stderr) => {
-      if (error) {
-        reject(`Error generating GIF: ${error.message}`);
-      }
-      resolve();
-    });
+    ffmpeg(videoPath)
+      .setFfmpegPath(ffmpegPath)
+      .output(gifPath)
+      .outputOptions([
+        '-vf', 'fps=10,scale=320:-1:flags=lanczos',
+        '-c:v', 'gif'
+      ])
+      .on('end', resolve)
+      .on('error', reject)
+      .run();
   });
 }
 
 async function uploadGIF(gifPath, destination) {
-  await storage.bucket('quicklifts-dd3f1.appspot.com').upload(gifPath, {
+  const bucket = admin.storage().bucket('quicklifts-dd3f1.appspot.com');
+  const [file] = await bucket.upload(gifPath, {
     destination: destination,
     public: true,
     metadata: { cacheControl: 'public, max-age=31536000' },
   });
-  const [url] = await storage.bucket('quicklifts-dd3f1.appspot.com').file(destination).getSignedUrl({
-    action: 'read',
-    expires: '03-17-2025'
-  });
-  return url;
+  return file.publicUrl();
 }
 
 async function processVideo(exerciseID, video) {
