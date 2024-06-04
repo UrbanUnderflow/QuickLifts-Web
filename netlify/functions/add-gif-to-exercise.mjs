@@ -1,9 +1,9 @@
-const admin = require('firebase-admin');
-const fetch = require('node-fetch');
-const ffmpeg = require('fluent-ffmpeg');
-const ffmpegPath = require('ffmpeg-static');
-const fs = require('fs');
-const path = require('path');
+import admin from 'firebase-admin';
+import fetch from 'node-fetch';
+import ffmpeg from 'fluent-ffmpeg';
+import ffmpegPath from 'ffmpeg-static';
+import fs from 'fs';
+import path from 'path';
 
 // Initialize Firebase Admin SDK
 if (admin.apps.length === 0) {
