@@ -2,7 +2,11 @@ import admin from 'firebase-admin';
 import fetch from 'node-fetch';
 import fs from 'fs';
 import path from 'path';
-import { createFFmpeg, fetchFile } from '@ffmpeg/ffmpeg';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+const gifsicle = require('gifsicle');
+
+const execAsync = promisify(exec);
 
 // Initialize Firebase Admin SDK
 if (admin.apps.length === 0) {
@@ -24,7 +28,6 @@ if (admin.apps.length === 0) {
 }
 
 const db = admin.firestore();
-const ffmpeg = createFFmpeg({ log: true });
 
 async function downloadVideo(videoURL, filePath) {
   const res = await fetch(videoURL);
@@ -37,11 +40,9 @@ async function downloadVideo(videoURL, filePath) {
 }
 
 async function generateGIF(videoPath, gifPath) {
-  await ffmpeg.load();
-  ffmpeg.FS('writeFile', 'input.mp4', await fetchFile(videoPath));
-  await ffmpeg.run('-i', 'input.mp4', '-vf', 'fps=10,scale=320:-1:flags=lanczos', 'output.gif');
-  const data = ffmpeg.FS('readFile', 'output.gif');
-  fs.writeFileSync(gifPath, data);
+  const command = `ffmpeg -i ${videoPath} -vf "fps=10,scale=320:-1:flags=lanczos" -c:v gif -f gif ${gifPath}`;
+  await execAsync(command);
+  await execAsync(`${gifsicle} --optimize=3 ${gifPath} -o ${gifPath}`);
 }
 
 async function uploadGIF(gifPath, destination) {
