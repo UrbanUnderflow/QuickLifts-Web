@@ -1,6 +1,11 @@
 [build]
-    command = "yarn build"
-    functions = "netlify/functions"
-    publish = "build"
+  command = "yarn build"
+  functions = "netlify/functions"
+  publish = "build"
 [build.environment]
   NODE_VERSION = "18"
+
+[[headers]]
+  for = "/apple-app-site-association"
+  [headers.values]
+    Content-Type = "application/json"
