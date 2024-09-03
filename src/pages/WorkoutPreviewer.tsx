@@ -65,11 +65,12 @@ const WorkoutPreviewer: React.FC = () => {
               <p className="text-xl font-bold text-[#E0FE10]">{workout.zone}</p>
             </div>
             {/* Workout stats */}
-            <div className="flex justify-around my-6">
+            <div className="flex justify-around my-10">
               <div className="text-center">
                 <p className="text-3xl font-bold text-[#E0FE10]">{logs.length}</p>
                 <p className="text-lg text-white">Exercises</p>
               </div>
+              <div className="h-14 w-px bg-white opacity-50"></div>
               <div className="text-center">
                 <p className="text-3xl font-bold text-[#E0FE10]">{workout.estimatedDuration()}</p>
                 <p className="text-lg text-white">Duration</p>
