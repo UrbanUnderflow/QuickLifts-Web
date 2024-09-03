@@ -4,6 +4,7 @@ import Home from './pages/Home';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import Terms from './pages/Terms';
 import CompletedOnboarding from './pages/CompletedOnboarding';
+import WorkoutPreviewer from './pages/WorkoutPreviewer';
 
 const App: React.FC = () => {
   return (
@@ -13,6 +14,8 @@ const App: React.FC = () => {
         <Route path="/privacyPolicy" element={<PrivacyPolicy />} />
         <Route path="/terms" element={<Terms />} />
         <Route path="/completeOnboarding" element={<CompletedOnboarding />} />
+        <Route path="*" element={<div>404 Not Found</div>} />
+        <Route path="/workoutPreviewer" element={< WorkoutPreviewer />} />
       </Routes>
     </Router>
   );
