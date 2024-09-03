@@ -33,7 +33,6 @@ const WorkoutPreviewer: React.FC = () => {
         setIsLoading(false);
       }
     };
-
     fetchWorkout();
   }, [workoutId, userId]);
 
@@ -49,27 +48,35 @@ const WorkoutPreviewer: React.FC = () => {
 
   return (
     <div className="relative h-screen bg-black">
+      {/* Download banner */}
+      <div className="fixed top-0 left-0 right-0 bg-[#E0FE10] text-black py-2 px-4 text-center z-50">
+        <p className="font-bold">
+          Download the Pulse app for full access to this workout
+          <a href="https://apps.apple.com/us/app/pulse-the-fitness-collective/id6451497729" className="underline ml-2">Get App</a>
+        </p>
+      </div>
+
       <SequentialVideoPlayerView videoURLs={videoURLs} isMuted={true} ratio="cover" />
       <div className="absolute inset-0 mt-64 overflow-y-auto bg-gradient-to-b from-transparent via-black to-black">
-        <div className="flex flex-col mt-24 h-full p-4">
+        <div className="flex flex-col min-h-full p-4 pb-20 pt-12"> {/* Added pt-12 for banner space */}
           <div className="flex-grow">
-            <div className="text-center text-white mt-10 mb-6">
+            <div className="text-center text-white mt-10 mb-1">
               <h2 className="text-2xl font-bold">Your workout for today:</h2>
-              <p className="text-xl font-bold text-green-400">{workout.zone}</p>
+              <p className="text-xl font-bold text-[#E0FE10]">{workout.zone}</p>
             </div>
             {/* Workout stats */}
             <div className="flex justify-around my-6">
               <div className="text-center">
-                <p className="text-3xl font-bold text-green-400">{logs.length}</p>
+                <p className="text-3xl font-bold text-[#E0FE10]">{logs.length}</p>
                 <p className="text-lg text-white">Exercises</p>
               </div>
               <div className="text-center">
-                <p className="text-3xl font-bold text-green-400">{workout.estimatedDuration()}</p>
+                <p className="text-3xl font-bold text-[#E0FE10]">{workout.estimatedDuration()}</p>
                 <p className="text-lg text-white">Duration</p>
               </div>
             </div>
             {/* Exercise list */}
-            <div className="mt-6">
+            <div className="mt-6 mb-28">
               {logs.map((log) => (
                 <SweatListCardView
                   key={log.id}
@@ -78,15 +85,16 @@ const WorkoutPreviewer: React.FC = () => {
               ))}
             </div>
           </div>
-          <div className="mt-auto p-4">
-            <button
-              onClick={() => {console.log("Use Sweatlist clicked")}}
-              className="w-full py-3 bg-green-500 text-black font-bold rounded-lg text-lg"
-            >
-              Track this Workout
-            </button>
-          </div>
         </div>
+      </div>
+      {/* Sticky floating button */}
+      <div className="fixed bottom-0 left-0 right-0 p-10 bg-gradient-to-t from-black to-transparent">
+        <button
+          onClick={() => {console.log("Use Sweatlist clicked")}}
+          className="w-full py-3 bg-[#E0FE10] text-black font-bold rounded-lg text-lg"
+        >
+          Track this Workout
+        </button>
       </div>
     </div>
   );
