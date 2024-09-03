@@ -27,7 +27,7 @@ const SweatListCardView: React.FC<SweatListCardProps> = ({ log }) => {
   const videoUrl = log.exercise.videos[log.exercise.currentVideoPosition]?.videoURL;
 
   return (
-    <div className="flex bg-gray-800 bg-opacity-50 rounded-lg h-24 mb-4 overflow-hidden">
+    <div className="flex bg-black-800 bg-opacity-50 rounded-lg h-24 mb-4 overflow-hidden">
       {log.exercise.videos.length > 0 && videoUrl ? (
         <div className="relative w-24 h-24 overflow-hidden">
           <video
@@ -46,7 +46,7 @@ const SweatListCardView: React.FC<SweatListCardProps> = ({ log }) => {
       )}
       <div className="flex flex-col justify-center ml-4 flex-grow">
         <h3 className="text-lg font-bold text-white">{log.exercise.name}</h3>
-        <p className="text-sm text-green-400">{`${log.exercise.sets} sets x ${log.exercise.reps} reps`}</p>
+        <p className="text-sm text-[#E0FE10]">{`${log.exercise.sets} sets x ${log.exercise.reps} reps`}</p>
       </div>
     </div>
   );
