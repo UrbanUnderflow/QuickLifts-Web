@@ -92,7 +92,7 @@ const WorkoutPreviewer: React.FC = () => {
       </div>
 
       <SequentialVideoPlayerView videoURLs={videoURLs} isMuted={true} ratio="cover" />
-      <div className="absolute inset-0 mt-64 overflow-y-auto bg-gradient-to-b from-transparent via-[#192126] via-25% to-[#192126] to-50%">
+      <div className="absolute inset-0 mt-80 overflow-y-auto bg-gradient-to-b from-transparent via-[#192126] via-25% to-[#192126] to-50%">
         <div className="flex flex-col min-h-full p-4 pb-20 pt-12"> {/* Added pt-12 for banner space */}
           <div className="flex-grow">
             <div className="text-center text-white mt-10 mb-1">
