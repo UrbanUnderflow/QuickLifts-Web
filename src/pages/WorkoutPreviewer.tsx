@@ -5,6 +5,7 @@ import SweatListCardView from '../components/SweatListCardView';
 import WorkoutService from '../services/WorkoutService';
 import { ExerciseLog } from '../types/ExerciseLog';
 import { Workout } from '../types/Workout';
+import { ExerciseReference } from '../types/ExerciseReference';
 
 const WorkoutPreviewer: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -15,7 +16,7 @@ const WorkoutPreviewer: React.FC = () => {
 
   const [showModal, setShowModal] = useState(false);
 
-  const workoutId = searchParams.get('workoutId') || "0D4530EB-5135-4C82-AA55-D85068B75114";
+  const workoutId = searchParams.get('workoutId') || "1039FEC0-E7B6-4F7E-84BC-B89086232B5F";
   const userId = searchParams.get('userId') || "Bq6zlqIlSdPUGki6gsv6X9TdVtG3";
 
   useEffect(() => {
@@ -38,6 +39,23 @@ const WorkoutPreviewer: React.FC = () => {
     fetchWorkout();
   }, [workoutId, userId]);
 
+  function estimatedDuration(exercises: ExerciseReference[]): number {
+    const averageExerciseTime = 8; // Average time per exercise in minutes
+    const averageRestTime = 1; // Average rest time between exercises in minutes
+    const warmupTime = 5; // Warm-up time in minutes
+    const cooldownTime = 5; // Cool-down time in minutes
+  
+    const totalExerciseTime = exercises.length * averageExerciseTime;
+    const totalRestTime = Math.max(0, exercises.length - 1) * averageRestTime; // No rest after last exercise
+  
+    const estimatedTotalTime = warmupTime + totalExerciseTime + totalRestTime + cooldownTime;
+  
+    // Round to the nearest multiple of 5
+    const roundedTime = Math.round(estimatedTotalTime / 5) * 5;
+  
+    return roundedTime;
+  }
+
   const handleGetAppClick = () => {
     setShowModal(true);
   };
@@ -56,6 +74,7 @@ const WorkoutPreviewer: React.FC = () => {
   }
 
   const videoURLs = logs.flatMap(log => log.exercise.videos.map(video => video.videoURL));
+  const duration = estimatedDuration(workout.exercises);
 
   return (
     <div className="relative h-screen bg-black">
@@ -78,18 +97,18 @@ const WorkoutPreviewer: React.FC = () => {
           <div className="flex-grow">
             <div className="text-center text-white mt-10 mb-1">
               <h2 className="text-2xl font-bold">Your workout for today:</h2>
-              <p className="text-xl font-bold text-[#E0FE10]">{workout.zone}</p>
+              <p className="text-xl font-bold text-[#E0FE10]">{workout.title}</p>
             </div>
             {/* Workout stats */}
             <div className="flex justify-around my-10">
               <div className="text-center">
-                <p className="text-3xl font-bold text-[#E0FE10]">{logs.length}</p>
-                <p className="text-lg text-white">Exercises</p>
+                <p className="text-2xl font-bold text-[#E0FE10]">{logs.length}</p>
+                <p className="text-m text-white">Exercises</p>
               </div>
               <div className="h-14 w-px bg-white opacity-50"></div>
               <div className="text-center">
-                <p className="text-3xl font-bold text-[#E0FE10]">{workout.estimatedDuration()}</p>
-                <p className="text-lg text-white">Duration</p>
+                <p className="text-2xl font-bold text-[#E0FE10]">{duration} mins</p>
+                <p className="text-m text-white">Duration</p>
               </div>
             </div>
             {/* Exercise list */}
