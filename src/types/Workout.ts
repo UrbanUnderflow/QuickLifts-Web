@@ -1,7 +1,6 @@
 // types.ts
 import { Exercise } from './Exercise';
 import { ExerciseLog } from './ExerciseLog';
-import { BodyPart } from './BodyPart';
 import { BodyZone } from './BodyZone';
 
 // Enums
