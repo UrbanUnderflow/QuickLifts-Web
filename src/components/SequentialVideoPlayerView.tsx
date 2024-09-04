@@ -23,38 +23,41 @@ const SequentialVideoPlayerView: React.FC<SequentialVideoPlayerProps> = ({
     };
 
     const handleCanPlay = () => {
-      video.play().catch(error => {
+      video.play().catch((error) => {
         if (error.name !== "AbortError") {
           console.error("Error playing video:", error);
         }
       });
     };
 
+    // Event listeners for video end and can play
     video.addEventListener('ended', playNextVideo);
     video.addEventListener('canplay', handleCanPlay);
 
+    // Clean up event listeners on unmount
     return () => {
       video.removeEventListener('ended', playNextVideo);
       video.removeEventListener('canplay', handleCanPlay);
     };
-  }, [videoURLs]);
+  }, [videoURLs, currentVideoIndex]); // add currentVideoIndex to dependency array
 
   useEffect(() => {
     const video = videoRef.current;
     if (video) {
-      video.load();
+      // Update video source and reset play state
+      video.src = videoURLs[currentVideoIndex];
+      video.load(); // Load the new video
     }
-  }, [currentVideoIndex]);
+  }, [currentVideoIndex, videoURLs]); // Add videoURLs as a dependency
 
   return (
     <div className="relative w-full h-full bg-black">
       <video
         ref={videoRef}
-        src={videoURLs[currentVideoIndex]}
         className={`absolute inset-0 w-full h-full ${ratio === 'cover' ? 'object-cover' : 'object-contain'}`}
         muted={isMuted}
         playsInline
-        loop
+        loop={false} // Change loop to false to avoid looping the same video
       />
     </div>
   );
