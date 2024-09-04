@@ -13,6 +13,8 @@ const WorkoutPreviewer: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  const [showModal, setShowModal] = useState(false);
+
   const workoutId = searchParams.get('workoutId') || "0D4530EB-5135-4C82-AA55-D85068B75114";
   const userId = searchParams.get('userId') || "Bq6zlqIlSdPUGki6gsv6X9TdVtG3";
 
@@ -36,6 +38,15 @@ const WorkoutPreviewer: React.FC = () => {
     fetchWorkout();
   }, [workoutId, userId]);
 
+  const handleGetAppClick = () => {
+    setShowModal(true);
+  };
+
+  const confirmRedirect = () => {
+    window.open("https://apps.apple.com/us/app/pulse-the-fitness-collective/id6451497729", "_blank");
+    setShowModal(false);
+  };
+
   if (isLoading) {
     return <div className="text-white text-center pt-20">Loading workout...</div>;
   }
@@ -52,12 +63,17 @@ const WorkoutPreviewer: React.FC = () => {
       <div className="fixed top-0 left-0 right-0 bg-[#E0FE10] text-black py-2 px-4 text-center z-50">
         <p className="font-bold">
           Download the Pulse app for full access to this workout
-          <a href="https://apps.apple.com/us/app/pulse-the-fitness-collective/id6451497729" className="underline ml-2">Get App</a>
+          <button 
+            onClick={handleGetAppClick} 
+            className="underline ml-2 font-bold bg-transparent border-none cursor-pointer"
+          >
+            Get App
+          </button>
         </p>
       </div>
 
       <SequentialVideoPlayerView videoURLs={videoURLs} isMuted={true} ratio="cover" />
-      <div className="absolute inset-0 mt-64 overflow-y-auto bg-gradient-to-b from-transparent via-black to-black">
+      <div className="absolute inset-0 mt-64 overflow-y-auto bg-gradient-to-b from-transparent via-[#192126] via-25% to-[#192126] to-50%">
         <div className="flex flex-col min-h-full p-4 pb-20 pt-12"> {/* Added pt-12 for banner space */}
           <div className="flex-grow">
             <div className="text-center text-white mt-10 mb-1">
@@ -90,13 +106,39 @@ const WorkoutPreviewer: React.FC = () => {
       </div>
       {/* Sticky floating button */}
       <div className="fixed bottom-0 left-0 right-0 p-10 bg-gradient-to-t from-black to-transparent">
-        <button
-          onClick={() => {console.log("Use Sweatlist clicked")}}
-          className="w-full py-3 bg-[#E0FE10] text-black font-bold rounded-lg text-lg"
+      <button
+        onClick={() => {
+            handleGetAppClick();         
+        }}
+        className="w-full py-3 bg-[#E0FE10] text-black font-bold rounded-full text-lg"
         >
-          Track this Workout
+        Track this Workout
         </button>
       </div>
+
+      {/* Confirmation Modal */}
+      {showModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]">
+          <div className="bg-white p-6 rounded-lg max-w-sm w-full">
+            <h2 className="text-xl font-bold mb-4">Confirm Download</h2>
+            <p className="mb-6">You're about to be redirected to the App Store to download Pulse. Continue?</p>
+            <div className="flex justify-end space-x-4">
+              <button 
+                onClick={() => setShowModal(false)}
+                className="px-4 py-2 bg-gray-200 rounded"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={confirmRedirect}
+                className="px-4 py-2 bg-[#E0FE10] text-black rounded"
+              >
+                Continue
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
