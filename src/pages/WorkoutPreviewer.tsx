@@ -17,7 +17,7 @@ const WorkoutPreviewer: React.FC = () => {
   const [showModal, setShowModal] = useState(false);
 
   const workoutId = searchParams.get('workoutId') || "1039FEC0-E7B6-4F7E-84BC-B89086232B5F";
-  const userId = searchParams.get('userId') || "Bq6zlqIlSdPUGki6gsv6X9TdVtG3";
+  const userId = searchParams.get('referralCode') || "Bq6zlqIlSdPUGki6gsv6X9TdVtG3";
 
   useEffect(() => {
     const fetchWorkout = async () => {
