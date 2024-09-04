@@ -15,7 +15,7 @@ const App: React.FC = () => {
         <Route path="/terms" element={<Terms />} />
         <Route path="/completeOnboarding" element={<CompletedOnboarding />} />
         <Route path="*" element={<div>404 Not Found</div>} />
-        <Route path="/workoutPreviewer" element={< WorkoutPreviewer />} />
+        <Route path="/workoutPreview" element={< WorkoutPreviewer />} />
       </Routes>
     </Router>
   );
