@@ -100,7 +100,7 @@ const Checklist = () => {
                   {/* For larger screens */}
                   <img src="/step2.svg" alt="Phone" className="w-full sm:w-h h-[450px] sm:h-[450px] object-contain hidden sm:block" />
                   {/* For smaller screens */}
-                  <img src="/step2Mobile.svg" alt="Phone" className="w-full sm:w-h h-[450px] sm:h-[450px] object-contain sm:hidden" />
+                  <img src="/step2Mobile.png" alt="Phone" className="w-full sm:w-h h-[450px] sm:h-[450px] object-contain sm:hidden" />
                 </div>
 
 
