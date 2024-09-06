@@ -89,7 +89,7 @@ const Checklist = () => {
                   {/* For larger screens */}
                   <img src="/step1.svg" alt="Phone" className="w-full sm:w-h h-[450px] sm:h-[450px] object-contain hidden sm:block" />
                   {/* For smaller screens */}
-                  <img src="/step1Mobile.svg" alt="Phone" className="w-full sm:w-h h-[450px] sm:h-[450px] object-contain sm:hidden" />
+                  <img src="/step1Mobile.png" alt="Phone" className="w-full sm:w-h h-[450px] sm:h-[450px] object-contain sm:hidden" />
                 </div>
 
                 {/* Spacer */}
@@ -112,7 +112,7 @@ const Checklist = () => {
                   {/* For larger screens */}
                   <img src="/step3.svg" alt="Phone" className="w-full sm:w-h h-[450px] sm:h-[450px] object-contain hidden sm:block" />
                   {/* For smaller screens */}
-                  <img src="/step3Mobile.svg" alt="Phone" className="w-full sm:w-h h-[450px] sm:h-[450px] object-contain sm:hidden" />
+                  <img src="/step3Mobile.png" alt="Phone" className="w-full sm:w-h h-[450px] sm:h-[450px] object-contain sm:hidden" />
                 </div>
 
                 {/* Spacer */}
@@ -123,7 +123,7 @@ const Checklist = () => {
                   {/* For larger screens */}
                   <img src="/step4.svg" alt="Phone" className="w-full sm:w-h h-[450px] sm:h-[450px] object-contain hidden sm:block" />
                   {/* For smaller screens */}
-                  <img src="/step4Mobile.svg" alt="Phone" className="w-full sm:w-h h-[450px] sm:h-[450px] object-contain sm:hidden" />
+                  <img src="/step4Mobile.png" alt="Phone" className="w-full sm:w-h h-[450px] sm:h-[450px] object-contain sm:hidden" />
                 </div>
 
                 {/* Spacer */}
