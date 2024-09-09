@@ -14,6 +14,8 @@ import { ExerciseAuthor } from '../types/ExerciseAuthor';
 import { BodyPart } from '../types/BodyPart';
 import { ProfileImage } from '../types/ProfileImage';
 import { ExerciseComment } from '../types/ExerciseComment';
+import { SweatlistCollection } from '../types/SweatlistCollection';
+import { SweatlistIdentifiers } from '../types/SweatlistIdentifiers';
 
 class WorkoutService {
   private static instance: WorkoutService;
@@ -68,6 +70,74 @@ class WorkoutService {
     }
   }
 
+  public async fetchCollectionWithSweatLists(collectionId: string): Promise<{ collection: any, sweatLists: any[] }> {    
+    const baseURL = "https://firestore.googleapis.com/v1/projects/quicklifts-dd3f1/databases/(default)/documents";
+    const collectionURL = `${baseURL}/sweatlist-collection/${collectionId}`;
+    
+    try {
+      // Fetch the collection details
+      const collectionResponse = await axios.get(collectionURL);
+      
+      if (collectionResponse.status !== 200) {
+        console.error('Error response from server:', collectionResponse.status, collectionResponse.statusText);
+        throw new Error('Failed to fetch collection');
+      }
+  
+      // Parse collection data
+      const collectionData = collectionResponse.data.fields;
+
+      const collection = this.parseCollection(collectionData);
+      console.log(collection)
+  
+      // Prepare to fetch sweat lists (workouts) by sweatlistIds in the collection
+      const sweatLists: Workout[] = [];
+      for (const sweatlistIdentifier of collection.sweatlistIds) {
+        // For each sweatlistId, fetch the saved workout (sweat list)
+        try {
+          const [workout] = await this.fetchSavedWorkout(sweatlistIdentifier.sweatlistAuthorId, sweatlistIdentifier.id); // Only care about the workout, not logs here
+          if (workout) {
+            sweatLists.push(workout);
+          }
+        } catch (error) {
+          console.error(`Error fetching workout with ID ${sweatlistIdentifier.id}:`, error);
+        }
+      }
+  
+      return { collection, sweatLists };
+  
+    } catch (error) {
+      console.error('Error fetching collection with sweat lists:', error);
+      throw error;
+    }
+  }
+  
+  private parseCollection(fields: any): SweatlistCollection {
+    const id = fields.id?.stringValue || '';
+    const title = fields.title?.stringValue || '';
+    const subtitle = fields.subtitle?.stringValue || '';
+  
+    // Parse the sweatlistIds, assuming SweatlistIdentifiers has a specific structure
+    const sweatlistIdsArray = fields.sweatlistIds?.arrayValue?.values || [];
+    const sweatlistIds: SweatlistIdentifiers[] = sweatlistIdsArray.map((item: any) => ({
+      id: item.mapValue?.fields?.id?.stringValue || '', // Adjust based on how SweatlistIdentifiers is structured
+      sweatlistAuthorId: item.mapValue?.fields?.sweatlistAuthorId?.stringValue || '', // Example fields
+    }));
+  
+    const ownerId = fields.ownerId?.stringValue || '';
+    const createdAtTimestamp = parseFloat(fields.createdAt?.doubleValue || '0');
+    const updatedAtTimestamp = parseFloat(fields.updatedAt?.doubleValue || '0');
+  
+    return {
+      id,
+      title,
+      subtitle,
+      sweatlistIds,
+      ownerId,
+      createdAt: new Date(createdAtTimestamp * 1000),
+      updatedAt: new Date(updatedAtTimestamp * 1000),
+    };
+  }
+  
   private parseWorkout(fields: any): Workout {
     const id = fields.id?.stringValue || '';
     const title = fields.title?.stringValue || '';

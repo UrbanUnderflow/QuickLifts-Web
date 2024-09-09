@@ -6,6 +6,7 @@ import Terms from './pages/Terms';
 import CompletedOnboarding from './pages/CompletedOnboarding';
 import WorkoutPreviewer from './pages/WorkoutPreviewer';
 import Checklist from './pages/Checklist';
+import CollectionView from './pages/CollectionView';
 
 
 const App: React.FC = () => {
@@ -18,6 +19,7 @@ const App: React.FC = () => {
         <Route path="/completeOnboarding" element={<CompletedOnboarding />} />
         <Route path="*" element={<div>404 Not Found</div>} />
         <Route path="/workoutPreview" element={< WorkoutPreviewer />} />
+        <Route path="/collection" element={< CollectionView />} />
         <Route path="/starterpack" element={< Checklist />} />
 
       </Routes>
