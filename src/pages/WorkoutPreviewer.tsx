@@ -61,8 +61,26 @@ const WorkoutPreviewer: React.FC = () => {
   };
 
   const confirmRedirect = () => {
-    window.open("https://apps.apple.com/us/app/pulse-the-fitness-collective/id6451497729", "_blank");
+    const workoutId = searchParams.get('workoutId') || "1039FEC0-E7B6-4F7E-84BC-B89086232B5F";
+    const referralCode = searchParams.get('referralCode') || "Bq6zlqIlSdPUGki6gsv6X9TdVtG3";
+  
+    // Construct the deep link URL that your app can handle
+    const deepLink = encodeURIComponent(`https://fitwithpulse.ai/workoutPreview?workoutId=${workoutId}&referralCode=${referralCode}`);
+  
+    // Your Firebase Dynamic Links domain
+    const dynamicLinkDomain = "https://quicklifts.page.link";
+  
+    // Your iOS bundle ID and App Store ID
+    const bundleId = "Tremaine.QuickLifts";
+    const appStoreId = "6451497729";
+  
+    // Construct the full Dynamic Link URL
+    const dynamicLink = `${dynamicLinkDomain}/?link=${deepLink}&ibi=${bundleId}&isi=${appStoreId}`;
+  
     setShowModal(false);
+  
+    // Redirect to the Dynamic Link
+    window.location.href = dynamicLink;
   };
 
   if (isLoading) {
