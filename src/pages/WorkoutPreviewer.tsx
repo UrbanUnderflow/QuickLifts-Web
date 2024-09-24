@@ -61,20 +61,21 @@ const WorkoutPreviewer: React.FC = () => {
   };
 
   const confirmRedirect = () => {
-    const workoutId = searchParams.get('workoutId') || "1039FEC0-E7B6-4F7E-84BC-B89086232B5F";
-    const referralCode = searchParams.get('referralCode') || "Bq6zlqIlSdPUGki6gsv6X9TdVtG3";
+    const workoutId = searchParams.get('workoutId') || "defaultWorkoutId";
+    const referralCode = searchParams.get('referralCode') || "defaultReferralCode";
+    const linkType = "workoutPreview";
   
-    // Construct the deep link URL that your app can handle
-    const deepLink = encodeURIComponent(`https://fitwithpulse.ai/workoutPreview?workoutId=${workoutId}&referralCode=${referralCode}`);
+    // Construct the deep link URL
+    const deepLink = encodeURIComponent(`https://fitwithpulse.ai/workoutPreview?linkType=${linkType}&workoutId=${workoutId}&referralCode=${referralCode}`);
   
-    // Your Firebase Dynamic Links domain
+    // Firebase Dynamic Links domain
     const dynamicLinkDomain = "https://quicklifts.page.link";
   
-    // Your iOS bundle ID and App Store ID
+    // iOS parameters
     const bundleId = "Tremaine.QuickLifts";
     const appStoreId = "6451497729";
   
-    // Construct the full Dynamic Link URL
+    // Full Dynamic Link URL
     const dynamicLink = `${dynamicLinkDomain}/?link=${deepLink}&ibi=${bundleId}&isi=${appStoreId}`;
   
     setShowModal(false);
