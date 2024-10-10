@@ -46,7 +46,9 @@ const SweatListCardView: React.FC<SweatListCardProps> = ({ log }) => {
       )}
       <div className="flex flex-col justify-center ml-4 flex-grow">
         <h3 className="text-lg font-bold text-white">{log.exercise.name}</h3>
-        <p className="text-sm text-[#E0FE10]">{`${log.exercise.sets} sets x ${log.exercise.reps} reps`}</p>
+        <p className="text-sm text-[#E0FE10]">
+        {`${log.exercise.sets} sets x ${log.exercise.reps === 0 ? 12 : log.exercise.reps} reps`}
+        </p>
       </div>
     </div>
   );
