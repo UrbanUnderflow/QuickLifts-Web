@@ -100,7 +100,7 @@ const WorkoutPreviewer: React.FC = () => {
       {/* Download banner */}
       <div className="fixed top-0 left-0 right-0 bg-[#E0FE10] text-black py-2 px-4 text-center z-50">
         <p className="font-bold">
-          Download the Pulse app for full access to this workout
+          Get more workouts with the Pulse app, as well as full access to this workout!
           <button 
             onClick={handleGetAppClick} 
             className="underline ml-2 font-bold bg-transparent border-none cursor-pointer"
