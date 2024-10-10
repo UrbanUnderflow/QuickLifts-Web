@@ -77,11 +77,14 @@ const WorkoutPreviewer: React.FC = () => {
   
     // Full Dynamic Link URL
     const dynamicLink = `${dynamicLinkDomain}/?link=${deepLink}&ibi=${bundleId}&isi=${appStoreId}`;
+
+    const appStoreURL = "https://apps.apple.com/us/app/pulse-the-fitness-collective/id6451497729";
+
   
     setShowModal(false);
   
     // Redirect to the Dynamic Link
-    window.location.href = dynamicLink;
+    window.location.href = appStoreURL;
   };
 
   if (isLoading) {
