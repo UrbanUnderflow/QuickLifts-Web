@@ -16,7 +16,7 @@ export interface Exercise {
     visibility: string[];
     currentVideoPosition: number;
     sets: number;
-    reps: number;
+    reps: string;
     weight: number;
     author: ExerciseAuthor;
     createdAt: Date

@@ -7,10 +7,13 @@ interface SweatListCardProps {
 
 const SweatListCardView: React.FC<SweatListCardProps> = ({ log }) => {
   useEffect(() => {
-    console.log('Exercise:', log.exercise.name);
+    console.log('Exercise Log:', log);
+    console.log('Exercise name:', log.exercise.name);
+    console.log('Sets:', log.exercise.sets);
+    console.log('Reps:', log.exercise.reps);
     console.log('Videos length:', log.exercise.videos.length);
     console.log('Current video position:', log.exercise.currentVideoPosition);
-    
+
     const currentVideo = log.exercise.videos[log.exercise.currentVideoPosition];
     if (currentVideo) {
       console.log('Current video URL:', currentVideo.videoURL);
@@ -47,7 +50,7 @@ const SweatListCardView: React.FC<SweatListCardProps> = ({ log }) => {
       <div className="flex flex-col justify-center ml-4 flex-grow">
         <h3 className="text-lg font-bold text-white">{log.exercise.name}</h3>
         <p className="text-sm text-[#E0FE10]">
-        {`${log.exercise.sets} sets x ${log.exercise.reps === 0 ? 12 : log.exercise.reps} reps`}
+        {`${log.exercise.sets} sets x ${log.exercise.reps === "0" ? 12 : log.exercise.reps} reps`}
         </p>
       </div>
     </div>
