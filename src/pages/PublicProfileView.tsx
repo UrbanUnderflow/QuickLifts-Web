@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { FollowRequest } from '../types/FollowRequest';
 import { User } from '../types/User';
+import ExerciseGrid from '../components/ExerciseGrid';
+import { Exercise } from '../types/Exercise';
 
 
 const TABS = {
@@ -18,6 +20,8 @@ export default function ProfileView() {
   const { username } = useParams<{ username: string }>();
   const [selectedTab, setSelectedTab] = useState<TabType>(TABS.ACTIVITY);
   const [user, setUser] = useState<User | null>(null);
+  const [userVideos, setUserVideos] = useState<Exercise[]>([]);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -52,6 +56,27 @@ export default function ProfileView() {
       fetchUserProfile();
     }
   }, [username]);
+
+  // Add to useEffect after user is loaded
+    useEffect(() => {
+      const fetchUserVideos = async () => {
+        if (!user?.id) return;
+        
+        try {
+          const response = await fetch(`${API_BASE_URL}/get-user-videos?userId=${user.id}`);
+          if (!response.ok) throw new Error('Failed to fetch videos');
+          
+          const data = await response.json();
+          if (data.success) {
+            setUserVideos(data.exercises);
+          }
+        } catch (error) {
+          console.error('Error fetching user videos:', error);
+        }
+      };
+
+      fetchUserVideos();
+    }, [user?.id]);
 
   useEffect(() => {
     const fetchFollowData = async (userId: string) => {
@@ -179,8 +204,16 @@ export default function ProfileView() {
                 </div>
               )}
               {selectedTab === TABS.EXERICSES && (
-                <div className="text-zinc-400">
-                  Exercise library coming soon...
+                <div className="px-5">
+                  <h2 className="text-xl text-white font-semibold mb-4">
+                    {user.username}'s Videos ({userVideos.length})
+                  </h2>
+                  <ExerciseGrid
+                    userVideos={userVideos}
+                    onSelectVideo={(exercise) => {
+                      // Handle video selection
+                    }}
+                  />
                 </div>
               )}
               {selectedTab === TABS.SWEATLISTS && (
