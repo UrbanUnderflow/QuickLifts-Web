@@ -4,6 +4,8 @@ import { FollowRequest } from '../types/FollowRequest';
 import { User } from '../types/User';
 import ExerciseGrid from '../components/ExerciseGrid';
 import { Exercise } from '../types/Exercise';
+import { Challenge } from '../types/Challenge';
+import { ChallengesTab } from '../components/ChallengesTab';
 
 
 const TABS = {
@@ -20,7 +22,11 @@ export default function ProfileView() {
   const { username } = useParams<{ username: string }>();
   const [selectedTab, setSelectedTab] = useState<TabType>(TABS.ACTIVITY);
   const [user, setUser] = useState<User | null>(null);
+
+
   const [userVideos, setUserVideos] = useState<Exercise[]>([]);
+  const [activeChallenges, setActiveChallenges] = useState<Challenge[]>([]);
+
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -56,6 +62,26 @@ export default function ProfileView() {
       fetchUserProfile();
     }
   }, [username]);
+
+    useEffect(() => {
+      const fetchChallenges = async () => {
+        if (!user?.id) return;
+        
+        try {
+          const response = await fetch(`${API_BASE_URL}/get-challenges?userId=${user.id}`);
+          if (!response.ok) throw new Error('Failed to fetch challenges');
+          
+          const data = await response.json();
+          if (data.success) {
+            setActiveChallenges(data.challenges);
+          }
+        } catch (error) {
+          console.error('Error fetching challenges:', error);
+        }
+      };
+    
+      fetchChallenges();
+    }, [user?.id]);
 
   // Add to useEffect after user is loaded
     useEffect(() => {
@@ -223,10 +249,14 @@ export default function ProfileView() {
               )}
               
               {selectedTab === TABS.CHALLENGES && (
-                <div className="text-zinc-400">
-                  Workouts library coming soon...
-                </div>
-              )}
+                  <ChallengesTab
+                  activeChallenges={activeChallenges}
+                  onSelectChallenge={(challenge) => {
+                  // Handle challenge selection here
+                  // e.g. navigate to challenge detail view
+                  }}
+                  />
+                )}
               
             </div>
           </div>
