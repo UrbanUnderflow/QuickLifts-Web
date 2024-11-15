@@ -7,7 +7,7 @@ import CompletedOnboarding from './pages/CompletedOnboarding';
 import WorkoutPreviewer from './pages/WorkoutPreviewer';
 import Checklist from './pages/Checklist';
 import CollectionView from './pages/CollectionView';
-
+import PublicProfileView from './pages/PublicProfileView';
 
 const App: React.FC = () => {
   return (
@@ -21,6 +21,7 @@ const App: React.FC = () => {
         <Route path="/workoutPreview" element={< WorkoutPreviewer />} />
         <Route path="/collection" element={< CollectionView />} />
         <Route path="/starterpack" element={< Checklist />} />
+        <Route path="/:username" element={<PublicProfileView />} />
 
       </Routes>
     </Router>
