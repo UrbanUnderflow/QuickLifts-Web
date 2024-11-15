@@ -47,7 +47,6 @@ type TabType = typeof TABS[keyof typeof TABS];
 
 export default function ProfileView() {
   const { username } = useParams<{ username: string }>();
-  const navigate = useNavigate();
   const [selectedTab, setSelectedTab] = useState<TabType>(TABS.ACTIVITY);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
