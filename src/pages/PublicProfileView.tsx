@@ -1,46 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
+import { FollowRequest } from '../types/FollowRequest';
+import { User } from '../types/User';
 
-interface User {
-  id: string;
-  displayName: string;
-  username: string;
-  bio?: string;
-  profileImage?: {
-    profileImageURL?: string;
-  };
-  followerCount: number;
-  followingCount: number;
-  bodyWeight?: number;
-  workoutCount: number;
-  creator?: {
-    type?: string[];
-    instagramHandle?: string;
-    twitterHandle?: string;
-    youtubeUrl?: string;
-  };
-}
-
-// Add to existing interfaces
-interface FollowRequest {
-  fromUser: {
-    id: string;
-    username: string;
-    displayName: string;
-  };
-  toUser: {
-    id: string;
-    username: string;
-    displayName: string;
-  };
-  status: string;
-}
 
 const TABS = {
   STATS: 'stats',
   ACTIVITY: 'activity',
-  WORKOUTS: 'workouts',
-  CHECKLIST: 'checklist'
+  EXERICSES: 'exercises',
+  SWEATLISTS: 'sweatlists',
+  CHALLENGES: 'challenges',
 } as const;
 
 type TabType = typeof TABS[keyof typeof TABS];
@@ -55,10 +24,14 @@ export default function ProfileView() {
   const [followers, setFollowers] = useState<FollowRequest[]>([]);
   const [following, setFollowing] = useState<FollowRequest[]>([]);
 
+  const API_BASE_URL = process.env.NODE_ENV === 'development' 
+  ? 'http://localhost:8888/.netlify/functions'
+  : 'https://fitwithpulse.ai/.netlify/functions';
+
   useEffect(() => {
     const fetchUserProfile = async () => {
       try {
-        const response = await fetch(`https://fitwithpulse.ai/.netlify/functions/get-user-profile?username=${username}`);
+        const response = await fetch(`${API_BASE_URL}/get-user-profile?username=${username}`);
         if (!response.ok) {
           throw new Error('Profile not found');
         }
@@ -188,12 +161,12 @@ export default function ProfileView() {
             <div className="mt-8">
               {selectedTab === TABS.STATS && (
                 <div className="grid grid-cols-2 gap-4 text-white">
-                  {/* <div className="p-4 bg-zinc-800 rounded-lg">
+                  <div className="p-4 bg-zinc-800 rounded-lg">
                     <div className="text-2xl font-bold">
                       {user.bodyWeight?.[user.bodyWeight.length - 1]?.newWeight || 0} lbs
                     </div>
                     <div className="text-zinc-400">Body Weight</div>
-                  </div> */}
+                  </div>
                   <div className="p-4 bg-zinc-800 rounded-lg">
                     <div className="text-2xl font-bold">{user.workoutCount || 0}</div>
                     <div className="text-zinc-400">Workouts</div>
@@ -205,16 +178,23 @@ export default function ProfileView() {
                   Activity feed coming soon...
                 </div>
               )}
-              {selectedTab === TABS.WORKOUTS && (
+              {selectedTab === TABS.EXERICSES && (
+                <div className="text-zinc-400">
+                  Exercise library coming soon...
+                </div>
+              )}
+              {selectedTab === TABS.SWEATLISTS && (
+                <div className="text-zinc-400">
+                  Exercise library coming soon...
+                </div>
+              )}
+              
+              {selectedTab === TABS.CHALLENGES && (
                 <div className="text-zinc-400">
                   Workouts library coming soon...
                 </div>
               )}
-              {selectedTab === TABS.CHECKLIST && (
-                <div className="text-zinc-400">
-                  Onboarding checklist coming soon...
-                </div>
-              )}
+              
             </div>
           </div>
         </div>
