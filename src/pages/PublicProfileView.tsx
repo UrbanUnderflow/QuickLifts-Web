@@ -61,7 +61,7 @@ export default function ProfileView() {
     if (username) {
       fetchUserProfile();
     }
-  }, [username]);
+  }, [username, API_BASE_URL]);
 
     useEffect(() => {
       const fetchChallenges = async () => {
@@ -81,7 +81,7 @@ export default function ProfileView() {
       };
     
       fetchChallenges();
-    }, [user?.id]);
+    }, [user?.id, API_BASE_URL]);
 
   // Add to useEffect after user is loaded
     useEffect(() => {
@@ -102,7 +102,7 @@ export default function ProfileView() {
       };
 
       fetchUserVideos();
-    }, [user?.id]);
+    }, [user?.id, API_BASE_URL]);
 
   useEffect(() => {
     const fetchFollowData = async (userId: string) => {
