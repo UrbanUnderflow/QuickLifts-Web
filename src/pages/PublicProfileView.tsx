@@ -7,7 +7,6 @@ import { Exercise } from '../types/Exercise';
 import { Challenge } from '../types/Challenge';
 import { ChallengesTab } from '../components/ChallengesTab';
 import { WorkoutSummary } from '../types/WorkoutSummary';
-import { ExerciseVideo } from '../types/ExerciseVideo';
 import { StarIcon } from '@heroicons/react/24/outline';
 import { ActivityTab } from '../components/ActivityTab';
 import { SweatlistsTab } from '../components/SweatlistTab';
@@ -39,7 +38,6 @@ export default function ProfileView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [userWorkouts, setUserWorkouts] = useState<Workout[]>([]);
-  const [selectedActivityDate, setSelectedActivityDate] = useState<Date | null>(null);
 
   
 
@@ -111,7 +109,7 @@ export default function ProfileView() {
       };
 
       fetchUserVideos();
-    }, [user?.id, API_BASE_URL]);
+    }, [user?.id, API_BASE_URL, setUserWorkouts]);
 
   useEffect(() => {
     const fetchFollowData = async (userId: string) => {
@@ -176,7 +174,7 @@ export default function ProfileView() {
     };
   
     fetchWorkoutSummaries();
-  }, [user?.id]); // Only depend on user.id since the other data will trigger their own updates
+  }, [user?.id, API_BASE_URL, followers, following, userVideos]); // Only depend on user.id since the other data will trigger their own updates
 
   if (loading) {
     return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
