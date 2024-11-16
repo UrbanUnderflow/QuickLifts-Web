@@ -30,7 +30,6 @@ export const ActivityTab: React.FC<ActivityTabProps> = ({
     const groupActivities = (): ActivityGroup[] => {
       if (activities.length === 0) return [];
   
-      const calendar = new Date();
       const groups: { [key: string]: UserActivity[] } = {};
   
       activities.forEach(activity => {
