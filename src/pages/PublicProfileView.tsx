@@ -234,21 +234,23 @@ export default function ProfileView() {
               </div>
             </div>
 
-            <div className="mt-8 border-b border-zinc-700">
-              <nav className="flex gap-8">
-                {Object.values(TABS).map((tab) => (
-                  <button
-                    key={tab}
-                    onClick={() => setSelectedTab(tab)}
-                    className={`pb-4 px-2 text-sm font-medium transition-colors relative 
-                      ${selectedTab === tab ? 'text-white' : 'text-zinc-400 hover:text-zinc-300'}`}
-                  >
-                    {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                    {selectedTab === tab && (
-                      <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-white" />
-                    )}
-                  </button>
-                ))}
+            <div className="mt-8 border-b border-zinc-700 overflow-x-auto">
+              <nav className="flex whitespace-nowrap min-w-full sm:min-w-0 px-4 sm:px-0">
+                <div className="flex gap-8 pb-2 sm:pb-0">
+                  {Object.values(TABS).map((tab) => (
+                    <button
+                      key={tab}
+                      onClick={() => setSelectedTab(tab)}
+                      className={`pb-4 px-2 text-sm font-medium transition-colors relative flex-shrink-0
+                        ${selectedTab === tab ? 'text-white' : 'text-zinc-400 hover:text-zinc-300'}`}
+                    >
+                      {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                      {selectedTab === tab && (
+                        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-white" />
+                      )}
+                    </button>
+                  ))}
+                </div>
               </nav>
             </div>
 
