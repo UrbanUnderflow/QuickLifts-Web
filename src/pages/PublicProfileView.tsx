@@ -6,6 +6,14 @@ import ExerciseGrid from '../components/ExerciseGrid';
 import { Exercise } from '../types/Exercise';
 import { Challenge } from '../types/Challenge';
 import { ChallengesTab } from '../components/ChallengesTab';
+import { WorkoutSummary } from '../types/WorkoutSummary';
+import { ExerciseVideo } from '../types/ExerciseVideo';
+import { StarIcon } from '@heroicons/react/24/outline';
+import { ActivityTab } from '../components/ActivityTab';
+import { SweatlistsTab } from '../components/SweatlistTab';
+import { Workout } from '../types/Workout';
+import { parseActivityType } from '../utils/activityParser';
+import { UserActivity } from '../types/Activity';
 
 
 const TABS = {
@@ -22,17 +30,18 @@ export default function ProfileView() {
   const { username } = useParams<{ username: string }>();
   const [selectedTab, setSelectedTab] = useState<TabType>(TABS.ACTIVITY);
   const [user, setUser] = useState<User | null>(null);
-
-
   const [userVideos, setUserVideos] = useState<Exercise[]>([]);
   const [activeChallenges, setActiveChallenges] = useState<Challenge[]>([]);
-
-
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
+  const [workoutSummaries, setWorkoutSummaries] = useState<WorkoutSummary[]>([]);
+  const [activities, setActivities] = useState<UserActivity[]>([]);
   const [followers, setFollowers] = useState<FollowRequest[]>([]);
   const [following, setFollowing] = useState<FollowRequest[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [userWorkouts, setUserWorkouts] = useState<Workout[]>([]);
+  const [selectedActivityDate, setSelectedActivityDate] = useState<Date | null>(null);
+
+  
 
   const API_BASE_URL = process.env.NODE_ENV === 'development' 
   ? 'http://localhost:8888/.netlify/functions'
@@ -133,6 +142,42 @@ export default function ProfileView() {
     }
   }, [user?.id]);
 
+  useEffect(() => {
+    const fetchWorkoutSummaries = async () => {
+      if (!user?.id) return;
+      
+      try {
+        const response = await fetch(`${API_BASE_URL}/get-workout-summaries?userId=${user.id}`);
+        if (!response.ok) throw new Error('Failed to fetch workout summaries');
+        
+        const data = await response.json();
+        if (data.success) {
+          const summaries = data.summaries.map((summary: any) =>
+            WorkoutSummary.fromFirestore(summary)
+          );
+          setWorkoutSummaries(summaries);
+          
+          // Only update activities if we have all the required data
+          if (userVideos.length > 0 || followers.length > 0 || following.length > 0) {
+            const followRequests = [...followers, ...following];
+            
+            const parsedActivities = parseActivityType(
+              summaries,
+              userVideos,
+              followRequests,
+              user.id
+            );
+            setActivities(parsedActivities);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching workout summaries:', error);
+      }
+    };
+  
+    fetchWorkoutSummaries();
+  }, [user?.id]); // Only depend on user.id since the other data will trigger their own updates
+
   if (loading) {
     return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
   }
@@ -225,8 +270,35 @@ export default function ProfileView() {
                 </div>
               )}
               {selectedTab === TABS.ACTIVITY && (
-                <div className="text-zinc-400">
-                  Activity feed coming soon...
+                <div className="px-5">
+                  {activities.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center p-8">
+                      <StarIcon className="w-12 h-12 text-white/20" />
+                      <h3 className="mt-4 text-white font-medium">
+                        {user.username} has no activities yet
+                      </h3>
+                    </div>
+                  ) : (
+                    <ActivityTab
+                      activities={activities}
+                      workoutSummaries={workoutSummaries}
+                      userVideos={userVideos}
+                      username={user.username}
+                      isPublicProfile={true}
+                      onWorkoutSelect={(summary) => {
+                        // Handle workout summary selection
+                        console.log('Selected workout summary:', summary);
+                      }}
+                      onVideoSelect={(exercise) => {
+                        // Handle video selection
+                        console.log('Selected exercise:', exercise);
+                      }}
+                      onProfileSelect={(userId) => {
+                        // Handle profile selection
+                        console.log('Selected user profile:', userId);
+                      }}
+                    />
+                  )}
                 </div>
               )}
               {selectedTab === TABS.EXERICSES && (
@@ -243,11 +315,14 @@ export default function ProfileView() {
                 </div>
               )}
               {selectedTab === TABS.SWEATLISTS && (
-                <div className="text-zinc-400">
-                  Exercise library coming soon...
-                </div>
+                <SweatlistsTab
+                sweatlists={userWorkouts}
+                onSelectSweatlist={(workout) => {
+                    // Handle workout selection
+                    console.log('Selected workout:', workout);
+                  }}
+                />
               )}
-              
               {selectedTab === TABS.CHALLENGES && (
                   <ChallengesTab
                   activeChallenges={activeChallenges}

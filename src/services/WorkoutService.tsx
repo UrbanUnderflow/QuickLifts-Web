@@ -317,7 +317,6 @@ class WorkoutService {
       totalAccountLikes: parseInt(fields.totalAccountLikes?.integerValue || '0'),
       totalAccountBookmarked: parseInt(fields.totalAccountBookmarked?.integerValue || '0'),
       totalAccountUsage: parseInt(fields.totalAccountUsage?.integerValue || '0'),
-      comments: this.parseComments(fields.comments),
       isApproved: fields.isApproved?.booleanValue || false,
       liked: fields.liked?.booleanValue,
       bookmarked: fields.bookmarked?.booleanValue,
