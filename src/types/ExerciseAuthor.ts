@@ -1,13 +1,18 @@
-
+// types/ExerciseAuthor.ts
 export interface ExerciseAuthor {
-    userId: string;
-    username: string;
+  userId: string;
+  username: string;
+ }
+ 
+ export function fromFirebase(data: any): ExerciseAuthor {
+  return {
+    userId: data.userId || '',
+    username: data.username || ''
+  };
+ }
+ 
+ export class ExerciseAuthor {
+  static fromFirebase(data: any): ExerciseAuthor {
+    return fromFirebase(data);
   }
-  
-  // If you need a function to convert ExerciseAuthor to a plain object (similar to toDictionary in Swift)
-  export function exerciseAuthorToDictionary(author: ExerciseAuthor): { [key: string]: any } {
-    return {
-      userId: author.userId,
-      username: author.username
-    };
-  }
+ }

@@ -11,4 +11,6 @@ export interface FollowRequest {
       displayName: string;
     };
     status: string;
+    createdAt: Date;
+    updatedAt: Date
   }
