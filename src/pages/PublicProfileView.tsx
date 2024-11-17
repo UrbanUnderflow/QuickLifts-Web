@@ -14,7 +14,6 @@ import { Workout } from '../types/Workout';
 import { parseActivityType } from '../utils/activityParser';
 import { UserActivity } from '../types/Activity';
 import FullScreenExerciseView from '../pages/FullscreenExerciseView';
-import { Helmet } from 'react-helmet';
 
 const TABS = {
   STATS: 'stats',
@@ -199,18 +198,8 @@ export default function ProfileView() {
     youtube: user.creator?.youtubeUrl
   };
 
-  const imageUrl = `${user.profileImage?.profileImageURL}?t=${Date.now()}`;
-
   return (
     <div className="min-h-screen bg-zinc-900">
-      <Helmet>
-        <title>{`${user.displayName}'s Profile | Pulse`}</title>
-        <meta property="og:title" content={`${user.displayName}'s Profile | Pulse`} />
-        <meta property="og:description" content={user.bio || 'Check out this fitness profile on Pulse'} />
-        <meta property="og:image" content={imageUrl || 'https://fitwithpulse.ai/default-profile.png'} />
-        <meta property="og:type" content="profile" />
-        <meta property="og:url" content={`https://fitwithpulse.ai/${username}`} />
-      </Helmet>
       <div className="relative">
         <div className="h-48 bg-gradient-to-b from-zinc-800 to-zinc-900" />
         

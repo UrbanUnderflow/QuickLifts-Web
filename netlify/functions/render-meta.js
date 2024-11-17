@@ -21,53 +21,62 @@ if (admin.apps.length === 0) {
 const db = admin.firestore();
 
 exports.handler = async (event) => {
-    const username = event.queryStringParameters.username;
-  
-    // Default meta tags
-    let metaTags = `
-      <title>Pulse: Fitness Collective</title>
-      <!-- Default meta tags -->
-    `;
-  
-    // If it's a profile page
-    if (username && username !== 'favicon.ico') {
-      try {
-        // Fetch user data from Firestore
-        const usersRef = db.collection('users');
-        const snapshot = await usersRef.where('username', '==', username).get();
-  
-        if (!snapshot.empty) {
-          const userData = snapshot.docs[0].data();
-          const imageUrl = userData.profileImage?.profileImageURL || 'https://fitwithpulse.ai/default-profile.png';
-  
-          metaTags = `
-            <title>${userData.displayName}'s Profile | Pulse</title>
-            <meta property="og:title" content="${userData.displayName}'s Profile | Pulse" />
-            <meta property="og:description" content="${userData.bio || 'Check out this fitness profile on Pulse'}" />
-            <meta property="og:image" content="${imageUrl}" />
-            <meta property="og:url" content="https://fitwithpulse.ai/${username}" />
-            <meta property="og:type" content="profile" />
-          `;
-        }
-      } catch (error) {
-        console.error('Error fetching user data:', error);
+  const username = event.queryStringParameters.username;
+
+  // Default meta tags for the home page
+  let metaTags = `
+    <title>Pulse: Fitness Collective</title>
+    <meta property="og:title" content="Pulse: Fitness Collective" />
+    <meta property="og:description" content="Beat Your Best, Share Your Victory" />
+    <meta property="og:image" content="https://fitwithpulse.ai/preview-image.png" />
+    <meta property="og:url" content="https://fitwithpulse.ai" />
+    <meta property="og:type" content="website" />
+  `;
+
+  // If it's a profile page
+  if (username && username !== 'favicon.ico') {
+    try {
+      const usersRef = db.collection('users');
+      const snapshot = await usersRef.where('username', '==', username).get();
+
+      if (!snapshot.empty) {
+        const userData = snapshot.docs[0].data();
+        const imageUrl = userData.profileImage?.profileImageURL || 'https://fitwithpulse.ai/default-profile.png';
+        const bio = userData.bio || 'Check out this fitness profile on Pulse';
+
+        metaTags = `
+          <title>${userData.displayName}'s Profile | Pulse</title>
+          <meta property="og:title" content="${userData.displayName}'s Profile | Pulse" />
+          <meta property="og:description" content="${bio}" />
+          <meta property="og:image" content="${imageUrl}" />
+          <meta property="og:url" content="https://fitwithpulse.ai/${username}" />
+          <meta property="og:type" content="profile" />
+        `;
       }
+    } catch (error) {
+      console.error('Error fetching user data:', error);
+      // Optionally, you can set default or error meta tags here
     }
+  }
 
   const html = `
     <!DOCTYPE html>
     <html lang="en">
       <head>
+        ${metaTags}
         <meta charset="utf-8" />
         <link rel="icon" href="/favicon.ico" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <meta name="theme-color" content="#000000" />
-        ${metaTags}
         <link rel="apple-touch-icon" href="/logo192.png" />
         <link rel="manifest" href="/manifest.json" />
+        <link href="/static/css/main.6aecf152.css" rel="stylesheet" />
+        <title>Pulse: Fitness Collective</title>
       </head>
       <body>
+        <noscript>You need to enable JavaScript to run this app.</noscript>
         <div id="root"></div>
+        <script src="/static/js/main.1faa15df.js"></script>
       </body>
     </html>
   `;
