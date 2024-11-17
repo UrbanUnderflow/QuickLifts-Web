@@ -205,9 +205,13 @@ export default function ProfileView() {
         <title>{user.displayName}'s Profile</title>
         <meta property="og:title" content={`${user.displayName}'s Profile`} />
         <meta property="og:description" content={user.bio || 'Check out this fitness profile on Pulse'} />
-        <meta property="og:image" content={user.profileImage?.profileImageURL || '/api/placeholder/96/96'} />
+        <meta property="og:image" content={`https://fitwithpulse.ai/.netlify/functions/social-preview?username=${username}`} />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
         <meta property="og:url" content={`https://fitwithpulse.ai/${username}`} />
         <meta property="og:type" content="profile" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:image" content={`https://fitwithpulse.ai/.netlify/functions/social-preview?username=${username}`} />
       </Helmet>
       <div className="relative">
         <div className="h-48 bg-gradient-to-b from-zinc-800 to-zinc-900" />
