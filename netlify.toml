@@ -6,18 +6,17 @@
 [build.environment]
   NODE_VERSION = "18"
 
-# Important: Profile pages must come before the SPA catch-all
 [[redirects]]
-  from = "/:username"
+  from = "/:username([^/.]+)/?$"  # Matches usernames but not files/paths with dots
   to = "/.netlify/functions/render-meta"
   status = 200
   force = true
-  condition = {NOT = [{Path = "/privacyPolicy"}, {Path = "/terms"}, {Path = "/completeOnboarding"}, {Path = "/workoutPreview"}, {Path = "/collection"}, {Path = "/starterpack"}, {Path = "/static/*"}, {Path = "/favicon.ico"}, {Path = "/manifest.json"}, {Path = "/logo192.png"}]}
+  conditions = {Role = ["anonymous"]}
 
 # Handle static assets
 [[redirects]]
-  from = "/static/*"
-  to = "/static/:splat"
+  from = "/(.*)\.(ico|png|jpg|gif|json|js|css)$"
+  to = "/:splat"
   status = 200
 
 [[redirects]]

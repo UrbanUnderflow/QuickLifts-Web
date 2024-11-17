@@ -21,8 +21,14 @@ if (admin.apps.length === 0) {
 const db = admin.firestore();
 
 exports.handler = async (event) => {
-    console.log('Event received:', event);
-    
+    console.log('=================== DEBUG START ===================');
+    console.log('Full event:', JSON.stringify(event, null, 2));
+    console.log('Path:', event.path);
+    console.log('HTTP method:', event.httpMethod);
+    console.log('Headers:', JSON.stringify(event.headers, null, 2));
+    console.log('Query parameters:', JSON.stringify(event.queryStringParameters, null, 2));
+    console.log('=================== DEBUG END ===================');
+  
     // Get username from path or query params
     const username = event.queryStringParameters?.username || 
                     event.path.split('/').filter(Boolean).pop();
