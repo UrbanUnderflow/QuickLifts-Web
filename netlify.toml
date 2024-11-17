@@ -44,6 +44,7 @@
   from = "/:username"
   to = "/.netlify/functions/render-meta?username=:username"
   status = 200
+  conditions = { Role = ["anonymous"] }
 
 # Fallback redirect to serve your React app for other routes
 [[redirects]]
@@ -51,6 +52,7 @@
   to = "/index.html"
   status = 200
 
+# Headers and other settings remain the same
 [[headers]]
   for = "/apple-app-site-association"
   [headers.values]
