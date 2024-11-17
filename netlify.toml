@@ -36,7 +36,7 @@
 
 # Redirect user profile URLs to the Netlify function
 [[redirects]]
-  from = "/u/:username"
+  from = "/:username"
   to = "/.netlify/functions/render-meta?username=:username"
   status = 200
 
