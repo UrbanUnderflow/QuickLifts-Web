@@ -1,5 +1,4 @@
 // types/WorkoutSummary.ts
-
 import { ExerciseLog } from './ExerciseLog';
 import { BodyPart } from './BodyPart';
 import { WorkoutRating } from './Workout';
@@ -21,7 +20,7 @@ export class WorkoutSummary {
     isCompleted: boolean;
     createdAt: Date;
     updatedAt: Date;
-    completedAt?: Date;
+    completedAt?: Date | null;
     duration: string;
   
     constructor(data: any) {
@@ -39,14 +38,32 @@ export class WorkoutSummary {
       this.gifURLs = data.gifURLs;
       this.recommendedWork = data.recommendedWork;
       this.isCompleted = data.isCompleted;
-      this.createdAt = data.createdAt?.toDate();
-      this.updatedAt = data.updatedAt?.toDate();
-      this.completedAt = data.completedAt?.toDate();
+      this.createdAt = data.createdAt ? new Date(data.createdAt) : new Date();
+      this.updatedAt = data.updatedAt ? new Date(data.updatedAt) : new Date();
+      this.completedAt = data.completedAt ? new Date(data.completedAt) : null;
       this.duration = data.duration;
     }
   
-    static fromFirestore(data: any): WorkoutSummary {
-      return new WorkoutSummary(data);
+    static fromFirebase(data: any): WorkoutSummary {
+      return new WorkoutSummary({
+        id: data.id || '',
+        workoutId: data.workoutId || '',
+        exercises: data.exercises || [],
+        bodyParts: data.bodyParts || [],
+        secondaryBodyParts: data.secondaryBodyParts || [],
+        workoutTitle: data.workoutTitle || '',
+        caloriesBurned: data.caloriesBurned || 0,
+        workoutRating: data.workoutRating,
+        exercisesCompleted: data.exercisesCompleted || [],
+        aiInsight: data.aiInsight || '',
+        recommendations: data.recommendations || [],
+        gifURLs: data.gifURLs || [],
+        recommendedWork: data.recommendedWork,
+        isCompleted: data.isCompleted || false,
+        createdAt: data.createdAt,
+        updatedAt: data.updatedAt,
+        completedAt: data.completedAt,
+        duration: data.duration || ''
+      });
     }
-  }
-  
+}
