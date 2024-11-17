@@ -6,12 +6,50 @@
 [build.environment]
   NODE_VERSION = "18"
 
+# Serve static assets directly
+[[redirects]]
+  from = "/favicon.ico"
+  to = "/favicon.ico"
+  status = 200
+
+[[redirects]]
+  from = "/manifest.json"
+  to = "/manifest.json"
+  status = 200
+
+[[redirects]]
+  from = "/logo192.png"
+  to = "/logo192.png"
+  status = 200
+
+[[redirects]]
+  from = "/static/*"
+  to = "/static/:splat"
+  status = 200
+
+# Ensure API routes are served correctly
+[[redirects]]
+  from = "/api/*"
+  to = "/api/:splat"
+  status = 200
+
+# Ensure functions are accessible
+[[redirects]]
+  from = "/.netlify/functions/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
+
+# Redirect user profile URLs to the Netlify function
+[[redirects]]
+  from = "/:username"
+  to = "/.netlify/functions/render-meta?username=:username"
+  status = 200
+
+# Fallback redirect to serve your React app for other routes
 [[redirects]]
   from = "/*"
-  to = "/.netlify/functions/render-meta"
+  to = "/index.html"
   status = 200
-  force = true
-  conditions = {Role = ["anonymous"]}
 
 [[headers]]
   for = "/apple-app-site-association"
