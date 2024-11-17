@@ -21,7 +21,19 @@ if (admin.apps.length === 0) {
 const db = admin.firestore();
 
 exports.handler = async (event) => {
-  const username = event.queryStringParameters.username;
+    // Get username from either query params or path
+    const username = event.queryStringParameters?.username || event.path.split('/').pop();
+    
+    console.log('Received request for username:', username);
+    console.log('Event path:', event.path);
+    console.log('Event query parameters:', event.queryStringParameters);
+  
+    if (!username || username === 'render-meta') {
+      return {
+        statusCode: 404,
+        body: 'Username not found'
+      };
+    }
 
   // Default meta tags for the home page
   let metaTags = `

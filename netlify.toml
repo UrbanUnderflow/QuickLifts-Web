@@ -6,47 +6,37 @@
 [build.environment]
   NODE_VERSION = "18"
 
-# Serve specific static assets directly
+# Serve index.html for the root path
 [[redirects]]
-  from = "/favicon.ico"
-  to = "/favicon.ico"
+  from = "/"
+  to = "/index.html"
   status = 200
 
-[[redirects]]
-  from = "/manifest.json"
-  to = "/manifest.json"
-  status = 200
-
-[[redirects]]
-  from = "/logo192.png"
-  to = "/logo192.png"
-  status = 200
-
-# Serve all static files under /static/* correctly
+# Handle static assets
 [[redirects]]
   from = "/static/*"
   to = "/static/:splat"
   status = 200
 
-# Ensure API routes are served correctly
 [[redirects]]
   from = "/api/*"
   to = "/api/:splat"
   status = 200
 
-# Redirect user profile URLs to the Netlify function
+# Important: Handle profile pages before the catch-all
 [[redirects]]
   from = "/:username"
-  to = "/.netlify/functions/render-meta?username=:username"
+  to = "/.netlify/functions/render-meta"
   status = 200
-
-# Fallback redirect to serve your React app for all other routes
+  force = true
+  conditions = {Role = ["anonymous"]}
+  
+# SPA catch-all redirect
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
 
-# Headers Configuration
 [[headers]]
   for = "/apple-app-site-association"
   [headers.values]
@@ -63,22 +53,6 @@
     X-XSS-Protection = "1; mode=block"
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
-
-# Specific cache control for media files
-[[headers]]
-  for = "/*.jpg"
-  [headers.values]
-    Cache-Control = "public, max-age=0, must-revalidate"
-
-[[headers]]
-  for = "/*.png"
-  [headers.values]
-    Cache-Control = "public, max-age=0, must-revalidate"
-
-[[headers]]
-  for = "/*.gif"
-  [headers.values]
-    Cache-Control = "public, max-age=0, must-revalidate"
 
 [functions]
   directory = "netlify/functions"
