@@ -204,35 +204,12 @@ export default function ProfileView() {
   return (
     <div className="min-h-screen bg-zinc-900">
       <Helmet>
-          {/* Basic Meta Tags */}
-          <title>{user.displayName}'s Profile | Pulse</title>
-          <meta name="description" content={user.bio || 'Check out this fitness profile on Pulse'} />
-          
-          {/* OpenGraph Meta Tags */}
-          <meta property="og:site_name" content="Pulse" />
-          <meta property="og:title" content={`${user.displayName}'s Profile | Pulse`} />
-          <meta property="og:description" content={user.bio || 'Check out this fitness profile on Pulse'} />
-          <meta property="og:image" content={imageUrl || 'https://fitwithpulse.ai/default-profile.png'} />
-          <meta property="og:image:secure_url" content={imageUrl || 'https://fitwithpulse.ai/default-profile.png'} />
-          <meta property="og:image:width" content="1200" />
-          <meta property="og:image:height" content="630" />
-          <meta property="og:type" content="profile" />
-          <meta property="og:url" content={`https://fitwithpulse.ai/${username}`} />
-          
-          {/* Twitter Meta Tags */}
-          <meta name="twitter:card" content="summary_large_image" />
-          <meta name="twitter:site" content="@pulse" />
-          <meta name="twitter:title" content={`${user.displayName}'s Profile | Pulse`} />
-          <meta name="twitter:description" content={user.bio || 'Check out this fitness profile on Pulse'} />
-          <meta name="twitter:image" content={imageUrl || 'https://fitwithpulse.ai/default-profile.png'} />
-          
-          {/* Apple Meta Tags */}
-          <meta name="apple-mobile-web-app-capable" content="yes" />
-          <meta name="apple-mobile-web-app-title" content="Pulse" />
-          <meta name="apple-mobile-web-app-status-bar-style" content="black" />
-          
-          {/* Cache busting parameter */}
-          <meta property="og:image:url" content={imageUrl || 'https://fitwithpulse.ai/default-profile.png'} />
+        <title>{`${user.displayName}'s Profile | Pulse`}</title>
+        <meta property="og:title" content={`${user.displayName}'s Profile | Pulse`} />
+        <meta property="og:description" content={user.bio || 'Check out this fitness profile on Pulse'} />
+        <meta property="og:image" content={imageUrl || 'https://fitwithpulse.ai/default-profile.png'} />
+        <meta property="og:type" content="profile" />
+        <meta property="og:url" content={`https://fitwithpulse.ai/${username}`} />
       </Helmet>
       <div className="relative">
         <div className="h-48 bg-gradient-to-b from-zinc-800 to-zinc-900" />
