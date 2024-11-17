@@ -7,7 +7,7 @@
   NODE_VERSION = "18"
 
 [[redirects]]
-  from = "/:username([^/.]+)/?$"  # Matches usernames but not files/paths with dots
+  from = "/:username([^/.]+)/?$"
   to = "/.netlify/functions/render-meta"
   status = 200
   force = true
