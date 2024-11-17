@@ -6,7 +6,7 @@
 [build.environment]
   NODE_VERSION = "18"
 
-# Serve static assets directly
+# Serve specific static assets directly
 [[redirects]]
   from = "/favicon.ico"
   to = "/favicon.ico"
@@ -22,6 +22,7 @@
   to = "/logo192.png"
   status = 200
 
+# Serve all static files under /static/* correctly
 [[redirects]]
   from = "/static/*"
   to = "/static/:splat"
@@ -33,26 +34,19 @@
   to = "/api/:splat"
   status = 200
 
-# Ensure functions are accessible
-[[redirects]]
-  from = "/.netlify/functions/*"
-  to = "/.netlify/functions/:splat"
-  status = 200
-
 # Redirect user profile URLs to the Netlify function
 [[redirects]]
   from = "/:username"
   to = "/.netlify/functions/render-meta?username=:username"
   status = 200
-  conditions = { Role = ["anonymous"] }
 
-# Fallback redirect to serve your React app for other routes
+# Fallback redirect to serve your React app for all other routes
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
 
-# Headers and other settings remain the same
+# Headers Configuration
 [[headers]]
   for = "/apple-app-site-association"
   [headers.values]
@@ -70,7 +64,7 @@
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
 
-# Add specific cache control for media files
+# Specific cache control for media files
 [[headers]]
   for = "/*.jpg"
   [headers.values]
