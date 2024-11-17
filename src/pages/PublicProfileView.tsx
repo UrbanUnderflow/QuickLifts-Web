@@ -14,6 +14,7 @@ import { Workout } from '../types/Workout';
 import { parseActivityType } from '../utils/activityParser';
 import { UserActivity } from '../types/Activity';
 import FullScreenExerciseView from '../pages/FullscreenExerciseView';
+import { Helmet } from 'react-helmet';
 
 const TABS = {
   STATS: 'stats',
@@ -200,6 +201,14 @@ export default function ProfileView() {
 
   return (
     <div className="min-h-screen bg-zinc-900">
+      <Helmet>
+        <title>{user.displayName}'s Profile</title>
+        <meta property="og:title" content={`${user.displayName}'s Profile`} />
+        <meta property="og:description" content={user.bio || 'Check out this fitness profile on Pulse'} />
+        <meta property="og:image" content={user.profileImage?.profileImageURL || '/api/placeholder/96/96'} />
+        <meta property="og:url" content={`https://fitwithpulse.ai/${username}`} />
+        <meta property="og:type" content="profile" />
+      </Helmet>
       <div className="relative">
         <div className="h-48 bg-gradient-to-b from-zinc-800 to-zinc-900" />
         
