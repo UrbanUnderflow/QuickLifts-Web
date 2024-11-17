@@ -6,6 +6,13 @@
 [build.environment]
   NODE_VERSION = "18"
 
+[[redirects]]
+  from = "/*"
+  to = "/.netlify/functions/render-meta"
+  status = 200
+  force = true
+  conditions = {Role = ["anonymous"]}
+
 [[headers]]
   for = "/apple-app-site-association"
   [headers.values]
@@ -18,8 +25,12 @@
     Access-Control-Allow-Methods = "GET, POST, PUT, DELETE, OPTIONS"
     Access-Control-Allow-Headers = "Content-Type"
     Cache-Control = "public, max-age=0, must-revalidate"
+    X-Frame-Options = "DENY"
+    X-XSS-Protection = "1; mode=block"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
 
-# Add specific cache control for social media preview images
+# Add specific cache control for media files
 [[headers]]
   for = "/*.jpg"
   [headers.values]
@@ -30,12 +41,10 @@
   [headers.values]
     Cache-Control = "public, max-age=0, must-revalidate"
 
-# Add specific headers for profile pages
 [[headers]]
-  for = "/[username]"
+  for = "/*.gif"
   [headers.values]
     Cache-Control = "public, max-age=0, must-revalidate"
-    X-Frame-Options = "DENY"
-    X-XSS-Protection = "1; mode=block"
-    X-Content-Type-Options = "nosniff"
-    Referrer-Policy = "strict-origin-when-cross-origin"
+
+[functions]
+  directory = "netlify/functions"
