@@ -31,6 +31,7 @@ exports.handler = async (event) => {
     <meta property="og:image" content="https://fitwithpulse.ai/preview-image.png" />
     <meta property="og:url" content="https://fitwithpulse.ai" />
     <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
   `;
 
   // If it's a profile page
@@ -51,11 +52,44 @@ exports.handler = async (event) => {
           <meta property="og:image" content="${imageUrl}" />
           <meta property="og:url" content="https://fitwithpulse.ai/${username}" />
           <meta property="og:type" content="profile" />
+          <meta name="twitter:card" content="summary_large_image" />
+          <meta name="twitter:title" content="${userData.displayName}'s Profile | Pulse" />
+          <meta name="twitter:description" content="${bio}" />
+          <meta name="twitter:image" content="${imageUrl}" />
+          <link rel="canonical" href="https://fitwithpulse.ai/${username}" />
+        `;
+      } else {
+        // User not found, set default or 404 meta tags
+        metaTags = `
+          <title>Profile Not Found | Pulse</title>
+          <meta property="og:title" content="Profile Not Found | Pulse" />
+          <meta property="og:description" content="The profile you are looking for does not exist." />
+          <meta property="og:image" content="https://fitwithpulse.ai/default-profile.png" />
+          <meta property="og:url" content="https://fitwithpulse.ai" />
+          <meta property="og:type" content="website" />
+          <meta name="twitter:card" content="summary_large_image" />
+          <meta name="twitter:title" content="Profile Not Found | Pulse" />
+          <meta name="twitter:description" content="The profile you are looking for does not exist." />
+          <meta name="twitter:image" content="https://fitwithpulse.ai/default-profile.png" />
+          <link rel="canonical" href="https://fitwithpulse.ai" />
         `;
       }
     } catch (error) {
       console.error('Error fetching user data:', error);
-      // Optionally, you can set default or error meta tags here
+      // Optionally, set default or error meta tags
+      metaTags = `
+        <title>Error | Pulse</title>
+        <meta property="og:title" content="Error | Pulse" />
+        <meta property="og:description" content="An error occurred while fetching the profile." />
+        <meta property="og:image" content="https://fitwithpulse.ai/error-image.png" />
+        <meta property="og:url" content="https://fitwithpulse.ai" />
+        <meta property="og:type" content="website" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="Error | Pulse" />
+        <meta name="twitter:description" content="An error occurred while fetching the profile." />
+        <meta name="twitter:image" content="https://fitwithpulse.ai/error-image.png" />
+        <link rel="canonical" href="https://fitwithpulse.ai" />
+      `;
     }
   }
 
@@ -71,12 +105,11 @@ exports.handler = async (event) => {
         <link rel="apple-touch-icon" href="/logo192.png" />
         <link rel="manifest" href="/manifest.json" />
         <link href="/static/css/main.6aecf152.css" rel="stylesheet" />
-        <title>Pulse: Fitness Collective</title>
       </head>
       <body>
         <noscript>You need to enable JavaScript to run this app.</noscript>
         <div id="root"></div>
-        <script src="/static/js/main.1faa15df.js"></script>
+        <script src="/static/js/main.95d63212.js"></script>
       </body>
     </html>
   `;
