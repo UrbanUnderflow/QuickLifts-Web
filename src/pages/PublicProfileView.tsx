@@ -13,7 +13,7 @@ import { SweatlistsTab } from '../components/SweatlistTab';
 import { Workout } from '../types/Workout';
 import { parseActivityType } from '../utils/activityParser';
 import { UserActivity } from '../types/Activity';
-
+import FullScreenExerciseView from '../pages/FullscreenExerciseView';
 
 const TABS = {
   STATS: 'stats',
@@ -39,14 +39,14 @@ export default function ProfileView() {
   const [error, setError] = useState<string | null>(null);
   const [userWorkouts, setUserWorkouts] = useState<Workout[]>([]);
 
-  
+  const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
 
   const API_BASE_URL = process.env.NODE_ENV === 'development' 
   ? 'http://localhost:8888/.netlify/functions'
   : 'https://fitwithpulse.ai/.netlify/functions';
 
   useEffect(() => {
-    const fetchUserProfile = async () => {
+    const fetchUserProfile = async () => { 
       try {
         const response = await fetch(`${API_BASE_URL}/get-user-profile?username=${username}`);
         if (!response.ok) {
@@ -111,34 +111,41 @@ export default function ProfileView() {
       fetchUserVideos();
     }, [user?.id, API_BASE_URL, setUserWorkouts]);
 
-  useEffect(() => {
-    const fetchFollowData = async (userId: string) => {
-      try {
-        const [followersRes, followingRes] = await Promise.all([
-          fetch(`https://fitwithpulse.ai/.netlify/functions/get-followers?userId=${userId}`),
-          fetch(`https://fitwithpulse.ai/.netlify/functions/get-following?userId=${userId}`)
-        ]);
-
-        if (!followersRes.ok || !followingRes.ok) {
-          throw new Error('Failed to fetch follow data');
+    useEffect(() => {
+      const fetchFollowData = async (userId: string) => {
+        try {
+          const fetchOptions = {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+          };
+    
+          const [followersRes, followingRes] = await Promise.all([
+            fetch(`${API_BASE_URL}/get-followers?userId=${userId}`, fetchOptions),
+            fetch(`${API_BASE_URL}/get-following?userId=${userId}`, fetchOptions)
+          ]);
+    
+          if (!followersRes.ok || !followingRes.ok) {
+            throw new Error('Failed to fetch follow data');
+          }
+    
+          const followersData = await followersRes.json();
+          const followingData = await followingRes.json();
+    
+          if (followersData.success && followingData.success) {
+            setFollowers(followersData.followers);
+            setFollowing(followingData.following);
+          }
+        } catch (error) {
+          console.error('Error fetching follow data:', error);
         }
-
-        const followersData = await followersRes.json();
-        const followingData = await followingRes.json();
-
-        if (followersData.success && followingData.success) {
-          setFollowers(followersData.followers);
-          setFollowing(followingData.following);
-        }
-      } catch (error) {
-        console.error('Error fetching follow data:', error);
+      };
+    
+      if (user?.id) {
+        fetchFollowData(user.id);
       }
-    };
-
-    if (user?.id) {
-      fetchFollowData(user.id);
-    }
-  }, [user?.id]);
+    }, [user?.id, API_BASE_URL]);
 
   useEffect(() => {
     const fetchWorkoutSummaries = async () => {
@@ -150,8 +157,9 @@ export default function ProfileView() {
         
         const data = await response.json();
         if (data.success) {
+          console.log('Workout summaries:', data.summaries);
           const summaries = data.summaries.map((summary: any) =>
-            WorkoutSummary.fromFirestore(summary)
+            WorkoutSummary.fromFirebase(summary)
           );
           setWorkoutSummaries(summaries);
           
@@ -218,8 +226,10 @@ export default function ProfileView() {
               <p className="mt-4 text-zinc-300">{user.bio}</p>
 
               <div className="mt-4 flex gap-6">
-                {Object.entries(socialLinks).map(([platform, handle]) => (
-                  handle && (
+                {Object.entries(socialLinks).map(([platform, handle]) => {
+                  if (!handle) return null;
+
+                  return (
                     <a 
                       key={platform}
                       href={getSocialLink(platform, handle)}
@@ -227,10 +237,14 @@ export default function ProfileView() {
                       rel="noopener noreferrer"
                       className="text-zinc-400 hover:text-white transition-colors"
                     >
-                      {platform}
+                      <img 
+                        src={`/${platform}.svg`}
+                        alt={platform}
+                        className="w-6 h-6 hover:opacity-80"
+                      />
                     </a>
-                  )
-                ))}
+                  );
+                })}
               </div>
             </div>
 
@@ -310,6 +324,9 @@ export default function ProfileView() {
                     userVideos={userVideos}
                     onSelectVideo={(exercise) => {
                       // Handle video selection
+                      console.log(exercise);
+                      setSelectedExercise(exercise);
+
                     }}
                   />
                 </div>
@@ -336,6 +353,19 @@ export default function ProfileView() {
             </div>
           </div>
         </div>
+
+        {/* Add at the bottom of your JSX */}
+        {selectedExercise && (
+          <FullScreenExerciseView
+            exercise={selectedExercise}
+            user={user}
+            onBack={() => setSelectedExercise(null)}
+            onProfileClick={() => {
+              // Handle profile click
+              console.log('Profile clicked');
+            }}
+          />
+        )}
       </div>
     </div>
   );

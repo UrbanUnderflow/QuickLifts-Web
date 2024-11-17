@@ -1,6 +1,12 @@
 // get-challenges.js
 const admin = require('firebase-admin');
 
+const headers = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS'
+};
+
 if (admin.apps.length === 0) {
   admin.initializeApp({
     credential: admin.credential.cert({
@@ -52,12 +58,6 @@ async function getCollectionsByOwnerId(ownerId) {
 }
 
 exports.handler = async (event) => {
-  const headers = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
-    'Access-Control-Allow-Methods': 'GET, OPTIONS'
-  };
-
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers, body: '' };
   }

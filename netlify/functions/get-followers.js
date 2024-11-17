@@ -1,6 +1,12 @@
 // get-followers.js
 const admin = require('firebase-admin');
 
+const headers = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS'
+};
+
 if (admin.apps.length === 0) {
   admin.initializeApp({
     credential: admin.credential.cert({
@@ -42,6 +48,7 @@ exports.handler = async (event) => {
     if (!userId) {
       return {
         statusCode: 400,
+        headers,
         body: JSON.stringify({ success: false, error: 'userId parameter is required' })
       };
     }
@@ -50,7 +57,7 @@ exports.handler = async (event) => {
     
     return {
       statusCode: 200,
-      headers: { 'Content-Type': 'application/json' },
+      headers, 
       body: JSON.stringify({
         success: true,
         followers
@@ -59,6 +66,7 @@ exports.handler = async (event) => {
   } catch (error) {
     return {
       statusCode: 500,
+      headers, 
       body: JSON.stringify({
         success: false,
         error: error.message
