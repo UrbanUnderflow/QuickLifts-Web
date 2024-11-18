@@ -19,7 +19,15 @@ const FullScreenExerciseView: React.FC<FullScreenExerciseViewProps> = ({
 }) => {
   const [showFullCaption, setShowFullCaption] = React.useState(false);
   const [defaultImage, setDefaultImage] = React.useState(false);
-  const currentVideo = exercise.videos[0]; // You might want to add video index state if multiple videos
+  const currentVideo = exercise?.videos?.[0] || null; // Safe check
+
+  if (!exercise || !exercise.videos || exercise.videos.length === 0) {
+    return (
+      <div className="fixed inset-0 bg-black z-50 flex items-center justify-center text-white">
+        No video available
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 bg-black z-50">
@@ -37,10 +45,7 @@ const FullScreenExerciseView: React.FC<FullScreenExerciseViewProps> = ({
       <div className="relative h-full flex flex-col">
         {/* Header */}
         <div className="pt-12 px-4">
-          <button 
-            onClick={onBack}
-            className="text-white p-2"
-          >
+          <button onClick={onBack} className="text-white p-2">
             <ChevronLeftIcon className="w-6 h-6" />
           </button>
         </div>
@@ -52,10 +57,7 @@ const FullScreenExerciseView: React.FC<FullScreenExerciseViewProps> = ({
         <div className="p-4 bg-gradient-to-t from-black/60 to-transparent">
           <div className="flex space-x-2">
             {/* Profile Image */}
-            <button 
-              onClick={onProfileClick}
-              className="relative flex-shrink-0"
-            >
+            <button onClick={onProfileClick} className="relative flex-shrink-0">
               {defaultImage ? (
                 <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center">
                   <img src="/profile-image.svg" alt="default profile" className="w-6 h-6" />
@@ -68,29 +70,20 @@ const FullScreenExerciseView: React.FC<FullScreenExerciseViewProps> = ({
                   onError={() => setDefaultImage(true)}
                 />
               )}
-              {/* Priority Badge - add if needed */}
             </button>
 
             {/* Exercise Info */}
-            <div 
-              className="flex-1"
-              onClick={() => setShowFullCaption(!showFullCaption)}
-            >
+            <div className="flex-1" onClick={() => setShowFullCaption(!showFullCaption)}>
               <div className="text-white">
                 <span className="font-bold">{exercise.name}</span>
                 {" - "}
-                <span>
-                  {currentVideo?.caption || exercise.description}
-                </span>
+                <span>{currentVideo?.caption || exercise.description}</span>
               </div>
 
               {/* Tags */}
               <div className="flex flex-wrap gap-2 mt-2">
                 {exercise.primaryBodyParts.slice(0, 3).map((bodyPart) => (
-                  <span 
-                    key={bodyPart}
-                    className="px-2 py-1 bg-white/10 rounded-full text-xs text-white"
-                  >
+                  <span key={bodyPart} className="px-2 py-1 bg-white/10 rounded-full text-xs text-white">
                     {bodyPart}
                   </span>
                 ))}
@@ -102,5 +95,6 @@ const FullScreenExerciseView: React.FC<FullScreenExerciseViewProps> = ({
     </div>
   );
 };
+
 
 export default FullScreenExerciseView;

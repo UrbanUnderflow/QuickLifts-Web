@@ -1,15 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useRouter } from 'next/router';
 
-const CompletedOnboarding = () => {
-  const location = useLocation();
+const CompletedOnboarding: React.FC = () => {
+  const router = useRouter();
+  const { userId } = router.query; // Access query parameters from the router
   const [loading, setLoading] = useState(true);
   const [success, setSuccess] = useState(false);
 
   useEffect(() => {
-    const queryParams = new URLSearchParams(location.search);
-    const userId = queryParams.get('userId');
-
     if (!userId) {
       console.error('UserId is missing');
       setLoading(false); // Stop loading if userId is missing
@@ -41,7 +39,7 @@ const CompletedOnboarding = () => {
     };
 
     updateOnboardingStatus();
-  }, [location.search]);
+  }, [userId]);
 
   if (!loading && !success) {
     return (
@@ -63,4 +61,3 @@ const CompletedOnboarding = () => {
 };
 
 export default CompletedOnboarding;
-

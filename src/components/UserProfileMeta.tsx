@@ -1,4 +1,5 @@
 import React from 'react';
+import Head from 'next/head';
 
 interface UserProfileMetaProps {
   userData: {
@@ -12,7 +13,7 @@ interface UserProfileMetaProps {
 
 const UserProfileMeta: React.FC<UserProfileMetaProps> = ({ userData, bio, username }) => {
   return (
-    <>
+    <Head>
       <title>{`${userData.displayName}'s Profile | Pulse`}</title>
       <meta property="og:title" content={`${userData.displayName}'s Profile | Pulse`} />
       <meta property="og:description" content={bio} />
@@ -22,7 +23,7 @@ const UserProfileMeta: React.FC<UserProfileMetaProps> = ({ userData, bio, userna
       <meta name="twitter:title" content={`${userData.displayName}'s Profile | Pulse`} />
       <meta name="twitter:description" content={bio} />
       <link rel="canonical" href={`https://fitwithpulse.ai/${username}`} />
-    </>
+    </Head>
   );
 };
 
