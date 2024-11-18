@@ -14,6 +14,7 @@ import { Workout } from '../types/Workout';
 import { parseActivityType } from '../utils/activityParser';
 import { UserActivity } from '../types/Activity';
 import FullScreenExerciseView from '../pages/FullscreenExerciseView';
+import UserProfileMeta from '../components/UserProfileMeta';
 
 const TABS = {
   STATS: 'stats',
@@ -200,6 +201,18 @@ export default function ProfileView() {
 
   return (
     <div className="min-h-screen bg-zinc-900">
+      {/* User Profile Meta Component */}
+      <UserProfileMeta 
+        userData={{
+          displayName: user.displayName,
+          bio: user.bio || 'User bio goes here',
+          username: user.username
+        }}
+        bio={user.bio || 'User bio goes here'}
+        username={user.username}
+      />
+
+      {/* Profile Content */}
       <div className="relative">
         <div className="h-48 bg-gradient-to-b from-zinc-800 to-zinc-900" />
         
