@@ -1,9 +1,12 @@
-// next.config.js
-module.exports = {
-    reactStrictMode: true, // Enables React strict mode for highlighting potential problems
-    webpack: (config) => {
-      // Return the base config without any custom modifications
-      return config;
-    },
-  };
-  
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  reactStrictMode: true,
+  images: {
+    domains: ['fitwithpulse.ai'],
+  },
+  env: {
+    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
+  }
+};
+
+module.exports = nextConfig;
