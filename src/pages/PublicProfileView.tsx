@@ -19,7 +19,7 @@ const TABS = {
   STATS: 'stats',
   ACTIVITY: 'activity',
   EXERICSES: 'exercises',
-  SWEATLISTS: 'sweatlists',
+  // SWEATLISTS: 'sweatlists',
   CHALLENGES: 'challenges',
 } as const;
 
@@ -331,7 +331,7 @@ export default function ProfileView() {
                   />
                 </div>
               )}
-              {selectedTab === TABS.SWEATLISTS && (
+              {/* {selectedTab === TABS.SWEATLISTS && (
                 <SweatlistsTab
                 sweatlists={userWorkouts}
                 onSelectSweatlist={(workout) => {
@@ -339,7 +339,7 @@ export default function ProfileView() {
                     console.log('Selected workout:', workout);
                   }}
                 />
-              )}
+              )} */}
               {selectedTab === TABS.CHALLENGES && (
                   <ChallengesTab
                   activeChallenges={activeChallenges}
