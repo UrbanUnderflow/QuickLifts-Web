@@ -22,6 +22,7 @@ const VideoCard: React.FC<VideoCardProps> = ({ gifUrl, exerciseName, onClick }) 
       .then(response => {
         // Since we're using no-cors, we won't get status
         // Instead, just assume it's valid if we get a response
+        console.log(response);
         setIsValidGif(true);
       })
       .catch(() => setIsValidGif(false));

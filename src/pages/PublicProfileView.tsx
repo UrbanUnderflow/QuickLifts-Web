@@ -9,8 +9,8 @@ import { ChallengesTab } from '../components/ChallengesTab';
 import { WorkoutSummary } from '../types/WorkoutSummary';
 import { StarIcon } from '@heroicons/react/24/outline';
 import { ActivityTab } from '../components/ActivityTab';
-import { SweatlistsTab } from '../components/SweatlistTab';
-import { Workout } from '../types/Workout';
+// import { SweatlistsTab } from '../components/SweatlistTab';
+// import { Workout } from '../types/Workout';
 import { parseActivityType } from '../utils/activityParser';
 import { UserActivity } from '../types/Activity';
 import FullScreenExerciseView from '../pages/FullscreenExerciseView';
@@ -38,7 +38,7 @@ export default function ProfileView() {
   const [following, setFollowing] = useState<FollowRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [userWorkouts, setUserWorkouts] = useState<Workout[]>([]);
+  // const [userWorkouts, setUserWorkouts] = useState<Workout[]>([]);
 
   const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
 
@@ -110,7 +110,7 @@ export default function ProfileView() {
       };
 
       fetchUserVideos();
-    }, [user?.id, API_BASE_URL, setUserWorkouts]);
+    }, [user?.id, API_BASE_URL]);
 
     useEffect(() => {
       const fetchFollowData = async (userId: string) => {
@@ -359,6 +359,7 @@ export default function ProfileView() {
                   onSelectChallenge={(challenge) => {
                   // Handle challenge selection here
                   // e.g. navigate to challenge detail view
+                  console.log(challenge);
                   }}
                   />
                 )}
