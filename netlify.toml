@@ -6,25 +6,21 @@
 [build.environment]
   NODE_VERSION = "18"
 
-# Handle profile pages
+# Important: Profile pages must come first
 [[redirects]]
-  from = "/:username"
-  to = "/.netlify/functions/user-profile/:username"
+  from = "/:username([^/.]+)/?$"
+  to = "/.netlify/functions/user-profile"
   status = 200
   force = true
+  conditions = {User-Agent = ["facebookexternalhit/*", "Twitterbot*", "WhatsApp*", "*LinkedInBot*", "Pinterest*", "*TelegramBot*", "*Slackbot*", "*iMessage*"]}
 
 # Handle static assets
 [[redirects]]
-  from = "/static/*"
-  to = "/static/:splat"
+  from = "/(.*)\.(ico|png|jpg|gif|json|js|css)$"
+  to = "/:splat"
   status = 200
 
-[[redirects]]
-  from = "/api/*"
-  to = "/api/:splat"
-  status = 200
-
-# SPA catch-all redirect
+# SPA fallback for regular users
 [[redirects]]
   from = "/*"
   to = "/index.html"
@@ -33,10 +29,4 @@
 [[headers]]
   for = "/*"
   [headers.values]
-    Cache-Control = "no-cache"
-    Access-Control-Allow-Origin = "*"
-    Access-Control-Allow-Methods = "GET, POST, PUT, DELETE, OPTIONS"
-    Access-Control-Allow-Headers = "Content-Type"
-
-[functions]
-  directory = "netlify/functions"
+    Cache-Control = "public, max-age=0, must-revalidate"
