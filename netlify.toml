@@ -8,8 +8,8 @@
 
 # Important: Profile pages must come first
 [[redirects]]
-  from = "/:username([^/.]+)/?$"
-  to = "/.netlify/functions/user-profile"
+  from = "/:username"
+  to = "/.netlify/functions/user-profile?username=:username"
   status = 200
   force = true
   conditions = {User-Agent = ["facebookexternalhit/*", "Twitterbot*", "WhatsApp*", "*LinkedInBot*", "Pinterest*", "*TelegramBot*", "*Slackbot*", "*iMessage*"]}
