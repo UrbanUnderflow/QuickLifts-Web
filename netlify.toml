@@ -11,9 +11,9 @@
   to = "/.netlify/functions/render-meta"
   status = 200
   force = true
-  conditions = {Role = ["anonymous"]}
+  [redirects.conditions]
+    Role = ["anonymous"]
 
-# Handle static assets
 [[redirects]]
   from = "/(.*)\.(ico|png|jpg|gif|json|js|css)$"
   to = "/:splat"
@@ -24,7 +24,6 @@
   to = "/api/:splat"
   status = 200
 
-# SPA catch-all redirect as fallback
 [[redirects]]
   from = "/*"
   to = "/index.html"
