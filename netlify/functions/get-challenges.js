@@ -8,6 +8,7 @@ const headers = {
 };
 
 if (admin.apps.length === 0) {
+  console.log('Initializing Firebase Admin SDK...');
   admin.initializeApp({
     credential: admin.credential.cert({
       "type": "service_account",
@@ -28,6 +29,7 @@ const db = admin.firestore();
 
 async function getCollectionsByOwnerId(ownerId) {
   const now = new Date();
+  console.log(`Fetching collections for ownerId: ${ownerId}`);
   
   try {
     const snapshot = await db.collection('sweatlist-collection')
@@ -35,36 +37,55 @@ async function getCollectionsByOwnerId(ownerId) {
       .get();
 
     if (snapshot.empty) {
+      console.log('No collections found for the given ownerId.');
       return [];
     }
 
     const collections = snapshot.docs
-      .map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }))
-      .filter(collection => collection.challenge) // Filter for challenges only
-      .filter(collection => { // Filter for active challenges
+      .map(doc => {
+        console.log(`Document ID: ${doc.id}, Data:`, doc.data());
+        return {
+          id: doc.id,
+          ...doc.data()
+        };
+      })
+      .filter(collection => {
+        const hasChallenge = !!collection.challenge;
+        console.log(`Collection ID: ${collection.id}, Has Challenge: ${hasChallenge}`);
+        return hasChallenge;
+      })
+      .filter(collection => {
         const startDate = collection.challenge.startDate?.toDate();
         const endDate = collection.challenge.endDate?.toDate();
+        console.log(`Collection ID: ${collection.id}, Start Date: ${startDate}, End Date: ${endDate}`);
         return startDate < now && endDate > now;
       })
-      .filter(collection => collection.challenge.status === 'published'); // Filter for published only
+      .filter(collection => {
+        const isPublished = collection.challenge.status === 'published';
+        console.log(`Collection ID: ${collection.id}, Is Published: ${isPublished}`);
+        return isPublished;
+      });
 
+    console.log('Filtered collections:', collections);
     return collections;
   } catch (error) {
+    console.error('Error fetching collections:', error);
     throw error;
   }
 }
 
 exports.handler = async (event) => {
+  console.log('Received event:', event);
+
   if (event.httpMethod === 'OPTIONS') {
+    console.log('Handling OPTIONS preflight request.');
     return { statusCode: 200, headers, body: '' };
   }
 
   try {
     const userId = event.queryStringParameters.userId;
     if (!userId) {
+      console.log('Missing userId in query parameters.');
       return {
         statusCode: 400,
         headers,
@@ -72,6 +93,7 @@ exports.handler = async (event) => {
       };
     }
 
+    console.log(`Fetching challenges for userId: ${userId}`);
     const challenges = await getCollectionsByOwnerId(userId);
     
     return {
@@ -80,6 +102,7 @@ exports.handler = async (event) => {
       body: JSON.stringify({ success: true, challenges })
     };
   } catch (error) {
+    console.error('Error in handler:', error);
     return {
       statusCode: 500,
       headers,

@@ -1,5 +1,10 @@
-// netlify/functions/user-profile.js
 const admin = require('firebase-admin');
+
+const headers = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS'
+};
 
 if (admin.apps.length === 0) {
   admin.initializeApp({
@@ -21,8 +26,17 @@ if (admin.apps.length === 0) {
 const db = admin.firestore();
 
 exports.handler = async (event, context) => {
-  // Get username from path parameter
-  const username = event.path.split('/').pop();
+  // Handle CORS preflight request
+  if (event.httpMethod === 'OPTIONS') {
+    return {
+      statusCode: 200,
+      headers,
+      body: ''
+    };
+  }
+
+  // Get username from path parameter or query parameter
+  const username = event.queryStringParameters?.username || event.path.split('/').pop();
 
   console.log('Processing username:', username);
 
@@ -34,6 +48,7 @@ exports.handler = async (event, context) => {
     if (snapshot.empty) {
       return {
         statusCode: 404,
+        headers,
         body: `<!DOCTYPE html><html><head><title>User Not Found</title></head><body>User not found</body></html>`
       };
     }
@@ -78,16 +93,14 @@ exports.handler = async (event, context) => {
 
     return {
       statusCode: 200,
-      headers: {
-        'Content-Type': 'text/html',
-        'Cache-Control': 'no-cache'
-      },
+      headers,
       body: html
     };
   } catch (error) {
     console.error('Error:', error);
     return {
       statusCode: 500,
+      headers,
       body: `<!DOCTYPE html><html><head><title>Error</title></head><body>Server error</body></html>`
     };
   }
