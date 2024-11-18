@@ -7,16 +7,14 @@
   NODE_VERSION = "18"
 
 [[redirects]]
-  from = "/:username([^/.]+)/?$"
+  from = "/:username"
   to = "/.netlify/functions/render-meta"
   status = 200
   force = true
-  [redirects.conditions]
-    Role = ["anonymous"]
 
 [[redirects]]
-  from = "/(.*)\.(ico|png|jpg|gif|json|js|css)$"
-  to = "/:splat"
+  from = "/static/*"
+  to = "/static/:splat"
   status = 200
 
 [[redirects]]
