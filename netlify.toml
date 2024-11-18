@@ -6,12 +6,14 @@
 [build.environment]
   NODE_VERSION = "18"
 
+# Handle profile pages
 [[redirects]]
   from = "/:username"
-  to = "/.netlify/functions/render-meta"
+  to = "/.netlify/functions/user-profile/:username"
   status = 200
   force = true
 
+# Handle static assets
 [[redirects]]
   from = "/static/*"
   to = "/static/:splat"
@@ -22,27 +24,19 @@
   to = "/api/:splat"
   status = 200
 
+# SPA catch-all redirect
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
 
 [[headers]]
-  for = "/apple-app-site-association"
-  [headers.values]
-    Content-Type = "application/json"
-
-[[headers]]
   for = "/*"
   [headers.values]
+    Cache-Control = "no-cache"
     Access-Control-Allow-Origin = "*"
     Access-Control-Allow-Methods = "GET, POST, PUT, DELETE, OPTIONS"
     Access-Control-Allow-Headers = "Content-Type"
-    Cache-Control = "no-cache"
-    X-Frame-Options = "DENY"
-    X-XSS-Protection = "1; mode=block"
-    X-Content-Type-Options = "nosniff"
-    Referrer-Policy = "strict-origin-when-cross-origin"
 
 [functions]
   directory = "netlify/functions"
