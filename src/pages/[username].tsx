@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { GetServerSideProps } from 'next';
 import { useRouter } from 'next/router';
 import { FollowRequest } from '../types/FollowRequest';
 import { User } from '../types/User';
@@ -14,6 +15,11 @@ import { UserActivity } from '../types/Activity';
 import FullScreenExerciseView from '../pages/FullscreenExerciseView';
 import UserProfileMeta from '../components/UserProfileMeta';
 
+interface ProfileViewProps {
+  initialUserData: User | null;
+  error: string | null; // Changed from optional to required, can be null
+}
+
 const TABS = {
   STATS: 'stats',
   ACTIVITY: 'activity',
@@ -23,20 +29,20 @@ const TABS = {
 
 type TabType = typeof TABS[keyof typeof TABS];
 
-export default function ProfileView() {
+export default function ProfileView({ initialUserData, error: serverError }: ProfileViewProps) {
   const router = useRouter();
-  const { username } = router.query; // Use Next.js router to access the route parameter
+  const { username } = router.query;
 
   const [selectedTab, setSelectedTab] = useState<TabType>(TABS.ACTIVITY);
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<User | null>(initialUserData);
   const [userVideos, setUserVideos] = useState<Exercise[]>([]);
   const [activeChallenges, setActiveChallenges] = useState<Challenge[]>([]);
   const [workoutSummaries, setWorkoutSummaries] = useState<WorkoutSummary[]>([]);
   const [activities, setActivities] = useState<UserActivity[]>([]);
   const [followers, setFollowers] = useState<FollowRequest[]>([]);
   const [following, setFollowing] = useState<FollowRequest[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(!initialUserData);
+  const [error, setError] = useState<string | null>(serverError || null);
   const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
 
   const API_BASE_URL = process.env.NODE_ENV === 'development' 
@@ -45,7 +51,7 @@ export default function ProfileView() {
 
   useEffect(() => {
     const fetchUserProfile = async () => { 
-      if (!username) return;
+      if (!username || initialUserData) return;
 
       try {
         setLoading(true);
@@ -67,84 +73,83 @@ export default function ProfileView() {
     };
 
     fetchUserProfile();
-  }, [username, API_BASE_URL])
+  }, [username, API_BASE_URL, initialUserData])
 
-    useEffect(() => {
-      const fetchChallenges = async () => {
-        if (!user?.id) return;
+  useEffect(() => {
+    const fetchChallenges = async () => {
+      if (!user?.id) return;
+      
+      try {
+        const response = await fetch(`${API_BASE_URL}/get-challenges?userId=${user.id}`);
+        if (!response.ok) throw new Error('Failed to fetch challenges');
         
-        try {
-          const response = await fetch(`${API_BASE_URL}/get-challenges?userId=${user.id}`);
-          if (!response.ok) throw new Error('Failed to fetch challenges');
-          
-          const data = await response.json();
-          if (data.success) {
-            setActiveChallenges(data.challenges);
-          }
-        } catch (error) {
-          console.error('Error fetching challenges:', error);
+        const data = await response.json();
+        if (data.success) {
+          setActiveChallenges(data.challenges);
         }
-      };
-    
-      fetchChallenges();
-    }, [user?.id, API_BASE_URL]);
-
-  // Add to useEffect after user is loaded
-    useEffect(() => {
-      const fetchUserVideos = async () => {
-        if (!user?.id) return;
-        
-        try {
-          const response = await fetch(`${API_BASE_URL}/get-user-videos?userId=${user.id}`);
-          if (!response.ok) throw new Error('Failed to fetch videos');
-          
-          const data = await response.json();
-          if (data.success) {
-            setUserVideos(data.exercises);
-          }
-        } catch (error) {
-          console.error('Error fetching user videos:', error);
-        }
-      };
-
-      fetchUserVideos();
-    }, [user?.id, API_BASE_URL]);
-
-    useEffect(() => {
-      const fetchFollowData = async (userId: string) => {
-        try {
-          const fetchOptions = {
-            method: 'GET',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-          };
-    
-          const [followersRes, followingRes] = await Promise.all([
-            fetch(`${API_BASE_URL}/get-followers?userId=${userId}`, fetchOptions),
-            fetch(`${API_BASE_URL}/get-following?userId=${userId}`, fetchOptions)
-          ]);
-    
-          if (!followersRes.ok || !followingRes.ok) {
-            throw new Error('Failed to fetch follow data');
-          }
-    
-          const followersData = await followersRes.json();
-          const followingData = await followingRes.json();
-    
-          if (followersData.success && followingData.success) {
-            setFollowers(followersData.followers);
-            setFollowing(followingData.following);
-          }
-        } catch (error) {
-          console.error('Error fetching follow data:', error);
-        }
-      };
-    
-      if (user?.id) {
-        fetchFollowData(user.id);
+      } catch (error) {
+        console.error('Error fetching challenges:', error);
       }
-    }, [user?.id, API_BASE_URL]);
+    };
+  
+    fetchChallenges();
+  }, [user?.id, API_BASE_URL]);
+
+  useEffect(() => {
+    const fetchUserVideos = async () => {
+      if (!user?.id) return;
+      
+      try {
+        const response = await fetch(`${API_BASE_URL}/get-user-videos?userId=${user.id}`);
+        if (!response.ok) throw new Error('Failed to fetch videos');
+        
+        const data = await response.json();
+        if (data.success) {
+          setUserVideos(data.exercises);
+        }
+      } catch (error) {
+        console.error('Error fetching user videos:', error);
+      }
+    };
+
+    fetchUserVideos();
+  }, [user?.id, API_BASE_URL]);
+
+  useEffect(() => {
+    const fetchFollowData = async (userId: string) => {
+      try {
+        const fetchOptions = {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+        };
+  
+        const [followersRes, followingRes] = await Promise.all([
+          fetch(`${API_BASE_URL}/get-followers?userId=${userId}`, fetchOptions),
+          fetch(`${API_BASE_URL}/get-following?userId=${userId}`, fetchOptions)
+        ]);
+  
+        if (!followersRes.ok || !followingRes.ok) {
+          throw new Error('Failed to fetch follow data');
+        }
+  
+        const followersData = await followersRes.json();
+        const followingData = await followingRes.json();
+  
+        if (followersData.success && followingData.success) {
+          setFollowers(followersData.followers);
+          setFollowing(followingData.following);
+        }
+      } catch (error) {
+        console.error('Error fetching follow data:', error);
+      }
+    };
+  
+    if (user?.id) {
+      fetchFollowData(user.id);
+    }
+  }, [user?.id, API_BASE_URL]);
 
   useEffect(() => {
     const fetchWorkoutSummaries = async () => {
@@ -162,7 +167,6 @@ export default function ProfileView() {
           );
           setWorkoutSummaries(summaries);
           
-          // Only update activities if we have all the required data
           if (userVideos.length > 0 || followers.length > 0 || following.length > 0) {
             const followRequests = [...followers, ...following];
             
@@ -181,14 +185,30 @@ export default function ProfileView() {
     };
   
     fetchWorkoutSummaries();
-  }, [user?.id, API_BASE_URL, followers, following, userVideos]); // Only depend on user.id since the other data will trigger their own updates
+  }, [user?.id, API_BASE_URL, followers, following, userVideos]);
 
-  if (loading) {
-    return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
-  }
+  if (loading || error || !user) {
+    const defaultMetaData = {
+      displayName: 'Pulse Profile',
+      bio: 'Discover fitness profiles on Pulse',
+      username: username as string || '',
+      profileImage: {
+        profileImageURL: 'https://fitwithpulse.ai/default-profile.png'
+      }
+    };
 
-  if (error || !user) {
-    return <div className="flex items-center justify-center min-h-screen">Profile not found</div>;
+    return (
+      <>
+        <UserProfileMeta 
+          userData={defaultMetaData}
+          bio={defaultMetaData.bio}
+          username={defaultMetaData.username}
+        />
+        <div className="flex items-center justify-center min-h-screen">
+          {loading ? 'Loading...' : 'Profile not found'}
+        </div>
+      </>
+    );
   }
 
   const socialLinks = {
@@ -199,18 +219,17 @@ export default function ProfileView() {
 
   return (
     <div className="min-h-screen bg-zinc-900">
-      {/* User Profile Meta Component */}
       <UserProfileMeta 
         userData={{
           displayName: user.displayName,
           bio: user.bio || 'User bio goes here',
-          username: user.username
+          username: user.username,
+          profileImage: user.profileImage
         }}
         bio={user.bio || 'User bio goes here'}
         username={user.username}
       />
 
-      {/* Profile Content */}
       <div className="relative">
         <div className="h-48 bg-gradient-to-b from-zinc-800 to-zinc-900" />
         
@@ -311,15 +330,12 @@ export default function ProfileView() {
                       username={user.username}
                       isPublicProfile={true}
                       onWorkoutSelect={(summary) => {
-                        // Handle workout summary selection
                         console.log('Selected workout summary:', summary);
                       }}
                       onVideoSelect={(exercise) => {
-                        // Handle video selection
                         console.log('Selected exercise:', exercise);
                       }}
                       onProfileSelect={(userId) => {
-                        // Handle profile selection
                         console.log('Selected user profile:', userId);
                       }}
                     />
@@ -334,46 +350,30 @@ export default function ProfileView() {
                   <ExerciseGrid
                     userVideos={userVideos}
                     onSelectVideo={(exercise) => {
-                      // Handle video selection
                       console.log(exercise);
                       setSelectedExercise(exercise);
-
                     }}
                   />
                 </div>
               )}
-              {/* {selectedTab === TABS.SWEATLISTS && (
-                <SweatlistsTab
-                sweatlists={userWorkouts}
-                onSelectSweatlist={(workout) => {
-                    // Handle workout selection
-                    console.log('Selected workout:', workout);
-                  }}
-                />
-              )} */}
               {selectedTab === TABS.CHALLENGES && (
-                  <ChallengesTab
+                <ChallengesTab
                   activeChallenges={activeChallenges}
                   onSelectChallenge={(challenge) => {
-                  // Handle challenge selection here
-                  // e.g. navigate to challenge detail view
-                  console.log(challenge);
+                    console.log(challenge);
                   }}
-                  />
-                )}
-              
+                />
+              )}
             </div>
           </div>
         </div>
 
-        {/* Add at the bottom of your JSX */}
         {selectedExercise && (
           <FullScreenExerciseView
             exercise={selectedExercise}
             user={user}
             onBack={() => setSelectedExercise(null)}
             onProfileClick={() => {
-              // Handle profile click
               console.log('Profile clicked');
             }}
           />
@@ -382,6 +382,53 @@ export default function ProfileView() {
     </div>
   );
 }
+
+
+export const getServerSideProps: GetServerSideProps<ProfileViewProps> = async (context) => {
+  const { username } = context.params || {};
+
+  if (!username || typeof username !== 'string') {
+    return {
+      props: {
+        initialUserData: null,
+        error: 'Invalid username'
+      }
+    };
+  }
+
+  try {
+    const API_BASE_URL = process.env.NODE_ENV === 'development' 
+      ? 'http://localhost:8888/.netlify/functions'
+      : 'https://fitwithpulse.ai/.netlify/functions';
+
+    const response = await fetch(`${API_BASE_URL}/get-user-profile?username=${username}`);
+    
+    if (!response.ok) {
+      throw new Error('Profile not found');
+    }
+
+    const data = await response.json();
+    
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to load profile');
+    }
+
+    return {
+      props: {
+        initialUserData: data.user,
+        error: null
+      }
+    };
+  } catch (error) {
+    console.error('Error in getServerSideProps:', error);
+    return {
+      props: {
+        initialUserData: null,
+        error: error instanceof Error ? error.message : 'Failed to load profile'
+      }
+    };
+  }
+};
 
 function getSocialLink(platform: string, handle: string): string {
   switch (platform) {
