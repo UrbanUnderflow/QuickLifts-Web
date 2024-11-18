@@ -48,13 +48,6 @@ async function fetchWorkoutSummaries(userId) {
         return null;
       };
 
-      // Debug log
-      console.log('Raw data timestamps:', {
-        createdAt: data.createdAt,
-        updatedAt: data.updatedAt,
-        completedAt: data.completedAt
-      });
-
       return {
         id: doc.id,
         ...data,

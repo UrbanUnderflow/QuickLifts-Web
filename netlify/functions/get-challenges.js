@@ -41,6 +41,16 @@ async function getCollectionsByOwnerId(ownerId) {
       return [];
     }
 
+    // Helper function to safely convert timestamps
+    const convertTimestamp = (timestamp) => {
+      if (!timestamp) return null;
+      if (timestamp._seconds) return new Date(timestamp._seconds * 1000);
+      if (timestamp.seconds) return new Date(timestamp.seconds * 1000);
+      if (timestamp.toDate && typeof timestamp.toDate === 'function') return timestamp.toDate();
+      if (timestamp instanceof Date) return timestamp;
+      return null;
+    };
+
     const collections = snapshot.docs
       .map(doc => {
         console.log(`Document ID: ${doc.id}, Data:`, doc.data());
@@ -55,8 +65,8 @@ async function getCollectionsByOwnerId(ownerId) {
         return hasChallenge;
       })
       .filter(collection => {
-        const startDate = collection.challenge.startDate?.toDate();
-        const endDate = collection.challenge.endDate?.toDate();
+        const startDate = convertTimestamp(collection.challenge.startDate);
+        const endDate = convertTimestamp(collection.challenge.endDate);
         console.log(`Collection ID: ${collection.id}, Start Date: ${startDate}, End Date: ${endDate}`);
         return startDate < now && endDate > now;
       })
@@ -73,6 +83,7 @@ async function getCollectionsByOwnerId(ownerId) {
     throw error;
   }
 }
+
 
 exports.handler = async (event) => {
   console.log('Received event:', event);
