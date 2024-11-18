@@ -6,21 +6,28 @@
 [build.environment]
   NODE_VERSION = "18"
 
-# Important: Profile pages must come first
+# Handle static assets without complex regex
 [[redirects]]
-  from = "/:username"
-  to = "/.netlify/functions/user-profile?username=:username"
-  status = 200
-  force = true
-  conditions = {User-Agent = ["facebookexternalhit/*", "Twitterbot*", "WhatsApp*", "*LinkedInBot*", "Pinterest*", "*TelegramBot*", "*Slackbot*", "*iMessage*"]}
-
-# Handle static assets
-[[redirects]]
-  from = "/(.*)\.(ico|png|jpg|gif|json|js|css)$"
-  to = "/:splat"
+  from = "/static/*"
+  to = "/static/:splat"
   status = 200
 
-# SPA fallback for regular users
+[[redirects]]
+  from = "/favicon.ico"
+  to = "/favicon.ico"
+  status = 200
+
+[[redirects]]
+  from = "/manifest.json"
+  to = "/manifest.json"
+  status = 200
+
+[[redirects]]
+  from = "/logo192.png"
+  to = "/logo192.png"
+  status = 200
+
+# SPA fallback for all other routes
 [[redirects]]
   from = "/*"
   to = "/index.html"
