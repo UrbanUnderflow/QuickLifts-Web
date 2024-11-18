@@ -1,17 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useRouter } from 'next/router';
 import WorkoutService from '../services/WorkoutService';
 import CollectionSweatlistItem from '../components/CollectionSweatlistItem';
 import { Workout } from '../types/Workout'; // Import your Workout type for type safety
 
 const CollectionPreviewer: React.FC = () => {
-  const [searchParams] = useSearchParams();
+  const router = useRouter();
   const [collection, setCollection] = useState<any | null>(null); // Assuming `collection` doesn't have a specific type yet
   const [sweatLists, setSweatLists] = useState<Workout[]>([]); // Ensure correct typing for sweat lists (workouts)
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const collectionId = searchParams.get('collectionId') || '57D465B8-A48B-46BF-A76A-3B4EC8D52470';
+  const collectionId = (router.query.collectionId as string) || '57D465B8-A48B-46BF-A76A-3B4EC8D52470';
 
   useEffect(() => {
     const fetchCollection = async () => {

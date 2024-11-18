@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useRouter } from 'next/router'; // Use useRouter from Next.js
 import SequentialVideoPlayerView from '../components/SequentialVideoPlayerView';
 import SweatListCardView from '../components/SweatListCardView';
 import WorkoutService from '../services/WorkoutService';
@@ -8,7 +8,8 @@ import { Workout } from '../types/Workout';
 import { ExerciseReference } from '../types/ExerciseReference';
 
 const WorkoutPreviewer: React.FC = () => {
-  const [searchParams] = useSearchParams();
+  const router = useRouter();
+  const { wId, referralCode } = router.query;
   const [workout, setWorkout] = useState<Workout | null>(null);
   const [logs, setLogs] = useState<ExerciseLog[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -16,10 +17,12 @@ const WorkoutPreviewer: React.FC = () => {
 
   const [showModal, setShowModal] = useState(false);
 
-  const workoutId = searchParams.get('workoutId') || "1039FEC0-E7B6-4F7E-84BC-B89086232B5F";
-  const userId = searchParams.get('referralCode') || "Bq6zlqIlSdPUGki6gsv6X9TdVtG3";
+  const userId = (referralCode as string) || "Bq6zlqIlSdPUGki6gsv6X9TdVtG3";
+  const workoutId = (wId as string) || "1039FEC0-E7B6-4F7E-84BC-B89086232B5F";
 
   useEffect(() => {
+    if (!workoutId || !referralCode) return; // Ensure params are available
+
     const fetchWorkout = async () => {
       try {
         setIsLoading(true);

@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import './GlisteningButton.css';
 import EmailPopup from '../EmailPopup';  // Make sure the path to this import is correct
 
 const Footer = () => {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useRouter } from 'next/router';
 import { FollowRequest } from '../types/FollowRequest';
 import { User } from '../types/User';
 import ExerciseGrid from '../components/ExerciseGrid';
@@ -9,8 +9,6 @@ import { ChallengesTab } from '../components/ChallengesTab';
 import { WorkoutSummary } from '../types/WorkoutSummary';
 import { StarIcon } from '@heroicons/react/24/outline';
 import { ActivityTab } from '../components/ActivityTab';
-// import { SweatlistsTab } from '../components/SweatlistTab';
-// import { Workout } from '../types/Workout';
 import { parseActivityType } from '../utils/activityParser';
 import { UserActivity } from '../types/Activity';
 import FullScreenExerciseView from '../pages/FullscreenExerciseView';
@@ -20,14 +18,15 @@ const TABS = {
   STATS: 'stats',
   ACTIVITY: 'activity',
   EXERICSES: 'exercises',
-  // SWEATLISTS: 'sweatlists',
   CHALLENGES: 'challenges',
 } as const;
 
 type TabType = typeof TABS[keyof typeof TABS];
 
 export default function ProfileView() {
-  const { username } = useParams<{ username: string }>();
+  const router = useRouter();
+  const { username } = router.query; // Use Next.js router to access the route parameter
+
   const [selectedTab, setSelectedTab] = useState<TabType>(TABS.ACTIVITY);
   const [user, setUser] = useState<User | null>(null);
   const [userVideos, setUserVideos] = useState<Exercise[]>([]);
@@ -38,17 +37,18 @@ export default function ProfileView() {
   const [following, setFollowing] = useState<FollowRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  // const [userWorkouts, setUserWorkouts] = useState<Workout[]>([]);
-
   const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
 
   const API_BASE_URL = process.env.NODE_ENV === 'development' 
-  ? 'http://localhost:8888/.netlify/functions'
-  : 'https://fitwithpulse.ai/.netlify/functions';
+    ? 'http://localhost:8888/.netlify/functions'
+    : 'https://fitwithpulse.ai/.netlify/functions';
 
   useEffect(() => {
     const fetchUserProfile = async () => { 
+      if (!username) return;
+
       try {
+        setLoading(true);
         const response = await fetch(`${API_BASE_URL}/get-user-profile?username=${username}`);
         if (!response.ok) {
           throw new Error('Profile not found');
@@ -66,10 +66,8 @@ export default function ProfileView() {
       }
     };
 
-    if (username) {
-      fetchUserProfile();
-    }
-  }, [username, API_BASE_URL]);
+    fetchUserProfile();
+  }, [username, API_BASE_URL])
 
     useEffect(() => {
       const fetchChallenges = async () => {

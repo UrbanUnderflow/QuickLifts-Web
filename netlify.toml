@@ -1,36 +1,10 @@
 [build]
-  command = "yarn build"
-  functions = "netlify/functions"
-  publish = "build"
+  command = "next build"
+  publish = ".next"
 
-[build.environment]
-  NODE_VERSION = "18"
-
-# Handle static assets without complex regex
-[[redirects]]
-  from = "/static/*"
-  to = "/static/:splat"
-  status = 200
-
-[[redirects]]
-  from = "/favicon.ico"
-  to = "/favicon.ico"
-  status = 200
-
-[[redirects]]
-  from = "/manifest.json"
-  to = "/manifest.json"
-  status = 200
-
-[[redirects]]
-  from = "/logo192.png"
-  to = "/logo192.png"
-  status = 200
-
-# SPA fallback for all other routes
 [[redirects]]
   from = "/*"
-  to = "/index.html"
+  to = "/"
   status = 200
 
 [[headers]]
