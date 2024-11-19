@@ -20,8 +20,15 @@ interface ProfileViewProps {
   error: string | null; // Changed from optional to required, can be null
 }
 
+// Add this interface with your other interfaces
+// interface UserStats {
+//   bodyWeight: number;
+//   workoutCount: number;
+//   date: number;
+// }
+
 const TABS = {
-  STATS: 'stats',
+  // STATS: 'stats',
   ACTIVITY: 'activity',
   EXERICSES: 'exercises',
   CHALLENGES: 'challenges',
@@ -33,7 +40,7 @@ export default function ProfileView({ initialUserData, error: serverError }: Pro
   const router = useRouter();
   const { username } = router.query;
 
-  const [selectedTab, setSelectedTab] = useState<TabType>(TABS.ACTIVITY);
+  const [selectedTab, setSelectedTab] = useState<TabType>(TABS.EXERICSES);
   const [user, setUser] = useState<User | null>(initialUserData);
   const [userVideos, setUserVideos] = useState<Exercise[]>([]);
   const [activeChallenges, setActiveChallenges] = useState<Challenge[]>([]);
@@ -48,6 +55,14 @@ export default function ProfileView({ initialUserData, error: serverError }: Pro
   const API_BASE_URL = process.env.NODE_ENV === 'development' 
     ? 'http://localhost:8888/.netlify/functions'
     : 'https://fitwithpulse.ai/.netlify/functions';
+
+  // In your ProfileView component, update the stats state initialization
+  // Initial state setup
+  // const [stats, setStats] = useState<UserStats>({
+  //   bodyWeight: initialUserData?.bodyWeight?.[0]?.newWeight || 0,
+  //   workoutCount: initialUserData?.workoutCount || 0,
+  //   date: initialUserData?.bodyWeight?.[0]?.createdAt || 0
+  // });
 
   useEffect(() => {
     const fetchUserProfile = async () => { 
@@ -74,6 +89,35 @@ export default function ProfileView({ initialUserData, error: serverError }: Pro
 
     fetchUserProfile();
   }, [username, API_BASE_URL, initialUserData])
+
+// Update the fetchBodyWeight useEffect
+useEffect(() => {
+  const fetchBodyWeight = async () => {
+    if (!user?.id) return;
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/get-body-weight?userId=${user.id}`);
+      if (!response.ok) throw new Error('Failed to fetch body weight data');
+      
+      const data = await response.json();
+      if (data.success) {
+        // Assuming the API returns an array and we want the latest entry
+        // const latestWeight = data.bodyWeight[0];
+        // if (latestWeight) {
+        //   setStats(prevStats => ({
+        //     ...prevStats,
+        //     bodyWeight: latestWeight.newWeight,
+        //     date: latestWeight.createdAt
+        //   }));
+        // }
+      }
+    } catch (error) {
+      console.error('Error fetching body weight:', error);
+    }
+  };
+
+  fetchBodyWeight();
+}, [user?.id, API_BASE_URL]);
 
   useEffect(() => {
     const fetchChallenges = async () => {
@@ -299,20 +343,28 @@ export default function ProfileView({ initialUserData, error: serverError }: Pro
             </div>
 
             <div className="mt-8">
-              {selectedTab === TABS.STATS && (
-                <div className="grid grid-cols-2 gap-4 text-white">
-                  <div className="p-4 bg-zinc-800 rounded-lg">
-                    <div className="text-2xl font-bold">
-                      {user.bodyWeight?.[user.bodyWeight.length - 1]?.newWeight || 0} lbs
-                    </div>
-                    <div className="text-zinc-400">Body Weight</div>
+              {/* {selectedTab === TABS.STATS && (
+              <div className="grid grid-cols-2 gap-4 text-white">
+                <div className="p-4 bg-zinc-800 rounded-lg">
+                  <div className="text-2xl font-bold">
+                    {`${stats.bodyWeight || 0} lbs`}
                   </div>
-                  <div className="p-4 bg-zinc-800 rounded-lg">
-                    <div className="text-2xl font-bold">{user.workoutCount || 0}</div>
-                    <div className="text-zinc-400">Workouts</div>
+                  <div className="text-zinc-400">Body Weight</div>
+                  <div className="text-sm text-zinc-500 mt-1">
+                    Last updated: {new Date(stats.date * 1000).toLocaleDateString()}
                   </div>
                 </div>
-              )}
+                <div className="p-4 bg-zinc-800 rounded-lg">
+                  <div className="text-2xl font-bold">{stats.workoutCount}</div>
+                  <div className="text-zinc-400">Workouts</div>
+                  {workoutSummaries.length > 0 && (
+                    <div className="text-sm text-zinc-500 mt-1">
+                      Last workout: {new Date(workoutSummaries[0].completedAt ?? 0).toLocaleDateString()}
+                    </div>
+                  )}
+                </div>
+              </div>
+              )} */}
               {selectedTab === TABS.ACTIVITY && (
                 <div className="px-5">
                   {activities.length === 0 ? (
@@ -383,7 +435,6 @@ export default function ProfileView({ initialUserData, error: serverError }: Pro
   );
 }
 
-
 export const getServerSideProps: GetServerSideProps<ProfileViewProps> = async (context) => {
   const { username } = context.params || {};
 
@@ -408,6 +459,8 @@ export const getServerSideProps: GetServerSideProps<ProfileViewProps> = async (c
     }
 
     const data = await response.json();
+
+    console.log('User data:', data.user);
     
     if (!data.success) {
       throw new Error(data.error || 'Failed to load profile');
