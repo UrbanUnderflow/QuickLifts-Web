@@ -8,7 +8,6 @@ const headers = {
 };
 
 if (admin.apps.length === 0) {
-  console.log('Initializing Firebase Admin SDK...');
   admin.initializeApp({
     credential: admin.credential.cert({
       "type": "service_account",
@@ -53,7 +52,6 @@ async function getCollectionsByOwnerId(ownerId) {
 
     const collections = snapshot.docs
       .map(doc => {
-        console.log(`Document ID: ${doc.id}, Data:`, doc.data());
         return {
           id: doc.id,
           ...doc.data()
@@ -61,42 +59,34 @@ async function getCollectionsByOwnerId(ownerId) {
       })
       .filter(collection => {
         const hasChallenge = !!collection.challenge;
-        console.log(`Collection ID: ${collection.id}, Has Challenge: ${hasChallenge}`);
         return hasChallenge;
       })
       .filter(collection => {
         const startDate = convertTimestamp(collection.challenge.startDate);
         const endDate = convertTimestamp(collection.challenge.endDate);
-        console.log(`Collection ID: ${collection.id}, Start Date: ${startDate}, End Date: ${endDate}`);
         return startDate < now && endDate > now;
       })
       .filter(collection => {
         const isPublished = collection.challenge.status === 'published';
-        console.log(`Collection ID: ${collection.id}, Is Published: ${isPublished}`);
         return isPublished;
       });
 
-    console.log('Filtered collections:', collections);
     return collections;
   } catch (error) {
-    console.error('Error fetching collections:', error);
     throw error;
   }
 }
 
 
 exports.handler = async (event) => {
-  console.log('Received event:', event);
 
   if (event.httpMethod === 'OPTIONS') {
-    console.log('Handling OPTIONS preflight request.');
     return { statusCode: 200, headers, body: '' };
   }
 
   try {
     const userId = event.queryStringParameters.userId;
     if (!userId) {
-      console.log('Missing userId in query parameters.');
       return {
         statusCode: 400,
         headers,
@@ -104,7 +94,6 @@ exports.handler = async (event) => {
       };
     }
 
-    console.log(`Fetching challenges for userId: ${userId}`);
     const challenges = await getCollectionsByOwnerId(userId);
     
     return {

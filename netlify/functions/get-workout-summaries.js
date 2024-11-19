@@ -73,8 +73,6 @@ exports.handler = async (event) => {
   }
 
   try {
-    console.log('Event received:', event); // Debug logging
-
     const userId = event.queryStringParameters?.userId;
     if (!userId) {
       return {
@@ -87,10 +85,8 @@ exports.handler = async (event) => {
       };
     }
 
-    console.log('Fetching workouts for userId:', userId); // Debug logging
     const summaries = await fetchWorkoutSummaries(userId);
-    console.log('Fetched summaries:', summaries); // Debug logging
-
+    
     return {
       statusCode: 200,
       headers,

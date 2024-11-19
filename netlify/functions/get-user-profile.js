@@ -30,6 +30,8 @@ async function getUserByUsername(username) {
     }
 
     const userData = snapshot.docs[0].data();
+
+    console.log('User data:', userData);
     
     // Return only necessary profile data
     return {
