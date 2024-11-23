@@ -1,8 +1,7 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Calendar, Clock, Flag, Users, Play } from 'lucide-react';
 import { 
   ChallengeInvitationProps, 
-  ChallengeStatus 
 } from '../types/ChallengeTypes';
 import ChallengeCTA from './ChallengeCTA';
 
@@ -38,20 +37,7 @@ const DetailTile: React.FC<DetailTileProps> = ({ title, value, icon }) => (
 
 const RoundInvitation: React.FC<ChallengeInvitationProps> = ({ 
   challenge, 
-  onJoinChallenge 
 }) => {
-  const [isJoining, setIsJoining] = useState<boolean>(false);
-
-  const handleJoinChallenge = async (): Promise<void> => {
-    try {
-      setIsJoining(true);
-      await onJoinChallenge(challenge);
-    } catch (error) {
-      console.error('Error joining challenge:', error);
-    } finally {
-      setIsJoining(false);
-    }
-  };
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white">
@@ -67,7 +53,7 @@ const RoundInvitation: React.FC<ChallengeInvitationProps> = ({
         {/* Header Section */}
         <div className="text-center space-y-4 mb-8">
           <h2 className="text-lg font-semibold text-white/90">
-            You're invited to participate in this challenge 🎉
+            You're invited to participate in this Round 🎉
           </h2>
           <h1 className="text-3xl font-bold">{challenge.title}</h1>
           <p className="text-white/70">{challenge.subtitle}</p>

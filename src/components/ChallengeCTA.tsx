@@ -108,7 +108,7 @@ const ChallengeCTA: React.FC<{ challenge: any }> = ({ challenge }) => {
         onClick={handleJoinChallenge}
         className="w-full flex items-center justify-center px-8 py-4 text-lg font-medium rounded-xl text-black bg-[#E0FE10] hover:bg-[#E0FE10]/90"
       >
-        Join Challenge
+        Join Round
       </button>
     </div>
   );
