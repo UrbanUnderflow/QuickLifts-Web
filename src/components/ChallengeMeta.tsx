@@ -25,8 +25,8 @@ const ChallengeMeta: React.FC<ChallengeMetaProps> = ({ challenge, id }) => {
     <Head>
       <title>{`Join ${challenge.title} | Pulse`}</title>
       <meta name="description" content={enrichedDescription} />
-      <meta property="og:title" content={`Join ${challenge.title} | Pulse`} />
-      <meta property="og:description" content={enrichedDescription} />
+      <meta property="og:title" content={`The Next Round Awaits | Pulse`} />
+      <meta property="og:description" content={`${challenge.title}`}/>
       <meta property="og:type" content="website" />
       <meta property="og:url" content={`https://fitwithpulse.ai/challenge/${id}`} />
       <meta property="og:site_name" content="Pulse Fitness" />
