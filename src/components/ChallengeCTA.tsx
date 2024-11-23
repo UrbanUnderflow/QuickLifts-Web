@@ -28,23 +28,18 @@ const ChallengeCTA: React.FC<{ challenge: any }> = ({ challenge }) => {
     }
   ];
 
-  // Deep link URL for the App Store
   const appStoreUrl = 'https://apps.apple.com/ca/app/pulse-community-workouts/id6451497729';
   
-  // Construct deep link URL for the challenge
-  const deepLinkUrl = `pulse://challenge/${challenge.id}`;
+  // Updated deep link URL to use Firebase Dynamic Links format
+  const deepLinkUrl = `https://fitwithpulse.page.link/?link=https://www.fitwithpulse.ai?linkType=round%26roundId=${challenge.id}&apn=com.pulse.fitnessapp&ibi=com.pulse.fitnessapp&isi=6451497729`;
 
   const handleJoinChallenge = () => {
-    // Check if the app is installed by attempting to open the deep link
     const fallbackTimer = setTimeout(() => {
-      // If timer fires, app is not installed
       setShowInstructions(true);
     }, 1000);
 
-    // Attempt to open deep link
     window.location.href = deepLinkUrl;
 
-    // Clear timer if window blur event occurs (indicating app switch)
     window.onblur = () => {
       clearTimeout(fallbackTimer);
     };

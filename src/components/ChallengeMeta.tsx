@@ -21,6 +21,9 @@ const ChallengeMeta: React.FC<ChallengeMetaProps> = ({ challenge, id }) => {
 
   const enrichedDescription = `${challenge.subtitle} • ${startDate} - ${endDate} • Join the challenge now!`;
 
+  const deepLinkUrl = `pulse://rounds?linkType=round&roundId=${id}`;
+
+
   return (
     <Head>
       <title>{`Join ${challenge.title} | Pulse`}</title>
@@ -35,9 +38,9 @@ const ChallengeMeta: React.FC<ChallengeMetaProps> = ({ challenge, id }) => {
       <meta property="og:image:height" content="630" />
       
       {/* Deep Linking Meta Tags */}
-      <meta property="al:ios:url" content={`pulse://challenge/${challenge.id}`} />
       <meta property="al:ios:app_store_id" content="6451497729" />
       <meta property="al:ios:app_name" content="Pulse: Community Workouts" />
+      <meta property="al:ios:url" content={deepLinkUrl} />
       
       {/* Twitter Meta Tags */}
       <meta name="twitter:card" content="summary_large_image" />
