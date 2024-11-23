@@ -1,7 +1,8 @@
+import { GetServerSideProps } from 'next';
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
-import Head from 'next/head';
 import RoundInvitation from '../../components/RoundInvitation';
+import ChallengeMeta from '../../components/ChallengeMeta';
 import { SweatlistCollection } from '../../types/SweatlistCollection';
 
 const LoadingState = () => (
@@ -25,21 +26,25 @@ const ErrorState: React.FC<{ message: string }> = ({ message }) => (
   </div>
 );
 
-const ChallengePage = () => {
+interface ChallengePageProps {
+  initialCollection?: SweatlistCollection;
+  initialError?: string;
+}
+
+const ChallengePage: React.FC<ChallengePageProps> = ({ initialCollection, initialError }) => {
   const router = useRouter();
   const { id } = router.query;
-  const [collection, setCollection] = useState<SweatlistCollection | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [collection, setCollection] = useState<SweatlistCollection | null>(initialCollection || null);
+  const [loading, setLoading] = useState(!initialCollection);
+  const [error, setError] = useState<string | null>(initialError || null);
 
   useEffect(() => {
     const fetchChallenge = async () => {
-      if (!id) return;
+      if (!id || initialCollection) return;
 
       try {
         console.log('Fetching challenge with ID:', id);
         
-        // Use the direct Netlify Dev URL
         const apiUrl = process.env.NODE_ENV === 'development' 
           ? 'http://localhost:8888/.netlify/functions'
           : 'https://fitwithpulse.ai/.netlify/functions';
@@ -103,7 +108,7 @@ const ChallengePage = () => {
     if (router.isReady && id) {
       fetchChallenge();
     }
-  }, [id, router.isReady]);
+  }, [id, router.isReady, initialCollection]);
 
   if (!router.isReady || loading) {
     return <LoadingState />;
@@ -119,15 +124,11 @@ const ChallengePage = () => {
 
   return (
     <>
-      <Head>
-        <title>{`Join ${collection.challenge.title} | Pulse`}</title>
-        <meta name="description" content={collection.challenge.subtitle} />
-        <meta property="og:title" content={`Join ${collection.challenge.title} | Pulse`} />
-        <meta property="og:description" content={collection.challenge.subtitle} />
-        <meta property="og:type" content="website" />
-        <meta property="og:url" content={`https://fitwithpulse.ai/challenge/${id}`} />
-      </Head>
-
+      <ChallengeMeta 
+        challenge={collection.challenge}
+        id={id as string}
+      />
+      
       <RoundInvitation
         challenge={collection.challenge}
         onClose={() => {
@@ -148,6 +149,66 @@ const ChallengePage = () => {
       />
     </>
   );
+};
+
+export const getServerSideProps: GetServerSideProps<ChallengePageProps> = async ({ params, res }) => {
+  try {
+    const id = params?.id as string;
+    if (!id) {
+      return { props: { initialError: 'Challenge ID is required' } };
+    }
+
+    // Set cache-control headers
+    res.setHeader(
+      'Cache-Control',
+      'public, s-maxage=10, stale-while-revalidate=59'
+    );
+
+    const response = await fetch(
+      `https://fitwithpulse.ai/.netlify/functions/get-challenge-by-id?id=${id}`
+    );
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch challenge');
+    }
+
+    const data = await response.json();
+
+    if (!data.success || !data.collection) {
+      return {
+        props: {
+          initialError: 'Challenge not found'
+        }
+      };
+    }
+
+    // Process dates
+    const processedCollection = {
+      ...data.collection,
+      createdAt: new Date(data.collection.createdAt).toISOString(),
+      updatedAt: new Date(data.collection.updatedAt).toISOString(),
+      challenge: data.collection.challenge ? {
+        ...data.collection.challenge,
+        startDate: new Date(data.collection.challenge.startDate).toISOString(),
+        endDate: new Date(data.collection.challenge.endDate).toISOString(),
+        createdAt: new Date(data.collection.challenge.createdAt).toISOString(),
+        updatedAt: new Date(data.collection.challenge.updatedAt).toISOString(),
+      } : null
+    };
+
+    return {
+      props: {
+        initialCollection: processedCollection
+      }
+    };
+  } catch (error) {
+    console.error('Error fetching challenge:', error);
+    return {
+      props: {
+        initialError: 'Failed to load challenge'
+      }
+    };
+  }
 };
 
 export default ChallengePage;
