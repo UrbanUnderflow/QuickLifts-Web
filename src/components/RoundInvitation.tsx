@@ -1,18 +1,19 @@
 import React from 'react';
 import { Calendar, Clock, Flag, Users, Play } from 'lucide-react';
-import { 
-  ChallengeInvitationProps, 
-} from '../types/ChallengeTypes';
+import { ChallengeInvitationProps } from '../types/ChallengeTypes';
 import ChallengeCTA from './ChallengeCTA';
 
-const formatDate = (date: Date): string => {
+const formatDate = (dateString: string | Date): string => {
+  const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
   return date.toLocaleDateString('en-US', { 
     month: 'long',
     day: 'numeric'
   });
 };
 
-const getDurationInDays = (startDate: Date, endDate: Date): number => {
+const getDurationInDays = (startDateString: string | Date, endDateString: string | Date): number => {
+  const startDate = typeof startDateString === 'string' ? new Date(startDateString) : startDateString;
+  const endDate = typeof endDateString === 'string' ? new Date(endDateString) : endDateString;
   const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
   return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 };
@@ -35,20 +36,18 @@ const DetailTile: React.FC<DetailTileProps> = ({ title, value, icon }) => (
   </div>
 );
 
-const RoundInvitation: React.FC<ChallengeInvitationProps> = ({ 
-  challenge, 
-}) => {
+const RoundInvitation: React.FC<ChallengeInvitationProps> = ({ challenge }) => {
+  // Ensure we have valid Date objects
+  const startDate = new Date(challenge.startDate);
+  const endDate = new Date(challenge.endDate);
+  
+  // Ensure participants is always an array
+  const participantsCount = challenge.participants?.length ?? 0;
+
+  console.log('Challenge data:', challenge); // Add this for debugging
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white">
-      {/* Close Button */}
-      {/* <button 
-        onClick={onClose}
-        className="absolute top-6 left-6 p-2 hover:bg-zinc-800 rounded-full transition-colors"
-      >
-        <X className="w-6 h-6" />
-      </button> */}
-
       <div className="max-w-2xl mx-auto px-6 py-8">
         {/* Header Section */}
         <div className="text-center space-y-4 mb-8">
@@ -68,27 +67,27 @@ const RoundInvitation: React.FC<ChallengeInvitationProps> = ({
         <div className="grid grid-cols-2 gap-4 mb-12">
           <DetailTile 
             title="Duration" 
-            value={`${getDurationInDays(challenge.startDate, challenge.endDate)} Days`}
+            value={`${getDurationInDays(startDate, endDate)} Days`}
             icon={<Calendar className="w-6 h-6 text-[#E0FE10]" />}
           />
           <DetailTile 
             title="Start Date" 
-            value={formatDate(challenge.startDate)}
+            value={formatDate(startDate)}
             icon={<Clock className="w-6 h-6 text-[#E0FE10]" />}
           />
           <DetailTile 
             title="End Date" 
-            value={formatDate(challenge.endDate)}
+            value={formatDate(endDate)}
             icon={<Flag className="w-6 h-6 text-[#E0FE10]" />}
           />
           <DetailTile 
             title="Participants" 
-            value={challenge.participants.length}
+            value={participantsCount}
             icon={<Users className="w-6 h-6 text-[#E0FE10]" />}
           />
         </div>
 
-        {/* Add the new CTA component */}
+        {/* Add the CTA component */}
         <ChallengeCTA challenge={challenge} />
       </div>
     </div>
