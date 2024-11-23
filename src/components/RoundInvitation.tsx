@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Calendar, Clock, Flag, Users, Play, X } from 'lucide-react';
+import { Calendar, Clock, Flag, Users, Play } from 'lucide-react';
 import { 
   ChallengeInvitationProps, 
   ChallengeStatus 
 } from '../types/ChallengeTypes';
+import ChallengeCTA from './ChallengeCTA';
 
 const formatDate = (date: Date): string => {
   return date.toLocaleDateString('en-US', { 
@@ -37,7 +38,6 @@ const DetailTile: React.FC<DetailTileProps> = ({ title, value, icon }) => (
 
 const RoundInvitation: React.FC<ChallengeInvitationProps> = ({ 
   challenge, 
-  onClose, 
   onJoinChallenge 
 }) => {
   const [isJoining, setIsJoining] = useState<boolean>(false);
@@ -56,12 +56,12 @@ const RoundInvitation: React.FC<ChallengeInvitationProps> = ({
   return (
     <div className="min-h-screen bg-zinc-950 text-white">
       {/* Close Button */}
-      <button 
+      {/* <button 
         onClick={onClose}
         className="absolute top-6 left-6 p-2 hover:bg-zinc-800 rounded-full transition-colors"
       >
         <X className="w-6 h-6" />
-      </button>
+      </button> */}
 
       <div className="max-w-2xl mx-auto px-6 py-8">
         {/* Header Section */}
@@ -102,16 +102,8 @@ const RoundInvitation: React.FC<ChallengeInvitationProps> = ({
           />
         </div>
 
-        {/* Join Button */}
-        {challenge.status === ChallengeStatus.Published && (
-          <button
-            onClick={handleJoinChallenge}
-            disabled={isJoining}
-            className="w-full py-4 bg-[#E0FE10] text-black font-semibold rounded-xl hover:bg-[#E0FE10]/90 transition-colors disabled:opacity-50"
-          >
-            {isJoining ? 'Joining...' : 'Join Challenge'}
-          </button>
-        )}
+        {/* Add the new CTA component */}
+        <ChallengeCTA challenge={challenge} />
       </div>
     </div>
   );
