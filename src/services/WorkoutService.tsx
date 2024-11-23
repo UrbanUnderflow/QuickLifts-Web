@@ -14,8 +14,9 @@ import { ExerciseAuthor } from '../types/ExerciseAuthor';
 import { BodyPart } from '../types/BodyPart';
 import { ProfileImage } from '../types/ProfileImage';
 import { ExerciseComment } from '../types/ExerciseComment';
-import { SweatlistCollection } from '../types/SweatlistCollection';
-import { SweatlistIdentifiers } from '../types/SweatlistIdentifiers';
+import { SweatlistCollection, SweatlistType } from '../types/SweatlistCollection';
+import { TogetherRound, UserTogetherRound, ChallengeStatus } from '../types/ChallengeTypes';
+
 
 class WorkoutService {
   private static instance: WorkoutService;
@@ -116,26 +117,109 @@ class WorkoutService {
     const title = fields.title?.stringValue || '';
     const subtitle = fields.subtitle?.stringValue || '';
   
-    // Parse the sweatlistIds, assuming SweatlistIdentifiers has a specific structure
+    // Parse challenge if it exists
+    const challenge = fields.challenge?.mapValue?.fields ? 
+      this.parseChallenge(fields.challenge.mapValue.fields) : 
+      undefined;
+  
+    // Parse the sweatlistIds
     const sweatlistIdsArray = fields.sweatlistIds?.arrayValue?.values || [];
-    const sweatlistIds: SweatlistIdentifiers[] = sweatlistIdsArray.map((item: any) => ({
-      id: item.mapValue?.fields?.id?.stringValue || '', // Adjust based on how SweatlistIdentifiers is structured
-      sweatlistAuthorId: item.mapValue?.fields?.sweatlistAuthorId?.stringValue || '', // Example fields
+    const sweatlistIds = sweatlistIdsArray.map((item: any) => ({
+      id: item.mapValue?.fields?.id?.stringValue || '',
+      sweatlistAuthorId: item.mapValue?.fields?.sweatlistAuthorId?.stringValue || '',
+      order: parseInt(item.mapValue?.fields?.order?.integerValue || '0')
     }));
   
     const ownerId = fields.ownerId?.stringValue || '';
     const createdAtTimestamp = parseFloat(fields.createdAt?.doubleValue || '0');
     const updatedAtTimestamp = parseFloat(fields.updatedAt?.doubleValue || '0');
   
+    // Determine privacy based on challenge presence
+    let privacy: SweatlistType;
+    if (challenge) {
+      privacy = SweatlistType.Together;
+    } else {
+      privacy = fields.privacy?.stringValue as SweatlistType || SweatlistType.Solo;
+    }
+  
     return {
       id,
       title,
       subtitle,
+      challenge,
       sweatlistIds,
       ownerId,
+      privacy,
       createdAt: new Date(createdAtTimestamp * 1000),
-      updatedAt: new Date(updatedAtTimestamp * 1000),
+      updatedAt: new Date(updatedAtTimestamp * 1000)
     };
+  }
+
+  // Add this helper method to parse challenges
+  private parseChallenge(fields: any): TogetherRound | undefined {
+    if (!fields) return undefined;
+  
+    // Convert status string to enum
+    const statusString = fields.status?.stringValue || 'draft';
+    const status = statusString as ChallengeStatus;
+  
+    return {
+      id: fields.id?.stringValue || '',
+      title: fields.title?.stringValue || '',
+      subtitle: fields.subtitle?.stringValue || '',
+      status: status,
+      participants: this.parseParticipants(fields.participants?.arrayValue?.values || []),
+      startDate: new Date(parseFloat(fields.startDate?.doubleValue || '0') * 1000),
+      endDate: new Date(parseFloat(fields.endDate?.doubleValue || '0') * 1000),
+      createdAt: new Date(parseFloat(fields.createdAt?.doubleValue || '0') * 1000),
+      updatedAt: new Date(parseFloat(fields.updatedAt?.doubleValue || '0') * 1000)
+    };
+  }
+
+  // Add this helper method to parse participants
+  private parseParticipants(participants: any[]): UserTogetherRound[] {
+    return participants.map(participant => {
+      const fields = participant.mapValue?.fields || {};
+      
+      return {
+        id: fields.id?.stringValue || '',
+        challengeId: fields.challengeId?.stringValue || '',
+        userId: fields.userId?.stringValue || '',
+        username: fields.username?.stringValue || '',
+        profileImage: this.parseProfileImage(fields.profileImage?.mapValue?.fields || {}),
+        progress: parseFloat(fields.progress?.doubleValue || '0'),
+        completedWorkouts: fields.completedWorkouts?.arrayValue?.values?.map((w: any) => w.stringValue) || [],
+        isCompleted: fields.isCompleted?.booleanValue || false,
+        location: fields.location ? {
+          latitude: parseFloat(fields.location.mapValue?.fields?.latitude?.doubleValue || '0'),
+          longitude: parseFloat(fields.location.mapValue?.fields?.longitude?.doubleValue || '0')
+        } : undefined,
+        city: fields.city?.stringValue || '',
+        country: fields.country?.stringValue,
+        timezone: fields.timezone?.stringValue,
+        joinDate: new Date(parseFloat(fields.joinDate?.doubleValue || '0') * 1000),
+        createdAt: new Date(parseFloat(fields.createdAt?.doubleValue || '0') * 1000),
+        updatedAt: new Date(parseFloat(fields.updatedAt?.doubleValue || '0') * 1000),
+        pulsePoints: {
+          baseCompletion: parseFloat(fields.pulsePoints?.mapValue?.fields?.baseCompletion?.doubleValue || '0'),
+          firstCompletion: parseFloat(fields.pulsePoints?.mapValue?.fields?.firstCompletion?.doubleValue || '0'),
+          streakBonus: parseFloat(fields.pulsePoints?.mapValue?.fields?.streakBonus?.doubleValue || '0'),
+          checkInBonus: parseFloat(fields.pulsePoints?.mapValue?.fields?.checkInBonus?.doubleValue || '0'),
+          effortRating: parseFloat(fields.pulsePoints?.mapValue?.fields?.effortRating?.doubleValue || '0'),
+          chatParticipation: parseFloat(fields.pulsePoints?.mapValue?.fields?.chatParticipation?.doubleValue || '0'),
+          locationCheckin: parseFloat(fields.pulsePoints?.mapValue?.fields?.locationCheckin?.doubleValue || '0'),
+          contentEngagement: parseFloat(fields.pulsePoints?.mapValue?.fields?.contentEngagement?.doubleValue || '0'),
+          encouragementSent: parseFloat(fields.pulsePoints?.mapValue?.fields?.encouragementSent?.doubleValue || '0'),
+          encouragementReceived: parseFloat(fields.pulsePoints?.mapValue?.fields?.encouragementReceived?.doubleValue || '0')
+        },
+        currentStreak: parseInt(fields.currentStreak?.integerValue || '0'),
+        encouragedUsers: fields.encouragedUsers?.arrayValue?.values?.map((u: any) => u.stringValue) || [],
+        encouragedByUsers: fields.encouragedByUsers?.arrayValue?.values?.map((u: any) => u.stringValue) || [],
+        checkIns: (fields.checkIns?.arrayValue?.values || []).map((timestamp: any) => 
+          new Date(parseFloat(timestamp.doubleValue || '0') * 1000)
+        )
+      };
+    });
   }
   
   private parseWorkout(fields: any): Workout {
