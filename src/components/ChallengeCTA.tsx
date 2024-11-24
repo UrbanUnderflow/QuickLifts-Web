@@ -31,7 +31,7 @@ const ChallengeCTA: React.FC<{ challenge: any }> = ({ challenge }) => {
   const appStoreUrl = 'https://apps.apple.com/ca/app/pulse-community-workouts/id6451497729';
   
   // Updated deep link URL to use Firebase Dynamic Links format
-  const deepLinkUrl = `https://fitwithpulse.page.link/?link=https://www.fitwithpulse.ai?linkType=round%26roundId=${challenge.id}&apn=com.pulse.fitnessapp&ibi=com.pulse.fitnessapp&isi=6451497729`;
+  const deepLinkUrl = `https://quicklifts.page.link/?link=https://www.quickliftsapp.com?linkType=round%26roundId=${challenge.id}&apn=com.pulse.fitnessapp&ibi=Tremaine.QuickLifts&isi=6451497729`;
 
   const handleJoinChallenge = () => {
     const fallbackTimer = setTimeout(() => {
