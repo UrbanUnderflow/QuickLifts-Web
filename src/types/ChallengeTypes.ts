@@ -67,21 +67,12 @@ interface ProfileImage {
     endDate: Date;
     createdAt: Date;
     updatedAt: Date;
+    introVideoURL?: string; // Add this property
   }
   
   // Props interface for the component
   interface ChallengeInvitationProps {
-    challenge: {
-      id: string;
-      title: string;
-      subtitle: string;
-      status: string;
-      startDate: Date;
-      endDate: Date;
-      createdAt: Date;
-      updatedAt: Date;
-      participants: any[]; // Define proper participant type
-    };
+    challenge: TogetherRound;
     onClose: () => void;
     onJoinChallenge: (challenge: any) => Promise<void>;
   }

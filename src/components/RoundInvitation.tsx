@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Calendar, Clock, Flag, Users, Play } from 'lucide-react';
 import { ChallengeInvitationProps } from '../types/ChallengeTypes';
 import ChallengeCTA from './ChallengeCTA';
@@ -36,6 +36,46 @@ const DetailTile: React.FC<DetailTileProps> = ({ title, value, icon }) => (
   </div>
 );
 
+const VideoPreview: React.FC<{ videoUrl?: string }> = ({ videoUrl }) => {
+    const [isPlaying, setIsPlaying] = useState(false);
+  
+    if (!videoUrl) {
+      return (
+        <div className="relative bg-black rounded-xl h-48 mb-8 flex items-center justify-center">
+          <Play className="w-8 h-8 text-white/90" />
+        </div>
+      );
+    }
+  
+    return (
+      <div className="relative bg-black rounded-xl h-48 mb-8 overflow-hidden">
+        <video
+          className="w-full h-full object-cover"
+          src={videoUrl}
+          controls={isPlaying}
+          playsInline
+          poster={!isPlaying ? undefined : ''}
+        >
+          Your browser does not support the video tag.
+        </video>
+        {!isPlaying && (
+          <div 
+            className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 cursor-pointer"
+            onClick={() => {
+              setIsPlaying(true);
+              const videoElement = document.querySelector('video');
+              if (videoElement) {
+                videoElement.play();
+              }
+            }}
+          >
+            <Play className="w-8 h-8 text-white/90" />
+          </div>
+        )}
+      </div>
+    );
+  };
+
 const RoundInvitation: React.FC<ChallengeInvitationProps> = ({ challenge }) => {
   // Ensure we have valid Date objects
   const startDate = new Date(challenge.startDate);
@@ -59,9 +99,7 @@ const RoundInvitation: React.FC<ChallengeInvitationProps> = ({ challenge }) => {
         </div>
 
         {/* Video Preview */}
-        <div className="relative bg-black rounded-xl h-48 mb-8 flex items-center justify-center">
-          <Play className="w-8 h-8 text-white/90" />
-        </div>
+        <VideoPreview videoUrl={challenge.introVideoURL} />
 
         {/* Challenge Details Grid */}
         <div className="grid grid-cols-2 gap-4 mb-12">
