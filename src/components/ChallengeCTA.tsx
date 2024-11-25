@@ -29,7 +29,13 @@ const ChallengeCTA: React.FC<{ challenge: any }> = ({ challenge }) => {
   ];
 
   const appStoreUrl = 'https://apps.apple.com/ca/app/pulse-community-workouts/id6451497729';
-  const deepLinkUrl = `https://quicklifts.page.link/?link=https://www.quickliftsapp.com?linkType=round%26roundId=${challenge.id}&apn=com.pulse.fitnessapp&ibi=Tremaine.QuickLifts&isi=6451497729`;
+  
+  // Create the base URL with properly encoded parameters
+  const baseUrl = `https://www.quickliftsapp.com/?linkType=round&roundId=${challenge.id}`;
+  const encodedBaseUrl = encodeURIComponent(baseUrl);
+  
+  // Create the dynamic link URL with proper encoding
+  const deepLinkUrl = `https://quicklifts.page.link/?link=${encodedBaseUrl}&apn=com.pulse.fitnessapp&ibi=Tremaine.QuickLifts&isi=6451497729`;
 
   const handleJoinChallenge = () => {
     setShowInstructions(true);
