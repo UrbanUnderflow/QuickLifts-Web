@@ -1,4 +1,3 @@
-// get-challenge-by-id.js
 const admin = require('firebase-admin');
 
 const headers = {
@@ -26,59 +25,21 @@ if (admin.apps.length === 0) {
 
 const db = admin.firestore();
 
-// Updated timestamp converter
+// Updated timestamp converter for Unix timestamps
 const convertTimestamp = (timestamp) => {
-  try {
-    // Handle Firestore Timestamp
-    if (timestamp && typeof timestamp.toDate === 'function') {
-      return timestamp.toDate().toISOString();
-    }
-    // Handle seconds/nanoseconds format
-    if (timestamp && timestamp._seconds !== undefined) {
-      return new Date(timestamp._seconds * 1000).toISOString();
-    }
-    // Handle regular Date objects
-    if (timestamp instanceof Date) {
-      return timestamp.toISOString();
-    }
-    // Handle timestamp numbers
-    if (typeof timestamp === 'number') {
-      return new Date(timestamp).toISOString();
-    }
-    console.log('Unable to convert timestamp:', timestamp);
-    return null;
-  } catch (error) {
-    console.error('Error converting timestamp:', error);
-    return null;
-  }
-};
-
-// Helper function to process dates in nested objects
-const processDateFields = (obj) => {
-  if (!obj || typeof obj !== 'object') return obj;
-
-  const processed = { ...obj };
+  if (!timestamp) return null;
   
-  for (const [key, value] of Object.entries(processed)) {
-    // Check if the field name suggests it's a date
-    if (key.toLowerCase().includes('date') || 
-        key === 'createdAt' || 
-        key === 'updatedAt') {
-      processed[key] = convertTimestamp(value);
-    } 
-    // Handle nested objects
-    else if (value && typeof value === 'object' && !value.toDate) {
-      if (Array.isArray(value)) {
-        processed[key] = value.map(item => 
-          typeof item === 'object' ? processDateFields(item) : item
-        );
-      } else {
-        processed[key] = processDateFields(value);
-      }
-    }
+  // If it's a number (Unix timestamp), convert it
+  if (typeof timestamp === 'number') {
+    return new Date(timestamp * 1000).toISOString();
   }
   
-  return processed;
+  // Handle already converted date
+  if (timestamp instanceof Date) {
+    return timestamp.toISOString();
+  }
+  
+  return null;
 };
 
 async function getCollectionById(collectionId) {
@@ -95,21 +56,65 @@ async function getCollectionById(collectionId) {
     const data = doc.data();
     console.log('Raw Firestore data:', JSON.stringify(data, null, 2));
 
-    // Process the collection data with dates
+    // Process the collection data with Unix timestamp handling
     const collection = {
       id: doc.id,
-      ...processDateFields(data)
+      title: data.title || '',
+      subtitle: data.subtitle || '',
+      createdAt: convertTimestamp(data.createdAt),
+      updatedAt: convertTimestamp(data.updatedAt),
+      challenge: data.challenge ? {
+        id: data.challenge.id || doc.id,
+        title: data.challenge.title || '',
+        subtitle: data.challenge.subtitle || '',
+        introVideoURL: data.challenge.introVideoURL || '',
+        status: data.challenge.status || 'draft',
+        startDate: convertTimestamp(data.challenge.startDate),
+        endDate: convertTimestamp(data.challenge.endDate),
+        createdAt: convertTimestamp(data.challenge.createdAt),
+        updatedAt: convertTimestamp(data.challenge.updatedAt),
+        participants: Array.isArray(data.challenge.participants) ? data.challenge.participants.map(participant => ({
+          id: participant.id || '',
+          challengeId: participant.challengeId || '',
+          userId: participant.userId || '',
+          username: participant.username || '',
+          profileImage: participant.profileImage || null,
+          progress: participant.progress || 0,
+          completedWorkouts: participant.completedWorkouts || [],
+          isCompleted: participant.isCompleted || false,
+          city: participant.city || '',
+          country: participant.country || '',
+          timezone: participant.timezone || '',
+          joinDate: convertTimestamp(participant.joinDate),
+          createdAt: convertTimestamp(participant.createdAt),
+          updatedAt: convertTimestamp(participant.updatedAt),
+          pulsePoints: participant.pulsePoints || {
+            baseCompletion: 0,
+            firstCompletion: 0,
+            streakBonus: 0,
+            checkInBonus: 0,
+            effortRating: 0,
+            chatParticipation: 0,
+            locationCheckin: 0,
+            contentEngagement: 0,
+            encouragementSent: 0,
+            encouragementReceived: 0
+          },
+          currentStreak: participant.currentStreak || 0,
+          encouragedUsers: participant.encouragedUsers || [],
+          encouragedByUsers: participant.encouragedByUsers || [],
+          checkIns: Array.isArray(participant.checkIns) ? 
+            participant.checkIns.map(checkIn => convertTimestamp(checkIn)).filter(Boolean) : []
+        })) : []
+      } : null
     };
 
-    // Verify this is a challenge collection
     if (!collection.challenge) {
       console.log('Collection does not contain a challenge.');
       return null;
     }
 
-    // Log processed data for debugging
     console.log('Processed collection:', JSON.stringify(collection, null, 2));
-
     return collection;
   } catch (error) {
     console.error('Error fetching collection:', error);
@@ -119,7 +124,11 @@ async function getCollectionById(collectionId) {
 
 exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') {
-    return { statusCode: 200, headers, body: '' };
+    return { 
+      statusCode: 200, 
+      headers,
+      body: '' 
+    };
   }
 
   try {
@@ -128,7 +137,10 @@ exports.handler = async (event) => {
       return {
         statusCode: 400,
         headers,
-        body: JSON.stringify({ success: false, error: 'Collection ID is required' })
+        body: JSON.stringify({ 
+          success: false, 
+          error: 'Collection ID is required' 
+        })
       };
     }
 
@@ -138,24 +150,31 @@ exports.handler = async (event) => {
       return {
         statusCode: 404,
         headers,
-        body: JSON.stringify({ success: false, error: 'Challenge not found or not available' })
+        body: JSON.stringify({ 
+          success: false, 
+          error: 'Challenge not found or not available' 
+        })
       };
     }
-
-    // Log final response for debugging
-    console.log('Final response:', JSON.stringify({ success: true, collection }, null, 2));
 
     return {
       statusCode: 200,
       headers,
-      body: JSON.stringify({ success: true, collection })
+      body: JSON.stringify({
+        success: true,
+        collection
+      })
     };
+
   } catch (error) {
     console.error('Error in handler:', error);
     return {
       statusCode: 500,
       headers,
-      body: JSON.stringify({ success: false, error: error.message })
+      body: JSON.stringify({ 
+        success: false, 
+        error: error.message 
+      })
     };
   }
 };
