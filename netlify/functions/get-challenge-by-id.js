@@ -42,6 +42,63 @@ const convertTimestamp = (timestamp) => {
   return null;
 };
 
+async function getUserChallenges(challengeId) {
+  try {
+    const snapshot = await db.collection('user-challenge')
+      .where('challengeId', '==', challengeId)
+      .get();
+
+    if (snapshot.empty) {
+      console.log('No user challenges found for this challenge');
+      return [];
+    }
+
+    const userChallenges = snapshot.docs.map(doc => {
+      const data = doc.data();
+      console.log('user-challenge data: ', JSON.stringify(data, null, 2));
+
+      return {
+        id: doc.id,
+        challengeId: data.challengeId || '',
+        userId: data.userId || '',
+        username: data.username || '',
+        profileImage: data.profileImage || null,
+        progress: data.progress || 0,
+        completedWorkouts: data.completedWorkouts || [],
+        isCompleted: data.isCompleted || false,
+        city: data.city || '',
+        country: data.country || '',
+        timezone: data.timezone || '',
+        joinDate: convertTimestamp(data.joinDate),
+        createdAt: convertTimestamp(data.createdAt),
+        updatedAt: convertTimestamp(data.updatedAt),
+        pulsePoints: data.pulsePoints || {
+          baseCompletion: 0,
+          firstCompletion: 0,
+          streakBonus: 0,
+          checkInBonus: 0,
+          effortRating: 0,
+          chatParticipation: 0,
+          locationCheckin: 0,
+          contentEngagement: 0,
+          encouragementSent: 0,
+          encouragementReceived: 0
+        },
+        currentStreak: data.currentStreak || 0,
+        encouragedUsers: data.encouragedUsers || [],
+        encouragedByUsers: data.encouragedByUsers || [],
+        checkIns: Array.isArray(data.checkIns) ? 
+          data.checkIns.map(checkIn => convertTimestamp(checkIn)).filter(Boolean) : []
+      };
+    });
+
+    return userChallenges;
+  } catch (error) {
+    console.error('Error fetching user challenges:', error);
+    throw error;
+  }
+}
+
 async function getCollectionById(collectionId) {
   console.log(`Fetching collection with ID: ${collectionId}`);
   
@@ -55,6 +112,10 @@ async function getCollectionById(collectionId) {
 
     const data = doc.data();
     console.log('Raw Firestore data:', JSON.stringify(data, null, 2));
+
+    // Fetch participants from user-challenge collection
+    const participants = await getUserChallenges(collectionId);
+    console.log('Fetched participants:', JSON.stringify(participants, null, 2));
 
     // Process the collection data with Unix timestamp handling
     const collection = {
@@ -73,39 +134,7 @@ async function getCollectionById(collectionId) {
         endDate: convertTimestamp(data.challenge.endDate),
         createdAt: convertTimestamp(data.challenge.createdAt),
         updatedAt: convertTimestamp(data.challenge.updatedAt),
-        participants: Array.isArray(data.challenge.participants) ? data.challenge.participants.map(participant => ({
-          id: participant.id || '',
-          challengeId: participant.challengeId || '',
-          userId: participant.userId || '',
-          username: participant.username || '',
-          profileImage: participant.profileImage || null,
-          progress: participant.progress || 0,
-          completedWorkouts: participant.completedWorkouts || [],
-          isCompleted: participant.isCompleted || false,
-          city: participant.city || '',
-          country: participant.country || '',
-          timezone: participant.timezone || '',
-          joinDate: convertTimestamp(participant.joinDate),
-          createdAt: convertTimestamp(participant.createdAt),
-          updatedAt: convertTimestamp(participant.updatedAt),
-          pulsePoints: participant.pulsePoints || {
-            baseCompletion: 0,
-            firstCompletion: 0,
-            streakBonus: 0,
-            checkInBonus: 0,
-            effortRating: 0,
-            chatParticipation: 0,
-            locationCheckin: 0,
-            contentEngagement: 0,
-            encouragementSent: 0,
-            encouragementReceived: 0
-          },
-          currentStreak: participant.currentStreak || 0,
-          encouragedUsers: participant.encouragedUsers || [],
-          encouragedByUsers: participant.encouragedByUsers || [],
-          checkIns: Array.isArray(participant.checkIns) ? 
-            participant.checkIns.map(checkIn => convertTimestamp(checkIn)).filter(Boolean) : []
-        })) : []
+        participants: participants // Use the fetched participants instead
       } : null
     };
 
