@@ -12,52 +12,36 @@ const NotificationTestPage: React.FC = () => {
     try {
       let parsedData;
       try {
-        parsedData = JSON.parse(data); // Validate JSON input
+        parsedData = JSON.parse(data);
       } catch {
         throw new Error("Invalid JSON in custom data field.");
       }
-  
-      const payload = {
-        fcmToken,
-        payload: {
-          notification: { title, body },
-          data: parsedData,
-        },
-      };
-  
-      const apiUrl =
-        process.env.NODE_ENV === "development"
-          ? "http://localhost:8888/.netlify/functions/send-custom-notification"
-          : "https://fitwithpulse.ai/.netlify/functions/send-custom-notification";
-  
-      const response = await fetch(apiUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-  
-      const contentType = response.headers.get("content-type");
-      let result;
-  
-      if (contentType && contentType.includes("application/json")) {
-        result = await response.json();
-      } else {
-        const text = await response.text(); // Handle non-JSON response
-        throw new Error(`Unexpected response: ${text}`);
-      }
-  
-      if (response.ok) {
-        setResponse(JSON.stringify(result, null, 2));
 
+      const response = await fetch('/.netlify/functions/send-custom-notification', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          fcmToken,
+          title,
+          body,
+          data: parsedData
+        })
+      });
+
+      const result = await response.json();
+      
+      if (result.success) {
+        setResponse(JSON.stringify(result, null, 2));
         setError(null);
       } else {
-        throw new Error(result.message || "Failed to send notification.");
-        console.error(result.message);
-
+        throw new Error(result.message || 'Failed to send notification');
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unexpected error occurred.");
-      console.error(err instanceof Error ? err.message : "Unexpected error occurred.");
+      const errorMessage = err instanceof Error ? err.message : "Unexpected error occurred.";
+      setError(errorMessage);
+      console.error(errorMessage);
       setResponse(null);
     }
   };
@@ -117,17 +101,17 @@ const NotificationTestPage: React.FC = () => {
         </button>
       </form>
 
+      {error && (
+        <div className="mt-6 p-4 bg-red-900 text-white w-full max-w-md rounded-lg">
+          <h2 className="text-lg font-bold mb-2">Error:</h2>
+          <pre className="whitespace-pre-wrap break-words">{error}</pre>
+        </div>
+      )}
+
       {response && (
         <div className="mt-6 p-4 bg-green-900 text-white w-full max-w-md rounded-lg">
           <h2 className="text-lg font-bold mb-2">Response:</h2>
           <pre className="whitespace-pre-wrap">{response}</pre>
-        </div>
-      )}
-
-      {error && (
-        <div className="mt-6 p-4 bg-red-900 text-white w-full max-w-md rounded-lg">
-          <h2 className="text-lg font-bold mb-2">Error:</h2>
-          <p>{error}</p>
         </div>
       )}
     </div>
