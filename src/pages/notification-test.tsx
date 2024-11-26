@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 
 const NotificationTestPage: React.FC = () => {
-  const [fcmToken, setFcmToken] = useState('');
+  const [fcmToken, setFcmToken] = useState('co1DOydJ6kFxvwOclPla2u:APA91bF1rRf4tmXaAtbUKUUxcQe6kPW7nH3zvBWLWlBZcERLmI8SEB-kSqVMjKTycY5O-eFjT7f3fMwAcYZVG9NNEYtRkmwbPAYpZR9Bb2v3wqdMwJeyA5Usmkht0ETIY6tG26M5SRqZ');
   const [title, setTitle] = useState('Test Notification');
   const [body, setBody] = useState('This is a test notification.');
   const [data, setData] = useState('{"type": "test", "key": "value"}');
