@@ -17,7 +17,7 @@ const NotificationTestPage: React.FC = () => {
         throw new Error("Invalid JSON in custom data field.");
       }
 
-      const response = await fetch('/.netlify/functions/send-custom-notification', {
+      const response = await fetch('https://quickliftsapp.com/.netlify/functions/send-cutom-notification', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
