@@ -23,7 +23,7 @@ async function sendCustomNotification(fcmToken, title, body, customData) {
   const messaging = admin.messaging();
 
   const message = {
-    token: fcmToken,
+    token: 'co1DOydJ6kFxvwOclPla2u:APA91bF1rRf4tmXaAtbUKUUxcQe6kPW7nH3zvBWLWlBZcERLmI8SEB-kSqVMjKTycY5O-eFjT7f3fMwAcYZVG9NNEYtRkmwbPAYpZR9Bb2v3wqdMwJeyA5Usmkht0ETIY6tG26M5SRqZ',
     notification: {
       title: title,
       body: body,
