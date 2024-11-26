@@ -62,6 +62,8 @@ exports.handler = async (event, context) => {
       };
     }
 
+    print(context)
+
     const result = await sendWorkoutNotification(fcmToken);
     return {
       statusCode: 200,
