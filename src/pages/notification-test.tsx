@@ -1,48 +1,72 @@
 import React, { useState } from 'react';
 
 const NotificationTestPage: React.FC = () => {
-  const [fcmToken, setFcmToken] = useState('co1DOydJ6kFxvwOclPla2u:APA91bF1rRf4tmXaAtbUKUUxcQe6kPW7nH3zvBWLWlBZcERLmI8SEB-kSqVMjKTycY5O-eFjT7f3fMwAcYZVG9NNEYtRkmwbPAYpZR9Bb2v3wqdMwJeyA5Usmkht0ETIY6tG26M5SRqZ');
+  const [fcmToken, setFcmToken] = useState('');
   const [title, setTitle] = useState('Test Notification');
   const [body, setBody] = useState('This is a test notification.');
   const [data, setData] = useState('{"type": "test", "key": "value"}');
   const [response, setResponse] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   const sendNotification = async () => {
+    setIsLoading(true);
+    setError(null);
+    setResponse(null);
+
     try {
+      if (!fcmToken.trim()) {
+        throw new Error('FCM Token is required');
+      }
+
       let parsedData;
       try {
         parsedData = JSON.parse(data);
       } catch {
-        throw new Error("Invalid JSON in custom data field.");
+        throw new Error('Invalid JSON in custom data field');
       }
 
-      const response = await fetch('https://quickliftsapp.com/.netlify/functions/send-cutom-notification', {
+      // Structure the payload to match what the function expects
+      const requestBody = {
+        fcmToken: fcmToken.trim(),
+        payload: {
+          notification: {
+            title,
+            body
+          },
+          data: parsedData
+        }
+      };
+
+      console.log('Sending request with body:', JSON.stringify(requestBody, null, 2)); // Debug log
+
+      const response = await fetch('/.netlify/functions/send-custom-notification', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          fcmToken,
-          title,
-          body,
-          data: parsedData
-        })
+        body: JSON.stringify(requestBody)
       });
 
-      const result = await response.json();
-      
-      if (result.success) {
-        setResponse(JSON.stringify(result, null, 2));
-        setError(null);
-      } else {
-        throw new Error(result.message || 'Failed to send notification');
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await response.text();
+        throw new Error(`Server returned non-JSON response: ${text}`);
       }
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || `Server error: ${response.status}`);
+      }
+
+      setResponse(JSON.stringify(result, null, 2));
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Unexpected error occurred.";
+      const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred';
       setError(errorMessage);
-      console.error(errorMessage);
-      setResponse(null);
+      console.error('Error sending notification:', err);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -64,6 +88,7 @@ const NotificationTestPage: React.FC = () => {
             onChange={(e) => setFcmToken(e.target.value)}
             className="w-full p-2 bg-zinc-800 text-white rounded"
             required
+            placeholder="Enter FCM token"
           />
         </div>
         <div className="mb-4">
@@ -73,6 +98,8 @@ const NotificationTestPage: React.FC = () => {
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             className="w-full p-2 bg-zinc-800 text-white rounded"
+            required
+            placeholder="Enter notification title"
           />
         </div>
         <div className="mb-4">
@@ -82,6 +109,8 @@ const NotificationTestPage: React.FC = () => {
             value={body}
             onChange={(e) => setBody(e.target.value)}
             className="w-full p-2 bg-zinc-800 text-white rounded"
+            required
+            placeholder="Enter notification body"
           />
         </div>
         <div className="mb-4">
@@ -91,13 +120,19 @@ const NotificationTestPage: React.FC = () => {
             onChange={(e) => setData(e.target.value)}
             rows={5}
             className="w-full p-2 bg-zinc-800 text-white rounded"
+            placeholder="Enter valid JSON data"
           />
         </div>
         <button
           type="submit"
-          className="w-full bg-[#E0FE10] text-black py-2 rounded-lg font-bold"
+          disabled={isLoading}
+          className={`w-full py-2 rounded-lg font-bold ${
+            isLoading 
+              ? 'bg-gray-500 cursor-not-allowed' 
+              : 'bg-[#E0FE10] text-black hover:bg-[#d4f00f]'
+          }`}
         >
-          Send Notification
+          {isLoading ? 'Sending...' : 'Send Notification'}
         </button>
       </form>
 
