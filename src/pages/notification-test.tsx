@@ -40,7 +40,7 @@ const NotificationTestPage: React.FC = () => {
 
       console.log('Sending request with body:', JSON.stringify(requestBody, null, 2)); // Debug log
 
-      const response = await fetch('/.netlify/functions/send-custom-notification', {
+      const response = await fetch('/.netlify/functions/send-notification', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
