@@ -18,22 +18,23 @@ if (admin.apps.length === 0) {
   });
 }
 
-// Define the Cloud Function handler
-async function sendWorkoutNotification(fcmToken) {
+// Define the notification sender function
+async function sendCustomNotification(fcmToken, title, body, customData) {
   const messaging = admin.messaging();
 
   const message = {
     token: fcmToken,
     notification: {
-      title: 'You have a new workout!',
-      body: 'A new workout has been sent to you.',
+      title: title,
+      body: body,
     },
+    data: customData,
     apns: {
       payload: {
         aps: {
           alert: {
-            title: 'You have a new workout!',
-            body: 'A new workout has been sent to you.',
+            title: title,
+            body: body,
           },
           badge: 1,
         },
@@ -52,19 +53,25 @@ async function sendWorkoutNotification(fcmToken) {
 }
 
 // Cloud Function to handle HTTP request
-exports.handler = async (event, context) => {
+exports.handler = async (event) => {
   try {
-    const fcmToken = event.queryStringParameters.fcmToken;
+    const { fcmToken, title, body, data } = JSON.parse(event.body || '{}');
+    
     if (!fcmToken) {
       return {
         statusCode: 400,
-        body: 'Missing FCM token.'
+        body: JSON.stringify({ success: false, message: 'Missing FCM token.' })
       };
     }
 
-    print(context)
+    if (!title || !body) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ success: false, message: 'Missing notification title or body.' })
+      };
+    }
 
-    const result = await sendWorkoutNotification(fcmToken);
+    const result = await sendCustomNotification(fcmToken, title, body, data || {});
     return {
       statusCode: 200,
       body: JSON.stringify(result)
@@ -76,4 +83,3 @@ exports.handler = async (event, context) => {
     };
   }
 };
-

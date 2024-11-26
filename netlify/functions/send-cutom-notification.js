@@ -8,7 +8,7 @@ const headers = {
   'Content-Type': 'application/json'
 };
 
-// Initialize Firebase Admin SDK only once
+// Initialize Firebase Admin SDK
 if (admin.apps.length === 0) {
   admin.initializeApp({
     credential: admin.credential.cert({
@@ -43,14 +43,16 @@ exports.handler = async (event) => {
       headers,
       body: JSON.stringify({
         success: false,
-        message: 'Method not allowed'
+        message: 'Method not allowed',
+        receivedMethod: event.httpMethod
       })
     };
   }
 
   try {
     // Parse the request body
-    const { fcmToken, payload } = JSON.parse(event.body);
+    const body = JSON.parse(event.body);
+    const { fcmToken, payload } = body;
 
     // Validate required parameters
     if (!fcmToken || !payload) {
@@ -63,6 +65,8 @@ exports.handler = async (event) => {
         })
       };
     }
+
+    console.log('Sending notification with payload:', JSON.stringify(payload, null, 2));
 
     // Construct the message
     const message = {
