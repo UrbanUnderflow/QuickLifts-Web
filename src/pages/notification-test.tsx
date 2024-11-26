@@ -48,12 +48,16 @@ const NotificationTestPage: React.FC = () => {
   
       if (response.ok) {
         setResponse(JSON.stringify(result, null, 2));
+
         setError(null);
       } else {
         throw new Error(result.message || "Failed to send notification.");
+        console.error(result.message);
+
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unexpected error occurred.");
+      console.error(err instanceof Error ? err.message : "Unexpected error occurred.");
       setResponse(null);
     }
   };
