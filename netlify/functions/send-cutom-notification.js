@@ -20,39 +20,24 @@ if (admin.apps.length === 0) {
 
 // Cloud Function to handle HTTP request
 exports.sendCustomNotification = async (req, res) => {
-  const { fcmToken, payload } = req.body;
-
-  if (!fcmToken || !payload) {
-    return res.status(400).send({ success: false, message: 'Missing required parameters.' });
-  }
-
-  const message = {
-    token: fcmToken,
-    notification: {
-      title: payload.notification.title || "Notification",
-      body: payload.notification.body || "You have a new notification.",
-    },
-    data: payload.data || {}, // Add custom data payload
-    apns: {
-      payload: {
-        aps: {
-          alert: {
-            title: payload.notification.title || "Notification",
-            body: payload.notification.body || "You have a new notification.",
-          },
-          sound: "default",
-        },
-      },
-    },
-  };
-
   try {
-    const messaging = admin.messaging();
-    const response = await messaging.send(message);
-    console.log('Successfully sent notification:', response);
-    return res.status(200).send({ success: true, message: 'Notification sent successfully.' });
+    const { fcmToken, payload } = req.body;
+
+    if (!fcmToken || !payload) {
+      return res.status(400).json({ success: false, message: "Missing required parameters." });
+    }
+
+    const message = {
+      token: fcmToken,
+      notification: payload.notification,
+      data: payload.data,
+    };
+
+    const response = await admin.messaging().send(message);
+    console.log("Successfully sent notification:", response);
+    return res.status(200).json({ success: true, message: "Notification sent successfully." });
   } catch (error) {
-    console.error('Error sending notification:', error);
-    return res.status(500).send({ success: false, message: error.message });
+    console.error("Error sending notification:", error);
+    return res.status(500).json({ success: false, message: error.message || "Internal Server Error" });
   }
 };
