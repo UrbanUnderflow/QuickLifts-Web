@@ -10,57 +10,50 @@ const NotificationTestPage: React.FC = () => {
 
   const sendNotification = async () => {
     try {
-      // Validate JSON data input
       let parsedData;
       try {
-        parsedData = JSON.parse(data); // Ensure it's valid JSON
-      } catch (err) {
-        if (err instanceof Error) {
-          setError(err.message || 'An unexpected error occurred.');
-        } else {
-          setError('An unknown error occurred.');
-        }
-        setResponse(null);
+        parsedData = JSON.parse(data); // Validate JSON input
+      } catch {
+        throw new Error("Invalid JSON in custom data field.");
       }
   
       const payload = {
         fcmToken,
         payload: {
-          notification: {
-            title,
-            body,
-          },
+          notification: { title, body },
           data: parsedData,
         },
       };
   
       const apiUrl =
-        process.env.NODE_ENV === 'development'
-          ? 'http://localhost:8888/.netlify/functions/send-custom-notification'
-          : 'https://fitwithpulse.ai/.netlify/functions/send-custom-notification';
+        process.env.NODE_ENV === "development"
+          ? "http://localhost:8888/.netlify/functions/send-custom-notification"
+          : "https://fitwithpulse.ai/.netlify/functions/send-custom-notification";
   
       const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload), // Correctly stringify the payload
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
       });
   
-      const result = await response.json(); // Parse the JSON response
+      const contentType = response.headers.get("content-type");
+      let result;
+  
+      if (contentType && contentType.includes("application/json")) {
+        result = await response.json();
+      } else {
+        const text = await response.text(); // Handle non-JSON response
+        throw new Error(`Unexpected response: ${text}`);
+      }
+  
       if (response.ok) {
         setResponse(JSON.stringify(result, null, 2));
         setError(null);
       } else {
-        setError(result.message || 'Failed to send notification.');
-        setResponse(null);
+        throw new Error(result.message || "Failed to send notification.");
       }
     } catch (err) {
-      if (err instanceof Error) {
-        setError(err.message || 'An unexpected error occurred.');
-      } else {
-        setError('An unknown error occurred.');
-      }
+      setError(err instanceof Error ? err.message : "Unexpected error occurred.");
       setResponse(null);
     }
   };
