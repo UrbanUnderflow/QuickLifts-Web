@@ -18,7 +18,7 @@ const ChallengeCTA: React.FC<{ challenge: any }> = ({ challenge }) => {
     },
     {
       title: "Create Account",
-      description: "Sign up for a free account to start your fitness journey",
+      description: "Sign up for an account to start your fitness journey",
       icon: <UserIcon className="w-8 h-8 text-[#E0FE10]" />
     },
     {
