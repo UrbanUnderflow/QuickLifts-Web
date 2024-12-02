@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Calendar, Clock, Flag, Users, Play } from 'lucide-react';
 import { ChallengeInvitationProps } from '../types/ChallengeTypes';
 import ChallengeCTA from './ChallengeCTA';
@@ -36,45 +36,68 @@ const DetailTile: React.FC<DetailTileProps> = ({ title, value, icon }) => (
   </div>
 );
 
-const VideoPreview: React.FC<{ videoUrl?: string }> = ({ videoUrl }) => {
-    const [isPlaying, setIsPlaying] = useState(false);
-  
-    if (!videoUrl) {
-      return (
-        <div className="relative bg-black rounded-xl h-48 mb-8 flex items-center justify-center">
-          <Play className="w-8 h-8 text-white/90" />
-        </div>
-      );
+
+interface VideoPreviewProps {
+  videoUrl?: string;
+}
+
+const VideoPreview: React.FC<VideoPreviewProps> = ({ videoUrl }) => {
+  const [isPlaying, setIsPlaying] = useState<boolean>(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    const playVideo = async () => {
+      if (videoRef.current) {
+        try {
+          await videoRef.current.play();
+          setIsPlaying(true);
+        } catch (error) {
+          console.error('Autoplay failed:', error);
+        }
+      }
+    };
+    
+    if (videoUrl) {
+      playVideo();
     }
-  
+  }, [videoUrl]);
+
+  if (!videoUrl) {
     return (
-      <div className="relative bg-black rounded-xl h-48 mb-8 overflow-hidden">
-        <video
-          className="w-full h-full object-cover"
-          src={videoUrl}
-          controls={isPlaying}
-          playsInline
-          poster={!isPlaying ? undefined : ''}
-        >
-          Your browser does not support the video tag.
-        </video>
-        {!isPlaying && (
-          <div 
-            className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 cursor-pointer"
-            onClick={() => {
-              setIsPlaying(true);
-              const videoElement = document.querySelector('video');
-              if (videoElement) {
-                videoElement.play();
-              }
-            }}
-          >
-            <Play className="w-8 h-8 text-white/90" />
-          </div>
-        )}
+      <div className="relative bg-black rounded-xl h-48 mb-8 flex items-center justify-center">
+        <Play className="w-8 h-8 text-white/90" />
       </div>
     );
-  };
+  }
+
+  return (
+    <div className="relative bg-black rounded-xl h-48 mb-8 overflow-hidden">
+      <video
+        ref={videoRef}
+        className="w-full h-full object-cover"
+        src={videoUrl}
+        controls={isPlaying}
+        playsInline
+        autoPlay
+        muted
+      >
+        Your browser does not support the video tag.
+      </video>
+      {!isPlaying && (
+        <div 
+          className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 cursor-pointer"
+          onClick={() => {
+            videoRef.current?.play();
+            setIsPlaying(true);
+          }}
+        >
+          <Play className="w-8 h-8 text-white/90" />
+        </div>
+      )}
+    </div>
+  );
+};
+
 
 const RoundInvitation: React.FC<ChallengeInvitationProps> = ({ challenge }) => {
   // Ensure we have valid Date objects

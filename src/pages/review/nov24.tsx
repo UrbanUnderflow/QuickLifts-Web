@@ -1,6 +1,6 @@
 import React from 'react';
 import Image from 'next/image';
-import { ArrowUpRight, Trophy, Users, Star, Calendar, ArrowUp, ArrowDown } from 'lucide-react';
+import { ArrowUpRight, Trophy, Users, Star, Activity, Calendar, ArrowUp, ArrowDown } from 'lucide-react';
 
 const MonthInReview = () => {
   return (
@@ -55,29 +55,43 @@ const MonthInReview = () => {
     </div>
     </div>
 
-      {/* Key Metrics Grid */}
-      <div className="max-w-6xl mx-auto px-4 -mt-12">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {[
-            { label: "Active Users", value: "2,847", change: 12.4 },
-            { label: "Avg. Daily Workouts", value: "156", change: 8.7 },
-            { label: "Revenue", value: "$12.4K", change: 15.2 },
-            { label: "User Retention", value: "84%", change: -2.1 }
-          ].map((metric, index) => (
-            <div key={index} className="bg-white p-6 rounded-xl shadow-lg">
-              <div className="flex items-center justify-between">
-                <span className="text-zinc-500">{metric.label}</span>
-                <span className={`flex items-center ${metric.change >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                  {metric.change >= 0 ? <ArrowUp size={16} /> : <ArrowDown size={16} />}
-                  {Math.abs(metric.change)}%
-                </span>
-              </div>
-              <div className="mt-2 text-3xl font-bold">{metric.value}</div>
-            </div>
-          ))}
+      {/* Key Metrics Section */}
+        <div className="max-w-6xl mx-auto px-4 mt-16">
+        <div className="flex items-center gap-3 mb-6">
+            <Activity className="text-black" size={28} />
+            <h2 className="text-2xl font-bold">Key Metrics</h2>
         </div>
-      </div>
-
+        <div className="bg-white rounded-xl shadow-lg p-8">
+            <div className="mb-8">
+            <p className="text-lg text-zinc-600">
+                November brought steady growth in our core metrics, with particular strength 
+                in workout completion rates. While our user acquisition pace remains modest, 
+                we're seeing deeper engagement from our existing community. Our focus on building 
+                a sustainable, engaged user base is reflected in the 8.7% increase in completed workouts, 
+                even as we transition some metrics to our new tracking system.
+            </p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[
+                { label: "Active Users", value: "90", change: 4.6 },
+                { label: "Moves", value: "84", change: -2.1 },
+                { label: "Workouts Completed", value: "156", change: 8.7 },
+                { label: "Revenue", value: "$236", change: 0 },
+            ].map((metric, index) => (
+                <div key={index} className="bg-zinc-50 p-6 rounded-lg">
+                <div className="flex items-center justify-between">
+                    <span className="text-zinc-500">{metric.label}</span>
+                    <span className={`flex items-center ${metric.change >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                    {metric.change >= 0 ? <ArrowUp size={16} /> : <ArrowDown size={16} />}
+                    {Math.abs(metric.change)}%
+                    </span>
+                </div>
+                <div className="mt-2 text-3xl font-bold">{metric.value}</div>
+                </div>
+            ))}
+            </div>
+        </div>
+        </div>
       {/* Community Spotlight */}
       <div className="max-w-6xl mx-auto px-4 mt-16">
         <div className="flex items-center gap-3 mb-6">
