@@ -60,7 +60,7 @@ const MonthInReview = () => {
       <div className="mt-2 text-zinc-400 text-xl font-['Thunder']">November 2024</div>
       <p className="mt-4 text-zinc-400 max-w-2xl text-lg">
         November marks a pivotal shift in our journey, moving beyond the building phase to 
-        deeply engage with our community and future partners. While our technology foundations 
+        deeply engaging with our community and future partners. While our technology foundations 
         remain strong, we're now focusing on the conversations and connections that matter most. 
         From prestigious tech accelerator programs to vibrant community partnerships, 
         we're fostering meaningful dialogues about the future of social fitness and building 
