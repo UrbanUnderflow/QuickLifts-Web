@@ -267,7 +267,7 @@ const MonthInReview = () => {
             <div className="space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center gap-6">
                 <div className="flex-shrink-0 w-24 text-center">
-                <div className="text-2xl font-bold">Dec 6</div>
+                <div className="text-2xl font-bold">Dec 5</div>
                 <div className="text-zinc-500">2024</div>
                 </div>
                 <div className="flex-grow">
