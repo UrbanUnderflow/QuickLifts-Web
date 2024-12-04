@@ -74,7 +74,7 @@ const MonthInReview = () => {
     <div className="bg-white rounded-xl shadow-lg p-8">
         <div className="flex items-center gap-3 mb-6">
         <Trophy className="text-black" size={28} />
-        <h2 className="text-2xl font-bold">Major Achievements</h2>
+        <h2 className="text-2xl font-bold">November's Achievements</h2>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {[
