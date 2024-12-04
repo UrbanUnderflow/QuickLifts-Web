@@ -1,27 +1,58 @@
 import React from 'react';
 import Image from 'next/image';
-import { ArrowUpRight, Trophy, Users, Star, Activity, Calendar, ArrowUp, ArrowDown } from 'lucide-react';
+import { ArrowUpRight, Trophy, Users, Star, Activity, Calendar  } from 'lucide-react';
+import MetricsGrid from '../../components/MetricsGrid';
+
+
+const metrics = [
+  {
+    label: "Active Users",
+    currentValue: 90,
+    previousValue: 86,
+    isCurrency: false
+  },
+  {
+    label: "Moves",
+    currentValue: 194,
+    previousValue: 0,
+    isCurrency: false
+  },
+  {
+    label: "Workouts Completed",
+    currentValue: 417,
+    previousValue: 0,
+    isCurrency: false
+  },
+  {
+    label: "Revenue",
+    currentValue: 168,
+    previousValue: 201,
+    isCurrency: true
+  }
+];
 
 const MonthInReview = () => {
   return (
     <div className="min-h-screen bg-white">
-      {/* Hero Section */}
-      <div className="bg-gradient-to-br from-zinc-900 to-zinc-800 text-white py-24">
-        <div className="max-w-6xl mx-auto px-4">
-          <div className="text-sm font-medium text-[#E0FE10]">Month in Review</div>
-          <h1 className="mt-2 text-5xl sm:text-7xl font-bold font-['Thunder']">
-            November 2024
-          </h1>
-          <p className="mt-4 text-zinc-400 max-w-2xl text-lg">
-          November marks a pivotal shift in our journey, moving beyond the building phase to 
-          deeply engage with our community and future partners. While our technology foundations 
-          remain strong, we're now focusing on the conversations and connections that matter most. 
-          From prestigious tech accelerator programs to vibrant community partnerships, 
-          we're fostering meaningful dialogues about the future of social fitness and building 
-          relationships that will help guide our next steps moving into 2025.
-          </p>
-        </div>
-      </div>
+  {/* Hero Section */}
+  <div className="bg-gradient-to-br from-zinc-900 to-zinc-800 text-white py-24">
+    <div className="max-w-6xl mx-auto px-4">
+      <div className="text-sm font-medium text-[#E0FE10]">Month in Review</div>
+      <h1 className="mt-2 text-5xl sm:text-7xl font-bold font-['Thunder']">
+        Shifting From Building Code
+        <span className="block">to Building Community</span>
+      </h1>
+      <div className="mt-2 text-zinc-400 text-xl font-['Thunder']">November 2024</div>
+      <p className="mt-4 text-zinc-400 max-w-2xl text-lg">
+        November marks a pivotal shift in our journey, moving beyond the building phase to 
+        deeply engage with our community and future partners. While our technology foundations 
+        remain strong, we're now focusing on the conversations and connections that matter most. 
+        From prestigious tech accelerator programs to vibrant community partnerships, 
+        we're fostering meaningful dialogues about the future of social fitness and building 
+        relationships that will help guide our next steps moving into 2025.
+      </p>
+    </div>
+  </div>
 
     {/* Major Achievements Section */}
     <div className="max-w-6xl mx-auto px-4 -mt-12">
@@ -64,62 +95,41 @@ const MonthInReview = () => {
         <div className="bg-white rounded-xl shadow-lg p-8">
             <div className="mb-8">
             <p className="text-lg text-zinc-600">
-                November brought steady growth in our core metrics, with particular strength 
-                in workout completion rates. While our user acquisition pace remains modest, 
-                we're seeing deeper engagement from our existing community. Our focus on building 
-                a sustainable, engaged user base is reflected in the 8.7% increase in completed workouts, 
-                even as we transition some metrics to our new tracking system.
+            As we move from building to scaling, we’re focusing on meaningful metrics like workouts completed and moves—real indicators of deeper engagement. While we’re just starting to track these metrics, they’re key to validating our belief that content creators will drive impactful usage beyond organic downloads.
+            <br></br><br></br>With intentional marketing efforts launching in the new year, we’re excited to amplify creator impact and grow a thriving, engaged community.
             </p>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {[
-                { label: "Active Users", value: "90", change: 4.6 },
-                { label: "Moves", value: "84", change: -2.1 },
-                { label: "Workouts Completed", value: "156", change: 8.7 },
-                { label: "Revenue", value: "$236", change: 0 },
-            ].map((metric, index) => (
-                <div key={index} className="bg-zinc-50 p-6 rounded-lg">
-                <div className="flex items-center justify-between">
-                    <span className="text-zinc-500">{metric.label}</span>
-                    <span className={`flex items-center ${metric.change >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                    {metric.change >= 0 ? <ArrowUp size={16} /> : <ArrowDown size={16} />}
-                    {Math.abs(metric.change)}%
-                    </span>
-                </div>
-                <div className="mt-2 text-3xl font-bold">{metric.value}</div>
-                </div>
-            ))}
-            </div>
+            <MetricsGrid metrics={metrics} />
         </div>
         </div>
       {/* Community Spotlight */}
       <div className="max-w-6xl mx-auto px-4 mt-16">
         <div className="flex items-center gap-3 mb-6">
           <Users className="text-black" size={28} />
-          <h2 className="text-2xl font-bold">Building in Atlanta</h2>
+          <h2 className="text-2xl font-bold">Building in Atlanta and Beyond</h2>
         </div>
         <div className="bg-white rounded-xl shadow-lg p-8">
           <div className="prose max-w-none">
             <p className="text-lg text-zinc-600 mb-6">
-              This month marked our deeper integration into Atlanta's vibrant tech ecosystem. 
-              Our pitch at Atlanta Tech Village showcased not just our product, but the incredible 
-              support and energy of the local tech community.
+            This month, we deepened our integration into Atlanta’s vibrant tech ecosystem by pitching at Atlanta Tech Village, attending various pitch events across the city, and pursuing the It Takes a Village pre-accelerator.
+            The supportive community and energy of Atlanta remain foundational as we grow Pulse into a platform that connects fitness enthusiasts around the globe.
             </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-8">
               <div>
                 <h3 className="text-xl font-bold mb-4">Community Engagement</h3>
                 <ul className="space-y-3 text-zinc-600">
                   <li>• Pitched at Atlanta Tech Village</li>
-                  <li>• Applied for TechStars accelerator program</li>
-                  <li>• Submitted application for Global 300</li>
-                  <li>• Participating in It Takes A Village initiative</li>
+                  <li>• Applied for <a href="https://www.techstars.com/accelerators/nyc" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">TechStars NYC</a> accelerator program</li>
+                  <li>• Applied for <a href="https://www.techstars.com/accelerators/baltimore-ai-health" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">TechStars AI Health in Baltimore</a></li>
+                  <li>• Submitted application for <a href="https://500.co/founders/flagship" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">Global 500</a></li>
+                  <li>• Applied for <a href="https://www.atlantatechvillage.com/programs/pre-accelerator" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">It Takes A Village pre-accelerator</a></li>
                 </ul>
               </div>
               <div>
-                <h3 className="text-xl font-bold mb-4">Why Atlanta?</h3>
+                <h3 className="text-xl font-bold mb-4">Looking to Build Deeper Roots in Atlanta</h3>
                 <p className="text-zinc-600">
-                  The supportive ecosystem, diverse talent pool, and collaborative spirit make 
-                  Atlanta the perfect home for building the future of fitness communities.
+                As we continue to grow Pulse, we’re looking to strengthen our ties within Atlanta’s thriving ecosystem. We’re seeking connections to local programs, potential partners, and opportunities to collaborate with like-minded innovators in the city.
+                <br></br><br></br>If you’re part of Atlanta’s tech, fitness, or entrepreneurial community—or know someone who is—let’s connect. 
                 </p>
               </div>
             </div>
@@ -179,6 +189,56 @@ const MonthInReview = () => {
                     height={400} 
                     className="rounded-lg"
                 />   
+          </div>
+        </div>
+      </div>
+
+      {/* How You Can Help Section */}
+      <div className="max-w-6xl mx-auto px-4 mt-16">
+        <div className="bg-white rounded-xl shadow-lg p-8">
+          <div className="flex items-center gap-3 mb-6">
+            <Star className="text-black" size={28} />
+            <h2 className="text-2xl font-bold">How You Can Help</h2>
+          </div>
+          <div className="prose max-w-none">
+            <p className="text-lg text-zinc-600 mb-6">
+              A primary goal for Pulse right now is to gain acceptance into an accelerator program that can help us prepare for fundraising and build the operational foundation needed to scale our user base. 
+            </p>
+            <h3 className="text-xl font-bold mb-4">Ways You Can Support:</h3>
+            <ul className="space-y-3 text-zinc-600">
+              <li>• Introductions to accelerator programs focused on AI, health, or fitness</li>
+              <li>• Connections to angel investors or early-stage VCs aligned with our mission</li>
+              <li>• Partnerships or opportunities within the fitness or tech communities</li>
+            </ul>
+            <p className="mt-6 text-zinc-600">
+              If you or someone you know can assist in any of these areas, we’d love to connect. Your support can help us take the next big step toward scaling Pulse.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Thank You Section */}
+      <div className="max-w-6xl mx-auto px-4 mt-16">
+        <div className="bg-white rounded-xl shadow-lg p-8">
+          <div className="flex items-center gap-3 mb-6">
+            <Trophy className="text-black" size={28} />
+            <h2 className="text-2xl font-bold">Giving Gratitude</h2>
+          </div>
+          <div className="prose max-w-none">
+            <p className="text-lg text-zinc-600 mb-6">
+              This month, we’ve been fortunate to receive incredible support and guidance from a variety of individuals and organizations. We want to take a moment to express our gratitude:
+            </p>
+            <ul className="space-y-3 text-zinc-600">
+              <li>• The hosts of AcceleratorCon for accepting our company as finalists</li>
+              <li>• <a href="https://www.linkedin.com/in/jordansawadogo/" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">Jordan Sawadogo</a> from <a href="https://500.co/founders/flagship" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">Global 500</a> and <a href="https://www.linkedin.com/in/justinmurray2577/" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">Justin Murray</a> from <a href="https://www.plugandplaytechcenter.com/" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">Plug & Play</a> for taking the time to interview us during the Draft Experience</li>
+              <li>• <a href="https://www.linkedin.com/in/jaceycadet/" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">Jacey Cadet</a> from <a href="https://www.atlantatechvillage.com/" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">Atlanta Tech Village</a> for valuable feedback on our pitch</li>
+              <li>• <a href="https://startuprunway.org/" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">Start-Up Runway</a> for accepting us as finalists for the December 5th pitch event</li>
+              <li>• <a href="https://www.hypesportsinnovation.com/" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">Hype Sports Innovation</a> for acceptance into their program in partnership with IBM</li>
+              <li>• Jaidus for their invaluable feedback and input on our upcoming Rounds feature</li>
+            </ul>
+            <p className="mt-6 text-lg text-zinc-600">
+              Thank you all for your incredible support! We’re looking forward to a productive and impactful December as we continue building and scaling Pulse.
+            </p>
           </div>
         </div>
       </div>
