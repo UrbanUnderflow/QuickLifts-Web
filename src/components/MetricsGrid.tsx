@@ -6,13 +6,15 @@ interface Metric {
   currentValue: number;
   previousValue: number;
   isCurrency?: boolean;
+  showGrowth?: boolean;
 }
 
 interface MetricsGridProps {
   metrics: Metric[];
 }
 
-const MetricCard: React.FC<Metric> = ({ label, currentValue, previousValue, isCurrency = false }) => {
+const MetricCard: React.FC<Metric> = ({ label, currentValue, previousValue, isCurrency = false, showGrowth = true
+}) => {
   const calculatePercentageChange = () => {
     if (previousValue === 0) return 0;
     return ((currentValue - previousValue) / previousValue) * 100;
@@ -32,11 +34,15 @@ const MetricCard: React.FC<Metric> = ({ label, currentValue, previousValue, isCu
       <div className="flex items-center justify-between">
         <span className="text-zinc-500">{label}</span>
         <div className="flex flex-col items-end">
-          <span className={`flex items-center ${percentageChange >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-            {percentageChange >= 0 ? <ArrowUp size={16} /> : <ArrowDown size={16} />}
-            {Math.abs(percentageChange).toFixed(1)}%
-          </span>
-          <span className="text-xs text-zinc-400">from {formatValue(previousValue)}</span>
+        {showGrowth && (
+            <>
+            <span className={`flex items-center ${percentageChange >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+              {percentageChange >= 0 ? <ArrowUp size={16} /> : <ArrowDown size={16} />}
+              {Math.abs(percentageChange).toFixed(1)}%
+            </span>
+            <span className="text-xs text-zinc-400">from {formatValue(previousValue)}</span>
+          </>
+        )}
         </div>
       </div>
       <div className="mt-2 text-3xl font-bold">{formatValue(currentValue)}</div>

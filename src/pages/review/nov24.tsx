@@ -16,13 +16,15 @@ const metrics = [
     label: "Moves",
     currentValue: 194,
     previousValue: 0,
-    isCurrency: false
+    isCurrency: false,
+    showGrowth: false
   },
   {
     label: "Workouts Completed",
     currentValue: 417,
     previousValue: 0,
-    isCurrency: false
+    isCurrency: false,
+    showGrowth: false
   },
   {
     label: "Revenue",
@@ -110,7 +112,7 @@ const MonthInReview = () => {
         <div className="bg-white rounded-xl shadow-lg p-8">
             <div className="mb-8">
             <p className="text-lg text-zinc-600">
-            As we move from building to scaling, we’re focusing on meaningful metrics like workouts completed and moves—real indicators of deeper engagement. While we’re just starting to track these metrics, they’re key to validating our belief that content creators will drive impactful usage beyond organic downloads.
+            As we move from building to scaling, we’re focusing on meaningful metrics like Workouts Completed and Moves—real indicators of deeper engagement. While we’re just starting to track these metrics, they’re key to validating our belief that content creators will drive impactful usage beyond organic downloads.
             <br></br><br></br>With intentional marketing efforts launching in the new year, we’re excited to amplify creator impact and grow a thriving, engaged community.
             </p>
             </div>
