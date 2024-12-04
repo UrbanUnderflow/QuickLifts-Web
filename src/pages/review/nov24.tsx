@@ -249,7 +249,7 @@ const MonthInReview = () => {
               <li>• <a href="https://www.linkedin.com/in/jaceycadet/" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">Jacey Cadet</a> from <a href="https://www.atlantatechvillage.com/" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">Atlanta Tech Village</a> for valuable feedback on our pitch</li>
               <li>• <a href="https://startuprunway.org/" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">Start-Up Runway</a> for accepting us as finalists for the December 5th pitch event</li>
               <li>• <a href="https://www.hypesportsinnovation.com/" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">Hype Sports Innovation</a> for acceptance into their program in partnership with IBM</li>
-              <li>• Jaidus for their invaluable feedback and input on our upcoming Rounds feature</li>
+              <li>• Jaidus for his invaluable feedback and input on our upcoming "Rounds" feature</li>
             </ul>
             <p className="mt-6 text-lg text-zinc-600">
               Thank you all for your incredible support! We’re looking forward to a productive and impactful December as we continue building and scaling Pulse.
