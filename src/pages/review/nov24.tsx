@@ -2,6 +2,7 @@ import React from 'react';
 import Image from 'next/image';
 import { ArrowUpRight, Trophy, Users, Star, Activity, Calendar  } from 'lucide-react';
 import MetricsGrid from '../../components/MetricsGrid';
+import MonthInReviewMeta from '../../components/MonthInReviewMeta'; // Import the meta component
 
 
 const metrics = [
@@ -32,8 +33,22 @@ const metrics = [
 ];
 
 const MonthInReview = () => {
+  const metaTitle = "November 2024: Month in Review | Pulse";
+  const metaDescription =
+    "Explore Pulse's November highlights, including community building, accelerator applications, and major achievements as we shift from building to scaling.";
+  const metaImage = "https://fitwithpulse.ai/november-2024-review.png"; // Replace with an actual image URL for this review
+  const pageUrl = "https://fitwithpulse.ai/month-in-review/november-2024";
+
   return (
-    <div className="min-h-screen bg-white">
+    <>
+      <MonthInReviewMeta
+        title={metaTitle}
+        description={metaDescription}
+        imageUrl={metaImage}
+        pageUrl={pageUrl}
+      />
+
+  <div className="min-h-screen bg-white">
   {/* Hero Section */}
   <div className="bg-gradient-to-br from-zinc-900 to-zinc-800 text-white py-24">
     <div className="max-w-6xl mx-auto px-4">
@@ -273,6 +288,7 @@ const MonthInReview = () => {
         </div>
         </div>
     </div>
+    </>
   );
 };
 
