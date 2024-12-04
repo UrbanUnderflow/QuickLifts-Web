@@ -3,6 +3,5 @@
   "/_error": "pages/_error.js",
   "/_document": "pages/_document.js",
   "/review/nov24": "pages/review/nov24.js",
-  "/[username]": "pages/[username].js",
   "/review": "pages/review.js"
 }
