@@ -86,7 +86,7 @@ const MonthInReview = () => {
             },
             {
                 title: "AcceleratorCon Finalist",
-                description: <>Selected to present at the Draft Experience, where we shared our vision with investors from <a href="https://300.global/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 hover:underline">300 Global</a> and <a href="https://www.plugandplaytechcenter.com/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 hover:underline">Plug & Play</a> in New York.</>
+                description: <>Selected to present at the Draft Experience, where we shared our vision with investors from <a href="https://500.co" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 hover:underline">Global 500</a> and <a href="https://www.plugandplaytechcenter.com/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 hover:underline">Plug & Play</a> in New York.</>
             },
             {
                 title: "Startup Runway Finalist",
