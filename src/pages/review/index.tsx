@@ -96,11 +96,11 @@ export const getStaticProps: GetStaticProps = async () => {
             const fileContent = fs.readFileSync(fullPath, 'utf8');
   
             // Extract title from the h1 tag content
-            const titleMatch = fileContent.match(/<h1[^>]*>(.*?)<\/h1>/s);
+            const titleMatch = fileContent.match(/<h1[^>]*>([\s\S]*?)<\/h1>/);
             const title = titleMatch ? titleMatch[1].trim() : id;
   
             // Extract description from the first paragraph in the hero section
-            const descriptionMatch = fileContent.match(/text-zinc-400[^>]*>(.*?)<\/p>/s);
+            const descriptionMatch = fileContent.match(/text-zinc-400[^>]*>([\s\S]*?)<\/p>/);
             const description = descriptionMatch 
               ? descriptionMatch[1].trim()
               : 'Monthly review of our progress and achievements.';
