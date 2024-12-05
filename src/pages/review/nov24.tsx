@@ -86,7 +86,7 @@ const MonthInReview = () => {
             },
             {
                 title: "AcceleratorCon Finalist",
-                description: <>Selected to present at the Draft Experience, where we shared our vision with investors from <a href="https://500.co" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 hover:underline">Global 500</a> and <a href="https://www.plugandplaytechcenter.com/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 hover:underline">Plug & Play</a> in New York.</>
+                description: <>Selected to present at the Draft Experience, where we shared our vision with investors from <a href="https://500.co" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 hover:underline">500 Global</a> and <a href="https://www.plugandplaytechcenter.com/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 hover:underline">Plug & Play</a> in New York.</>
             },
             {
                 title: "Startup Runway Finalist",
@@ -138,7 +138,7 @@ const MonthInReview = () => {
                   <li>• Pitched at Atlanta Tech Village</li>
                   <li>• Applied for <a href="https://www.techstars.com/accelerators/nyc" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">TechStars NYC</a> accelerator program</li>
                   <li>• Applied for <a href="https://www.techstars.com/accelerators/baltimore-ai-health" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">TechStars AI Health in Baltimore</a></li>
-                  <li>• Submitted application for <a href="https://500.co/founders/flagship" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">Global 500</a></li>
+                  <li>• Submitted application for <a href="https://500.co/founders/flagship" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">500 Global</a></li>
                   <li>• Applied for <a href="https://www.atlantatechvillage.com/programs/pre-accelerator" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">It Takes A Village pre-accelerator</a></li>
                 </ul>
               </div>
@@ -247,7 +247,7 @@ const MonthInReview = () => {
             </p>
             <ul className="space-y-3 text-zinc-600">
               <li>• The hosts of AcceleratorCon for accepting our company as finalists</li>
-              <li>• <a href="https://www.linkedin.com/in/jordansawadogo/" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">Jordan Sawadogo</a> from <a href="https://500.co/founders/flagship" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">Global 500</a> and <a href="https://www.linkedin.com/in/justinmurray2577/" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">Justin Murray</a> from <a href="https://www.plugandplaytechcenter.com/" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">Plug & Play</a> for taking the time to interview us during the Draft Experience</li>
+              <li>• <a href="https://www.linkedin.com/in/jordansawadogo/" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">Jordan Sawadogo</a> from <a href="https://500.co/founders/flagship" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">500 Global</a> and <a href="https://www.linkedin.com/in/justinmurray2577/" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">Justin Murray</a> from <a href="https://www.plugandplaytechcenter.com/" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">Plug & Play</a> for taking the time to interview us during the Draft Experience</li>
               <li>• <a href="https://www.linkedin.com/in/jaceycadet/" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">Jacey Cadet</a> from <a href="https://www.atlantatechvillage.com/" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">Atlanta Tech Village</a> for valuable feedback on our pitch</li>
               <li>• <a href="https://startuprunway.org/" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">Start-Up Runway</a> for accepting us as finalists for the December 5th pitch event</li>
               <li>• <a href="https://www.hypesportsinnovation.com/" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">Hype Sports Innovation</a> for acceptance into their program in partnership with IBM</li>
