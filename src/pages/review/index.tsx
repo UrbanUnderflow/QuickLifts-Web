@@ -2,6 +2,7 @@ import React from 'react';
 import Link from 'next/link';
 import { ArrowUpRight } from 'lucide-react';
 import { GetStaticProps } from 'next';
+import { JSDOM } from 'jsdom';
 import fs from 'fs';
 import path from 'path';
 
@@ -72,10 +73,17 @@ const ReviewsIndex: React.FC<ReviewsIndexProps> = ({ reviews }) => {
       </div>
 
       {/* Preview of Next Month */}
-      <div className="max-w-6xl mx-auto px-4 mt-16 mb-24">
+      <div className="max-w-6xl mx-auto px-4 mt-16 mb-12">
         <div className="bg-zinc-50 rounded-xl p-8 text-center">
           <div className="text-zinc-400 uppercase tracking-wider mb-2">Coming Soon</div>
           <div className="text-2xl font-bold">December 2024</div>
+        </div>
+      </div>
+
+      <div className="max-w-6xl mx-auto px-4 mt-16 mb-12">
+        <div className="bg-zinc-50 rounded-xl p-8 text-center">
+          <div className="text-zinc-400 uppercase tracking-wider mb-2">Coming Soon</div>
+          <div className="text-2xl font-bold">2024 Year In Review</div>
         </div>
       </div>
     </div>
@@ -83,59 +91,61 @@ const ReviewsIndex: React.FC<ReviewsIndexProps> = ({ reviews }) => {
 };
 
 export const getStaticProps: GetStaticProps = async () => {
-    try {
-      const reviewsDirectory = path.join(process.cwd(), 'src', 'pages', 'review');
-      const filenames = fs.readdirSync(reviewsDirectory);
-  
-      const reviews = await Promise.all(
-        filenames
-          .filter(filename => filename !== 'index.tsx' && filename.endsWith('.tsx'))
-          .map(async filename => {
-            const id = filename.replace(/\.tsx$/, '');
-            const fullPath = path.join(reviewsDirectory, filename);
-            const fileContent = fs.readFileSync(fullPath, 'utf8');
-  
-            // Extract title from the h1 tag content
-            const titleMatch = fileContent.match(/<h1[^>]*>([\s\S]*?)<\/h1>/);
-            const title = titleMatch ? titleMatch[1].trim() : id;
-  
-            // Extract description from the first paragraph in the hero section
-            const descriptionMatch = fileContent.match(/text-zinc-400[^>]*>([\s\S]*?)<\/p>/);
-            const description = descriptionMatch 
-              ? descriptionMatch[1].trim()
-              : 'Monthly review of our progress and achievements.';
-  
-            // Extract date from the file content or filename
-            const dateMatch = id.match(/([a-z]+)(\d+)/);
-            const month = dateMatch ? dateMatch[1] : '';
-            const year = dateMatch ? dateMatch[2] : '';
-            const date = `20${year}-${month}`;
-  
-            return {
-              id,
-              title,
-              description,
-              date
-            };
-          })
-      );
-  
-      // Sort reviews by date (newest first)
-      reviews.sort((a, b) => b.date.localeCompare(a.date));
-  
-      return {
-        props: {
-          reviews
-        }
-      };
-    } catch (error) {
-      console.error('Error reading reviews:', error);
-      return {
-        props: {
-          reviews: []
-        }
-      };
-    }
-  };
+  try {
+    const reviewsDirectory = path.join(process.cwd(), 'src', 'pages', 'review');
+    const filenames = fs.readdirSync(reviewsDirectory);
+
+    const reviews = await Promise.all(
+      filenames
+        .filter((filename) => filename !== 'index.tsx' && filename.endsWith('.tsx'))
+        .map(async (filename) => {
+          const id = filename.replace(/\.tsx$/, '');
+          const fullPath = path.join(reviewsDirectory, filename);
+          const fileContent = fs.readFileSync(fullPath, 'utf8');
+
+          // Use JSDOM to parse and extract content
+          const dom = new JSDOM(fileContent);
+          const document = dom.window.document;
+
+          // Extract title from <h1>
+          const title = document.querySelector('h1')?.textContent?.trim() || id;
+
+          // Extract description using the custom attribute
+          const description =
+            document.querySelector('[data-description="true"]')?.textContent?.trim() ||
+            'Monthly review of our progress and achievements.';
+
+          // Extract date from the filename
+          const dateMatch = id.match(/([a-z]+)(\d+)/);
+          const month = dateMatch ? dateMatch[1] : '';
+          const year = dateMatch ? dateMatch[2] : '';
+          const date = `20${year}-${month}`;
+
+          return {
+            id,
+            title,
+            description,
+            date,
+          };
+        })
+    );
+
+    // Sort reviews by date (newest first)
+    reviews.sort((a, b) => b.date.localeCompare(a.date));
+
+    return {
+      props: {
+        reviews,
+      },
+    };
+  } catch (error) {
+    console.error('Error reading reviews:', error);
+    return {
+      props: {
+        reviews: [],
+      },
+    };
+  }
+};
 
 export default ReviewsIndex;
