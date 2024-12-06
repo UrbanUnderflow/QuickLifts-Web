@@ -60,7 +60,7 @@ const MonthInReview = () => {
         <span className="block">to Building Community</span>
       </h1>
       <div className="mt-2 text-zinc-400 text-xl font-['Thunder']">November 2024</div>
-      <p className="mt-4 text-zinc-400 max-w-2xl text-lg">
+      <p className="mt-4 text-zinc-400 max-w-2xl text-lg" data-description="true">
         November marks a pivotal shift in our journey, moving beyond the building phase to 
         deeply engaging with our community and future partners. While our technology foundations 
         remain strong, we're now focusing on the conversations and connections that matter most. 
