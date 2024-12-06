@@ -1,6 +1,7 @@
 import React from 'react';
 import Image from 'next/image';
-import { ArrowUpRight, Trophy, Users, Star, Activity, Calendar  } from 'lucide-react';
+import Link from 'next/link';
+import { ArrowUpRight, ArrowLeft, Trophy, Users, Star, Activity, Calendar  } from 'lucide-react';
 import MetricsGrid from '../../components/MetricsGrid';
 import MonthInReviewMeta from '../../components/MonthInReviewMeta'; // Import the meta component
 
@@ -51,6 +52,15 @@ const MonthInReview = () => {
       />
 
   <div className="min-h-screen bg-white">
+    {/* Back to Reviews Link */}
+    <div className="bg-zinc-900 text-white py-4">
+          <div className="max-w-6xl mx-auto px-4">
+            <Link href="/review" className="flex items-center text-sm gap-2 text-[#E0FE10] hover:underline">
+              <ArrowLeft size={20} />
+              View Other Reviews
+            </Link>
+          </div>
+        </div>
   {/* Hero Section */}
   <div className="bg-gradient-to-br from-zinc-900 to-zinc-800 text-white py-24">
     <div className="max-w-6xl mx-auto px-4">
