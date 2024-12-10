@@ -1,4 +1,3 @@
-// netlify/functions/render-meta.js
 const admin = require('firebase-admin');
 
 if (admin.apps.length === 0) {
@@ -20,98 +19,101 @@ if (admin.apps.length === 0) {
 
 const db = admin.firestore();
 
-exports.handler = async (event) => {
-    console.log('=================== DEBUG START ===================');
-    console.log('Full event:', JSON.stringify(event, null, 2));
-    console.log('Path:', event.path);
-    console.log('HTTP method:', event.httpMethod);
-    console.log('Headers:', JSON.stringify(event.headers, null, 2));
-    console.log('Query parameters:', JSON.stringify(event.queryStringParameters, null, 2));
-    console.log('=================== DEBUG END ===================');
-  
-    // Get username from path or query params
-    const username = event.queryStringParameters?.username || 
-                    event.path.split('/').filter(Boolean).pop();
-  
-    console.log('Processing username:', username);
-  
-    if (!username || username === 'render-meta') {
-      return {
-        statusCode: 404,
-        body: 'Username not found'
-      };
-    }
+// Define routes and their meta tags
+const routeMetaTags = {
+  checklist: {
+    title: 'Getting Started with Pulse | Your Fitness Journey Begins Here',
+    description: 'Follow our simple checklist to get started with Pulse. Learn how to create your profile, connect with the fitness community, and begin tracking your workouts.',
+    image: 'https://fitwithpulse.ai/GetStarted.png',
+    type: 'website'
+  },
+  home: {
+    title: 'Pulse: Fitness Collective',
+    description: 'Beat Your Best, Share Your Victory',
+    image: 'https://fitwithpulse.ai/preview-image.png',
+    type: 'website'
+  },
+  // Add more routes as needed
+};
 
-  // Default meta tags for the home page
-  let metaTags = `
-    <title>Pulse: Fitness Collective</title>
-    <meta property="og:title" content="Pulse: Fitness Collective" />
-    <meta property="og:description" content="Beat Your Best, Share Your Victory" />
-    <meta property="og:image" content="https://fitwithpulse.ai/preview-image.png" />
-    <meta property="og:url" content="https://fitwithpulse.ai" />
+exports.handler = async (event) => {
+  console.log('Processing request for path:', event.path);
+
+  // Extract the path without query parameters
+  const path = event.path.split('?')[0];
+  const segments = path.split('/').filter(Boolean);
+  const firstSegment = segments[0] || 'home';
+
+  // Check if this is a known route
+  if (routeMetaTags[firstSegment]) {
+    const route = routeMetaTags[firstSegment];
+    const metaTags = `
+      <title>${route.title}</title>
+      <meta property="og:title" content="${route.title}" />
+      <meta property="og:description" content="${route.description}" />
+      <meta property="og:image" content="${route.image}" />
+      <meta property="og:url" content="https://fitwithpulse.ai${path}" />
+      <meta property="og:type" content="${route.type}" />
+      <meta name="twitter:card" content="summary_large_image" />
+      <meta name="twitter:title" content="${route.title}" />
+      <meta name="twitter:description" content="${route.description}" />
+      <meta name="twitter:image" content="${route.image}" />
+      <link rel="canonical" href="https://fitwithpulse.ai${path}" />
+    `;
+    return generateHtmlResponse(metaTags);
+  }
+
+  // Check if it might be a user profile
+  if (segments.length === 1 && firstSegment !== 'favicon.ico') {
+    try {
+      const snapshot = await db.collection('users')
+        .where('username', '==', firstSegment)
+        .get();
+
+      if (!snapshot.empty) {
+        const userData = snapshot.docs[0].data();
+        const metaTags = generateProfileMetaTags(userData, firstSegment);
+        return generateHtmlResponse(metaTags);
+      }
+    } catch (error) {
+      console.error('Error fetching user data:', error);
+    }
+  }
+
+  // If we get here, it's a 404
+  const notFoundMetaTags = `
+    <title>Page Not Found | Pulse</title>
+    <meta property="og:title" content="Page Not Found | Pulse" />
+    <meta property="og:description" content="The page you are looking for does not exist." />
+    <meta property="og:image" content="https://fitwithpulse.ai/default-image.png" />
+    <meta property="og:url" content="https://fitwithpulse.ai${path}" />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
   `;
 
-  // If it's a profile page
-  if (username && username !== 'favicon.ico') {
-    try {
-      const usersRef = db.collection('users');
-      const snapshot = await usersRef.where('username', '==', username).get();
+  return generateHtmlResponse(notFoundMetaTags, 404);
+};
 
-      if (!snapshot.empty) {
-        const userData = snapshot.docs[0].data();
-        const imageUrl = userData.profileImage?.profileImageURL || 'https://fitwithpulse.ai/default-profile.png';
-        const bio = userData.bio || 'Check out this fitness profile on Pulse';
+function generateProfileMetaTags(userData, username) {
+  const imageUrl = userData.profileImage?.profileImageURL || 'https://fitwithpulse.ai/default-profile.png';
+  const bio = userData.bio || 'Check out this fitness profile on Pulse';
+  
+  return `
+    <title>${userData.displayName}'s Profile | Pulse</title>
+    <meta property="og:title" content="${userData.displayName}'s Profile | Pulse" />
+    <meta property="og:description" content="${bio}" />
+    <meta property="og:image" content="${imageUrl}" />
+    <meta property="og:url" content="https://fitwithpulse.ai/${username}" />
+    <meta property="og:type" content="profile" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="${userData.displayName}'s Profile | Pulse" />
+    <meta name="twitter:description" content="${bio}" />
+    <meta name="twitter:image" content="${imageUrl}" />
+    <link rel="canonical" href="https://fitwithpulse.ai/${username}" />
+  `;
+}
 
-        metaTags = `
-          <title>${userData.displayName}'s Profile | Pulse</title>
-          <meta property="og:title" content="${userData.displayName}'s Profile | Pulse" />
-          <meta property="og:description" content="${bio}" />
-          <meta property="og:image" content="${imageUrl}" />
-          <meta property="og:url" content="https://fitwithpulse.ai/${username}" />
-          <meta property="og:type" content="profile" />
-          <meta name="twitter:card" content="summary_large_image" />
-          <meta name="twitter:title" content="${userData.displayName}'s Profile | Pulse" />
-          <meta name="twitter:description" content="${bio}" />
-          <meta name="twitter:image" content="${imageUrl}" />
-          <link rel="canonical" href="https://fitwithpulse.ai/${username}" />
-        `;
-      } else {
-        // User not found, set default or 404 meta tags
-        metaTags = `
-          <title>Profile Not Found | Pulse</title>
-          <meta property="og:title" content="Profile Not Found | Pulse" />
-          <meta property="og:description" content="The profile you are looking for does not exist." />
-          <meta property="og:image" content="https://fitwithpulse.ai/default-profile.png" />
-          <meta property="og:url" content="https://fitwithpulse.ai" />
-          <meta property="og:type" content="website" />
-          <meta name="twitter:card" content="summary_large_image" />
-          <meta name="twitter:title" content="Profile Not Found | Pulse" />
-          <meta name="twitter:description" content="The profile you are looking for does not exist." />
-          <meta name="twitter:image" content="https://fitwithpulse.ai/default-profile.png" />
-          <link rel="canonical" href="https://fitwithpulse.ai" />
-        `;
-      }
-    } catch (error) {
-      console.error('Error fetching user data:', error);
-      // Optionally, set default or error meta tags
-      metaTags = `
-        <title>Error | Pulse</title>
-        <meta property="og:title" content="Error | Pulse" />
-        <meta property="og:description" content="An error occurred while fetching the profile." />
-        <meta property="og:image" content="https://fitwithpulse.ai/error-image.png" />
-        <meta property="og:url" content="https://fitwithpulse.ai" />
-        <meta property="og:type" content="website" />
-        <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content="Error | Pulse" />
-        <meta name="twitter:description" content="An error occurred while fetching the profile." />
-        <meta name="twitter:image" content="https://fitwithpulse.ai/error-image.png" />
-        <link rel="canonical" href="https://fitwithpulse.ai" />
-      `;
-    }
-  }
-
+function generateHtmlResponse(metaTags, statusCode = 200) {
   const html = `
     <!DOCTYPE html>
     <html lang="en">
@@ -134,10 +136,10 @@ exports.handler = async (event) => {
   `;
 
   return {
-    statusCode: 200,
+    statusCode,
     headers: {
       'Content-Type': 'text/html',
     },
     body: html,
   };
-};
+}
