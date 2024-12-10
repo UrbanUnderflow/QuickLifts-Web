@@ -8,7 +8,7 @@ const nextConfig = {
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
   },
   // Add trailing slashes to match Netlify's default behavior
-  trailingSlash: true,
+  trailingSlash: false,
   // Ensure pages are generated statically when possible
   generateEtags: false,
 };
