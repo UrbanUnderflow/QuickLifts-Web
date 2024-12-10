@@ -6,7 +6,11 @@ const nextConfig = {
   },
   env: {
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
-  }
+  },
+  // Add trailing slashes to match Netlify's default behavior
+  trailingSlash: true,
+  // Ensure pages are generated statically when possible
+  generateEtags: false,
 };
 
 module.exports = nextConfig;

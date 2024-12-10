@@ -6,21 +6,6 @@
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
-[[redirects]]
-  from = "/profile/*"
-  to = "/"
-  status = 200
-
-[[redirects]]
-  from = "/checklist"
-  to = "/"
-  status = 200
-
-[[redirects]]
-  from = "/*"
-  to = "/"
-  status = 200
-
 [[headers]]
   for = "/*"
   [headers.values]
