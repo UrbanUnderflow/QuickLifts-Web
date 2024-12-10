@@ -2,6 +2,7 @@
 import React from 'react';
 import FAQ from '../components/FAQ';
 import PartnerJoinModal from '../components/PartnerJoinModal';
+import Meta from '../components/Meta'; // Import the Meta component
 import Head from 'next/head';
 
 const FAQ_DATA = [
@@ -78,6 +79,10 @@ const Checklist: React.FC = () => {
 
       {/* Main Content */}
       <div className="px-4 sm:px-8">
+         {/* Meta Component */}
+         <Meta title={title} description={description} url={pageUrl} />
+
+        {/* Main Content */}
         <div className="bg-white mb-64">
           {/* Badge and phone image section */}
           <div className="flex flex-col sm:flex-row mt-10 p-0 sm:px-20 justify-center items-center mx-auto space-x-0 sm:space-x-1">
