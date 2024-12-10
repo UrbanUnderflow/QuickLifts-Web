@@ -1,10 +1,9 @@
+
 import React from 'react';
-import { GetStaticProps } from 'next';
 import FAQ from '../components/FAQ';
 import PartnerJoinModal from '../components/PartnerJoinModal';
 import Head from 'next/head';
 
-// FAQ data remains the same
 const FAQ_DATA = [
   {
     question: "How does the revenue-sharing model work?",
@@ -34,19 +33,18 @@ const FAQ_DATA = [
 
 const Checklist: React.FC = () => {
   const [isModalOpen, setModalOpen] = React.useState(false);
-  
+
   const siteUrl = 'https://fitwithpulse.ai';
   const pageUrl = `${siteUrl}/checklist`;
   const title = 'Getting Started with Pulse | Your Fitness Journey Begins Here';
-  const description = 'Follow our simple checklist to get started with Pulse. Learn how to create your profile, connect with the fitness community, and begin tracking your workouts.';
+  const description =
+    'Follow our simple checklist to get started with Pulse. Learn how to create your profile, connect with the fitness community, and begin tracking your workouts.';
   const previewImage = `${siteUrl}/GetStarted.png`;
 
-  const closeModal = () => {
-    setModalOpen(false);
-  };
+  const closeModal = () => setModalOpen(false);
 
   return (
-    <>
+    <div className="w-full relative bg-white">
       <Head>
         {/* Primary Meta Tags */}
         <title>{title}</title>
@@ -74,104 +72,60 @@ const Checklist: React.FC = () => {
         <meta name="author" content="Pulse Fitness" />
         <link rel="canonical" href={pageUrl} />
 
-        {/* Apple Mobile Web App Meta */}
-        <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="black" />
-        <meta name="apple-mobile-web-app-title" content="Pulse Fitness" />
-
         {/* Theme Color */}
         <meta name="theme-color" content="#E0FE10" />
       </Head>
 
-      {/* Rest of the component remains the same */}
-      <div className="w-full relative bg-white">
-        {/* Existing content remains unchanged */}
-        <div className="px-4 sm:px-8">
-          <div className="bg-white mb-64">
-            {/* Badge and phone image section */}
-            <div className="flex flex-col sm:flex-row mt-10 p-0 sm:px-20 justify-center items-center mx-auto space-x-0 sm:space-x-1">
-              <div
-                className="relative w-full h-auto mb-10 overflow-hidden group cursor-pointer"
-                onClick={() => window.location.href = "https://apps.apple.com/ca/app/pulse-community-workouts/id6451497729"}
-              >
-                <img
-                  src="/HowToGetStarted.svg"
-                  alt="How to get started with Pulse"
-                  className="w-full sm:w-[541px] h-auto object-contain"
-                />
-              </div>
-
-              <div className="relative w-full h-auto mb-10 overflow-hidden group">
-                <img 
-                  src="/checklistPhone.svg" 
-                  alt="Checklist overview on phone" 
-                  className="w-full sm:w-[681px] h-auto object-contain" 
-                />
-                <div className="absolute inset-0 transition-opacity duration-300 ease-in-out flex justify-end items-start opacity-0 group-hover:opacity-100">
-                  <div className="w-full h-full bg-gray-500 opacity-60"></div>
-                  <a 
-                    href="https://apps.apple.com/ca/app/pulse-community-workouts/id6451497729" 
-                    className="absolute right-0 bottom-0 m-8 bg-clear text-white py-4 px-6 border border-white rounded-full flex items-center justify-center font-bold hover:bg-[#e6fd54] hover:text-black hover:border-black focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-black"
-                  >
-                    Download App
-                    <svg className="ml-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7-7 7" />
-                    </svg>
-                  </a>
-                </div>
-              </div>
+      {/* Main Content */}
+      <div className="px-4 sm:px-8">
+        <div className="bg-white mb-64">
+          {/* Badge and phone image section */}
+          <div className="flex flex-col sm:flex-row mt-10 p-0 sm:px-20 justify-center items-center mx-auto space-x-0 sm:space-x-1">
+            <div
+              className="relative w-full h-auto mb-10 overflow-hidden group cursor-pointer"
+              onClick={() =>
+                window.location.href =
+                  'https://apps.apple.com/ca/app/pulse-community-workouts/id6451497729'
+              }
+            >
+              <img
+                src="/HowToGetStarted.svg"
+                alt="How to get started with Pulse"
+                className="w-full sm:w-[541px] h-auto object-contain"
+              />
             </div>
 
-            {/* Start Here section */}
-            <div className="w-full max-w-[1240px] mx-auto flex flex-col gap-8 sm:gap-10 mb-40">
-              <div className="flex flex-col items-center gap-4 sm:gap-6 text-center">
-                <div className="text-zinc-600 text-3xl sm:text-4xl font-normal font-['Thunder'] uppercase leading-9">
-                  Start Here
-                </div>
-                <div className="w-full max-w-[791.1px] text-black text-[32px] sm:text-[64px] font-medium font-['Thunder'] leading-[40px] sm:leading-[79px]">
-                  Complete these checklist items to get started and learn how to use the app.
-                </div>
-              </div>
-
-              {/* Checklist steps */}
-              <div className="self-stretch items-center gap-10">
-                {[1, 2, 3, 4, 5].map((step) => (
-                  <React.Fragment key={step}>
-                    <div className="flex items-center gap-4">
-                      <img 
-                        src={`/step${step}.svg`} 
-                        alt={`Step ${step}`} 
-                        className="w-full sm:w-h h-[450px] sm:h-[450px] object-contain hidden sm:block" 
-                      />
-                      <img 
-                        src={`/step${step}Mobile.${step === 5 ? 'svg' : 'png'}`} 
-                        alt={`Step ${step} mobile view`} 
-                        className="w-full sm:w-h h-[450px] sm:h-[450px] object-contain sm:hidden" 
-                      />
-                    </div>
-                    {step < 5 && <div className="h-8 sm:h-16" />}
-                  </React.Fragment>
-                ))}
-              </div>
-            </div>
-
-            {/* FAQ section */}
-            <div className="w-full max-w-[1240px] mx-auto flex flex-col gap-8 sm:gap-10 mb-40">
-              <FAQ title="Frequently Asked Questions" items={FAQ_DATA} />
+            <div className="relative w-full h-auto mb-10 overflow-hidden group">
+              <img
+                src="/checklistPhone.svg"
+                alt="Checklist overview on phone"
+                className="w-full sm:w-[681px] h-auto object-contain"
+              />
             </div>
           </div>
+
+          {/* Start Here section */}
+          <div className="w-full max-w-[1240px] mx-auto flex flex-col gap-8 sm:gap-10 mb-40">
+            <div className="flex flex-col items-center gap-4 sm:gap-6 text-center">
+              <div className="text-zinc-600 text-3xl sm:text-4xl font-normal font-['Thunder'] uppercase leading-9">
+                Start Here
+              </div>
+              <div className="w-full max-w-[791.1px] text-black text-[32px] sm:text-[64px] font-medium font-['Thunder'] leading-[40px] sm:leading-[79px]">
+                Complete these checklist items to get started and learn how to use the app.
+              </div>
+            </div>
+          </div>
+
+          {/* FAQ section */}
+          <div className="w-full max-w-[1240px] mx-auto flex flex-col gap-8 sm:gap-10 mb-40">
+            <FAQ title="Frequently Asked Questions" items={FAQ_DATA} />
+          </div>
         </div>
-
-        <PartnerJoinModal isOpen={isModalOpen} closeModal={closeModal} />
       </div>
-    </>
-  );
-};
 
-export const getStaticProps: GetStaticProps = async () => {
-  return {
-    props: {}
-  };
+      <PartnerJoinModal isOpen={isModalOpen} closeModal={closeModal} />
+    </div>
+  );
 };
 
 export default Checklist;
