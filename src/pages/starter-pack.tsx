@@ -121,6 +121,26 @@ const Checklist: React.FC = () => {
             </div>
           </div>
 
+           {/* Checklist steps */}
+           <div className="self-stretch items-center gap-10">
+                {[1, 2, 3, 4, 5].map((step) => (
+                  <React.Fragment key={step}>
+                    <div className="flex items-center gap-4">
+                      <img 
+                        src={`/step${step}.svg`} 
+                        alt={`Step ${step}`} 
+                        className="w-full sm:w-h h-[450px] sm:h-[450px] object-contain hidden sm:block" 
+                      />
+                      <img 
+                        src={`/step${step}Mobile.${step === 5 ? 'svg' : 'png'}`} 
+                        alt={`Step ${step} mobile view`} 
+                        className="w-full sm:w-h h-[450px] sm:h-[450px] object-contain sm:hidden" 
+                      />
+                    </div>
+                    {step < 5 && <div className="h-8 sm:h-16" />}
+                  </React.Fragment>
+                ))}
+            </div>
           {/* FAQ section */}
           <div className="w-full max-w-[1240px] mx-auto flex flex-col gap-8 sm:gap-10 mb-40">
             <FAQ title="Frequently Asked Questions" items={FAQ_DATA} />
