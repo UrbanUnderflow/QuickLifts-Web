@@ -13,53 +13,68 @@ const NotificationTestPage: React.FC = () => {
     setIsLoading(true);
     setError(null);
     setResponse(null);
-
+  
     try {
       if (!fcmToken.trim()) {
         throw new Error('FCM Token is required');
       }
-
-      let parsedData;
+  
+      let parsedData: Record<string, string>;
       try {
-        parsedData = JSON.parse(data);
-      } catch {
-        throw new Error('Invalid JSON in custom data field');
+        // Parse the custom data
+        const rawData = JSON.parse(data);
+  
+        // Ensure all values in the data are strings
+        parsedData = Object.fromEntries(
+          Object.entries(rawData).map(([key, value]) => {
+            if (typeof value !== 'string') {
+              throw new Error(`The value for "${key}" must be a string`);
+            }
+            return [key, String(value)];
+          })
+        );
+      } catch (e) {
+        if (e instanceof SyntaxError) {
+          throw new Error('Invalid JSON in custom data field');
+        } else {
+          throw e;
+        }
       }
-
+  
       // Structure the payload to match what the function expects
       const requestBody = {
         fcmToken: fcmToken.trim(),
         payload: {
           notification: {
             title,
-            body
+            body,
           },
-          data: parsedData
-        }
+          data: parsedData, // Flattened and validated data
+        },
       };
-
+  
       console.log('Sending request with body:', JSON.stringify(requestBody, null, 2)); // Debug log
-
+  
       const response = await fetch('/.netlify/functions/send-notification', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(requestBody)
+        body: JSON.stringify(requestBody),
       });
-
+  
       const contentType = response.headers.get('content-type');
       if (!contentType || !contentType.includes('application/json')) {
         const text = await response.text();
         throw new Error(`Server returned non-JSON response: ${text}`);
       }
-
+  
       const result = await response.json();
-
+  
       if (!response.ok) {
         throw new Error(result.message || `Server error: ${response.status}`);
       }
-
+  
       setResponse(JSON.stringify(result, null, 2));
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred';
