@@ -440,10 +440,21 @@ export const getServerSideProps: GetServerSideProps<ProfileViewProps> = async (c
 
   if (!username || typeof username !== 'string') {
     return {
-      props: {
-        initialUserData: null,
-        error: 'Invalid username'
-      }
+      redirect: {
+        destination: '/',
+        permanent: false,
+      },
+    };
+  }
+
+  // List of reserved paths that should not be treated as usernames
+  const reservedPaths = ['checklist', 'support', 'privacy', 'terms'];
+  if (reservedPaths.includes(username.toLowerCase())) {
+    return {
+      redirect: {
+        destination: `/${username}`,
+        permanent: false,
+      },
     };
   }
 
@@ -459,8 +470,6 @@ export const getServerSideProps: GetServerSideProps<ProfileViewProps> = async (c
     }
 
     const data = await response.json();
-
-    console.log('User data:', data.user);
     
     if (!data.success) {
       throw new Error(data.error || 'Failed to load profile');
