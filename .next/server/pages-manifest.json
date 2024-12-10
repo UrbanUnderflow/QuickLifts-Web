@@ -3,7 +3,7 @@
   "/_error": "pages/_error.js",
   "/_document": "pages/_document.js",
   "/profile/[username]": "pages/profile/[username].js",
-  "/notification-test": "pages/notification-test.js",
+  "/checklist": "pages/checklist.js",
   "/starter-pack": "pages/starter-pack.js",
-  "/checklist": "pages/checklist.js"
+  "/notification-test": "pages/notification-test.js"
 }

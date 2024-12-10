@@ -19,11 +19,6 @@ self.__BUILD_MANIFEST = {
       "static/chunks/main.js",
       "static/chunks/pages/_error.js"
     ],
-    "/checklist": [
-      "static/chunks/webpack.js",
-      "static/chunks/main.js",
-      "static/chunks/pages/checklist.js"
-    ],
     "/notification-test": [
       "static/chunks/webpack.js",
       "static/chunks/main.js",
