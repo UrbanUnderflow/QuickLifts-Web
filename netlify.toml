@@ -20,3 +20,10 @@
   for = "/*"
   [headers.values]
     Cache-Control = "public, max-age=0, must-revalidate"
+
+[functions]
+  directory = "netlify/functions"
+  included_files = ["netlify/functions/**"]
+
+[functions."update-challenge-status"]
+  schedule = "@daily"
