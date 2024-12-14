@@ -1,33 +1,51 @@
 import React, { useState } from 'react';
 
+interface ChallengeUpdate {
+  id: string;
+  currentStatus: string;
+  newStatus: string;
+  startDate: string;
+  endDate: string;
+}
+
+interface CollectionResult {
+  updatesApplied: number;
+  proposedUpdates: ChallengeUpdate[];
+}
+
 interface UpdateResult {
   success: boolean;
   message: string;
   results: {
-    sweatlistCollection: {
-      updatesApplied: number;
-      proposedUpdates: Array<{
-        id: string;
-        currentStatus: string;
-        newStatus: string;
-        startDate: string;
-        endDate: string;
-      }>;
-    };
-    userChallengeCollection: {
-      updatesApplied: number;
-      proposedUpdates: Array<{
-        id: string;
-        currentStatus: string;
-        newStatus: string;
-        startDate: string;
-        endDate: string;
-      }>;
-    };
+    sweatlistCollection: CollectionResult;
+    userChallengeCollection: CollectionResult;
     timestamp: string;
     testMode: boolean;
   };
 }
+
+// Separate component with proper typing
+const UpdateSummary: React.FC<{
+  collection: CollectionResult;
+  title: string;
+}> = ({ collection, title }) => (
+  <div className="mb-6">
+    <h3 className="text-lg font-bold mb-2">{title}</h3>
+    <div className="space-y-2">
+      <p>Updates Applied: {collection.updatesApplied}</p>
+      <div className="space-y-4">
+        {collection.proposedUpdates.map((update, index) => (
+          <div key={index} className="bg-zinc-800 p-4 rounded-lg">
+            <p className="font-medium">ID: {update.id}</p>
+            <p>Status Change: {update.currentStatus} → {update.newStatus}</p>
+            <p className="text-sm text-zinc-400">Start: {new Date(update.startDate).toLocaleDateString()}</p>
+            <p className="text-sm text-zinc-400">End: {new Date(update.endDate).toLocaleDateString()}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+);
 
 const ChallengeStatusTestPage: React.FC = () => {
   const [response, setResponse] = useState<UpdateResult | null>(null);
@@ -54,7 +72,7 @@ const ChallengeStatusTestPage: React.FC = () => {
         throw new Error(`Server returned non-JSON response: ${text}`);
       }
 
-      const data = await result.json();
+      const data: UpdateResult = await result.json();
 
       if (!result.ok) {
         throw new Error(data.message || `Server error: ${result.status}`);
@@ -70,25 +88,6 @@ const ChallengeStatusTestPage: React.FC = () => {
     }
   };
 
-  const UpdateSummary = ({ collection, title }: { collection: typeof response.results.sweatlistCollection, title: string }) => (
-    <div className="mb-6">
-      <h3 className="text-lg font-bold mb-2">{title}</h3>
-      <div className="space-y-2">
-        <p>Updates Applied: {collection.updatesApplied}</p>
-        <div className="space-y-4">
-          {collection.proposedUpdates.map((update, index) => (
-            <div key={index} className="bg-zinc-800 p-4 rounded-lg">
-              <p className="font-medium">ID: {update.id}</p>
-              <p>Status Change: {update.currentStatus} → {update.newStatus}</p>
-              <p className="text-sm text-zinc-400">Start: {new Date(update.startDate).toLocaleDateString()}</p>
-              <p className="text-sm text-zinc-400">End: {new Date(update.endDate).toLocaleDateString()}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-
   return (
     <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center p-4">
       <h1 className="text-white text-2xl mb-6">Challenge Status Update Test</h1>
@@ -102,7 +101,7 @@ const ChallengeStatusTestPage: React.FC = () => {
               : 'bg-yellow-500 text-black hover:bg-yellow-400'
           }`}
         >
-          {isLoading && !response?.results.testMode ? 'Testing...' : 'Test Run (No Updates)'}
+          {isLoading && response?.results.testMode ? 'Testing...' : 'Test Run (No Updates)'}
         </button>
 
         <button
