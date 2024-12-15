@@ -1,5 +1,12 @@
 const admin = require('firebase-admin');
 
+// Add headers for CORS
+const headers = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS'
+};
+
 // Initialize Firebase Admin SDK
 if (admin.apps.length === 0) {
   admin.initializeApp({
@@ -13,7 +20,7 @@ if (admin.apps.length === 0) {
       auth_uri: "https://accounts.google.com/o/oauth2/auth",
       token_uri: "https://oauth2.googleapis.com/token",
       auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
-      client_x509_cert_url: "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-1qxb0%40quicklifts-dd3f1.iam.gserviceaccount.com",
+      client_x509_cert_url: "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-1qxb0@quicklifts-dd3f1.iam.gserviceaccount.com",
       universe_domain: "googleapis.com",
     }),
   });
@@ -21,33 +28,71 @@ if (admin.apps.length === 0) {
 
 const db = admin.firestore();
 
+// Improved timestamp converter
+const convertTimestamp = (timestamp) => {
+  if (!timestamp) return null;
+  
+  try {
+    // Handle Unix timestamp (number)
+    if (typeof timestamp === 'number') {
+      return new Date(timestamp * 1000).toISOString();
+    }
+    
+    // Handle Firestore Timestamp
+    if (timestamp._seconds) {
+      return new Date(timestamp._seconds * 1000).toISOString();
+    }
+    
+    // Handle Firestore Timestamp (another format)
+    if (timestamp.seconds) {
+      return new Date(timestamp.seconds * 1000).toISOString();
+    }
+    
+    // Handle Date object
+    if (timestamp instanceof Date) {
+      return timestamp.toISOString();
+    }
+    
+    // Handle Firestore toDate() method
+    if (timestamp.toDate && typeof timestamp.toDate === 'function') {
+      return timestamp.toDate().toISOString();
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error converting timestamp:', error);
+    return null;
+  }
+};
+
 function logChallengeDetails(challenge, now, newStatus) {
   console.log({
     currentStatus: challenge.status,
     proposedStatus: newStatus,
-    startDate: challenge.startDate.toDate().toISOString(),
-    endDate: challenge.endDate.toDate().toISOString(),
-    currentTime: now.toISOString()
+    startDate: convertTimestamp(challenge.startDate),
+    endDate: convertTimestamp(challenge.endDate),
+    currentTime: convertTimestamp(now)
   });
 }
 
 function determineChallengeStatus(challenge, now) {
-  // Ensure we have valid dates to compare
   if (!challenge?.startDate || !challenge?.endDate) {
     console.log('Challenge missing start or end date');
     return null;
   }
 
   try {
-    const startDate = challenge.startDate.toDate();
-    const endDate = challenge.endDate.toDate();
+    // Convert timestamps properly
+    const startTimestamp = challenge.startDate.toDate?.() || new Date(challenge.startDate);
+    const endTimestamp = challenge.endDate.toDate?.() || new Date(challenge.endDate);
+    const currentTime = new Date(now);
 
-    // Normalize all dates to midnight UTC for consistent comparison
-    const normalizedNow = new Date(now.setHours(0, 0, 0, 0));
-    const normalizedStart = new Date(startDate.setHours(0, 0, 0, 0));
-    const normalizedEnd = new Date(endDate.setHours(0, 0, 0, 0));
+    // Normalize all dates to midnight UTC
+    const normalizedNow = new Date(currentTime.setHours(0, 0, 0, 0));
+    const normalizedStart = new Date(startTimestamp.setHours(0, 0, 0, 0));
+    const normalizedEnd = new Date(endTimestamp.setHours(0, 0, 0, 0));
 
-    // Determine the new status
+    // Determine status
     let newStatus = null;
     if (normalizedNow >= normalizedStart && normalizedNow <= normalizedEnd) {
       newStatus = 'active';
@@ -55,69 +100,115 @@ function determineChallengeStatus(challenge, now) {
       newStatus = 'completed';
     }
 
-    // Log the details
     logChallengeDetails(challenge, now, newStatus);
-
     return newStatus;
   } catch (error) {
-    console.error('Error determining challenge status:', error);
+    console.error('Error determining challenge status:', error, {
+      challenge: JSON.stringify(challenge),
+      now: now
+    });
     return null;
   }
 }
 
 async function updateChallengeCollection(collectionName, now, testMode = false) {
-  console.log(`Processing ${collectionName} collection... ${testMode ? '(TEST MODE)' : ''}`);
+  console.log(`Processing ${collectionName}... ${testMode ? '(TEST MODE)' : ''}`);
   const batch = db.batch();
   const updates = [];
   const proposedUpdates = [];
 
-  const snapshot = await db.collection(collectionName).get();
-  
-  snapshot.forEach((doc) => {
-    const data = doc.data();
-    if (!data.challenge) return;
-
-    const newStatus = determineChallengeStatus(data.challenge, now);
+  try {
+    const snapshot = await db.collection(collectionName).get();
     
-    // Only update if we have a new status and it's different from the current one
-    if (newStatus && newStatus !== data.challenge.status) {
-      console.log(`${testMode ? 'Would update' : 'Updating'} ${doc.id} status to ${newStatus}`);
-      
-      // Store the proposed update
-      proposedUpdates.push({
-        id: doc.id,
-        currentStatus: data.challenge.status,
-        newStatus: newStatus,
-        startDate: data.challenge.startDate.toDate().toISOString(),
-        endDate: data.challenge.endDate.toDate().toISOString()
-      });
+    for (const doc of snapshot.docs) {
+      const data = doc.data();
+      if (!data.challenge) {
+        console.log(`Skipping document ${doc.id} - no challenge data`);
+        continue;
+      }
 
-      if (!testMode) {
-        updates.push({
-          ref: doc.ref,
-          status: newStatus
+      const newStatus = determineChallengeStatus(data.challenge, now);
+      
+      if (newStatus && newStatus !== data.challenge.status) {
+        console.log(`${testMode ? '[TEST] Would update' : 'Updating'} ${doc.id} from ${data.challenge.status} to ${newStatus}`);
+        
+        proposedUpdates.push({
+          id: doc.id,
+          currentStatus: data.challenge.status,
+          newStatus,
+          startDate: convertTimestamp(data.challenge.startDate),
+          endDate: convertTimestamp(data.challenge.endDate)
         });
+
+        if (!testMode) {
+          updates.push({
+            ref: doc.ref,
+            status: newStatus
+          });
+        }
       }
     }
-  });
 
-  // Only apply updates if not in test mode
-  if (!testMode && updates.length > 0) {
-    updates.forEach(({ ref, status }) => {
-      batch.update(ref, {
-        'challenge.status': status,
-        'challenge.updatedAt': admin.firestore.Timestamp.fromDate(now)
+    if (!testMode && updates.length > 0) {
+      updates.forEach(({ ref, status }) => {
+        batch.update(ref, {
+          'challenge.status': status,
+          'challenge.updatedAt': admin.firestore.Timestamp.fromDate(now)
+        });
       });
-    });
-    await batch.commit();
-    console.log(`Updated ${updates.length} documents in ${collectionName}`);
+      await batch.commit();
+      console.log(`Updated ${updates.length} documents in ${collectionName}`);
+    }
+
+    return {
+      updatesApplied: testMode ? 0 : updates.length,
+      proposedUpdates
+    };
+  } catch (error) {
+    console.error(`Error processing ${collectionName}:`, error);
+    throw error;
+  }
+}
+
+// Handler function for Netlify
+exports.handler = async (event) => {
+  // Handle CORS preflight
+  if (event.httpMethod === 'OPTIONS') {
+    return { statusCode: 200, headers, body: '' };
   }
 
-  return {
-    updatesApplied: testMode ? 0 : updates.length,
-    proposedUpdates: proposedUpdates
-  };
-}
+  console.log('Event received:', {
+    httpMethod: event.httpMethod,
+    body: event.body,
+    headers: event.headers
+  });
+
+  try {
+    const { testMode = false } = event.body ? JSON.parse(event.body) : {};
+    const result = await updateChallengeStatuses(testMode);
+
+    return {
+      statusCode: 200,
+      headers,
+      body: JSON.stringify({
+        success: true,
+        message: testMode ? 'Test run completed successfully' : 'Challenge statuses updated successfully',
+        results: result
+      })
+    };
+  } catch (error) {
+    console.error('Error updating challenge statuses:', error);
+    return {
+      statusCode: 500,
+      headers,
+      body: JSON.stringify({ 
+        success: false, 
+        error: error.message,
+        timestamp: new Date().toISOString()
+      })
+    };
+  }
+};
 
 async function updateChallengeStatuses(testMode = false) {
   const now = new Date();
@@ -130,48 +221,13 @@ async function updateChallengeStatuses(testMode = false) {
     ]);
 
     return {
-      sweatlistCollection: {
-        updatesApplied: sweatlistResults.updatesApplied,
-        proposedUpdates: sweatlistResults.proposedUpdates
-      },
-      userChallengeCollection: {
-        updatesApplied: userChallengeResults.updatesApplied,
-        proposedUpdates: userChallengeResults.proposedUpdates
-      },
+      sweatlistCollection: sweatlistResults,
+      userChallengeCollection: userChallengeResults,
       timestamp: now.toISOString(),
-      testMode: testMode
+      testMode
     };
   } catch (error) {
     console.error('Error in updateChallengeStatuses:', error);
     throw error;
   }
 }
-
-// Handler function for Netlify
-exports.handler = async (event) => {
-  try {
-    // Parse the request body if it exists
-    const { testMode = false } = event.body ? JSON.parse(event.body) : {};
-    
-    const result = await updateChallengeStatuses(testMode);
-
-    return {
-      statusCode: 200,
-      body: JSON.stringify({
-        success: true,
-        message: testMode ? 'Test run completed successfully' : 'Challenge statuses updated successfully',
-        results: result
-      }),
-    };
-  } catch (error) {
-    console.error('Error updating challenge statuses:', error);
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ 
-        success: false, 
-        error: error.message,
-        timestamp: new Date().toISOString()
-      }),
-    };
-  }
-};
