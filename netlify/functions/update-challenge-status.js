@@ -1,13 +1,11 @@
 const admin = require('firebase-admin');
 
-// Add headers for CORS
 const headers = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'Content-Type',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS'
 };
 
-// Initialize Firebase Admin SDK
 if (admin.apps.length === 0) {
   admin.initializeApp({
     credential: admin.credential.cert({
@@ -28,41 +26,20 @@ if (admin.apps.length === 0) {
 
 const db = admin.firestore();
 
-// Improved timestamp converter
 const convertTimestamp = (timestamp) => {
   if (!timestamp) return null;
   
-  try {
-    // Handle Unix timestamp (number)
-    if (typeof timestamp === 'number') {
-      return new Date(timestamp * 1000).toISOString();
-    }
-    
-    // Handle Firestore Timestamp
-    if (timestamp._seconds) {
-      return new Date(timestamp._seconds * 1000).toISOString();
-    }
-    
-    // Handle Firestore Timestamp (another format)
-    if (timestamp.seconds) {
-      return new Date(timestamp.seconds * 1000).toISOString();
-    }
-    
-    // Handle Date object
-    if (timestamp instanceof Date) {
-      return timestamp.toISOString();
-    }
-    
-    // Handle Firestore toDate() method
-    if (timestamp.toDate && typeof timestamp.toDate === 'function') {
-      return timestamp.toDate().toISOString();
-    }
-    
-    return null;
-  } catch (error) {
-    console.error('Error converting timestamp:', error);
-    return null;
+  // If it's a number (Unix timestamp), convert it
+  if (typeof timestamp === 'number') {
+    return new Date(timestamp * 1000).toISOString();
   }
+  
+  // Handle already converted date
+  if (timestamp instanceof Date) {
+    return timestamp.toISOString();
+  }
+  
+  return null;
 };
 
 function logChallengeDetails(challenge, now, newStatus) {
@@ -82,17 +59,23 @@ function determineChallengeStatus(challenge, now) {
   }
 
   try {
-    // Convert timestamps properly
-    const startTimestamp = challenge.startDate.toDate?.() || new Date(challenge.startDate);
-    const endTimestamp = challenge.endDate.toDate?.() || new Date(challenge.endDate);
-    const currentTime = new Date(now);
+    // Convert the current time to Unix timestamp (seconds)
+    const currentTimestamp = Math.floor(now.getTime() / 1000);
+    
+    // Get start and end timestamps - assuming they're stored as Unix timestamps
+    const startTimestamp = typeof challenge.startDate === 'number' ? 
+      challenge.startDate : 
+      Math.floor(new Date(challenge.startDate).getTime() / 1000);
+    
+    const endTimestamp = typeof challenge.endDate === 'number' ? 
+      challenge.endDate : 
+      Math.floor(new Date(challenge.endDate).getTime() / 1000);
 
-    // Normalize all dates to midnight UTC
-    const normalizedNow = new Date(currentTime.setHours(0, 0, 0, 0));
-    const normalizedStart = new Date(startTimestamp.setHours(0, 0, 0, 0));
-    const normalizedEnd = new Date(endTimestamp.setHours(0, 0, 0, 0));
+    // Normalize to start of day by removing hours, minutes, seconds
+    const normalizedNow = Math.floor(currentTimestamp / 86400) * 86400;
+    const normalizedStart = Math.floor(startTimestamp / 86400) * 86400;
+    const normalizedEnd = Math.floor(endTimestamp / 86400) * 86400;
 
-    // Determine status
     let newStatus = null;
     if (normalizedNow >= normalizedStart && normalizedNow <= normalizedEnd) {
       newStatus = 'active';
@@ -153,7 +136,7 @@ async function updateChallengeCollection(collectionName, now, testMode = false) 
       updates.forEach(({ ref, status }) => {
         batch.update(ref, {
           'challenge.status': status,
-          'challenge.updatedAt': admin.firestore.Timestamp.fromDate(now)
+          'challenge.updatedAt': Math.floor(now.getTime() / 1000) // Store as Unix timestamp
         });
       });
       await batch.commit();
@@ -170,9 +153,29 @@ async function updateChallengeCollection(collectionName, now, testMode = false) 
   }
 }
 
-// Handler function for Netlify
+async function updateChallengeStatuses(testMode = false) {
+  const now = new Date();
+  console.log(`Starting challenge status updates at: ${now.toISOString()} ${testMode ? '(TEST MODE)' : ''}`);
+
+  try {
+    const [sweatlistResults, userChallengeResults] = await Promise.all([
+      updateChallengeCollection('sweatlist-collection', now, testMode),
+      updateChallengeCollection('user-challenge', now, testMode)
+    ]);
+
+    return {
+      sweatlistCollection: sweatlistResults,
+      userChallengeCollection: userChallengeResults,
+      timestamp: Math.floor(now.getTime() / 1000), // Store as Unix timestamp
+      testMode
+    };
+  } catch (error) {
+    console.error('Error in updateChallengeStatuses:', error);
+    throw error;
+  }
+}
+
 exports.handler = async (event) => {
-  // Handle CORS preflight
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers, body: '' };
   }
@@ -204,30 +207,8 @@ exports.handler = async (event) => {
       body: JSON.stringify({ 
         success: false, 
         error: error.message,
-        timestamp: new Date().toISOString()
+        timestamp: Math.floor(Date.now() / 1000) // Store as Unix timestamp
       })
     };
   }
 };
-
-async function updateChallengeStatuses(testMode = false) {
-  const now = new Date();
-  console.log(`Starting challenge status updates at: ${now.toISOString()} ${testMode ? '(TEST MODE)' : ''}`);
-
-  try {
-    const [sweatlistResults, userChallengeResults] = await Promise.all([
-      updateChallengeCollection('sweatlist-collection', now, testMode),
-      updateChallengeCollection('user-challenge', now, testMode)
-    ]);
-
-    return {
-      sweatlistCollection: sweatlistResults,
-      userChallengeCollection: userChallengeResults,
-      timestamp: now.toISOString(),
-      testMode
-    };
-  } catch (error) {
-    console.error('Error in updateChallengeStatuses:', error);
-    throw error;
-  }
-}
