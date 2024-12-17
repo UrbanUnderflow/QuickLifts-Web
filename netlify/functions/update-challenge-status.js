@@ -26,21 +26,173 @@ if (admin.apps.length === 0) {
 
 const db = admin.firestore();
 
+async function sendNotification(userId, title, body, data = {}) {
+  try {
+    const userDoc = await db.collection('users').doc(userId).get();
+    const fcmToken = userDoc.data()?.fcmToken;
+
+    if (!fcmToken) {
+      console.log(`No FCM token found for user ${userId}`);
+      return;
+    }
+
+    const requestBody = {
+      fcmToken,
+      payload: {
+        notification: {
+          title,
+          body,
+        },
+        data: {
+          ...data,
+          timestamp: String(Math.floor(Date.now() / 1000))
+        }
+      }
+    };
+
+    const response = await fetch('/.netlify/functions/send-notification', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody)
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to send notification: ${response.statusText}`);
+    }
+
+    console.log(`Notification sent successfully to user ${userId}`);
+  } catch (error) {
+    console.error(`Error sending notification to user ${userId}:`, error);
+  }
+}
+
 const convertTimestamp = (timestamp) => {
   if (!timestamp) return null;
   
-  // If it's a number (Unix timestamp), convert it
   if (typeof timestamp === 'number') {
     return new Date(timestamp * 1000).toISOString();
   }
   
-  // Handle already converted date
   if (timestamp instanceof Date) {
     return timestamp.toISOString();
   }
   
   return null;
 };
+
+async function calculateWinner(challenge) {
+  try {
+    const participantScores = [];
+    const startTimestamp = challenge.startDate;
+    const endTimestamp = challenge.endDate;
+
+    for (const participant of challenge.participants) {
+      const workouts = await db.collection('users')
+        .doc(participant.userId)
+        .collection('workoutSummary')
+        .where('completedAt', '>=', startTimestamp)
+        .where('completedAt', '<=', endTimestamp)
+        .get();
+
+      let totalScore = 0;
+      workouts.forEach(doc => {
+        const workout = doc.data();
+        totalScore += workout.workScore || 0;
+      });
+
+      participantScores.push({
+        userId: participant.userId,
+        username: participant.username,
+        score: totalScore
+      });
+    }
+
+    participantScores.sort((a, b) => b.score - a.score);
+    return participantScores[0] || null;
+  } catch (error) {
+    console.error('Error calculating winner:', error);
+    return null;
+  }
+}
+
+async function handleStatusChange(doc, newStatus, oldStatus, testMode) {
+  if (testMode) {
+    console.log(`[TEST] Would handle status change: ${oldStatus} -> ${newStatus}`);
+    return;
+  }
+
+  const data = doc.data();
+  const challenge = data.challenge;
+
+  try {
+    if (newStatus === 'active' && oldStatus !== 'active') {
+      console.log(`Sending start notifications for challenge ${doc.id}`);
+      for (const participant of challenge.participants) {
+        await sendNotification(
+          participant.userId,
+          '🏃‍♂️ Challenge Started!',
+          `The challenge "${challenge.title}" has begun! Get ready to compete!`,
+          {
+            type: 'challenge_started',
+            challengeId: doc.id,
+            challengeTitle: challenge.title
+          }
+        );
+      }
+    } 
+    else if (newStatus === 'completed' && oldStatus !== 'completed') {
+      console.log(`Calculating winner for challenge ${doc.id}`);
+      const winner = await calculateWinner(challenge);
+
+      if (winner) {
+        await doc.ref.update({
+          'challenge.winner': winner,
+          'challenge.finalScores': Math.floor(winner.score)
+        });
+
+        for (const participant of challenge.participants) {
+          const isWinner = participant.userId === winner.userId;
+          
+          await sendNotification(
+            participant.userId,
+            isWinner ? '🏆 Congratulations, Champion!' : '🎉 Challenge Complete!',
+            isWinner 
+              ? `You won "${challenge.title}" with a score of ${Math.floor(winner.score)}!`
+              : `"${challenge.title}" has ended. ${winner.username} won with a score of ${Math.floor(winner.score)}!`,
+            {
+              type: 'challenge_completed',
+              challengeId: doc.id,
+              challengeTitle: challenge.title,
+              winnerId: winner.userId,
+              winnerUsername: winner.username,
+              winnerScore: String(Math.floor(winner.score)),
+              isWinner: String(isWinner)
+            }
+          );
+        }
+      } else {
+        console.log(`No winner determined for challenge ${doc.id}`);
+        for (const participant of challenge.participants) {
+          await sendNotification(
+            participant.userId,
+            '🎯 Challenge Complete',
+            `The challenge "${challenge.title}" has ended. Thanks for participating!`,
+            {
+              type: 'challenge_completed',
+              challengeId: doc.id,
+              challengeTitle: challenge.title,
+              noWinner: 'true'
+            }
+          );
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error handling status change:', error);
+  }
+}
 
 function logChallengeDetails(challenge, now, newStatus) {
   console.log({
@@ -59,10 +211,8 @@ function determineChallengeStatus(challenge, now) {
   }
 
   try {
-    // Convert the current time to Unix timestamp (seconds)
     const currentTimestamp = Math.floor(now.getTime() / 1000);
     
-    // Get start and end timestamps - assuming they're stored as Unix timestamps
     const startTimestamp = typeof challenge.startDate === 'number' ? 
       challenge.startDate : 
       Math.floor(new Date(challenge.startDate).getTime() / 1000);
@@ -71,7 +221,6 @@ function determineChallengeStatus(challenge, now) {
       challenge.endDate : 
       Math.floor(new Date(challenge.endDate).getTime() / 1000);
 
-    // Normalize to start of day by removing hours, minutes, seconds
     const normalizedNow = Math.floor(currentTimestamp / 86400) * 86400;
     const normalizedStart = Math.floor(startTimestamp / 86400) * 86400;
     const normalizedEnd = Math.floor(endTimestamp / 86400) * 86400;
@@ -115,6 +264,9 @@ async function updateChallengeCollection(collectionName, now, testMode = false) 
       if (newStatus && newStatus !== data.challenge.status) {
         console.log(`${testMode ? '[TEST] Would update' : 'Updating'} ${doc.id} from ${data.challenge.status} to ${newStatus}`);
         
+        // Handle notifications before updating status
+        await handleStatusChange(doc, newStatus, data.challenge.status, testMode);
+        
         proposedUpdates.push({
           id: doc.id,
           currentStatus: data.challenge.status,
@@ -136,7 +288,7 @@ async function updateChallengeCollection(collectionName, now, testMode = false) 
       updates.forEach(({ ref, status }) => {
         batch.update(ref, {
           'challenge.status': status,
-          'challenge.updatedAt': Math.floor(now.getTime() / 1000) // Store as Unix timestamp
+          'challenge.updatedAt': Math.floor(now.getTime() / 1000)
         });
       });
       await batch.commit();
@@ -166,7 +318,7 @@ async function updateChallengeStatuses(testMode = false) {
     return {
       sweatlistCollection: sweatlistResults,
       userChallengeCollection: userChallengeResults,
-      timestamp: Math.floor(now.getTime() / 1000), // Store as Unix timestamp
+      timestamp: Math.floor(now.getTime() / 1000),
       testMode
     };
   } catch (error) {
@@ -207,7 +359,7 @@ exports.handler = async (event) => {
       body: JSON.stringify({ 
         success: false, 
         error: error.message,
-        timestamp: Math.floor(Date.now() / 1000) // Store as Unix timestamp
+        timestamp: Math.floor(Date.now() / 1000)
       })
     };
   }
