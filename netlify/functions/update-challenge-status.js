@@ -194,16 +194,6 @@ async function handleStatusChange(doc, newStatus, oldStatus, testMode) {
   }
 }
 
-function logChallengeDetails(challenge, now, newStatus) {
-  console.log({
-    currentStatus: challenge.status,
-    proposedStatus: newStatus,
-    startDate: convertTimestamp(challenge.startDate),
-    endDate: convertTimestamp(challenge.endDate),
-    currentTime: convertTimestamp(now)
-  });
-}
-
 function determineChallengeStatus(challenge, now) {
   if (!challenge?.startDate || !challenge?.endDate) {
     console.log('Challenge missing start or end date');
@@ -226,9 +216,15 @@ function determineChallengeStatus(challenge, now) {
     const normalizedEnd = Math.floor(endTimestamp / 86400) * 86400;
 
     let newStatus = null;
+    
+    // Only set to active if current status is 'published'
     if (normalizedNow >= normalizedStart && normalizedNow <= normalizedEnd) {
-      newStatus = 'active';
+      newStatus = challenge.status === 'published' ? 'active' : null;
+      if (!newStatus) {
+        console.log(`Challenge is within active timeframe but status is ${challenge.status}, not 'published'. Skipping activation.`);
+      }
     } else if (normalizedNow > normalizedEnd) {
+      // We can complete any challenge that's past its end date
       newStatus = 'completed';
     }
 
