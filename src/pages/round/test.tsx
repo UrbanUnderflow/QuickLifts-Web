@@ -428,6 +428,7 @@ const calculateProgress = (): number => {
     return (
       <SignInModal
         isVisible={isModalVisible}
+        onClose={() => setIsModalVisible(false)}
         onSignInSuccess={(user) => {
           console.log('Sign-in successful:', user);
           setIsSignedIn(true);

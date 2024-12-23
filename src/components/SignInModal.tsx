@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Camera } from "lucide-react";
+import { Camera, X } from 'lucide-react';
 import { FitnessGoal, QuizData, SignUpStep } from "../types/AuthTypes";
 import authService from '../api/firebase/auth';
 import { userService } from '../api/firebase/user';
@@ -10,6 +10,8 @@ import { auth } from '../api/firebase/config';
 
 interface SignInModalProps {
   isVisible: boolean;
+  closable?: boolean; 
+  onClose?: () => void;
   onSignInSuccess?: (user: any) => void;
   onSignInError?: (error: Error) => void;
   onSignUpSuccess?: (user: any) => void;
@@ -20,6 +22,8 @@ interface SignInModalProps {
 
 const SignInModal: React.FC<SignInModalProps> = ({ 
     isVisible, 
+    closable = false, // Default to true
+    onClose,
     onSignInSuccess,
     onSignInError,
     onSignUpSuccess,
@@ -757,9 +761,9 @@ const SignInModal: React.FC<SignInModalProps> = ({
     <>
       <div className="text-center mb-8 pt-4 sm:pt-0">
         <img 
-          src="/pulse-logo.svg" 
+          src="/pulse-logo-white.svg" 
           alt="Pulse Logo" 
-          className="h-12 mx-auto mb-4"
+          className="h-8 mx-auto mb-8"
         />
         <h2 className="text-2xl font-bold text-white font-['Thunder'] mb-2">
           {isSignUp ? "Join the Collective" : "Welcome Back!"}
@@ -963,7 +967,16 @@ const SignInModal: React.FC<SignInModalProps> = ({
     <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-80 z-50 sm:p-6">
       <div className="bg-zinc-900 w-full h-full sm:h-auto sm:w-[480px] sm:rounded-xl p-6 sm:p-8 
         border-none sm:border sm:border-zinc-700 shadow-xl overflow-y-auto">
-        
+       {closable && onClose && (
+          <button 
+            onClick={onClose}
+            className="absolute top-4 right-4 text-zinc-400 hover:text-white transition-colors"
+            aria-label="Close modal"
+          >
+            <X size={24} />
+          </button>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-6">
            {/* Display error */}
            {error && (
