@@ -12,6 +12,7 @@
     "autoprefixer": "^10.4.20",
     "axios": "^1.7.2",
     "buffer": "^6.0.3",
+    "date-fns": "^4.1.0",
     "find-cache-dir": "3",
     "firebase-admin": "^12.1.1",
     "firebase-functions": "^4.9.0",
