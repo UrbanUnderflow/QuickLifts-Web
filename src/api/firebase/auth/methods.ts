@@ -9,6 +9,7 @@ import {
 import { doc, setDoc } from 'firebase/firestore';
 import { auth, db } from '../config';
 import { SignUpData, AuthService } from './types';
+import { User } from '../../../types/User';
   
   export const authMethods: AuthService = {
     async signUpWithEmail({ email, password, username, profileImage, quizData }: SignUpData) {
@@ -39,19 +40,55 @@ import { SignUpData, AuthService } from './types';
   
     async signInWithGoogle() {
       const provider = new GoogleAuthProvider();
-      const result = await signInWithPopup(auth, provider);
+      provider.addScope('email');
+      provider.addScope('profile');
       
-      const isNewUser = result.user.metadata.creationTime === result.user.metadata.lastSignInTime;
-      
-      if (isNewUser) {
-        await setDoc(doc(db, 'users', result.user.uid), {
-          email: result.user.email,
-          username: result.user.displayName?.toLowerCase().replace(/\s+/g, '_') || '',
-          createdAt: new Date()
-        });
+      try {
+        const result = await signInWithPopup(auth, provider);
+        const isNewUser = result.user.metadata.creationTime === result.user.metadata.lastSignInTime;
+        
+        if (isNewUser) {
+          // Create new user using your User model structure
+          const newUser = new User({
+            id: result.user.uid,
+            displayName: result.user.displayName || '',
+            email: result.user.email || '',
+            username: result.user.displayName?.toLowerCase().replace(/\s+/g, '_') || '',
+            bio: '',
+            profileImage: {
+              profileImageURL: result.user.photoURL || '',
+              imageOffsetWidth: 0,
+              imageOffsetHeight: 0,
+            },
+            followerCount: 0,
+            followingCount: 0,
+            bodyWeight: [],
+            workoutCount: 0,
+            creator: {
+              type: [],
+              instagramHandle: '',
+              twitterHandle: '',
+              youtubeUrl: '',
+              acceptCodeOfConduct: false,
+              acceptExecutiveTerms: false,
+              acceptGeneralTerms: false,
+              acceptSweatEquityPartnership: false,
+              onboardingStatus: '',
+              onboardingLink: '',
+              onboardingExpirationDate: 0,
+            },
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          });
+    
+          await setDoc(doc(db, 'users', result.user.uid), newUser);
+        }
+    
+        return result;
+      } catch (error) {
+        console.error('Error in signInWithGoogle:', error);
+        throw error;
       }
-  
-      return result;
     },
   
     async signInWithApple() {
