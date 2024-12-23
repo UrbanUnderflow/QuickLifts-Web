@@ -42,6 +42,7 @@ const Header: React.FC<HeaderProps> = ({
           <a href="mailto:pulsefitnessapp@gmail.com" className={getClassName('contact')}>
             Contact Us
           </a>
+          <div>|</div>
           <button 
             onClick={setIsSignInModalVisible}
             className="text-base font-medium text-gray-700 hover:text-[#14B8A6]"
