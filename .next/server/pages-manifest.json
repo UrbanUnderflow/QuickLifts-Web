@@ -4,5 +4,5 @@
   "/_document": "pages/_document.js",
   "/": "pages/index.js",
   "/round/test": "pages/round/test.js",
-  "/press-kit": "pages/press-kit.js"
+  "/dashboard": "pages/dashboard.js"
 }

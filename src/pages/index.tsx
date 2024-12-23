@@ -32,12 +32,6 @@ const Home: React.FC = () => {
     setIsMobileMenuOpen(!isMobileMenuOpen);
   };
 
-  const getMenuItemClassName = (section: Section) => {
-    return `text-base font-medium capitalize ${
-      currentSection === section ? 'text-[#14B8A6] font-bold' : 'text-gray-700'
-    }`;
-  };
-
   return (
     <div className="home">
       <div className="h-screen relative flex flex-col">
