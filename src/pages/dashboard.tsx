@@ -1,16 +1,52 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import BottomNav from '../components/App/BottomNav';
 import Discover from '../../src/components/App/RootScreens/Discover';
 import Search from '../../src/components/App/RootScreens/Search';
 import Create from '../../src/components/App/RootScreens/Create';
 import Message from '../../src/components/App/RootScreens/Message';
 import Profile from '../../src/components/App/RootScreens/Profile';
+import SignInModal from "../components/SignInModal";
 import { SelectedRootTabs } from '../types/DashboardTypes';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from '../api/firebase/config'; 
+
+
+// If you're using Firebase, you might import:
+// import { auth } from '../api/firebase/config';
+// import { onAuthStateChanged } from 'firebase/auth';
 
 const Dashboard = () => {
+  // Track which root tab is selected
   const [selectedTab, setSelectedTab] = useState<SelectedRootTabs>(SelectedRootTabs.Discover);
 
-  // Function to render the selected tab's content
+  // Track whether user is signed in
+  const [isSignedIn, setIsSignedIn] = useState(false);
+
+  // Control whether to show the sign-in modal
+  const [isSignInModalVisible, setIsSignInModalVisible] = useState(true);
+
+  // Example: if using Firebase, you'd watch the auth state:
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setIsSignedIn(true);
+        setIsSignInModalVisible(false);
+      } else {
+        setIsSignedIn(false);
+        setIsSignInModalVisible(true);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // For now, we can do some mock logic:
+  useEffect(() => {
+    // Suppose we discover the user is not signed in:
+    setIsSignedIn(false);
+    setIsSignInModalVisible(true);
+  }, []);
+
+  // Render the selected tab's content
   const renderContent = () => {
     switch (selectedTab) {
       case SelectedRootTabs.Discover:
@@ -28,6 +64,42 @@ const Dashboard = () => {
     }
   };
 
+  // If not signed in, show SignInModal
+  if (!isSignedIn) {
+    return (
+      <SignInModal
+        isVisible={isSignInModalVisible}
+        // The following onClose could be omitted if you *require* sign in
+        onClose={() => setIsSignInModalVisible(false)}
+        onSignInSuccess={(user) => {
+          console.log('Sign-in successful:', user);
+          setIsSignedIn(true);
+          setIsSignInModalVisible(false);
+        }}
+        onSignInError={(error) => {
+          console.error('Sign-in error:', error);
+          alert('Sign-in failed. Please try again.');
+        }}
+        onSignUpSuccess={(user) => {
+          console.log('Sign-up successful:', user);
+          setIsSignedIn(true);
+          setIsSignInModalVisible(false);
+        }}
+        onSignUpError={(error) => {
+          console.error('Sign-up error:', error);
+          alert('Sign-up failed. Please try again.');
+        }}
+        onQuizComplete={() => {
+          console.log('Quiz completed successfully');
+        }}
+        onQuizSkipped={() => {
+          console.log('Quiz skipped');
+        }}
+      />
+    );
+  }
+
+  // If user is signed in, display the actual dashboard
   return (
     <div className="min-h-screen bg-zinc-900">
       {/* Top Navigation */}

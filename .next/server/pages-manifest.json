@@ -2,7 +2,8 @@
   "/_app": "pages/_app.js",
   "/_error": "pages/_error.js",
   "/_document": "pages/_document.js",
-  "/": "pages/index.js",
   "/round/test": "pages/round/test.js",
-  "/dashboard": "pages/dashboard.js"
+  "/profile/[username]": "pages/profile/[username].js",
+  "/dashboard": "pages/dashboard.js",
+  "/press-kit": "pages/press-kit.js"
 }
