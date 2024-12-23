@@ -373,11 +373,6 @@ const formatDate = (date: Date | string): string => {
   });
 };
 
-const handleSignIn = () => {
-  setIsSignedIn(true);
-  setIsModalVisible(false);
-}
-
 // Calculate days until start or days remaining
 const calculateDays = (): DaysCalculation | null => {
   if (!challenge?.startDate || !challenge?.endDate) return null;
@@ -430,7 +425,37 @@ const calculateProgress = (): number => {
   };
 
   if (!isSignedIn) {
-    return <SignInModal isVisible={isModalVisible} onSignIn={handleSignIn} />;
+    return (
+      <SignInModal
+        isVisible={isModalVisible}
+        onSignInSuccess={(user) => {
+          console.log('Sign-in successful:', user);
+          setIsSignedIn(true);
+          setIsModalVisible(false);
+        }}
+        onSignInError={(error) => {
+          console.error('Sign-in error:', error);
+          alert('Sign-in failed. Please try again.');
+        }}
+        onSignUpSuccess={(user) => {
+          console.log('Sign-up successful:', user);
+          setIsSignedIn(true);
+          setIsModalVisible(false);
+        }}
+        onSignUpError={(error) => {
+          console.error('Sign-up error:', error);
+          alert('Sign-up failed. Please try again.');
+        }}
+        onQuizComplete={() => {
+          console.log('Quiz completed successfully');
+          // Handle post-quiz completion logic
+        }}
+        onQuizSkipped={() => {
+          console.log('Quiz skipped');
+          // Handle logic for skipping the quiz
+        }}
+      />
+    );
   }
 
   return (

@@ -5,6 +5,7 @@ import { ProfileImage } from './ProfileImage';
 export class User {
   id: string;
   displayName: string;
+  email: string;
   username: string;
   bio?: string;
   profileImage: ProfileImage;
@@ -31,6 +32,7 @@ export class User {
   constructor(data: any) {
     this.id = data.id || '';
     this.displayName = data.displayName || '';
+    this.email = data.email || '';
     this.username = data.username || '';
     this.bio = data.bio || '';
     this.profileImage = ProfileImage.fromFirebase(data.profileImage || {});
