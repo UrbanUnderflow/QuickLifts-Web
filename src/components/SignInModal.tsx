@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { getRedirectResult, signInWithRedirect, OAuthProvider } from 'firebase/auth';
 import { Camera, X } from 'lucide-react';
 import { FitnessGoal, QuizData, SignUpStep } from "../types/AuthTypes";
 import authService from '../api/firebase/auth';
@@ -67,6 +68,79 @@ const SignInModal: React.FC<SignInModalProps> = ({
     });
 
   if (!isVisible) return null;
+
+  useEffect(() => {
+    const handleRedirect = async () => {
+        try {
+            const result = await getRedirectResult(auth);
+            if (result) {
+                // After success, use your existing userService pattern
+                const firestoreUser = await userService.fetchUserFromFirestore(result.user.uid);
+                userService.currentUser = firestoreUser;
+
+                // Check if new user
+                const isNewUser = result.user.metadata.creationTime === result.user.metadata.lastSignInTime;
+                if (isNewUser) {
+                    // Create new user using your User model
+                    const newUser = new User({
+                        id: result.user.uid,
+                        displayName: result.user.displayName || '',
+                        email: result.user.email || '',
+                        username: result.user.displayName?.toLowerCase().replace(/\s+/g, '_') || '',
+                        bio: '',
+                        profileImage: {
+                            profileImageURL: '',
+                            imageOffsetWidth: 0,
+                            imageOffsetHeight: 0,
+                        },
+                        followerCount: 0,
+                        followingCount: 0,
+                        bodyWeight: [],
+                        workoutCount: 0,
+                        creator: {
+                            type: [],
+                            instagramHandle: '',
+                            twitterHandle: '',
+                            youtubeUrl: '',
+                            acceptCodeOfConduct: false,
+                            acceptExecutiveTerms: false,
+                            acceptGeneralTerms: false,
+                            acceptSweatEquityPartnership: false,
+                            onboardingStatus: '',
+                            onboardingLink: '',
+                            onboardingExpirationDate: 0,
+                        },
+                        createdAt: new Date(),
+                        updatedAt: new Date(),
+                    });
+
+                    await userService.updateUser(result.user.uid, newUser);
+                    userService.currentUser = newUser;
+
+                    if (isSignUp) {
+                        onSignUpSuccess?.(result.user);
+                    }
+                } else {
+                    // Existing user
+                    if (!isSignUp) {
+                        onSignInSuccess?.(result.user);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error handling redirect:', error);
+            const err = error as Error;
+            setError(err.message);
+            if (isSignUp) {
+                onSignUpError?.(err);
+            } else {
+                onSignInError?.(err);
+            }
+        }
+    };
+
+    handleRedirect();
+}, [isSignUp, onSignInSuccess, onSignUpSuccess, onSignInError, onSignUpError]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -229,38 +303,41 @@ const SignInModal: React.FC<SignInModalProps> = ({
 
   const handleSocialAuth = async (provider: 'google' | 'apple') => {
     try {
-      setIsLoading(true);
-      setError(null);
+        setIsLoading(true);
+        setError(null);
+        setActiveProvider(provider);
 
-      const result = isSignUp 
-        ? await (provider === 'google' 
-            ? authService.signInWithGoogle() 
-            : authService.signInWithApple())
-        : await (provider === 'google'
-            ? authService.signInWithGoogle()
-            : authService.signInWithApple());
+        if (provider === 'apple') {
+            const appleProvider = new OAuthProvider('apple.com');
+            appleProvider.addScope('email');
+            appleProvider.addScope('name');
+            
+            // Just start the redirect - the useEffect handler will handle the result
+            await signInWithRedirect(auth, appleProvider);
+        } else {
+            // Keep existing Google sign-in logic
+            const result = await authService.signInWithGoogle();
+            const firestoreUser = await userService.fetchUserFromFirestore(result.user.uid);
+            userService.currentUser = firestoreUser;
 
-      // After success:
-      const firestoreUser = await userService.fetchUserFromFirestore(result.user.uid);
-      userService.currentUser = firestoreUser;
-
-      if (isSignUp) {
-        onSignUpSuccess?.(result.user);
-      } else {
-        onSignInSuccess?.(result.user);
-      }
+            if (isSignUp) {
+                onSignUpSuccess?.(result.user);
+            } else {
+                onSignInSuccess?.(result.user);
+            }
+        }
     } catch (err) {
-      const error = err as Error;
-      setError(error.message);
-      if (isSignUp) {
-        onSignUpError?.(error);
-      } else {
-        onSignInError?.(error);
-      }
+        const error = err as Error;
+        setError(error.message);
+        if (isSignUp) {
+            onSignUpError?.(error);
+        } else {
+            onSignInError?.(error);
+        }
     } finally {
-      setIsLoading(false);
+        setIsLoading(false);
     }
-  };
+};
 
   const renderQuizPrompt = () => (
     <>

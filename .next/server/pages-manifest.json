@@ -2,8 +2,7 @@
   "/_app": "pages/_app.js",
   "/_error": "pages/_error.js",
   "/_document": "pages/_document.js",
-  "/profile/[username]": "pages/profile/[username].js",
   "/dashboard": "pages/dashboard.js",
   "/": "pages/index.js",
-  "/round/test": "pages/round/test.js"
+  "/profile/[username]": "pages/profile/[username].js"
 }
