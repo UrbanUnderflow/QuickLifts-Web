@@ -55,18 +55,25 @@ import {
   
     async signInWithApple() {
       const provider = new OAuthProvider('apple.com');
-      const result = await signInWithPopup(auth, provider);
-      
-      const isNewUser = result.user.metadata.creationTime === result.user.metadata.lastSignInTime;
-      
-      if (isNewUser) {
-        await setDoc(doc(db, 'users', result.user.uid), {
-          email: result.user.email,
-          username: result.user.displayName?.toLowerCase().replace(/\s+/g, '_') || '',
-          createdAt: new Date()
-        });
+      try {
+        const result = await signInWithPopup(auth, provider);
+    
+        const isNewUser =
+          result.user.metadata.creationTime === result.user.metadata.lastSignInTime;
+    
+        if (isNewUser) {
+          await setDoc(doc(db, 'users', result.user.uid), {
+            email: result.user.email,
+            username:
+              result.user.displayName?.toLowerCase().replace(/\s+/g, '_') || '',
+            createdAt: new Date(),
+          });
+        }
+    
+        return result;
+      } catch (error) {
+        console.error('Error during Apple sign-in:', error);
+        throw error; // re-throw so calling code can handle or display error
       }
-  
-      return result;
     }
   };
