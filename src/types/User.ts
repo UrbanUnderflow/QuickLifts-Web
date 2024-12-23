@@ -91,3 +91,115 @@ export class User {
     };
   }
 }
+
+export interface MacroRecommendations {
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+}
+
+export enum SubscriptionType {
+  Unsubscribed = "Unsubscribed",
+  Beta = "Beta User",
+  Monthly = "Monthly Subscriber",
+  Annual = "Annual Subscriber",
+  SweatEquityPartner = "Sweat Equity Partner",
+  ExecutivePartner = "Executive Partner",
+}
+
+export enum UserLevel {
+  Novice = "novice",
+  Intermediate = "intermediate",
+  Expert = "expert",
+}
+
+export enum WorkoutGoal {
+  LoseWeight = "Lose weight",
+  GainWeight = "Gain muscle mass",
+  ToneUp = "Tone up",
+  GeneralFitness = "General Fitness",
+}
+
+export interface UserHeight {
+  feet: number;
+  inches: number;
+}
+
+export interface ShortUser {
+  id: string;
+  displayName: string;
+  email: string;
+  fcmToken?: string | null;
+  username: string;
+  level: UserLevel;
+  videoCount: number;
+  profileImage: ProfileImage;
+}
+
+export enum Gender {
+  Woman = "woman",
+  Man = "man",
+  SelfDescribe = "I'd rather self describe",
+}
+
+export interface Encouragement {
+  fromUser: ShortUser;
+  toUser: ShortUser;
+  createdAt: Date;
+}
+
+
+export interface Gym {
+  id: string;
+  name: string;
+  address: string;
+  location: { latitude: number; longitude: number };
+}
+
+export enum SubscriptionPlatform {
+  iOS = "ios",
+  Android = "android",
+}
+
+export interface Creator {
+  id: string;
+  instagramHandle?: string;
+  twitterHandle?: string;
+  youtubeUrl?: string;
+  type?: ContentCreatorType[];
+  why?: FitnessCreatorWhy[];
+  onboardingPayoutState?: OnboardingPayoutState;
+  onboardingStatus?: OnboardingStatus;
+  isTrainer?: boolean;
+  digitalSignatures?: string[];
+  additionalFeedback?: string;
+  acceptGeneralTerms?: boolean;
+  acceptSweatEquityPartnership?: boolean;
+  acceptCodeOfConduct?: boolean;
+  acceptExecutiveTerms?: boolean;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+export enum ContentCreatorType {
+  PersonalTrainer = "personal_trainer",
+  FitnessEnthusiast = "fitness_enthusiast",
+}
+
+export enum FitnessCreatorWhy {
+  InspireOthers = "inspire_others",
+  BuildCommunity = "build_community",
+}
+
+export enum OnboardingPayoutState {
+  Introduction = "introduction",
+  InProgress = "in_progress",
+  Complete = "complete",
+}
+
+export enum OnboardingStatus {
+  NotStarted = "not_started",
+  InProgress = "in_progress",
+  Completed = "completed",
+}

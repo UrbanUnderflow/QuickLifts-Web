@@ -16,7 +16,7 @@ export class Exercise {
   tags: string[];
   videos: ExerciseVideo[];
   steps: string[];
-  visibility: ExerciseVisibility[];
+  visibility: ExerciseVisibility;
   currentVideoPosition: number;
   sets: number;
   reps: string;
