@@ -24,11 +24,6 @@ self.__BUILD_MANIFEST = {
       "static/chunks/main.js",
       "static/chunks/pages/dashboard.js"
     ],
-    "/press-kit": [
-      "static/chunks/webpack.js",
-      "static/chunks/main.js",
-      "static/chunks/pages/press-kit.js"
-    ],
     "/profile/[username]": [
       "static/chunks/webpack.js",
       "static/chunks/main.js",
