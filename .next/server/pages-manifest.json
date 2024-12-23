@@ -3,5 +3,6 @@
   "/_error": "pages/_error.js",
   "/_document": "pages/_document.js",
   "/": "pages/index.js",
-  "/round/test": "pages/round/test.js"
+  "/round/test": "pages/round/test.js",
+  "/press-kit": "pages/press-kit.js"
 }

@@ -5,10 +5,12 @@ import Footer from '../components/Footer/Footer';
 import Creator from './Creator';
 import Subscribe from './Subscribe';
 import Support from './Support';
+import SignInModal from '../components/SignInModal'; 
 
 const Home: React.FC = () => {
   const [currentSection, setCurrentSection] = useState<Section>('home');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isSignInModalVisible, setIsSignInModalVisible] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -39,8 +41,13 @@ const Home: React.FC = () => {
   return (
     <div className="home">
       <div className="h-screen relative flex flex-col">
-        <div className="relative w-full">
-          <Header onSectionChange={handleSectionChange} currentSection={currentSection} toggleMobileMenu={toggleMobileMenu} />
+      <div className="flex justify-between items-center pt-10">
+          <Header 
+            onSectionChange={handleSectionChange} 
+            currentSection={currentSection} 
+            toggleMobileMenu={toggleMobileMenu} 
+            setIsSignInModalVisible={() => setIsSignInModalVisible(true)}
+          />
         </div>
 
         {currentSection === 'home' && <HomeContent />}
@@ -61,6 +68,16 @@ const Home: React.FC = () => {
           </div>
         )}
 
+        {/* SignIn Modal */}
+        <SignInModal
+          isVisible={isSignInModalVisible}
+          onSignInSuccess={() => setIsSignInModalVisible(false)} // Close modal on success
+          onSignInError={(error) => console.error('Sign-in error:', error)} // Handle error
+          onSignUpSuccess={() => setIsSignInModalVisible(false)} // Close modal on success
+          onSignUpError={(error) => console.error('Sign-up error:', error)} // Handle error
+          onQuizComplete={() => console.log('Quiz completed')} // Optional
+          onQuizSkipped={() => console.log('Quiz skipped')} // Optional
+        />
         <Footer />
       </div>
     </div>
