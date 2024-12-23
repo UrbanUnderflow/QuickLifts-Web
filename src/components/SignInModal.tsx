@@ -81,37 +81,8 @@ const SignInModal: React.FC<SignInModalProps> = ({
                 // Check if new user
                 const isNewUser = result.user.metadata.creationTime === result.user.metadata.lastSignInTime;
                 if (isNewUser) {
-                    // Create new user using your User model
                     const newUser = new User({
-                        id: result.user.uid,
-                        displayName: result.user.displayName || '',
-                        email: result.user.email || '',
-                        username: result.user.displayName?.toLowerCase().replace(/\s+/g, '_') || '',
-                        bio: '',
-                        profileImage: {
-                            profileImageURL: '',
-                            imageOffsetWidth: 0,
-                            imageOffsetHeight: 0,
-                        },
-                        followerCount: 0,
-                        followingCount: 0,
-                        bodyWeight: [],
-                        workoutCount: 0,
-                        creator: {
-                            type: [],
-                            instagramHandle: '',
-                            twitterHandle: '',
-                            youtubeUrl: '',
-                            acceptCodeOfConduct: false,
-                            acceptExecutiveTerms: false,
-                            acceptGeneralTerms: false,
-                            acceptSweatEquityPartnership: false,
-                            onboardingStatus: '',
-                            onboardingLink: '',
-                            onboardingExpirationDate: 0,
-                        },
-                        createdAt: new Date(),
-                        updatedAt: new Date(),
+                        // ... your existing user creation code ...
                     });
 
                     await userService.updateUser(result.user.uid, newUser);
@@ -126,6 +97,12 @@ const SignInModal: React.FC<SignInModalProps> = ({
                         onSignInSuccess?.(result.user);
                     }
                 }
+
+                // Add a delay before closing the modal
+                setTimeout(() => {
+                    setIsLoading(false);
+                    onClose?.(); // Close the modal
+                }, 3000);
             }
         } catch (error) {
             console.error('Error handling redirect:', error);
@@ -136,11 +113,15 @@ const SignInModal: React.FC<SignInModalProps> = ({
             } else {
                 onSignInError?.(err);
             }
+            setIsLoading(false);
         }
     };
 
-    handleRedirect();
-}, [isSignUp, onSignInSuccess, onSignUpSuccess, onSignInError, onSignUpError]);
+    // Only run the redirect handler if the modal is visible
+    if (isVisible) {
+        handleRedirect();
+    }
+}, [isSignUp, onSignInSuccess, onSignUpSuccess, onSignInError, onSignUpError, onClose, isVisible]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -15,5 +15,5 @@ export interface SignUpData {
     signUpWithEmail: (data: SignUpData) => Promise<UserCredential>;
     signInWithEmail: (email: string, password: string) => Promise<UserCredential>;
     signInWithGoogle: () => Promise<UserCredential>;
-    signInWithApple: () => Promise<UserCredential>;
+    signInWithApple: () => Promise<void>;
   }
