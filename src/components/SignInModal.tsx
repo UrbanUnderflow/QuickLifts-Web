@@ -240,6 +240,10 @@ const SignInModal: React.FC<SignInModalProps> = ({
             ? authService.signInWithGoogle()
             : authService.signInWithApple());
 
+      // After success:
+      const firestoreUser = await userService.fetchUserFromFirestore(result.user.uid);
+      userService.currentUser = firestoreUser;
+
       if (isSignUp) {
         onSignUpSuccess?.(result.user);
       } else {
