@@ -71,53 +71,63 @@ const SignInModal: React.FC<SignInModalProps> = ({
 
   useEffect(() => {
     const handleRedirect = async () => {
+        console.log('Starting redirect handler...'); // Debug log 1
+
         try {
             const result = await getRedirectResult(auth);
+            console.log('Redirect result:', result); // Debug log 2
+
             if (result) {
-                // After success, use your existing userService pattern
-                const firestoreUser = await userService.fetchUserFromFirestore(result.user.uid);
-                userService.currentUser = firestoreUser;
+                console.log('Got successful result, fetching user...'); // Debug log 3
+                
+                try {
+                    const firestoreUser = await userService.fetchUserFromFirestore(result.user.uid);
+                    console.log('Fetched firestore user:', firestoreUser); // Debug log 4
 
-                // Check if new user
-                const isNewUser = result.user.metadata.creationTime === result.user.metadata.lastSignInTime;
-                if (isNewUser) {
-                    const newUser = new User({
-                        // ... your existing user creation code ...
-                    });
+                    userService.currentUser = firestoreUser;
 
-                    await userService.updateUser(result.user.uid, newUser);
-                    userService.currentUser = newUser;
+                    const isNewUser = result.user.metadata.creationTime === result.user.metadata.lastSignInTime;
+                    console.log('Is new user?', isNewUser); // Debug log 5
 
-                    if (isSignUp) {
+                    if (isNewUser) {
+                        console.log('Creating new user...'); // Debug log 6
+                        const newUser = new User({
+                            // ... user creation code ...
+                        });
+
+                        await userService.updateUser(result.user.uid, newUser);
+                        userService.currentUser = newUser;
+                        console.log('New user created and saved:', newUser); // Debug log 7
                         onSignUpSuccess?.(result.user);
-                    }
-                } else {
-                    // Existing user
-                    if (!isSignUp) {
+                    } else {
+                        console.log('Existing user, triggering sign in success'); // Debug log 8
                         onSignInSuccess?.(result.user);
                     }
-                }
 
-                // Add a delay before closing the modal
-                setTimeout(() => {
-                    setIsLoading(false);
-                    onClose?.(); // Close the modal
-                }, 3000);
+                    console.log('Attempting to close modal...'); // Debug log 9
+                    onClose?.();
+                } catch (firestoreError) {
+                    console.error('Error with Firestore operations:', firestoreError); // Debug log 10
+                    throw firestoreError;
+                }
+            } else {
+                console.log('No redirect result - probably first render'); // Debug log 11
             }
         } catch (error) {
-            console.error('Error handling redirect:', error);
-            const err = error as Error;
-            setError(err.message);
+            console.error('Main error in redirect handler:', error); // Debug log 12
+            setError(error instanceof Error ? error.message : 'Unknown error');
             if (isSignUp) {
-                onSignUpError?.(err);
+                onSignUpError?.(error as Error);
             } else {
-                onSignInError?.(err);
+                onSignInError?.(error as Error);
             }
+        } finally {
+            console.log('Finishing redirect handler, setting loading false'); // Debug log 13
             setIsLoading(false);
         }
     };
 
-    // Only run the redirect handler if the modal is visible
+    console.log('Effect running, isVisible:', isVisible); // Debug log 14
     if (isVisible) {
         handleRedirect();
     }
