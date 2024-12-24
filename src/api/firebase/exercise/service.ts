@@ -9,7 +9,7 @@ import {
   } from 'firebase/firestore';
 import { db } from '../config';
 import { Exercise } from './types';
-import { ExerciseVideo } from '../../../types/ExerciseVideo';
+import { ExerciseVideo } from '../../firebase/exercise/types';
 
 class ExerciseService {
     private _allExercises: Exercise[] = [];

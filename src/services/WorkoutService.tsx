@@ -1,19 +1,17 @@
 // WorkoutService.ts
 
 import axios from 'axios';
-import { Workout, WorkoutStatus } from '../api/firebase/workout/types';
-import { ExerciseLog } from '../types/ExerciseLog';
-import { ExerciseVideo } from '../types/ExerciseVideo';
 import { BodyZone } from '../types/BodyZone';
-import { ExerciseReference } from '../types/ExerciseReference';
-import { Exercise } from '../api/firebase/exercise/types';
-import { RepsAndWeightLog } from '../types/RepsAndWeightLog';
-import { WorkoutRating } from '../api/firebase/workout/types';
-import { ExerciseCategory } from '../types/ExerciseCategory';
-import { ExerciseAuthor } from '../types/ExerciseAuthor';
+import { Exercise, 
+        ExerciseVideo, 
+        ExerciseLog, 
+        ExerciseComment, 
+        ExerciseCategory,
+        ExerciseReference, 
+        ExerciseAuthor } from '../api/firebase/exercise/types';
+import { Workout, WorkoutRating, RepsAndWeightLog, WorkoutStatus } from '../api/firebase/workout/types';
 import { BodyPart } from '../types/BodyPart';
-import { ProfileImage } from '../types/ProfileImage';
-import { ExerciseComment } from '../types/ExerciseComment';
+import { ProfileImage } from '../api/firebase/user/types';
 import { SweatlistCollection, SweatlistType } from '../types/SweatlistCollection';
 import { TogetherRound, UserTogetherRound, ChallengeStatus } from '../types/ChallengeTypes';
 
@@ -290,6 +288,7 @@ class WorkoutService {
     const isBodyWeight = fields.isBodyWeight?.booleanValue || false;
     const logSubmitted = fields.logSubmitted?.booleanValue || false;
     const logIsEditing = fields.logIsEditing?.booleanValue || false;
+    const isCompleted = fields.isCompleted?.booleanValue || false;
     const createdAtTimestamp = parseFloat(fields.createdAt?.doubleValue || '0');
     const updatedAtTimestamp = parseFloat(fields.updatedAt?.doubleValue || '0');
 
@@ -305,6 +304,7 @@ class WorkoutService {
         leftWeight: parseFloat(logFields.leftWeight?.doubleValue || '0'),
         isSplit: logFields.isSplit?.booleanValue || false,
         isBodyWeight: logFields.isBodyWeight?.booleanValue || false,
+        isCompleted: logFields.isCompleted?.booleanValue || false,
         duration: parseInt(logFields.duration?.integerValue || '0'),
         calories: parseInt(logFields.calories?.integerValue || '0'),
         bpm: parseInt(logFields.bpm?.integerValue || '0')
@@ -324,6 +324,7 @@ class WorkoutService {
       isBodyWeight,
       logSubmitted,
       logIsEditing,
+      isCompleted,
       createdAt: new Date(createdAtTimestamp * 1000),
       updatedAt: new Date(updatedAtTimestamp * 1000)
     };
@@ -347,6 +348,7 @@ class WorkoutService {
       reps: fields.reps?.stringValue || '',
       sets: parseInt(fields.sets?.integerValue || '0'),
       weight: parseFloat(fields.weight?.doubleValue || '0'),
+      
       author: this.parseExerciseAuthor(fields.author?.mapValue?.fields || {}),
       createdAt: new Date(parseFloat(fields.createdAt?.doubleValue || '0') * 1000),
       updatedAt: new Date(parseFloat(fields.updatedAt?.doubleValue || '0') * 1000)
@@ -361,7 +363,9 @@ class WorkoutService {
         details: {
           duration: parseInt(fields.duration?.integerValue || '0'),
           bpm: parseInt(fields.bpm?.integerValue || '0'),
-          calories: parseInt(fields.calories?.integerValue || '0')
+          calories: parseInt(fields.calories?.integerValue || '0'),
+          screenTime: parseInt(fields.screenTime?.integerValue || '0'),
+          selectedVideo: this.parseExerciseVideo(fields.selectedVideo?.mapValue?.fields)  
         }
       };
     } else {
@@ -370,7 +374,9 @@ class WorkoutService {
         details: {
           reps: fields.reps?.stringValue || '',
           sets: parseInt(fields.sets?.integerValue || '0'),
-          weight: parseFloat(fields.weight?.doubleValue || '0')
+          weight: parseFloat(fields.weight?.doubleValue || '0'),
+          screenTime: parseInt(fields.screenTime?.integerValue || '0'),
+          selectedVideo: this.parseExerciseVideo(fields.selectedVideo?.mapValue?.fields)
         }
       };
     }
