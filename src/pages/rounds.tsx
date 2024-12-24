@@ -4,6 +4,8 @@ import React, { useState } from 'react';
 import Header, { Section } from '../components/Header';
 import SignInModal from '../components/SignInModal';
 import Footer from '../components/Footer/Footer';
+import { useScrollFade } from '../hooks/useScrollFade';
+
 
 const RoundsPage: NextPage = () => {
   const [currentSection, setCurrentSection] = useState<Section>('home');
@@ -71,7 +73,7 @@ const RoundsPage: NextPage = () => {
       )}
 
       {/* Hero Section */}
-      <main className="min-h-screen flex flex-col lg:flex-row items-center justify-center gap-20 p-8">
+      <main ref={useScrollFade()} className="min-h-screen flex flex-col lg:flex-row items-center justify-center gap-20 p-8">
         {/* Phone Frame Container (Left) */}
         <div className="relative w-[300px] sm:w-[380px]">
           <div className="relative aspect-[9/19.5] rounded-[3rem] p-[2px]">
@@ -108,7 +110,7 @@ const RoundsPage: NextPage = () => {
       </main>
 
       {/* Progress Tracking Section */}
-      <section className="min-h-screen bg-black flex flex-col lg:flex-row items-center justify-center gap-20 p-8">
+      <section ref={useScrollFade()} className="min-h-screen bg-black flex flex-col lg:flex-row items-center justify-center gap-20 p-8">
         {/* Text Content First on Left */}
         <div className="max-w-xl">
           <h2 className="text-[#E0FE10] uppercase tracking-wide font-semibold mb-4">
@@ -127,7 +129,7 @@ const RoundsPage: NextPage = () => {
       </section>
 
       {/* Workout Program Section */}
-      <section className="min-h-screen bg-zinc-900 flex flex-col lg:flex-row items-center justify-center gap-20 p-8">
+      <section ref={useScrollFade()} className="min-h-screen bg-zinc-900 flex flex-col lg:flex-row items-center justify-center gap-20 p-8">
         {/* Phone Frame Container (Left) */}
         <div className="relative w-[300px] sm:w-[380px]">
           <div className="relative aspect-[9/19.5] rounded-[3rem] p-[2px]">
@@ -155,13 +157,13 @@ const RoundsPage: NextPage = () => {
             Follow structured workout programs
           </h1>
           <p className="text-zinc-400 text-lg leading-relaxed">
-            Each Round comes with carefully workout programs designed by your community, broken down by day. Complete your assigned workouts, track your progress, and stay consistent with your fitness goals. The program can be done solo or even better with friends!
+            Each Round is essentially a workout program designed by your community, broken down by day. Complete your assigned workouts, track your progress, and stay consistent with your fitness goals. The program can be done solo or even better with friends!
           </p>
         </div>
       </section>
 
       {/* Call to Action Section */}
-      <section className="min-h-[50vh] bg-black flex flex-col items-center justify-center text-center p-8">
+      <section ref={useScrollFade()} className="min-h-[50vh] bg-black flex flex-col items-center justify-center text-center p-8">
         <h2 className="text-white text-5xl sm:text-6xl font-bold mb-6">
           Ready to join your first Round?
         </h2>
@@ -301,35 +303,55 @@ const RoundProgress = () => {
         <div className="space-y-3">
           <div className="flex items-center justify-between bg-zinc-800/30 p-3 rounded-xl">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-zinc-700"></div>
-              <div>
+                <div className="w-10 h-10 rounded-full overflow-hidden">
+                <img 
+                    src="/bobby.jpg" 
+                    alt="bobby" 
+                    className="w-full h-full object-cover" 
+                />
+                </div>
+                <div>
                 <div className="text-white">bobby</div>
                 <div className="text-[#E0FE10] text-sm">275 pts</div>
-              </div>
+                </div>
             </div>
             <div className="text-yellow-500">👑</div>
-          </div>
+            </div>
 
-          <div className="flex items-center justify-between bg-zinc-800/30 p-3 rounded-xl">
+            {/* For thetrefecta */}
+            <div className="flex items-center justify-between bg-zinc-800/30 p-3 rounded-xl">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-zinc-700"></div>
-              <div>
+                <div className="w-10 h-10 rounded-full overflow-hidden">
+                <img 
+                    src="/tre.jpg" 
+                    alt="thetrefecta" 
+                    className="w-full h-full object-cover" 
+                />
+                </div>
+                <div>
                 <div className="text-white">thetrefecta</div>
                 <div className="text-[#E0FE10] text-sm">175 pts</div>
-              </div>
+                </div>
             </div>
             <div className="bg-green-900/50 text-green-400 px-3 py-1 rounded-full text-sm">Active</div>
-          </div>
+            </div>
 
-          <div className="flex items-center justify-between bg-zinc-800/30 p-3 rounded-xl">
+            {/* For jaidus */}
+            <div className="flex items-center justify-between bg-zinc-800/30 p-3 rounded-xl">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-zinc-700"></div>
-              <div>
+                <div className="w-10 h-10 rounded-full overflow-hidden">
+                <img 
+                    src="/jaidus.jpg" 
+                    alt="jaidus" 
+                    className="w-full h-full object-cover" 
+                />
+                </div>
+                <div>
                 <div className="text-white">jaidus</div>
                 <div className="text-zinc-400 text-sm">175 pts</div>
-              </div>
+                </div>
             </div>
-          </div>
+            </div>
         </div>
       </div>
     </div>
