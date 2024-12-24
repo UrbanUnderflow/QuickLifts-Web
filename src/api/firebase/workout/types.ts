@@ -18,7 +18,7 @@ export enum WorkoutRating {
   JustRight = 'Just Right'
 }
   
-  
+
   
   export interface Workout {
     id: string;
@@ -27,6 +27,7 @@ export enum WorkoutRating {
     title: string;
     duration: number;
     workoutRating?: WorkoutRating;
+    workoutStatus: WorkoutStatus;
     useAuthorContent: boolean;
     isCompleted: boolean;
     author: string;
