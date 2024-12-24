@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { ExerciseLog } from '../types/ExerciseLog';
+import { ExerciseLog } from '../api/firebase/exercise/types';
 
 interface SweatListCardProps {
   log: ExerciseLog;

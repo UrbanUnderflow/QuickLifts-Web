@@ -1,6 +1,6 @@
 // types/User.ts
 import { BodyWeight } from './BodyWeight';
-import { ProfileImage } from './ProfileImage';
+import { ProfileImage } from '../api/firebase/user/types';
 
 export class User {
   id: string;

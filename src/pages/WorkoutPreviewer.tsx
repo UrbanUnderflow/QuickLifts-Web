@@ -3,9 +3,8 @@ import { useRouter } from 'next/router'; // Use useRouter from Next.js
 import SequentialVideoPlayerView from '../components/SequentialVideoPlayerView';
 import SweatListCardView from '../components/SweatListCardView';
 import WorkoutService from '../services/WorkoutService';
-import { ExerciseLog } from '../types/ExerciseLog';
+import { ExerciseLog, ExerciseReference } from '../api/firebase/exercise/types';
 import { Workout } from '../api/firebase/workout/types';
-import { ExerciseReference } from '../types/ExerciseReference';
 
 const WorkoutPreviewer: React.FC = () => {
   const router = useRouter();

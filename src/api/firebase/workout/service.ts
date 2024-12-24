@@ -1,6 +1,6 @@
 // src/api/firebase/workout/service.ts
-import { ExerciseLog } from '../../../types/ExerciseLog';
-import { Workout } from '../../../api/firebase/workout/types';
+import { ExerciseLog } from '../exercise/types';
+import { Workout } from '../workout/types';
 import { WorkoutStatus } from './types';
 import {
   collection,
