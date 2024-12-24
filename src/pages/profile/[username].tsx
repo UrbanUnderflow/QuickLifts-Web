@@ -51,6 +51,8 @@ export default function ProfileView({ initialUserData, error: serverError }: Pro
   const [loading, setLoading] = useState(!initialUserData);
   const [error, setError] = useState<string | null>(serverError || null);
   const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
+  const [showProfileImageModal, setShowProfileImageModal] = useState(false);
+
 
   const API_BASE_URL = process.env.NODE_ENV === 'development' 
     ? 'http://localhost:8888/.netlify/functions'
@@ -284,6 +286,7 @@ useEffect(() => {
                 src={user.profileImage?.profileImageURL || "/api/placeholder/96/96"}
                 alt={user.displayName}
                 className="w-24 h-24 rounded-full border-4 border-zinc-900"
+                onClick={() => setShowProfileImageModal(true)}
               />
             </div>
 
@@ -429,6 +432,24 @@ useEffect(() => {
               console.log('Profile clicked');
             }}
           />
+        )}
+
+        {showProfileImageModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+            <div className="relative bg-zinc-800 p-4 rounded shadow-md max-w-2xl w-full mx-2">
+              <button
+                onClick={() => setShowProfileImageModal(false)}
+                className="absolute top-2 right-2 text-zinc-300 hover:text-white"
+              >
+                ✕
+              </button>
+              <img
+                src={user.profileImage?.profileImageURL || "/api/placeholder/96/96"}
+                alt={user.displayName}
+                className="max-w-full max-h-[80vh] object-contain mx-auto"
+              />
+            </div>
+          </div>
         )}
       </div>
     </div>
