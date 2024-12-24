@@ -216,16 +216,18 @@ const SignInModal: React.FC<SignInModalProps> = ({
       try {
         setIsLoading(true);
         setError(null);
-  
+    
         const result = await authService.signInWithEmail(email, password);
-  
+    
         console.log('Sign-in successful:', result.user);
-  
+    
         // Fetch user data and save globally
         const userDoc = await userService.fetchUserFromFirestore(result.user.uid);
         userService.currentUser = userDoc;
-  
+    
         onSignInSuccess?.(result.user);
+        // Add this line to close the modal
+        onClose?.();  // Add this line
       } catch (err) {
         const error = err as Error;
         console.error('Error during sign-in:', error);

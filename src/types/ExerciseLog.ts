@@ -1,6 +1,6 @@
 // types/ExerciseLog.ts
 import { RepsAndWeightLog } from './RepsAndWeightLog';
-import { Exercise } from './Exercise';
+import { Exercise } from '../api/firebase/exercise/types';
 
 export class ExerciseLog {
   id: string;

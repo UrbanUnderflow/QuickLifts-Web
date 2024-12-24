@@ -9,7 +9,8 @@ import SignInModal from "../components/SignInModal";
 import { SelectedRootTabs } from '../types/DashboardTypes';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../api/firebase/config'; 
-
+import { userService } from '../api/firebase/user';
+import WorkoutPanel from '../components/App/Dashboard/WorkoutPanel';
 
 // If you're using Firebase, you might import:
 // import { auth } from '../api/firebase/config';
@@ -18,6 +19,8 @@ import { auth } from '../api/firebase/config';
 const Dashboard = () => {
   // Track which root tab is selected
   const [selectedTab, setSelectedTab] = useState<SelectedRootTabs>(SelectedRootTabs.Discover);
+  const [isWorkoutPanelOpen, setIsWorkoutPanelOpen] = useState(false);
+
 
   // Track whether user is signed in
   const [isSignedIn, setIsSignedIn] = useState(false);
@@ -27,15 +30,28 @@ const Dashboard = () => {
 
   // Example: if using Firebase, you'd watch the auth state:
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
-        setIsSignedIn(true);
-        setIsSignInModalVisible(false);
+        try {
+          // Fetch user data from Firestore and set it in userService
+          const firestoreUser = await userService.fetchUserFromFirestore(user.uid);
+          userService.currentUser = firestoreUser;
+          
+          console.log('User data fetched and set:', firestoreUser); // Debug log
+          
+          setIsSignedIn(true);
+          setIsSignInModalVisible(false);
+        } catch (error) {
+          console.error('Error fetching user data:', error);
+          // Handle error appropriately
+        }
       } else {
+        userService.currentUser = null; // Clear the current user
         setIsSignedIn(false);
         setIsSignInModalVisible(true);
       }
     });
+  
     return () => unsubscribe();
   }, []);
 
@@ -103,8 +119,16 @@ const Dashboard = () => {
   return (
     <div className="min-h-screen bg-zinc-900">
       {/* Top Navigation */}
-      <nav className="px-4 py-4 bg-zinc-900/80 backdrop-blur-sm border-b border-zinc-800 sticky top-0 z-10">
+      <nav className="px-4 py-4 bg-zinc-900/80 backdrop-blur-sm border-b border-zinc-800 sticky top-0 z-10 flex justify-between items-center">
         <img src="/pulse-logo-white.svg" alt="Pulse" className="h-8" />
+
+        {/* "Start Workout" button */}
+        <button
+        className="bg-[#E0FE10] text-black px-4 py-2 rounded-lg"
+        onClick={() => setIsWorkoutPanelOpen(true)}
+      >
+        Start Workout
+      </button>
       </nav>
 
       {/* Main Content */}
@@ -114,6 +138,12 @@ const Dashboard = () => {
 
       {/* Bottom Navigation */}
       <BottomNav selectedTab={selectedTab} onTabChange={setSelectedTab} />
+
+      {/* Render the panel */}
+      <WorkoutPanel
+        isVisible={isWorkoutPanelOpen}
+        onClose={() => setIsWorkoutPanelOpen(false)}
+      />
     </div>
   );
 };

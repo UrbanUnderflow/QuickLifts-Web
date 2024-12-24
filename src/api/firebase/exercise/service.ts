@@ -8,7 +8,7 @@ import {
     DocumentSnapshot,
   } from 'firebase/firestore';
 import { db } from '../config';
-import { Exercise } from '../../../types/Exercise';
+import { Exercise } from './types';
 import { ExerciseVideo } from '../../../types/ExerciseVideo';
 
 class ExerciseService {

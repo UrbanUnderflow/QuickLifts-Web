@@ -10,6 +10,24 @@ interface BottomNavProps {
 }
 
 const BottomNav: React.FC<BottomNavProps> = ({ selectedTab, onTabChange }) => {
+
+    // Add a useEffect to monitor userService.currentUser
+  React.useEffect(() => {
+    console.log('Current user in BottomNav:', userService.currentUser);
+    if (userService.currentUser?.profileImage) {
+      console.log('Profile image data:', userService.currentUser.profileImage);
+    }
+  }, []);
+
+  // Also add a log when rendering to see real-time values
+  const currentUser = userService.currentUser;
+  console.log('Rendering BottomNav with currentUser:', currentUser);
+  console.log('Has profile image?', 
+    currentUser && 
+    currentUser.profileImage && 
+    currentUser.profileImage.profileImageURL
+  );
+
   const tabs = [
     {
       id: SelectedRootTabs.Discover,
@@ -75,26 +93,27 @@ const BottomNav: React.FC<BottomNavProps> = ({ selectedTab, onTabChange }) => {
               ) : (
                 <>
                   {/* If this is the Profile tab and we have a user image, show it */}
-                  {isProfileTab && hasProfileImage ? (
+                 {isProfileTab && hasProfileImage ? (
+                    console.log('Rendering profile image:', currentUser.profileImage.profileImageURL) || 
                     <img
-                      src={
-                        isSelected
-                          ? currentUser.profileImage.profileImageURL
-                          : currentUser.profileImage.profileImageURL
-                      }
-                      alt="User profile"
-                      className={`w-6 h-6 rounded-full object-cover
+                        src={currentUser.profileImage.profileImageURL}
+                        alt="User profile"
+                        className={`w-6 h-6 rounded-full object-cover
                         ${isSelected ? 'ring-2 ring-[#E0FE10]' : ''}
-                      `}
+                        `}
+                        onError={(e) => {
+                        console.error('Error loading profile image:', e);
+                        e.currentTarget.src = tab.icon; // Fallback to default icon
+                        }}
                     />
-                  ) : (
-                    // Otherwise, fall back to normal icon logic
+                    ) : (
+                    console.log('Using default icon, hasProfileImage:', hasProfileImage) || 
                     <img
-                      src={isSelected ? tab.selectedIcon : tab.icon}
-                      alt={tab.label}
-                      className="w-6 h-6"
+                        src={isSelected ? tab.selectedIcon : tab.icon}
+                        alt={tab.label}
+                        className="w-6 h-6"
                     />
-                  )}
+                    )}
 
                   {/* Label or blank if it’s the "Create" tab */}
                   {tab.label && (
