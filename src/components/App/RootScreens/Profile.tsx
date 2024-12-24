@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { userService } from '../../../api/firebase/user';
-import { Exercise } from '../../../types/Exercise';
+import { Exercise } from '../../../api/firebase/exercise/types';
 import { Challenge } from '../../../types/Challenge';
 import { FollowRequest } from '../../../types/FollowRequest';
 import { WorkoutSummary } from '../../../types/WorkoutSummary';

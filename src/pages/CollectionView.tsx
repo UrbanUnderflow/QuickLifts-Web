@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import WorkoutService from '../services/WorkoutService';
 import CollectionSweatlistItem from '../components/CollectionSweatlistItem';
-import { Workout } from '../types/Workout'; // Import your Workout type for type safety
+import { Workout } from '../api/firebase/workout'; 
 
 const CollectionPreviewer: React.FC = () => {
   const router = useRouter();

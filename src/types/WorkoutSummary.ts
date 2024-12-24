@@ -1,7 +1,7 @@
 // types/WorkoutSummary.ts
 import { ExerciseLog } from './ExerciseLog';
 import { BodyPart } from './BodyPart';
-import { WorkoutRating } from './Workout';
+import { WorkoutRating } from '../api/firebase/workout/types';
 
 export class WorkoutSummary {
     id: string;

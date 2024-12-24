@@ -1,6 +1,6 @@
 // ExerciseGrid.tsx
 import React from 'react';
-import { Exercise } from '../types/Exercise';
+import { Exercise } from '../api/firebase/exercise/types';
 import VideoCard from './VideoCard';
 
 interface ExerciseGridProps {
