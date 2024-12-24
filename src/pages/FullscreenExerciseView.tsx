@@ -1,6 +1,6 @@
 // components/FullScreenExerciseView.tsx
 import React from 'react';
-import { Exercise } from '../types/Exercise';
+import { Exercise } from '../api/firebase/exercise/types';  
 import { User } from '../types/User';
 import { ChevronLeftIcon } from '@heroicons/react/24/outline';
 

@@ -1,5 +1,5 @@
 import { WorkoutSummary } from '../types/WorkoutSummary';
-import { Exercise } from '../types/Exercise';
+import { Exercise } from '../api/firebase/exercise/types';
 import { FollowRequest } from '../types/FollowRequest';
 import { UserActivity, ActivityType } from '../types/Activity';
 import { ExerciseLog } from '../types/ExerciseLog';
