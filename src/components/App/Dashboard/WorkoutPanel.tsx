@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import { Workout, WorkoutStatus } from '../../../api/firebase/workout/types';
-import { workoutService } from '../../../api/firebase/workout';
+// import { workoutService } from '../../../api/firebase/workout';
 import { Challenge } from '../../../types/Challenge';
 
 interface WorkoutPanelProps {
@@ -14,7 +14,7 @@ const WorkoutPanel: React.FC<WorkoutPanelProps> = ({ isVisible, onClose }) => {
   // State
   const [currentWorkout, setCurrentWorkout] = useState<Workout | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState(0);
+  // const [activeTab, setActiveTab] = useState(0);
   const [activeChallenges, setActiveChallenges] = useState<Challenge[]>([]);
 
   // Fetch data when panel becomes visible
@@ -29,7 +29,8 @@ const WorkoutPanel: React.FC<WorkoutPanelProps> = ({ isVisible, onClose }) => {
   const fetchWorkoutData = async () => {
     setLoading(true);
     try {
-      const workout = await workoutService.fetchCurrentWorkout();
+      // const workout = await workoutService.fetchCurrentWorkout();
+      const workout = null;
       setCurrentWorkout(workout);
     } catch (error) {
       console.error('Error fetching workout:', error);
@@ -57,8 +58,8 @@ const WorkoutPanel: React.FC<WorkoutPanelProps> = ({ isVisible, onClose }) => {
     if (!currentWorkout) return;
     
     try {
-      await workoutService.startWorkout(currentWorkout.id);
-      await fetchWorkoutData(); // Refresh workout data
+      // await workoutService.startWorkout(currentWorkout.id);
+      // await fetchWorkoutData(); // Refresh workout data
     } catch (error) {
       console.error('Error starting workout:', error);
     }
@@ -68,8 +69,8 @@ const WorkoutPanel: React.FC<WorkoutPanelProps> = ({ isVisible, onClose }) => {
     if (!currentWorkout) return;
 
     try {
-      await workoutService.cancelWorkout(currentWorkout.id);
-      await fetchWorkoutData(); // Refresh workout data
+      // await workoutService.cancelWorkout(currentWorkout.id);
+      // await fetchWorkoutData(); // Refresh workout data
     } catch (error) {
       console.error('Error canceling workout:', error);
     }
@@ -183,8 +184,8 @@ const WorkoutPanel: React.FC<WorkoutPanelProps> = ({ isVisible, onClose }) => {
             <>
               {/* Main Content */}
               {!currentWorkout && renderEmptyState()}
-              {currentWorkout?.status === WorkoutStatus.QueuedUp && renderQueuedWorkout()}
-              {currentWorkout?.status === WorkoutStatus.InProgress && renderInProgressWorkout()}
+              {currentWorkout?.workoutStatus === WorkoutStatus.QueuedUp && renderQueuedWorkout()}
+              {currentWorkout?.workoutStatus === WorkoutStatus.InProgress && renderInProgressWorkout()}
 
               {/* Challenges Section */}
               {renderActiveChallenges()}

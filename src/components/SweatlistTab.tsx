@@ -1,5 +1,5 @@
 import React from 'react';
-import { Workout } from '../types/Workout';
+import { Workout } from '../api/firebase/workout/types';
 import CollectionSweatlistItem from './CollectionSweatlistItem';
 import { 
     BookOpenIcon 
