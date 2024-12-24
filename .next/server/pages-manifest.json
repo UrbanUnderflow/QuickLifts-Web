@@ -1,1 +1,7 @@
-{"/_app":"pages/_app.js","/_document":"pages/_document.js","/CollectionView":"pages/CollectionView.html","/CompletedOnboarding":"pages/CompletedOnboarding.html","/FullscreenExerciseView":"pages/FullscreenExerciseView.html","/Home":"pages/Home.html","/HomeContent":"pages/HomeContent.html","/Creator":"pages/Creator.html","/PrivacyPolicy":"pages/PrivacyPolicy.html","/_error":"pages/_error.js","/SendNotification":"pages/SendNotification.html","/Subscribe":"pages/Subscribe.html","/Support":"pages/Support.html","/Terms":"pages/Terms.html","/WorkoutPreviewer":"pages/WorkoutPreviewer.html","/dashboard":"pages/dashboard.html","/notification-test":"pages/notification-test.html","/press-kit":"pages/press-kit.html","/":"pages/index.html","/review/nov24":"pages/review/nov24.html","/starter-pack":"pages/starter-pack.html","/update-challenge-status":"pages/update-challenge-status.html","/startuprunway":"pages/startuprunway.html","/user-dashboard":"pages/user-dashboard.html","/challenge/[id]":"pages/challenge/[id].js","/review":"pages/review.js","/Checklist":"pages/Checklist.js","/profile/[username]":"pages/profile/[username].js","/round/test":"pages/round/test.html","/404":"pages/404.html"}
+{
+  "/_app": "pages/_app.js",
+  "/_document": "pages/_document.js",
+  "/_error": "pages/_error.js",
+  "/": "pages/index.js",
+  "/connect": "pages/connect.js"
+}
