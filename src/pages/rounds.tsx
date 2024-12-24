@@ -1,10 +1,35 @@
 import type { NextPage } from 'next';
 import Head from 'next/head';
-import React from 'react';
+import React, { useState } from 'react';
+import Header, { Section } from '../components/Header';
+import SignInModal from '../components/SignInModal';
+import Footer from '../components/Footer/Footer';
 
 const RoundsPage: NextPage = () => {
+  const [currentSection, setCurrentSection] = useState<Section>('home');
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isSignInModalVisible, setIsSignInModalVisible] = useState(false);
+
+  const handleSectionChange = (section: Section) => {
+    setCurrentSection(section);
+    setIsMobileMenuOpen(false);
+    const params = new URLSearchParams(window.location.search);
+    params.set('p', section);
+    window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
+  };
+
+  const toggleMobileMenu = () => {
+    setIsMobileMenuOpen(!isMobileMenuOpen);
+  };
+
+  const getMenuItemClassName = (section: Section) => {
+    return `text-base font-medium capitalize ${
+      currentSection === section ? 'text-[#14B8A6] font-bold' : 'text-gray-700'
+    }`;
+  };
+
   return (
-    <>
+    <div className="min-h-screen bg-zinc-900">
       <Head>
         <title>Rounds - Create and Share Fitness Videos | Pulse</title>
         <meta 
@@ -20,11 +45,35 @@ const RoundsPage: NextPage = () => {
         <meta property="og:image" content="/rounds-preview.jpg" />
       </Head>
 
+      {/* Header */}
+      <div className="flex justify-between items-center pt-10">
+        <Header 
+          onSectionChange={handleSectionChange} 
+          currentSection={currentSection} 
+          toggleMobileMenu={toggleMobileMenu} 
+          setIsSignInModalVisible={() => setIsSignInModalVisible(true)}
+          theme="dark"
+        />
+      </div>
+
+      {/* Mobile Menu */}
+      {isMobileMenuOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-25 z-10 transition-opacity duration-300 ease-in-out" onMouseDown={() => setIsMobileMenuOpen(false)}>
+          <div className={`fixed inset-y-0 right-0 w-64 bg-white shadow-md transform transition-transform duration-300 ease-in-out z-20 ${isMobileMenuOpen ? 'translate-x-0' : 'translate-x-full'}`} onMouseDown={(e) => e.stopPropagation()}>
+            <div className="p-4 flex flex-col gap-6">
+              <button className={getMenuItemClassName('home')} onClick={() => handleSectionChange('home')}>Features</button>
+              <button className={getMenuItemClassName('creator')} onClick={() => handleSectionChange('creator')}>Creators</button>
+              <button className={getMenuItemClassName('support')} onClick={() => handleSectionChange('support')}>Support</button>
+              <button className={getMenuItemClassName('contact')} onClick={() => { setIsMobileMenuOpen(false); window.location.href = 'mailto:pulsefitnessapp@gmail.com'; }}>Contact Us</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Hero Section */}
-      <main className="min-h-screen bg-zinc-900 flex flex-col lg:flex-row items-center justify-center gap-20 p-8">
+      <main className="min-h-screen flex flex-col lg:flex-row items-center justify-center gap-20 p-8">
         {/* Phone Frame Container (Left) */}
         <div className="relative w-[300px] sm:w-[380px]">
-          {/* Phone Frame */}
           <div className="relative aspect-[9/19.5] rounded-[3rem] p-[2px]">
             <div className="absolute inset-0 rounded-[3rem] border-2 border-[#E0FE10]" />
             <div className="relative h-full w-full rounded-[3rem] overflow-hidden bg-zinc-900">
@@ -126,7 +175,20 @@ const RoundsPage: NextPage = () => {
           Join Now
         </a>
       </section>
-    </>
+
+      {/* SignIn Modal */}
+      <SignInModal
+        isVisible={isSignInModalVisible}
+        onSignInSuccess={() => setIsSignInModalVisible(false)}
+        onSignInError={(error) => console.error('Sign-in error:', error)}
+        onSignUpSuccess={() => setIsSignInModalVisible(false)}
+        onSignUpError={(error) => console.error('Sign-up error:', error)}
+        onQuizComplete={() => console.log('Quiz completed')}
+        onQuizSkipped={() => console.log('Quiz skipped')}
+      />
+
+      <Footer />
+    </div>
   );
 };
 
