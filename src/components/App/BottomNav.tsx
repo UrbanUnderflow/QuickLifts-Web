@@ -94,7 +94,6 @@ const BottomNav: React.FC<BottomNavProps> = ({ selectedTab, onTabChange }) => {
                 <>
                   {/* If this is the Profile tab and we have a user image, show it */}
                  {isProfileTab && hasProfileImage ? (
-                    console.log('Rendering profile image:', currentUser.profileImage.profileImageURL) || 
                     <img
                         src={currentUser.profileImage.profileImageURL}
                         alt="User profile"
@@ -107,7 +106,6 @@ const BottomNav: React.FC<BottomNavProps> = ({ selectedTab, onTabChange }) => {
                         }}
                     />
                     ) : (
-                    console.log('Using default icon, hasProfileImage:', hasProfileImage) || 
                     <img
                         src={isSelected ? tab.selectedIcon : tab.icon}
                         alt={tab.label}

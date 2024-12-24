@@ -1,7 +1,7 @@
 // WorkoutService.ts
 
 import axios from 'axios';
-import { Workout } from '../api/firebase/workout/types';
+import { Workout, WorkoutStatus } from '../api/firebase/workout/types';
 import { ExerciseLog } from '../types/ExerciseLog';
 import { ExerciseVideo } from '../types/ExerciseVideo';
 import { BodyZone } from '../types/BodyZone';
@@ -228,6 +228,8 @@ class WorkoutService {
     const duration = parseInt(fields.duration?.integerValue || '0');
     const workoutRatingRaw = fields.workoutRating?.stringValue || '';
     const workoutRating = workoutRatingRaw as WorkoutRating;
+    const workoutStatusRaw = fields.workoutStatus?.stringValue || '';
+    const workoutStatus = workoutStatusRaw as WorkoutStatus
     const isCompleted = fields.isCompleted?.booleanValue || false;
     const author = fields.author?.stringValue || '';
     const createdAtTimestamp = parseFloat(fields.createdAt?.doubleValue || '0');
@@ -255,6 +257,7 @@ class WorkoutService {
       title,
       duration,
       workoutRating,
+      workoutStatus,
       useAuthorContent: fields.useAuthorContent?.booleanValue || false,
       isCompleted,
       author,
