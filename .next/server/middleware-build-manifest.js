@@ -19,10 +19,10 @@ self.__BUILD_MANIFEST = {
       "static/chunks/main.js",
       "static/chunks/pages/_error.js"
     ],
-    "/connect": [
+    "/dashboard": [
       "static/chunks/webpack.js",
       "static/chunks/main.js",
-      "static/chunks/pages/connect.js"
+      "static/chunks/pages/dashboard.js"
     ],
     "/rounds": [
       "static/chunks/webpack.js",
