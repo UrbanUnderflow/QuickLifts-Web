@@ -1,7 +1,7 @@
 import React from 'react';
 import { ChevronUp, ChevronDown, ChevronRight, Clock, User, CheckCircle } from 'lucide-react';
 import { format } from 'date-fns';
-import { Workout } from '../../types/Workout';
+import { Workout } from '../../api/firebase/workout/types';
 import { GifImageViewer } from '../../components/GifImageViewer';
 
 interface CommonCardProps {
