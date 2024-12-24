@@ -22,11 +22,27 @@ const AboutPage: NextPage = () => {
     },
     {
       question: "Is Pulse available for both iOS and Android?",
-      answer: "We are currently only on iOS, but Android is coming soon!"
+      answer: "We are currently only on iOS, but you can use the web app on Android devices <a className='text-blue-500 hover:text-blue-700 focus:text-blue-700' href='https://fitwithpulse.ai/dashboard'>here</a>"
     },
     {
       question: "How do I get started?",
       answer: "Getting started is as easy as just downloading the app! <br /><br /> <a className='text-blue-500 hover:text-blue-700 focus:text-blue-700' href='https://apps.apple.com/ca/app/pulse-community-workouts/id6451497729'>Download Now</a>"
+    },
+    {
+      question: "How do I find and follow other users?",
+      answer: "Our workouts are your gateway to connection. See community members in action as you exercise. Discover new people to follow and get inspired with every rep."
+    },
+    {
+      question: "Can I create and share my own workouts?",
+      answer: "Yes! You can create your own exercises, workouts, and shoot your own videos to share with the collective. You can also share your workouts with friends and family directly."
+    },
+    {
+      question: "Are there community challenges or events?",
+      answer: "Yes! We have in-app and real-world challenges, but you have to stay connected to catch them!"
+    },
+    {
+      question: "Can I export my workout data?",
+      answer: "Absolutely! Your data is yours, and we make it easy to take it with you anywhere you decide to go."
     }
   ];
 
@@ -105,7 +121,7 @@ const AboutPage: NextPage = () => {
                 loop
                 muted
                 playsInline
-                src="/rounds.mp4"
+                src="/stack.mp4"
                 poster="/sample-round-poster.jpg"
               />
             </div>
@@ -173,7 +189,10 @@ const AboutPage: NextPage = () => {
 
       {/* FAQ Section */}
       <section className="bg-zinc-900 py-20">
-        <FAQ title="Frequently Asked Questions" items={faqData} />
+        <FAQ title="Frequently Asked Questions" 
+        items={faqData}
+        theme="dark"
+         />
       </section>
 
       {/* SignIn Modal */}
