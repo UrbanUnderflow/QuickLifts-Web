@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Exercise } from '../../../types/Exercise';
+import { Exercise } from '../../../api/firebase/exercise/types';
 import { exerciseService } from '../../../api/firebase/exercise';
 import { GifImageViewer } from '../../../components/GifImageViewer';
 import { useRouter } from 'next/router';

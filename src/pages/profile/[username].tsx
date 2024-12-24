@@ -4,7 +4,7 @@ import { useRouter } from 'next/router';
 import { FollowRequest } from '../../types/FollowRequest';
 import { User } from '../../types/User';
 import ExerciseGrid from '../../components/ExerciseGrid';
-import { Exercise } from '../../types/Exercise';
+import { Exercise } from '../../api/firebase/exercise/types'; 
 import { Challenge } from '../../types/Challenge';
 import { ChallengesTab } from '../../components/ChallengesTab';
 import { WorkoutSummary } from '../../types/WorkoutSummary';

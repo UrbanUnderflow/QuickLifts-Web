@@ -4,7 +4,7 @@ import SequentialVideoPlayerView from '../components/SequentialVideoPlayerView';
 import SweatListCardView from '../components/SweatListCardView';
 import WorkoutService from '../services/WorkoutService';
 import { ExerciseLog } from '../types/ExerciseLog';
-import { Workout } from '../types/Workout';
+import { Workout } from '../api/firebase/workout/types';
 import { ExerciseReference } from '../types/ExerciseReference';
 
 const WorkoutPreviewer: React.FC = () => {

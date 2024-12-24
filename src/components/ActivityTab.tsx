@@ -1,7 +1,7 @@
 import React from 'react';
 import { ActivityCell } from './ActivityCell';
 import { ActivityGroup, ActivityType, UserActivity } from '../types/Activity';
-import { Exercise } from '../types/Exercise';
+import { Exercise } from '../api/firebase/exercise/types';
 import { WorkoutSummary } from '../types/WorkoutSummary';
 import { StarIcon } from '@heroicons/react/24/outline';
 

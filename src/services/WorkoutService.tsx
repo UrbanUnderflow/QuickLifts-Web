@@ -1,14 +1,14 @@
 // WorkoutService.ts
 
 import axios from 'axios';
-import { Workout } from '../types/Workout';
+import { Workout } from '../api/firebase/workout/types';
 import { ExerciseLog } from '../types/ExerciseLog';
 import { ExerciseVideo } from '../types/ExerciseVideo';
 import { BodyZone } from '../types/BodyZone';
 import { ExerciseReference } from '../types/ExerciseReference';
-import { Exercise } from '../types/Exercise';
+import { Exercise } from '../api/firebase/exercise/types';
 import { RepsAndWeightLog } from '../types/RepsAndWeightLog';
-import { WorkoutRating } from '../types/Workout';
+import { WorkoutRating } from '../api/firebase/workout/types';
 import { ExerciseCategory } from '../types/ExerciseCategory';
 import { ExerciseAuthor } from '../types/ExerciseAuthor';
 import { BodyPart } from '../types/BodyPart';
