@@ -5,6 +5,9 @@ import Header, { Section } from '../components/Header';
 import SignInModal from '../components/SignInModal';
 import Footer from '../components/Footer/Footer';
 import FAQ from '../components/FAQ';
+import { useScrollFade } from '../hooks/useScrollFade';
+
+
 
 const AboutPage: NextPage = () => {
   const [currentSection, setCurrentSection] = useState<Section>('home');
@@ -67,8 +70,41 @@ const AboutPage: NextPage = () => {
         theme="dark"
       />
 
+      {/* What is Pulse Section */}
+      <section ref={useScrollFade()} className="min-h-screen bg-zinc-900 flex flex-col items-center justify-center text-center px-8 py-20">
+        <div className="max-w-4xl mx-auto">
+          <h2 className="text-[#E0FE10] uppercase tracking-wide font-semibold mb-4">
+            What is Pulse
+          </h2>
+          <h1 className="text-white text-5xl sm:text-7xl font-bold mb-8">
+            The Fitness Collective
+          </h1>
+          <p className="text-zinc-400 text-xl leading-relaxed mb-12">
+            Pulse is more than just another fitness app - it's a collective movement 
+            where every member contributes to and benefits from a shared fitness journey. 
+            We're transforming solo workouts into shared experiences, turning individual 
+            progress into collective inspiration, and building a community where everyone 
+            has a voice in fitness.
+          </p>
+          <div className="flex flex-wrap justify-center gap-6">
+            <div className="bg-zinc-800/50 rounded-xl p-6 max-w-[280px]">
+              <h3 className="text-white text-xl font-semibold mb-2">Create</h3>
+              <p className="text-zinc-400">Share your unique exercises and workout routines with the community</p>
+            </div>
+            <div className="bg-zinc-800/50 rounded-xl p-6 max-w-[280px]">
+              <h3 className="text-white text-xl font-semibold mb-2">Connect</h3>
+              <p className="text-zinc-400">Join a vibrant community of fitness enthusiasts and motivate each other</p>
+            </div>
+            <div className="bg-zinc-800/50 rounded-xl p-6 max-w-[280px]">
+              <h3 className="text-white text-xl font-semibold mb-2">Grow</h3>
+              <p className="text-zinc-400">Track your progress and evolve with a community that celebrates every win</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Moves Section */}
-      <section className="min-h-screen flex flex-col lg:flex-row items-center justify-center gap-20 p-8">
+      <section ref={useScrollFade()} className="min-h-screen flex flex-col lg:flex-row items-center justify-center gap-20 p-8">
         <div className="relative w-[300px] sm:w-[380px]">
           <div className="relative aspect-[9/19.5] rounded-[3rem] p-[2px]">
             <div className="absolute inset-0 rounded-[3rem] border-2 border-[#E0FE10]" />
@@ -99,7 +135,7 @@ const AboutPage: NextPage = () => {
       </section>
 
       {/* Stacks Section */}
-      <section className="min-h-screen bg-black flex flex-col lg:flex-row items-center justify-center gap-20 p-8">
+      <section ref={useScrollFade()} className="min-h-screen bg-black flex flex-col lg:flex-row items-center justify-center gap-20 p-8">
         <div className="max-w-xl lg:order-1">
           <h2 className="text-[#E0FE10] uppercase tracking-wide font-semibold mb-4">
             Build The Blocks
@@ -130,7 +166,7 @@ const AboutPage: NextPage = () => {
       </section>
 
       {/* Community Section */}
-      <section className="min-h-screen bg-zinc-900 flex flex-col lg:flex-row items-center justify-center gap-20 p-8">
+      <section ref={useScrollFade()} className="min-h-screen bg-zinc-900 flex flex-col lg:flex-row items-center justify-center gap-20 p-8">
         <div className="relative w-[300px] sm:w-[380px]">
           <div className="relative aspect-[9/19.5] rounded-[3rem] p-[2px]">
             <div className="absolute inset-0 rounded-[3rem] border-2 border-[#E0FE10]" />
@@ -161,7 +197,7 @@ const AboutPage: NextPage = () => {
       </section>
 
       {/* Why Choose Pulse Section */}
-      <section className="min-h-screen bg-black py-20">
+      <section ref={useScrollFade()} className="min-h-screen bg-black py-20">
         <div className="max-w-7xl mx-auto px-8">
           <div className="text-center mb-16">
             <h2 className="text-[#E0FE10] uppercase tracking-wide font-semibold mb-4">Why Choose Pulse</h2>
@@ -188,7 +224,7 @@ const AboutPage: NextPage = () => {
       </section>
 
       {/* FAQ Section */}
-      <section className="bg-zinc-900 py-20">
+      <section ref={useScrollFade()} className="bg-zinc-900 py-20">
         <FAQ title="Frequently Asked Questions" 
         items={faqData}
         theme="dark"
