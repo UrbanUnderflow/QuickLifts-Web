@@ -2,8 +2,5 @@
   "/_app": "pages/_app.js",
   "/_error": "pages/_error.js",
   "/_document": "pages/_document.js",
-  "/": "pages/index.js",
-  "/privacyPolicy": "pages/privacyPolicy.js",
-  "/terms": "pages/terms.js",
-  "/join-challenge": "pages/join-challenge.js"
+  "/": "pages/index.js"
 }
