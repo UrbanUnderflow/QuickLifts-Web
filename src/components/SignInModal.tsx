@@ -6,6 +6,8 @@ import authService from '../api/firebase/auth';
 import { userService } from '../api/firebase/user';
 import { User } from '../types/User';
 import { auth } from '../api/firebase/config';
+import Link from 'next/link';
+
 
 // type SignUpStep = 'initial' | 'password' | 'profile';
 
@@ -890,14 +892,14 @@ const SignInModal: React.FC<SignInModalProps> = ({
             )}
         </button> */}
 
-        {/* <div className="relative">
+        <div className="relative">
           <div className="absolute inset-0 flex items-center">
             <div className="w-full border-t border-zinc-700"></div>
           </div>
-          <div className="relative flex justify-center text-sm">
+          {/* <div className="relative flex justify-center text-sm">
             <span className="px-4 text-zinc-400 bg-zinc-900">or continue with email</span>
-          </div>
-        </div> */}
+          </div> */}
+        </div>
       </div>
 
       <div className="space-y-6">
@@ -1109,7 +1111,96 @@ const SignInModal: React.FC<SignInModalProps> = ({
               <p className="text-zinc-400 text-xs text-center font-['HK Grotesk'] px-4">
                 Join the Fitness Collective: Create, Share, and Progress Together
               </p>
+<>
+              {/* New Footer Section */}
+    <div className="mt-8 pt-6 border-t border-zinc-700">
+
+      {/* Links Section */}
+      <div className="flex flex-col sm:flex-row justify-center items-center gap-4 text-zinc-400 text-sm mb-6">
+        <Link 
+          href="/?p=home" 
+          className="hover:text-[#E0FE10] transition-colors"
+        >
+          About Pulse
+        </Link>
+        <div className="hidden sm:block w-1 h-1 bg-zinc-700 rounded-full"></div>
+        <Link 
+          href="/?p=creator" 
+          className="hover:text-[#E0FE10] transition-colors"
+        >
+          Creator Program
+        </Link>
+        <div className="hidden sm:block w-1 h-1 bg-zinc-700 rounded-full"></div>
+        <Link 
+          href="/?p=subscribe" 
+          className="hover:text-[#E0FE10] transition-colors"
+        >
+          Rounds Feature
+        </Link>
+      </div>
+
+      {/* Secondary Links */}
+      <div className="flex flex-wrap justify-center items-center gap-4 text-zinc-500 text-xs mb-6">
+        <Link 
+          href="/terms" 
+          className="hover:text-[#E0FE10] transition-colors"
+        >
+          Terms & Conditions
+        </Link>
+        <div className="hidden sm:block w-1 h-1 bg-zinc-700 rounded-full"></div>
+        <Link 
+          href="/privacyPolicy" 
+          className="hover:text-[#E0FE10] transition-colors"
+        >
+          Privacy Policy
+        </Link>
+        <div className="hidden sm:block w-1 h-1 bg-zinc-700 rounded-full"></div>
+        <button 
+          onClick={() => window.location.href = 'mailto:pulsefitnessapp@gmail.com'}
+          className="hover:text-[#E0FE10] transition-colors"
+        >
+          Contact Us
+        </button>
+      </div>
+
+      {/* Social Icons */}
+      <div className="flex justify-center gap-6 mb-6">
+        <a 
+          href="https://www.instagram.com/fitwithpulse/" 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="text-zinc-400 hover:text-[#E0FE10] transition-colors"
+        >
+          <img src="/instagram.svg" alt="Instagram" className="w-5 h-5" />
+        </a>
+        <a 
+          href="https://twitter.com/fitwithpulse" 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="text-zinc-400 hover:text-[#E0FE10] transition-colors"
+        >
+          <img src="/twitter.svg" alt="Twitter" className="w-5 h-5" />
+        </a>
+        <a 
+          href="https://www.youtube.com/@fitwithpulse" 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="text-zinc-400 hover:text-[#E0FE10] transition-colors"
+        >
+          <img src="/youtube.svg" alt="Youtube" className="w-5 h-5" />
+        </a>
+      </div>
+
+      {/* Copyright */}
+      <div className="text-center text-zinc-500 text-xs">
+        © {new Date().getFullYear()} Pulse. All rights reserved.
+      </div>
+    </div>
+  </>
+
             </div>
+
+            
           </>
         )}
       </div>
