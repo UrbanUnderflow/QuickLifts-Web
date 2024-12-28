@@ -1,136 +1,396 @@
-import React from 'react';
-import FAQ from '../components/FAQ';
+import React, { useEffect, useState } from 'react';
+import BottomNav from '../components/App/BottomNav';
+import Discover from '../../src/components/App/RootScreens/Discover';
+import Search from '../../src/components/App/RootScreens/Search';
+import Create from '../../src/components/App/RootScreens/Create';
+import Message from '../../src/components/App/RootScreens/Message';
+import Profile from '../../src/components/App/RootScreens/Profile';
+import SignInModal from "../components/SignInModal";
+import { SelectedRootTabs } from '../types/DashboardTypes';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from '../api/firebase/config'; 
+import { userService } from '../api/firebase/user';
+import WorkoutPanel from '../components/App/Dashboard/WorkoutPanel';
+import InProgressExercise from '../components/App/InProgressExercise/InProgressExercise';
+import { ExerciseLog, Exercise } from '../api/firebase/exercise/types';
+
+// If you're using Firebase, you might import:
+// import { auth } from '../api/firebase/config';
+// import { onAuthStateChanged } from 'firebase/auth';
 
 const HomeContent = () => {
-  const faqData = [
-    {
-      question: "What is the Fitness Collective?",
-      answer: "The Fitness Collective transcends a typical fitness community. While communities foster connection and support, a collective goes further, empowering its members to shape the very thing they're a part of. They contribute with user-generated content (exercises, videos, workouts), democratized influence, shared knowledge. <br /><br /><b>Think of it this way:</b> A community consumes, a collective creates. The Fitness Collective is where fitness lovers can not only find support and inspiration but also leave their own unique mark on the platform they love."
-    },
-    {
-      question: "How does Pulse track my progress?",
-      answer: "Pulse tracks your progress by allowing you to log your workouts through statistics and videos. <br /> <br />Pulse AI takes this information and applies a score called a <b>Work Score</b> to your sessions that you can easily focus on improving one session at a time."
-    },
-    {
-      question: "Is Pulse available for both iOS and Android?",
-      answer: "We are currently only on iOS, but Android is coming soon!"
-    },
-    {
-      question: "How do I get started?",
-      answer: "Getting started is as easy as just downloading the app! <br /><br /> <a className='text-blue-500 hover:text-blue-700 focus:text-blue-700' href='https://apps.apple.com/ca/app/pulse-community-workouts/id6451497729'>Download Now</a>"
-    },
-    {
-      question: "How do I find and follow other users?",
-      answer: "Our workouts are your gateway to connection. See community members in action as you exercise. Discover new people to follow and get inspired with every rep."
-    },
-    {
-      question: "Can I create and share my own workouts?",
-      answer: "Yes! You can create your own exercises, workouts, and shoot your own videos to share with the collective. You can also share your workouts with friends and family directly."
-    },
-    {
-      question: "Are there community challenges or events?",
-      answer: "Yes! We have in-app and real-world challenges, but you have to stay connected to catch them!"
-    },
-    {
-      question: "Can I export my workout data?",
-      answer: "Absolutely! Your data is yours, and we make it easy to take it with you anywhere you decide to go."
-    }
+  // Track which root tab is selected
+  const [selectedTab, setSelectedTab] = useState<SelectedRootTabs>(SelectedRootTabs.Discover);
+  const [isWorkoutPanelOpen, setIsWorkoutPanelOpen] = useState(false);
+
+
+  // Track whether user is signed in
+  const [isSignedIn, setIsSignedIn] = useState(false);
+
+  const [isWorkoutInProgress, setIsWorkoutInProgress] = useState(false); // Set to true for testing
+  const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0);
+
+  // Control whether to show the sign-in modal
+  const [isSignInModalVisible, setIsSignInModalVisible] = useState(true);
+
+  const mockExercises = [
+    new ExerciseLog({
+      id: 'log1',
+      workoutId: 'workout1',
+      userId: 'user123',
+      exercise: new Exercise({
+        id: 'ex1',
+        name: 'Push-ups',
+        description: 'A basic push-up exercise targeting chest, shoulders, and triceps.',
+        category: {
+          type: 'bodyWeight',
+          details: {
+            reps: ['10'],
+            sets: 3,
+            weight: 0,
+            screenTime: 45, 
+          },
+        },
+        primaryBodyParts: ['chest', 'triceps'],
+        secondaryBodyParts: ['shoulders'],
+        tags: ['strength', 'bodyweight'],
+        videos: [
+
+          { id: 'pushVid1',
+            videoURL: 'https://firebasestorage.googleapis.com:443/v0/b/quicklifts-dd3f1.appspot.com/o/videos%2FBench%20Press%2FBench%20Press_iNCW0VxnG3SAtr0IKIAoB3n3EF33%2B1719675103.2404962.mp4?alt=media&token=d38ee8d1-a60b-4966-9999-05d601edc7b6', 
+            gifURL: 'https://firebasestorage.googleapis.com/v0/b/quicklifts-dd3f1.appspot.com/o/gifs%2FBench%20Press%2F2D817A73-68FC-4E4D-93A3-D360554CE8EE_low.gif?alt=media&token=68da2b3f-0fad-4da7-98db-51b17f23e3b8'
+            },
+        ],
+        steps: ['Get into plank position', 'Lower your body', 'Push back up'],
+        visibility: 'public',
+        currentVideoPosition: 0,
+        sets: 3,
+        reps: '10',
+        weight: 0,
+        author: {
+          uid: 'author1',
+          displayName: 'Pulse Trainer',
+        },
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }),
+      logs: [],
+      feedback: '',
+      note: '',
+      recommendedWeight: '',
+      isSplit: false,
+      isBodyWeight: true,
+      logSubmitted: false,
+      logIsEditing: false,
+      isCompleted: false,
+      order: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }),
+  
+    new ExerciseLog({
+      id: 'log2',
+      workoutId: 'workout1',
+      userId: 'user123',
+      exercise: new Exercise({
+        id: 'ex2',
+        name: 'Squats',
+        description: 'A compound movement focusing on the lower body.',
+        category: {
+          type: 'weightTraining',
+          details: {
+            reps: ['8'],
+            sets: 4,
+            weight: 50,
+            screenTime: 60,
+          },
+        },
+        primaryBodyParts: ['quadriceps', 'glutes'],
+        secondaryBodyParts: ['hamstrings', 'core'],
+        tags: ['strength', 'compound'],
+        videos: [
+
+          { id: 'pushVid2',
+            videoURL: 'https://firebasestorage.googleapis.com:443/v0/b/quicklifts-dd3f1.appspot.com/o/videos%2FBench%20Press%2FBench%20Press_iNCW0VxnG3SAtr0IKIAoB3n3EF33%2B1719675103.2404962.mp4?alt=media&token=d38ee8d1-a60b-4966-9999-05d601edc7b6', 
+            gifURL: 'https://firebasestorage.googleapis.com/v0/b/quicklifts-dd3f1.appspot.com/o/gifs%2FBench%20Press%2F2D817A73-68FC-4E4D-93A3-D360554CE8EE_low.gif?alt=media&token=68da2b3f-0fad-4da7-98db-51b17f23e3b8'
+            },
+        ],
+        steps: ['Stand with feet shoulder-width apart', 'Lower hips', 'Drive through heels'],
+        visibility: 'public',
+        currentVideoPosition: 0,
+        sets: 4,
+        reps: '8',
+        weight: 50,
+        author: {
+          uid: 'author1',
+          displayName: 'Pulse Trainer',
+        },
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }),
+      logs: [],
+      feedback: '',
+      note: '',
+      recommendedWeight: '50 lbs',
+      isSplit: false,
+      isBodyWeight: false,
+      logSubmitted: false,
+      logIsEditing: false,
+      isCompleted: false,
+      order: 2,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }),
+  
+    new ExerciseLog({
+      id: 'log3',
+      workoutId: 'workout1',
+      userId: 'user123',
+      exercise: new Exercise({
+        id: 'ex3',
+        name: 'Planks',
+        description: 'An isometric core strength exercise.',
+        category: {
+          type: 'bodyWeight',
+          details: {
+            reps: ['30s'], 
+            sets: 3,
+            weight: 0,
+            screenTime: 30,
+          },
+        },
+        primaryBodyParts: ['core'],
+        secondaryBodyParts: ['shoulders', 'back'],
+        tags: ['endurance', 'bodyweight'],
+        videos: [
+
+          { id: 'pushVid1',
+            videoURL: 'https://firebasestorage.googleapis.com:443/v0/b/quicklifts-dd3f1.appspot.com/o/videos%2FBench%20Press%2FBench%20Press_iNCW0VxnG3SAtr0IKIAoB3n3EF33%2B1719675103.2404962.mp4?alt=media&token=d38ee8d1-a60b-4966-9999-05d601edc7b6', 
+            gifURL: 'https://firebasestorage.googleapis.com/v0/b/quicklifts-dd3f1.appspot.com/o/gifs%2FBench%20Press%2F2D817A73-68FC-4E4D-93A3-D360554CE8EE_low.gif?alt=media&token=68da2b3f-0fad-4da7-98db-51b17f23e3b8'
+            },
+        ],
+        steps: ['Assume push-up position', 'Keep body straight', 'Hold as long as possible'],
+        visibility: 'public',
+        currentVideoPosition: 0,
+        sets: 3,
+        reps: '30s',
+        weight: 0,
+        author: {
+          uid: 'author2',
+          displayName: 'Core Specialist',
+        },
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }),
+      logs: [],
+      feedback: '',
+      note: '',
+      recommendedWeight: '',
+      isSplit: false,
+      isBodyWeight: true,
+      logSubmitted: false,
+      logIsEditing: false,
+      isCompleted: false,
+      order: 3,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }),
   ];
 
+  // Example: if using Firebase, you'd watch the auth state:
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        try {
+          // Fetch user data from Firestore and set it in userService
+          const firestoreUser = await userService.fetchUserFromFirestore(user.uid);
+          userService.currentUser = firestoreUser;
+          
+          console.log('User data fetched and set:', firestoreUser); // Debug log
+          
+          setIsSignedIn(true);
+          setIsSignInModalVisible(false);
+        } catch (error) {
+          console.error('Error fetching user data:', error);
+          // Handle error appropriately
+        }
+      } else {
+        userService.currentUser = null; // Clear the current user
+        setIsSignedIn(false);
+        setIsSignInModalVisible(true);
+      }
+    });
+  
+    return () => unsubscribe();
+  }, []);
+
+  // For now, we can do some mock logic:
+  useEffect(() => {
+    // Suppose we discover the user is not signed in:
+    setIsSignedIn(false);
+    setIsSignInModalVisible(true);
+  }, []);
+
+  useEffect(() => {
+    // Find the first incomplete exercise
+    const firstIncomplete = mockExercises.findIndex((log) => !log.isCompleted);
+  
+    // If found, set currentExerciseIndex to that
+    if (firstIncomplete !== -1) {
+      setCurrentExerciseIndex(firstIncomplete);
+    }
+  }, [mockExercises]);
+
+  // Render the selected tab's content
+  const renderContent = () => {
+    switch (selectedTab) {
+      case SelectedRootTabs.Discover:
+        return <Discover />;
+      case SelectedRootTabs.Search:
+        return <Search />;
+      case SelectedRootTabs.Create:
+        return <Create />;
+      case SelectedRootTabs.Message:
+        return <Message />;
+      case SelectedRootTabs.Profile:
+        return <Profile />;
+      default:
+        return null;
+    }
+  };
+
+  if (isWorkoutInProgress) {
+    return (
+      <InProgressExercise
+        exercises={mockExercises}
+        currentExerciseIndex={currentExerciseIndex}
+        onComplete={() => {
+          if (currentExerciseIndex < mockExercises.length - 1) {
+            setCurrentExerciseIndex((prev) => prev + 1);
+          } else {
+            setIsWorkoutInProgress(false);
+          }
+        }}
+        onClose={() => {
+          if (window.confirm('Are you sure you want to end your workout?')) {
+            setIsWorkoutInProgress(false);
+          }
+        }}
+      />
+    );
+  }
+
+  // If signed in, show coming soon overlay
+  if (isSignedIn) {
+    return <ComingSoonOverlay />;
+  }
+
+  // If not signed in, show SignInModal
+  if (!isSignedIn) {
+    return (
+      <SignInModal
+        isVisible={isSignInModalVisible}
+        // The following onClose could be omitted if you *require* sign in
+        onClose={() => setIsSignInModalVisible(false)}
+        onSignInSuccess={(user) => {
+          console.log('Sign-in successful:', user);
+          setIsSignedIn(true);
+          setIsSignInModalVisible(false);
+        }}
+        onSignInError={(error) => {
+          console.error('Sign-in error:', error);
+          alert('Sign-in failed. Please try again.');
+        }}
+        onSignUpSuccess={(user) => {
+          console.log('Sign-up successful:', user);
+          setIsSignedIn(true);
+          setIsSignInModalVisible(false);
+        }}
+        onSignUpError={(error) => {
+          console.error('Sign-up error:', error);
+          alert('Sign-up failed. Please try again.');
+        }}
+        onQuizComplete={() => {
+          console.log('Quiz completed successfully');
+        }}
+        onQuizSkipped={() => {
+          console.log('Quiz skipped');
+        }}
+      />
+    );
+  }
+
+  // If user is signed in, display the actual dashboard
   return (
-    <>
-      <div className="flex flex-col sm:flex-row mt-10 p-0 sm:px-20 justify-center items-center mx-auto space-x-0 sm:space-x-1">
-        <div
-          className="relative w-full h-auto mb-10 overflow-hidden group cursor-pointer"
-          onClick={() => window.location.href = "https://apps.apple.com/ca/app/pulse-community-workouts/id6451497729"}
-        >
-          <img
-            src="/welcomeBadge.png"
-            alt="Phone"
-            className="w-[541px] h-auto object-contain"
-          />
-        </div>
+    <div className="min-h-screen bg-zinc-900">
+      {/* Top Navigation */}
+      <nav className="px-4 py-4 bg-zinc-900/80 backdrop-blur-sm border-b border-zinc-800 sticky top-0 z-10 flex justify-between items-center">
+        <img src="/pulse-logo-white.svg" alt="Pulse" className="h-8" />
 
-        <div className="relative w-full h-auto mb-10 overflow-hidden group">
-          <img src="/phoneimage1.png" alt="Phone" className="w-[681px] h-auto object-contain" />
-          <div className="absolute inset-0 transition-opacity duration-300 ease-in-out flex justify-end items-start opacity-0 group-hover:opacity-100">
-            <div className="w-full h-full bg-gray-500 opacity-60"></div>
-            <a href="https://apps.apple.com/ca/app/pulse-community-workouts/id6451497729" className="absolute right-0 bottom-0 m-8 bg-clear text-white py-4 px-6 border border-white rounded-full flex items-center justify-center font-bold hover:bg-[#e6fd54] hover:text-black hover:border-black focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-black">
-              Download App
-              <svg className="ml-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7-7 7"></path></svg>
-            </a>
-          </div>
-        </div>
+        {/* "Start Workout" button */}
+        <button
+        className="bg-[#E0FE10] text-black px-4 py-2 rounded-lg"
+        onClick={() => setIsWorkoutPanelOpen(true)}
+      >
+        Start Workout
+      </button>
+      </nav>
+
+      {/* Main Content */}
+      <div className="max-w-xl mx-auto px-4 py-6">
+        {renderContent()}
       </div>
 
-      <div className="flex flex-col sm:flex-row sm:px-20 mb-40 justify-center items-center mx-auto space-x-0 sm:space-x-5">
-        <div className="mt-0 sm:mt-0 flex justify-center sm:justify-start">
-          <img src="/person1.svg" alt="Person 1" className="hidden md:block w-full md:w-[400px] h-[405px]" />
-        </div>
-        <div className="mt-0 sm:mt-0 flex justify-center sm:justify-start">
-          <img src="/person2.svg" alt="Person 2" className="hidden md:block w-full md:w-[400px] h-[405px]" />
-        </div>
-        <div className="mt-0 sm:mt-0 flex justify-center sm:justify-start">
-          <img src="/person3.svg" alt="Person 3" className="hidden md:block w-full md:w-[400px] h-[405px]" />
-        </div>
-      </div>
+      {/* Bottom Navigation */}
+      <BottomNav selectedTab={selectedTab} onTabChange={setSelectedTab} />
 
-      <div className="bg-white text-gray-800">
-        <div className="sm:justify-around px-5 sm:px-20 items-start mx-auto">
-          <div className="text-left py-5">
-            <h2 className="text-2xl font-bold uppercase">Why Choose Pulse</h2>
-          </div>
-          <div className="text-left pb-10">
-            <h3 className="text-4xl font-extrabold">
-              A User-Driven Fitness Community: <br />Collective Content, Support, and Growth
-            </h3>
-          </div>
-        </div>
-
-        <div className="flex flex-col sm:flex-row sm:justify-around p-5 sm:p-20 items-start mx-auto">
-          <div className="sm:w-1/3 mb-6 sm:mb-0">
-            <h4 className="text-xl font-semibold mb-2">Growth over perfection pledge</h4>
-            <p>We celebrate milestones and acknowledge that perfection is when we continue to push ourselves beyond what feels comfortable,</p>
-          </div>
-          <div className="px-10">
-            <img src="/astricks.svg" alt="astricks" className="hidden md:block w-[22px] md:w-[22px] h-[176px]" />
-          </div>
-          <div className="sm:w-1/3 mb-6 sm:mb-0">
-            <h4 className="text-xl font-semibold mb-2">We show up</h4>
-            <p>60 percent of the battle is simply just showing up at the gym with a plan. If we can get in the room, we can achieve our best, so we pledge to workout, share, and encourage others along the way.</p>
-          </div>
-          <div className="px-10">
-            <img src="/astricks.svg" alt="astricks" className="hidden md:block w-[22px] md:w-[22px] h-[176px]" />
-          </div>
-          <div className="sm:w-1/3 mb-6 sm:mb-0">
-            <h4 className="text-xl font-semibold mb-2">Progress over pressure</h4>
-            <p>We track what matters for lasting change – strength, endurance, mobility, not just what the scale says.</p>
-            <a href="https://apps.apple.com/ca/app/pulse-community-workouts/id6451497729" className="mt-8 w-48 bg-[#e6fd54] text-black py-4 px-4 rounded-full flex items-center">
-              Download App
-              <svg className="ml-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
-            </a>
-          </div>
-        </div>
-      </div>
-
-      <div className="flex flex-col bg-[#fafafa] sm:flex-row px-5 sm:px-20 justify-center items-center mx-auto space-x-0 sm:space-x-5">
-        <div className="mt-0 m-0 p-0 sm:mt-0 flex justify-center sm:justify-start">
-          <img src="/socialBanner.svg" alt="social" className="hidden md:block w-full md:w-full h-[624px]" />
-        </div>
-      </div>
-
-      <div className="">
-        <div className="mt-0 sm:mt-0 flex justify-center sm:justify-start">
-          <img src="/socialreel.svg" alt="social" className="hidden md:block w-[1640px] md:w-[1640px] h-[624px]" />
-        </div>
-      </div>
-
-      <div>
-        <FAQ title="Frequently Asked Questions" items={faqData} />
-      </div>
-
-    </>
+      {/* Render the panel */}
+      <WorkoutPanel
+        isVisible={isWorkoutPanelOpen}
+        onClose={() => setIsWorkoutPanelOpen(false)}
+      />
+    </div>
   );
 };
 
 export default HomeContent;
+
+
+const ComingSoonOverlay = () => {
+  return (
+    <div className="fixed inset-0 bg-zinc-900 flex items-center justify-center z-50">
+      <div className="max-w-md mx-auto p-8 text-center">
+        <img 
+          src="/pulse-logo-white.svg" 
+          alt="Pulse" 
+          className="h-12 mx-auto mb-8"
+        />
+        
+        <h1 className="text-3xl font-bold text-white mb-4">
+          Web App Coming Soon
+        </h1>
+        
+        <p className="text-zinc-300 mb-6">
+          We're working hard to bring the Pulse experience to your browser. 
+          In the meantime, download our mobile app to start your fitness journey!
+        </p>
+        
+        <div className="space-y-4">
+          <a 
+            href="https://apps.apple.com/ca/app/pulse-community-workouts/id6451497729"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block w-full bg-[#E0FE10] text-black font-semibold py-3 px-6 rounded-lg hover:bg-opacity-90 transition-all"
+          >
+            Download iOS App
+          </a>
+          
+          <p className="text-zinc-400 text-sm">
+            We'll notify you via email when the web app is ready to use.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
