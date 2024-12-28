@@ -24,6 +24,11 @@ self.__BUILD_MANIFEST = {
       "static/chunks/main.js",
       "static/chunks/pages/_error.js"
     ],
+    "/join-challenge": [
+      "static/chunks/webpack.js",
+      "static/chunks/main.js",
+      "static/chunks/pages/join-challenge.js"
+    ],
     "/privacyPolicy": [
       "static/chunks/webpack.js",
       "static/chunks/main.js",

@@ -4,5 +4,6 @@
   "/_document": "pages/_document.js",
   "/": "pages/index.js",
   "/privacyPolicy": "pages/privacyPolicy.js",
-  "/terms": "pages/terms.js"
+  "/terms": "pages/terms.js",
+  "/join-challenge": "pages/join-challenge.js"
 }
