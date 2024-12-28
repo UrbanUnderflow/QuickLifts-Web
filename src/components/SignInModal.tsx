@@ -10,7 +10,6 @@ import Link from 'next/link';
 
 
 // type SignUpStep = 'initial' | 'password' | 'profile';
-
 interface SignInModalProps {
   isVisible: boolean;
   closable?: boolean; 
@@ -850,7 +849,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
       </div>
 
       <div className="flex flex-col gap-4 mb-8">
-      {/* <button
+       <button
             type="button"
             onClick={() => {
                 setActiveProvider('apple'); // Track the active provider
@@ -871,9 +870,9 @@ const SignInModal: React.FC<SignInModalProps> = ({
                 {isSignUp ? "Sign up with Apple" : "Sign in with Apple"}
                 </>
             )}
-        </button> */}
+        </button>
         
-        {/* <button
+        <button
             type="button"
             onClick={() => handleSocialAuth('google')}
             disabled={isLoading}
@@ -890,7 +889,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
                 {isSignUp ? "Sign up with Google" : "Sign in with Google"}
                 </>
             )}
-        </button> */}
+        </button>
 
         <div className="relative">
           <div className="absolute inset-0 flex items-center">
