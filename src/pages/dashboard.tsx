@@ -11,6 +11,8 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../api/firebase/config'; 
 import { userService } from '../api/firebase/user';
 import WorkoutPanel from '../components/App/Dashboard/WorkoutPanel';
+import InProgressExercise from '../components/App/InProgressExercise/InProgressExercise';
+import { ExerciseLog, Exercise } from '../api/firebase/exercise/types';
 
 // If you're using Firebase, you might import:
 // import { auth } from '../api/firebase/config';
@@ -25,8 +27,175 @@ const Dashboard = () => {
   // Track whether user is signed in
   const [isSignedIn, setIsSignedIn] = useState(false);
 
+  const [isWorkoutInProgress, setIsWorkoutInProgress] = useState(true); // Set to true for testing
+  const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0);
+
   // Control whether to show the sign-in modal
   const [isSignInModalVisible, setIsSignInModalVisible] = useState(true);
+
+  const mockExercises = [
+    new ExerciseLog({
+      id: 'log1',
+      workoutId: 'workout1',
+      userId: 'user123',
+      exercise: new Exercise({
+        id: 'ex1',
+        name: 'Push-ups',
+        description: 'A basic push-up exercise targeting chest, shoulders, and triceps.',
+        category: {
+          type: 'bodyWeight',
+          details: {
+            reps: ['10'],
+            sets: 3,
+            weight: 0,
+            screenTime: 45, 
+          },
+        },
+        primaryBodyParts: ['chest', 'triceps'],
+        secondaryBodyParts: ['shoulders'],
+        tags: ['strength', 'bodyweight'],
+        videos: [
+
+          { id: 'pushVid1',
+            videoURL: 'https://firebasestorage.googleapis.com:443/v0/b/quicklifts-dd3f1.appspot.com/o/videos%2FBench%20Press%2FBench%20Press_iNCW0VxnG3SAtr0IKIAoB3n3EF33%2B1719675103.2404962.mp4?alt=media&token=d38ee8d1-a60b-4966-9999-05d601edc7b6', 
+            gifURL: 'https://firebasestorage.googleapis.com/v0/b/quicklifts-dd3f1.appspot.com/o/gifs%2FBench%20Press%2F2D817A73-68FC-4E4D-93A3-D360554CE8EE_low.gif?alt=media&token=68da2b3f-0fad-4da7-98db-51b17f23e3b8'
+            },
+        ],
+        steps: ['Get into plank position', 'Lower your body', 'Push back up'],
+        visibility: 'public',
+        currentVideoPosition: 0,
+        sets: 3,
+        reps: '10',
+        weight: 0,
+        author: {
+          uid: 'author1',
+          displayName: 'Pulse Trainer',
+        },
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }),
+      logs: [],
+      feedback: '',
+      note: '',
+      recommendedWeight: '',
+      isSplit: false,
+      isBodyWeight: true,
+      logSubmitted: false,
+      logIsEditing: false,
+      isCompleted: false,
+      order: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }),
+  
+    new ExerciseLog({
+      id: 'log2',
+      workoutId: 'workout1',
+      userId: 'user123',
+      exercise: new Exercise({
+        id: 'ex2',
+        name: 'Squats',
+        description: 'A compound movement focusing on the lower body.',
+        category: {
+          type: 'weightTraining',
+          details: {
+            reps: ['8'],
+            sets: 4,
+            weight: 50,
+            screenTime: 60,
+          },
+        },
+        primaryBodyParts: ['quadriceps', 'glutes'],
+        secondaryBodyParts: ['hamstrings', 'core'],
+        tags: ['strength', 'compound'],
+        videos: [
+
+          { id: 'pushVid2',
+            videoURL: 'https://firebasestorage.googleapis.com:443/v0/b/quicklifts-dd3f1.appspot.com/o/videos%2FBench%20Press%2FBench%20Press_iNCW0VxnG3SAtr0IKIAoB3n3EF33%2B1719675103.2404962.mp4?alt=media&token=d38ee8d1-a60b-4966-9999-05d601edc7b6', 
+            gifURL: 'https://firebasestorage.googleapis.com/v0/b/quicklifts-dd3f1.appspot.com/o/gifs%2FBench%20Press%2F2D817A73-68FC-4E4D-93A3-D360554CE8EE_low.gif?alt=media&token=68da2b3f-0fad-4da7-98db-51b17f23e3b8'
+            },
+        ],
+        steps: ['Stand with feet shoulder-width apart', 'Lower hips', 'Drive through heels'],
+        visibility: 'public',
+        currentVideoPosition: 0,
+        sets: 4,
+        reps: '8',
+        weight: 50,
+        author: {
+          uid: 'author1',
+          displayName: 'Pulse Trainer',
+        },
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }),
+      logs: [],
+      feedback: '',
+      note: '',
+      recommendedWeight: '50 lbs',
+      isSplit: false,
+      isBodyWeight: false,
+      logSubmitted: false,
+      logIsEditing: false,
+      isCompleted: false,
+      order: 2,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }),
+  
+    new ExerciseLog({
+      id: 'log3',
+      workoutId: 'workout1',
+      userId: 'user123',
+      exercise: new Exercise({
+        id: 'ex3',
+        name: 'Planks',
+        description: 'An isometric core strength exercise.',
+        category: {
+          type: 'bodyWeight',
+          details: {
+            reps: ['30s'], 
+            sets: 3,
+            weight: 0,
+            screenTime: 30,
+          },
+        },
+        primaryBodyParts: ['core'],
+        secondaryBodyParts: ['shoulders', 'back'],
+        tags: ['endurance', 'bodyweight'],
+        videos: [
+
+          { id: 'pushVid1',
+            videoURL: 'https://firebasestorage.googleapis.com:443/v0/b/quicklifts-dd3f1.appspot.com/o/videos%2FBench%20Press%2FBench%20Press_iNCW0VxnG3SAtr0IKIAoB3n3EF33%2B1719675103.2404962.mp4?alt=media&token=d38ee8d1-a60b-4966-9999-05d601edc7b6', 
+            gifURL: 'https://firebasestorage.googleapis.com/v0/b/quicklifts-dd3f1.appspot.com/o/gifs%2FBench%20Press%2F2D817A73-68FC-4E4D-93A3-D360554CE8EE_low.gif?alt=media&token=68da2b3f-0fad-4da7-98db-51b17f23e3b8'
+            },
+        ],
+        steps: ['Assume push-up position', 'Keep body straight', 'Hold as long as possible'],
+        visibility: 'public',
+        currentVideoPosition: 0,
+        sets: 3,
+        reps: '30s',
+        weight: 0,
+        author: {
+          uid: 'author2',
+          displayName: 'Core Specialist',
+        },
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }),
+      logs: [],
+      feedback: '',
+      note: '',
+      recommendedWeight: '',
+      isSplit: false,
+      isBodyWeight: true,
+      logSubmitted: false,
+      logIsEditing: false,
+      isCompleted: false,
+      order: 3,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }),
+  ];
 
   // Example: if using Firebase, you'd watch the auth state:
   useEffect(() => {
@@ -62,6 +231,16 @@ const Dashboard = () => {
     setIsSignInModalVisible(true);
   }, []);
 
+  useEffect(() => {
+    // Find the first incomplete exercise
+    const firstIncomplete = mockExercises.findIndex((log) => !log.isCompleted);
+  
+    // If found, set currentExerciseIndex to that
+    if (firstIncomplete !== -1) {
+      setCurrentExerciseIndex(firstIncomplete);
+    }
+  }, [mockExercises]);
+
   // Render the selected tab's content
   const renderContent = () => {
     switch (selectedTab) {
@@ -79,6 +258,27 @@ const Dashboard = () => {
         return null;
     }
   };
+
+  if (isWorkoutInProgress) {
+    return (
+      <InProgressExercise
+        exercises={mockExercises}
+        currentExerciseIndex={currentExerciseIndex}
+        onComplete={() => {
+          if (currentExerciseIndex < mockExercises.length - 1) {
+            setCurrentExerciseIndex((prev) => prev + 1);
+          } else {
+            setIsWorkoutInProgress(false);
+          }
+        }}
+        onClose={() => {
+          if (window.confirm('Are you sure you want to end your workout?')) {
+            setIsWorkoutInProgress(false);
+          }
+        }}
+      />
+    );
+  }
 
   // If not signed in, show SignInModal
   if (!isSignedIn) {
