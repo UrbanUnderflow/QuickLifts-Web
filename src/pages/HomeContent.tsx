@@ -13,6 +13,7 @@ import { userService } from '../api/firebase/user';
 import WorkoutPanel from '../components/App/Dashboard/WorkoutPanel';
 import InProgressExercise from '../components/App/InProgressExercise/InProgressExercise';
 import { ExerciseLog, Exercise } from '../api/firebase/exercise/types';
+import Link from 'next/link';
 
 // If you're using Firebase, you might import:
 // import { auth } from '../api/firebase/config';
@@ -357,40 +358,132 @@ export default HomeContent;
 
 
 const ComingSoonOverlay = () => {
+  const handleContactClick = () => {
+    window.location.href = 'mailto:pulsefitnessapp@gmail.com';
+  };
+
   return (
-    <div className="fixed inset-0 bg-zinc-900 flex items-center justify-center z-50">
-      <div className="max-w-md mx-auto p-8 text-center">
-        <img 
-          src="/pulse-logo-white.svg" 
-          alt="Pulse" 
-          className="h-12 mx-auto mb-8"
-        />
-        
-        <h1 className="text-3xl font-bold text-white mb-4">
-          Web App Coming Soon
-        </h1>
-        
-        <p className="text-zinc-300 mb-6">
-          We're working hard to bring the Pulse experience to your browser. 
-          In the meantime, download our mobile app to start your fitness journey!
-        </p>
-        
-        <div className="space-y-4">
-          <a 
-            href="https://apps.apple.com/ca/app/pulse-community-workouts/id6451497729"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="block w-full bg-[#E0FE10] text-black font-semibold py-3 px-6 rounded-lg hover:bg-opacity-90 transition-all"
-          >
-            Download iOS App
-          </a>
+    <div className="fixed inset-0 bg-zinc-900 flex flex-col justify-between min-h-screen z-50">
+      {/* Main Content */}
+      <div className="flex-1 flex items-center justify-center">
+        <div className="max-w-md mx-auto p-8 text-center">
+          <img 
+            src="/pulse-logo-white.svg" 
+            alt="Pulse" 
+            className="h-12 mx-auto mb-8"
+          />
           
-          <p className="text-zinc-400 text-sm">
-            We'll notify you via email when the web app is ready to use.
+          <h1 className="text-3xl font-bold text-white mb-4">
+            Web App Coming Soon
+          </h1>
+          
+          <p className="text-zinc-300 mb-6">
+            We're working hard to bring the Pulse experience to your browser. 
+            In the meantime, download our mobile app to start your fitness journey!
           </p>
+          
+          <div className="space-y-4">
+            <a 
+              href="https://apps.apple.com/ca/app/pulse-community-workouts/id6451497729"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block w-full bg-[#E0FE10] text-black font-semibold py-3 px-6 rounded-lg hover:bg-opacity-90 transition-all"
+            >
+              Download iOS App
+            </a>
+            
+            <p className="text-zinc-400 text-sm">
+              We'll notify you via email when the web app is ready to use.
+            </p>
+          </div>
         </div>
       </div>
+
+      {/* Footer */}
+      <footer className="w-full border-t border-zinc-800">
+        <div className="max-w-4xl mx-auto px-6 py-8">
+          {/* Primary Links */}
+          <div className="flex flex-col sm:flex-row justify-center items-center gap-6 text-zinc-400 mb-6">
+            <Link 
+              href="/?p=home" 
+              className="hover:text-[#E0FE10] transition-colors"
+            >
+              About Pulse
+            </Link>
+            <div className="hidden sm:block w-1 h-1 bg-zinc-700 rounded-full"></div>
+            <Link 
+              href="/?p=creator" 
+              className="hover:text-[#E0FE10] transition-colors"
+            >
+              Creator Program
+            </Link>
+            <div className="hidden sm:block w-1 h-1 bg-zinc-700 rounded-full"></div>
+            <Link 
+              href="/?p=subscribe" 
+              className="hover:text-[#E0FE10] transition-colors"
+            >
+              Rounds Feature
+            </Link>
+          </div>
+
+          {/* Secondary Links */}
+          <div className="flex flex-col sm:flex-row justify-center items-center gap-6 text-zinc-500 text-sm mb-8">
+            <Link 
+              href="/terms" 
+              className="hover:text-[#E0FE10] transition-colors"
+            >
+              Terms & Conditions
+            </Link>
+            <div className="hidden sm:block w-1 h-1 bg-zinc-700 rounded-full"></div>
+            <Link 
+              href="/privacyPolicy" 
+              className="hover:text-[#E0FE10] transition-colors"
+            >
+              Privacy Policy
+            </Link>
+            <div className="hidden sm:block w-1 h-1 bg-zinc-700 rounded-full"></div>
+            <button 
+              onClick={handleContactClick}
+              className="hover:text-[#E0FE10] transition-colors"
+            >
+              Contact Us
+            </button>
+          </div>
+
+          {/* Social Icons */}
+          <div className="flex justify-center gap-6 mb-6">
+            <a 
+              href="https://www.instagram.com/fitwithpulse/" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-zinc-400 hover:text-[#E0FE10] transition-colors"
+            >
+              <img src="/instagram.svg" alt="Instagram" className="w-6 h-6" />
+            </a>
+            <a 
+              href="https://twitter.com/fitwithpulse" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-zinc-400 hover:text-[#E0FE10] transition-colors"
+            >
+              <img src="/twitter.svg" alt="Twitter" className="w-6 h-6" />
+            </a>
+            <a 
+              href="https://www.tiktok.com/@fitwithpulse" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-zinc-400 hover:text-[#E0FE10] transition-colors"
+            >
+              <img src="/tiktok.svg" alt="TikTok" className="w-6 h-6" />
+            </a>
+          </div>
+          
+          {/* Copyright */}
+          <div className="text-center text-sm text-zinc-500">
+            © {new Date().getFullYear()} Pulse. All rights reserved.
+          </div>
+        </div>
+      </footer>
     </div>
   );
 };
-
