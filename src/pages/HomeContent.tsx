@@ -13,27 +13,24 @@ import { userService } from '../api/firebase/user';
 import WorkoutPanel from '../components/App/Dashboard/WorkoutPanel';
 import InProgressExercise from '../components/App/InProgressExercise/InProgressExercise';
 import { ExerciseLog, Exercise } from '../api/firebase/exercise/types';
-import Link from 'next/link';
-
-// If you're using Firebase, you might import:
-// import { auth } from '../api/firebase/config';
-// import { onAuthStateChanged } from 'firebase/auth';
+import Link from 'next/link'; // If you need Link for the footer or other components
 
 const HomeContent = () => {
   // Track which root tab is selected
   const [selectedTab, setSelectedTab] = useState<SelectedRootTabs>(SelectedRootTabs.Discover);
   const [isWorkoutPanelOpen, setIsWorkoutPanelOpen] = useState(false);
 
-
   // Track whether user is signed in
   const [isSignedIn, setIsSignedIn] = useState(false);
 
-  const [isWorkoutInProgress, setIsWorkoutInProgress] = useState(false); // Set to true for testing
+  // Set to true for testing workout in progress
+  const [isWorkoutInProgress, setIsWorkoutInProgress] = useState(false); 
   const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0);
 
   // Control whether to show the sign-in modal
   const [isSignInModalVisible, setIsSignInModalVisible] = useState(true);
 
+  // Mock exercise data
   const mockExercises = [
     new ExerciseLog({
       id: 'log1',
@@ -56,11 +53,11 @@ const HomeContent = () => {
         secondaryBodyParts: ['shoulders'],
         tags: ['strength', 'bodyweight'],
         videos: [
-
-          { id: 'pushVid1',
-            videoURL: 'https://firebasestorage.googleapis.com:443/v0/b/quicklifts-dd3f1.appspot.com/o/videos%2FBench%20Press%2FBench%20Press_iNCW0VxnG3SAtr0IKIAoB3n3EF33%2B1719675103.2404962.mp4?alt=media&token=d38ee8d1-a60b-4966-9999-05d601edc7b6', 
+          {
+            id: 'pushVid1',
+            videoURL: 'https://firebasestorage.googleapis.com:443/v0/b/quicklifts-dd3f1.appspot.com/o/videos%2FBench%20Press%2FBench%20Press_iNCW0VxnG3SAtr0IKIAoB3n3EF33%2B1719675103.2404962.mp4?alt=media&token=d38ee8d1-a60b-4966-9999-05d601edc7b6',
             gifURL: 'https://firebasestorage.googleapis.com/v0/b/quicklifts-dd3f1.appspot.com/o/gifs%2FBench%20Press%2F2D817A73-68FC-4E4D-93A3-D360554CE8EE_low.gif?alt=media&token=68da2b3f-0fad-4da7-98db-51b17f23e3b8'
-            },
+          },
         ],
         steps: ['Get into plank position', 'Lower your body', 'Push back up'],
         visibility: 'public',
@@ -88,7 +85,6 @@ const HomeContent = () => {
       createdAt: new Date(),
       updatedAt: new Date(),
     }),
-  
     new ExerciseLog({
       id: 'log2',
       workoutId: 'workout1',
@@ -110,11 +106,11 @@ const HomeContent = () => {
         secondaryBodyParts: ['hamstrings', 'core'],
         tags: ['strength', 'compound'],
         videos: [
-
-          { id: 'pushVid2',
-            videoURL: 'https://firebasestorage.googleapis.com:443/v0/b/quicklifts-dd3f1.appspot.com/o/videos%2FBench%20Press%2FBench%20Press_iNCW0VxnG3SAtr0IKIAoB3n3EF33%2B1719675103.2404962.mp4?alt=media&token=d38ee8d1-a60b-4966-9999-05d601edc7b6', 
+          {
+            id: 'pushVid2',
+            videoURL: 'https://firebasestorage.googleapis.com:443/v0/b/quicklifts-dd3f1.appspot.com/o/videos%2FBench%20Press%2FBench%20Press_iNCW0VxnG3SAtr0IKIAoB3n3EF33%2B1719675103.2404962.mp4?alt=media&token=d38ee8d1-a60b-4966-9999-05d601edc7b6',
             gifURL: 'https://firebasestorage.googleapis.com/v0/b/quicklifts-dd3f1.appspot.com/o/gifs%2FBench%20Press%2F2D817A73-68FC-4E4D-93A3-D360554CE8EE_low.gif?alt=media&token=68da2b3f-0fad-4da7-98db-51b17f23e3b8'
-            },
+          },
         ],
         steps: ['Stand with feet shoulder-width apart', 'Lower hips', 'Drive through heels'],
         visibility: 'public',
@@ -142,7 +138,6 @@ const HomeContent = () => {
       createdAt: new Date(),
       updatedAt: new Date(),
     }),
-  
     new ExerciseLog({
       id: 'log3',
       workoutId: 'workout1',
@@ -164,11 +159,11 @@ const HomeContent = () => {
         secondaryBodyParts: ['shoulders', 'back'],
         tags: ['endurance', 'bodyweight'],
         videos: [
-
-          { id: 'pushVid1',
-            videoURL: 'https://firebasestorage.googleapis.com:443/v0/b/quicklifts-dd3f1.appspot.com/o/videos%2FBench%20Press%2FBench%20Press_iNCW0VxnG3SAtr0IKIAoB3n3EF33%2B1719675103.2404962.mp4?alt=media&token=d38ee8d1-a60b-4966-9999-05d601edc7b6', 
+          {
+            id: 'pushVid1',
+            videoURL: 'https://firebasestorage.googleapis.com:443/v0/b/quicklifts-dd3f1.appspot.com/o/videos%2FBench%20Press%2FBench%20Press_iNCW0VxnG3SAtr0IKIAoB3n3EF33%2B1719675103.2404962.mp4?alt=media&token=d38ee8d1-a60b-4966-9999-05d601edc7b6',
             gifURL: 'https://firebasestorage.googleapis.com/v0/b/quicklifts-dd3f1.appspot.com/o/gifs%2FBench%20Press%2F2D817A73-68FC-4E4D-93A3-D360554CE8EE_low.gif?alt=media&token=68da2b3f-0fad-4da7-98db-51b17f23e3b8'
-            },
+          },
         ],
         steps: ['Assume push-up position', 'Keep body straight', 'Hold as long as possible'],
         visibility: 'public',
@@ -198,45 +193,37 @@ const HomeContent = () => {
     }),
   ];
 
-  // Example: if using Firebase, you'd watch the auth state:
+  // Monitor auth changes
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         try {
-          // Fetch user data from Firestore and set it in userService
           const firestoreUser = await userService.fetchUserFromFirestore(user.uid);
           userService.currentUser = firestoreUser;
-          
-          console.log('User data fetched and set:', firestoreUser); // Debug log
-          
+          console.log('User data fetched and set:', firestoreUser);
           setIsSignedIn(true);
           setIsSignInModalVisible(false);
         } catch (error) {
           console.error('Error fetching user data:', error);
-          // Handle error appropriately
         }
       } else {
-        userService.currentUser = null; // Clear the current user
+        userService.currentUser = null;
         setIsSignedIn(false);
         setIsSignInModalVisible(true);
       }
     });
-  
     return () => unsubscribe();
   }, []);
 
-  // For now, we can do some mock logic:
+  // Mock logic for sign-in
   useEffect(() => {
-    // Suppose we discover the user is not signed in:
     setIsSignedIn(false);
     setIsSignInModalVisible(true);
   }, []);
 
+  // Find the first incomplete exercise
   useEffect(() => {
-    // Find the first incomplete exercise
     const firstIncomplete = mockExercises.findIndex((log) => !log.isCompleted);
-  
-    // If found, set currentExerciseIndex to that
     if (firstIncomplete !== -1) {
       setCurrentExerciseIndex(firstIncomplete);
     }
@@ -251,7 +238,7 @@ const HomeContent = () => {
         return <Search />;
       case SelectedRootTabs.Create:
         return <Create />;
-      case SelectedRootTabs.Message:
+      case SelectedRootTabs.Messages:
         return <Message />;
       case SelectedRootTabs.Profile:
         return <Profile />;
@@ -260,6 +247,7 @@ const HomeContent = () => {
     }
   };
 
+  // If workout is in progress, show the InProgressExercise component
   if (isWorkoutInProgress) {
     return (
       <InProgressExercise
@@ -281,17 +269,11 @@ const HomeContent = () => {
     );
   }
 
-  // If signed in, show coming soon overlay
-  // if (isSignedIn) {
-  //   return <ComingSoonOverlay />;
-  // }
-
-  // If not signed in, show SignInModal
+  // If user is not signed in, show the SignInModal
   if (!isSignedIn) {
     return (
       <SignInModal
         isVisible={isSignInModalVisible}
-        // The following onClose could be omitted if you *require* sign in
         onClose={() => setIsSignInModalVisible(false)}
         onSignInSuccess={(user) => {
           console.log('Sign-in successful:', user);
@@ -321,31 +303,35 @@ const HomeContent = () => {
     );
   }
 
-  // If user is signed in, display the actual dashboard
+    // If signed in, show coming soon overlay
+  // if (isSignedIn) {
+  //   return <ComingSoonOverlay />;
+  // }
+
+  // Otherwise, show the main HomeContent layout
   return (
     <div className="min-h-screen bg-zinc-900">
       {/* Top Navigation */}
       <nav className="px-4 py-4 bg-zinc-900/80 backdrop-blur-sm border-b border-zinc-800 sticky top-0 z-10 flex justify-between items-center">
         <img src="/pulse-logo-white.svg" alt="Pulse" className="h-8" />
-
-        {/* "Start Workout" button */}
+        
         <button
-        className="bg-[#E0FE10] text-black px-4 py-2 rounded-lg"
-        onClick={() => setIsWorkoutPanelOpen(true)}
-      >
-        Start Workout
-      </button>
+          className="bg-[#E0FE10] text-black px-4 py-2 rounded-lg"
+          onClick={() => setIsWorkoutPanelOpen(true)}
+        >
+          Start Workout
+        </button>
       </nav>
 
       {/* Main Content */}
-      <div className="max-w-xl mx-auto px-4 py-6">
-        {renderContent()}
+      <div className="w-full">
+      {renderContent()}
       </div>
 
       {/* Bottom Navigation */}
       <BottomNav selectedTab={selectedTab} onTabChange={setSelectedTab} />
 
-      {/* Render the panel */}
+      {/* Render WorkoutPanel if needed */}
       <WorkoutPanel
         isVisible={isWorkoutPanelOpen}
         onClose={() => setIsWorkoutPanelOpen(false)}
@@ -363,6 +349,8 @@ const ComingSoonOverlay = () => {
   };
 
   return (
+    <div className="min-h-screen bg-zinc-900">
+
     <div className="fixed inset-0 bg-zinc-900 flex flex-col justify-between min-h-screen z-50">
       {/* Main Content */}
       <div className="flex-1 flex items-center justify-center">
@@ -484,6 +472,7 @@ const ComingSoonOverlay = () => {
           </div>
         </div>
       </footer>
+    </div>
     </div>
   );
 };

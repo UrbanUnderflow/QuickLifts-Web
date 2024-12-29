@@ -14,8 +14,8 @@ import { parseActivityType } from '../../../utils/activityParser';
 
 const TABS = {
   ACTIVITY: 'activity',
-  EXERCISES: 'exercises',
-  CHALLENGES: 'challenges',
+  EXERCISES: 'moves',
+  CHALLENGES: 'rounds',
 } as const;
 
 type TabType = typeof TABS[keyof typeof TABS];
