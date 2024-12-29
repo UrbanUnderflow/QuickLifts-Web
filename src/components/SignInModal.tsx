@@ -1117,21 +1117,21 @@ const SignInModal: React.FC<SignInModalProps> = ({
       {/* Links Section */}
       <div className="flex flex-col sm:flex-row justify-center items-center gap-4 text-zinc-400 text-sm mb-6">
         <Link 
-          href="/?p=home" 
+          href="/about" 
           className="hover:text-[#E0FE10] transition-colors"
         >
           About Pulse
         </Link>
         <div className="hidden sm:block w-1 h-1 bg-zinc-700 rounded-full"></div>
         <Link 
-          href="/?p=creator" 
+          href="/creator" 
           className="hover:text-[#E0FE10] transition-colors"
         >
           Creator Program
         </Link>
         <div className="hidden sm:block w-1 h-1 bg-zinc-700 rounded-full"></div>
         <Link 
-          href="/?p=subscribe" 
+          href="/rounds" 
           className="hover:text-[#E0FE10] transition-colors"
         >
           Rounds Feature
