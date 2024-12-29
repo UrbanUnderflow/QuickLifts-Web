@@ -1,10 +1,16 @@
 import { BodyPart } from "../../../types/BodyPart";
 import { RepsAndWeightLog } from "../workout/types";
 import { ProfileImage } from '../user/types';
-
+import { DocumentSnapshot } from 'firebase/firestore';
 
 export interface ExerciseService {
-    fetchExercises: () => Promise<void>;
+  fetchExercises: () => Promise<void>;
+  fetchPaginatedExercises: (
+      lastDoc: DocumentSnapshot | null,
+      pageSize?: number
+  ) => Promise<{ exercises: Exercise[]; lastVisible: DocumentSnapshot | null }>;
+  fetchFeaturedExercisesWithVideos: (limit?: number) => Promise<Exercise[]>;
+  allExercises: Exercise[];
 }
 
 export interface ExerciseComment {

@@ -72,6 +72,68 @@ class ExerciseService {
       }
     }
 
+    async fetchFeaturedExercisesWithVideos(limit: number = 24): Promise<Exercise[]> {
+      try {
+        // Fetch all exercises
+        const exerciseSnapshot = await getDocs(collection(db, 'exercises'));
+        const exercises: Exercise[] = exerciseSnapshot.docs.map((doc) => 
+          Exercise.fromFirebase({
+            id: doc.id,
+            ...doc.data(),
+          })
+        );
+    
+        // Fetch all videos
+        const videoSnapshot = await getDocs(collection(db, 'exerciseVideos'));
+        const exerciseVideos: ExerciseVideo[] = videoSnapshot.docs.map((doc) => ({
+          id: doc.id,
+          exerciseId: doc.data().exerciseId || '',
+          username: doc.data().username || '',
+          userId: doc.data().userId || '',
+          videoURL: doc.data().videoURL || '',
+          fileName: doc.data().fileName || '',
+          exercise: doc.data().exercise || '',
+          profileImage: doc.data().profileImage || { profileImageURL: '' },
+          caption: doc.data().caption || '',
+          gifURL: doc.data().gifURL || '',
+          thumbnail: doc.data().thumbnail || '',
+          visibility: doc.data().visibility || 'open',
+          totalAccountsReached: doc.data().totalAccountsReached || 0,
+          totalAccountLikes: doc.data().totalAccountLikes || 0,
+          totalAccountBookmarked: doc.data().totalAccountBookmarked || 0,
+          totalAccountUsage: doc.data().totalAccountUsage || 0,
+          isApproved: doc.data().isApproved || false,
+          liked: doc.data().liked || false,
+          bookmarked: doc.data().bookmarked || false,
+          createdAt: doc.data().createdAt ? new Date(doc.data().createdAt.seconds * 1000) : new Date(),
+          updatedAt: doc.data().updatedAt ? new Date(doc.data().updatedAt.seconds * 1000) : new Date(),
+        }));
+    
+        // Map videos to exercises and filter for those with GIFs
+        const mappedExercises = exercises
+          .map(exercise => {
+            const videosForExercise = exerciseVideos.filter(
+              video => video.exercise === exercise.name && video.gifURL
+            );
+            return {
+              ...exercise,
+              videos: videosForExercise,
+            };
+          })
+          .filter(exercise => exercise.videos.length > 0);
+    
+        // Shuffle and limit results
+        const shuffledExercises = mappedExercises
+          .sort(() => Math.random() - 0.5)
+          .slice(0, limit);
+    
+        return shuffledExercises;
+      } catch (error) {
+        console.error('Error fetching featured exercises:', error);
+        return [];
+      }
+    }
+
     async fetchPaginatedExercises(
         lastDoc: DocumentSnapshot | null = null,
         pageSize: number = 15

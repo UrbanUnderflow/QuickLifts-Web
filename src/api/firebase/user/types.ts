@@ -4,6 +4,8 @@ import { User } from '../../../types/User';
 export interface UserService {
     updateUser: (userId: string, user: User) => Promise<void>;
     fetchUserFromFirestore: (userId: string) => Promise<User>;
+    fetchUsersWithVideosUploaded: () => Promise<User[]>;
+    currentUser: User | null;
 }
 
 // types/ProfileImage.ts

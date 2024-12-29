@@ -3,6 +3,6 @@ export enum SelectedRootTabs {
     Discover = 'discover',
     Search = 'search',
     Create = 'create',
-    Message = 'message',
+    Messages = 'messages',
     Profile = 'profile',
 }
