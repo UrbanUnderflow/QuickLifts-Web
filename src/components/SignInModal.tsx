@@ -3,8 +3,7 @@ import { getRedirectResult, signInWithRedirect, OAuthProvider } from 'firebase/a
 import { Camera, X } from 'lucide-react';
 import { FitnessGoal, QuizData, SignUpStep } from "../types/AuthTypes";
 import authService from '../api/firebase/auth';
-import { userService } from '../api/firebase/user';
-import { User } from '../types/User';
+import { userService, User } from '../api/firebase/user';
 import { auth } from '../api/firebase/config';
 import Link from 'next/link';
 

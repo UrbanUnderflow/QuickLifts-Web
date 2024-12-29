@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { GetServerSideProps } from 'next';
 import { useRouter } from 'next/router';
 import { FollowRequest } from '../../types/FollowRequest';
-import { User } from '../../types/User';
+import { User } from '../../api/firebase/user';
 import ExerciseGrid from '../../components/ExerciseGrid';
 import { Exercise } from '../../api/firebase/exercise/types'; 
 import { Challenge } from '../../types/Challenge';
