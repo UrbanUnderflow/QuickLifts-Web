@@ -3,7 +3,7 @@ import { GetServerSideProps } from 'next';
 import { useRouter } from 'next/router';
 import { ChevronLeft, BarChart2, Plus } from 'lucide-react';
 import { Exercise } from '../../api/firebase/exercise';
-import { User } from '../../types/User';
+import { User } from '../../api/firebase/user';
 
 interface ExerciseViewProps {
   initialExerciseData: Exercise | null;

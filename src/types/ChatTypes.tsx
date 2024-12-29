@@ -1,4 +1,4 @@
-import { ShortUser } from './../types/User';
+import { ShortUser } from '../api/firebase/user';
 
 export interface GroupMessage {
     id: string; // Unique identifier for the message

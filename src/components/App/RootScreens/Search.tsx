@@ -1,31 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { userService } from '../../../api/firebase/user';
+import { userService, User } from '../../../api/firebase/user';
 import { Search as SearchIcon, Users, Dumbbell, UserCircle } from 'lucide-react';
 import { exerciseService } from '../../../api/firebase/exercise';
 import { useRouter } from 'next/router';
+import { Exercise } from '../../../api/firebase/exercise';
 
 // Types
-interface User {
-  id: string;
-  username: string;
-  profileImage?: {
-    profileImageURL: string;
-  };
-  creator?: {
-    type: string[];
-  };
-}
-
-interface Exercise {
-  id: string;
-  name: string;
-  description: string;
-  videos: {
-    gifURL: string;
-  }[];
-  primaryBodyParts: string[];
-}
-
 interface SearchCardProps {
   text: string;
   subText?: string;

@@ -3,13 +3,13 @@ import { Calendar, ChevronDown } from 'lucide-react';
 import {SweatlistCollection, SweatlistType} from '../../types/SweatlistCollection';
 import { ChallengeStatus } from '../../types/ChallengeTypes';
 import { StackCard, RestDayCard } from '../../components/Rounds/StackCard';
-import { Workout, ExerciseReference } from '../../types/Workout';
+import { Workout } from '../../api/firebase/workout';
 import { BodyZone } from '../../types/BodyZone';
 import ParticipantsSection from '../../components/Rounds/ParticipantsSection';
 import { UserTogetherRound } from '../../types/ChallengeTypes';
-import { BodyPart } from '../../types/BodyPart';
 import RoundChatView from '../../components/Rounds/RoundChatView';
-import { UserLevel } from '../../types/User';
+import { UserLevel } from '../../api/firebase/user';
+import { BodyPart, ExerciseReference } from '../../api/firebase/exercise';
 import  { GroupMessage, MessageMediaType } from '../../types/ChatTypes';
 import SignInModal from "../../components/SignInModal"; 
 
@@ -152,150 +152,150 @@ export const mockCollection: SweatlistCollection = {
 };
 
 // Mock exercise references
-const mockExercises: ExerciseReference[] = [
-  {
-    exercise: {
-      id: 'ex1',
-      name: 'Squat',
-      description: 'Basic squat movement',
-      category: {
-        type: 'weightTraining', // Correct category type
-        details: {
-          reps: "12",
-          sets: 3,
-          weight: 50, // Mock details specific to weight training
-        },
-      },
-      primaryBodyParts: [BodyPart.Chest],
-      secondaryBodyParts: [BodyPart.Biceps],
-      tags: ['Strength', 'Legs', 'Quads'],
+// const mockExercises: ExerciseReference[] = [
+//   {
+//     exercise: {
+//       id: 'ex1',
+//       name: 'Squat',
+//       description: 'Basic squat movement',
+//       category: {
+//         type: 'weightTraining', // Correct category type
+//         details: {
+//           reps: "12",
+//           sets: 3,
+//           weight: 50, // Mock details specific to weight training
+//         },
+//       },
+//       primaryBodyParts: [BodyPart.Chest],
+//       secondaryBodyParts: [BodyPart.Biceps],
+//       tags: ['Strength', 'Legs', 'Quads'],
 
-      videos: [{
-        id: 'video1',
-        exerciseId: 'ex1',
-        username: 'demo_user',
-        userId: 'user123',
-        videoURL: 'https://firebasestorage.googleapis.com/v0/b/quicklifts-dd3f1.appspot.com/o/gifs%2FDeadlifts%2F08FD2A37-D139-4DFE-BE1D-316DF059536C_low.gif?alt=media&token=7524d749-d99e-4a34-bdb4-afb142b31c61',
-        fileName: 'squat_demo.mp4',
-        exercise: 'Squat',
-        profileImage: {
-          profileImageURL: "",
-          imageOffsetWidth: 0,
-          imageOffsetHeight: 0,
-        },
-        gifURL: 'https://firebasestorage.googleapis.com/v0/b/quicklifts-dd3f1.appspot.com/o/gifs%2FDeadlifts%2F08FD2A37-D139-4DFE-BE1D-316DF059536C_low.gif?alt=media&token=7524d749-d99e-4a34-bdb4-afb142b31c61',
-        visibility: "private",
-        totalAccountsReached: 0,
-        totalAccountLikes: 0,
-        totalAccountBookmarked: 0,
-        totalAccountUsage: 0,
-        isApproved: true,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      }],
-      steps: ['Step 1', 'Step 2', 'Step 3'],
-      visibility: 'open',
-      currentVideoPosition: 0,
-      sets: 3,
-      reps: "12",
-      weight: 0,
-      author: {
-        userId: 'user123',
-        username: 'demo_user',
-      },
-      createdAt: new Date(),
-      updatedAt: new Date()
-    },
-    groupId: 0
-  },
-];
+//       videos: [{
+//         id: 'video1',
+//         exerciseId: 'ex1',
+//         username: 'demo_user',
+//         userId: 'user123',
+//         videoURL: 'https://firebasestorage.googleapis.com/v0/b/quicklifts-dd3f1.appspot.com/o/gifs%2FDeadlifts%2F08FD2A37-D139-4DFE-BE1D-316DF059536C_low.gif?alt=media&token=7524d749-d99e-4a34-bdb4-afb142b31c61',
+//         fileName: 'squat_demo.mp4',
+//         exercise: 'Squat',
+//         profileImage: {
+//           profileImageURL: "",
+//           imageOffsetWidth: 0,
+//           imageOffsetHeight: 0,
+//         },
+//         gifURL: 'https://firebasestorage.googleapis.com/v0/b/quicklifts-dd3f1.appspot.com/o/gifs%2FDeadlifts%2F08FD2A37-D139-4DFE-BE1D-316DF059536C_low.gif?alt=media&token=7524d749-d99e-4a34-bdb4-afb142b31c61',
+//         visibility: "private",
+//         totalAccountsReached: 0,
+//         totalAccountLikes: 0,
+//         totalAccountBookmarked: 0,
+//         totalAccountUsage: 0,
+//         isApproved: true,
+//         createdAt: new Date(),
+//         updatedAt: new Date()
+//       }],
+//       steps: ['Step 1', 'Step 2', 'Step 3'],
+//       visibility: 'open',
+//       currentVideoPosition: 0,
+//       sets: 3,
+//       reps: "12",
+//       weight: 0,
+//       author: {
+//         userId: 'user123',
+//         username: 'demo_user',
+//       },
+//       createdAt: new Date(),
+//       updatedAt: new Date()
+//     },
+//     groupId: 0
+//   },
+// ];
 
-export const mockWorkouts: Workout[] = [
-  {
-    id: "sweatlist-001",
-    title: "Week 1: Foundation",
-    exercises: [...mockExercises],
-    logs: [],
-    duration: 45,
-    useAuthorContent: true,
-    isCompleted: false,
-    author: "user-123",
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    zone: BodyZone.UpperBody,
-    estimatedDuration: () => 45,
-    determineWorkoutZone: () => BodyZone.UpperBody,
-    toDictionary: () => ({
-      id: "sweatlist-001",
-      title: "Week 1: Foundation",
-      author: "user-123",
-      zone: BodyZone.UpperBody
-    })
-  },
-  {
-    id: "sweatlist-002",
-    title: "Week 2: Build",
-    exercises: [...mockExercises],
-    logs: [],
-    duration: 50,
-    useAuthorContent: true,
-    isCompleted: false,
-    author: "user-123",
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    zone: BodyZone.LowerBody,
-    estimatedDuration: () => 50,
-    determineWorkoutZone: () => BodyZone.LowerBody,
-    toDictionary: () => ({
-      id: "sweatlist-002",
-      title: "Week 2: Build",
-      author: "user-123",
-      zone: BodyZone.LowerBody
-    })
-  },
-  {
-    id: "sweatlist-003",
-    title: "Week 3: Intensify",
-    exercises: [...mockExercises],
-    logs: [],
-    duration: 55,
-    useAuthorContent: true,
-    isCompleted: false,
-    author: "user-123",
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    zone: BodyZone.Core,
-    estimatedDuration: () => 55,
-    determineWorkoutZone: () => BodyZone.Core,
-    toDictionary: () => ({
-      id: "sweatlist-003",
-      title: "Week 3: Intensify",
-      author: "user-123",
-      zone: BodyZone.Core
-    })
-  },
-  {
-    id: "sweatlist-004",
-    title: "Week 4: Peak",
-    exercises: [...mockExercises],
-    logs: [],
-    duration: 60,
-    useAuthorContent: true,
-    isCompleted: false,
-    author: "user-123",
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    zone: BodyZone.FullBody,
-    estimatedDuration: () => 60,
-    determineWorkoutZone: () => BodyZone.FullBody,
-    toDictionary: () => ({
-      id: "sweatlist-004",
-      title: "Week 4: Peak",
-      author: "user-123",
-      zone: BodyZone.FullBody
-    })
-  }
-];
+// export const mockWorkouts: Workout[] = [
+//   {
+//     id: "sweatlist-001",
+//     title: "Week 1: Foundation",
+//     exercises: [...mockExercises],
+//     logs: [],
+//     duration: 45,
+//     useAuthorContent: true,
+//     isCompleted: false,
+//     author: "user-123",
+//     createdAt: new Date(),
+//     updatedAt: new Date(),
+//     zone: BodyZone.UpperBody,
+//     estimatedDuration: () => 45,
+//     determineWorkoutZone: () => BodyZone.UpperBody,
+//     toDictionary: () => ({
+//       id: "sweatlist-001",
+//       title: "Week 1: Foundation",
+//       author: "user-123",
+//       zone: BodyZone.UpperBody
+//     })
+//   },
+//   {
+//     id: "sweatlist-002",
+//     title: "Week 2: Build",
+//     exercises: [...mockExercises],
+//     logs: [],
+//     duration: 50,
+//     useAuthorContent: true,
+//     isCompleted: false,
+//     author: "user-123",
+//     createdAt: new Date(),
+//     updatedAt: new Date(),
+//     zone: BodyZone.LowerBody,
+//     estimatedDuration: () => 50,
+//     determineWorkoutZone: () => BodyZone.LowerBody,
+//     toDictionary: () => ({
+//       id: "sweatlist-002",
+//       title: "Week 2: Build",
+//       author: "user-123",
+//       zone: BodyZone.LowerBody
+//     })
+//   },
+//   {
+//     id: "sweatlist-003",
+//     title: "Week 3: Intensify",
+//     exercises: [...mockExercises],
+//     logs: [],
+//     duration: 55,
+//     useAuthorContent: true,
+//     isCompleted: false,
+//     author: "user-123",
+//     createdAt: new Date(),
+//     updatedAt: new Date(),
+//     zone: BodyZone.Core,
+//     estimatedDuration: () => 55,
+//     determineWorkoutZone: () => BodyZone.Core,
+//     toDictionary: () => ({
+//       id: "sweatlist-003",
+//       title: "Week 3: Intensify",
+//       author: "user-123",
+//       zone: BodyZone.Core
+//     })
+//   },
+//   {
+//     id: "sweatlist-004",
+//     title: "Week 4: Peak",
+//     exercises: [...mockExercises],
+//     logs: [],
+//     duration: 60,
+//     useAuthorContent: true,
+//     isCompleted: false,
+//     author: "user-123",
+//     createdAt: new Date(),
+//     updatedAt: new Date(),
+//     zone: BodyZone.FullBody,
+//     estimatedDuration: () => 60,
+//     determineWorkoutZone: () => BodyZone.FullBody,
+//     toDictionary: () => ({
+//       id: "sweatlist-004",
+//       title: "Week 4: Peak",
+//       author: "user-123",
+//       zone: BodyZone.FullBody
+//     })
+//   }
+// ];
 
 // Example messages for the chat
 const mockMessages: GroupMessage[] = [
@@ -576,7 +576,7 @@ const calculateProgress = (): number => {
               </div>
 
               <div className="space-y-4">
-                {mockWorkouts.map((workout, index) => (
+                {/* {mockWorkouts.map((workout, index) => (
                   <StackCard
                     key={workout.id}
                     workout={workout}
@@ -592,10 +592,10 @@ const calculateProgress = (): number => {
                     onCalendarTap={(date) => handleCalendarTap(workout, date)}
                     onUpdateOrder={(newOrder) => handleSwapOrder(workout, newOrder)}
                   />
-                ))}
+                ))} */}
 
                 {/* Example of a Rest Day card */}
-                <RestDayCard
+                {/* <RestDayCard
                   selectedOrder={mockWorkouts.length}
                   maxOrder={mockWorkouts.length + 1}
                   showArrows={editMode}
@@ -605,7 +605,7 @@ const calculateProgress = (): number => {
                   onPrimaryAction={() => console.log('Rest day clicked')}
                   onCalendarTap={(date) => console.log('Rest day calendar tapped:', date)}
                   onUpdateOrder={(newOrder) => console.log('Rest day order update:', newOrder)}
-                />
+                /> */}
               </div>
             </div>
           </div>

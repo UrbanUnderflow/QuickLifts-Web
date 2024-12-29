@@ -9,7 +9,7 @@ import {
 import { doc, setDoc } from 'firebase/firestore';
 import { auth, db } from '../config';
 import { SignUpData, AuthService } from './types';
-import { User } from '../../../types/User';
+import { User } from '../../firebase/user';
   
   export const authMethods: AuthService = {
     async signUpWithEmail({ email, password, username, profileImage, quizData }: SignUpData) {

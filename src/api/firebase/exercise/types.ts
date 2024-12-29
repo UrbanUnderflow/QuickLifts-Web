@@ -1,4 +1,3 @@
-import { BodyPart } from "../../../types/BodyPart";
 import { RepsAndWeightLog } from "../workout/types";
 import { ProfileImage } from '../user/types';
 import { DocumentSnapshot } from 'firebase/firestore';
@@ -27,7 +26,33 @@ export interface ExerciseReference {
     groupId: number;
 }
 
-export type ExerciseVisibility = 'open' | 'private' | 'followers';
+export enum BodyPart {
+    Biceps = 'biceps',
+    Triceps = 'triceps',
+    Chest = 'chest',
+    Calves = 'calves',
+    Abs = 'abs',
+    Hamstrings = 'hamstrings',
+    Back = 'back',
+    Glutes = 'glutes',
+    Quadriceps = 'quadriceps',
+    Forearms = 'forearms',
+    Shoulders = 'shoulders',
+    Lowerback = 'lowerback',
+    // advanced
+    Lats = 'lats',
+    Traps = 'traps',
+    Rhomboids = 'rhomboids',
+    Deltoids = 'deltoids',
+    Fullbody = 'fullbody'
+}
+  
+// Function to check if a body part is advanced
+export function isAdvancedBodyPart(bodyPart: BodyPart): boolean {
+  return [BodyPart.Traps, BodyPart.Lats, BodyPart.Rhomboids, BodyPart.Deltoids].includes(bodyPart);
+}
+
+type ExerciseVisibility = 'limited' | 'secret' | 'live';
 
 
 export interface ExerciseReference {
@@ -164,6 +189,27 @@ export const ExerciseCategory = {
 // const cardio = ExerciseCategory.cardio({ duration: 30, bpm: 140, calories: 300 });
 // const fromId = ExerciseCategory.fromIdentifier('weight-training');
 // const id = ExerciseCategory.identifier(weightTraining);
+
+
+export interface Exercise {
+  id: string;
+  name: string;
+  category: ExerciseCategory;
+  primaryBodyParts: BodyPart[];
+  secondaryBodyParts: BodyPart[];
+  tags: string[];
+  description: string;
+  visibility: ExerciseVisibility;
+  steps: string[];
+  videos: ExerciseVideo[];
+  currentVideoPosition: number;
+  reps: string;
+  sets: number;
+  weight: number;
+  author: ExerciseAuthor;
+  createdAt: Date;
+  updatedAt: Date;
+}
 
 export class Exercise {
   id: string;
