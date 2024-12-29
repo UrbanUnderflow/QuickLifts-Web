@@ -282,9 +282,9 @@ const HomeContent = () => {
   }
 
   // If signed in, show coming soon overlay
-  if (isSignedIn) {
-    return <ComingSoonOverlay />;
-  }
+  // if (isSignedIn) {
+  //   return <ComingSoonOverlay />;
+  // }
 
   // If not signed in, show SignInModal
   if (!isSignedIn) {

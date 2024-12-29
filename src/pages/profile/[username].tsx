@@ -30,7 +30,7 @@ interface ProfileViewProps {
 const TABS = {
   // STATS: 'stats',
   ACTIVITY: 'activity',
-  EXERICSES: 'exercises',
+  EXERICSES: 'moves',
   CHALLENGES: 'challenges',
 } as const;
 
