@@ -115,7 +115,7 @@ const AboutPage: NextPage = () => {
                 loop
                 muted
                 playsInline
-                src="/move.mp4"
+                src="/ThisIsPulseNoSound.mp4"
                 poster="/sample-round-poster.jpg"
               />
             </div>

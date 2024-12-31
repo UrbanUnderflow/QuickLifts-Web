@@ -76,7 +76,7 @@ const ReviewsIndex: React.FC<ReviewsIndexProps> = ({ reviews }) => {
       <div className="max-w-6xl mx-auto px-4 mt-16 mb-12">
         <div className="bg-zinc-50 rounded-xl p-8 text-center">
           <div className="text-zinc-400 uppercase tracking-wider mb-2">Coming Soon</div>
-          <div className="text-2xl font-bold">December 2024</div>
+          <div className="text-2xl font-bold">January 2025</div>
         </div>
       </div>
 
