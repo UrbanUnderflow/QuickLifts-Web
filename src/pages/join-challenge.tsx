@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/router';
+import { workoutService } from '../../src/api/firebase/workout/service';
+// If your route is different, adjust the import path accordingly
+// import { workoutService } from '@/api/firebase/workout/service';
 
 export default function JoinChallengePage() {
   const [username, setUsername] = useState('');
@@ -18,29 +21,16 @@ export default function JoinChallengePage() {
       setIsLoading(true);
       setError('');
 
-      const response = await fetch('https://fitwithpulse.ai/.netlify/functions/join-challenge', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          username,
-          challengeId: 'jaidus-challenge-id' // Replace with actual challenge ID
-        })
+      // Use the new workoutService method (no Netlify function):
+      await workoutService.joinChallenge({
+        username,
+        challengeId: 'jaidus-challenge-id' // Replace with actual challenge ID
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to join challenge');
-      }
-
-      const data = await response.json();
-      if (data.success) {
-        // Redirect to success page or show success message
-        router.push('/challenge-joined');
-      } else {
-        throw new Error(data.error || 'Failed to join challenge');
-      }
+      // If successful, redirect or show success:
+      router.push('/challenge-joined');
     } catch (err) {
+      console.error(err);
       setError(err instanceof Error ? err.message : 'Failed to join challenge');
     } finally {
       setIsLoading(false);
