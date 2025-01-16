@@ -6,7 +6,7 @@ import { StackCard, RestDayCard } from '../../components/Rounds/StackCard';
 import { Workout } from '../../api/firebase/workout';
 import { BodyZone } from '../../types/BodyZone';
 import ParticipantsSection from '../../components/Rounds/ParticipantsSection';
-import { UserTogetherRound } from '../../types/ChallengeTypes';
+import { UserChallenge } from '../../types/ChallengeTypes';
 import RoundChatView from '../../components/Rounds/RoundChatView';
 import { UserLevel } from '../../api/firebase/user';
 import { BodyPart, ExerciseReference } from '../../api/firebase/exercise';
@@ -22,7 +22,7 @@ startDate.setDate(today.getDate() + 1); // Starts tomorrow
 const endDate = new Date(startDate);
 endDate.setDate(startDate.getDate() + 28); // 4-week challenge
 
-export const mockParticipants: UserTogetherRound[] = [
+export const mockParticipants: UserChallenge[] = [
 
   {
     id: "participant-001",
@@ -546,8 +546,8 @@ const calculateProgress = (): number => {
 
             {/* Participants Section */}
             <ParticipantsSection 
-              participants={challenge?.participants as UserTogetherRound[] || []}
-              onParticipantClick={(participant: UserTogetherRound) => {
+              participants={challenge?.participants as UserChallenge[] || []}
+              onParticipantClick={(participant: UserChallenge) => {
                 console.log('Participant clicked:', participant.username);
                 // Here you would typically navigate to the participant's profile
               }}

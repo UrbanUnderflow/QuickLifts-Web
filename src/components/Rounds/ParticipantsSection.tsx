@@ -1,10 +1,10 @@
 import React from 'react';
-import { UserTogetherRound } from '../../types/ChallengeTypes';
+import { UserChallenge } from '../../types/ChallengeTypes';
 import { Trophy, User } from 'lucide-react';
 
 interface ParticipantsSectionProps {
-  participants: UserTogetherRound[];
-  onParticipantClick?: (participant: UserTogetherRound) => void;
+  participants: UserChallenge[];
+  onParticipantClick?: (participant: UserChallenge) => void;
 }
 
 const ParticipantsSection: React.FC<ParticipantsSectionProps> = ({
@@ -18,7 +18,7 @@ const ParticipantsSection: React.FC<ParticipantsSectionProps> = ({
     (a, b) => getTotalPoints(b) - getTotalPoints(a)
   );
 
-  function getTotalPoints(participant: UserTogetherRound): number {
+  function getTotalPoints(participant: UserChallenge): number {
     const points = participant.pulsePoints;
     return (
       points.baseCompletion +

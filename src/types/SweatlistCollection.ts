@@ -1,5 +1,5 @@
-import { TogetherRound, 
-        UserTogetherRound,
+import { Challenge, 
+        UserChallenge,
         ChallengeStatus,
        } from './ChallengeTypes';
 
@@ -17,7 +17,7 @@ export interface SweatlistCollection {
   id: string;
   title: string;
   subtitle: string;
-  challenge?: TogetherRound;  // Optional challenge
+  challenge?: Challenge;  // Optional challenge
   publishedStatus?: boolean;  // Computed property based on challenge status
   sweatlistIds: SweatlistIdentifiers[];
   ownerId: string;
@@ -99,7 +99,7 @@ export function isCollectionPublished(collection: SweatlistCollection): boolean 
 }
 
 // Convert Firestore data to TogetherRound
-export function convertToTogetherRound(data: any): TogetherRound {
+export function convertToTogetherRound(data: any): Challenge {
   return {
     id: data.id || '',
     title: data.title || '',
@@ -116,7 +116,7 @@ export function convertToTogetherRound(data: any): TogetherRound {
 }
 
 // Convert TogetherRound to Firestore format
-export function convertChallengeToFirestore(challenge: TogetherRound): any {
+export function convertChallengeToFirestore(challenge: Challenge): any {
   return {
     id: challenge.id,
     title: challenge.title,
@@ -169,7 +169,7 @@ export function convertChallengeToFirestore(challenge: TogetherRound): any {
 }
 
 // Helper function to convert Firestore data to UserTogetherRound
-function convertToUserTogetherRound(data: any): UserTogetherRound {
+function convertToUserTogetherRound(data: any): UserChallenge {
   return {
     id: data.id || '',
     challengeId: data.challengeId || '',

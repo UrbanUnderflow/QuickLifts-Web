@@ -1,10 +1,10 @@
 // components/ChallengeMeta.tsx
 import React from 'react';
 import Head from 'next/head';
-import { TogetherRound } from '../types/ChallengeTypes';  // Correct import path
+import { Challenge } from '../types/ChallengeTypes';  // Correct import path
 
 interface ChallengeMetaProps {
-  challenge: TogetherRound;
+  challenge: Challenge;
   id: string;
 }
 

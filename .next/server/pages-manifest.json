@@ -1,8 +1,1 @@
-{
-  "/_app": "pages/_app.js",
-  "/_error": "pages/_error.js",
-  "/_document": "pages/_document.js",
-  "/review/dec24": "pages/review/dec24.js",
-  "/review": "pages/review.js",
-  "/": "pages/index.js"
-}
+{"/_app":"pages/_app.js","/_error":"pages/_error.js","/_document":"pages/_document.js","/CollectionView":"pages/CollectionView.html","/CompletedOnboarding":"pages/CompletedOnboarding.html","/Creator":"pages/Creator.html","/FullscreenExerciseView":"pages/FullscreenExerciseView.html","/HomeContent":"pages/HomeContent.html","/PrivacyPolicy":"pages/PrivacyPolicy.html","/SendNotification":"pages/SendNotification.html","/Subscribe":"pages/Subscribe.html","/Support":"pages/Support.html","/Terms":"pages/Terms.html","/WorkoutPreviewer":"pages/WorkoutPreviewer.html","/about":"pages/about.html","/connect":"pages/connect.html","/":"pages/index.html","/join-challenge":"pages/join-challenge.html","/notification-test":"pages/notification-test.html","/press-kit":"pages/press-kit.html","/review/dec24":"pages/review/dec24.html","/review/nov24":"pages/review/nov24.html","/review/yearInReview":"pages/review/yearInReview.html","/rounds":"pages/rounds.html","/starter-pack":"pages/starter-pack.html","/update-challenge-status":"pages/update-challenge-status.html","/user-dashboard":"pages/user-dashboard.html","/exercise/[exerciseName]":"pages/exercise/[exerciseName].js","/Checklist":"pages/Checklist.js","/challenge/[id]":"pages/challenge/[id].js","/profile/[username]":"pages/profile/[username].js","/review":"pages/review.js","/round/test":"pages/round/test.html","/404":"pages/404.html"}
