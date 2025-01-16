@@ -48,7 +48,7 @@ const BottomNav: React.FC<BottomNavProps> = ({ selectedTab, onTabChange }) => {
       selectedIcon: '/create-icon.svg',
     },
     {
-      id: SelectedRootTabs.Message,
+      id: SelectedRootTabs.Messages,
       label: 'Message',
       icon: '/message-icon.svg',
       selectedIcon: '/message-icon-selected.svg',
