@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from "react";
-import { getRedirectResult, signInWithRedirect, OAuthProvider } from 'firebase/auth';
+import { getRedirectResult, signInWithRedirect, OAuthProvider, UserCredential, AuthError } from 'firebase/auth';
+
 import { Camera, X } from 'lucide-react';
 import { FitnessGoal, QuizData, SignUpStep } from "../types/AuthTypes";
 import authService from '../api/firebase/auth';
 import { userService, User } from '../api/firebase/user';
 import { auth } from '../api/firebase/config';
 import Link from 'next/link';
-
 
 // type SignUpStep = 'initial' | 'password' | 'profile';
 interface SignInModalProps {
@@ -69,168 +69,181 @@ const SignInModal: React.FC<SignInModalProps> = ({
 
   if (!isVisible) return null;
   
-  useEffect(() => {
-      let isMounted = true;
-  
-      const handleRedirect = async () => {
-          if (!isVisible) return;
-          
-          console.log('🚀 Starting redirect handler...'); // Debug log
-          
-          try {
-              setIsLoading(true);
-              const result = await getRedirectResult(auth);
-              console.log('📝 Redirect result:', result); // Debug log
-  
-              if (!result) {
-                  console.log('ℹ️ No redirect result - likely first render or direct visit');
-                  return;
-              }
-  
-              if (!isMounted) {
-                  console.log('⚠️ Component unmounted during auth redirect');
-                  return;
-              }
-  
-              const { user, providerId, operationType } = result;
-              console.log('👤 User info:', { 
-                  providerId, 
-                  operationType,
-                  email: user.email,
-                  isNewUser: user.metadata.creationTime === user.metadata.lastSignInTime
-              });
-  
-              // Check if the provider is Apple
-              const isAppleSignIn = result.providerId === 'apple.com' || 
-                                  user.providerData.some(provider => provider.providerId === 'apple.com');
-  
-              try {
-                  // Try to fetch existing user from Firestore
-                  let firestoreUser = await userService.fetchUserFromFirestore(user.uid);
-                  const isNewUser = user.metadata.creationTime === user.metadata.lastSignInTime;
-  
-                  if (!isMounted) return;
-  
-                  if (!firestoreUser && isNewUser) {
-                      console.log('🆕 Creating new user document');
-                      
-                      // Create new user object
-                      const newUser = new User({
-                          id: user.uid,
-                          email: user.email || '',
-                          displayName: user.displayName || '',
-                          username: '', // Will need to be set later
-                          bio: '',
-                          profileImage: {
-                              profileImageURL: user.photoURL || '',
-                              imageOffsetWidth: 0,
-                              imageOffsetHeight: 0,
-                          },
-                          followerCount: 0,
-                          followingCount: 0,
-                          bodyWeight: [],
-                          workoutCount: 0,
-                          creator: {
-                              type: [],
-                              instagramHandle: '',
-                              twitterHandle: '',
-                              youtubeUrl: '',
-                              acceptCodeOfConduct: false,
-                              acceptExecutiveTerms: false,
-                              acceptGeneralTerms: false,
-                              acceptSweatEquityPartnership: false,
-                              onboardingStatus: '',
-                              onboardingLink: '',
-                              onboardingExpirationDate: 0,
-                          },
-                          createdAt: new Date(),
-                          updatedAt: new Date(),
-                      });
-  
-                      // Save new user to Firestore
-                      await userService.updateUser(user.uid, newUser);
-                      firestoreUser = newUser;
-                  }
-  
-                  if (!isMounted) return;
-  
-                  // Set the current user in the service
-                  userService.currentUser = firestoreUser;
-  
-                  // Handle the authentication result
-                  if (isNewUser) {
-                      console.log('✨ New user signed up successfully');
-                      onSignUpSuccess?.(user);
-                      
-                      // If it's a new Apple user, they might need to set additional info
-                      if (isAppleSignIn && !firestoreUser.username) {
-                          console.log('🍎 New Apple user needs to complete profile');
-                          // You might want to trigger a different modal or step here
-                          // setSignUpStep('profile'); // Uncomment if you want to show profile setup
-                      }
-                  } else {
-                      console.log('✅ Existing user signed in successfully');
-                      onSignInSuccess?.(user);
-                  }
-  
-                  // Close the modal if needed
-                  onClose?.();
-  
-              } catch (firestoreError) {
-                  console.error('❌ Firestore operation failed:', firestoreError);
-                  if (!isMounted) return;
-                  
-                  setError(firestoreError instanceof Error 
-                      ? firestoreError.message 
-                      : 'Failed to update user data'
-                  );
-                  
-                  if (isSignUp) {
-                      onSignUpError?.(firestoreError as Error);
-                  } else {
-                      onSignInError?.(firestoreError as Error);
-                  }
-              }
-  
-          } catch (error) {
-              console.error('❌ Main redirect handler error:', error);
-              if (!isMounted) return;
-  
-              setError(error instanceof Error 
-                  ? error.message 
-                  : 'Authentication failed'
-              );
-  
-              if (isSignUp) {
-                  onSignUpError?.(error as Error);
-              } else {
-                  onSignInError?.(error as Error);
-              }
-  
-          } finally {
-              if (isMounted) {
-                  console.log('🏁 Finishing redirect handler');
-                  setIsLoading(false);
-              }
-          }
-      };
-  
-      // Start the redirect handling process
-      handleRedirect();
-  
-      // Cleanup function to prevent state updates after unmount
-      return () => {
-          isMounted = false;
-      };
-  }, [
-      isVisible,
-      isSignUp,
-      onSignInSuccess,
-      onSignUpSuccess,
-      onSignInError,
-      onSignUpError,
-      onClose
-  ]);
+
+useEffect(() => {
+    let isMounted = true;
+
+    const handleRedirect = async () => {
+        if (!isVisible) return;
+        
+        // Check if we're returning from a redirect
+        const urlParams = new URLSearchParams(window.location.search);
+        const isRedirecting = urlParams.has('state') || window.location.href.includes('__/auth/handler');
+        
+        if (!isRedirecting) {
+            console.log('Not handling redirect - no redirect params detected');
+            return;
+        }
+        
+        console.log('🚀 Starting redirect handler... Detected redirect parameters');
+        
+        try {
+            setIsLoading(true);
+            console.log('Getting redirect result...');
+            const result = await getRedirectResult(auth);
+            console.log('Raw redirect result:', result);
+
+            if (!result) {
+                // Check pending redirect
+                const pendingResult = await getRedirectResult(auth).catch(e => {
+                    console.log('Pending redirect error:', e);
+                    return null;
+                });
+                console.log('Pending redirect result:', pendingResult);
+                
+                if (!pendingResult) {
+                    console.log('No redirect result despite redirect parameters');
+                    return;
+                }
+            }
+
+            if (!isMounted) {
+                console.log('⚠️ Component unmounted during auth redirect');
+                return;
+            }
+
+            // Handle the case where result might be null
+            const credential = result as UserCredential;
+            if (!credential || !credential.user) {
+                throw new Error('No auth credential returned');
+            }
+
+            const { user } = credential;
+            console.log('👤 User info:', { 
+                providerId: credential.providerId,
+                operationType: credential.operationType,
+                email: user.email,
+                isNewUser: user.metadata.creationTime === user.metadata.lastSignInTime
+            });
+
+            // Check if the provider is Apple
+            const isAppleSignIn = credential.providerId === 'apple.com' || 
+                                user.providerData.some(provider => provider.providerId === 'apple.com');
+
+            try {
+                // Try to fetch existing user from Firestore
+                let firestoreUser = await userService.fetchUserFromFirestore(user.uid);
+                const isNewUser = user.metadata.creationTime === user.metadata.lastSignInTime;
+
+                if (!isMounted) return;
+
+                if (!firestoreUser && isNewUser) {
+                    console.log('🆕 Creating new user document');
+                    
+                    // Create new user object
+                    const newUser = new User({
+                        id: user.uid,
+                        email: user.email || '',
+                        displayName: user.displayName || '',
+                        username: '', // Will need to be set later
+                        bio: '',
+                        profileImage: {
+                            profileImageURL: user.photoURL || '',
+                            imageOffsetWidth: 0,
+                            imageOffsetHeight: 0,
+                        },
+                        followerCount: 0,
+                        followingCount: 0,
+                        bodyWeight: [],
+                        workoutCount: 0,
+                        creator: {
+                            type: [],
+                            instagramHandle: '',
+                            twitterHandle: '',
+                            youtubeUrl: '',
+                            acceptCodeOfConduct: false,
+                            acceptExecutiveTerms: false,
+                            acceptGeneralTerms: false,
+                            acceptSweatEquityPartnership: false,
+                            onboardingStatus: '',
+                            onboardingLink: '',
+                            onboardingExpirationDate: 0,
+                        },
+                        createdAt: new Date(),
+                        updatedAt: new Date(),
+                    });
+
+                    // Save new user to Firestore
+                    await userService.updateUser(user.uid, newUser);
+                    firestoreUser = newUser;
+                }
+
+                if (!isMounted) return;
+
+                // Set the current user in the service
+                userService.currentUser = firestoreUser;
+
+                // Handle the authentication result
+                if (isNewUser) {
+                    console.log('✨ New user signed up successfully');
+                    onSignUpSuccess?.(user);
+                    
+                    // If it's a new Apple user, they might need to set additional info
+                    if (isAppleSignIn && !firestoreUser.username) {
+                        console.log('🍎 New Apple user needs to complete profile');
+                    }
+                } else {
+                    console.log('✅ Existing user signed in successfully');
+                    onSignInSuccess?.(user);
+                }
+
+                // Close the modal if needed
+                onClose?.();
+
+            } catch (firestoreError) {
+                console.error('❌ Firestore operation failed:', firestoreError);
+                if (!isMounted) return;
+                
+                setError(firestoreError instanceof Error 
+                    ? firestoreError.message 
+                    : 'Failed to update user data'
+                );
+                
+                if (isSignUp) {
+                    onSignUpError?.(firestoreError as Error);
+                } else {
+                    onSignInError?.(firestoreError as Error);
+                }
+            }
+
+        } catch (error) {
+            console.error('❌ Main redirect handler error:', error);
+            if (!isMounted) return;
+
+            setError(error instanceof Error 
+                ? error.message 
+                : 'Authentication failed'
+            );
+
+            if (isSignUp) {
+                onSignUpError?.(error as Error);
+            } else {
+                onSignInError?.(error as Error);
+            }
+        } finally {
+            if (isMounted) {
+                console.log('🏁 Finishing redirect handler');
+                setIsLoading(false);
+            }
+        }
+    };
+
+    handleRedirect();
+
+    return () => {
+        isMounted = false;
+    };
+}, [isVisible, isSignUp, onSignInSuccess, onSignUpSuccess, onSignInError, onSignUpError, onClose]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -400,29 +413,43 @@ const SignInModal: React.FC<SignInModalProps> = ({
         setActiveProvider(provider);
 
         if (provider === 'apple') {
+            console.log('1. Starting Apple Sign In process...');
             const appleProvider = new OAuthProvider('apple.com');
             
-            // Add these specific configurations
+            // Configure provider
             appleProvider.addScope('email');
             appleProvider.addScope('name');
             
-            // Add required OAuth custom parameters for Apple Sign In
-            appleProvider.setCustomParameters({
-                response_type: 'code id_token',
-                response_mode: 'fragment',
-                client_id: process.env.NEXT_PUBLIC_FIREBASE_APPLE_CLIENT_ID || '',
-                redirect_uri: window.location.origin
-            });
+            // Get the OAuth configuration from Firebase
+            const authDomain = auth.app.options.authDomain;
+            console.log('2. Auth Domain:', authDomain);
             
+            // Don't construct the redirect URL manually - let Firebase handle it
+            appleProvider.setCustomParameters({
+                // Remove redirect_uri - Firebase will handle this
+                response_type: 'code id_token',
+                state: JSON.stringify({
+                    returnUrl: window.location.origin,
+                    isSignUp: isSignUp
+                })
+            });
+
             try {
+                console.log('3. Initiating Apple sign-in redirect...');
                 await signInWithRedirect(auth, appleProvider);
-                // The redirect will happen here, so no code after this will execute
-            } catch (redirectError) {
-                console.error('Error during redirect:', redirectError);
+                console.log('4. Redirect initiated (you should not see this)');
+            } catch (e) {
+                const redirectError = e as AuthError;
+                console.error('5. Apple Sign In Redirect Error:', {
+                    code: redirectError.code,
+                    message: redirectError.message,
+                    name: redirectError.name,
+                    stack: redirectError.stack
+                });
                 throw redirectError;
             }
         } else {
-            // Existing Google sign-in logic
+            // Keep existing Google sign-in logic
             const result = await authService.signInWithGoogle();
             const firestoreUser = await userService.fetchUserFromFirestore(result.user.uid);
             userService.currentUser = firestoreUser;
@@ -434,8 +461,8 @@ const SignInModal: React.FC<SignInModalProps> = ({
             }
         }
     } catch (err) {
+        console.error('6. Main error in handleSocialAuth:', err);
         const error = err as Error;
-        console.error('Social auth error:', error);
         setError(error.message);
         if (isSignUp) {
             onSignUpError?.(error);
@@ -444,9 +471,9 @@ const SignInModal: React.FC<SignInModalProps> = ({
         }
     } finally {
         setIsLoading(false);
+        setActiveProvider(null);
     }
 };
-
 
   const renderQuizPrompt = () => (
     <>
