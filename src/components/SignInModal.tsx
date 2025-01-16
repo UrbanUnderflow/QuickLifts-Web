@@ -413,39 +413,30 @@ useEffect(() => {
         setActiveProvider(provider);
 
         if (provider === 'apple') {
-            console.log('1. Starting Apple Sign In process...');
+            console.log('Starting Apple Sign In process...');
             const appleProvider = new OAuthProvider('apple.com');
             
-            // Configure provider
+            // Add required scopes
             appleProvider.addScope('email');
             appleProvider.addScope('name');
             
-            // Get the OAuth configuration from Firebase
-            const authDomain = auth.app.options.authDomain;
-            console.log('2. Auth Domain:', authDomain);
-            
-            // Don't construct the redirect URL manually - let Firebase handle it
+            // Set custom parameters (don't set redirect_uri - Firebase handles this)
             appleProvider.setCustomParameters({
-                // Remove redirect_uri - Firebase will handle this
+                // Optional: Localize the Apple authentication screen
+                // locale: 'en',
                 response_type: 'code id_token',
                 state: JSON.stringify({
-                    returnUrl: window.location.origin,
-                    isSignUp: isSignUp
+                    returnUrl: window.location.origin
                 })
             });
 
             try {
-                console.log('3. Initiating Apple sign-in redirect...');
+                console.log('Initiating Apple sign-in redirect...');
                 await signInWithRedirect(auth, appleProvider);
-                console.log('4. Redirect initiated (you should not see this)');
+                // Won't reach here due to redirect
             } catch (e) {
                 const redirectError = e as AuthError;
-                console.error('5. Apple Sign In Redirect Error:', {
-                    code: redirectError.code,
-                    message: redirectError.message,
-                    name: redirectError.name,
-                    stack: redirectError.stack
-                });
+                console.error('Apple Sign In Redirect Error:', redirectError);
                 throw redirectError;
             }
         } else {
@@ -461,7 +452,7 @@ useEffect(() => {
             }
         }
     } catch (err) {
-        console.error('6. Main error in handleSocialAuth:', err);
+        console.error('Main error in handleSocialAuth:', err);
         const error = err as Error;
         setError(error.message);
         if (isSignUp) {
