@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { getRedirectResult, signInWithRedirect, OAuthProvider, UserCredential, AuthError } from 'firebase/auth';
+import { getRedirectResult, signInWithRedirect, signInWithPopup, OAuthProvider, UserCredential, AuthError } from 'firebase/auth';
 
 import { Camera, X } from 'lucide-react';
 import { FitnessGoal, QuizData, SignUpStep } from "../types/AuthTypes";
@@ -76,47 +76,48 @@ const SignInModal: React.FC<SignInModalProps> = ({
         setActiveProvider(provider);
 
         if (provider === 'apple') {
-            // Clear previous logs and setup logging
-            const logs: string[] = [];
-            localStorage.setItem('authFlowLogs', JSON.stringify(logs));
-            
-            const addLog = (log: string) => {
-                const currentLogs = JSON.parse(localStorage.getItem('authFlowLogs') || '[]');
-                currentLogs.push(`[${new Date().toISOString()}] ${log}`);
-                localStorage.setItem('authFlowLogs', JSON.stringify(currentLogs));
-            };
-
-            addLog('Starting Apple Sign In process');
+            // Initialize Apple OAuth provider
             const appleProvider = new OAuthProvider('apple.com');
-            
-            // Add required scopes
             appleProvider.addScope('email');
             appleProvider.addScope('name');
 
-            // Log auth configuration
-            const authDomain = auth.app.options.authDomain;
-            addLog(`Auth Domain: ${authDomain}`);
-            addLog(`Current URL: ${window.location.href}`);
-            addLog(`Window Location Origin: ${window.location.origin}`);
-
             try {
-                addLog('Initiating Apple sign-in redirect...');
-                await signInWithRedirect(auth, appleProvider);
-                addLog('Redirect initiated (you should not see this log)');
-            } catch (e) {
-                const redirectError = e as AuthError;
-                addLog(`❌ Redirect Error: ${redirectError.code} - ${redirectError.message}`);
-                if (redirectError.stack) {
-                    addLog(`Error Stack: ${redirectError.stack}`);
+                // Sign in with popup
+                const result: UserCredential = await signInWithPopup(auth, appleProvider);
+                // Handle the signed-in user information as needed
+                const user = result.user;
+                // Fetch or create user in Firestore
+                let firestoreUser = await userService.fetchUserFromFirestore(user.uid);
+                if (!firestoreUser) {
+                    firestoreUser = new User({
+                        id: user.uid,
+                        email: user.email || '',
+                        displayName: user.displayName || '',
+                    });
+                    await userService.updateUser(user.uid, firestoreUser);
                 }
-                throw redirectError;
+                userService.currentUser = firestoreUser;
+                // Call success callbacks
+                if (isSignUp) {
+                    onSignUpSuccess?.(user);
+                } else {
+                    onSignInSuccess?.(user);
+                }
+            } catch (error) {
+                // Handle errors here
+                console.error('Apple sign-in error:', error);
+                setError(error.message);
+                if (isSignUp) {
+                    onSignUpError?.(error);
+                } else {
+                    onSignInError?.(error);
+                }
             }
-        } else {
-            // Keep existing Google sign-in logic
+        } else if (provider === 'google') {
+            // Existing Google sign-in logic
             const result = await authService.signInWithGoogle();
             const firestoreUser = await userService.fetchUserFromFirestore(result.user.uid);
             userService.currentUser = firestoreUser;
-
             if (isSignUp) {
                 onSignUpSuccess?.(result.user);
             } else {
@@ -125,18 +126,18 @@ const SignInModal: React.FC<SignInModalProps> = ({
         }
     } catch (err) {
         console.error('Main error:', err);
-        const error = err as Error;
-        setError(error.message);
+        setError(err.message);
         if (isSignUp) {
-            onSignUpError?.(error);
+            onSignUpError?.(err);
         } else {
-            onSignInError?.(error);
+            onSignInError?.(err);
         }
     } finally {
         setIsLoading(false);
         setActiveProvider(null);
     }
 };
+
 const addLog = (log: string) => {
   const currentLogs = JSON.parse(localStorage.getItem('authFlowLogs') || '[]');
   currentLogs.push(`[${new Date().toISOString()}] ${log}`);
