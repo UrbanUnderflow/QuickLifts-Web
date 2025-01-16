@@ -14,8 +14,8 @@ const metrics = [
     isCurrency: false
   },
   {
-    label: "Unique Moves",
-    currentValue: 216,
+    label: "Moves",
+    currentValue: 194,
     previousValue: 0,
     isCurrency: false,
     showGrowth: false

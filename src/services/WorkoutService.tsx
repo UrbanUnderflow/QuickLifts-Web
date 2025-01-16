@@ -10,10 +10,10 @@ import { Exercise,
         ExerciseReference, 
         ExerciseAuthor } from '../api/firebase/exercise/types';
 import { Workout, WorkoutRating, RepsAndWeightLog, WorkoutStatus } from '../api/firebase/workout/types';
-import { BodyPart } from '../types/BodyPart';
+import { BodyPart } from '../api/firebase/exercise';
 import { ProfileImage } from '../api/firebase/user/types';
 import { SweatlistCollection, SweatlistType } from '../types/SweatlistCollection';
-import { TogetherRound, UserTogetherRound, ChallengeStatus } from '../types/ChallengeTypes';
+import { Challenge, UserChallenge, ChallengeStatus } from '../types/ChallengeTypes';
 
 
 class WorkoutService {
@@ -154,7 +154,7 @@ class WorkoutService {
   }
 
   // Add this helper method to parse challenges
-  private parseChallenge(fields: any): TogetherRound | undefined {
+  private parseChallenge(fields: any): Challenge | undefined {
     if (!fields) return undefined;
   
     // Convert status string to enum
@@ -175,7 +175,7 @@ class WorkoutService {
   }
 
   // Add this helper method to parse participants
-  private parseParticipants(participants: any[]): UserTogetherRound[] {
+  private parseParticipants(participants: any[]): UserChallenge[] {
     return participants.map(participant => {
       const fields = participant.mapValue?.fields || {};
       
@@ -221,61 +221,50 @@ class WorkoutService {
   }
   
   private parseWorkout(fields: any): Workout {
-    const id = fields.id?.stringValue || '';
-    const title = fields.title?.stringValue || '';
-    const duration = parseInt(fields.duration?.integerValue || '0');
-    const workoutRatingRaw = fields.workoutRating?.stringValue || '';
-    const workoutRating = workoutRatingRaw as WorkoutRating;
-    const workoutStatusRaw = fields.workoutStatus?.stringValue || '';
-    const workoutStatus = workoutStatusRaw as WorkoutStatus
-    const isCompleted = fields.isCompleted?.booleanValue || false;
-    const author = fields.author?.stringValue || '';
-    const createdAtTimestamp = parseFloat(fields.createdAt?.doubleValue || '0');
-    const updatedAtTimestamp = parseFloat(fields.updatedAt?.doubleValue || '0');
-    const zone = fields.zone?.stringValue as BodyZone || BodyZone.FullBody;
-
     const exercisesArray = fields.exercises?.arrayValue?.values || [];
     const exercises: ExerciseReference[] = exercisesArray.map((exerciseData: any) => {
-      const exerciseFields = exerciseData.mapValue?.fields?.exercise?.mapValue?.fields || {};
-      return {
-        exercise: this.parseExercise(exerciseFields),
-        groupId: parseInt(exerciseData.mapValue?.fields?.groupId?.integerValue || '0')
-      };
+        const exerciseFields = exerciseData.mapValue?.fields?.exercise?.mapValue?.fields || {};
+        return {
+            exercise: this.parseExercise(exerciseFields),
+            groupId: parseInt(exerciseData.mapValue?.fields?.groupId?.integerValue || '0')
+        };
     });
 
     const logsArray = fields.logs?.arrayValue?.values || [];
     const logs: ExerciseLog[] = logsArray.map((logData: any) => {
-      return this.parseExerciseLog(logData.mapValue?.fields || {});
+        return this.parseExerciseLog(logData.mapValue?.fields || {});
     });
 
-    return {
-      id,
-      exercises,
-      logs,
-      title,
-      duration,
-      workoutRating,
-      workoutStatus,
-      useAuthorContent: fields.useAuthorContent?.booleanValue || false,
-      isCompleted,
-      author,
-      createdAt: new Date(createdAtTimestamp * 1000),
-      updatedAt: new Date(updatedAtTimestamp * 1000),
-      zone,
-      estimatedDuration: () => {
-        // Implement this method based on your Swift logic
-        return 0;
-      },
-      determineWorkoutZone: () => {
-        // Implement this method based on your Swift logic
-        return BodyZone.FullBody;
-      },
-      toDictionary: () => {
-        // Implement this method if needed
-        return {};
-      }
-    };
-  }
+    // Create a new Workout instance with the parsed data
+    return new Workout({
+        id: fields.id?.stringValue || '',
+        collectionId: fields.collectionId?.arrayValue?.values?.map((id: any) => id.stringValue) || [],
+        roundWorkoutId: fields.roundWorkoutId?.stringValue || '',
+        exercises: exercises,
+        challenge: fields.challenge?.mapValue?.fields 
+            ? this.parseChallenge(fields.challenge.mapValue.fields) 
+            : undefined,
+        logs: logs,
+        title: fields.title?.stringValue || '',
+        description: fields.description?.stringValue || '',
+        duration: parseInt(fields.duration?.integerValue || '0'),
+        workoutRating: fields.workoutRating?.stringValue as WorkoutRating,
+        useAuthorContent: fields.useAuthorContent?.booleanValue || false,
+        isCompleted: fields.isCompleted?.booleanValue || false,
+        workoutStatus: fields.workoutStatus?.stringValue as WorkoutStatus || WorkoutStatus.QueuedUp,
+        startTime: fields.startTime?.timestampValue 
+            ? new Date(fields.startTime.timestampValue) 
+            : undefined,
+        order: parseInt(fields.order?.integerValue || '0'),
+        author: fields.author?.stringValue || '',
+        createdAt: new Date(parseFloat(fields.createdAt?.doubleValue || '0') * 1000),
+        updatedAt: new Date(parseFloat(fields.updatedAt?.doubleValue || '0') * 1000),
+        zone: fields.zone?.stringValue as BodyZone || BodyZone.FullBody,
+        estimatedDuration: () => parseInt(fields.duration?.integerValue || '0'),
+        determineWorkoutZone: () => fields.zone?.stringValue as BodyZone || BodyZone.FullBody,
+        toDictionary: () => ({})
+    } as Workout);
+}
 
   private parseExerciseLog(fields: any): ExerciseLog {
     const id = fields.id?.stringValue || '';

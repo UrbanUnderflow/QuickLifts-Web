@@ -25,7 +25,7 @@ interface ProfileImage {
   }
   
   // Types for user in challenge
-  interface UserTogetherRound {
+  interface UserChallenge {
     id: string;
     challengeId: string;
     userId: string;
@@ -57,11 +57,11 @@ interface ProfileImage {
   }
   
   // Main challenge interface
-  interface TogetherRound {
+  interface Challenge {
     id: string;
     title: string;
     subtitle: string;
-    participants: UserTogetherRound[];
+    participants: UserChallenge[];
     status: ChallengeStatus;
     startDate: Date;
     endDate: Date;
@@ -72,7 +72,7 @@ interface ProfileImage {
   
   // Props interface for the component
   interface ChallengeInvitationProps {
-    challenge: TogetherRound;
+    challenge: Challenge;
     onClose: () => void;
     onJoinChallenge: (challenge: any) => Promise<void>;
   }
@@ -81,8 +81,8 @@ interface ProfileImage {
     ProfileImage,
     UserLocation,
     PulsePoints,
-    UserTogetherRound,
-    TogetherRound,
+    UserChallenge,
+    Challenge,
     ChallengeInvitationProps
   };
   

@@ -1,6 +1,6 @@
 // types/WorkoutSummary.ts
 import { ExerciseLog } from '../api/firebase/exercise/types';
-import { BodyPart } from './BodyPart';
+import { BodyPart } from '../api/firebase/exercise';
 import { WorkoutRating } from '../api/firebase/workout/types';
 
 export class WorkoutSummary {

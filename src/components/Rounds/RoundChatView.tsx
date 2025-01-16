@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { GroupMessage, QuickMessage } from '../../types/ChatTypes'; // Replace with the actual path to your types
-import { UserTogetherRound } from '../../types/ChallengeTypes'; // Replace with actual path
+import { UserChallenge } from '../../types/ChallengeTypes'; // Replace with actual path
 import { ImageIcon, SendIcon } from 'lucide-react'; // Replace with desired icons
 import MessageBubble from '../../components/Rounds/MessageBubble'; // We'll define this below
 
 interface ChallengeChatViewProps {
-  participants: UserTogetherRound[];
+  participants: UserChallenge[];
   messages: GroupMessage[];
   onSendMessage: (message: string, image?: File) => void;
   currentUser: { id: string; username: string };
