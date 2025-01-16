@@ -1,6 +1,6 @@
 import { BodyZone } from '../../../types/BodyZone';
 import { ExerciseReference, ExerciseLog } from '../exercise/types';
-
+import { BodyPart } from '../exercise/types';
 
 // src/types/WorkoutTypes.ts
 export enum WorkoutStatus {
@@ -75,7 +75,7 @@ export class Workout {
   author: string;
   createdAt: Date;
   updatedAt: Date;
-  // zone: BodyZone;
+  zone: BodyZone;
 
   constructor(data: Workout) {
     this.id = data.id;
@@ -96,7 +96,7 @@ export class Workout {
     this.author = data.author;
     this.createdAt = data.createdAt;
     this.updatedAt = data.updatedAt;
-    // this.zone = this.determineWorkoutZone();
+    this.zone = this.determineWorkoutZone();
   }
 
   estimatedDuration(): number {
@@ -104,13 +104,65 @@ export class Workout {
     return this.duration;
   }
 
-  // determineWorkoutZone(): BodyZone {
-  //   // Implement your logic to determine the workout zone
-  //   if (this.exercises.some(ex => ex.primaryBodyPart === 'Core')) {
-  //     return BodyZone.Core;
-  //   }
-  //   return BodyZone.FullBody;
-  // }
+// Then update the determineWorkoutZone function
+determineWorkoutZone(): BodyZone {
+    // Create a Set of all primary body parts involved in this workout
+    const bodyPartsInvolved = new Set<BodyPart>();
+    
+    for (const exerciseRef of this.exercises) {
+        // Assuming exerciseRef.primaryBodyParts is an array of BodyPart
+        // If it's a single value, remove the inner loop
+        for (const bodyPart of exerciseRef.exercise.primaryBodyParts || [exerciseRef.exercise.primaryBodyParts]) {
+            bodyPartsInvolved.add(bodyPart as BodyPart);
+        }
+    }
+
+    // Define body part groups
+    const upperBodyParts = new Set([
+        BodyPart.Chest,
+        BodyPart.Shoulders,
+        BodyPart.Biceps,
+        BodyPart.Triceps,
+        BodyPart.Traps,
+        BodyPart.Lats,
+        BodyPart.Forearms
+    ]);
+
+    const lowerBodyParts = new Set([
+        BodyPart.Hamstrings,
+        BodyPart.Glutes,
+        BodyPart.Quadriceps,
+        BodyPart.Calves
+    ]);
+
+    const coreParts = new Set([
+        BodyPart.Abs,
+        BodyPart.Lowerback
+    ]);
+
+    // Helper function to check if sets have common elements
+    const hasCommonElements = (set1: Set<BodyPart>, set2: Set<BodyPart>): boolean => {
+        return Array.from(set1).some(item => set2.has(item));
+    };
+
+    // Check which body zones are involved
+    const hasUpperBody = hasCommonElements(bodyPartsInvolved, upperBodyParts);
+    const hasLowerBody = hasCommonElements(bodyPartsInvolved, lowerBodyParts);
+    const hasCore = hasCommonElements(bodyPartsInvolved, coreParts);
+
+    // Determine the workout zone
+    if ((hasUpperBody && hasLowerBody && hasCore) || (hasUpperBody && hasLowerBody)) {
+        return BodyZone.FullBody;
+    } else if (hasUpperBody && hasCore || hasUpperBody) {
+        return BodyZone.UpperBody;
+    } else if (hasLowerBody && hasCore || hasLowerBody) {
+        return BodyZone.LowerBody;
+    } else if (hasCore) {
+        return BodyZone.Core;
+    } else {
+        return BodyZone.FullBody; // Default case
+    }
+}
 
   toDictionary(): { [key: string]: any } {
     return {
