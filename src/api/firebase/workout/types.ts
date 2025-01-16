@@ -50,26 +50,93 @@ export interface RepsAndWeightLog {
   }
  }
   
-  export interface Workout {
-    id: string;
-    exercises: ExerciseReference[];
-    logs?: ExerciseLog[];
-    title: string;
-    duration: number;
-    workoutRating?: WorkoutRating;
-    workoutStatus: WorkoutStatus;
-    useAuthorContent: boolean;
-    isCompleted: boolean;
-    author: string;
-    createdAt: Date;
-    updatedAt: Date;
-    zone: BodyZone;
-  
-    // Methods (these will be implemented as functions in TypeScript)
-    estimatedDuration: () => number;
-    determineWorkoutZone: () => BodyZone;
-    toDictionary: () => { [key: string]: any };
+// WorkoutClass.ts
+
+// import { Workout } from './Workout';
+// import { BodyZone } from './BodyZone';
+import { Challenge } from '../../../types/Challenge';
+
+export class Workout {
+  id: string;
+  collectionId?: string[];
+  roundWorkoutId: string;
+  exercises: ExerciseReference[];
+  challenge?: Challenge;
+  logs?: ExerciseLog[];
+  title: string;
+  description: string;
+  duration: number;
+  workoutRating?: WorkoutRating;
+  useAuthorContent: boolean;
+  isCompleted: boolean;
+  workoutStatus: WorkoutStatus;
+  startTime?: Date;
+  order?: number;
+  author: string;
+  createdAt: Date;
+  updatedAt: Date;
+  // zone: BodyZone;
+
+  constructor(data: Workout) {
+    this.id = data.id;
+    this.collectionId = data.collectionId;
+    this.roundWorkoutId = data.roundWorkoutId;
+    this.exercises = data.exercises;
+    this.challenge = data.challenge;
+    this.logs = data.logs;
+    this.title = data.title;
+    this.description = data.description;
+    this.duration = data.duration;
+    this.workoutRating = data.workoutRating;
+    this.useAuthorContent = data.useAuthorContent;
+    this.isCompleted = data.isCompleted;
+    this.workoutStatus = data.workoutStatus;
+    this.startTime = data.startTime;
+    this.order = data.order;
+    this.author = data.author;
+    this.createdAt = data.createdAt;
+    this.updatedAt = data.updatedAt;
+    // this.zone = this.determineWorkoutZone();
   }
+
+  estimatedDuration(): number {
+    // Implement your logic to estimate duration
+    return this.duration;
+  }
+
+  // determineWorkoutZone(): BodyZone {
+  //   // Implement your logic to determine the workout zone
+  //   if (this.exercises.some(ex => ex.primaryBodyPart === 'Core')) {
+  //     return BodyZone.Core;
+  //   }
+  //   return BodyZone.FullBody;
+  // }
+
+  toDictionary(): { [key: string]: any } {
+    return {
+      id: this.id,
+      collectionId: this.collectionId,
+      roundWorkoutId: this.roundWorkoutId,
+      exercises: this.exercises,
+      challenge: this.challenge,
+      logs: this.logs,
+      title: this.title,
+      description: this.description,
+      duration: this.duration,
+      workoutRating: this.workoutRating,
+      useAuthorContent: this.useAuthorContent,
+      isCompleted: this.isCompleted,
+      workoutStatus: this.workoutStatus,
+      startTime: this.startTime,
+      order: this.order,
+      author: this.author,
+      createdAt: this.createdAt,
+      updatedAt: this.updatedAt,
+      // zone: this.zone,
+    };
+  }
+}
+
   
 
 export interface WorkoutService {

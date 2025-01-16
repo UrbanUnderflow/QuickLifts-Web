@@ -1,34 +1,35 @@
-import React from 'react';
+import { useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { ArrowUpRight, ArrowLeft, Trophy, Users, Star, Activity, Calendar  } from 'lucide-react';
 import MetricsGrid from '../../components/MetricsGrid';
 import MonthInReviewMeta from '../../components/MonthInReviewMeta';
+import Spacer from '../../components/Spacer';
 
 const metrics = [
   {
-    label: "Active Users",
+    label: "Subscribed Members",
     currentValue: 120,
     previousValue: 90,
     isCurrency: false
   },
   {
-    label: "Moves",
-    currentValue: 250,
+    label: "Unique Moves",
+    currentValue: 213,
     previousValue: 194,
     isCurrency: false,
     showGrowth: true
   },
   {
     label: "Workouts Completed",
-    currentValue: 580,
+    currentValue: 555,
     previousValue: 417,
     isCurrency: false,
     showGrowth: true
   },
   {
     label: "Revenue",
-    currentValue: 210,
+    currentValue: 247,
     previousValue: 168,
     isCurrency: true
   }
@@ -40,6 +41,7 @@ const MonthInReview = () => {
     "Explore Pulse's December highlights, including our Rounds feature launch, successful beta testing, and major achievements as we expand our fitness community.";
   const metaImage = "https://fitwithpulse.ai/december-2024-review.png";
   const pageUrl = "https://fitwithpulse.ai/month-in-review/december-2024";
+  const [isPlaying, setIsPlaying] = useState(false);
 
   return (
     <>
@@ -71,9 +73,9 @@ const MonthInReview = () => {
             </h1>
             <div className="mt-2 text-zinc-400 text-xl font-['Thunder']">December 2024</div>
             <p className="mt-4 text-zinc-400 max-w-2xl text-lg" data-description="true">
-              December was a jam-packed month of achievements and growth! We successfully launched our Rounds feature with a kickoff event at SoulCycle Buckhead, 
-              completed vital beta testing, and competed in our first pitch event. The energy and momentum heading into the New Year is incredible as we focus on 
-              expanding our creator community and enhancing the Rounds experience.
+            We celebrated the launch of Rounds with a special event at SoulCycle Buckhead, marking our first official partnership with instructor Jaidus. 
+            The morning was filled with energy and excitement as our community came together to experience this new chapter in group fitness training. 
+            The enthusiasm from both Jaidus and the attendees validated our vision for Rounds as a powerful tool for community-driven fitness.
             </p>
           </div>
         </div>
@@ -119,9 +121,8 @@ const MonthInReview = () => {
           <div className="bg-white rounded-xl shadow-lg p-8">
             <div className="mb-8">
               <p className="text-lg text-zinc-600">
-                December marked a significant uptick in user engagement with the launch of Rounds. We've seen encouraging growth across all key metrics, 
-                particularly in workout completions and community engagement. The successful beta testing phase and official launch have created 
-                momentum that we're excited to build upon in the new year.
+                December marked a significant uptick in user engagement with the launch of Rounds. We've seen encouraging growth across all key metrics. The successful beta testing phase and official launch have created 
+                momentum that we're excited to build upon this year.
                 <br /><br />
                 As we move into 2025, our focus will be on expanding our creator network and enhancing the Rounds experience based on user feedback.
               </p>
@@ -142,24 +143,89 @@ const MonthInReview = () => {
                 Our December launch event at SoulCycle Buckhead marked a pivotal moment in Pulse's community building efforts. The enthusiasm and 
                 engagement from both creators and users have validated our vision for Rounds as a powerful tool for community-driven fitness.
               </p>
+
+              {/* Media Grid Section - Now with equal-sized cells */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 my-8">
+                {/* Video */}
+                <div className="aspect-[9/16] w-full bg-zinc-100 rounded-lg overflow-hidden relative">
+                  <video 
+                    className="w-full h-full object-cover"
+                    controls
+                    playsInline
+                    src="/LaunchEventRecap.mp4"
+                    poster="/LaunchEventRecapThumbnail.png"
+                    onPlay={() => setIsPlaying(true)}
+                    onPause={() => setIsPlaying(false)}
+                  />
+                  {!isPlaying && (
+                    <button 
+                      className="absolute inset-0 w-full h-full flex items-center justify-center bg-black/20 transition-opacity hover:bg-black/30"
+                      onClick={(e) => {
+                        e.currentTarget.parentElement?.querySelector('video')?.play();
+                      }}
+                    >
+                      <div className="w-16 h-16 rounded-full bg-white/30 backdrop-blur-sm flex items-center justify-center transition-transform hover:scale-110">
+                        <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center">
+                          <svg 
+                            viewBox="0 0 24 24" 
+                            className="w-6 h-6 text-black fill-current"
+                            style={{ marginLeft: '2px' }}
+                          >
+                            <path d="M8 5v14l11-7z" />
+                          </svg>
+                        </div>
+                      </div>
+                    </button>
+                  )}
+                </div>
+
+                {/* First Image */}
+                <div className="aspect-[9/16] w-full bg-zinc-100 rounded-lg overflow-hidden">
+                  <Image 
+                    src="/cake.jpg" 
+                    alt="Launch Event Celebration Cake" 
+                    width={400}
+                    height={600}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+
+                {/* Second Image */}
+                <div className="aspect-[9/16] w-full bg-zinc-100 rounded-lg overflow-hidden">
+                  <Image 
+                    src="/toast.jpg" 
+                    alt="Launch Event Toast" 
+                    width={400}
+                    height={600}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              </div>
+
+              {/* Content Sections */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-8">
                 <div>
-                  <h3 className="text-xl font-bold mb-4">Launch Highlights</h3>
+                  <h3 className="text-xl font-bold mb-4">Event Wins</h3>
                   <ul className="space-y-3 text-zinc-600">
                     <li>• Successful kickoff event at SoulCycle Buckhead</li>
-                    <li>• Strong beta testing group engagement</li>
-                    <li>• Positive creator feedback on the Rounds feature</li>
-                    <li>• Growing interest from Atlanta fitness community</li>
-                    <li>• Expanding network of potential creator partners</li>
+                    <li>• Created warm connections and brand awareness amongst SoulCycle riders</li>
+                    <li>• Received valuable feedback from attendees</li>
+                    <li>• Signed up a handful of individuals for the challenge</li>
+                  </ul>
+                  <Spacer size={48} />
+                  <h3 className="text-xl font-bold mb-4">Key Learnings</h3>
+                  <ul className="space-y-3 text-zinc-600">
+                    <li>• Registration feels longer than needed. Will shorten this for Round sign ups.</li>
+                    <li>• Goal for events of this format should be soley brand awareness as people don't have as much time inbetween cycling and moving forward with their day.</li>
+                    <li>• Have more branded items for individuals to take with them(shirts, towels, etc)</li>
                   </ul>
                 </div>
                 <div>
-                  <h3 className="text-xl font-bold mb-4">Looking Forward to 2025</h3>
+                  <h3 className="text-xl font-bold mb-4">What's Next</h3>
                   <p className="text-zinc-600">
-                    As we enter the new year, we're focused on expanding our creator network and enhancing the Rounds experience. We're actively 
-                    seeking partnerships with fitness professionals and facilities across Atlanta to bring more diverse workout experiences to our community.
-                    <br /><br />
-                    If you're a fitness professional interested in hosting Rounds or know someone who might be, we'd love to connect.
+                    Building on the success of our launch event, we're excited to create more in-person experiences that bridge our digital and physical communities. Looking ahead to February, we're launching our next Round featuring both <a href="https://www.soul-cycle.com/instructors/10241/Jaidus/" target="_blank" rel="noopener noreferrer" className="text-black hover:text-zinc-700 underline">Jaidus</a> and <a href="https://www.soul-cycle.com/instructors/10699/Vynnessa/" target="_blank" rel="noopener noreferrer" className="text-black hover:text-zinc-700 underline">Vynnessa Smith</a>, two incredible SoulCycle Buckhead instructors.
+                  <br /><br />
+                    Beyond SoulCycle, we're actively building partnerships with established fitness communities across Atlanta to bring diverse training experiences to our platform. If you're part of a fitness community interested in hosting Rounds, we'd love to connect and explore how we can grow together.
                   </p>
                 </div>
               </div>
@@ -186,7 +252,7 @@ const MonthInReview = () => {
                     <li>• Strong participation in first public Round</li>
                     <li>• Positive community feedback</li>
                     <li>• Growing creator interest</li>
-                    <li>• Enhanced engagement metrics</li>
+                    <li>• Received vital UI suggestions, and crtical feedback</li>
                   </ul>
                 </div>
 
@@ -197,20 +263,46 @@ const MonthInReview = () => {
                       Experience the power of community training with our upcoming Rounds. Connect with fellow fitness enthusiasts and push your 
                       limits together.
                     </p>
-                    <button className="mt-6 bg-[#E0FE10] text-black px-6 py-3 rounded-lg font-medium flex items-center gap-2">
-                      Download Pulse Now
-                      <ArrowUpRight size={18} />
-                    </button>
+                    <div className="flex flex-col sm:flex-row gap-4">
+                      <a 
+                        href="https://apps.apple.com/ca/app/pulse-community-fitness/id6451497729"
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="mt-6 bg-[#E0FE10] text-black px-6 py-3 rounded-lg font-medium flex items-center gap-2 hover:bg-[#d4f00f] transition-colors"
+                      >
+                        Download Pulse Now
+                        <ArrowUpRight size={18} />
+                      </a>
+                      <a 
+                        href="https://fitwithpulse.ai/challenge/cevWHBlBk7VobANRUsmC"
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="mt-6 bg-blue-500 text-white px-6 py-3 rounded-lg font-medium flex items-center gap-2 hover:bg-blue-400 transition-colors"
+                      >
+                        Join Jaidus's Round
+                        <ArrowUpRight size={18} />
+                      </a>
+                    </div>
                   </div>
-                </div>   
+                </div>
               </div>
-              <Image 
-                src="/roundsPreview.png"
-                alt="Rounds Preview" 
-                width={400} 
-                height={400} 
-                className="rounded-lg"
-              />   
+              
+              <div className="grid grid-cols-2 gap-6">
+                <Image 
+                  src="/leaderboard.png"
+                  alt="Rounds leaderboard" 
+                  width={400} 
+                  height={400} 
+                  className="rounded-lg w-full"
+                />   
+                <Image 
+                  src="/challenge-notifications.png"
+                  alt="Rounds notifications" 
+                  width={400} 
+                  height={400} 
+                  className="rounded-lg w-full"
+                />   
+              </div>
             </div>
           </div>
         </div>
@@ -268,7 +360,7 @@ const MonthInReview = () => {
         {/* Upcoming Events */}
         <div className="max-w-6xl mx-auto px-4 mt-16 mb-24">
           <div className="bg-white rounded-xl shadow-lg p-8">
-            <h2 className="text-2xl font-bold mb-6">Join Us at Upcoming Events</h2>
+            <h2 className="text-2xl font-bold mb-6">Join Our 30-Day Ab Challenge</h2>
             <div className="space-y-6">
               <div className="flex flex-col sm:flex-row sm:items-center gap-6">
                 <div className="flex-shrink-0 w-24 text-center">
@@ -276,18 +368,18 @@ const MonthInReview = () => {
                   <div className="text-zinc-500">2025</div>
                 </div>
                 <div className="flex-grow">
-                  <h3 className="font-bold">First Round Celebration</h3>
+                  <h3 className="font-bold">30-Day Ab Challenge</h3>
                   <p className="text-zinc-600 mt-1">
-                    Join us at Lululemon for a community celebration of our first completed Round.
+                    Kickstart your fitness journey and build core strength with our 30-day ab challenge. Join Jaidus and a community of fitness enthusiasts to push your limits and achieve your goals together.
                   </p>
                 </div>
                 <a 
-                  href="https://forms.gle/your-registration-link" 
+                  href="https://fitwithpulse.ai/challenge/cevWHBlBk7VobANRUsmC" 
                   target="_blank" 
                   rel="noopener noreferrer"
                   className="flex-shrink-0 bg-[#E0FE10] text-black px-6 py-3 rounded-lg font-medium flex items-center justify-center gap-2 mt-4 sm:mt-0"
                 >
-                  Register to Attend
+                  Join the Challenge
                   <ArrowUpRight size={18} />
                 </a>
               </div>
