@@ -69,6 +69,70 @@ const SignInModal: React.FC<SignInModalProps> = ({
 
   if (!isVisible) return null;
   
+  const handleSocialAuth = async (provider: 'google' | 'apple') => {
+    try {
+        setIsLoading(true);
+        setError(null);
+        setActiveProvider(provider);
+
+        if (provider === 'apple') {
+            console.log('Starting Apple Sign In process...');
+            const appleProvider = new OAuthProvider('apple.com');
+            
+            // Add required scopes
+            appleProvider.addScope('email');
+            appleProvider.addScope('name');
+
+            // Log auth configuration
+            const authDomain = auth.app.options.authDomain;
+            console.log('Auth Domain:', authDomain);
+            console.log('Current URL:', window.location.href);
+
+            // Don't set custom parameters for redirect_uri
+            // Let Firebase handle it
+            appleProvider.setCustomParameters({
+                response_type: 'code id_token'
+            });
+
+            try {
+                console.log('Initiating redirect...');
+                await signInWithRedirect(auth, appleProvider);
+                // Won't hit this due to redirect
+            } catch (e) {
+                const redirectError = e as AuthError;
+                console.error('Redirect Error:', {
+                    code: redirectError.code,
+                    message: redirectError.message,
+                    stack: redirectError.stack
+                });
+                throw redirectError;
+            }
+        } else {
+            // Keep existing Google sign-in logic
+            const result = await authService.signInWithGoogle();
+            const firestoreUser = await userService.fetchUserFromFirestore(result.user.uid);
+            userService.currentUser = firestoreUser;
+
+            if (isSignUp) {
+                onSignUpSuccess?.(result.user);
+            } else {
+                onSignInSuccess?.(result.user);
+            }
+        }
+    } catch (err) {
+        console.error('Main error:', err);
+        const error = err as Error;
+        setError(error.message);
+        if (isSignUp) {
+            onSignUpError?.(error);
+        } else {
+            onSignInError?.(error);
+        }
+    } finally {
+        setIsLoading(false);
+        setActiveProvider(null);
+    }
+};
 
 useEffect(() => {
     let isMounted = true;
@@ -86,6 +150,7 @@ useEffect(() => {
         }
         
         console.log('🚀 Starting redirect handler... Detected redirect parameters');
+        console.log('Current URL:', window.location.href);
         
         try {
             setIsLoading(true);
@@ -112,7 +177,6 @@ useEffect(() => {
                 return;
             }
 
-            // Handle the case where result might be null
             const credential = result as UserCredential;
             if (!credential || !credential.user) {
                 throw new Error('No auth credential returned');
@@ -405,66 +469,6 @@ useEffect(() => {
       setIsLoading(false);
     }
   };
-
-  const handleSocialAuth = async (provider: 'google' | 'apple') => {
-    try {
-        setIsLoading(true);
-        setError(null);
-        setActiveProvider(provider);
-
-        if (provider === 'apple') {
-            console.log('Starting Apple Sign In process...');
-            const appleProvider = new OAuthProvider('apple.com');
-            
-            // Add required scopes
-            appleProvider.addScope('email');
-            appleProvider.addScope('name');
-            
-            // Set custom parameters (don't set redirect_uri - Firebase handles this)
-            appleProvider.setCustomParameters({
-                // Optional: Localize the Apple authentication screen
-                // locale: 'en',
-                response_type: 'code id_token',
-                state: JSON.stringify({
-                    returnUrl: window.location.origin
-                })
-            });
-
-            try {
-                console.log('Initiating Apple sign-in redirect...');
-                await signInWithRedirect(auth, appleProvider);
-                // Won't reach here due to redirect
-            } catch (e) {
-                const redirectError = e as AuthError;
-                console.error('Apple Sign In Redirect Error:', redirectError);
-                throw redirectError;
-            }
-        } else {
-            // Keep existing Google sign-in logic
-            const result = await authService.signInWithGoogle();
-            const firestoreUser = await userService.fetchUserFromFirestore(result.user.uid);
-            userService.currentUser = firestoreUser;
-
-            if (isSignUp) {
-                onSignUpSuccess?.(result.user);
-            } else {
-                onSignInSuccess?.(result.user);
-            }
-        }
-    } catch (err) {
-        console.error('Main error in handleSocialAuth:', err);
-        const error = err as Error;
-        setError(error.message);
-        if (isSignUp) {
-            onSignUpError?.(error);
-        } else {
-            onSignInError?.(error);
-        }
-    } finally {
-        setIsLoading(false);
-        setActiveProvider(null);
-    }
-};
 
   const renderQuizPrompt = () => (
     <>
