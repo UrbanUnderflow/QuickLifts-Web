@@ -76,7 +76,17 @@ const SignInModal: React.FC<SignInModalProps> = ({
         setActiveProvider(provider);
 
         if (provider === 'apple') {
-            console.log('Starting Apple Sign In process...');
+            // Clear previous logs and setup logging
+            const logs: string[] = [];
+            localStorage.setItem('authFlowLogs', JSON.stringify(logs));
+            
+            const addLog = (log: string) => {
+                const currentLogs = JSON.parse(localStorage.getItem('authFlowLogs') || '[]');
+                currentLogs.push(`[${new Date().toISOString()}] ${log}`);
+                localStorage.setItem('authFlowLogs', JSON.stringify(currentLogs));
+            };
+
+            addLog('Starting Apple Sign In process');
             const appleProvider = new OAuthProvider('apple.com');
             
             // Add required scopes
@@ -85,26 +95,20 @@ const SignInModal: React.FC<SignInModalProps> = ({
 
             // Log auth configuration
             const authDomain = auth.app.options.authDomain;
-            console.log('Auth Domain:', authDomain);
-            console.log('Current URL:', window.location.href);
-
-            // Don't set custom parameters for redirect_uri
-            // Let Firebase handle it
-            appleProvider.setCustomParameters({
-                response_type: 'code id_token'
-            });
+            addLog(`Auth Domain: ${authDomain}`);
+            addLog(`Current URL: ${window.location.href}`);
+            addLog(`Window Location Origin: ${window.location.origin}`);
 
             try {
-                console.log('Initiating redirect...');
+                addLog('Initiating Apple sign-in redirect...');
                 await signInWithRedirect(auth, appleProvider);
-                // Won't hit this due to redirect
+                addLog('Redirect initiated (you should not see this log)');
             } catch (e) {
                 const redirectError = e as AuthError;
-                console.error('Redirect Error:', {
-                    code: redirectError.code,
-                    message: redirectError.message,
-                    stack: redirectError.stack
-                });
+                addLog(`❌ Redirect Error: ${redirectError.code} - ${redirectError.message}`);
+                if (redirectError.stack) {
+                    addLog(`Error Stack: ${redirectError.stack}`);
+                }
                 throw redirectError;
             }
         } else {
@@ -135,6 +139,17 @@ const SignInModal: React.FC<SignInModalProps> = ({
 };
 
 useEffect(() => {
+
+    // Check for stored logs on component mount
+    const logs = localStorage.getItem('authFlowLogs');
+    if (logs) {
+        console.log('Auth Flow Logs:');
+        console.log('------------------------');
+        JSON.parse(logs).forEach((log: string) => console.log(log));
+        console.log('------------------------');
+        localStorage.removeItem('authFlowLogs'); // Clear logs after displaying
+    }
+    
     let isMounted = true;
 
     const handleRedirect = async () => {
