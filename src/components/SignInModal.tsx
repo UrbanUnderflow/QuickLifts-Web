@@ -137,192 +137,119 @@ const SignInModal: React.FC<SignInModalProps> = ({
         setActiveProvider(null);
     }
 };
+const addLog = (log: string) => {
+  const currentLogs = JSON.parse(localStorage.getItem('authFlowLogs') || '[]');
+  currentLogs.push(`[${new Date().toISOString()}] ${log}`);
+  localStorage.setItem('authFlowLogs', JSON.stringify(currentLogs));
+};
 
 useEffect(() => {
+  // Fetch and display existing logs
+  const logs = localStorage.getItem('authFlowLogs');
+  if (logs) {
+      console.log('Auth Flow Logs:');
+      console.log('------------------------');
+      JSON.parse(logs).forEach((log: string) => console.log(log));
+      console.log('------------------------');
+      localStorage.removeItem('authFlowLogs'); // Clear logs after displaying
+  }
 
-    // Check for stored logs on component mount
-    const logs = localStorage.getItem('authFlowLogs');
-    if (logs) {
-        console.log('Auth Flow Logs:');
-        console.log('------------------------');
-        JSON.parse(logs).forEach((log: string) => console.log(log));
-        console.log('------------------------');
-        localStorage.removeItem('authFlowLogs'); // Clear logs after displaying
-    }
-    
-    let isMounted = true;
+  let isMounted = true;
 
-    const handleRedirect = async () => {
-        if (!isVisible) return;
-        
-        // Check if we're returning from a redirect
-        const urlParams = new URLSearchParams(window.location.search);
-        const isRedirecting = urlParams.has('state') || window.location.href.includes('__/auth/handler');
-        
-        if (!isRedirecting) {
-            console.log('Not handling redirect - no redirect params detected');
-            return;
-        }
-        
-        console.log('🚀 Starting redirect handler... Detected redirect parameters');
-        console.log('Current URL:', window.location.href);
-        
-        try {
-            setIsLoading(true);
-            console.log('Getting redirect result...');
-            const result = await getRedirectResult(auth);
-            console.log('Raw redirect result:', result);
+  const handleRedirect = async () => {
+      addLog('Starting redirect handler');
 
-            if (!result) {
-                // Check pending redirect
-                const pendingResult = await getRedirectResult(auth).catch(e => {
-                    console.log('Pending redirect error:', e);
-                    return null;
-                });
-                console.log('Pending redirect result:', pendingResult);
-                
-                if (!pendingResult) {
-                    console.log('No redirect result despite redirect parameters');
-                    return;
-                }
-            }
+      if (!isVisible) {
+          addLog('Modal not visible, skipping redirect handling');
+          return;
+      }
 
-            if (!isMounted) {
-                console.log('⚠️ Component unmounted during auth redirect');
-                return;
-            }
+      // Check if we are returning from a redirect
+      const urlParams = new URLSearchParams(window.location.search);
+      const isRedirecting = urlParams.has('state') || window.location.href.includes('__/auth/handler');
+      addLog(`Redirect detected: ${isRedirecting}`);
+      addLog(`Current URL: ${window.location.href}`);
 
-            const credential = result as UserCredential;
-            if (!credential || !credential.user) {
-                throw new Error('No auth credential returned');
-            }
+      if (!isRedirecting) {
+          addLog('No redirect parameters detected, exiting redirect handler');
+          return;
+      }
 
-            const { user } = credential;
-            console.log('👤 User info:', { 
-                providerId: credential.providerId,
-                operationType: credential.operationType,
-                email: user.email,
-                isNewUser: user.metadata.creationTime === user.metadata.lastSignInTime
-            });
+      try {
+          setIsLoading(true);
+          addLog('Calling getRedirectResult...');
+          const result = await getRedirectResult(auth);
+          addLog(`getRedirectResult result: ${JSON.stringify(result)}`);
 
-            // Check if the provider is Apple
-            const isAppleSignIn = credential.providerId === 'apple.com' || 
-                                user.providerData.some(provider => provider.providerId === 'apple.com');
+          if (!result) {
+              addLog('No result returned by getRedirectResult, checking pending redirect...');
+              const pendingResult = await getRedirectResult(auth).catch((e) => {
+                  addLog(`Pending redirect error: ${e.message}`);
+                  return null;
+              });
+              addLog(`Pending redirect result: ${JSON.stringify(pendingResult)}`);
 
-            try {
-                // Try to fetch existing user from Firestore
-                let firestoreUser = await userService.fetchUserFromFirestore(user.uid);
-                const isNewUser = user.metadata.creationTime === user.metadata.lastSignInTime;
+              if (!pendingResult) {
+                  addLog('No pending redirect result, exiting handler');
+                  return;
+              }
+          }
 
-                if (!isMounted) return;
+          if (!isMounted) {
+              addLog('Component unmounted during redirect, exiting handler');
+              return;
+          }
 
-                if (!firestoreUser && isNewUser) {
-                    console.log('🆕 Creating new user document');
-                    
-                    // Create new user object
-                    const newUser = new User({
-                        id: user.uid,
-                        email: user.email || '',
-                        displayName: user.displayName || '',
-                        username: '', // Will need to be set later
-                        bio: '',
-                        profileImage: {
-                            profileImageURL: user.photoURL || '',
-                            imageOffsetWidth: 0,
-                            imageOffsetHeight: 0,
-                        },
-                        followerCount: 0,
-                        followingCount: 0,
-                        bodyWeight: [],
-                        workoutCount: 0,
-                        creator: {
-                            type: [],
-                            instagramHandle: '',
-                            twitterHandle: '',
-                            youtubeUrl: '',
-                            acceptCodeOfConduct: false,
-                            acceptExecutiveTerms: false,
-                            acceptGeneralTerms: false,
-                            acceptSweatEquityPartnership: false,
-                            onboardingStatus: '',
-                            onboardingLink: '',
-                            onboardingExpirationDate: 0,
-                        },
-                        createdAt: new Date(),
-                        updatedAt: new Date(),
-                    });
+          // Process user credential
+          const credential = result as UserCredential;
+          if (!credential || !credential.user) {
+              throw new Error('No user credential found in redirect result');
+          }
 
-                    // Save new user to Firestore
-                    await userService.updateUser(user.uid, newUser);
-                    firestoreUser = newUser;
-                }
+          const { user } = credential;
+          addLog(`User info: providerId=${credential.providerId}, email=${user.email}, isNewUser=${user.metadata.creationTime === user.metadata.lastSignInTime}`);
 
-                if (!isMounted) return;
+          // Check if it's a new Apple user
+          const isAppleSignIn = credential.providerId === 'apple.com' || user.providerData.some((provider) => provider.providerId === 'apple.com');
+          let firestoreUser = await userService.fetchUserFromFirestore(user.uid);
 
-                // Set the current user in the service
-                userService.currentUser = firestoreUser;
+          if (!firestoreUser && user.metadata.creationTime === user.metadata.lastSignInTime) {
+              addLog('New user detected, creating Firestore document');
+              firestoreUser = new User({ id: user.uid, email: user.email || '', displayName: user.displayName || '' });
+              await userService.updateUser(user.uid, firestoreUser);
+          }
 
-                // Handle the authentication result
-                if (isNewUser) {
-                    console.log('✨ New user signed up successfully');
-                    onSignUpSuccess?.(user);
-                    
-                    // If it's a new Apple user, they might need to set additional info
-                    if (isAppleSignIn && !firestoreUser.username) {
-                        console.log('🍎 New Apple user needs to complete profile');
-                    }
-                } else {
-                    console.log('✅ Existing user signed in successfully');
-                    onSignInSuccess?.(user);
-                }
+          if (isMounted) {
+              userService.currentUser = firestoreUser;
+              if (user.metadata.creationTime === user.metadata.lastSignInTime) {
+                  onSignUpSuccess?.(user);
+              } else {
+                  onSignInSuccess?.(user);
+              }
+              onClose?.();
+              addLog('User processed successfully');
+          }
+      } catch (error) {
+          addLog(`Redirect handler error: ${error instanceof Error ? error.message : error}`);
+          if (!isMounted) return;
 
-                // Close the modal if needed
-                onClose?.();
+          setError(error instanceof Error ? error.message : 'Authentication failed');
+          isSignUp ? onSignUpError?.(error as Error) : onSignInError?.(error as Error);
+      } finally {
+          if (isMounted) {
+              setIsLoading(false);
+              addLog('Redirect handler complete');
+          }
+      }
+  };
 
-            } catch (firestoreError) {
-                console.error('❌ Firestore operation failed:', firestoreError);
-                if (!isMounted) return;
-                
-                setError(firestoreError instanceof Error 
-                    ? firestoreError.message 
-                    : 'Failed to update user data'
-                );
-                
-                if (isSignUp) {
-                    onSignUpError?.(firestoreError as Error);
-                } else {
-                    onSignInError?.(firestoreError as Error);
-                }
-            }
+  handleRedirect();
 
-        } catch (error) {
-            console.error('❌ Main redirect handler error:', error);
-            if (!isMounted) return;
+  return () => {
+      isMounted = false;
+  };
+}, [isVisible, onSignInSuccess, onSignUpSuccess, onSignInError, onSignUpError, onClose]);
 
-            setError(error instanceof Error 
-                ? error.message 
-                : 'Authentication failed'
-            );
-
-            if (isSignUp) {
-                onSignUpError?.(error as Error);
-            } else {
-                onSignInError?.(error as Error);
-            }
-        } finally {
-            if (isMounted) {
-                console.log('🏁 Finishing redirect handler');
-                setIsLoading(false);
-            }
-        }
-    };
-
-    handleRedirect();
-
-    return () => {
-        isMounted = false;
-    };
-}, [isVisible, isSignUp, onSignInSuccess, onSignUpSuccess, onSignInError, onSignUpError, onClose]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
