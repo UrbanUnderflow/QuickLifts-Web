@@ -103,14 +103,24 @@ const SignInModal: React.FC<SignInModalProps> = ({
                 } else {
                     onSignInSuccess?.(user);
                 }
-            } catch (error) {
+            } catch (error: unknown) {
                 // Handle errors here
                 console.error('Apple sign-in error:', error);
-                setError(error.message);
-                if (isSignUp) {
-                    onSignUpError?.(error);
+                if (error instanceof Error) {
+                    setError(error.message);
+                    if (isSignUp) {
+                        onSignUpError?.(error);
+                    } else {
+                        onSignInError?.(error);
+                    }
                 } else {
-                    onSignInError?.(error);
+                    const genericError = new Error('An unknown error occurred during Apple sign-in');
+                    setError(genericError.message);
+                    if (isSignUp) {
+                        onSignUpError?.(genericError);
+                    } else {
+                        onSignInError?.(genericError);
+                    }
                 }
             }
         } else if (provider === 'google') {
@@ -124,13 +134,23 @@ const SignInModal: React.FC<SignInModalProps> = ({
                 onSignInSuccess?.(result.user);
             }
         }
-    } catch (err) {
+    } catch (err: unknown) {
         console.error('Main error:', err);
-        setError(err.message);
-        if (isSignUp) {
-            onSignUpError?.(err);
+        if (err instanceof Error) {
+            setError(err.message);
+            if (isSignUp) {
+                onSignUpError?.(err);
+            } else {
+                onSignInError?.(err);
+            }
         } else {
-            onSignInError?.(err);
+            const genericError = new Error('An unknown error occurred');
+            setError(genericError.message);
+            if (isSignUp) {
+                onSignUpError?.(genericError);
+            } else {
+                onSignInError?.(genericError);
+            }
         }
     } finally {
         setIsLoading(false);
