@@ -1,7 +1,7 @@
 // WorkoutService.ts
 
 import axios from 'axios';
-import { BodyZone } from '../types/BodyZone';
+import { BodyZone } from '../api/firebase/workout';
 import { Exercise, 
         ExerciseVideo, 
         ExerciseLog, 
@@ -116,28 +116,32 @@ class WorkoutService {
     const subtitle = fields.subtitle?.stringValue || '';
   
     // Parse challenge if it exists
-    const challenge = fields.challenge?.mapValue?.fields ? 
-      this.parseChallenge(fields.challenge.mapValue.fields) : 
-      undefined;
+    const challenge = fields.challenge?.mapValue?.fields
+      ? this.parseChallenge(fields.challenge.mapValue.fields)
+      : undefined;
   
     // Parse the sweatlistIds
     const sweatlistIdsArray = fields.sweatlistIds?.arrayValue?.values || [];
     const sweatlistIds = sweatlistIdsArray.map((item: any) => ({
       id: item.mapValue?.fields?.id?.stringValue || '',
       sweatlistAuthorId: item.mapValue?.fields?.sweatlistAuthorId?.stringValue || '',
-      order: parseInt(item.mapValue?.fields?.order?.integerValue || '0')
+      order: parseInt(item.mapValue?.fields?.order?.integerValue || '0'),
     }));
   
     const ownerId = fields.ownerId?.stringValue || '';
     const createdAtTimestamp = parseFloat(fields.createdAt?.doubleValue || '0');
     const updatedAtTimestamp = parseFloat(fields.updatedAt?.doubleValue || '0');
   
+    // Parse participants
+    const participantsArray = fields.participants?.arrayValue?.values || [];
+    const participants = participantsArray.map((item: any) => item.stringValue || '');
+  
     // Determine privacy based on challenge presence
     let privacy: SweatlistType;
     if (challenge) {
       privacy = SweatlistType.Together;
     } else {
-      privacy = fields.privacy?.stringValue as SweatlistType || SweatlistType.Solo;
+      privacy = (fields.privacy?.stringValue as SweatlistType) || SweatlistType.Solo;
     }
   
     return {
@@ -148,8 +152,9 @@ class WorkoutService {
       sweatlistIds,
       ownerId,
       privacy,
+      participants, // Include the parsed participants
       createdAt: new Date(createdAtTimestamp * 1000),
-      updatedAt: new Date(updatedAtTimestamp * 1000)
+      updatedAt: new Date(updatedAtTimestamp * 1000),
     };
   }
 

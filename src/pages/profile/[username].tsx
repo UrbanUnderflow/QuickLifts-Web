@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { GetServerSideProps } from 'next';
 import { useRouter } from 'next/router';
-import { FollowRequest } from '../../types/FollowRequest';
+import { FollowRequest } from '../../api/firebase/user';
 import { User } from '../../api/firebase/user';
 import ExerciseGrid from '../../components/ExerciseGrid';
 import { Exercise } from '../../api/firebase/exercise/types'; 
-import { Challenge } from '../../types/Challenge';
+import { Challenge } from '../../types/ChallengeTypes';
 import { ChallengesTab } from '../../components/ChallengesTab';
 import { WorkoutSummary } from '../../api/firebase/workout';
 import { StarIcon } from '@heroicons/react/24/outline';
