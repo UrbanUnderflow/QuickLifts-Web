@@ -1,4 +1,4 @@
-import { Challenge } from '../types/Challenge';
+import { Challenge } from '../types/ChallengeTypes';
 import { ChallengeCard } from './ChallengeCard';
 import { StarIcon } from '@heroicons/react/24/outline';
 

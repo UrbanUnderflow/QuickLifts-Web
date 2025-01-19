@@ -1,4 +1,5 @@
 import { GroupMessage } from "./types";
+import { QueryDocumentSnapshot } from "firebase/firestore"; 
 
 // services/ChatService.ts
 export class ChatService {
@@ -26,20 +27,20 @@ export class ChatService {
   
         const snapshot = await messagesRef.get();
         
-        return snapshot.docs.map(doc => {
-          const data = doc.data();
-          return {
-            id: doc.id,
-            sender: data.sender,
-            content: data.content,
-            checkinId: data.checkinId || "",
-            timestamp: new Date(data.timestamp * 1000),
-            readBy: this.parseReadBy(data.readBy || {}),
-            mediaURL: data.mediaURL || "",
-            mediaType: data.mediaType || "none",
-            gymName: data.gymName || ""
-          };
-        });
+        return snapshot.docs.map((doc: QueryDocumentSnapshot) => {
+            const data = doc.data();
+            return {
+              id: doc.id,
+              sender: data.sender,
+              content: data.content,
+              checkinId: data.checkinId || "",
+              timestamp: new Date(data.timestamp * 1000),
+              readBy: this.parseReadBy(data.readBy || {}),
+              mediaURL: data.mediaURL || "",
+              mediaType: data.mediaType || "none",
+              gymName: data.gymName || ""
+            };
+          });
       } catch (error) {
         console.error('Error fetching messages:', error);
         throw error;

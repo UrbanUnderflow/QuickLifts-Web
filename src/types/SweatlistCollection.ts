@@ -37,13 +37,14 @@ export function convertToSweatlistCollection(id: string, data: any): SweatlistCo
     sweatlistIds: (data.sweatlistIds || []).map((item: any) => ({
       id: item.id || '',
       sweatlistAuthorId: item.sweatlistAuthorId || '',
-      order: item.order || 0
+      order: item.order || 0,
     })),
     ownerId: data.ownerId || '',
     // Set privacy based on challenge presence, matching Swift logic
     privacy: data.challenge ? SweatlistType.Together : SweatlistType.Solo,
+    participants: (data.participants || []).map((participant: any) => participant || ''), // Include participants
     createdAt: data.createdAt ? new Date(data.createdAt) : new Date(),
-    updatedAt: data.updatedAt ? new Date(data.updatedAt) : new Date()
+    updatedAt: data.updatedAt ? new Date(data.updatedAt) : new Date(),
   };
 }
 
@@ -101,7 +102,7 @@ export function isCollectionPublished(collection: SweatlistCollection): boolean 
 
 // Convert Firestore data to TogetherRound
 export function convertToTogetherRound(data: any): Challenge {
-  return {
+  return new Challenge({
     id: data.id || '',
     title: data.title || '',
     subtitle: data.subtitle || '',
@@ -112,8 +113,9 @@ export function convertToTogetherRound(data: any): Challenge {
     startDate: data.startDate ? new Date(data.startDate) : new Date(),
     endDate: data.endDate ? new Date(data.endDate) : new Date(),
     createdAt: data.createdAt ? new Date(data.createdAt) : new Date(),
-    updatedAt: data.updatedAt ? new Date(data.updatedAt) : new Date()
-  };
+    updatedAt: data.updatedAt ? new Date(data.updatedAt) : new Date(),
+    introVideoURL: data.introVideoURL || undefined,
+  });
 }
 
 // Convert TogetherRound to Firestore format
