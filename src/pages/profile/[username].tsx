@@ -7,7 +7,7 @@ import ExerciseGrid from '../../components/ExerciseGrid';
 import { Exercise } from '../../api/firebase/exercise/types'; 
 import { Challenge } from '../../types/Challenge';
 import { ChallengesTab } from '../../components/ChallengesTab';
-import { WorkoutSummary } from '../../types/WorkoutSummary';
+import { WorkoutSummary } from '../../api/firebase/workout';
 import { StarIcon } from '@heroicons/react/24/outline';
 import { ActivityTab } from '../../components/ActivityTab';
 import { parseActivityType } from '../../utils/activityParser';

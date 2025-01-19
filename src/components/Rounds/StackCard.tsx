@@ -133,7 +133,7 @@ export const StackCard: React.FC<{
                 />
                 <StatView
                   icon={<Clock size={16} />}
-                  value={workout.estimatedDuration() < 1 ? "< 1" : String(workout.estimatedDuration())}
+                  value={Workout.estimatedDuration(workout.exercises) < 1 ? "< 1" : String(Workout.estimatedDuration(workout.exercises))}
                   label="min"
                 />
               </div>

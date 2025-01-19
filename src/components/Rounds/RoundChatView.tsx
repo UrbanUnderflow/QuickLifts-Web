@@ -8,7 +8,7 @@ interface ChallengeChatViewProps {
   participants: UserChallenge[];
   messages: GroupMessage[];
   onSendMessage: (message: string, image?: File) => void;
-  currentUser: { id: string; username: string };
+  currentUser: { id: string; username: string } | null;
 }
 
 const RoundChatView: React.FC<ChallengeChatViewProps> = ({
@@ -21,6 +21,11 @@ const RoundChatView: React.FC<ChallengeChatViewProps> = ({
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [quickMessage, setQuickMessage] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Add a null check before using currentUser
+  if (!currentUser) {
+    return null; // or return a placeholder/error component
+  }
 
   const QUICK_MESSAGES: QuickMessage[] = [
     QuickMessage.Encourage,

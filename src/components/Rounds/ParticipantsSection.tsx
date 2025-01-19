@@ -12,6 +12,7 @@ const ParticipantsSection: React.FC<ParticipantsSectionProps> = ({
   onParticipantClick
 }) => {
   const [previousRanks, setPreviousRanks] = React.useState<number[]>([]);
+  const [showAllParticipants, setShowAllParticipants] = React.useState<boolean>(false);
 
   // Sort participants by total points
   const sortedParticipants = [...participants].sort(
@@ -61,12 +62,19 @@ const ParticipantsSection: React.FC<ParticipantsSectionProps> = ({
     );
   };
 
+  const toggleShowAll = () => {
+    setShowAllParticipants((prev) => !prev);
+  };
+
+  // Show only the top 5 participants by default
+  const displayedParticipants = showAllParticipants ? sortedParticipants : sortedParticipants.slice(0, 5);
+
   return (
     <div className="bg-zinc-800 rounded-xl p-6 mt-6">
       <h2 className="text-lg font-semibold text-white mb-4">Participants</h2>
 
       <div className="space-y-4">
-        {sortedParticipants.map((participant, index) => (
+        {displayedParticipants.map((participant, index) => (
           <div
             key={participant.id}
             onClick={() => onParticipantClick?.(participant)}
@@ -104,10 +112,10 @@ const ParticipantsSection: React.FC<ParticipantsSectionProps> = ({
 
               {/* User Info */}
               <div>
-              <div className="flex items-center space-x-2">
-                <span className="text-white font-medium">{participant.username}</span>
-                {getRankIndicator(index + 1, previousRanks[index])}
-              </div>
+                <div className="flex items-center space-x-2">
+                  <span className="text-white font-medium">{participant.username}</span>
+                  {getRankIndicator(index + 1, previousRanks[index])}
+                </div>
                 <div className="text-sm text-zinc-400">
                   {participant.city}, {participant.country}
                 </div>
@@ -124,6 +132,15 @@ const ParticipantsSection: React.FC<ParticipantsSectionProps> = ({
           </div>
         ))}
       </div>
+
+      {participants.length > 5 && (
+        <button
+          onClick={toggleShowAll}
+          className="mt-4 text-sm text-blue-500 hover:text-blue-400"
+        >
+          {showAllParticipants ? 'Show less' : `Show all (${participants.length})`}
+        </button>
+      )}
     </div>
   );
 };

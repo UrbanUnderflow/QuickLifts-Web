@@ -19,6 +19,7 @@ export interface SweatlistCollection {
   subtitle: string;
   challenge?: Challenge;  // Optional challenge
   publishedStatus?: boolean;  // Computed property based on challenge status
+  participants: string[];
   sweatlistIds: SweatlistIdentifiers[];
   ownerId: string;
   privacy: SweatlistType;
