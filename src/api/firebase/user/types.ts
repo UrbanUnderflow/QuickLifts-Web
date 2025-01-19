@@ -7,6 +7,23 @@ export interface UserService {
     currentUser: User | null;
 }
 
+// Add to existing interfaces
+export interface FollowRequest {
+  fromUser: {
+    id: string;
+    username: string;
+    displayName: string;
+  };
+  toUser: {
+    id: string;
+    username: string;
+    displayName: string;
+  };
+  status: string;
+  createdAt: Date;
+  updatedAt: Date
+}
+
 // types/ProfileImage.ts
 export interface ProfileImage {
     profileImageURL: string;

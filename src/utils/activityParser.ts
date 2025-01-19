@@ -1,6 +1,6 @@
-import { WorkoutSummary } from '../types/WorkoutSummary';
+import { WorkoutSummary } from '../api/firebase/workout';
 import { Exercise, ExerciseLog } from '../api/firebase/exercise/types';
-import { FollowRequest } from '../types/FollowRequest';
+import { FollowRequest } from '../api/firebase/user';
 import { UserActivity, ActivityType } from '../types/Activity';
 
 // utils/activityParser.ts
@@ -27,11 +27,14 @@ export function parseActivityType(
     const weightLifting: ExerciseLog[] = [];
     
     summary.exercisesCompleted.forEach(log => {
-      if (log.exercise.tags.includes('cardio')) {
+      // Add null checks and default to empty array for tags
+      const tags = log.exercise?.tags || [];
+      
+      if (tags.includes('cardio')) {
         cardioExercises.push(log);
         containsCardio = true;
       }
-      if (log.exercise.tags.includes('weight-training') || log.exercise.tags.length === 0) {
+      if (tags.includes('weight-training') || tags.length === 0) {
         weightLifting.push(log);
         containsWeightTraining = true;
       }
@@ -39,8 +42,8 @@ export function parseActivityType(
 
     if (containsCardio) {
       const caloriesBurned = cardioExercises
-        .flatMap(ex => ex.logs)
-        .reduce((sum, log) => sum + log.calories, 0);
+        .flatMap(ex => ex.logs || [])
+        .reduce((sum, log) => sum + (log.calories || 0), 0);
 
       activities.push({
         id: generateUniqueId(),
@@ -48,16 +51,16 @@ export function parseActivityType(
         title: "You completed a cardio workout",
         correspondingId: summary.id,
         value: `${caloriesBurned} cals burned`,
-        date: new Date(summary.updatedAt) // Ensure date is a Date object
+        date: new Date(summary.updatedAt || Date.now()) // Fallback to current date
       });
     }
 
     if (containsWeightTraining) {
-      const totalSets = weightLifting.reduce((sum, ex) => sum + ex.logs.length, 0);
+      const totalSets = weightLifting.reduce((sum, ex) => sum + (ex.logs?.length || 0), 0);
       const totalReps = weightLifting
-        .flatMap(ex => ex.logs)
-        .reduce((sum, log) => sum + log.reps, 0);
-      const averageReps = Math.round(totalReps / totalSets);
+        .flatMap(ex => ex.logs || [])
+        .reduce((sum, log) => sum + (log.reps || 0), 0);
+      const averageReps = totalSets > 0 ? Math.round(totalReps / totalSets) : 0;
 
       activities.push({
         id: generateUniqueId(),
@@ -65,7 +68,7 @@ export function parseActivityType(
         title: "You completed a weight training workout",
         correspondingId: summary.id,
         value: `${summary.exercisesCompleted.length} exercises, ${totalSets} sets, ${averageReps} rep average`,
-        date: new Date(summary.updatedAt) // Ensure date is a Date object
+        date: new Date(summary.updatedAt || Date.now()) // Fallback to current date
       });
     }
   });
@@ -78,7 +81,7 @@ export function parseActivityType(
       title: "You posted a new exercise",
       correspondingId: exercise.id,
       value: exercise.name,
-      date: new Date(exercise.createdAt) // Ensure date is a Date object
+      date: new Date(exercise.createdAt || Date.now()) // Fallback to current date
     });
   });
 
@@ -90,7 +93,7 @@ export function parseActivityType(
       title: follow.toUser.id === currentUserId ? "Some members followed you" : "You followed some members",
       correspondingId: follow.fromUser.id,
       value: follow.toUser.id === currentUserId ? follow.fromUser.username : follow.toUser.username,
-      date: new Date(follow.createdAt) // Ensure date is a Date object
+      date: new Date(follow.createdAt || Date.now()) // Fallback to current date
     });
   });
 

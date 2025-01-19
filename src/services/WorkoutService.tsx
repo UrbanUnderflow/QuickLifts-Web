@@ -161,18 +161,30 @@ class WorkoutService {
     const statusString = fields.status?.stringValue || 'draft';
     const status = statusString as ChallengeStatus;
   
-    return {
+    // Parse the participants array
+    const participants = this.parseParticipants(fields.participants?.arrayValue?.values || []);
+  
+    // Parse startDate, endDate, createdAt, and updatedAt from timestamps
+    const startDate = new Date(parseFloat(fields.startDate?.doubleValue || '0') * 1000);
+    const endDate = new Date(parseFloat(fields.endDate?.doubleValue || '0') * 1000);
+    const createdAt = new Date(parseFloat(fields.createdAt?.doubleValue || '0') * 1000);
+    const updatedAt = new Date(parseFloat(fields.updatedAt?.doubleValue || '0') * 1000);
+  
+    // Return a new Challenge instance
+    return new Challenge({
       id: fields.id?.stringValue || '',
       title: fields.title?.stringValue || '',
       subtitle: fields.subtitle?.stringValue || '',
-      status: status,
-      participants: this.parseParticipants(fields.participants?.arrayValue?.values || []),
-      startDate: new Date(parseFloat(fields.startDate?.doubleValue || '0') * 1000),
-      endDate: new Date(parseFloat(fields.endDate?.doubleValue || '0') * 1000),
-      createdAt: new Date(parseFloat(fields.createdAt?.doubleValue || '0') * 1000),
-      updatedAt: new Date(parseFloat(fields.updatedAt?.doubleValue || '0') * 1000)
-    };
+      status,
+      participants,
+      startDate,
+      endDate,
+      createdAt,
+      updatedAt,
+      introVideoURL: fields.introVideoURL?.stringValue || undefined, // Optional property
+    });
   }
+  
 
   // Add this helper method to parse participants
   private parseParticipants(participants: any[]): UserChallenge[] {

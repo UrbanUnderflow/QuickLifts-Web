@@ -1,32 +1,59 @@
 import React, { useEffect, useState } from 'react';
+import { useRouter } from 'next/router';
 import { X } from 'lucide-react';
-import { Workout, WorkoutStatus } from '../../../api/firebase/workout/types';
-import { Challenge } from '../../../types/Challenge';
+import { Workout, WorkoutStatus, WorkoutSummary } from '../../../api/firebase/workout/types';
+import {  
+  Challenge,
+  UserChallenge
+ } from '../../../types/ChallengeTypes';
 import WorkoutTypeSelector from '../../../components/App/Dashboard/WorkoutTypeSelector';
 import classNames from 'classnames'; // Install classnames for conditional classes
+import { userService } from '../../../api/firebase/user'; 
+import { workoutService } from '../../../api/firebase/workout'
 
 interface WorkoutPanelProps {
   isVisible: boolean;
   onClose: () => void;
+  onStartWorkout?: (workout: Workout) => Promise<void>; // Add this optional prop
 }
 
 type Tab = 'today' | 'rounds';
 
-const WorkoutPanel: React.FC<WorkoutPanelProps> = ({ isVisible, onClose }) => {
+const WorkoutPanel: React.FC<WorkoutPanelProps> = ({ 
+  isVisible, 
+  onClose, 
+  onStartWorkout 
+}) => {
   const [currentWorkout, setCurrentWorkout] = useState<Workout | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeChallenges, setActiveChallenges] = useState<Challenge[]>([]);
+  const [activeChallenges, setActiveChallenges] = useState<UserChallenge[]>([]);
   const [selectedTab, setSelectedTab] = useState<Tab>('today');
   const [showWorkoutTypeSelector, setShowWorkoutTypeSelector] = useState(false);
-  const [recentWorkouts, setRecentWorkouts] = useState<Workout[]>([]); // Assuming you have recent workouts data
+  const [recentWorkouts, setRecentWorkouts] = useState<WorkoutSummary[]>([]); // Assuming you have recent workouts data
+  const router = useRouter();
 
   useEffect(() => {
     if (isVisible) {
+      console.log("We are visible!")
       fetchWorkoutData();
       fetchActiveChallenges();
       fetchRecentWorkouts();
     }
   }, [isVisible]);
+
+  const getDaysLeft = (endDate: Date | string | undefined): number => {
+    if (!endDate) return 0;
+    
+    const end = new Date(endDate);
+    const now = new Date();
+    
+    // Get difference in milliseconds and convert to days
+    const diffTime = end.getTime() - now.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    // Return 0 if negative (past end date)
+    return Math.max(0, diffDays);
+  };
 
   const fetchWorkoutData = async () => {
     setLoading(true);
@@ -41,20 +68,19 @@ const WorkoutPanel: React.FC<WorkoutPanelProps> = ({ isVisible, onClose }) => {
     }
   };
 
-  const fetchActiveChallenges = async () => {
+  const fetchActiveChallenges = async (): Promise<void> => {
     try {
-      // Replace with your actual data fetching logic
-      const challenges: Challenge[] = await fetchChallenges();
-      setActiveChallenges(challenges);
+      const challenges: UserChallenge[] = await fetchChallengesForUser(); // Fetch active challenges
+      setActiveChallenges(challenges); // Update the state with fetched challenges
     } catch (error) {
       console.error('Error fetching challenges:', error);
     }
   };
+  
 
   const fetchRecentWorkouts = async () => {
     try {
-      // Replace with your actual data fetching logic
-      const workouts: Workout[] = await fetchRecentWorkoutsData();
+      const workouts: WorkoutSummary[] = await fetchRecentWorkoutsData();
       setRecentWorkouts(workouts);
     } catch (error) {
       console.error('Error fetching recent workouts:', error);
@@ -67,15 +93,65 @@ const WorkoutPanel: React.FC<WorkoutPanelProps> = ({ isVisible, onClose }) => {
     return null; // Example
   };
 
-  const fetchChallenges = async (): Promise<Challenge[]> => {
-    // Implement your actual fetch logic here
-    return []; // Example
+  const fetchChallengesForUser = async (): Promise<UserChallenge[]> => {
+    try {
+      const activeChallenges = await workoutService.fetchActiveChallenges();
+      console.log('User Challenges:', activeChallenges);
+  
+      // Logic to determine the active challenge, if any
+      const activeChallenge = activeChallenges.length > 0 ? activeChallenges[0] : null;
+  
+      if (activeChallenge) {
+        console.log('Active Challenge:', activeChallenge);
+      } else {
+        console.log('No active challenges found.');
+      }
+  
+      // Return the fetched challenges
+      return activeChallenges;
+    } catch (error) {
+      console.error('Error fetching user challenges:', error);
+      // Return an empty array in case of error to match the return type
+      return [];
+    }
   };
+  
 
-  const fetchRecentWorkoutsData = async (): Promise<Workout[]> => {
-    // Implement your actual fetch logic here
-    return []; // Example
-  };
+  const fetchRecentWorkoutsData = async (): Promise<WorkoutSummary[]> => {
+    try {
+      const today = new Date();
+      console.log('Fetching workouts for date:', today); // Log the date
+  
+      const summaries = await workoutService.fetchAllWorkoutSummaries();
+      console.log('Here are the summaries:', summaries);
+  
+      return summaries.slice(0, 3).map(summary =>
+        WorkoutSummary.fromFirebase({
+          id: summary.id,
+          workoutId: summary.workoutId || '',
+          exercises: summary.exercises || [],
+          bodyParts: summary.bodyParts || [],
+          secondaryBodyParts: summary.secondaryBodyParts || [],
+          workoutTitle: summary.workoutTitle || 'Untitled Workout',
+          caloriesBurned: summary.caloriesBurned || 0,
+          workoutRating: summary.workoutRating,
+          exercisesCompleted: summary.exercisesCompleted || [],
+          aiInsight: summary.aiInsight || '',
+          recommendations: summary.recommendations || [],
+          gifURLs: summary.gifURLs || [],
+          recommendedWork: summary.recommendedWork,
+          isCompleted: summary.isCompleted || false,
+          createdAt: summary.createdAt,
+          updatedAt: summary.updatedAt,
+          completedAt: summary.completedAt,
+          duration: summary.duration || '',
+        })
+      );
+    } catch (error) {
+      console.error('Error fetching recent workouts:', error);
+      return [];
+    }
+  };  
 
   const handleGenerateWorkout = () => {
     setShowWorkoutTypeSelector(true);
@@ -87,15 +163,19 @@ const WorkoutPanel: React.FC<WorkoutPanelProps> = ({ isVisible, onClose }) => {
     // TODO: Implement workout generation logic
   };
 
+  
   const handleStartWorkout = async () => {
     if (!currentWorkout) return;
     try {
-      await fetchWorkoutData();
-      // Implement workout start logic
+      if (onStartWorkout) {
+        await onStartWorkout(currentWorkout);
+      }
+      onClose(); // Close the panel
     } catch (error) {
       console.error('Error starting workout:', error);
     }
   };
+
 
   const handleCancelWorkout = () => {
     // Implement workout cancellation logic
@@ -205,25 +285,75 @@ const WorkoutPanel: React.FC<WorkoutPanelProps> = ({ isVisible, onClose }) => {
     );
   };
 
+  const handleChallengeSelect = (challenge: UserChallenge) => {
+    onClose(); // Close the panel first
+    router.push(`/round/${challenge.challengeId}`);
+  };
+
   // Rounds Tab Content
   const renderRoundsTab = () => {
+    // Helper function to calculate progress
+    const calculateProgress = (challenge: UserChallenge) => {
+      if (!challenge.challenge?.startDate || !challenge.challenge?.endDate) return 0;
+      
+      const start = new Date(challenge.challenge.startDate);
+      const end = new Date(challenge.challenge.endDate);
+      const now = new Date();
+  
+      const totalDuration = end.getTime() - start.getTime();
+      const elapsed = now.getTime() - start.getTime();
+      
+      return Math.min(Math.max(elapsed / totalDuration, 0), 1);
+    };
+  
     return (
-      <div className="p-6 bg-[#E0FE10] rounded-lg">
-        <h2 className="text-xl font-bold text-black mb-4">Active Rounds</h2>
+      <div className="p-6">
+        <h2 className="text-2xl font-bold text-black mb-4">Active Rounds</h2>
         {activeChallenges.length === 0 ? (
           <p className="text-black">No active rounds</p>
         ) : (
           <div className="space-y-4">
             {activeChallenges.map((challenge) => (
+              <button
+              key={challenge.id}
+              onClick={() => handleChallengeSelect(challenge)}
+              className="w-full text-left" // Add text-left to maintain alignment
+             >
               <div
                 key={challenge.id}
-                className="my-2 p-4 rounded-lg bg-black text-white flex flex-col"
+                className="p-4 space-y-3 bg-zinc-800 rounded-xl"
               >
-                <h3 className="font-bold">{challenge.title}</h3>
-                {/* Add additional challenge details here */}
-                <p className="text-sm">Duration: {challenge.durationInDays} days</p>
-                <p className="text-sm">Participants: {challenge.participants.length}</p>
+                {/* Title and Days Left */}
+                <div className="flex justify-between items-center">
+                  <h3 className="text-white font-semibold">
+                    {challenge.challenge?.title}
+                  </h3>
+                  <span className="text-[#E0FE10] text-sm">
+                    {getDaysLeft(challenge.challenge?.endDate)}d left
+                  </span>
+                </div>
+  
+                {/* Progress Bar */}
+                <div className="h-2 bg-zinc-700 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-[#E0FE10] rounded-full"
+                    style={{ 
+                      width: `${calculateProgress(challenge) * 100}%`
+                    }}
+                  />
+                </div>
+  
+                {/* Stats Row */}
+                <div className="flex justify-between text-sm text-white/70">
+                  <div className="flex items-center gap-1">
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                      <path d="M15.45 22c1.95.31 3.5-1.24 3.5-3.19V5.19c0-1.95-1.55-3.5-3.5-3.19m0 20H8.55c-1.95.31-3.5-1.24-3.5-3.19V5.19c0-1.95 1.55-3.5 3.5-3.19" />
+                    </svg>
+                    <span>{challenge.currentStreak} day streak</span>
+                  </div>
+                </div>
               </div>
+            </button>
             ))}
           </div>
         )}
@@ -246,12 +376,12 @@ const WorkoutPanel: React.FC<WorkoutPanelProps> = ({ isVisible, onClose }) => {
               className="w-full p-4 bg-black rounded-lg text-white flex justify-between items-center hover:bg-black/80 transition"
             >
               <div>
-                <h3 className="font-bold">{workout.title}</h3>
+                <h3 className="font-bold">{workout.workoutTitle}</h3>
                 <p className="text-sm">
-                  {/* {formatDate(workout.completedAt)} · {workout.duration} min */}
+                  {formatDate(workout.createdAt)} · {workout.duration} min
                 </p>
               </div>
-              {/* <span className="font-bold">Score: {workout.score}</span> */}
+              <span className="font-bold">Score: {workout.duration}</span>
             </button>
           ))}
         </div>
@@ -265,9 +395,9 @@ const WorkoutPanel: React.FC<WorkoutPanelProps> = ({ isVisible, onClose }) => {
     return date.toLocaleDateString(undefined, options);
   };
 
-  const openWorkoutSummary = (workout: Workout) => {
+  const openWorkoutSummary = (workoutSummary: WorkoutSummary) => {
     // Implement workout summary modal/navigation
-    console.log('Open summary for workout:', workout);
+    console.log('Open summary for workout:', workoutSummary);
   };
 
   // Main Render

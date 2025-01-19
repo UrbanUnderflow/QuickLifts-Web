@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { userService } from '../../../api/firebase/user';
+import { userService, FollowRequest } from '../../../api/firebase/user';
 import { Exercise } from '../../../api/firebase/exercise/types';
-import { Challenge } from '../../../types/Challenge';
-import { FollowRequest } from '../../../types/FollowRequest';
-import { WorkoutSummary } from '../../../types/WorkoutSummary';
+import { Challenge } from '../../../types/ChallengeTypes';
+import { WorkoutSummary } from '../../../api/firebase/workout/types';
+import { workoutService } from '../../../api/firebase/workout/service'
 import { UserActivity } from '../../../types/Activity';
 import { StarIcon } from '@heroicons/react/24/outline';
 import { ActivityTab } from '../../ActivityTab';
@@ -30,118 +30,69 @@ const Profile: React.FC = () => {
   const [following, setFollowing] = useState<FollowRequest[]>([]);
   const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
 
-  const API_BASE_URL = process.env.NODE_ENV === 'development' 
-    ? 'http://localhost:8888/.netlify/functions'
-    : 'https://fitwithpulse.ai/.netlify/functions';
-
   const currentUser = userService.currentUser;
+
+  if (!currentUser) {
+    return <div>Loading...</div>;
+  }
+
+  useEffect(() => {
+    const fetchUserData = async () => {
+      if (!currentUser?.id) return;
+  
+      try {
+        // Fetch followers and following
+        const [followers, following, challenges, summaries] = await Promise.all([
+          userService.fetchFollowers(),
+          userService.fetchFollowing(),
+          workoutService.fetchUserChallenges(),
+          workoutService.fetchAllWorkoutSummaries()
+        ]);
+  
+        setFollowers(followers);
+        setFollowing(following);
+        
+        // Convert challenges
+        const activeChallenges = challenges
+          .map(uc => uc.challenge)
+          .filter(c => c !== undefined);
+        setActiveChallenges(activeChallenges);
+  
+        setWorkoutSummaries(summaries);
+  
+        // Parsing activities
+        const parsedActivities = parseActivityType(
+          summaries, 
+          userVideos, 
+          [...followers, ...following], 
+          currentUser.id
+        );
+
+        console.log("Parsed Activities" + JSON.stringify(parsedActivities));
+        setActivities(parsedActivities);
+  
+      } catch (error) {
+        console.error('Error fetching user data:', error);
+      }
+    };
+  
+    fetchUserData();
+  }, [currentUser?.id]);
 
   useEffect(() => {
     const fetchUserVideos = async () => {
       if (!currentUser?.id) return;
       
       try {
-        const response = await fetch(`${API_BASE_URL}/get-user-videos?userId=${currentUser.id}`);
-        if (!response.ok) throw new Error('Failed to fetch videos');
-        
-        const data = await response.json();
-        if (data.success) {
-          setUserVideos(data.exercises);
-        }
+        const videos = await userService.fetchUserVideos();
+        setUserVideos(videos);
       } catch (error) {
         console.error('Error fetching user videos:', error);
       }
     };
-
+  
     fetchUserVideos();
   }, [currentUser?.id]);
-
-  useEffect(() => {
-    const fetchChallenges = async () => {
-      if (!currentUser?.id) return;
-      
-      try {
-        const response = await fetch(`${API_BASE_URL}/get-challenges?userId=${currentUser.id}`);
-        if (!response.ok) throw new Error('Failed to fetch challenges');
-        
-        const data = await response.json();
-        if (data.success) {
-          setActiveChallenges(data.challenges);
-        }
-      } catch (error) {
-        console.error('Error fetching challenges:', error);
-      }
-    };
-
-    fetchChallenges();
-  }, [currentUser?.id]);
-
-  useEffect(() => {
-    const fetchFollowData = async () => {
-      if (!currentUser?.id) return;
-
-      try {
-        const [followersRes, followingRes] = await Promise.all([
-          fetch(`${API_BASE_URL}/get-followers?userId=${currentUser.id}`),
-          fetch(`${API_BASE_URL}/get-following?userId=${currentUser.id}`)
-        ]);
-
-        if (!followersRes.ok || !followingRes.ok) {
-          throw new Error('Failed to fetch follow data');
-        }
-
-        const followersData = await followersRes.json();
-        const followingData = await followingRes.json();
-
-        if (followersData.success && followingData.success) {
-          setFollowers(followersData.followers);
-          setFollowing(followingData.following);
-        }
-      } catch (error) {
-        console.error('Error fetching follow data:', error);
-      }
-    };
-
-    fetchFollowData();
-  }, [currentUser?.id]);
-
-  useEffect(() => {
-    const fetchWorkoutSummaries = async () => {
-      if (!currentUser?.id) return;
-      
-      try {
-        const response = await fetch(`${API_BASE_URL}/get-workout-summaries?userId=${currentUser.id}`);
-        if (!response.ok) throw new Error('Failed to fetch workout summaries');
-        
-        const data = await response.json();
-        if (data.success) {
-          const summaries = data.summaries.map((summary: any) =>
-            WorkoutSummary.fromFirebase(summary)
-          );
-          setWorkoutSummaries(summaries);
-          
-          if (userVideos.length > 0 || followers.length > 0 || following.length > 0) {
-            const followRequests = [...followers, ...following];
-            const parsedActivities = parseActivityType(
-              summaries,
-              userVideos,
-              followRequests,
-              currentUser.id
-            );
-            setActivities(parsedActivities);
-          }
-        }
-      } catch (error) {
-        console.error('Error fetching workout summaries:', error);
-      }
-    };
-
-    fetchWorkoutSummaries();
-  }, [currentUser?.id, followers, following, userVideos]);
-
-  if (!currentUser) {
-    return <div>Loading...</div>;
-  }
 
   const socialLinks = {
     instagram: currentUser.creator?.instagramHandle,
