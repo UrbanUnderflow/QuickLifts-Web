@@ -149,7 +149,11 @@ const Discover: React.FC = () => {
             muted
             loop
             className="w-full aspect-square object-cover"
-            onClick={handleVideoTap}
+            onClick={(e) => {
+              e.preventDefault(); // Prevents accidental fullscreen triggers
+              handleVideoTap(e);  // Your tap-to-play logic
+            }}
+            playsInline // Prevents fullscreen on mobile Safari
           />
 
           <div className="p-4">
