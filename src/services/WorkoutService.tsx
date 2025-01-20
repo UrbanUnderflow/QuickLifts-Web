@@ -86,7 +86,6 @@ class WorkoutService {
       const collectionData = collectionResponse.data.fields;
 
       const collection = this.parseCollection(collectionData);
-      console.log(collection)
   
       // Prepare to fetch sweat lists (workouts) by sweatlistIds in the collection
       const sweatLists: Workout[] = [];
