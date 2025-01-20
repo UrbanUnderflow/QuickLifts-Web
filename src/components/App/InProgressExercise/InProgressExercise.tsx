@@ -9,9 +9,8 @@ interface InProgressExerciseProps {
   onClose: () => void;    // callback to close the workout
 }
 
-const getScreenTime = (exercise: Exercise): number => {
-  // Return the screenTime if present, otherwise default to 0
-  return exercise.category.details?.screenTime ?? 0;
+const getScreenTime = (exercise: Exercise | undefined): number => {
+  return exercise?.category?.details?.screenTime ?? 60; // Default to 60 seconds if undefined
 };
 
 const InProgressExercise: React.FC<InProgressExerciseProps> = ({
@@ -20,6 +19,18 @@ const InProgressExercise: React.FC<InProgressExerciseProps> = ({
   onComplete,
   onClose,
 }) => {
+  if (!exercises || exercises.length === 0 || currentExerciseIndex >= exercises.length) {
+    console.error('Invalid exercises data or currentExerciseIndex');
+    return (
+      <div className="fixed inset-0 bg-zinc-900 flex items-center justify-center">
+        <p className="text-white">No exercises available</p>
+        <button onClick={onClose} className="mt-4 bg-[#E0FE10] text-black px-4 py-2 rounded">
+          Close Workout
+        </button>
+      </div>
+    );
+  }
+
   // The current exercise user is doing
   const currentExercise = exercises[currentExerciseIndex].exercise;
 
@@ -55,15 +66,15 @@ const InProgressExercise: React.FC<InProgressExerciseProps> = ({
 
   // Return whichever video we want displayed
   const getCurrentVideoUrl = (): string => {
-    const { videos, currentVideoPosition } = currentExercise;
-    return videos[currentVideoPosition]?.videoURL || '';
+    const { videos, currentVideoPosition } = currentExercise || {};
+    return videos?.[currentVideoPosition ?? 0]?.videoURL || '';
   };
 
   return (
     <div className="fixed inset-0 bg-zinc-900 flex flex-col">
       {/* Video Section */}
       <div className="relative flex-1">
-        <video
+      <video
           src={getCurrentVideoUrl()}
           className="absolute inset-0 w-full h-full object-cover"
           autoPlay
@@ -92,16 +103,16 @@ const InProgressExercise: React.FC<InProgressExerciseProps> = ({
         {/* Exercise Navigation Bubbles */}
         <div className="absolute bottom-8 left-0 right-0">
           <div className="flex justify-center gap-2 px-4 overflow-x-auto">
-            {exercises.map((exerciseLog, idx) => (
+          {exercises.map((exerciseLog, idx) => (
               <div
-                key={exerciseLog.id}
+                key={exerciseLog.id || idx}
                 className={`relative w-10 h-10 rounded-full overflow-hidden border-2 
                   ${
                     idx === currentExerciseIndex
-                      ? 'border-[#E0FE10]'           // current exercise
+                      ? 'border-[#E0FE10]'
                       : idx < currentExerciseIndex
-                      ? 'border-zinc-600'           // past exercises
-                      : 'border-zinc-400'           // future exercises
+                      ? 'border-zinc-600'
+                      : 'border-zinc-400'
                   }`}
               >
                 {exerciseLog.isCompleted ? (
@@ -110,8 +121,8 @@ const InProgressExercise: React.FC<InProgressExerciseProps> = ({
                   </div>
                 ) : (
                   <img
-                    src={exerciseLog.exercise.videos[0]?.gifURL}
-                    alt={exerciseLog.exercise.name}
+                    src={exerciseLog.exercise?.videos?.[0]?.gifURL || '/placeholder-exercise.gif'}
+                    alt={exerciseLog.exercise?.name || 'Exercise'}
                     className="w-full h-full object-cover"
                   />
                 )}

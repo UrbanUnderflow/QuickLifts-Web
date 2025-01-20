@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
 import BottomNav from '../components/App/BottomNav';
 import Discover from '../../src/components/App/RootScreens/Discover';
 import Search from '../../src/components/App/RootScreens/Search';
@@ -9,81 +10,164 @@ import SignInModal from "../components/SignInModal";
 import WorkoutReadyView from "../components/WorkoutReadyView";
 import InProgressExercise from '../components/App/InProgressExercise/InProgressExercise';
 import { SelectedRootTabs } from '../types/DashboardTypes';
-import { onAuthStateChanged } from 'firebase/auth';
-import { auth } from '../api/firebase/config'; 
+import { onAuthStateChanged, getAuth, signOut } from 'firebase/auth';
 import { userService } from '../api/firebase/user';
+import { RootState } from '../redux/store';
 import WorkoutPanel from '../components/App/Dashboard/WorkoutPanel';
 import { ExerciseLog, Exercise } from '../api/firebase/exercise/types';
-import { Workout } from '../api/firebase/workout/types';
+import { Workout, WorkoutStatus } from '../api/firebase/workout/types';
 import { workoutService } from '../api/firebase/workout/service';
-import Link from 'next/link';
+import { setUser, setLoading } from '../redux/userSlice';
+
+import { setCurrentWorkout, setCurrentExerciseLogs } from '../redux/workoutSlice';
+
+  // Monitor auth changes
+  export const useAuth = () => {
+    const dispatch = useDispatch();
+    const auth = getAuth();
+  
+    useEffect(() => {
+      console.log('useAuth effect running');
+      dispatch(setLoading(true));
+  
+      const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+        console.log('Auth state changed. User:', firebaseUser ? firebaseUser.uid : 'null');
+        if (firebaseUser) {
+          try {
+            const firestoreUser = await userService.fetchUserFromFirestore(firebaseUser.uid);
+            console.log('Firestore user fetched:', firestoreUser);
+            dispatch(setUser(firestoreUser));
+            userService.currentUser = firestoreUser;
+          } catch (error) {
+            console.error('Error fetching user data:', error);
+            dispatch(setUser(null));
+          }
+        } else {
+          console.log('No Firebase user, setting user to null');
+          dispatch(setUser(null));
+          userService.currentUser = null;
+        }
+        dispatch(setLoading(false));
+      });
+  
+      return () => unsubscribe();
+    }, [dispatch]);
+  };
 
 const HomeContent = () => {
   // Track which root tab is selected
   const [selectedTab, setSelectedTab] = useState<SelectedRootTabs>(SelectedRootTabs.Discover);
   const [isWorkoutPanelOpen, setIsWorkoutPanelOpen] = useState(false);
 
-  // Track whether user is signed in
-  const [isSignedIn, setIsSignedIn] = useState(false);
-
   // Control whether to show the sign-in modal
   const [isSignInModalVisible, setIsSignInModalVisible] = useState(true);
 
   // New states for workout flow
-  const [workoutStatus, setWorkoutStatus] = useState<'idle' | 'ready' | 'in-progress' | 'completed'>('idle');
-  const [currentWorkout, setCurrentWorkout] = useState<Workout | null>(null);
-  const [currentExerciseLogs, setCurrentExerciseLogs] = useState<ExerciseLog[]>([]);
   const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0);
+  
+  const { currentUser, loading } = useSelector((state: RootState) => state.user);
+  const userId = useSelector((state: RootState) => state.user.currentUser?.id);
+  const currentWorkoutSession = useSelector((state: RootState) => state.workout.currentWorkout);
+  const currentExerciseLogs = useSelector((state: RootState) => state.workout.currentExerciseLogs);
+  
 
-  // Monitor auth changes
+
+  const dispatch = useDispatch();
+
+
+  //Do authentication
+  useAuth(); 
+
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
+    console.log('HomeContent effect. CurrentUser:', currentUser, 'Loading:', loading);
+  }, [currentUser, loading]);
+
+  useEffect(() => {
+    if (userId) {
+      const fetchWorkoutSessions = async () => {
         try {
-          const firestoreUser = await userService.fetchUserFromFirestore(user.uid);
-          userService.currentUser = firestoreUser;
-          console.log('User data fetched and set:', firestoreUser);
-          setIsSignedIn(true);
-          setIsSignInModalVisible(false);
+          console.log('Fetching workout sessions...');
+          const sessions = await workoutService.fetchAllWorkoutSessions(userId);
+          console.log('Workout sessions fetched:', sessions);
+  
+          const queuedUpSessions = sessions.filter(session => 
+            session.workout?.workoutStatus === WorkoutStatus.QueuedUp
+          );
+  
+          const inProgressSessions = sessions.filter(session => 
+            session.workout?.workoutStatus === WorkoutStatus.InProgress
+          );
+  
+          console.log('QueuedUp sessions:', queuedUpSessions);
+          console.log('InProgress sessions:', inProgressSessions);
+  
+          if (inProgressSessions.length > 0) {
+            const currentSession = inProgressSessions[0]; // Prioritize InProgress
+            console.log('Current workout session (InProgress) found:', currentSession);
+            dispatch(setCurrentWorkout(currentSession.workout));
+            dispatch(setCurrentExerciseLogs(currentSession.logs || []));
+          } else if (queuedUpSessions.length > 0) {
+            const currentSession = queuedUpSessions[0];
+            console.log('Current workout session (QueuedUp) found:', currentSession);
+            dispatch(setCurrentWorkout(currentSession.workout));
+            dispatch(setCurrentExerciseLogs(currentSession.logs || []));
+          } else {
+            console.log('No current workout session found');
+            dispatch(setCurrentWorkout(null));
+            dispatch(setCurrentExerciseLogs([]));
+          }
         } catch (error) {
-          console.error('Error fetching user data:', error);
+          console.error('Error fetching workout sessions:', error);
         }
-      } else {
-        userService.currentUser = null;
-        setIsSignedIn(false);
-        setIsSignInModalVisible(true);
-      }
-    });
-    return () => unsubscribe();
-  }, []);
+      };
+  
+      fetchWorkoutSessions();
+    }
+  }, [userId, dispatch]);
 
   // Function to start a workout
   const startWorkout = (workout: Workout, logs: ExerciseLog[]) => {
-    setCurrentWorkout(workout);
-    setCurrentExerciseLogs(logs);
-    setWorkoutStatus('ready');
-  };
+    dispatch(setCurrentWorkout(workout));
+    dispatch(setCurrentExerciseLogs(logs));
+  };  
 
   // Function to begin the workout (move from ready to in-progress)
   const beginWorkout = () => {
-    setWorkoutStatus('in-progress');
+    if (currentWorkoutSession) {
+      dispatch(setCurrentWorkout({
+        ...currentWorkoutSession,
+        workoutStatus: WorkoutStatus.InProgress
+      }));
+    }
+  };
+
+  const handleSignOut = async () => {
+    const auth = getAuth();
+    try {
+      await signOut(auth);
+      // Handle successful sign out (e.g., redirect to home page)
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
   };
 
   // Function to complete an exercise
   const completeExercise = () => {
+    const dispatch = useDispatch();
+    const currentExerciseLogs = useSelector((state: RootState) => state.workout.currentExerciseLogs);
+    
     const updatedLogs = [...currentExerciseLogs];
     updatedLogs[currentExerciseIndex] = {
       ...updatedLogs[currentExerciseIndex],
       isCompleted: true
     };
-
-    setCurrentExerciseLogs(updatedLogs);
-
+  
+    dispatch(setCurrentExerciseLogs(updatedLogs));
+  
     // Move to next exercise or complete workout
-    if (currentExerciseIndex < currentExerciseLogs.length - 1) {
+    if (currentExerciseIndex < updatedLogs.length - 1) {
       setCurrentExerciseIndex(prev => prev + 1);
     } else {
-      setWorkoutStatus('completed');
       // Optional: reset or navigate
       resetWorkout();
     }
@@ -91,24 +175,26 @@ const HomeContent = () => {
 
   // Function to reset workout
   const resetWorkout = () => {
-    setWorkoutStatus('idle');
-    setCurrentWorkout(null);
-    setCurrentExerciseLogs([]);
+    const dispatch = useDispatch();
+    dispatch(setCurrentWorkout(null));
+    dispatch(setCurrentExerciseLogs([]));
     setCurrentExerciseIndex(0);
   };
 
   // Render workout views based on status
   const renderWorkoutView = () => {
-    switch (workoutStatus) {
-      case 'ready':
+    if (!currentWorkoutSession) return null;
+  
+    switch (currentWorkoutSession.workoutStatus) {
+      case WorkoutStatus.QueuedUp:
         return (
           <WorkoutReadyView 
-            workout={currentWorkout!}
+            workout={currentWorkoutSession}
             onClose={resetWorkout}
             onStartWorkout={beginWorkout}
           />
         );
-      case 'in-progress':
+      case WorkoutStatus.InProgress:
         return (
           <InProgressExercise
             exercises={currentExerciseLogs}
@@ -143,30 +229,38 @@ const HomeContent = () => {
   // Modify WorkoutPanel to use new startWorkout method
   const handleStartWorkout = async (workout: Workout) => {
     try {
-      // Save workout session and get logs
-      const savedWorkout = await workoutService.saveWorkoutSession({
-        workout,
-        logs: workout.logs || []
-      });
+      if (userId) {
+        // Save workout session and get logs
+        const savedWorkout = await workoutService.saveWorkoutSession({
+          userId,
+          workout,
+          logs: workout.logs || []
+        });
 
-      if (savedWorkout) {
-        startWorkout(savedWorkout, savedWorkout.logs || []);
-        setIsWorkoutPanelOpen(false);
+        if (savedWorkout) {
+          startWorkout(savedWorkout, savedWorkout.logs || []);
+          setIsWorkoutPanelOpen(false);
+        }
       }
     } catch (error) {
       console.error('Error starting workout:', error);
     }
   };
 
+  //Added loading state
+  if (loading) {
+    return <div className="min-h-screen bg-zinc-900 flex items-center justify-center">
+    </div>;
+  }
+
   // If user is not signed in, show the SignInModal
-  if (!isSignedIn) {
+  if (!currentUser) {
     return (
       <SignInModal
         isVisible={isSignInModalVisible}
         onClose={() => setIsSignInModalVisible(false)}
         onSignInSuccess={(user) => {
           console.log('Sign-in successful:', user);
-          setIsSignedIn(true);
           setIsSignInModalVisible(false);
         }}
         onSignInError={(error) => {
@@ -175,7 +269,6 @@ const HomeContent = () => {
         }}
         onSignUpSuccess={(user) => {
           console.log('Sign-up successful:', user);
-          setIsSignedIn(true);
           setIsSignInModalVisible(false);
         }}
         onSignUpError={(error) => {
@@ -196,13 +289,12 @@ const HomeContent = () => {
   return (
     <div className="min-h-screen bg-zinc-900">
       {/* Render workout view if in workout flow */}
-      {(workoutStatus === 'ready' || workoutStatus === 'in-progress') && renderWorkoutView()}
-
-      {/* Existing layout if not in workout flow */}
-      {workoutStatus === 'idle' && (
+      {currentWorkoutSession ? (
+        renderWorkoutView()
+      ) : (
         <>
-          {/* Top Navigation */}
-          <nav className="px-4 py-4 bg-zinc-900/80 backdrop-blur-sm border-b border-zinc-800 sticky top-0 z-10 flex justify-between items-center">
+            {/* Top Navigation */}
+            <nav className="px-4 py-4 bg-zinc-900/80 backdrop-blur-sm border-b border-zinc-800 sticky top-0 z-10 flex justify-between items-center">
             <img src="/pulse-logo-white.svg" alt="Pulse" className="h-8" />
             
             <button

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSelector } from 'react-redux';
 import { useRouter } from 'next/router';
 import SequentialVideoPlayerView from '../../../components/SequentialVideoPlayerView';
 import SweatListCardView from '../../../components/SweatListCardView';
@@ -6,6 +7,7 @@ import { workoutService } from '../../../api/firebase/workout/service';
 import { ExerciseLog, ExerciseReference } from '../../../api/firebase/exercise/types';
 import { Workout } from '../../../api/firebase/workout/types';
 import { userService } from '../../../api/firebase/user/service';
+import { RootState } from '../../../redux/store';
 
 const WorkoutPreviewer: React.FC = () => {
   const router = useRouter();
@@ -15,6 +17,9 @@ const WorkoutPreviewer: React.FC = () => {
   const [logs, setLogs] = useState<ExerciseLog[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  const userId = useSelector((state: RootState) => state.user.currentUser?.id);
+
 
   useEffect(() => {
     if (!router.isReady || !username || !id) return;
@@ -57,26 +62,29 @@ const WorkoutPreviewer: React.FC = () => {
   }
 
   const handleStartWorkout = async () => {
-    // if (!workout || !logs.length) {
-    //   setError("Unable to start workout");
-    //   return;
-    // }
-
+    if (!workout || !logs.length) {
+      setError("Unable to start workout");
+      return;
+    }
+  
     try {
-      // // Save the workout session (queue it up)
-      // const savedWorkout = await workoutService.saveWorkoutSession({
-      //   workout,
-      //   logs
-      // });
-
-      // console.log("We have queued up saved workout: " + savedWorkout);
-
-      // if (savedWorkout) {
-        // Navigate back to the home page
-        router.push('/');
-      // } else {
-      //   setError("Failed to save workout session");
-      // }
+      if (userId) {
+        // Save the workout session (queue it up)
+        const savedWorkout = await workoutService.saveWorkoutSession({
+          userId,
+          workout,
+          logs
+        });
+    
+        console.log("We have queued up saved workout:", savedWorkout);
+    
+        if (savedWorkout) {
+          // Navigate back to the home page
+          router.push('/');
+        } else {
+          setError("Failed to save workout session");
+        }
+      }
     } catch (err) {
       console.error('Error starting workout:', err);
       setError("Failed to start workout");

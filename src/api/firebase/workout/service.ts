@@ -63,8 +63,8 @@ class WorkoutService {
   /**
    * Fetch the user's current workout (either QueuedUp or InProgress).
    */
-  async fetchCurrentWorkout(): Promise<Workout | null> {
-    const session = await this.fetchCurrentWorkoutSession();
+  async fetchCurrentWorkout(userId: string): Promise<Workout | null> {
+    const session = await this.fetchCurrentWorkoutSession(userId);
     return session.workout;
   }
 
@@ -757,17 +757,16 @@ async fetchUserChallengesByChallengeId(challengeId: string): Promise<UserChallen
    * Fetch the workout session from Firestore, returning { workout, logs }.
    * Checks first for a QueuedUp session, then for InProgress.
    */
-  async fetchCurrentWorkoutSession(): Promise<{
+  async fetchCurrentWorkoutSession(userId: string): Promise<{
     workout: Workout | null;
     logs: ExerciseLog[] | null;
   }> {
-    const currentUser = userService.currentUser;
-    if (!currentUser?.id) {
-      throw new Error('No user is signed in');
+    if (!userId) {
+      throw new Error('No user ID provided');
     }
 
     // Reference to user's workoutSessions
-    const workoutSessionsRef = collection(db, 'users', currentUser.id, 'workoutSessions');
+    const workoutSessionsRef = collection(db, 'users', userId, 'workoutSessions');
 
     // 1) Check for QueuedUp
     let q = query(workoutSessionsRef, where('status', '==', WorkoutStatus.QueuedUp));
@@ -789,6 +788,37 @@ async fetchUserChallengesByChallengeId(challengeId: string): Promise<UserChallen
     return { workout: null, logs: null };
   }
 
+  async fetchAllWorkoutSessions(userId: string): Promise<{
+    workout: Workout | null;
+    logs: ExerciseLog[] | null;
+  }[]> {
+    if (!userId) {
+      throw new Error('No user ID provided');
+    }
+  
+    // Reference to user's workoutSessions
+    const workoutSessionsRef = collection(db, 'users', userId, 'workoutSessions');
+  
+    try {
+      const snap = await getDocs(workoutSessionsRef);
+  
+      if (snap.empty) {
+        console.log('No workout sessions found for user');
+        return [];
+      }
+  
+      const sessions = await Promise.all(
+        snap.docs.map(doc => this.processWorkoutSessionDocument(doc))
+      );
+  
+      console.log(`Found ${sessions.length} workout sessions`);
+      return sessions;
+    } catch (error) {
+      console.error('Error fetching workout sessions:', error);
+      throw error;
+    }
+  }
+
   /**
    * Helper to build the Workout object + any logs from the snapshot.
    */
@@ -796,31 +826,59 @@ async fetchUserChallengesByChallengeId(challengeId: string): Promise<UserChallen
     workoutDoc: QueryDocumentSnapshot<DocumentData>
   ): Promise<{ workout: Workout; logs: ExerciseLog[] }> {
     const data = workoutDoc.data();
-    const workout: Workout = {
+    const workout = new Workout({
       id: workoutDoc.id,
-      ...data,
-      // Make sure to handle .toDate() if these fields are Firebase Timestamps
-      createdAt: data.createdAt?.toDate() ?? new Date(),
-      updatedAt: data.updatedAt?.toDate() ?? new Date()
-    } as Workout;
-
-    // If you have logs embedded in the same doc or in a subcollection,
-    // fetch them here. For now, we return an empty array.
-    const logs: ExerciseLog[] = [];
-
+      roundWorkoutId: data.roundWorkoutId || '',
+      exercises: data.exercises || [],
+      title: data.title || '',
+      description: data.description || '',
+      duration: data.duration || 0,
+      useAuthorContent: data.useAuthorContent || false,
+      isCompleted: data.isCompleted || false,
+      workoutStatus: data.workoutStatus || WorkoutStatus.Archived,
+      author: data.author || '',
+      createdAt: convertFirestoreTimestamp(data.createdAt),
+      updatedAt: convertFirestoreTimestamp(data.updatedAt),
+      startTime: convertFirestoreTimestamp(data.startTime),
+      collectionId: data.collectionId,
+      challenge: data.challenge,
+      logs: data.logs,
+      workoutRating: data.workoutRating,
+      order: data.order,
+      zone: data.zone || BodyZone.FullBody
+    });
+  
+    // Fetch logs from subcollection
+    const logsRef = collection(workoutDoc.ref, 'logs');
+    const logsSnapshot = await getDocs(logsRef);
+    const logs: ExerciseLog[] = logsSnapshot.docs.map(logDoc => {
+      const logData = logDoc.data();
+      return ExerciseLog.fromFirebase({
+        ...logData,
+        id: logDoc.id,
+        workoutId: workout.id,
+        createdAt: convertFirestoreTimestamp(logData.createdAt),
+        updatedAt: convertFirestoreTimestamp(logData.updatedAt)
+      });
+    });
+  
+    console.log("The workout is:", JSON.stringify(workout, null, 2));
+    console.log("Logs fetched:", logs.length);
+  
     return { workout, logs };
   }
 
   async saveWorkoutSession({
+    userId,
     workout,
     logs
   }: {
+    userId: string,
     workout: Workout,
     logs: ExerciseLog[]
   }): Promise<Workout | null> {
-    const currentUser = userService.currentUser;
-    if (!currentUser?.id) {
-      throw new Error('No user is signed in');
+    if (!userId) {
+      throw new Error('No user ID provided');
     }
   
     try {
@@ -828,7 +886,7 @@ async fetchUserChallengesByChallengeId(challengeId: string): Promise<UserChallen
   
       // Prepare workout data for saving
       const newWorkout = {
-        ...workout,
+        ...Challenge.toFirestoreObject(workout),
         workoutStatus: WorkoutStatus.QueuedUp,
         createdAt: currentDate,
         updatedAt: currentDate,
@@ -838,7 +896,7 @@ async fetchUserChallengesByChallengeId(challengeId: string): Promise<UserChallen
   
       // Prepare logs with unique IDs and timestamps
       const newLogs = logs.map((log, index) => ({
-        ...log,
+        ...Challenge.toFirestoreObject(log),
         id: `${log.id}-${currentDate.getTime()}`, // Ensure unique ID
         workoutId: newWorkout.id,
         order: index, // Add order to maintain exercise sequence
@@ -850,7 +908,7 @@ async fetchUserChallengesByChallengeId(challengeId: string): Promise<UserChallen
   
       // Prepare workout session document
       const workoutSessionRef = doc(
-        collection(db, 'users', currentUser.id, 'workoutSessions')
+        collection(db, 'users', userId, 'workoutSessions')
       );
   
       // Save the full workout session data
@@ -864,7 +922,7 @@ async fetchUserChallengesByChallengeId(challengeId: string): Promise<UserChallen
       this._currentWorkoutLogs = newLogs;
   
       // Optionally, update user's current workout reference
-      const userRef = doc(db, 'users', currentUser.id);
+      const userRef = doc(db, 'users', userId);
       await updateDoc(userRef, {
         currentWorkoutSessionId: workoutSessionRef.id
       });
@@ -875,6 +933,8 @@ async fetchUserChallengesByChallengeId(challengeId: string): Promise<UserChallen
       throw error;
     }
   }
+
+
 
   /**
    * Example "join challenge" method using the client SDK (no admin privileges).

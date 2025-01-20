@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
+import { useSelector, useDispatch } from 'react-redux';
 import { X } from 'lucide-react';
 import { Workout, WorkoutStatus, WorkoutSummary } from '../../../api/firebase/workout/types';
 import {  
@@ -10,6 +11,9 @@ import WorkoutTypeSelector from '../../../components/App/Dashboard/WorkoutTypeSe
 import classNames from 'classnames'; // Install classnames for conditional classes
 import { userService } from '../../../api/firebase/user'; 
 import { workoutService } from '../../../api/firebase/workout'
+import { RootState } from '../../../redux/store';
+import { setCurrentWorkout, setCurrentExerciseLogs } from '../../../redux/workoutSlice';
+
 
 interface WorkoutPanelProps {
   isVisible: boolean;
@@ -24,12 +28,15 @@ const WorkoutPanel: React.FC<WorkoutPanelProps> = ({
   onClose, 
   onStartWorkout 
 }) => {
-  const [currentWorkout, setCurrentWorkout] = useState<Workout | null>(null);
+  const dispatch = useDispatch();
+  const currentWorkout = useSelector((state: RootState) => state.workout.currentWorkout);
+  const currentExerciseLogs = useSelector((state: RootState) => state.workout.currentExerciseLogs);
+  
   const [loading, setLoading] = useState(true);
   const [activeChallenges, setActiveChallenges] = useState<UserChallenge[]>([]);
   const [selectedTab, setSelectedTab] = useState<Tab>('today');
   const [showWorkoutTypeSelector, setShowWorkoutTypeSelector] = useState(false);
-  const [recentWorkouts, setRecentWorkouts] = useState<WorkoutSummary[]>([]); // Assuming you have recent workouts data
+  const [recentWorkouts, setRecentWorkouts] = useState<WorkoutSummary[]>([]);
   const router = useRouter();
 
   useEffect(() => {
@@ -58,9 +65,11 @@ const WorkoutPanel: React.FC<WorkoutPanelProps> = ({
   const fetchWorkoutData = async () => {
     setLoading(true);
     try {
-      // Replace with your actual data fetching logic
-      const workout: Workout | null = await fetchCurrentWorkout();
-      setCurrentWorkout(workout);
+      const workout = await workoutService.fetchCurrentWorkoutSession(userService.currentUser?.id || '');
+      if (workout) {
+        dispatch(setCurrentWorkout(workout.workout));
+        dispatch(setCurrentExerciseLogs(workout.logs || []));
+      }
     } catch (error) {
       console.error('Error fetching workout:', error);
     } finally {

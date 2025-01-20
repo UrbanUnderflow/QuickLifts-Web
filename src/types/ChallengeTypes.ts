@@ -113,6 +113,43 @@ class Challenge {
     const durationInMilliseconds = end - start;
     return Math.ceil(durationInMilliseconds / (1000 * 60 * 60 * 24));
   }
+
+  static toFirestoreObject(obj: any): any {
+      if (obj === null || typeof obj !== 'object') {
+        return obj;
+      }
+    
+      if (obj instanceof Date) {
+        return obj;
+      }
+    
+      if (Array.isArray(obj)) {
+        return obj.map(item => this.toFirestoreObject(item));
+      }
+    
+      if (obj instanceof Challenge) {
+        return {
+          id: obj.id,
+          title: obj.title,
+          subtitle: obj.subtitle,
+          participants: obj.participants,
+          status: obj.status,
+          startDate: obj.startDate,
+          endDate: obj.endDate,
+          createdAt: obj.createdAt,
+          updatedAt: obj.updatedAt,
+          introVideoURL: obj.introVideoURL,
+        };
+      }
+    
+      const plainObject: {[key: string]: any} = {};
+      for (const key in obj) {
+        if (Object.prototype.hasOwnProperty.call(obj, key)) {
+          plainObject[key] = this.toFirestoreObject(obj[key]);
+        }
+      }
+      return plainObject;
+    }
 }
 
 // Props interface for the component

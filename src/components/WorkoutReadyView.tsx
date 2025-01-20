@@ -19,26 +19,9 @@ onStartWorkout
   const router = useRouter();
 
   const handleStartWorkout = async () => {
-    try {
-      // If onStartWorkout is provided, call it
       if (onStartWorkout) {
         onStartWorkout();
       }
-
-      // Save the workout session
-      const savedWorkout = await workoutService.saveWorkoutSession({
-        workout,
-        logs: workout.logs || []
-      });
-
-      if (savedWorkout) {
-        // Navigate to the workout overview or start screen
-        router.push(`/workout/overview`);
-      }
-    } catch (error) {
-      console.error('Error starting workout:', error);
-      // Handle error (maybe show a toast or error message)
-    }
   };
 
   const InfoCard = ({ icon, title, value }: { icon: React.ElementType, title: string, value: string }) => {
