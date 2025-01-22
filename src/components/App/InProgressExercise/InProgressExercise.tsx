@@ -4,6 +4,7 @@ import { ExerciseLog, Exercise } from '../../../api/firebase/exercise/types';
 
 interface InProgressExerciseProps {
   exercises: ExerciseLog[];
+  currentExerciseLogs: ExerciseLog[];
   currentExerciseIndex: number;
   onComplete: () => void; // callback from parent to go to next exercise
   onClose: () => void;    // callback to close the workout
@@ -15,47 +16,91 @@ const getScreenTime = (exercise: Exercise | undefined): number => {
 
 const InProgressExercise: React.FC<InProgressExerciseProps> = ({
   exercises,
+  currentExerciseLogs,
   currentExerciseIndex,
   onComplete,
   onClose,
 }) => {
-  if (!exercises || exercises.length === 0 || currentExerciseIndex >= exercises.length) {
-    console.error('Invalid exercises data or currentExerciseIndex');
+  // Comprehensive initial validation
+  if (!exercises || exercises.length === 0) {
+    console.error('No exercises provided');
     return (
       <div className="fixed inset-0 bg-zinc-900 flex items-center justify-center">
         <p className="text-white">No exercises available</p>
-        <button onClick={onClose} className="mt-4 bg-[#E0FE10] text-black px-4 py-2 rounded">
+        <button 
+          onClick={onClose} 
+          className="mt-4 bg-[#E0FE10] text-black px-4 py-2 rounded"
+        >
           Close Workout
         </button>
       </div>
     );
   }
 
-  // The current exercise user is doing
-  const currentExercise = exercises[currentExerciseIndex].exercise;
+  if (currentExerciseIndex < 0 || currentExerciseIndex >= exercises.length) {
+    console.error('Invalid exercise index', { 
+      currentExerciseIndex, 
+      exercisesLength: exercises.length 
+    });
+    return (
+      <div className="fixed inset-0 bg-zinc-900 flex items-center justify-center">
+        <p className="text-white">Invalid exercise selection</p>
+        <button 
+          onClick={onClose} 
+          className="mt-4 bg-[#E0FE10] text-black px-4 py-2 rounded"
+        >
+          Close Workout
+        </button>
+      </div>
+    );
+  }
 
-  // Timer state
+  // Current exercise log and exercise
+  const currentExerciseLog = exercises[currentExerciseIndex];
+  const currentExercise = currentExerciseLog?.exercise;
+
+  // Validate current exercise
+  if (!currentExercise) {
+    console.error('No exercise found at current index', { 
+      currentExerciseIndex,
+      exerciseLog: currentExerciseLog 
+    });
+    return (
+      <div className="fixed inset-0 bg-zinc-900 flex items-center justify-center">
+        <p className="text-white">Exercise data is missing</p>
+        <button 
+          onClick={onClose} 
+          className="mt-4 bg-[#E0FE10] text-black px-4 py-2 rounded"
+        >
+          Close Workout
+        </button>
+      </div>
+    );
+  }
+
+  // Timer state management
   const [timeRemaining, setTimeRemaining] = useState(() =>
     getScreenTime(currentExercise)
   );
   const [isPaused, setIsPaused] = useState(false);
 
-  // Whenever the current exercise changes, reset the timer
+  // Reset timer when exercise changes
   useEffect(() => {
     setTimeRemaining(getScreenTime(currentExercise));
   }, [currentExercise]);
 
-  // Countdown effect
+  // Countdown logic
   useEffect(() => {
-    // If time is up, tell the parent to move on
+    // If time is up, move to next exercise
     if (timeRemaining <= 0) {
       onComplete();
-      return; // Stop further logic in this effect
+      return;
     }
-    // If paused, do nothing
+
+    // Pause check
     if (isPaused) return;
 
-    // Otherwise, decrement each second
+    // Countdown timer
     const timer = setInterval(() => {
       setTimeRemaining((prev) => prev - 1);
     }, 1000);
@@ -64,24 +109,56 @@ const InProgressExercise: React.FC<InProgressExerciseProps> = ({
     return () => clearInterval(timer);
   }, [timeRemaining, isPaused, onComplete]);
 
-  // Return whichever video we want displayed
+  // Video URL retrieval with comprehensive error handling
   const getCurrentVideoUrl = (): string => {
-    const { videos, currentVideoPosition } = currentExercise || {};
-    return videos?.[currentVideoPosition ?? 0]?.videoURL || '';
+    // Detailed logging of exercise and video information
+    console.log('Current Exercise Details:', {
+      name: currentExercise?.name,
+      videos: currentExercise?.videos,
+      currentVideoPosition: currentExercise?.currentVideoPosition
+    });
+
+    // Comprehensive video retrieval
+    const videos = currentExercise?.videos || [];
+    
+    if (videos.length === 0) {
+      console.warn(`No videos found for exercise: ${currentExercise?.name}`);
+      return '';
+    }
+
+    // Safe video position selection
+    const videoPosition = Math.min(
+      currentExercise?.currentVideoPosition ?? 0, 
+      videos.length - 1
+    );
+
+    const videoUrl = videos[videoPosition]?.videoURL || '';
+    
+    if (!videoUrl) {
+      console.warn(`No video URL for exercise ${currentExercise?.name}`);
+    }
+
+    return videoUrl;
   };
 
   return (
     <div className="fixed inset-0 bg-zinc-900 flex flex-col">
       {/* Video Section */}
       <div className="relative flex-1">
-      <video
+        <video
           src={getCurrentVideoUrl()}
           className="absolute inset-0 w-full h-full object-cover"
           autoPlay
           loop
           muted
           playsInline
+          onError={(e) => {
+            console.error('Video error:', e);
+          }}
         />
+
+        {/* Gradient Overlay */}
+        <div className="absolute bottom-0 left-0 right-0 h-48 bg-gradient-to-t from-black/70 to-transparent pointer-events-none"></div>
 
         {/* Timer Overlay */}
         <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-black/50 rounded-full px-6 py-2 flex items-center gap-4">
@@ -100,34 +177,47 @@ const InProgressExercise: React.FC<InProgressExerciseProps> = ({
           </span>
         </div>
 
+        {/* Exercise Name Section */}
+        <div className="absolute bottom-24 left-0 right-0 px-4 z-10">
+          <h2 className="text-white text-4xl font-bold">
+            {currentExercise?.name || 'Exercise'}
+          </h2>
+        </div>
+
         {/* Exercise Navigation Bubbles */}
-        <div className="absolute bottom-8 left-0 right-0">
-          <div className="flex justify-center gap-2 px-4 overflow-x-auto">
-          {exercises.map((exerciseLog, idx) => (
-              <div
-                key={exerciseLog.id || idx}
-                className={`relative w-10 h-10 rounded-full overflow-hidden border-2 
-                  ${
-                    idx === currentExerciseIndex
-                      ? 'border-[#E0FE10]'
-                      : idx < currentExerciseIndex
-                      ? 'border-zinc-600'
-                      : 'border-zinc-400'
-                  }`}
-              >
-                {exerciseLog.isCompleted ? (
-                  <div className="bg-[#E0FE10] w-full h-full flex items-center justify-center">
-                    <span className="text-black">✓</span>
-                  </div>
-                ) : (
-                  <img
-                    src={exerciseLog.exercise?.videos?.[0]?.gifURL || '/placeholder-exercise.gif'}
-                    alt={exerciseLog.exercise?.name || 'Exercise'}
-                    className="w-full h-full object-cover"
-                  />
-                )}
-              </div>
-            ))}
+        <div className="absolute bottom-8 left-0 right-0 z-10">
+          <div className="px-4 overflow-x-auto">
+            <div className="flex gap-2 w-fit">
+              {currentExerciseLogs.map((exerciseLog, idx) => (
+                <div
+                  key={exerciseLog.id || idx}
+                  className={`flex-shrink-0 relative w-10 h-10 rounded-full overflow-hidden border-2 
+                    ${
+                      idx === currentExerciseIndex
+                        ? 'border-[#E0FE10]'
+                        : exerciseLog.isCompleted
+                        ? 'border-zinc-600'
+                        : 'border-zinc-400'
+                    }`}
+                >
+                  {exerciseLog.isCompleted ? (
+                    <div className="bg-[#E0FE10] w-full h-full flex items-center justify-center">
+                      <span className="text-black">✓</span>
+                    </div>
+                  ) : (
+                    <img
+                      src={exerciseLog.exercise?.videos?.[0]?.gifURL || '/placeholder-exercise.gif'}
+                      alt={exerciseLog.exercise?.name || 'Exercise'}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        console.error(`Error loading GIF for exercise ${idx}:`, e);
+                        (e.target as HTMLImageElement).src = '/placeholder-exercise.gif';
+                      }}
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 

@@ -6,7 +6,7 @@ import { Workout, WorkoutStatus, WorkoutSummary } from '../../../api/firebase/wo
 import {  
   Challenge,
   UserChallenge
- } from '../../../types/ChallengeTypes';
+ } from '../../../api/firebase/workout/types';
 import WorkoutTypeSelector from '../../../components/App/Dashboard/WorkoutTypeSelector';
 import classNames from 'classnames'; // Install classnames for conditional classes
 import { userService } from '../../../api/firebase/user'; 

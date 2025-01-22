@@ -1,7 +1,7 @@
 // components/ChallengeMeta.tsx
 import React from 'react';
 import Head from 'next/head';
-import { Challenge } from '../types/ChallengeTypes';  // Correct import path
+import { Challenge } from '../api/firebase/workout/types';  // Correct import path
 
 interface ChallengeMetaProps {
   challenge: Challenge;

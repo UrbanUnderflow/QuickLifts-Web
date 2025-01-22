@@ -1,17 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { GroupMessage, QuickMessage } from '../../types/ChatTypes'; // Replace with the actual path to your types
-import { UserChallenge } from '../../types/ChallengeTypes'; // Replace with actual path
+import { GroupMessage, QuickMessage } from '../../api/firebase/chat/types'; // Replace with the actual path to your types
+import { UserChallenge } from '../../api/firebase/workout/types'; // Replace with actual path
 import { ImageIcon, SendIcon } from 'lucide-react'; // Replace with desired icons
 import MessageBubble from '../../components/Rounds/MessageBubble'; // We'll define this below
+import { User } from '../../api/firebase/user/types';
 
-interface ChallengeChatViewProps {
+interface RoundChatViewProps {
   participants: UserChallenge[];
   messages: GroupMessage[];
-  onSendMessage: (message: string, image?: File) => void;
-  currentUser: { id: string; username: string } | null;
+  onSendMessage: (message: string, image?: File) => Promise<void>;
+  currentUser: User | null;
+  onCollapse?: () => void; // Add this line
 }
 
-const RoundChatView: React.FC<ChallengeChatViewProps> = ({
+const RoundChatView: React.FC<RoundChatViewProps> = ({
   participants,
   messages,
   onSendMessage,
@@ -63,7 +65,7 @@ const RoundChatView: React.FC<ChallengeChatViewProps> = ({
   };
 
   return (
-    <div className="bg-zinc-900 text-white rounded-xl flex flex-col h-[400px]">
+    <div className="bg-zinc-900 text-white rounded-xl flex flex-col h-[600px]">
       {/* Header */}
       <div className="p-4 flex justify-between items-center bg-zinc-800 rounded-t-xl">
         <div>

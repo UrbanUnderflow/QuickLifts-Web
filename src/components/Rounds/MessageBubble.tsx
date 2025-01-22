@@ -1,5 +1,5 @@
 import React from 'react';
-import { GroupMessage } from '../../types/ChatTypes';
+import { GroupMessage } from '../../api/firebase/chat/types';
 
 interface MessageBubbleProps {
   message: GroupMessage;

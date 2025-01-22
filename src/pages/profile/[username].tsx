@@ -5,7 +5,7 @@ import { FollowRequest } from '../../api/firebase/user';
 import { User } from '../../api/firebase/user';
 import ExerciseGrid from '../../components/ExerciseGrid';
 import { Exercise } from '../../api/firebase/exercise/types'; 
-import { Challenge } from '../../types/ChallengeTypes';
+import { Challenge } from '../../api/firebase/workout/types';
 import { ChallengesTab } from '../../components/ChallengesTab';
 import { WorkoutSummary } from '../../api/firebase/workout';
 import { StarIcon } from '@heroicons/react/24/outline';
@@ -207,7 +207,6 @@ useEffect(() => {
         
         const data = await response.json();
         if (data.success) {
-          console.log('Workout summaries:', data.summaries);
           const summaries = data.summaries.map((summary: any) =>
             WorkoutSummary.fromFirebase(summary)
           );

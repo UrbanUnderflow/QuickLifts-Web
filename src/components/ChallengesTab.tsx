@@ -1,4 +1,4 @@
-import { Challenge } from '../types/ChallengeTypes';
+import { Challenge } from '../api/firebase/workout/types';
 import { ChallengeCard } from './ChallengeCard';
 import { StarIcon } from '@heroicons/react/24/outline';
 

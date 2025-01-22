@@ -1,5 +1,6 @@
 import { ExerciseReference, ExerciseLog } from '../exercise/types';
-import { BodyPart } from '../exercise/types';
+import { BodyPart, ExerciseCategory } from '../exercise/types';
+import { convertFirestoreTimestamp } from '../../../utils/formatDate';
 
 // src/types/WorkoutTypes.ts
 export enum WorkoutStatus {
@@ -60,10 +61,6 @@ export interface RepsAndWeightLog {
   
 // WorkoutClass.ts
 
-import {  
-  Challenge
- } from '../../../types/ChallengeTypes';
-
  export class Workout {
   id: string;
   collectionId?: string[];
@@ -108,24 +105,59 @@ import {
   }
 
   static estimatedDuration(exercises: ExerciseReference[]): number {
-    const averageExerciseTime = 8; // Average time per exercise in minutes
-    const averageRestTime = 1; // Average rest time between exercises in minutes
-    const warmupTime = 5; // Warm-up time in minutes
-    const cooldownTime = 5; // Cool-down time in minutes
+    const warmupTime = 5;
+    const cooldownTime = 5;
+    let totalExerciseTime = 0;
+    let restTime = 0;
+    let hasScreenTimeExercises = false;
+    
+    for (const exerciseRef of exercises) {
+      const exercise = exerciseRef.exercise;
+      console.groupCollapsed(`Exercise: ${exercise}`);
+      
+      if (exercise.category.type === 'cardio') {
+        const duration = exercise.category.details?.duration || 0;
+        console.log('Cardio duration (minutes):', duration);
+        totalExerciseTime += duration;
+      } else if (exercise.category.type === 'weightTraining') {
+        const screenTime = exercise.category.details?.screenTime || 0;
+        
+        if (screenTime > 0) {
+          console.log('Screen time (seconds):', screenTime);
+          console.log('Converted to minutes:', Math.floor(screenTime / 60));
+          totalExerciseTime += Math.floor(screenTime / 60);
+          hasScreenTimeExercises = true;
+        } else {
+          console.log('Using default timing (8m exercise + 1m rest)');
+          totalExerciseTime += 8;
+          restTime += 1;
+        }
+      }
   
-    // Calculate total exercise time based on number of exercises
-    const totalExerciseTime = exercises.length * averageExerciseTime;
+      console.log('Current totals:', {
+        totalExerciseTime,
+        restTime,
+        hasScreenTimeExercises
+      });
+      console.groupEnd();
+    }
   
-    // Calculate rest time between exercises (no rest after last exercise)
-    const totalRestTime = Math.max(0, exercises.length - 1) * averageRestTime;
+    if (!hasScreenTimeExercises) {
+      console.log('Adding warmup/cool-down:', warmupTime + cooldownTime, 'minutes');
+      totalExerciseTime += warmupTime + cooldownTime;
+    }
   
-    // Total estimated workout time
-    const estimatedTotalTime = warmupTime + totalExerciseTime + totalRestTime + cooldownTime;
+    const estimatedTotalTime = totalExerciseTime + restTime;
+    console.log('Pre-rounded total:', estimatedTotalTime);
   
-    // Round to the nearest multiple of 5 for a cleaner presentation
-    const roundedTime = Math.round(estimatedTotalTime / 5) * 5;
+    let finalEstimate = estimatedTotalTime;
+    if (!hasScreenTimeExercises) {
+      finalEstimate = Math.round(estimatedTotalTime / 5) * 5;
+      console.log('Rounded to nearest 5 minutes:', finalEstimate);
+    }
   
-    return Math.max(roundedTime, 10); // Ensure minimum workout time is 10 minutes
+    console.log('Final estimated duration:', finalEstimate, 'minutes');
+    return finalEstimate;
   }
 
   static determineWorkoutZone(exercises: ExerciseReference[]): BodyZone {
@@ -285,3 +317,313 @@ export interface WorkoutService {
   getCurrentWorkoutStatus: () => Promise<WorkoutStatus>;
   saveWorkout: (workout: Workout) => Promise<void>;
 }
+
+// SweatlistIdentifiers type
+export interface SweatlistIdentifiers {
+  id: string;
+  sweatlistAuthorId: string;
+  sweatlistName: string;
+  order: number;
+}
+
+// Enum for sweatlist type matching Swift implementation
+export enum SweatlistType {
+  Together = 'together',
+  Solo = 'solo',
+  Locked = 'locked'
+}
+
+// Main SweatlistCollection interface
+export class SweatlistCollection {
+  id: string;
+  title: string;
+  subtitle: string;
+  challenge?: Challenge;
+  publishedStatus?: boolean;
+  participants: string[];
+  sweatlistIds: SweatlistIdentifiers[];
+  ownerId: string;
+  privacy: SweatlistType;
+  createdAt: Date;
+  updatedAt: Date;
+
+  constructor(data: any) {
+    this.id = data.id;
+    this.title = data.title || '';
+    this.subtitle = data.subtitle || '';
+    this.challenge = data.challenge ? new Challenge(data.challenge) : undefined;
+    this.sweatlistIds = (data.sweatlistIds || []).map((item: any) => ({
+      id: item.id || '',
+      sweatlistAuthorId: item.sweatlistAuthorId || '',
+      sweatlistName: item.sweatlistName || '',
+      order: item.order || 0,
+    }));
+    this.ownerId = data.ownerId || '';
+    this.privacy = data.challenge ? SweatlistType.Together : SweatlistType.Solo;
+    this.participants = (data.participants || []).map((participant: any) => participant || '');
+    this.createdAt = convertFirestoreTimestamp(data.createdAt);
+    this.updatedAt = convertFirestoreTimestamp(data.updatedAt);
+  }
+
+  static fromFirestore(data: any): SweatlistCollection {
+    return new SweatlistCollection(data);
+  }
+
+  toDictionary(): any {
+    return {
+      id: this.id,
+      title: this.title,
+      subtitle: this.subtitle,
+      challenge: this.challenge ? this.challenge.toDictionary() : null,
+      sweatlistIds: this.sweatlistIds.map(item => ({
+        id: item.id,
+        sweatlistAuthorId: item.sweatlistAuthorId,
+        order: item.order
+      })),
+      ownerId: this.ownerId,
+      privacy: this.privacy,
+      createdAt: this.createdAt,
+      updatedAt: this.updatedAt
+    };
+  }
+
+  toRESTDictionary(): any {
+    return {
+      fields: {
+        id: { stringValue: this.id },
+        title: { stringValue: this.title },
+        subtitle: { stringValue: this.subtitle },
+        ownerId: { stringValue: this.ownerId },
+        sweatlistIds: {
+          arrayValue: {
+            values: this.sweatlistIds.map(item => ({
+              mapValue: {
+                fields: {
+                  id: { stringValue: item.id },
+                  sweatlistAuthorId: { stringValue: item.sweatlistAuthorId },
+                  order: { integerValue: item.order }
+                }
+              }
+            }))
+          }
+        },
+        createdAt: { doubleValue: this.createdAt.getTime() },
+        updatedAt: { doubleValue: this.updatedAt.getTime() }
+      }
+    };
+  }
+
+  isPublished(): boolean {
+    if (!this.challenge) return false;
+    return this.challenge.status === ChallengeStatus.Published;
+  }
+}
+
+// Types for user profile image
+interface ProfileImage {
+  profileImageURL: string;
+  thumbnailURL?: string;
+}
+
+// Types for location
+interface UserLocation {
+  latitude: number;
+  longitude: number;
+}
+
+// Types for pulse points
+interface PulsePoints {
+  baseCompletion: number;
+  firstCompletion: number;
+  streakBonus: number;
+  checkInBonus: number;
+  effortRating: number;
+  chatParticipation: number;
+  locationCheckin: number;
+  contentEngagement: number;
+  encouragementSent: number;
+  encouragementReceived: number;
+}
+
+// Types for user in challenge
+interface UserChallenge {
+  id: string;
+  challenge?: Challenge;
+  challengeId: string;
+  userId: string;
+  username: string;
+  profileImage?: ProfileImage;
+  progress: number;
+  completedWorkouts: string[];
+  isCompleted: boolean;
+  location?: UserLocation;
+  city: string;
+  country?: string;
+  timezone?: string;
+  joinDate: Date;
+  createdAt: Date;
+  updatedAt: Date;
+  pulsePoints: PulsePoints;
+  currentStreak: number;
+  encouragedUsers: string[];
+  encouragedByUsers: string[];
+  checkIns: Date[];
+}
+
+// Challenge status enum
+enum ChallengeStatus {
+  Draft = 'draft',
+  Published = 'published',
+  Completed = 'completed',
+  Cancelled = 'cancelled'
+}
+
+class Challenge {
+  id: string;
+  title: string;
+  subtitle: string;
+  participants: UserChallenge[];
+  durationInDays: number;
+  status: ChallengeStatus;
+  startDate: Date;
+  endDate: Date;
+  createdAt: Date;
+  updatedAt: Date;
+  introVideoURL?: string;
+
+  constructor(data: {
+    id: string;
+    title: string;
+    subtitle: string;
+    participants: UserChallenge[];
+    status: ChallengeStatus;
+    startDate: Date;
+    endDate: Date;
+    createdAt: Date;
+    updatedAt: Date;
+    introVideoURL?: string;
+  }) {
+    this.id = data.id;
+    this.title = data.title;
+    this.subtitle = data.subtitle;
+    this.participants = data.participants;
+    this.status = data.status;
+    this.startDate = convertFirestoreTimestamp(data.startDate);
+    this.endDate = convertFirestoreTimestamp(data.endDate);
+    this.createdAt = convertFirestoreTimestamp(data.createdAt);
+    this.updatedAt = convertFirestoreTimestamp(data.updatedAt);
+    this.introVideoURL = data.introVideoURL;
+    this.durationInDays = this.calculateDurationInDays();
+  }
+
+    toDictionary(): any {
+      return {
+        id: this.id,
+        title: this.title,
+        subtitle: this.subtitle,
+        participants: this.participants.map(participant => ({
+          id: participant.id,
+          challengeId: participant.challengeId,
+          userId: participant.userId,
+          username: participant.username,
+          profileImage: participant.profileImage,
+          progress: participant.progress,
+          completedWorkouts: participant.completedWorkouts,
+          isCompleted: participant.isCompleted,
+          location: participant.location,
+          city: participant.city,
+          country: participant.country,
+          timezone: participant.timezone,
+          joinDate: participant.joinDate,
+          createdAt: participant.createdAt,
+          updatedAt: participant.updatedAt,
+          pulsePoints: participant.pulsePoints,
+          currentStreak: participant.currentStreak,
+          encouragedUsers: participant.encouragedUsers,
+          encouragedByUsers: participant.encouragedByUsers,
+          checkIns: participant.checkIns
+        })),
+        status: this.status,
+        startDate: this.startDate,
+        endDate: this.endDate,
+        createdAt: this.createdAt,
+        updatedAt: this.updatedAt,
+        introVideoURL: this.introVideoURL,
+        durationInDays: this.durationInDays
+      };
+    }
+
+
+  /**
+   * Calculates the duration in days between the startDate and endDate.
+   * @returns The number of days between the two dates.
+   */
+  private calculateDurationInDays(): number {
+    // Convert dates to timestamps using valueOf()
+    const start = this.startDate?.valueOf();
+    const end = this.endDate?.valueOf();
+
+    // Ensure converted dates are valid
+    if (!start || !end || isNaN(start) || isNaN(end)) {
+      throw new Error('Invalid startDate or endDate');
+    }
+
+    // Calculate the difference in milliseconds and convert to days
+    const durationInMilliseconds = end - start;
+    return Math.ceil(durationInMilliseconds / (1000 * 60 * 60 * 24));
+  }
+
+  static toFirestoreObject(obj: any): any {
+      if (obj === null || typeof obj !== 'object') {
+        return obj;
+      }
+    
+      if (obj instanceof Date) {
+        return obj;
+      }
+    
+      if (Array.isArray(obj)) {
+        return obj.map(item => this.toFirestoreObject(item));
+      }
+    
+      if (obj instanceof Challenge) {
+        return {
+          id: obj.id,
+          title: obj.title,
+          subtitle: obj.subtitle,
+          participants: obj.participants,
+          status: obj.status,
+          startDate: obj.startDate,
+          endDate: obj.endDate,
+          createdAt: obj.createdAt,
+          updatedAt: obj.updatedAt,
+          introVideoURL: obj.introVideoURL,
+        };
+      }
+    
+      const plainObject: {[key: string]: any} = {};
+      for (const key in obj) {
+        if (Object.prototype.hasOwnProperty.call(obj, key)) {
+          plainObject[key] = this.toFirestoreObject(obj[key]);
+        }
+      }
+      return plainObject;
+    }
+}
+
+// Props interface for the component
+interface ChallengeInvitationProps {
+  challenge: Challenge;
+  onClose: () => void;
+  onJoinChallenge: (challenge: any) => Promise<void>;
+}
+
+export type {
+  ProfileImage,
+  UserLocation,
+  PulsePoints,
+  UserChallenge,
+  ChallengeInvitationProps
+};
+
+export { ChallengeStatus, Challenge };

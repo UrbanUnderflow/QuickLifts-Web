@@ -1,16 +1,19 @@
 import React, { useEffect, useState } from 'react';
 import { Calendar, ChevronDown } from 'lucide-react';
-import { SweatlistCollection, SweatlistType } from '../../types/SweatlistCollection';
-import { ChallengeStatus, UserChallenge } from '../../types/ChallengeTypes';
+import { SweatlistCollection, SweatlistIdentifiers } from '../../api/firebase/workout/types';
+import { ChallengeStatus, UserChallenge } from '../../api/firebase/workout/types';
 import { StackCard, RestDayCard } from '../../components/Rounds/StackCard';
 import { Workout, WorkoutStatus, BodyZone } from '../../api/firebase/workout/types';
 import ParticipantsSection from '../../components/Rounds/ParticipantsSection';
 import RoundChatView from '../../components/Rounds/RoundChatView';
-import { GroupMessage, MessageMediaType } from '../../types/ChatTypes';
-import SignInModal from "../../components/SignInModal";
+import { GroupMessage, MessageMediaType } from '../../api/firebase/chat/types';
 import { workoutService } from '../../api/firebase/workout/service';
-import { userService } from '../../api/firebase/user';
+import { userService, User } from '../../api/firebase/user';
 import { useRouter } from 'next/router';
+import { RootState } from '../../redux/store';
+import { useSelector } from 'react-redux';
+
+import { ChatService } from '../../api/firebase/chat/service';
 
 const ChallengeDetailView = () => {
   const router = useRouter();
@@ -22,28 +25,66 @@ const ChallengeDetailView = () => {
   const [error, setError] = useState<string | null>(null);
   const [showMenu, setShowMenu] = useState(false);
   const [editMode, setEditMode] = useState(false);
-  const [isSignedIn, setIsSignedIn] = useState(false);
-  const [isModalVisible, setIsModalVisible] = useState(true);
-  const [userChallenges, setUserChallenge] = useState<UserChallenge[] | null>(null);
+  const [userChallenges, setUserChallenges] = useState<UserChallenge[] | null>(null);
+
+  const [messages, setMessages] = useState<GroupMessage[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [chatExpanded, setChatExpanded] = useState(true);
+
+  const [participantsLoading, setParticipantsLoading] = useState(true);
+
+
+  const { currentUser } = useSelector((state: RootState) => state.user);
+
+  useEffect(() => {
+    const fetchMessages = async () => {
+      if (collection?.challenge?.id) {
+        try {
+          const messages = await ChatService.getInstance().fetchChallengeMessages(collection.challenge.id);
+          setMessages(messages);
+          calculateUnread(messages);
+        } catch (error) {
+          console.error('Error fetching messages:', error);
+        }
+      }
+    };
+    
+    fetchMessages();
+    const unsubscribe = setupRealtimeUpdates();
+    return () => unsubscribe();
+  }, [collection?.challenge?.id]);
+
+  useEffect(() => {
+    if (collection?.challenge?.id && currentUser) {
+      const unreadMessages = messages.filter(msg => !msg.readBy[currentUser.id]);
+      if (unreadMessages.length > 0) {
+        ChatService.getInstance().markMessagesAsRead(
+          collection.challenge.id,
+          currentUser.id,
+          unreadMessages.map(msg => msg.id)
+        );
+      }
+    }
+  }, [messages, collection?.challenge?.id, currentUser]);
 
   useEffect(() => {
     const fetchData = async () => {
       if (!id) return;
 
       try {
-        // Fetch collection data
         const collectionData = await workoutService.getCollectionById(id as string);
+
+        console.log("this is the collection data:", {...collectionData});
         if (!collectionData || !collectionData.challenge) {
           throw new Error('Invalid challenge data received');
         }
         
-        console.log(collectionData);
         setCollection(collectionData);
         await fetchWorkouts(collectionData);
 
-        // Fetch user challenge
-        await fetchUserChallenge(collection?.challenge?.id ?? "0");
-
+        if (collectionData.challenge.id) {
+          await fetchUserChallenge(collectionData.challenge.id);
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'An error occurred');
       } finally {
@@ -56,26 +97,54 @@ const ChallengeDetailView = () => {
     }
   }, [id, router.isReady]);
 
-  const fetchUserChallenge = async (challengeId: string) => {
-    if (!id) return;
+  const setupRealtimeUpdates = () => {
+    return ChatService.getInstance().subscribeToMessages(collection?.challenge?.id || '', (newMessages) => {
+      setMessages(newMessages);
+      calculateUnread(newMessages);
+    });
+  };
   
-    try {
-      console.log("This is the challenge ID: " + challengeId);
+  const calculateUnread = (messages: GroupMessage[]) => {
+    const count = messages.filter(msg => 
+      !msg.readBy[currentUser?.id || '']
+    ).length;
+    setUnreadCount(count);
+  };
 
-      const userChallenges = await workoutService.fetchUserChallengesByChallengeId(challengeId);
-      console.log("UserChallenge: " + userChallenges);
-      setUserChallenge(userChallenges);
-    } catch (error) {
-      console.error('Error fetching user challenge:', error);
-      setError(error instanceof Error ? error.message : 'An error occurred');
-    }
+  const fetchUserChallenge = async (challengeId: string) => {
+    if (!challengeId) return;
+
+    setParticipantsLoading(true);
+    const maxRetries = 3;
+    let retries = 0;
+
+    const tryFetch = async (): Promise<void> => {
+      try {
+        const userChallenges = await workoutService.fetchUserChallengesByChallengeId(challengeId);
+        setUserChallenges(userChallenges);
+      } catch (error) {
+        console.error(`Error fetching user challenge (attempt ${retries + 1}):`, error);
+        if (retries < maxRetries) {
+          retries++;
+          await new Promise(resolve => setTimeout(resolve, 1000 * retries));
+          await tryFetch();
+        } else {
+          console.error('Max retries reached. Failed to fetch user challenge.');
+          setError('Failed to load participants. Please try refreshing the page.');
+        }
+      } finally {
+        setParticipantsLoading(false);
+      }
+    };
+
+    await tryFetch();
   };
 
   const fetchWorkouts = async (collection: SweatlistCollection) => {
     let sweatlistIds = collection.sweatlistIds;
-
+   
     // Handle rest workouts
-    sweatlistIds = sweatlistIds.map(sweatlistId => {
+    sweatlistIds = sweatlistIds.map((sweatlistId: SweatlistIdentifiers) => {
       if (sweatlistId.id === "rest" && !sweatlistId.sweatlistAuthorId) {
         return {
           ...sweatlistId,
@@ -84,24 +153,23 @@ const ChallengeDetailView = () => {
       }
       return sweatlistId;
     });
-
-    // Group by author
-    const groupedByAuthor = sweatlistIds.reduce((acc, curr) => {
+   
+    // Group by author 
+    const groupedByAuthor = sweatlistIds.reduce((acc: { [key: string]: SweatlistIdentifiers[] }, curr: SweatlistIdentifiers) => {
       const authorId = curr.sweatlistAuthorId;
       if (!acc[authorId]) {
         acc[authorId] = [];
       }
       acc[authorId].push(curr);
       return acc;
-    }, {} as { [key: string]: typeof sweatlistIds });
-
+    }, {});
+   
     try {
       let allWorkouts: Workout[] = [];
       
-      // Fetch workouts for each author
-      await Promise.all(Object.entries(groupedByAuthor).map(async ([authorId, sweatlistGroup]) => {
+      await Promise.all(Object.entries(groupedByAuthor).map(async ([authorId, sweatlistGroup]: [string, SweatlistIdentifiers[]]) => {
         if (!authorId) return;
-
+   
         const sweatlists = await workoutService.getAllSweatlists(authorId);
         
         sweatlistGroup.forEach(sweatlistId => {
@@ -109,7 +177,7 @@ const ChallengeDetailView = () => {
             // Create rest workout placeholder
             const restWorkout: Workout = {
               id: "rest",
-              roundWorkoutId: "rest", // Add roundWorkoutId
+              roundWorkoutId: "rest", 
               title: "Rest Day",
               description: "Recovery day",
               author: sweatlistId.sweatlistAuthorId,
@@ -118,32 +186,39 @@ const ChallengeDetailView = () => {
               duration: 0,
               useAuthorContent: true,
               isCompleted: false,
-              workoutStatus: WorkoutStatus.QueuedUp, // Add workoutStatus
+              workoutStatus: WorkoutStatus.QueuedUp,
               createdAt: new Date(),
               updatedAt: new Date(),
-              zone: BodyZone.FullBody, // Add zone
-              collectionId: [], // Optional property
-              challenge: undefined, // Optional property
-              startTime: undefined, // Optional property
-              order: 0, // Optional property
-              workoutRating: undefined // Optional property
+              zone: BodyZone.FullBody,
+              collectionId: [],
+              challenge: undefined,
+              startTime: undefined,
+              order: 0,
+              workoutRating: undefined
             };
             allWorkouts.push(restWorkout);
           } else {
             const workout = sweatlists?.find(sl => sl.id === sweatlistId.id);
             if (workout) {
+              if (Array.isArray(workout.exercises)) {
+                workout.exercises.forEach((exercise, index) => {
+                  if (exercise && exercise.exercise) {
+                    // Exercise validation if needed
+                  }
+                });
+              }
               allWorkouts.push(workout);
             }
           }
         });
       }));
-
+   
       setWorkouts(allWorkouts);
     } catch (error) {
       console.error('Error fetching workouts:', error);
       setError('Failed to fetch workouts');
     }
-  };
+   };
 
   const formatDate = (date: Date | string | number): string => {
     // If it's a timestamp (number), convert to milliseconds if needed
@@ -189,6 +264,10 @@ const ChallengeDetailView = () => {
     }
   };
 
+  const toggleChatExpansion = () => {
+    setChatExpanded(!chatExpanded);
+  };
+
   const handleSwapOrder = async (workout: Workout, newOrder: number) => {
     // Implement workout reordering logic
     try {
@@ -214,24 +293,30 @@ const ChallengeDetailView = () => {
   };
 
   const handleSendMessage = async (message: string, image?: File) => {
-    if (!collection?.id || !userService.currentUser) return;
-
+    if (!collection?.challenge?.id || !currentUser) return;
+  
     try {
-      let mediaUrl = '';
+      let mediaUrl: string | null = null;
       if (image) {
-        // Upload image if provided
-        // mediaUrl = await workoutService.uploadChatImage(image);
+        mediaUrl = await ChatService.getInstance().uploadMedia(image);
+        if (!mediaUrl) {
+          console.error('Failed to upload image');
+          return; // Or handle this case as appropriate for your app
+        }
       }
-
-      const messageData = {
+  
+      const messageData: Omit<GroupMessage, 'id'> = {
+        sender: User.toShortUser(currentUser), // Assuming you've added the toShortUser method to your User class
         content: message,
+        timestamp: new Date(),
+        readBy: {},
         mediaURL: mediaUrl,
         mediaType: image ? MessageMediaType.Image : MessageMediaType.None,
-        sender: userService.currentUser,
-        timestamp: new Date(),
+        checkinId: null,
+        gymName: null
       };
-
-      // await workoutService.sendChallengeMessage(collection.id, messageData);
+  
+      await ChatService.getInstance().sendMessage(collection.challenge.id, messageData);
     } catch (error) {
       console.error('Failed to send message:', error);
     }
@@ -243,37 +328,6 @@ const ChallengeDetailView = () => {
 
   if (error) {
     return <div className="flex items-center justify-center min-h-screen text-red-500">{error}</div>;
-  }
-
-  if (!isSignedIn) {
-    return (
-      <SignInModal
-        isVisible={isModalVisible}
-        onClose={() => setIsModalVisible(false)}
-        onSignInSuccess={(user) => {
-          setIsSignedIn(true);
-          setIsModalVisible(false);
-        }}
-        onSignInError={(error) => {
-          console.error('Sign-in error:', error);
-          alert('Sign-in failed. Please try again.');
-        }}
-        onSignUpSuccess={(user) => {
-          setIsSignedIn(true);
-          setIsModalVisible(false);
-        }}
-        onSignUpError={(error) => {
-          console.error('Sign-up error:', error);
-          alert('Sign-up failed. Please try again.');
-        }}
-        onQuizComplete={() => {
-          console.log('Quiz completed');
-        }}
-        onQuizSkipped={() => {
-          console.log('Quiz skipped');
-        }}
-      />
-    );
   }
 
   const daysInfo = calculateDays();
@@ -377,12 +431,22 @@ const ChallengeDetailView = () => {
             {/* Chat Section */}
             {collection && (
               <div className="mt-8">
-                <RoundChatView
-                  participants={collection.challenge?.participants || []}
-                  messages={[]} // Messages would be fetched and updated in real-time
-                  onSendMessage={handleSendMessage}
-                  currentUser={userService.currentUser}
-                />
+                {chatExpanded ? (
+                  <RoundChatView
+                    participants={collection.challenge?.participants || []}
+                    messages={messages}
+                    onSendMessage={handleSendMessage}
+                    currentUser={currentUser}
+                    onCollapse={toggleChatExpansion}
+                  />
+                ) : (
+                  <></>
+                  // <ChatPreviewCard
+                  //   messages={messages}
+                  //   unreadCount={unreadCount}
+                  //   onExpand={toggleChatExpansion}
+                  // />
+                )}
               </div>
             )}
 
@@ -390,51 +454,83 @@ const ChallengeDetailView = () => {
             <div className="mt-8">
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-lg font-semibold">Stacks in this Round</h2>
-                <button 
+                {/* <button 
                   onClick={() => setEditMode(!editMode)}
                   className="px-3 py-1 text-sm bg-zinc-800 rounded-full hover:bg-zinc-700 transition-colors"
                 >
                   {editMode ? 'Done' : 'Edit'}
-                </button>
+                </button> */}
               </div>
 
               <div className="space-y-4">
-                {workouts.map((workout, index) => (
-                  workout.id === "rest" ? (
-                    <RestDayCard
-                      key={`rest-${index}`}
-                      selectedOrder={index}
-                      maxOrder={workouts.length}
-                      showArrows={editMode}
-                      showCalendar={true}
-                      workoutDate={new Date()}
-                      isComplete={false}
-                      onPrimaryAction={() => console.log('Rest day clicked')}
-                      onCalendarTap={(date) => console.log('Rest day calendar tapped:', date)}
-                      onUpdateOrder={(newOrder) => handleSwapOrder(workout, newOrder)}
-                    />
-                  ) : (
-                    <StackCard
-                      key={workout.id}
-                      workout={workout}
-                      gifUrls={workout.exercises?.map(ex => ex.exercise?.videos?.[0]?.gifURL || '') || []}
-                      selectedOrder={index}
-                      maxOrder={workouts.length}
-                      showArrows={editMode}
-                      showCalendar={true}
-                      workoutDate={new Date()}
-                      isComplete={false}
-                      isChallengeEnabled={true}
-                      onPrimaryAction={() => {
-                        // Assuming the workout's author is the username we want to use
-                        const username = workout.author;
-                        router.push(`/workout/${username}/${workout.id}`);
-                      }}
-                      onCalendarTap={(date) => handleCalendarTap(workout, date)}
-                      onUpdateOrder={(newOrder) => handleSwapOrder(workout, newOrder)}
-                    />
-                  )
-                ))}
+              {workouts.map((workout, index) => {
+                // Calculate workout date based on challenge start date and index
+                const workoutDate = collection?.challenge?.startDate 
+                  ? new Date(new Date(collection.challenge.startDate).getTime() + (index * 24 * 60 * 60 * 1000))
+                  : new Date();
+
+                // Get current day index based on challenge start date
+                const currentDayIndex = collection?.challenge?.startDate ? (() => {
+                  const startDate = new Date(collection.challenge.startDate);
+                  startDate.setHours(0, 0, 0, 0);
+                  const today = new Date();
+                  today.setHours(0, 0, 0, 0);
+                  const diffTime = Math.abs(today.getTime() - startDate.getTime());
+                  return Math.floor(diffTime / (1000 * 60 * 60 * 24));
+                })() : 0;
+
+                return workout.id === "rest" ? (
+                  <RestDayCard
+                    key={`rest-${index}`}
+                    selectedOrder={index}
+                    maxOrder={workouts.length}
+                    showArrows={editMode}
+                    showCalendar={true}
+                    workoutDate={workoutDate}
+                    isComplete={false}
+                    challengeStartDate={collection?.challenge?.startDate}
+                    challengeHasStarted={
+                      collection?.challenge?.status === ChallengeStatus.Published && 
+                      new Date() >= new Date(collection?.challenge?.startDate || 0)
+                    }
+                    currentDayIndex={currentDayIndex}
+                    index={index}
+                    onPrimaryAction={() => console.log('Rest day clicked')}
+                    onCalendarTap={(date) => console.log('Rest day calendar tapped:', date)}
+                    onUpdateOrder={(newOrder) => handleSwapOrder(workout, newOrder)}
+                  />
+                ) : (
+                  <StackCard
+                    key={workout.id}
+                    workout={workout}
+                    gifUrls={workout.exercises?.map(ex => {
+                      return ex.exercise?.videos?.[0]?.gifURL || '';
+                    }) || []}
+                    selectedOrder={index}
+                    maxOrder={workouts.length}
+                    showArrows={editMode}
+                    showCalendar={true}
+                    workoutDate={workoutDate}
+                    isComplete={false}
+                    isChallengeEnabled={true}
+                    challengeStartDate={collection?.challenge?.startDate}
+                    challengeHasStarted={
+                      collection?.challenge?.status === ChallengeStatus.Published && 
+                      new Date() >= new Date(collection?.challenge?.startDate || 0)
+                    }
+                    currentDayIndex={currentDayIndex}
+                    userChallenge={userChallenges?.find(uc => uc.userId === currentUser?.id)}
+                    allWorkoutSummaries={[]} // Replace with actual workout summaries
+                    index={index}
+                    onPrimaryAction={() => {
+                      const username = workout.author;
+                      router.push(`/workout/${username}/${workout.id}`);
+                    }}
+                    onCalendarTap={(date) => handleCalendarTap(workout, date)}
+                    onUpdateOrder={(newOrder) => handleSwapOrder(workout, newOrder)}
+                  />
+                );
+              })}
               </div>
             </div>
           </div>

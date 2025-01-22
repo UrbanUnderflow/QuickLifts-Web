@@ -1,5 +1,5 @@
 import React from 'react';
-import { UserChallenge } from '../../types/ChallengeTypes';
+import { UserChallenge } from '../../api/firebase/workout/types';
 import { Trophy, User } from 'lucide-react';
 
 interface ParticipantsSectionProps {
@@ -136,7 +136,7 @@ const ParticipantsSection: React.FC<ParticipantsSectionProps> = ({
       {participants.length > 5 && (
         <button
           onClick={toggleShowAll}
-          className="mt-4 text-sm text-blue-500 hover:text-blue-400"
+          className="mt-4 text-sm text-[#E0FE10] hover:text-gray-400"
         >
           {showAllParticipants ? 'Show less' : `Show all (${participants.length})`}
         </button>
