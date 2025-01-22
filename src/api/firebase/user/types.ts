@@ -56,6 +56,9 @@ export interface ProfileImage {
    followingCount: number;
    bodyWeight: BodyWeight[];
    workoutCount: number;
+   fcmToken?: string;
+   level: UserLevel = UserLevel.Novice;
+   videoCount: number = 0;
    creator?: {
      type?: string[];
      instagramHandle?: string;
@@ -79,6 +82,9 @@ export interface ProfileImage {
      this.username = data.username || '';
      this.bio = data.bio || '';
      this.profileImage = ProfileImage.fromFirebase(data.profileImage || {});
+     this.fcmToken = data.fcmToken || '';
+      this.level = data.level || UserLevel.Novice;
+      this.videoCount = data.videoCount || 0;
      this.followerCount = data.followerCount || 0;
      this.followingCount = data.followingCount || 0;
      this.bodyWeight = Array.isArray(data.bodyWeight)
@@ -98,10 +104,27 @@ export interface ProfileImage {
        onboardingLink: data.creator?.onboardingLink || '',
        onboardingExpirationDate: data.creator?.onboardingExpirationDate || 0
      };
+     // Update existing properties
+    this.bodyWeight = Array.isArray(data.bodyWeight)
+    ? data.bodyWeight.map((weight: any) => BodyWeight.fromFirebase(weight))
+    : [];
      this.createdAt = data.createdAt ? new Date(data.createdAt) : new Date();
      this.updatedAt = data.updatedAt ? new Date(data.updatedAt) : new Date();
    }
  
+   static toShortUser(user: User): ShortUser {
+    return {
+      id: user.id,
+      displayName: user.displayName,
+      email: user.email,
+      username: user.username,
+      level: user.level || UserLevel.Novice, // You might want to add a 'level' property to the User class if it doesn't exist
+      videoCount: user.workoutCount, // Assuming workoutCount is equivalent to videoCount
+      profileImage: user.profileImage,
+      fcmToken: user.fcmToken // Add this property to the User class if it doesn't exist
+    }
+  };
+
    static fromFirebase(data: any): User {
     return new User({
       id: data.id || '',

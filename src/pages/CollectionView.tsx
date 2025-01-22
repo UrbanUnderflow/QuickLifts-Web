@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import WorkoutService from '../services/WorkoutService';
+import { workoutService } from '../api/firebase/workout/service';
 import CollectionSweatlistItem from '../components/CollectionSweatlistItem';
 import { Workout } from '../api/firebase/workout'; 
 
@@ -17,7 +17,7 @@ const CollectionPreviewer: React.FC = () => {
     const fetchCollection = async () => {
       try {
         setIsLoading(true);
-        const fetchedCollection = await WorkoutService.sharedInstance.fetchCollectionWithSweatLists(collectionId);
+        const fetchedCollection = await workoutService.fetchCollectionWithSweatLists(collectionId);
         console.log(`There are ${fetchedCollection.sweatLists.length} sweatlists in this collection`);
         if (fetchedCollection) {
           setCollection(fetchedCollection.collection);

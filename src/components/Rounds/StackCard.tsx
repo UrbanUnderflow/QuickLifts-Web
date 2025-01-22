@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { ChevronUp, ChevronDown, ChevronRight, Clock, User, CheckCircle } from 'lucide-react';
 import { format } from 'date-fns';
-import { Workout } from '../../api/firebase/workout/types';
+import { Workout, WorkoutSummary } from '../../api/firebase/workout/types';
 import { GifImageViewer } from '../../components/GifImageViewer';
+import { UserChallenge } from '../../api/firebase/workout/types';
 
 interface CommonCardProps {
   selectedOrder?: number;
@@ -12,6 +13,13 @@ interface CommonCardProps {
   workoutDate?: Date;
   backgroundColor?: string;
   isComplete?: boolean;
+  // New props for completion logic
+  challengeStartDate?: Date;
+  currentDayIndex?: number;
+  userChallenge?: UserChallenge;
+  allWorkoutSummaries?: WorkoutSummary[];
+  index?: number;
+  challengeHasStarted?: boolean;  // Add this line
   onPrimaryAction: () => void;
   onCalendarTap?: (date: Date) => void;
   onUpdateOrder?: (newOrder: number) => void;
@@ -84,11 +92,52 @@ const NavigationArrows = ({
   </div>
 );
 
+const didUserCompleteWorkoutFromLogs = (
+  workout: Workout,
+  date: Date,
+  allWorkoutSummaries?: WorkoutSummary[]
+): boolean => {
+  if (!allWorkoutSummaries?.length) return false;
+
+  const startOfDay = new Date(date);
+  startOfDay.setHours(0, 0, 0, 0);
+  
+  const endOfDay = new Date(date);
+  endOfDay.setHours(23, 59, 59, 999);
+
+  // Filter summaries for the given day
+  const sameDaySummaries = allWorkoutSummaries.filter(summary => {
+    if (!summary.completedAt) return false;
+    const completedAt = new Date(summary.completedAt);
+    return completedAt >= startOfDay && completedAt < endOfDay;
+  });
+
+  // Get workout exercise IDs
+  const workoutExerciseIds = workout.exercises.map(ex => ex.exercise.id);
+
+  // Check each summary
+  return sameDaySummaries.some(summary => {
+    if (!summary.completedAt) return false;
+    
+    const completedExerciseIds = summary.exercisesCompleted.map(ex => ex.exercise.id);
+    const hasOverlappingExercises = workoutExerciseIds.some(id => 
+      completedExerciseIds.includes(id)
+    );
+    
+    if (hasOverlappingExercises) {
+      const logHour = new Date(summary.completedAt).getHours();
+      return logHour >= 6; // Only count completions after 6 AM
+    }
+    return false;
+  });
+};
+
 // Saved Sweatlist Card Component
 export const StackCard: React.FC<{
   workout: Workout;
   gifUrls: string[];
   isChallengeEnabled?: boolean;
+  challengeHasStarted?: boolean; 
 } & CommonCardProps> = ({
   workout,
   gifUrls,
@@ -98,16 +147,75 @@ export const StackCard: React.FC<{
   showCalendar,
   workoutDate,
   backgroundColor = 'bg-zinc-800',
-  isComplete = false,
+  isComplete: initialIsComplete = false,
   isChallengeEnabled = false,
+  challengeStartDate,
+  challengeHasStarted,
+  currentDayIndex,
+  userChallenge,
+  allWorkoutSummaries,
+  index,
   onPrimaryAction,
   onCalendarTap,
   onUpdateOrder
 }) => {
+  const [isComplete, setIsComplete] = useState(initialIsComplete);
+
+  // Refresh completion status
+  useEffect(() => {
+    if (!challengeStartDate || !isChallengeEnabled) {
+      setIsComplete(initialIsComplete);
+      return;
+    }
+
+    // For future dates, always mark as incomplete
+    if (workoutDate && workoutDate > new Date()) {
+      setIsComplete(false);
+      return;
+    }
+
+    // Check if completed in userChallenge
+    const isMarkedComplete = userChallenge?.completedWorkouts?.some(
+      completedWorkoutId => completedWorkoutId === workout.id
+    );
+
+    // Check if completed in logs
+    const completedViaLogs = workoutDate ? 
+      didUserCompleteWorkoutFromLogs(workout, workoutDate, allWorkoutSummaries) : 
+      false;
+
+    // Workout is complete if either condition is true
+    setIsComplete(isMarkedComplete || completedViaLogs);
+  }, [workout, challengeStartDate, userChallenge, allWorkoutSummaries, workoutDate, initialIsComplete, isChallengeEnabled]);
+
+  const isToday = (index: number | undefined, startDate: Date | undefined) => {
+   
+    if (index === undefined || !startDate) {
+      return false;
+    }
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const start = new Date(startDate);
+    start.setHours(0, 0, 0, 0);
+    
+    const diffTime = Math.abs(today.getTime() - start.getTime());
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+  
+    return index === diffDays;
+  };
+
+  const debugClassName = `
+    rounded-lg overflow-hidden cursor-pointer ${backgroundColor}
+    ${index !== undefined && index < (currentDayIndex || 0) || isComplete ? 'opacity-70' : 'opacity-100'}
+    ${isToday(index, challengeStartDate) && challengeHasStarted ? 'ring-2 ring-green-500' : ''}
+  `;
+
   return (
     <div 
       onClick={onPrimaryAction}
-      className={`rounded-lg overflow-hidden cursor-pointer ${backgroundColor}`}
+      className={debugClassName}
     >
       <div className="flex">
         {showArrows && selectedOrder !== undefined && maxOrder !== undefined && onUpdateOrder && (
@@ -174,7 +282,6 @@ export const StackCard: React.FC<{
   );
 };
 
-// Rest Day Card Component
 export const RestDayCard: React.FC<CommonCardProps> = ({
   selectedOrder,
   maxOrder,
@@ -182,15 +289,55 @@ export const RestDayCard: React.FC<CommonCardProps> = ({
   showCalendar,
   workoutDate,
   backgroundColor = 'bg-zinc-800',
-  isComplete = false,
+  isComplete: initialIsComplete = false,
+  challengeStartDate,
+  challengeHasStarted,
+  currentDayIndex,
+  index,
   onPrimaryAction,
   onCalendarTap,
   onUpdateOrder
 }) => {
+  const [isComplete, setIsComplete] = useState(initialIsComplete);
+
+  // Refresh completion status for rest days
+  useEffect(() => {
+    if (!challengeStartDate || !workoutDate) {
+      setIsComplete(initialIsComplete);
+      return;
+    }
+
+    // Rest days are complete if the date has passed
+    setIsComplete(workoutDate <= new Date());
+  }, [workoutDate, challengeStartDate, initialIsComplete]);
+
+  const isToday = (index: number | undefined, startDate: Date | undefined) => {
+    if (index === undefined || !startDate) {
+      return false;
+    }
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const start = new Date(startDate);
+    start.setHours(0, 0, 0, 0);
+    
+    const diffTime = Math.abs(today.getTime() - start.getTime());
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+  
+    return index === diffDays;
+  };
+
+  const debugClassName = `
+    rounded-lg overflow-hidden cursor-pointer ${backgroundColor}
+    ${index !== undefined && index < (currentDayIndex || 0) || isComplete ? 'opacity-70' : 'opacity-100'}
+    ${isToday(index, challengeStartDate) && challengeHasStarted ? 'ring-2 ring-green-500' : ''}
+  `;
+
   return (
     <div 
       onClick={onPrimaryAction}
-      className={`rounded-lg overflow-hidden cursor-pointer ${backgroundColor}`}
+      className={debugClassName}
     >
       <div className="flex">
         {showArrows && selectedOrder !== undefined && maxOrder !== undefined && onUpdateOrder && (

@@ -1,1 +1,1 @@
-{"version":1,"functions":{"/Checklist":{},"/HomeContent":{},"/exercise/[exerciseName]":{},"/profile/[username]":{},"/review":{},"/challenge/[id]":{}}}
+{"version":1,"functions":{"/Checklist":{},"/challenge/[id]":{},"/review":{},"/exercise/[exerciseName]":{},"/profile/[username]":{}}}

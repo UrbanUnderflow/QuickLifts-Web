@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import RoundInvitation from '../../components/RoundInvitation';
 import ChallengeMeta from '../../components/ChallengeMeta';
-import { SweatlistCollection } from '../../types/SweatlistCollection';
+import { SweatlistCollection } from '../../api/firebase/workout/types';
 
 const LoadingState = () => (
   <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
@@ -43,14 +43,12 @@ const ChallengePage: React.FC<ChallengePageProps> = ({ initialCollection, initia
       if (!id || initialCollection) return;
 
       try {
-        console.log('Fetching challenge with ID:', id);
         
         const apiUrl = process.env.NODE_ENV === 'development' 
           ? 'http://localhost:8888/.netlify/functions'
           : 'https://fitwithpulse.ai/.netlify/functions';
 
         const url = `${apiUrl}/get-challenge-by-id?id=${id}`;
-        console.log('Fetching from URL:', url);
 
         const response = await fetch(url, {
           method: 'GET',
@@ -67,7 +65,6 @@ const ChallengePage: React.FC<ChallengePageProps> = ({ initialCollection, initia
         }
 
         const data = await response.json();
-        console.log('Received data:', data);
 
         if (!data.success) {
           throw new Error(data.error || 'Failed to fetch challenge');
@@ -95,7 +92,6 @@ const ChallengePage: React.FC<ChallengePageProps> = ({ initialCollection, initia
           }
         };
 
-        console.log('Processed collection:', processedCollection);
         setCollection(processedCollection);
       } catch (err) {
         console.error('Error details:', err);
@@ -132,12 +128,10 @@ const ChallengePage: React.FC<ChallengePageProps> = ({ initialCollection, initia
       <RoundInvitation
         challenge={collection.challenge}
         onClose={() => {
-          console.log('Closing challenge invitation');
           router.push('/');
         }}
         onJoinChallenge={async (challenge) => {
           try {
-            console.log('Attempting to join challenge:', challenge);
             // Add your join challenge logic here
             await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
             router.push('/');

@@ -6,10 +6,14 @@ import '../components/Footer/GlisteningButton.css';
 import '../index.css';
 import '../styles/animations.css';
 
+import AuthWrapper from '../components/AuthWrapper';
+
 const MyApp: React.FC<AppProps> = ({ Component, pageProps }) => {
-  return (
+  return (    
     <Provider store={store}>
-      <Component {...pageProps} />
+      <AuthWrapper>
+        <Component {...pageProps} />
+      </AuthWrapper>
     </Provider>
   );
 };

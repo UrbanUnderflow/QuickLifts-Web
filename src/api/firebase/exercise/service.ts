@@ -26,7 +26,7 @@ class ExerciseService {
           id: doc.id,
           ...doc.data(),
         }));
-  
+    
         // Fetch all videos
         const videoSnapshot = await getDocs(collection(db, 'exerciseVideos'));
         const exerciseVideos: ExerciseVideo[] = videoSnapshot.docs.map((doc) => ({
@@ -52,20 +52,30 @@ class ExerciseService {
           createdAt: doc.data().createdAt ? new Date(doc.data().createdAt.seconds * 1000) : new Date(),
           updatedAt: doc.data().updatedAt ? new Date(doc.data().updatedAt.seconds * 1000) : new Date(),
         }));
-  
-        // Map videos to their corresponding exercises
+    
+        // Map videos to their corresponding exercises by name
         const mappedExercises = exercises.map((exercise) => {
-          const videosForExercise = exerciseVideos.filter((video) => video.exerciseId === exercise.id);
+          const videosForExercise = exerciseVideos.filter((video) => 
+            video.exercise.toLowerCase() === exercise.name.toLowerCase()
+          );
+    
           return {
             ...exercise,
             videos: videosForExercise,
           };
         });
-  
-        // Filter out exercises without videos and store them
+    
+        // Filter out exercises without videos
         this._allExercises = mappedExercises.filter((exercise) => exercise.videos.length > 0);
-  
-        console.log(`Fetched ${this._allExercises.length} exercises with videos.`);
+    
+        // console.log(`Fetched ${this._allExercises.length} exercises with videos.`);
+        
+        // Detailed logging for debugging
+        // console.log('Sample exercises:', this._allExercises.slice(0, 5).map(ex => ({
+        //   name: ex.name,
+        //   videoCount: ex.videos.length,
+        //   firstVideoUrl: ex.videos[0]?.videoURL
+        // })));
       } catch (error) {
         console.error('Error fetching exercises:', error);
         throw new Error('Failed to fetch exercises.');

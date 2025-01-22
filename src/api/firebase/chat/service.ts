@@ -1,57 +1,175 @@
-import { GroupMessage } from "./types";
-import { QueryDocumentSnapshot } from "firebase/firestore"; 
+import {
+  GroupMessage,
+  messageToFirestore,
+  firestoreToMessage,
+  MessageMediaType,
+} from "./types";
+import { db, storage } from "../config";
+import {
+  collection,
+  doc,
+  getDocs,
+  addDoc,
+  updateDoc,
+  query,
+  orderBy,
+  onSnapshot,
+  Timestamp,
+  QueryDocumentSnapshot,
+  DocumentData,
+  startAfter,
+  limit,
+} from "firebase/firestore";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
-// services/ChatService.ts
 export class ChatService {
-    static instance: ChatService;
-    private db: any; // Firebase database reference
-  
-    private constructor() {
-      // Initialize Firebase db reference
+  private static instance: ChatService;
+  private messagesPerPage = 50;
+
+  private constructor() {}
+
+  static getInstance(): ChatService {
+    if (!ChatService.instance) {
+      ChatService.instance = new ChatService();
     }
-  
-    static getInstance(): ChatService {
-      if (!ChatService.instance) {
-        ChatService.instance = new ChatService();
+    return ChatService.instance;
+  }
+
+  private validateCollectionId(collectionId: string): boolean {
+    if (
+      !collectionId ||
+      typeof collectionId !== "string" ||
+      collectionId.trim() === "" ||
+      collectionId.length > 1500 ||
+      /[\/.]/.test(collectionId)
+    ) {
+      console.error(`Invalid collection ID: ${collectionId}`);
+      return false;
+    }
+    return true;
+  }
+
+  private getMessagesRef(collectionId: string) {
+    if (!this.validateCollectionId(collectionId)) {
+      return null;
+    }
+    const parentDocRef = doc(db, "sweatlist-collection", collectionId);
+    return collection(parentDocRef, "messages");
+  }
+
+  async fetchChallengeMessages(
+    collectionId: string,
+    lastVisible?: QueryDocumentSnapshot<DocumentData>
+  ): Promise<GroupMessage[]> {
+    try {
+      const messagesRef = this.getMessagesRef(collectionId);
+      if (!messagesRef) {
+        return [];
       }
-      return ChatService.instance;
-    }
-  
-    async fetchChallengeMessages(collectionId: string): Promise<GroupMessage[]> {
-      try {
-        const messagesRef = this.db
-          .collection("sweatlist-collection")
-          .doc(collectionId)
-          .collection("messages")
-          .orderBy("timestamp");
-  
-        const snapshot = await messagesRef.get();
-        
-        return snapshot.docs.map((doc: QueryDocumentSnapshot) => {
-            const data = doc.data();
-            return {
-              id: doc.id,
-              sender: data.sender,
-              content: data.content,
-              checkinId: data.checkinId || "",
-              timestamp: new Date(data.timestamp * 1000),
-              readBy: this.parseReadBy(data.readBy || {}),
-              mediaURL: data.mediaURL || "",
-              mediaType: data.mediaType || "none",
-              gymName: data.gymName || ""
-            };
-          });
-      } catch (error) {
-        console.error('Error fetching messages:', error);
-        throw error;
+
+      let q = query(
+        messagesRef,
+        orderBy("timestamp", "desc"),
+        limit(this.messagesPerPage)
+      );
+
+      if (lastVisible) {
+        q = query(q, startAfter(lastVisible));
       }
-    }
-  
-    private parseReadBy(readByData: any): { [key: string]: Date } {
-      const readBy: { [key: string]: Date } = {};
-      Object.entries(readByData).forEach(([userId, timestamp]) => {
-        readBy[userId] = new Date((timestamp as number) * 1000);
-      });
-      return readBy;
+
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map((doc) => this.parseMessageDocument(doc)).reverse();
+    } catch (error) {
+      console.error("Error fetching messages:", error);
+      return [];
     }
   }
+
+  subscribeToMessages(
+    collectionId: string,
+    callback: (messages: GroupMessage[]) => void
+  ): () => void {
+    try {
+      const messagesRef = this.getMessagesRef(collectionId);
+      if (!messagesRef) {
+        return () => {};
+      }
+
+      const q = query(messagesRef, orderBy("timestamp", "asc"));
+
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        const messages = snapshot.docs.map((doc) => this.parseMessageDocument(doc));
+        callback(messages);
+      });
+
+      return unsubscribe;
+    } catch (error) {
+      console.error("Error subscribing to messages:", error);
+      return () => {};
+    }
+  }
+
+  async sendMessage(
+    collectionId: string,
+    message: Omit<GroupMessage, "id">
+  ): Promise<GroupMessage | null> {
+    try {
+      const messagesRef = this.getMessagesRef(collectionId);
+      if (!messagesRef) {
+        return null;
+      }
+
+      const docRef = await addDoc(messagesRef, messageToFirestore(message));
+
+      return {
+        ...message,
+        id: docRef.id,
+      };
+    } catch (error) {
+      console.error("Error sending message:", error);
+      return null;
+    }
+  }
+
+  private parseMessageDocument(
+    doc: QueryDocumentSnapshot<DocumentData>
+  ): GroupMessage {
+    return firestoreToMessage(doc.id, doc.data());
+  }
+
+  async uploadMedia(file: File): Promise<string | null> {
+    try {
+      const storageRef = ref(storage, `chat-media/${Date.now()}_${file.name}`);
+      const snapshot = await uploadBytes(storageRef, file);
+      return await getDownloadURL(snapshot.ref);
+    } catch (error) {
+      console.error("Error uploading media:", error);
+      return null;
+    }
+  }
+
+  async markMessagesAsRead(
+    collectionId: string,
+    userId: string,
+    messageIds: string[]
+  ): Promise<void> {
+    try {
+      if (!this.validateCollectionId(collectionId)) {
+        return;
+      }
+
+      const parentDocRef = doc(db, "sweatlist-collection", collectionId);
+
+      await Promise.all(
+        messageIds.map(async (messageId) => {
+          const messageRef = doc(parentDocRef, "messages", messageId);
+          await updateDoc(messageRef, {
+            [`readBy.${userId}`]: Timestamp.now(),
+          });
+        })
+      );
+    } catch (error) {
+      console.error("Error marking messages as read:", error);
+    }
+  }
+}

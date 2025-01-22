@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Calendar, Clock, Flag, Users, Play } from 'lucide-react';
-import { ChallengeInvitationProps } from '../types/ChallengeTypes';
+import { ChallengeInvitationProps } from '../api/firebase/workout/types';
 import ChallengeCTA from './ChallengeCTA';
 
 const formatDate = (dateString: string | Date): string => {
