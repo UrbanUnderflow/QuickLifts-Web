@@ -1,11 +1,13 @@
 import React, { useEffect } from 'react';
 import { ExerciseLog } from '../api/firebase/exercise/types';
 
-interface SweatListCardProps {
+interface SweatListCardViewProps {
+  key: string;
   log: ExerciseLog;
+  gifUrls?: string[];
 }
 
-const SweatListCardView: React.FC<SweatListCardProps> = ({ log }) => {
+const SweatListCardView: React.FC<SweatListCardViewProps> = ({ log, gifUrls = [] }) => {
   useEffect(() => {
     console.log('Exercise Log:', log);
   console.log('Exercise name:', log.exercise?.name);

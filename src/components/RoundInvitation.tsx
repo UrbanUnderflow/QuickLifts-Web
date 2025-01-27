@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Calendar, Clock, Flag, Users, Play } from 'lucide-react';
 import { ChallengeInvitationProps } from '../api/firebase/workout/types';
 import ChallengeCTA from './ChallengeCTA';
+import {IntroVideo} from '../api/firebase/workout'
 
 const formatDate = (dateString: string | Date): string => {
   const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
@@ -38,13 +39,22 @@ const DetailTile: React.FC<DetailTileProps> = ({ title, value, icon }) => (
 
 
 interface VideoPreviewProps {
-  videoUrl?: string;
+  introVideos?: IntroVideo[];
 }
 
-const VideoPreview: React.FC<VideoPreviewProps> = ({ videoUrl }) => {
+const VideoPreview: React.FC<VideoPreviewProps> = ({ introVideos }) => {
+  const [currentUserId, setCurrentUserId] = useState<string>('');
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const videoRef = useRef<HTMLVideoElement>(null);
-
+ 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const hostId = params.get('id');
+    if (hostId) setCurrentUserId(hostId);
+  }, []);
+ 
+  const videoUrl = introVideos?.find(video => video.userId === currentUserId)?.videoUrl;
+ 
   useEffect(() => {
     const playVideo = async () => {
       if (videoRef.current) {
@@ -72,17 +82,16 @@ const VideoPreview: React.FC<VideoPreviewProps> = ({ videoUrl }) => {
 
   return (
     <div className="relative bg-black rounded-xl h-48 mb-8 overflow-hidden">
-      <video
-        ref={videoRef}
-        className="w-full h-full object-cover"
-        src={videoUrl}
-        controls={isPlaying}
-        playsInline
-        autoPlay
-        muted
-      >
-        Your browser does not support the video tag.
-      </video>
+     <video
+       ref={videoRef}
+       className="w-full h-full object-cover"
+       src={videoUrl}
+       controls={isPlaying}
+       playsInline
+       autoPlay
+       muted
+     >
+     </video>
       {!isPlaying && (
         <div 
           className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 cursor-pointer"
@@ -122,8 +131,8 @@ const RoundInvitation: React.FC<ChallengeInvitationProps> = ({ challenge }) => {
         </div>
 
         {/* Video Preview */}
-        <VideoPreview videoUrl={challenge.introVideoURL} />
-
+        <VideoPreview introVideos={challenge.introVideos} />
+        
         {/* Challenge Details Grid */}
         <div className="grid grid-cols-2 gap-4 mb-12">
           <DetailTile 

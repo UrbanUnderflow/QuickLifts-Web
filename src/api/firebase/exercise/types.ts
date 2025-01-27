@@ -234,13 +234,12 @@ export class Exercise {
     this.id = data.id || '';
     this.name = data.name || '';
     this.description = data.description || '';
-    this.category = data.category as ExerciseCategory;
     this.primaryBodyParts = (data.primaryBodyParts || []) as BodyPart[];
     this.secondaryBodyParts = (data.secondaryBodyParts || []) as BodyPart[];
     this.tags = data.tags || [];
     this.videos = (data.videos || []).map((video: any) => ExerciseVideo.fromFirebase(video));
     this.steps = data.steps || [];
-    this.visibility = data.visibility || [];
+    this.visibility = data.visibility || 'live';
     this.currentVideoPosition = data.currentVideoPosition || 0;
     this.sets = data.sets || 0;
     this.reps = data.reps || '';
@@ -248,6 +247,45 @@ export class Exercise {
     this.author = ExerciseAuthor.fromFirebase(data.author || {});
     this.createdAt = data.createdAt ? new Date(data.createdAt) : new Date();
     this.updatedAt = data.updatedAt ? new Date(data.updatedAt) : new Date();
+
+    // Handle category parsing
+    const categoryData = data.category || {};
+    const categoryId = categoryData.id;
+
+    switch (categoryId) {
+      case 'weight-training':
+        this.category = ExerciseCategory.weightTraining({
+          reps: categoryData.reps || '12',
+          sets: categoryData.sets || 3,
+          weight: categoryData.weight || 0,
+          screenTime: categoryData.screenTime || 0,
+          selectedVideo: categoryData.selectedVideo 
+            ? ExerciseVideo.fromFirebase(categoryData.selectedVideo)
+            : undefined
+        });
+        break;
+
+      case 'cardio':
+        this.category = ExerciseCategory.cardio({
+          duration: categoryData.duration || 0,
+          bpm: categoryData.bpm || 0,
+          calories: categoryData.calories || 0,
+          screenTime: categoryData.screenTime || 0,
+          selectedVideo: categoryData.selectedVideo 
+            ? ExerciseVideo.fromFirebase(categoryData.selectedVideo)
+            : undefined
+        });
+        break;
+
+      default:
+        // Fallback to weight training if unknown
+        this.category = ExerciseCategory.weightTraining({
+          reps: '12',
+          sets: 3,
+          weight: 0,
+          screenTime: 0
+        });
+    }
   }
 
   static fromFirebase(data: any): Exercise {
