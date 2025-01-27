@@ -3,6 +3,7 @@ import { Calendar, Clock, Flag, Users, Play } from 'lucide-react';
 import { ChallengeInvitationProps } from '../api/firebase/workout/types';
 import ChallengeCTA from './ChallengeCTA';
 import {IntroVideo} from '../api/firebase/workout'
+import { useRouter } from 'next/router';
 
 const formatDate = (dateString: string | Date): string => {
   const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
@@ -107,13 +108,16 @@ const VideoPreview: React.FC<VideoPreviewProps> = ({ introVideos }) => {
   );
 };
 
-
 interface HostSectionProps {
   userId: string;
 }
 
 const HostSection: React.FC<HostSectionProps> = ({ userId }) => {
-  const [hostData, setHostData] = useState<{ username?: string; profileImage?: string | null }>({});
+  const router = useRouter();
+  const [hostData, setHostData] = useState<{ 
+    username?: string; 
+    profileImage?: { profileImageURL: string } | null 
+  }>({});
 
   useEffect(() => {
     const fetchHostData = async () => {
@@ -125,10 +129,12 @@ const HostSection: React.FC<HostSectionProps> = ({ userId }) => {
         const response = await fetch(`${apiUrl}/get-user-by-id?id=${userId}`);
         const data = await response.json();
         
+        console.log('API Response:', data);
+        
         if (data.success) {
           setHostData({
             username: data.user.username,
-            profileImage: data.user.profileImage?.url || null  
+            profileImage: data.user.profileImage  // Use the whole profileImage object
           });
         }
       } catch (error) {
@@ -144,11 +150,16 @@ const HostSection: React.FC<HostSectionProps> = ({ userId }) => {
   if (!hostData.username) return null;
 
   return (
-    <div className="flex items-center justify-center gap-3 mb-8">
+    <div 
+      className="flex items-center justify-center gap-3 mb-8 cursor-pointer hover:opacity-80 transition-opacity"
+      onClick={() => router.push(`/profile/${hostData.username}`)}
+      role="button"
+      aria-label={`View ${hostData.username}'s profile`}
+    >
       <div className="flex items-center gap-2">
-        {hostData.profileImage ? (
+        {hostData.profileImage?.profileImageURL ? (
           <img 
-            src={hostData.profileImage} 
+            src={hostData.profileImage.profileImageURL}
             alt={hostData.username}
             className="w-10 h-10 rounded-full object-cover"
           />
