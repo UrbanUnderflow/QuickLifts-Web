@@ -21,7 +21,16 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
   const currentUser = useSelector((state: RootState) => state.user.currentUser);
   const isLoading = useSelector((state: RootState) => state.user.loading);
 
-  const publicRoutes = ['/about', '/creator', '/rounds', '/terms', '/privacyPolicy', '/round-invitation'];
+  const publicRoutes = ['/about', '/creator', '/rounds', '/terms', '/privacyPolicy'];
+  const publicPathPatterns = ['/round-invitation']; // Paths that start with these are public
+
+  const isPublicRoute = (path: string) => {
+    // Check exact matches
+    if (publicRoutes.includes(path)) return true;
+    
+    // Check if the path starts with any of the public patterns
+    return publicPathPatterns.some(pattern => path.startsWith(pattern));
+  };
 
   useEffect(() => {
     dispatch(setLoading(true));
@@ -41,8 +50,8 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
       } else {
         dispatch(setUser(null));
         userService.currentUser = null;
-        // Only show sign in modal if not on a public route
-        setShowSignInModal(!publicRoutes.includes(router.pathname));
+        // Use the new isPublicRoute function
+        setShowSignInModal(!isPublicRoute(router.pathname));
       }
       dispatch(setLoading(false));
     });
