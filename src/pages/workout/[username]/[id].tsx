@@ -28,6 +28,9 @@ const WorkoutPreviewer: React.FC = () => {
       try {
         const [fetchedWorkout, fetchedLogs] = await workoutService.fetchSavedWorkout(username as string, id as string);
 
+        console.log("fetched workouts:", JSON.stringify(fetchedWorkout, null, 2));
+        console.log("fetched logs:", JSON.stringify(fetchedLogs, null, 2));
+
         if (fetchedWorkout) {
           setWorkout(fetchedWorkout);
           setLogs(fetchedLogs || []);
@@ -99,9 +102,10 @@ const WorkoutPreviewer: React.FC = () => {
     return <div className="text-white text-center pt-20">Error loading workout: {error || "Unknown error"}</div>;
   }
 
-  const videoURLs = logs
-    .filter(log => log.exercise && log.exercise.videos)
-    .flatMap(log => log.exercise.videos.map(video => video.videoURL));
+  const videoURLs = workout.exercises
+  .filter(exerciseRef => exerciseRef.exercise.videos?.length > 0)
+  .flatMap(exerciseRef => exerciseRef.exercise.videos.map(video => video.videoURL))
+  .filter(url => url);
   
   const duration = estimatedDuration(workout.exercises);
 
@@ -137,10 +141,11 @@ const WorkoutPreviewer: React.FC = () => {
             
             <div className="mt-6 mb-28">
               {logs.map((log) => (
-                <SweatListCardView
-                  key={log.id}
-                  log={log}
-                />
+               <SweatListCardView
+               key={log.id}
+               log={log}
+               gifUrls={log.exercise.videos?.map(video => video.gifURL).filter((url): url is string => !!url) || []}
+             />
               ))}
             </div>
           </div>

@@ -333,6 +333,10 @@ export enum SweatlistType {
   Locked = 'locked'
 }
 
+export interface ReferralChain {
+  originalHostId: string;
+  shares: string[];
+ }
 // Main SweatlistCollection interface
 export class SweatlistCollection {
   id: string;
@@ -454,7 +458,11 @@ interface UserChallenge {
   username: string;
   profileImage?: ProfileImage;
   progress: number;
-  completedWorkouts: string[];
+  completedWorkouts: { 
+    id: string; 
+    workoutId: string;
+    completedAt: number;
+  }[];
   isCompleted: boolean;
   location?: UserLocation;
   city: string;
@@ -478,6 +486,39 @@ enum ChallengeStatus {
   Cancelled = 'cancelled'
 }
 
+// types.ts (or appropriate location)
+export class IntroVideo {
+  id: string;
+  userId: string;
+  videoUrl: string;
+
+  constructor(data: {
+    id: string;
+    userId: string;
+    videoUrl: string;
+  }) {
+    this.id = data.id;
+    this.userId = data.userId;
+    this.videoUrl = data.videoUrl;
+  }
+
+  static fromFirebase(data: any): IntroVideo {
+    return new IntroVideo({
+      id: data.id || '',
+      userId: data.userId || '',
+      videoUrl: data.videoUrl || ''
+    });
+  }
+
+  toDictionary(): { [key: string]: any } {
+    return {
+      id: this.id,
+      userId: this.userId,
+      videoUrl: this.videoUrl
+    };
+  }
+}
+
 class Challenge {
   id: string;
   title: string;
@@ -489,7 +530,9 @@ class Challenge {
   endDate: Date;
   createdAt: Date;
   updatedAt: Date;
-  introVideoURL?: string;
+  introVideos: IntroVideo[];
+  referralChains: ReferralChain[];
+
 
   constructor(data: {
     id: string;
@@ -501,7 +544,8 @@ class Challenge {
     endDate: Date;
     createdAt: Date;
     updatedAt: Date;
-    introVideoURL?: string;
+    introVideos?: IntroVideo[];
+    referralChains: ReferralChain[];
   }) {
     this.id = data.id;
     this.title = data.title;
@@ -512,8 +556,12 @@ class Challenge {
     this.endDate = convertFirestoreTimestamp(data.endDate);
     this.createdAt = convertFirestoreTimestamp(data.createdAt);
     this.updatedAt = convertFirestoreTimestamp(data.updatedAt);
-    this.introVideoURL = data.introVideoURL;
+    this.introVideos = data.introVideos || [];
     this.durationInDays = this.calculateDurationInDays();
+    this.referralChains = (data.referralChains || []).map((chain: any) => ({
+      originalHostId: chain.originalHostId || '',
+      shares: chain.shares || []
+    }));
   }
 
     toDictionary(): any {
@@ -548,8 +596,16 @@ class Challenge {
         endDate: this.endDate,
         createdAt: this.createdAt,
         updatedAt: this.updatedAt,
-        introVideoURL: this.introVideoURL,
-        durationInDays: this.durationInDays
+        durationInDays: this.durationInDays,
+        introVideos: this.introVideos.map(video => ({
+          id: video.id,
+          userId: video.userId,
+          videoUrl: video.videoUrl
+        })),
+        referralChains: this.referralChains.map(chain => ({
+          originalHostId: chain.originalHostId,
+          shares: chain.shares
+        }))
       };
     }
 
@@ -597,7 +653,11 @@ class Challenge {
           endDate: obj.endDate,
           createdAt: obj.createdAt,
           updatedAt: obj.updatedAt,
-          introVideoURL: obj.introVideoURL,
+          introVideos: obj.introVideos.map(video => ({
+            id: video.id,
+            userId: video.userId,
+            videoUrl: video.videoUrl
+          }))
         };
       }
     

@@ -22,15 +22,15 @@ interface SignInModalProps {
 }
 
 const SignInModal: React.FC<SignInModalProps> = ({ 
-    isVisible, 
-    closable = false, // Default to true
-    onClose,
-    onSignInSuccess,
-    onSignInError,
-    onSignUpSuccess,
-    onSignUpError,
-    onQuizComplete,
-    onQuizSkipped,
+  isVisible, 
+  closable = false,
+  onClose,
+  onSignInSuccess,
+  onSignInError,
+  onSignUpSuccess,
+  onSignUpError,
+  onQuizComplete,
+  onQuizSkipped,
 }) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -1139,7 +1139,8 @@ useEffect(() => {
   };
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-80 z-50 sm:p-6">
+    <div className="fixed inset-0 flex items-center justify-center bg-black z-50 sm:p-6">
+
       <div className="bg-zinc-900 w-full h-full sm:h-auto sm:w-[480px] sm:rounded-xl p-6 sm:p-8 
         border-none sm:border sm:border-zinc-700 shadow-xl overflow-y-auto">
        {closable && onClose && (
@@ -1216,43 +1217,53 @@ useEffect(() => {
 
       {/* Links Section */}
       <div className="flex flex-col sm:flex-row justify-center items-center gap-4 text-zinc-400 text-sm mb-6">
-        <Link 
+        <a 
           href="/about" 
           className="hover:text-[#E0FE10] transition-colors"
+          target="_blank"
+          rel="noopener noreferrer"
         >
           About Pulse
-        </Link>
+        </a>
         <div className="hidden sm:block w-1 h-1 bg-zinc-700 rounded-full"></div>
-        <Link 
+        <a 
           href="/creator" 
           className="hover:text-[#E0FE10] transition-colors"
+          target="_blank"
+          rel="noopener noreferrer"
         >
           Creator Program
-        </Link>
+        </a>
         <div className="hidden sm:block w-1 h-1 bg-zinc-700 rounded-full"></div>
-        <Link 
+        <a 
           href="/rounds" 
           className="hover:text-[#E0FE10] transition-colors"
+          target="_blank"
+          rel="noopener noreferrer"
         >
           Rounds Feature
-        </Link>
+        </a>
       </div>
 
       {/* Secondary Links */}
       <div className="flex flex-wrap justify-center items-center gap-4 text-zinc-500 text-xs mb-6">
-        <Link 
-          href="/terms" 
-          className="hover:text-[#E0FE10] transition-colors"
+        <a 
+        href="/terms" 
+        className="hover:text-[#E0FE10] transition-colors"
+        target="_blank"
+        rel="noopener noreferrer"
         >
           Terms & Conditions
-        </Link>
+        </a>
         <div className="hidden sm:block w-1 h-1 bg-zinc-700 rounded-full"></div>
-        <Link 
+        <a 
           href="/privacyPolicy" 
           className="hover:text-[#E0FE10] transition-colors"
+          target="_blank"
+          rel="noopener noreferrer"
         >
           Privacy Policy
-        </Link>
+        </a>
         <div className="hidden sm:block w-1 h-1 bg-zinc-700 rounded-full"></div>
         <button 
           onClick={() => window.location.href = 'mailto:pulsefitnessapp@gmail.com'}

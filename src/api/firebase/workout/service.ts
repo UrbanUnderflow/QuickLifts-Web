@@ -19,7 +19,7 @@ import { db } from '../config';
 import { userService } from '../user';
 import { ExerciseLog, ExerciseCategory, Exercise, BodyPart, ExerciseVideo, ExerciseAuthor, ExerciseVideoVisibility } from '../exercise/types';
 import {ProfileImage} from '../user/types'
-import { Workout, WorkoutSummary, BodyZone } from '../workout/types';
+import { Workout, WorkoutSummary, BodyZone, IntroVideo } from '../workout/types';
 import { WorkoutStatus, SweatlistCollection } from './types';
 import { format } from 'date-fns'; 
 import { convertTimestamp, serverTimestamp } from '../../../utils/timestamp'; // Adjust the import path
@@ -239,7 +239,14 @@ async fetchUserChallengesByUserId(userId: string): Promise<UserChallenge[]> {
               endDate: data.challenge.endDate ? new Date(data.challenge.endDate) : new Date(),
               createdAt: data.challenge.createdAt ? new Date(data.challenge.createdAt) : new Date(),
               updatedAt: data.challenge.updatedAt ? new Date(data.challenge.updatedAt) : new Date(),
-              introVideoURL: data.challenge.introVideoURL || '',
+              introVideos: (data.challenge.introVideos || []).map((v: any) => 
+                new IntroVideo({
+                  id: v.id,
+                  userId: v.userId,
+                  videoUrl: v.videoUrl
+                })
+              ),
+              referralChains: data.challenge.referralChains || []
             })
           : undefined,
         createdAt: convertTimestamp(data.createdAt),
@@ -313,7 +320,14 @@ private parseWorkoutData(data: DocumentData): Workout {
           updatedAt: data.challenge.updatedAt instanceof Date 
             ? data.challenge.updatedAt 
             : (data.challenge.updatedAt ? new Date(data.challenge.updatedAt) : new Date()),
-          introVideoURL: data.challenge.introVideoURL || '',
+            introVideos: (data.challenge.introVideos || []).map((v: any) => 
+              new IntroVideo({
+                id: v.id,
+                userId: v.userId,
+                videoUrl: v.videoUrl
+              })
+            ),
+            referralChains: data.challenge.referralChains || []
         })
       : undefined,
     logs: data.logs || [],
@@ -537,20 +551,35 @@ async fetchSavedWorkout(userId: string, workoutId: string): Promise<[Workout | n
       return [null, null];
     }
 
+    // Get exercises with videos mapped
+    const exercisesWithVideos = await this.fetchAndMapExercisesWithVideos();
     const workoutData = workoutSnap.data();
-    const workout = this.parseWorkoutData(workoutData || {});
 
-    // Fetch logs subcollection
-    const logsRef = collection(db, 'users', userId, 'MyCreatedWorkouts', workoutId, 'logs');
+    // Map the exercises in the workout to the full exercise objects with videos
+    const mappedExercises = (workoutData.exercises || []).map((exerciseRef: any) => {
+      const fullExercise = exercisesWithVideos.find(ex => ex.name === exerciseRef.exercise.name);
+      return {
+        ...exerciseRef,
+        exercise: fullExercise || exerciseRef.exercise
+      };
+    });
+
+    workoutData.exercises = mappedExercises;
+    const workout = this.parseWorkoutData(workoutData);
+
+    // Fetch logs
+    const logsRef = collection(workoutRef, 'logs');
     const logsSnapshot = await getDocs(logsRef);
 
     const logs: ExerciseLog[] = logsSnapshot.docs.map(logDoc => {
       const logData = logDoc.data();
+      const fullExercise = exercisesWithVideos.find(ex => ex.name === logData.exercise.name);
+      
       return {
         id: logDoc.id,
         workoutId: workoutId,
         userId: userId,
-        exercise: logData.exercise,
+        exercise: fullExercise || logData.exercise,
         logs: logData.log || [],
         feedback: logData.feedback || '',
         note: logData.note || '',
@@ -560,26 +589,12 @@ async fetchSavedWorkout(userId: string, workoutId: string): Promise<[Workout | n
         logSubmitted: logData.logSubmitted || false,
         logIsEditing: logData.logIsEditing || false,
         isCompleted: logData.isCompleted || false,
-        createdAt: logData.createdAt instanceof Date 
-          ? logData.createdAt 
-          : (typeof logData.createdAt?.toDate === 'function' 
-            ? logData.createdAt.toDate() 
-            : (logData.createdAt 
-              ? new Date(logData.createdAt) 
-              : new Date())),
-        updatedAt: logData.updatedAt instanceof Date 
-          ? logData.updatedAt 
-          : (typeof logData.updatedAt?.toDate === 'function' 
-            ? logData.updatedAt.toDate() 
-            : (logData.updatedAt 
-              ? new Date(logData.updatedAt) 
-              : new Date()))
+        createdAt: convertFirestoreTimestamp(logData.createdAt),
+        updatedAt: convertFirestoreTimestamp(logData.updatedAt)
       };
     });
 
-    // Update workout logs
     workout.logs = logs;
-
     return [workout, logs];
   } catch (error) {
     console.error('Error fetching saved workout:', error);
@@ -622,7 +637,14 @@ async fetchUserChallengesByChallengeId(challengeId: string): Promise<UserChallen
               endDate: data.challenge.endDate ? new Date(data.challenge.endDate) : new Date(),
               createdAt: data.challenge.createdAt ? new Date(data.challenge.createdAt) : new Date(),
               updatedAt: data.challenge.updatedAt ? new Date(data.challenge.updatedAt) : new Date(),
-              introVideoURL: data.challenge.introVideoURL || '',
+              introVideos: (data.challenge.introVideos || []).map((v: any) => 
+                new IntroVideo({
+                  id: v.id,
+                  userId: v.userId,
+                  videoUrl: v.videoUrl
+                })
+              ),
+              referralChains: data.challenge.referralChains || []
             })
           : undefined,
         createdAt: convertTimestamp(data.createdAt),
@@ -697,7 +719,14 @@ async getCollectionById(id: string): Promise<SweatlistCollection> {
                 endDate: convertFirestoreTimestamp(data.challenge.endDate),
                 createdAt: convertFirestoreTimestamp(data.challenge.createdAt),
                 updatedAt: convertFirestoreTimestamp(data.challenge.updatedAt),
-                introVideoURL: data.challenge.introVideoURL || '',
+                introVideos: (data.challenge.introVideos || []).map((v: any) => 
+                  new IntroVideo({
+                    id: v.id,
+                    userId: v.userId,
+                    videoUrl: v.videoUrl
+                  })
+                ),
+                referralChains: data.challenge.referralChains || []
               })
             : undefined;
 
@@ -1103,75 +1132,59 @@ async getCollectionById(id: string): Promise<SweatlistCollection> {
     userId,
     workout,
     logs
-  }: {
+   }: {
     userId: string,
     workout: Workout,
     logs: ExerciseLog[]
-  }): Promise<Workout | null> {
-    if (!userId) {
-      throw new Error('No user ID provided');
-    }
-  
+   }): Promise<Workout | null> {
+    if (!userId) throw new Error('No user ID provided');
+   
     try {
       const currentDate = new Date();
-  
-      // Prepare workout data for saving
-      const newWorkout = {
-        ...Challenge.toFirestoreObject(workout),
+      
+      const cleanWorkout = new Workout({
+        ...workout,
+        roundWorkoutId: `${workout.id}-${currentDate.getTime()}`,
         workoutStatus: WorkoutStatus.QueuedUp,
         createdAt: currentDate,
         updatedAt: currentDate,
         startTime: currentDate,
-        roundWorkoutId: `${workout.id}-${currentDate.getTime()}`
-      };
-  
-      // Prepare workout session document
-      const workoutSessionRef = doc(
-        collection(db, 'users', userId, 'workoutSessions')
-      );
-  
-      // Save the workout session data
-      await setDoc(workoutSessionRef, newWorkout);
-  
-      // Prepare logs with unique IDs and timestamps
+        logs: []
+       });
+   
+      const workoutSessionRef = doc(collection(db, 'users', userId, 'workoutSessions'));
+      await setDoc(workoutSessionRef, cleanWorkout);
+   
       const logsRef = collection(workoutSessionRef, 'logs');
       const logBatch = writeBatch(db);
-
-  
+   
       logs.forEach((log, index) => {
-        // console.log("The log is:" + JSON.stringify(log));
-
         const logDocRef = doc(logsRef, `${log.id}-${currentDate.getTime()}`);
         logBatch.set(logDocRef, {
-          ...Challenge.toFirestoreObject(log),
           id: logDocRef.id,
           workoutId: workoutSessionRef.id,
-          order: log.order ?? index, // Use log.order if available, otherwise use index
+          exercise: {
+            id: log.exercise.id,
+            name: log.exercise.name,
+            category: log.exercise.category,
+            videos: log.exercise.videos || []
+          },
+          order: index,
           createdAt: currentDate,
           updatedAt: currentDate,
           logSubmitted: false,
           isCompleted: false
         });
       });
-  
+   
       await logBatch.commit();
-  
-      // Update the service's current workout and logs
-      this._currentWorkout = new Workout(newWorkout);
-      this._currentWorkoutLogs = logs;
-  
-      // Optionally, update user's current workout reference
-      const userRef = doc(db, 'users', userId);
-      await updateDoc(userRef, {
-        currentWorkoutSessionId: workoutSessionRef.id
-      });
-  
-      return this._currentWorkout;
+      
+      return cleanWorkout;
     } catch (error) {
       console.error('Error saving workout session:', error);
       throw error;
     }
-  }
+   }
 
   /**
    * Example "join challenge" method using the client SDK (no admin privileges).

@@ -132,6 +132,11 @@ const didUserCompleteWorkoutFromLogs = (
   });
 };
 
+interface CompletedWorkout {
+  workoutId: string;
+  completedAt: Date;
+}
+
 // Saved Sweatlist Card Component
 export const StackCard: React.FC<{
   workout: Workout;
@@ -163,30 +168,58 @@ export const StackCard: React.FC<{
 
   // Refresh completion status
   useEffect(() => {
+    console.log('\n🔍 Checking workout completion status');
+    console.log('📊 Initial Data:', {
+      workoutId: workout.id,
+      workoutDate,
+      challengeStartDate,
+      isChallengeEnabled,
+      initialIsComplete
+    });
+  
     if (!challengeStartDate || !isChallengeEnabled) {
+      console.log('❌ No challenge date or challenge not enabled');
       setIsComplete(initialIsComplete);
       return;
     }
-
-    // For future dates, always mark as incomplete
+  
     if (workoutDate && workoutDate > new Date()) {
+      console.log('⏳ Future date detected, marking incomplete:', workoutDate);
       setIsComplete(false);
       return;
     }
-
-    // Check if completed in userChallenge
+  
+    // Check userChallenge completions
     const isMarkedComplete = userChallenge?.completedWorkouts?.some(
-      completedWorkoutId => completedWorkoutId === workout.id
+      completedWorkout => {
+        console.log('Comparing:', {
+          completedWorkoutId: completedWorkout.workoutId,
+          currentWorkoutId: workout.id,
+          matches: completedWorkout.workoutId === workout.id
+        });
+        return completedWorkout.workoutId === workout.id;
+      }
     );
-
-    // Check if completed in logs
+    
+    console.log('🏆 Completion from userChallenge:', {
+      isMarkedComplete,
+      completedWorkouts: userChallenge?.completedWorkouts
+    });
+  
+    // Check logs
     const completedViaLogs = workoutDate ? 
       didUserCompleteWorkoutFromLogs(workout, workoutDate, allWorkoutSummaries) : 
       false;
-
-    // Workout is complete if either condition is true
-    setIsComplete(isMarkedComplete || completedViaLogs);
-  }, [workout, challengeStartDate, userChallenge, allWorkoutSummaries, workoutDate, initialIsComplete, isChallengeEnabled]);
+    console.log('📝 Completion from logs:', {
+      completedViaLogs,
+      summariesCount: allWorkoutSummaries?.length || 0
+    });
+  
+    const finalCompletionStatus = isMarkedComplete || completedViaLogs;
+    console.log('✅ Final completion status:', finalCompletionStatus);
+  
+    setIsComplete(finalCompletionStatus);
+  }, [workout, challengeStartDate, userChallenge, allWorkoutSummaries, workoutDate]);
 
   const isToday = (index: number | undefined, startDate: Date | undefined) => {
    
