@@ -108,22 +108,79 @@ const VideoPreview: React.FC<VideoPreviewProps> = ({ introVideos }) => {
 };
 
 
+interface HostSectionProps {
+  userId: string;
+}
+
+const HostSection: React.FC<HostSectionProps> = ({ userId }) => {
+  const [hostData, setHostData] = useState<{ username?: string; profileImage?: string | null }>({});
+
+  useEffect(() => {
+    const fetchHostData = async () => {
+      try {
+        const apiUrl = process.env.NODE_ENV === 'development' 
+          ? 'http://localhost:8888/.netlify/functions'
+          : 'https://fitwithpulse.ai/.netlify/functions';
+  
+        const response = await fetch(`${apiUrl}/get-user-by-id?id=${userId}`);
+        const data = await response.json();
+        
+        if (data.success) {
+          setHostData({
+            username: data.user.username,
+            profileImage: data.user.profileImage?.url || null  
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching host data:', error);
+      }
+    };
+  
+    if (userId) {
+      fetchHostData();
+    }
+  }, [userId]);
+
+  if (!hostData.username) return null;
+
+  return (
+    <div className="flex items-center justify-center gap-3 mb-8">
+      <div className="flex items-center gap-2">
+        {hostData.profileImage ? (
+          <img 
+            src={hostData.profileImage} 
+            alt={hostData.username}
+            className="w-10 h-10 rounded-full object-cover"
+          />
+        ) : (
+          <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center">
+            <Users className="w-6 h-6 text-zinc-400" />
+          </div>
+        )}
+        <div className="flex flex-col">
+          <span className="text-sm text-white/70">Hosted by</span>
+          <span className="font-medium">{hostData.username}</span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const RoundInvitation: React.FC<ChallengeInvitationProps> = ({ challenge }) => {
   // Ensure we have valid Date objects
   const startDate = new Date(challenge.startDate);
   const endDate = new Date(challenge.endDate);
+  const [hostId, setHostId] = useState<string>('');
+
   
   // Ensure participants is always an array
   const participantsCount = challenge.participants?.length ?? 0;
 
-  // Add detailed logging
-  // console.log('Full Challenge Object:', JSON.stringify(challenge, null, 2));
-  // console.log('IntroVideos:', challenge.introVideos);
-  // console.log('IntroVideos Type:', typeof challenge.introVideos);
-  // console.log('IntroVideos Length:', challenge.introVideos?.length);
-  // console.log('Is IntroVideos Array?', Array.isArray(challenge.introVideos));
-
-  // console.log('Challenge data:', challenge); // Add this for debugging
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get('id');
+    if (id) setHostId(id);
+  }, []);
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white">
@@ -136,6 +193,9 @@ const RoundInvitation: React.FC<ChallengeInvitationProps> = ({ challenge }) => {
           <h1 className="text-3xl font-bold">{challenge.title}</h1>
           <p className="text-white/70">{challenge.subtitle}</p>
         </div>
+
+        {/* Host Section */}
+        {hostId && <HostSection userId={hostId} />}
 
         {/* Video Preview */}
         <VideoPreview introVideos={challenge.introVideos} />
