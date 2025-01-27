@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import RoundInvitation from '../../components/RoundInvitation';
 import ChallengeMeta from '../../components/ChallengeMeta';
-import { SweatlistCollection } from '../../api/firebase/workout/types';
+import { SweatlistCollection, Challenge } from '../../api/firebase/workout/types';
 
 const LoadingState = () => (
   <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
@@ -32,6 +32,8 @@ interface ChallengePageProps {
 }
 
 const ChallengePage: React.FC<ChallengePageProps> = ({ initialCollection, initialError }) => {
+  console.log("Component rendering", { initialCollection, initialError }); // Add this
+
   const router = useRouter();
   const { id } = router.query;
   const [collection, setCollection] = useState<SweatlistCollection | null>(initialCollection || null);
@@ -39,17 +41,19 @@ const ChallengePage: React.FC<ChallengePageProps> = ({ initialCollection, initia
   const [error, setError] = useState<string | null>(initialError || null);
 
   useEffect(() => {
+    console.log("useEffect triggered", { id, initialCollection }); // Add this
+
     const fetchChallenge = async () => {
       if (!id || initialCollection) return;
-
+      
+  
       try {
-        
         const apiUrl = process.env.NODE_ENV === 'development' 
           ? 'http://localhost:8888/.netlify/functions'
           : 'https://fitwithpulse.ai/.netlify/functions';
-
+  
         const url = `${apiUrl}/get-challenge-by-id?id=${id}`;
-
+  
         const response = await fetch(url, {
           method: 'GET',
           headers: {
@@ -57,41 +61,47 @@ const ChallengePage: React.FC<ChallengePageProps> = ({ initialCollection, initia
             'Content-Type': 'application/json',
           },
         });
-
+  
         if (!response.ok) {
           const errorText = await response.text();
           console.error('Error response:', errorText);
           throw new Error(`HTTP error! status: ${response.status}`);
         }
-
+  
         const data = await response.json();
+      console.log("Client - Raw API Response:", JSON.stringify(data, null, 2));
+      console.log("Client - Collection introVideoURL:", data.collection.introVideoURL);
+      console.log("Client - Collection ownerId:", data.collection.ownerId);
 
+  
         if (!data.success) {
           throw new Error(data.error || 'Failed to fetch challenge');
         }
-
+  
         if (!data.collection || !data.collection.challenge) {
           throw new Error('Invalid challenge data received');
         }
-
-        const processedCollection = {
+  
+        // Convert the plain object into a Challenge instance
+        const processedCollection: SweatlistCollection = {
           ...data.collection,
-          createdAt: data.collection.createdAt ? new Date(data.collection.createdAt) : new Date(),
-          updatedAt: data.collection.updatedAt ? new Date(data.collection.updatedAt) : new Date(),
-          challenge: {
-            ...data.collection.challenge,
-            startDate: data.collection.challenge.startDate ? 
-              new Date(data.collection.challenge.startDate) : new Date(),
-            endDate: data.collection.challenge.endDate ? 
-              new Date(data.collection.challenge.endDate) : new Date(),
-            createdAt: data.collection.challenge.createdAt ? 
-              new Date(data.collection.challenge.createdAt) : new Date(),
-            updatedAt: data.collection.challenge.updatedAt ? 
-              new Date(data.collection.challenge.updatedAt) : new Date(),
-            participants: data.collection.challenge.participants || []
-          }
+          createdAt: new Date(data.collection.createdAt),
+          updatedAt: new Date(data.collection.updatedAt),
+          challenge: new Challenge({
+            id: data.collection.challenge.id,
+            title: data.collection.challenge.title,
+            subtitle: data.collection.challenge.subtitle,
+            introVideos: data.collection.challenge.introVideos || [],
+            status: data.collection.challenge.status || 'draft',
+            startDate: new Date(data.collection.challenge.startDate),
+            endDate: new Date(data.collection.challenge.endDate),
+            createdAt: new Date(data.collection.challenge.createdAt),
+            updatedAt: new Date(data.collection.challenge.updatedAt),
+            participants: data.collection.challenge.participants || [],
+            referralChains: data.collection.challenge.referralChains || []
+          })
         };
-
+  
         setCollection(processedCollection);
       } catch (err) {
         console.error('Error details:', err);
@@ -100,7 +110,7 @@ const ChallengePage: React.FC<ChallengePageProps> = ({ initialCollection, initia
         setLoading(false);
       }
     };
-
+  
     if (router.isReady && id) {
       fetchChallenge();
     }
@@ -147,6 +157,8 @@ const ChallengePage: React.FC<ChallengePageProps> = ({ initialCollection, initia
 
 export const getServerSideProps: GetServerSideProps<ChallengePageProps> = async ({ params, res }) => {
   try {
+    console.log("getServerSideProps starting", params);  // Add this
+
     const id = params?.id as string;
     if (!id) {
       return { props: { initialError: 'Challenge ID is required' } };
@@ -167,7 +179,13 @@ export const getServerSideProps: GetServerSideProps<ChallengePageProps> = async 
     }
 
     const data = await response.json();
-
+    
+    console.log("SSR Raw Response:", {
+      introVideoURL: data.collection.introVideoURL,
+      ownerId: data.collection.ownerId,
+      rawData: JSON.stringify(data.collection, null, 2)
+    });
+    
     if (!data.success || !data.collection) {
       return {
         props: {
@@ -176,18 +194,25 @@ export const getServerSideProps: GetServerSideProps<ChallengePageProps> = async 
       };
     }
 
-    // Process dates
+    console.log(data);
+    // Return a plain object instead of a Challenge instance
     const processedCollection = {
       ...data.collection,
       createdAt: new Date(data.collection.createdAt).toISOString(),
       updatedAt: new Date(data.collection.updatedAt).toISOString(),
-      challenge: data.collection.challenge ? {
-        ...data.collection.challenge,
+      challenge: {
+        id: data.collection.challenge.id,
+        title: data.collection.challenge.title,
+        subtitle: data.collection.challenge.subtitle,
+        introVideos: data.collection.challenge.introVideos || [],
+        status: data.collection.challenge.status || 'draft',
         startDate: new Date(data.collection.challenge.startDate).toISOString(),
         endDate: new Date(data.collection.challenge.endDate).toISOString(),
         createdAt: new Date(data.collection.challenge.createdAt).toISOString(),
         updatedAt: new Date(data.collection.challenge.updatedAt).toISOString(),
-      } : null
+        participants: data.collection.challenge.participants || [],
+        referralChains: data.collection.challenge.referralChains || []
+      }
     };
 
     return {
