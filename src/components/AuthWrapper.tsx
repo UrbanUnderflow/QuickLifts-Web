@@ -21,7 +21,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
   const currentUser = useSelector((state: RootState) => state.user.currentUser);
   const isLoading = useSelector((state: RootState) => state.user.loading);
 
-  const publicRoutes = ['/about', '/creator', '/rounds', '/terms', '/privacyPolicy'];
+  const publicRoutes = ['/about', '/creator', '/rounds', '/terms', '/privacyPolicy', '/round-invitation'];
 
   useEffect(() => {
     dispatch(setLoading(true));
