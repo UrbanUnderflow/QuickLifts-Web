@@ -117,7 +117,8 @@ async function getCollectionById(collectionId) {
     const participants = await getUserChallenges(collectionId);
     console.log('Fetched participants:', JSON.stringify(participants, null, 2));
 
-    // Process the collection data with Unix timestamp handling
+    console.log('Challenge data before processing:', JSON.stringify(data.challenge, null, 2));
+    // Process the collection data with Unix timestamp handling    
     const collection = {
       id: doc.id,
       title: data.title || '',
@@ -128,15 +129,23 @@ async function getCollectionById(collectionId) {
         id: data.challenge.id || doc.id,
         title: data.challenge.title || '',
         subtitle: data.challenge.subtitle || '',
-        introVideoURL: data.challenge.introVideoURL || '',
+        // Updated introVideos array
+        introVideos: (data.challenge.introVideos || []).map((v) => ({
+          id: v.id || '',
+          userId: v.userId || '',
+          videoUrl: v.videoUrl || ''
+        })),
         status: data.challenge.status || 'draft',
         startDate: convertTimestamp(data.challenge.startDate),
         endDate: convertTimestamp(data.challenge.endDate),
         createdAt: convertTimestamp(data.challenge.createdAt),
         updatedAt: convertTimestamp(data.challenge.updatedAt),
-        participants: participants // Use the fetched participants instead
+        participants: participants
       } : null
     };
+
+    console.log('Challenge data after processing:', JSON.stringify(collection.challenge, null, 2));
+
 
     if (!collection.challenge) {
       console.log('Collection does not contain a challenge.');

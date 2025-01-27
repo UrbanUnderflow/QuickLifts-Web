@@ -116,7 +116,14 @@ const RoundInvitation: React.FC<ChallengeInvitationProps> = ({ challenge }) => {
   // Ensure participants is always an array
   const participantsCount = challenge.participants?.length ?? 0;
 
-  console.log('Challenge data:', challenge); // Add this for debugging
+  // Add detailed logging
+  // console.log('Full Challenge Object:', JSON.stringify(challenge, null, 2));
+  // console.log('IntroVideos:', challenge.introVideos);
+  // console.log('IntroVideos Type:', typeof challenge.introVideos);
+  // console.log('IntroVideos Length:', challenge.introVideos?.length);
+  // console.log('Is IntroVideos Array?', Array.isArray(challenge.introVideos));
+
+  // console.log('Challenge data:', challenge); // Add this for debugging
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white">
