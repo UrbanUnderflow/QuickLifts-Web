@@ -1,1 +1,7 @@
-{"/_app":"pages/_app.js","/_document":"pages/_document.js","/CollectionView":"pages/CollectionView.html","/CompletedOnboarding":"pages/CompletedOnboarding.html","/FullscreenExerciseView":"pages/FullscreenExerciseView.html","/SendNotification":"pages/SendNotification.html","/HomeContent":"pages/HomeContent.html","/Subscribe":"pages/Subscribe.html","/Support":"pages/Support.html","/about":"pages/about.html","/connect":"pages/connect.html","/creator":"pages/creator.html","/join-challenge":"pages/join-challenge.html","/moves":"pages/moves.html","/notification-test":"pages/notification-test.html","/press-kit":"pages/press-kit.html","/":"pages/index.html","/privacyPolicy":"pages/privacyPolicy.html","/review/dec24":"pages/review/dec24.html","/review/nov24":"pages/review/nov24.html","/review/yearInReview":"pages/review/yearInReview.html","/round/[id]":"pages/round/[id].html","/rounds":"pages/rounds.html","/stacks":"pages/stacks.html","/starter-pack":"pages/starter-pack.html","/update-challenge-status":"pages/update-challenge-status.html","/terms":"pages/terms.html","/user-dashboard":"pages/user-dashboard.html","/workout/[username]/[id]":"pages/workout/[username]/[id].html","/Checklist":"pages/Checklist.js","/exercise/[exerciseName]":"pages/exercise/[exerciseName].js","/review":"pages/review.js","/_error":"pages/_error.js","/round-invitation/[id]":"pages/round-invitation/[id].js","/profile/[username]":"pages/profile/[username].js","/404":"pages/404.html"}
+{
+  "/_app": "pages/_app.js",
+  "/_error": "pages/_error.js",
+  "/_document": "pages/_document.js",
+  "/starter-pack": "pages/starter-pack.js",
+  "/round-invitation/[id]": "pages/round-invitation/[id].js"
+}
