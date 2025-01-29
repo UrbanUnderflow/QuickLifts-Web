@@ -47,31 +47,6 @@ const RoundsPage: NextPage = () => {
         <meta property="og:image" content="/rounds-preview.jpg" />
       </Head>
 
-      {/* Header */}
-      <div className="flex justify-between items-center pt-10">
-        <Header 
-          onSectionChange={handleSectionChange} 
-          currentSection={currentSection} 
-          toggleMobileMenu={toggleMobileMenu} 
-          setIsSignInModalVisible={() => setIsSignInModalVisible(true)}
-          theme="dark"
-        />
-      </div>
-
-      {/* Mobile Menu */}
-      {isMobileMenuOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-25 z-10 transition-opacity duration-300 ease-in-out" onMouseDown={() => setIsMobileMenuOpen(false)}>
-          <div className={`fixed inset-y-0 right-0 w-64 bg-white shadow-md transform transition-transform duration-300 ease-in-out z-20 ${isMobileMenuOpen ? 'translate-x-0' : 'translate-x-full'}`} onMouseDown={(e) => e.stopPropagation()}>
-            <div className="p-4 flex flex-col gap-6">
-              <button className={getMenuItemClassName('home')} onClick={() => handleSectionChange('home')}>Features</button>
-              <button className={getMenuItemClassName('creator')} onClick={() => handleSectionChange('creator')}>Creators</button>
-              <button className={getMenuItemClassName('support')} onClick={() => handleSectionChange('support')}>Support</button>
-              <button className={getMenuItemClassName('contact')} onClick={() => { setIsMobileMenuOpen(false); window.location.href = 'mailto:pulsefitnessapp@gmail.com'; }}>Contact Us</button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Hero Section */}
       <main ref={useScrollFade()} className="min-h-screen flex flex-col lg:flex-row items-center justify-center gap-20 p-8">
         {/* Phone Frame Container (Left) */}
@@ -189,7 +164,6 @@ const RoundsPage: NextPage = () => {
         onQuizSkipped={() => console.log('Quiz skipped')}
       />
 
-      <Footer />
     </div>
   );
 };

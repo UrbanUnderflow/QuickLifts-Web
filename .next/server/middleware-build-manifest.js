@@ -19,15 +19,15 @@ self.__BUILD_MANIFEST = {
       "static/chunks/main.js",
       "static/chunks/pages/_error.js"
     ],
-    "/profile/[username]": [
+    "/moves": [
       "static/chunks/webpack.js",
       "static/chunks/main.js",
-      "static/chunks/pages/profile/[username].js"
+      "static/chunks/pages/moves.js"
     ],
-    "/round-invitation/[id]": [
+    "/rounds": [
       "static/chunks/webpack.js",
       "static/chunks/main.js",
-      "static/chunks/pages/round-invitation/[id].js"
+      "static/chunks/pages/rounds.js"
     ]
   },
   "ampFirstPages": []

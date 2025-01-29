@@ -245,8 +245,7 @@ async fetchUserChallengesByUserId(userId: string): Promise<UserChallenge[]> {
                   userId: v.userId,
                   videoUrl: v.videoUrl
                 })
-              ),
-              referralChains: data.challenge.referralChains || []
+              )
             })
           : undefined,
         createdAt: convertTimestamp(data.createdAt),
@@ -326,8 +325,7 @@ private parseWorkoutData(data: DocumentData): Workout {
                 userId: v.userId,
                 videoUrl: v.videoUrl
               })
-            ),
-            referralChains: data.challenge.referralChains || []
+            )
         })
       : undefined,
     logs: data.logs || [],
@@ -643,8 +641,7 @@ async fetchUserChallengesByChallengeId(challengeId: string): Promise<UserChallen
                   userId: v.userId,
                   videoUrl: v.videoUrl
                 })
-              ),
-              referralChains: data.challenge.referralChains || []
+              )
             })
           : undefined,
         createdAt: convertTimestamp(data.createdAt),
@@ -725,8 +722,7 @@ async getCollectionById(id: string): Promise<SweatlistCollection> {
                     userId: v.userId,
                     videoUrl: v.videoUrl
                   })
-                ),
-                referralChains: data.challenge.referralChains || []
+                )
               })
             : undefined;
 

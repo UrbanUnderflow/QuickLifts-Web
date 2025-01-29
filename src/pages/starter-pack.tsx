@@ -1,156 +1,249 @@
-
-import React from 'react';
+import React, { useState } from 'react';
+import { Check } from 'lucide-react';
+import Head from 'next/head';
 import FAQ from '../components/FAQ';
 import PartnerJoinModal from '../components/PartnerJoinModal';
-import Meta from '../components/Meta'; // Import the Meta component
-import Head from 'next/head';
+import Meta from '../components/Meta';
+import { Dumbbell, Layers, Timer } from 'lucide-react';  // Changed LayerStack to Layers
 
-const FAQ_DATA = [
+
+const CREATOR_STEPS = [
   {
-    question: "How does the revenue-sharing model work?",
-    answer: "As a content creator on Pulse, you'll be directly compensated for the impact your content makes within the community. The more engagement and value your content generates, the more you'll earn through our revenue-sharing system."
+    title: "Account Creation",
+    description: "Start your creator journey by setting up your profile. A complete profile helps build trust with your community and showcases your fitness expertise. Take time to craft a bio that highlights your unique perspective and training style.",
+    detailedSteps: [
+      "Download the app",
+      "Sign up using your email or sign in with apple'",
+      "Upload a profile image",
+    ],
+    image: "/step1Mobile.svg",
+    mobileImage: "/step1Mobile.svg"
   },
   {
-    question: "What kind of content can I create on Pulse?",
-    answer: "Pulse welcomes a wide range of fitness content, including workouts, exercise demonstrations, progress updates, and informative videos. Our Creators Hub provides the tools and support you need to craft engaging and impactful content."
+    title: "Set Up Your Profile",
+    description: "Make your profile stand out by sharing your fitness story. Whether you're a certified trainer or passionate enthusiast, your unique perspective matters. Connect your social media to expand your reach and let people know where to find more of your content.",
+    detailedSteps: [
+      "Fill out profile description",
+      "Add social media handles",
+    ],
+    image: "/step2Mobile.svg",
+    mobileImage: "/step2Mobile.svg"
   },
   {
-    question: "Do I need to be a certified fitness professional to become a Sweat Equity Partner?",
-    answer: "While professional certifications are valuable, they're not a requirement to become a content creator on Pulse. We welcome fitness enthusiasts from all backgrounds who have unique ideas, techniques, and experiences to share."
+    title: "Upload Your First Content",
+    description: "Time to share your expertise! Create your first Move by recording an exercise, combine Moves into a Stack for a complete workout, and organize your Stacks into a Round for a full training program. Each piece of content you create helps others on their fitness journey.",
+    detailedSteps: [
+      "Record or upload first exercise video",
+      "Create your first 'Stack'",
+      "Create a 'Round'"
+    ],
+    image: "/step3Mobile.svg",
+    mobileImage: "/step3Mobile.svg"
   },
   {
-    question: "How does Pulse ensure the quality and safety of the content shared on the platform?",
-    answer: "Pulse uses our AI model to moderate all content, along with a dedicated team that reviews and moderates content before it is released to ensure it meets our community guidelines and safety standards."
-  },
-  {
-    question: "Can I connect with other fitness content creators on Pulse?",
-    answer: "Absolutely! Pulse fosters a thriving community of like-minded individuals passionate about fitness. You'll have opportunities to connect, collaborate, and learn from other content creators within the platform."
-  },
-  {
-    question: "Is there a cost to become a Sweat Equity Partner with Pulse?",
-    answer: "Yes, there is an annual subscription fee to become a Sweat Equity Partner on Pulse. However, we offer a 30-day free trial for new partners to explore the platform and its benefits."
+    title: "Start a workout",
+    description: "Experience Pulse from your community's perspective. Try out your own workout or join someone else's Round. This helps you understand the user experience and creates authentic content that resonates with your audience.",
+    detailedSteps: [
+      "Start and complete your first workout",
+      "Join a 'Round'",
+    ],
+    image: "/step4Mobile.svg",
+    mobileImage: "/step4Mobile.svg"
   }
 ];
 
-const Checklist: React.FC = () => {
-  const [isModalOpen, setModalOpen] = React.useState(false);
+const FAQ_DATA = [
+  {
+    question: "How do I earn through Pulse?",
+    answer: "Your earnings grow with your community impact. Get rewarded for Stack completions, Round participation, and community engagement. The more value you create, the more you earn."
+  },
+  {
+    question: "What makes a successful Round?",
+    answer: "Great Rounds combine engaging workouts with active community participation. Focus on consistent interaction, clear instructions, and celebrating member progress."
+  },
+  {
+    question: "How often should I create content?",
+    answer: "Quality beats quantity. We recommend 2-3 new Moves or Stacks weekly, but focus on creating value for your community rather than hitting specific numbers."
+  },
+  {
+    question: "Do I need special equipment to create content?",
+    answer: "Just your smartphone! While professional equipment can enhance quality, many successful creators start with just their phones and natural lighting."
+  }
+];
+
+const CreatorChecklist = () => {
+  const [completedSteps, setCompletedSteps] = useState<number[]>([]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const siteUrl = 'https://fitwithpulse.ai';
-  const pageUrl = `${siteUrl}/checklist`;
-  const title = 'Getting Started with Pulse | Your Fitness Journey Begins Here';
-  const description =
-    'Follow our simple checklist to get started with Pulse. Learn how to create your profile, connect with the fitness community, and begin tracking your workouts.';
-  const previewImage = `${siteUrl}/GetStarted.png`;
-
-  const closeModal = () => setModalOpen(false);
+  const pageUrl = `${siteUrl}/creator-checklist`;
+  const title = 'Creator Guide | Start Your Pulse Journey';
+  const description = 'Begin your creator journey with Pulse. Learn how to create content, build your community, and grow your fitness brand.';
 
   return (
-    <div className="w-full relative bg-white">
+    <div className="min-h-screen bg-white">
       <Head>
-        {/* Primary Meta Tags */}
         <title>{title}</title>
-        <meta name="title" content={title} />
         <meta name="description" content={description} />
-
-        {/* Open Graph / Facebook */}
-        <meta property="og:type" content="website" />
-        <meta property="og:url" content={pageUrl} />
-        <meta property="og:title" content={title} />
-        <meta property="og:description" content={description} />
-        <meta property="og:image" content={previewImage} />
-        <meta property="og:site_name" content="Pulse Fitness" />
-
-        {/* Twitter */}
-        <meta property="twitter:card" content="summary_large_image" />
-        <meta property="twitter:url" content={pageUrl} />
-        <meta property="twitter:title" content={title} />
-        <meta property="twitter:description" content={description} />
-        <meta property="twitter:image" content={previewImage} />
-
-        {/* Additional Meta Tags */}
-        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
-        <meta name="keywords" content="fitness app, workout tracking, fitness community, pulse fitness, getting started, fitness journey" />
-        <meta name="author" content="Pulse Fitness" />
-        <link rel="canonical" href={pageUrl} />
-
-        {/* Theme Color */}
-        <meta name="theme-color" content="#E0FE10" />
       </Head>
 
-      {/* Main Content */}
-      <div className="px-4 sm:px-8">
-         {/* Meta Component */}
-         <Meta title={title} description={description} url={pageUrl} />
+      <Meta title={title} description={description} url={pageUrl} />
 
-        {/* Main Content */}
-        <div className="bg-white mb-64">
-          {/* Badge and phone image section */}
-          <div className="flex flex-col sm:flex-row mt-10 p-0 sm:px-20 justify-center items-center mx-auto space-x-0 sm:space-x-1">
-            <div
-              className="relative w-full h-auto mb-10 overflow-hidden group cursor-pointer"
-              onClick={() =>
-                window.location.href =
-                  'https://apps.apple.com/ca/app/pulse-community-workouts/id6451497729'
-              }
-            >
-              <img
-                src="/HowToGetStarted.svg"
-                alt="How to get started with Pulse"
-                className="w-full sm:w-[541px] h-auto object-contain"
-              />
-            </div>
-
-            <div className="relative w-full h-auto mb-10 overflow-hidden group">
-              <img
-                src="/checklistPhone.svg"
-                alt="Checklist overview on phone"
-                className="w-full sm:w-[681px] h-auto object-contain"
-              />
-            </div>
-          </div>
-
-          {/* Start Here section */}
-          <div className="w-full max-w-[1240px] mx-auto flex flex-col gap-8 sm:gap-10 mb-40">
-            <div className="flex flex-col items-center gap-4 sm:gap-6 text-center">
-              <div className="text-zinc-600 text-3xl sm:text-4xl font-normal font-['Thunder'] uppercase leading-9">
-                Start Here
-              </div>
-              <div className="w-full max-w-[791.1px] text-black text-[32px] sm:text-[64px] font-medium font-['Thunder'] leading-[40px] sm:leading-[79px]">
-                Complete these checklist items to get started and learn how to use the app.
-              </div>
-            </div>
-          </div>
-
-           {/* Checklist steps */}
-           <div className="self-stretch items-center gap-10">
-                {[1, 2, 3, 4, 5].map((step) => (
-                  <React.Fragment key={step}>
-                    <div className="flex items-center gap-4">
-                      <img 
-                        src={`/step${step}.svg`} 
-                        alt={`Step ${step}`} 
-                        className="w-full sm:w-h h-[450px] sm:h-[450px] object-contain hidden sm:block" 
-                      />
-                      <img 
-                        src={`/step${step}Mobile.${step === 5 ? 'svg' : 'png'}`} 
-                        alt={`Step ${step} mobile view`} 
-                        className="w-full sm:w-h h-[450px] sm:h-[450px] object-contain sm:hidden" 
-                      />
-                    </div>
-                    {step < 5 && <div className="h-8 sm:h-16" />}
-                  </React.Fragment>
-                ))}
-            </div>
-          {/* FAQ section */}
-          <div className="w-full max-w-[1240px] mx-auto flex flex-col gap-8 sm:gap-10 mb-40">
-            <FAQ title="Frequently Asked Questions" items={FAQ_DATA} />
-          </div>
+      {/* Hero Section */}
+      <div className="pt-20 pb-16 text-center">
+        <div className="max-w-3xl mx-auto px-4">
+          <h1 className="text-4xl sm:text-6xl font-['Thunder'] font-bold mb-6">
+            Ready to Shape the Future of <span className="text-orange-500">Fitness?</span>
+          </h1>
+          <p className="text-xl text-zinc-600">
+            Follow this guide to kickstart your creator journey and join a community of passionate fitness leaders.
+          </p>
         </div>
       </div>
 
-      <PartnerJoinModal isOpen={isModalOpen} closeModal={closeModal} />
+      {/* Interactive Feature Tiles */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto px-4 mb-20">
+        <a 
+          href="/moves" 
+          className="group relative overflow-hidden bg-black border-2 border-black rounded-2xl p-6 hover:bg-zinc-900 transition-all cursor-pointer"
+        >
+          <div className="relative z-10">
+            <h3 className="text-xl font-semibold mb-2 text-white">Moves</h3>
+            <p className="text-zinc-300 mb-4">The building blocks of your workout. Record and save exercises to create custom Stacks.</p>
+            <span className="text-sm text-white group-hover:text-white/80 transition-colors">
+            Learn about Moves →
+            </span>
+          </div>
+          <div className="absolute top-4 right-4">
+          <Dumbbell className="w-8 h-8 text-white opacity-20" />
+          </div>
+        </a>
+
+        <a 
+          href="/stacks" 
+          className="group relative overflow-hidden bg-black border-2 border-black rounded-2xl p-6 hover:bg-zinc-900 transition-all cursor-pointer"
+        >
+          <div className="relative z-10">
+            <h3 className="text-xl font-semibold mb-2 text-white">Stacks</h3>
+            <p className="text-zinc-300 mb-4">Stack your Moves to build a complete workout. Create the perfect training session for any goal.</p>
+            <span className="text-sm text-white group-hover:text-white/80 transition-colors">
+              Learn about Stacks →
+            </span>
+          </div>
+          <div className="absolute top-4 right-4">
+          <Layers className="w-8 h-8 text-white opacity-20" />
+          </div>
+        </a>
+
+        <a 
+          href="/rounds" 
+          className="group relative overflow-hidden bg-black border-2 border-black rounded-2xl p-6 hover:bg-zinc-900 transition-all cursor-pointer"
+        >
+          <div className="relative z-10">
+            <h3 className="text-xl font-semibold mb-2 text-white">Rounds</h3>
+            <p className="text-zinc-300 mb-4">Join the Round. Time-bound training programs where your community trains together or at their own pace.</p>
+            <span className="text-sm text-white group-hover:text-white/80 transition-colors">
+            Learn about Rounds →
+            </span>
+          </div>
+          <div className="absolute top-4 right-4">
+          <Timer className="w-8 h-8 text-white opacity-20" />
+          </div>
+        </a>
+      </div>
+
+      {/* Steps Section */}
+      <div className="max-w-6xl mx-auto px-4 mb-32">
+        <div className="grid gap-16">
+          {CREATOR_STEPS.map((step, index) => (
+            <div key={index} className="relative bg-white border border-zinc-100 rounded-2xl p-8">
+              <div className="flex flex-col md:flex-row items-start gap-8">
+                <div className="w-full md:w-1/2">
+                  <div className="bg-zinc-50 rounded-xl p-4">
+                    <img 
+                      src={step.image}
+                      alt={step.title}
+                      className="hidden md:block w-full h-auto rounded-lg shadow-lg"
+                    />
+                    <img 
+                      src={step.mobileImage}
+                      alt={step.title}
+                      className="md:hidden w-full h-auto rounded-lg shadow-lg"
+                    />
+                  </div>
+                </div>
+                <div className="w-full md:w-1/2 space-y-6">
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center justify-center w-8 h-8 rounded-full bg-zinc-100 text-zinc-700 font-semibold">
+                      {index + 1}
+                    </div>
+                    <h3 className="text-2xl sm:text-3xl font-['Thunder'] font-bold">
+                      {step.title}
+                    </h3>
+                  </div>
+                  
+                  <p className="text-lg text-zinc-600">
+                    {step.description}
+                  </p>
+
+                  <div className="space-y-3">
+                    <h4 className="text-sm font-semibold text-zinc-700">Quick Steps:</h4>
+                    {step.detailedSteps.map((detailStep, i) => (
+                      <div key={i} className="flex items-center gap-3">
+                        <div className="w-1.5 h-1.5 rounded-full bg-zinc-300"></div>
+                        <p className="text-sm text-zinc-600">{detailStep}</p>
+                      </div>
+                    ))}
+                  </div>
+                  
+                  <button
+                    onClick={() => {
+                      if (completedSteps.includes(index)) {
+                        setCompletedSteps(completedSteps.filter(s => s !== index));
+                      } else {
+                        setCompletedSteps([...completedSteps, index]);
+                      }
+                    }}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all ${
+                      completedSteps.includes(index)
+                        ? 'bg-green-100 text-green-700'
+                        : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200'
+                    }`}
+                  >
+                    <Check className="w-4 h-4" />
+                    {completedSteps.includes(index) ? 'Completed' : 'Mark Complete'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* FAQ Section */}
+      <div className="max-w-4xl mx-auto px-4 mb-32">
+        <FAQ title="Common Questions" items={FAQ_DATA} />
+      </div>
+
+      {/* CTA Section */}
+      <div className="bg-zinc-50 py-20">
+        <div className="max-w-4xl mx-auto px-4 text-center">
+          <h2 className="text-3xl sm:text-4xl font-['Thunder'] font-bold mb-6">
+            Ready to Start Creating?
+          </h2>
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="inline-flex items-center gap-2 bg-black text-white px-8 py-4 rounded-full font-semibold hover:bg-zinc-800 transition-colors"
+          >
+            Join as Creator
+            <span className="text-[#E0FE10]">→</span>
+          </button>
+        </div>
+      </div>
+
+      <PartnerJoinModal isOpen={isModalOpen} closeModal={() => setIsModalOpen(false)} />
     </div>
   );
 };
 
-export default Checklist;
+export default CreatorChecklist;
