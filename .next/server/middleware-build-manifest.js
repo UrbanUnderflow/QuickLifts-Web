@@ -24,11 +24,6 @@ self.__BUILD_MANIFEST = {
       "static/chunks/main.js",
       "static/chunks/pages/moves.js"
     ],
-    "/rounds": [
-      "static/chunks/webpack.js",
-      "static/chunks/main.js",
-      "static/chunks/pages/rounds.js"
-    ],
     "/starter-pack": [
       "static/chunks/webpack.js",
       "static/chunks/main.js",
