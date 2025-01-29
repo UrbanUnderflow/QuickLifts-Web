@@ -102,6 +102,17 @@ const CreatorChecklist = () => {
             </p>
           </div>
 
+          {/* Download App */}
+          <a 
+            href="https://apps.apple.com/ca/app/pulse-community-workouts/id6451497729"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 bg-black text-white px-8 py-4 rounded-full font-semibold hover:bg-zinc-800 transition-colors"
+          >
+            Download Pulse
+            <span className="text-[#E0FE10]">→</span>
+          </a>
+
           {/* Learning Path Introduction */}
           <div className="max-w-2xl mx-auto">
             <h2 className="text-2xl sm:text-3xl font-['Thunder'] font-bold mb-4">
