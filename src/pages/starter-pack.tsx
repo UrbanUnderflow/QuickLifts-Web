@@ -91,13 +91,43 @@ const CreatorChecklist = () => {
 
       {/* Hero Section */}
       <div className="pt-20 pb-16 text-center">
-        <div className="max-w-3xl mx-auto px-4">
-          <h1 className="text-4xl sm:text-6xl font-['Thunder'] font-bold mb-6">
-            Ready to Shape the Future of <span className="text-orange-500">Fitness?</span>
-          </h1>
-          <p className="text-xl text-zinc-600">
-            Follow this guide to kickstart your creator journey and join a community of passionate fitness leaders.
-          </p>
+        <div className="max-w-3xl mx-auto px-4 space-y-12">
+          {/* App Introduction */}
+          <div>
+            <h1 className="text-4xl sm:text-6xl font-['Thunder'] font-bold mb-6">
+              Welcome to <span className="text-orange-500">Pulse</span>
+            </h1>
+            <p className="text-xl text-zinc-600">
+              Join a community where fitness enthusiasts create, share, and grow together. Whether you're a certified trainer or passionate about fitness, you can build your following and earn from your impact.
+            </p>
+          </div>
+
+          {/* Learning Path Introduction */}
+          <div className="max-w-2xl mx-auto">
+            <h2 className="text-2xl sm:text-3xl font-['Thunder'] font-bold mb-4">
+              Let's Get You Started
+            </h2>
+            <p className="text-lg text-zinc-600">
+              Before diving into the setup process, familiarize yourself with our core features below. Understanding Moves, Stacks, and Rounds will help you make the most of your creator journey.
+            </p>
+          </div>
+
+          {/* Arrow indicator */}
+          <div className="flex justify-center">
+            <svg 
+              className="w-6 h-6 text-zinc-400 animate-bounce" 
+              fill="none" 
+              viewBox="0 0 24 24" 
+              stroke="currentColor"
+            >
+              <path 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+                strokeWidth={2} 
+                d="M19 14l-7 7m0 0l-7-7m7 7V3" 
+              />
+            </svg>
+          </div>
         </div>
       </div>
 
@@ -231,17 +261,17 @@ const CreatorChecklist = () => {
           <h2 className="text-3xl sm:text-4xl font-['Thunder'] font-bold mb-6">
             Ready to Start Creating?
           </h2>
-          <button
-            onClick={() => setIsModalOpen(true)}
+          <a 
+            href="https://apps.apple.com/ca/app/pulse-community-workouts/id6451497729"
+            target="_blank"
+            rel="noopener noreferrer"
             className="inline-flex items-center gap-2 bg-black text-white px-8 py-4 rounded-full font-semibold hover:bg-zinc-800 transition-colors"
           >
-            Join as Creator
+            Download Pulse
             <span className="text-[#E0FE10]">→</span>
-          </button>
+          </a>
         </div>
       </div>
-
-      <PartnerJoinModal isOpen={isModalOpen} closeModal={() => setIsModalOpen(false)} />
     </div>
   );
 };

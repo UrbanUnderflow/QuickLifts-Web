@@ -4,5 +4,5 @@
   "/_document": "pages/_document.js",
   "/rounds": "pages/rounds.js",
   "/moves": "pages/moves.js",
-  "/stacks": "pages/stacks.js"
+  "/starter-pack": "pages/starter-pack.js"
 }
