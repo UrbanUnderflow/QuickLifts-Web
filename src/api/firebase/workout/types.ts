@@ -487,32 +487,25 @@ enum ChallengeStatus {
   Completed = 'completed',
   Cancelled = 'cancelled'
 }
+export interface IntroVideo {
+  id: string;
+  userId: string;
+  videoUrl: string;
+  toDictionary(): any;
+}
 
-// types.ts (or appropriate location)
-export class IntroVideo {
+export class IntroVideo implements IntroVideo {
   id: string;
   userId: string;
   videoUrl: string;
 
-  constructor(data: {
-    id: string;
-    userId: string;
-    videoUrl: string;
-  }) {
+  constructor(data: { id: string; userId: string; videoUrl: string; }) {
     this.id = data.id;
     this.userId = data.userId;
     this.videoUrl = data.videoUrl;
   }
 
-  static fromFirebase(data: any): IntroVideo {
-    return new IntroVideo({
-      id: data.id || '',
-      userId: data.userId || '',
-      videoUrl: data.videoUrl || ''
-    });
-  }
-
-  toDictionary(): { [key: string]: any } {
+  toDictionary(): any {
     return {
       id: this.id,
       userId: this.userId,
@@ -545,7 +538,8 @@ class Challenge {
     createdAt: Date;
     updatedAt: Date;
     introVideos?: IntroVideo[];
-  }) {
+    introVideoURL?: string; // Add this for backwards compatibility
+   }) {
     this.id = data.id;
     this.title = data.title;
     this.subtitle = data.subtitle;
@@ -555,9 +549,22 @@ class Challenge {
     this.endDate = convertFirestoreTimestamp(data.endDate);
     this.createdAt = convertFirestoreTimestamp(data.createdAt);
     this.updatedAt = convertFirestoreTimestamp(data.updatedAt);
-    this.introVideos = data.introVideos || [];
+   
+    // Handle both old and new format
+    if (data.introVideos) {
+      this.introVideos = data.introVideos.map(video => new IntroVideo(video));
+    } else if (data.introVideoURL) {
+      this.introVideos = [new IntroVideo({
+        id: '1',
+        userId: data.participants[0]?.userId || '',
+        videoUrl: data.introVideoURL
+      })];
+    } else {
+      this.introVideos = [];
+    }
+   
     this.durationInDays = this.calculateDurationInDays();
-  }
+   }
 
     toDictionary(): any {
       return {
@@ -592,11 +599,8 @@ class Challenge {
         createdAt: this.createdAt,
         updatedAt: this.updatedAt,
         durationInDays: this.durationInDays,
-        introVideos: this.introVideos.map(video => ({
-          id: video.id,
-          userId: video.userId,
-          videoUrl: video.videoUrl
-        })),
+        introVideos: this.introVideos.map(video => video.toDictionary())
+
       };
     }
 

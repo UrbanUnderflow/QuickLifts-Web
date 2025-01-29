@@ -2,7 +2,6 @@
   "/_app": "pages/_app.js",
   "/_error": "pages/_error.js",
   "/_document": "pages/_document.js",
-  "/rounds": "pages/rounds.js",
-  "/moves": "pages/moves.js",
-  "/starter-pack": "pages/starter-pack.js"
+  "/starter-pack": "pages/starter-pack.js",
+  "/round-invitation/[id]": "pages/round-invitation/[id].js"
 }
