@@ -98,7 +98,6 @@ const ChallengePage: React.FC<ChallengePageProps> = ({ initialCollection, initia
             createdAt: new Date(data.collection.challenge.createdAt),
             updatedAt: new Date(data.collection.challenge.updatedAt),
             participants: data.collection.challenge.participants || [],
-            referralChains: data.collection.challenge.referralChains || []
           })
         };
   
@@ -211,7 +210,6 @@ export const getServerSideProps: GetServerSideProps<ChallengePageProps> = async 
         createdAt: new Date(data.collection.challenge.createdAt).toISOString(),
         updatedAt: new Date(data.collection.challenge.updatedAt).toISOString(),
         participants: data.collection.challenge.participants || [],
-        referralChains: data.collection.challenge.referralChains || []
       }
     };
 

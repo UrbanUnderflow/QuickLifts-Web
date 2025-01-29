@@ -21,8 +21,8 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
   const currentUser = useSelector((state: RootState) => state.user.currentUser);
   const isLoading = useSelector((state: RootState) => state.user.loading);
 
-  const publicRoutes = ['/about', '/creator', '/rounds', '/terms', '/privacyPolicy'];
-  const publicPathPatterns = ['/round-invitation', '/profile']; // Paths that start with these are public
+  const publicRoutes = ['/about', '/creator', '/rounds', '/terms', '/privacyPolicy', '/starter-pack'];
+  const publicPathPatterns = ['/round-invitation', '/profile', 'challenge']; // Paths that start with these are public
 
   const isPublicRoute = (path: string) => {
     // Check exact matches

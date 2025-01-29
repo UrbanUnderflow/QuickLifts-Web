@@ -337,6 +337,7 @@ export interface ReferralChain {
   originalHostId: string;
   shares: string[];
  }
+
 // Main SweatlistCollection interface
 export class SweatlistCollection {
   id: string;
@@ -458,6 +459,7 @@ interface UserChallenge {
   username: string;
   profileImage?: ProfileImage;
   progress: number;
+  referralChains: ReferralChain;
   completedWorkouts: { 
     id: string; 
     workoutId: string;
@@ -531,8 +533,6 @@ class Challenge {
   createdAt: Date;
   updatedAt: Date;
   introVideos: IntroVideo[];
-  referralChains: ReferralChain[];
-
 
   constructor(data: {
     id: string;
@@ -545,7 +545,6 @@ class Challenge {
     createdAt: Date;
     updatedAt: Date;
     introVideos?: IntroVideo[];
-    referralChains: ReferralChain[];
   }) {
     this.id = data.id;
     this.title = data.title;
@@ -558,10 +557,6 @@ class Challenge {
     this.updatedAt = convertFirestoreTimestamp(data.updatedAt);
     this.introVideos = data.introVideos || [];
     this.durationInDays = this.calculateDurationInDays();
-    this.referralChains = (data.referralChains || []).map((chain: any) => ({
-      originalHostId: chain.originalHostId || '',
-      shares: chain.shares || []
-    }));
   }
 
     toDictionary(): any {
@@ -602,10 +597,6 @@ class Challenge {
           userId: video.userId,
           videoUrl: video.videoUrl
         })),
-        referralChains: this.referralChains.map(chain => ({
-          originalHostId: chain.originalHostId,
-          shares: chain.shares
-        }))
       };
     }
 
