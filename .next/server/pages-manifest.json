@@ -2,8 +2,8 @@
   "/_app": "pages/_app.js",
   "/_error": "pages/_error.js",
   "/_document": "pages/_document.js",
-  "/about": "pages/about.js",
-  "/rounds": "pages/rounds.js",
   "/moves": "pages/moves.js",
-  "/starter-pack": "pages/starter-pack.js"
+  "/starter-pack": "pages/starter-pack.js",
+  "/stacks": "pages/stacks.js",
+  "/rounds": "pages/rounds.js"
 }
