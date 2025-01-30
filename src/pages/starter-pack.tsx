@@ -156,7 +156,7 @@ const CreatorChecklist = () => {
             </span>
           </div>
           <div className="absolute top-4 right-4">
-          <Dumbbell className="w-8 h-8 text-white opacity-20" />
+          <Dumbbell className="w-8 h-8 text-[#E0FE10] opacity-40" />
           </div>
         </a>
 
@@ -172,7 +172,7 @@ const CreatorChecklist = () => {
             </span>
           </div>
           <div className="absolute top-4 right-4">
-          <Layers className="w-8 h-8 text-white opacity-20" />
+          <Layers className="w-8 h-8 text-[#E0FE10] opacity-40" />
           </div>
         </a>
 
@@ -188,7 +188,7 @@ const CreatorChecklist = () => {
             </span>
           </div>
           <div className="absolute top-4 right-4">
-          <Timer className="w-8 h-8 text-white opacity-20" />
+          <Timer className="w-8 h-8 text-[#E0FE10] opacity-40" />
           </div>
         </a>
       </div>
