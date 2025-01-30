@@ -25,38 +25,59 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
   const publicPathPatterns = ['/round-invitation', '/profile', '/challenge']; // Paths that start with these are public
 
   const isPublicRoute = (path: string) => {
-    // Check exact matches
-    if (publicRoutes.includes(path)) return true;
+    // Normalize the path
+    const normalizedPath = path.toLowerCase().replace(/\/$/, '');
     
-    // Check if the path starts with any of the public patterns
-    return publicPathPatterns.some(pattern => path.startsWith(pattern));
+    // Log for debugging
+    console.log('Checking path:', normalizedPath);
+    
+    // Check exact matches
+    if (publicRoutes.includes(normalizedPath)) {
+      console.log('Found exact match');
+      return true;
+    }
+    
+    // Check patterns
+    const isPatternMatch = publicPathPatterns.some(pattern => 
+      normalizedPath.startsWith(pattern.toLowerCase())
+    );
+    
+    console.log('Pattern match result:', isPatternMatch);
+    return isPatternMatch;
   };
 
   useEffect(() => {
-    dispatch(setLoading(true));
-
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
+    // Add error boundary
+    try {
+      dispatch(setLoading(true));
+      
+      const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
         try {
-          const firestoreUser = await userService.fetchUserFromFirestore(firebaseUser.uid);
-          dispatch(setUser(firestoreUser));
-          userService.currentUser = firestoreUser;
-          setShowSignInModal(false);
+          if (firebaseUser) {
+            const firestoreUser = await userService.fetchUserFromFirestore(firebaseUser.uid);
+            dispatch(setUser(firestoreUser));
+            userService.currentUser = firestoreUser;
+            setShowSignInModal(false);
+          } else {
+            dispatch(setUser(null));
+            userService.currentUser = null;
+            const isPublic = isPublicRoute(router.pathname);
+            console.log('Route is public:', isPublic);
+            setShowSignInModal(!isPublic);
+          }
         } catch (error) {
-          console.error('Error fetching user data:', error);
+          console.error('Auth state change error:', error);
           dispatch(setUser(null));
-          setShowSignInModal(true);
+        } finally {
+          dispatch(setLoading(false));
         }
-      } else {
-        dispatch(setUser(null));
-        userService.currentUser = null;
-        // Use the new isPublicRoute function
-        setShowSignInModal(!isPublicRoute(router.pathname));
-      }
-      dispatch(setLoading(false));
-    });
+      });
 
-    return () => unsubscribe();
+      return () => unsubscribe();
+    } catch (error) {
+      console.error('Auth wrapper error:', error);
+      dispatch(setLoading(false));
+    }
   }, [dispatch, auth, router.pathname]);
 
   const handleSignInSuccess = (user: any) => {
@@ -68,17 +89,15 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
   };
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-zinc-900"></div>
-      </div>
-    );
+    console.log('Auth wrapper is loading');
+    return <div className="flex items-center justify-center min-h-screen">
+      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-zinc-900"></div>
+    </div>;
   }
 
   return (
     <>
       {children}
-      
       {showSignInModal && !currentUser && (
         <SignInModal
           isVisible={true}
