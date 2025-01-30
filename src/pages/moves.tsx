@@ -1,8 +1,9 @@
 import React from 'react';
+import type { NextPage } from 'next';
 import Head from 'next/head';
 import { useScrollFade } from '../hooks/useScrollFade';
 
-const MovesPage = () => {
+const MovesPage: NextPage = () => {
   return (
     <div className="min-h-screen bg-zinc-900">
       <Head>
