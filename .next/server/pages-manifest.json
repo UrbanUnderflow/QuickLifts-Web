@@ -2,8 +2,7 @@
   "/_app": "pages/_app.js",
   "/_error": "pages/_error.js",
   "/_document": "pages/_document.js",
-  "/stacks": "pages/stacks.js",
-  "/": "pages/index.js",
   "/terms": "pages/terms.js",
-  "/starter-pack": "pages/starter-pack.js"
+  "/stacks": "pages/stacks.js",
+  "/": "pages/index.js"
 }

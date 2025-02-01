@@ -25,7 +25,6 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     '/about', 
     '/creator', 
     '/rounds', 
-    '/terms', 
     '/privacyPolicy', 
     '/starter-pack', 
     '/stacks', 
