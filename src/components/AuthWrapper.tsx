@@ -41,21 +41,18 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
   ].map(pattern => pattern.toLowerCase());  // Normalize all patterns
   
   const isPublicRoute = (path: string) => {
-    // Normalize the path to lowercase
-    const normalizedPath = path.toLowerCase().replace(/\/$/, '');
-    
-    // Log for debugging
-    console.log('Checking path:', normalizedPath);
+    console.log('Raw router path:', router.pathname);
+    console.log('Public routes:', publicRoutes);
     
     // Check exact matches
-    if (publicRoutes.includes(normalizedPath)) {
-      console.log('Found exact match for:', normalizedPath);
+    if (publicRoutes.includes(path)) {
+      console.log('Path found in public routes:', path);
       return true;
     }
     
     // Check patterns
-    const isPatternMatch = publicPathPatterns.some(pattern => normalizedPath.startsWith(pattern));
-    console.log('Pattern match result for:', normalizedPath, isPatternMatch);
+    const isPatternMatch = publicPathPatterns.some(pattern => path.startsWith(pattern));
+    console.log('Checking path patterns:', path, isPatternMatch);
     
     return isPatternMatch;
   };
