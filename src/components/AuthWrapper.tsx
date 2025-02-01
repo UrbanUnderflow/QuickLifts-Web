@@ -30,8 +30,6 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     '/starter-pack', 
     '/stacks', 
     '/moves',
-    '/Terms',           // Add uppercase variants
-    '/PrivacyPolicy'   // Add uppercase variants
   ].map(route => route.toLowerCase());  // Normalize all routes
   
   const publicPathPatterns = [
@@ -41,20 +39,15 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
   ].map(pattern => pattern.toLowerCase());  // Normalize all patterns
   
   const isPublicRoute = (path: string) => {
-    console.log('Raw router path:', router.pathname);
-    console.log('Public routes:', publicRoutes);
+    const normalizedPath = path.toLowerCase();
     
     // Check exact matches
-    if (publicRoutes.includes(path)) {
-      console.log('Path found in public routes:', path);
+    if (publicRoutes.includes(normalizedPath)) {
       return true;
     }
     
     // Check patterns
-    const isPatternMatch = publicPathPatterns.some(pattern => path.startsWith(pattern));
-    console.log('Checking path patterns:', path, isPatternMatch);
-    
-    return isPatternMatch;
+    return publicPathPatterns.some(pattern => normalizedPath.startsWith(pattern));
   };
 
   useEffect(() => {
