@@ -2,7 +2,8 @@
   "/_app": "pages/_app.js",
   "/_error": "pages/_error.js",
   "/_document": "pages/_document.js",
-  "/terms": "pages/terms.js",
   "/stacks": "pages/stacks.js",
-  "/": "pages/index.js"
+  "/": "pages/index.js",
+  "/terms": "pages/terms.js",
+  "/term": "pages/term.js"
 }
