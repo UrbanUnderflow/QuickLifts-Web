@@ -3,6 +3,6 @@
   "/_error": "pages/_error.js",
   "/_document": "pages/_document.js",
   "/stacks": "pages/stacks.js",
-  "/terms": "pages/terms.js",
-  "/privacy": "pages/privacy.js"
+  "/privacyPolicy": "pages/privacyPolicy.js",
+  "/terms": "pages/terms.js"
 }
