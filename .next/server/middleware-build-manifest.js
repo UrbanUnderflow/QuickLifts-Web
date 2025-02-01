@@ -19,10 +19,10 @@ self.__BUILD_MANIFEST = {
       "static/chunks/main.js",
       "static/chunks/pages/_error.js"
     ],
-    "/privacy": [
+    "/privacyPolicy": [
       "static/chunks/webpack.js",
       "static/chunks/main.js",
-      "static/chunks/pages/privacy.js"
+      "static/chunks/pages/privacyPolicy.js"
     ],
     "/stacks": [
       "static/chunks/webpack.js",
