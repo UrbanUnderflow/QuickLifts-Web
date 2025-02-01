@@ -29,6 +29,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     '/starter-pack', 
     '/stacks', 
     '/moves',
+    '/terms',
   ].map(route => route.toLowerCase());  // Normalize all routes
   
   const publicPathPatterns = [
