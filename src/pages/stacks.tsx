@@ -81,7 +81,7 @@ const StacksPage = () => {
                 loop
                 muted
                 playsInline
-                src="/createstacks.mp4"
+                src="/createstack.mp4"
                 poster="/create-stack-poster.jpg"
               />
             </div>

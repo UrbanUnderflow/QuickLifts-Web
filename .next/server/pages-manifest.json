@@ -2,8 +2,7 @@
   "/_app": "pages/_app.js",
   "/_error": "pages/_error.js",
   "/_document": "pages/_document.js",
-  "/moves": "pages/moves.js",
-  "/starter-pack": "pages/starter-pack.js",
   "/stacks": "pages/stacks.js",
-  "/rounds": "pages/rounds.js"
+  "/privacyPolicy": "pages/privacyPolicy.js",
+  "/terms": "pages/terms.js"
 }
