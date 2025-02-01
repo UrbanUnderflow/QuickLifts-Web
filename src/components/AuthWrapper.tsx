@@ -21,11 +21,27 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
   const currentUser = useSelector((state: RootState) => state.user.currentUser);
   const isLoading = useSelector((state: RootState) => state.user.loading);
 
-  const publicRoutes = ['/about', '/creator', '/rounds', '/terms', '/privacyPolicy', '/starter-pack', '/stacks', '/moves'];
-  const publicPathPatterns = ['/round-invitation', '/profile', '/challenge']; // Paths that start with these are public
-
+  const publicRoutes = [
+    '/about', 
+    '/creator', 
+    '/rounds', 
+    '/terms', 
+    '/privacyPolicy', 
+    '/starter-pack', 
+    '/stacks', 
+    '/moves',
+    '/Terms',           // Add uppercase variants
+    '/PrivacyPolicy'   // Add uppercase variants
+  ].map(route => route.toLowerCase());  // Normalize all routes
+  
+  const publicPathPatterns = [
+    '/round-invitation', 
+    '/profile', 
+    '/challenge'
+  ].map(pattern => pattern.toLowerCase());  // Normalize all patterns
+  
   const isPublicRoute = (path: string) => {
-    // Normalize the path
+    // Normalize the path to lowercase
     const normalizedPath = path.toLowerCase().replace(/\/$/, '');
     
     // Log for debugging
@@ -33,16 +49,14 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     
     // Check exact matches
     if (publicRoutes.includes(normalizedPath)) {
-      console.log('Found exact match');
+      console.log('Found exact match for:', normalizedPath);
       return true;
     }
     
     // Check patterns
-    const isPatternMatch = publicPathPatterns.some(pattern => 
-      normalizedPath.startsWith(pattern.toLowerCase())
-    );
+    const isPatternMatch = publicPathPatterns.some(pattern => normalizedPath.startsWith(pattern));
+    console.log('Pattern match result for:', normalizedPath, isPatternMatch);
     
-    console.log('Pattern match result:', isPatternMatch);
     return isPatternMatch;
   };
 
