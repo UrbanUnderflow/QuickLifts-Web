@@ -9,7 +9,7 @@ interface OnboardingStep {
 
 const ChallengeCTA: React.FC<{ challenge: any }> = ({ challenge }) => {
   const [showInstructions, setShowInstructions] = useState(false);
-  
+
   const steps: OnboardingStep[] = [
     {
       title: "Download Pulse",
@@ -29,16 +29,21 @@ const ChallengeCTA: React.FC<{ challenge: any }> = ({ challenge }) => {
   ];
 
   const appStoreUrl = 'https://apps.apple.com/ca/app/pulse-community-workouts/id6451497729';
-  
-  // Create the base URL with properly encoded parameters
+
+  // Construct the deep link URL
   const baseUrl = `https://www.quickliftsapp.com/?linkType=round&roundId=${challenge.id}`;
   const encodedBaseUrl = encodeURIComponent(baseUrl);
-  
-  // Create the dynamic link URL with proper encoding
   const deepLinkUrl = `https://quicklifts.page.link/?link=${encodedBaseUrl}&apn=com.pulse.fitnessapp&ibi=Tremaine.QuickLifts&isi=6451497729`;
 
   const handleJoinChallenge = () => {
-    setShowInstructions(true);
+    // Attempt to launch the app via deep link
+    window.location.href = deepLinkUrl;
+    // After a short delay, if the document is still visible, assume the app didn't launch
+    setTimeout(() => {
+      if (!document.hidden) {
+        setShowInstructions(true);
+      }
+    }, 1500);
   };
 
   const handleOpenInApp = () => {
@@ -58,16 +63,10 @@ const ChallengeCTA: React.FC<{ challenge: any }> = ({ challenge }) => {
               <div className="space-y-8">
                 {steps.map((step, index) => (
                   <div key={index} className="flex items-start space-x-4">
-                    <div className="flex-shrink-0">
-                      {step.icon}
-                    </div>
+                    <div className="flex-shrink-0">{step.icon}</div>
                     <div className="flex-1">
-                      <h3 className="text-lg font-semibold text-white">
-                        {step.title}
-                      </h3>
-                      <p className="text-zinc-400 mt-1">
-                        {step.description}
-                      </p>
+                      <h3 className="text-lg font-semibold text-white">{step.title}</h3>
+                      <p className="text-zinc-400 mt-1">{step.description}</p>
                     </div>
                     {index < steps.length - 1 && (
                       <ArrowRight className="w-5 h-5 text-zinc-600 transform rotate-90 mt-2" />
