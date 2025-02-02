@@ -2,7 +2,6 @@
   "/_app": "pages/_app.js",
   "/_error": "pages/_error.js",
   "/_document": "pages/_document.js",
-  "/": "pages/index.js",
-  "/round/[id]": "pages/round/[id].js",
-  "/round/[id]/wrapup": "pages/round/[id]/wrapup.js"
+  "/round/[id]/wrapup": "pages/round/[id]/wrapup.js",
+  "/round-invitation/[id]": "pages/round-invitation/[id].js"
 }

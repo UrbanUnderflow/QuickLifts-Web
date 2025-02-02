@@ -1,5 +1,5 @@
 import { GetServerSideProps } from 'next';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/router';
 import RoundInvitation from '../../components/RoundInvitation';
 import ChallengeMeta from '../../components/ChallengeMeta';
@@ -33,12 +33,21 @@ interface ChallengePageProps {
 
 const ChallengePage: React.FC<ChallengePageProps> = ({ initialCollection, initialError }) => {
   console.log("Component rendering", { initialCollection, initialError }); // Add this
+  console.log("Challenge Page Render - Collection Data:", {
+    hasPin: initialCollection?.pin ? true : false,
+    pin: initialCollection?.pin,
+    fullCollection: initialCollection
+  });
+
 
   const router = useRouter();
   const { id } = router.query;
   const [collection, setCollection] = useState<SweatlistCollection | null>(initialCollection || null);
   const [loading, setLoading] = useState(!initialCollection);
   const [error, setError] = useState<string | null>(initialError || null);
+
+  const [isPinVerified, setIsPinVerified] = useState(false);
+
 
   useEffect(() => {
     console.log("useEffect triggered", { id, initialCollection }); // Add this
@@ -68,7 +77,12 @@ const ChallengePage: React.FC<ChallengePageProps> = ({ initialCollection, initia
           throw new Error(`HTTP error! status: ${response.status}`);
         }
   
-        const data = await response.json();
+      const data = await response.json();
+      console.log("SSR Response Data:", {
+        pin: data.collection.pin,
+        fullData: data.collection
+      });
+  
       console.log("Client - Raw API Response:", JSON.stringify(data, null, 2));
       console.log("Client - Collection introVideoURL:", data.collection.introVideoURL);
       console.log("Client - Collection ownerId:", data.collection.ownerId);
@@ -87,6 +101,7 @@ const ChallengePage: React.FC<ChallengePageProps> = ({ initialCollection, initia
           ...data.collection,
           createdAt: new Date(data.collection.createdAt),
           updatedAt: new Date(data.collection.updatedAt),
+          pin: data.collection.pin,
           challenge: new Challenge({
             id: data.collection.challenge.id,
             title: data.collection.challenge.title,
@@ -126,6 +141,17 @@ const ChallengePage: React.FC<ChallengePageProps> = ({ initialCollection, initia
 
   if (!collection || !collection.challenge) {
     return <ErrorState message="Challenge not found" />;
+  }
+
+  // Show PIN entry if collection has a PIN and it's not verified yet
+  if (collection.pin && !isPinVerified) {
+    return (
+      <PINEntry
+        expectedPIN={collection.pin}
+        onSuccess={() => setIsPinVerified(true)}
+        onError={(message) => setError(message)}
+      />
+    );
   }
 
   return (
@@ -200,6 +226,7 @@ export const getServerSideProps: GetServerSideProps<ChallengePageProps> = async 
       ...data.collection,
       createdAt: new Date(data.collection.createdAt).toISOString(),
       updatedAt: new Date(data.collection.updatedAt).toISOString(),
+      pin: data.collection.pin ?? null,  // Changed this line
       challenge: {
         id: data.collection.challenge.id,
         title: data.collection.challenge.title,
@@ -233,4 +260,114 @@ export const getServerSideProps: GetServerSideProps<ChallengePageProps> = async 
   }
 };
 
+interface PINEntryProps {
+  expectedPIN: string;
+  onSuccess: () => void;
+  onError: (message: string) => void;
+}
+
+const PINEntry: React.FC<PINEntryProps> = ({ expectedPIN, onSuccess, onError }) => {
+  const [pin, setPin] = useState<string[]>(Array(9).fill(''));
+  const [showError, setShowError] = useState(false);
+  const [showEnterButton, setShowEnterButton] = useState(false);
+  const inputRefs = useRef<(HTMLInputElement | null)[]>(Array(9).fill(null));
+
+  const handlePinChange = (index: number, value: string) => {
+    if (!/^\d*$/.test(value)) return; // Only allow numbers
+
+    const newPin = [...pin];
+    newPin[index] = value;
+    setPin(newPin);
+
+    // If we have a value, move to next input
+    if (value && index < 8) {
+      inputRefs.current[index + 1]?.focus();
+    }
+
+    // Show enter button when all digits are filled
+    setShowEnterButton(newPin.every(digit => digit !== ''));
+    setShowError(false);
+  };
+
+  const handleKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Backspace' && !pin[index] && index > 0) {
+      // Move to previous input on backspace if current input is empty
+      inputRefs.current[index - 1]?.focus();
+    }
+  };
+
+  const validatePIN = () => {
+    const enteredPIN = pin.join('');
+    if (enteredPIN === expectedPIN) {
+      onSuccess();
+    } else {
+      setShowError(true);
+      onError('Incorrect PIN. Please try again.');
+      // Clear PIN and focus first input
+      setPin(Array(9).fill(''));
+      inputRefs.current[0]?.focus();
+      setShowEnterButton(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col items-center justify-center min-h-screen bg-zinc-950 p-4">
+      <div className="w-full max-w-md">
+        <h2 className="text-2xl font-bold text-white text-center mb-8">
+          Enter Round PIN
+        </h2>
+        
+        <div className="mb-8">
+          <div className="flex justify-center gap-2 mb-4">
+            {pin.map((digit, index) => (
+              <input
+                key={index}
+                ref={(el) => {
+                  if (inputRefs.current) {
+                    inputRefs.current[index] = el;
+                  }
+                }}
+                type="text"
+                maxLength={1}
+                value={digit}
+                onChange={(e) => handlePinChange(index, e.target.value)}
+                onKeyDown={(e) => handleKeyDown(index, e)}
+                className={`
+                  w-10 h-12 
+                  text-center text-xl font-bold
+                  bg-zinc-900 
+                  border-2 ${showError ? 'border-red-500' : 'border-[#E0FE10]'}
+                  text-white 
+                  rounded-lg 
+                  focus:outline-none 
+                  focus:border-[#E0FE10] 
+                  transition-colors
+                `}
+              />
+            ))}
+          </div>
+
+          {showError && (
+            <p className="text-red-500 text-center text-sm mt-2">
+              Incorrect PIN. Please try again.
+            </p>
+          )}
+        </div>
+
+        {showEnterButton && (
+          <button
+            onClick={validatePIN}
+            className="w-full py-3 bg-[#E0FE10] text-black rounded-lg font-bold 
+                     hover:bg-opacity-90 transition-opacity"
+          >
+            Enter
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
+
 export default ChallengePage;
+
+

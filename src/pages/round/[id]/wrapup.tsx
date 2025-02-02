@@ -1,9 +1,13 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { useSelector } from 'react-redux';
 import { useRouter } from 'next/router';
 import html2canvas from 'html2canvas';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Crown, Award, Flame, Sunrise, Heart, TrendingUp } from 'lucide-react';
 import { workoutService, Challenge, UserChallenge, SweatlistCollection } from '../../../api/firebase/workout';
+import { RootState } from '../../../redux/store';
+import { collection } from 'firebase/firestore';
+
 
 
 // --- Shareable Analytics View ---
@@ -102,6 +106,9 @@ const RoundWrapup: React.FC = () => {
   const router = useRouter();
   const { id } = router.query;
 
+  const { currentUser } = useSelector((state: RootState) => state.user);
+
+
   // A ref for the shareable analytics view snapshot
   const shareableRef = useRef<HTMLDivElement>(null);
 
@@ -123,52 +130,100 @@ const RoundWrapup: React.FC = () => {
     fetchData();
   }, [id]);
 
+  // Early riser calculation
+  const calculateEarlyRiser = (participants: UserChallenge[]) => {
+    const earlyRisers = participants.map(p => {
+      console.log("User:", p.username);
+      console.log("All completed workouts:", p.completedWorkouts);
+      
+      const count = p.completedWorkouts.filter(w => {
+        console.log("Raw completedAt:", w.completedAt);
+        const completedAt = new Date(w.completedAt);
+        console.log("Parsed completedAt:", completedAt);
+        console.log("Hour:", completedAt.getHours());
+        return completedAt.getHours() < 8;
+      }).length;
+  
+      console.log("Early workout count:", count);
+      return { user: p, count };
+    });
+  
+    const topEarlyRiser = earlyRisers.sort((a, b) => b.count - a.count)[0];
+    console.log("Top early riser:", topEarlyRiser);
+    
+    return topEarlyRiser;
+  };
+
   // When participants update, calculate rankings and superlatives
   useEffect(() => {
     if (participants.length > 0) {
       const sorted = [...participants].sort((a, b) => b.pulsePoints.totalPoints - a.pulsePoints.totalPoints);
       setRankedParticipants(sorted);
 
-      const earlyRisers = participants.map((p) => ({
-        user: p,
-        count: p.completedWorkouts.filter((w: any) => new Date(w.completedAt).getHours() < 8).length,
-      }));
-      setTopEarlyRiser(earlyRisers.sort((a, b) => b.count - a.count)[0]);
+      const earlyRiserResult = calculateEarlyRiser(participants);
+      setTopEarlyRiser(earlyRiserResult);
 
       const streaks = participants.map((p) => ({ user: p, count: p.currentStreak }));
       setTopStreakHolder(streaks.sort((a, b) => b.count - a.count)[0]);
 
-      const encouraging = participants.map((p) => ({ user: p, count: p.encouragedUsers.length }));
-      setMostEncouraging(encouraging.sort((a, b) => b.count - a.count)[0]);
+      // Only show if count > 0
+        const encouraging = participants.map(p => ({ 
+            user: p, 
+            count: p.encouragedUsers.length 
+        }));
+      const mostEncouraging = encouraging.sort((a, b) => b.count - a.count)[0];
 
       // Biggest comeback (using mock logic)
-      const comeback = participants.map((p) => ({
-        user: p,
-        improvement: Math.floor(Math.random() * 100),
-      }));
-      setBiggestComeback(comeback.sort((a, b) => b.improvement - a.improvement)[0]);
+      if (participants.length > 0 && challenge) {
+        const comebackResult = calculateComeback(participants, challenge);
+        setBiggestComeback(comebackResult);
+      }
     }
   }, [participants]);
 
-  // Helper: capture snapshot of shareable view using html2canvas
-  const generateShareableImage = async (): Promise<string | null> => {
-    if (shareableRef.current) {
-      const canvas = await html2canvas(shareableRef.current);
-      return canvas.toDataURL('image/png');
-    }
-    return null;
+  const calculateComeback = (participants: UserChallenge[], challenge: Challenge) => {
+    const totalDuration = challenge.durationInDays;
+  
+    const comebacks = participants.map(p => {
+      if (p.completedWorkouts.length === 0) {
+        return { user: p, improvement: 0 };
+      }
+  
+      // Sort workouts by date
+      const sortedWorkouts = [...p.completedWorkouts].sort(
+        (a, b) => new Date(a.completedAt).getTime() - new Date(b.completedAt).getTime()
+      );
+  
+      // Get first and last workout dates
+      const firstDate = new Date(sortedWorkouts[0].completedAt);
+      const lastDate = new Date(sortedWorkouts[sortedWorkouts.length - 1].completedAt);
+      
+      // Calculate effective duration in days (inclusive)
+      const effectiveDays = Math.ceil(
+        (lastDate.getTime() - firstDate.getTime()) / (1000 * 3600 * 24)
+      ) + 1;
+  
+      // Calculate rates
+      const totalPoints = p.pulsePoints.totalPoints;
+      const actualRate = totalPoints / effectiveDays;
+      const expectedRate = totalPoints / totalDuration;
+      
+      // Calculate improvement percentage
+      const improvement = expectedRate > 0 
+        ? ((actualRate / expectedRate) - 1) * 100 
+        : 0;
+  
+      console.log(`${p.username}:`);
+      console.log(`Compressed ${totalPoints} points into ${effectiveDays} days`);
+      console.log(`Rate: ${actualRate.toFixed(2)}/day vs Expected ${expectedRate.toFixed(2)}/day`);
+      console.log(`Improvement: ${improvement.toFixed(0)}%`);
+  
+      return { user: p, improvement: Math.round(improvement) };
+    });
+  
+    return comebacks.sort((a, b) => b.improvement - a.improvement)[0];
   };
-
-  // shareRound uses the shareable view to generate an image then triggers share
-  const shareRound = async () => {
-    const imageUrl = await generateShareableImage();
-    if (imageUrl) {
-      setShareItems([imageUrl]);
-      setActiveSheet(true);
-    } else {
-      console.error('Failed to generate shareable image.');
-    }
-  };
+  
 
   // Compute analytics text
   const analyticsText =
@@ -248,7 +303,7 @@ const RoundWrapup: React.FC = () => {
                 <Flame className="w-8 h-8 text-orange-400" />
               </div>
               <div className="text-center text-2xl font-bold">
-                {(participants.find(p => p.userId === 'currentUserId')?.currentStreak) || 0}
+                {(participants.find(p => p.userId === currentUser?.id)?.currentStreak) || 0}
               </div>
               <div className="text-center text-sm text-gray-400">Day Streak</div>
             </div>
@@ -258,7 +313,7 @@ const RoundWrapup: React.FC = () => {
                 <TrendingUp className="w-8 h-8 text-primaryGreen" />
               </div>
               <div className="text-center text-2xl font-bold">
-                {challenge ? Math.floor(((participants.find(p => p.userId === 'currentUserId')?.completedWorkouts.length || 0) / challenge.durationInDays) * 100) : 0}%
+                {challenge ? Math.floor(((participants.find(p => p.userId === currentUser?.id)?.completedWorkouts.length || 0) / challenge.durationInDays) * 100) : 0}%
               </div>
               <div className="text-center text-sm text-gray-400">Completion</div>
             </div>
@@ -268,7 +323,7 @@ const RoundWrapup: React.FC = () => {
                 <Heart className="w-8 h-8 text-purple-400" />
               </div>
               <div className="text-center text-2xl font-bold">
-                {(participants.find(p => p.userId === 'currentUserId')?.encouragedUsers.length) || 0}
+                {(participants.find(p => p.userId === currentUser?.id)?.encouragedUsers.length) || 0}
               </div>
               <div className="text-center text-sm text-gray-400">Encouraged</div>
             </div>
@@ -278,7 +333,7 @@ const RoundWrapup: React.FC = () => {
                 <span className="w-8 h-8 flex items-center justify-center text-green-400 font-bold">✓</span>
               </div>
               <div className="text-center text-2xl font-bold">
-                {(participants.find(p => p.userId === 'currentUserId')?.checkIns.length) || 0}
+                {(participants.find(p => p.userId === currentUser?.id)?.checkIns.length) || 0}
               </div>
               <div className="text-center text-sm text-gray-400">Check-ins</div>
             </div>
@@ -288,25 +343,25 @@ const RoundWrapup: React.FC = () => {
                 <Award className="w-8 h-8 text-blue-400" />
               </div>
               <div className="text-center text-2xl font-bold">
-                {(participants.find(p => p.userId === 'currentUserId')?.pulsePoints.totalPoints) || 0}
+                {(participants.find(p => p.userId === currentUser?.id)?.pulsePoints.totalPoints) || 0}
               </div>
               <div className="text-center text-sm text-gray-400">Pulse Points</div>
             </div>
             {/* Rank */}
             <div className="w-32 p-4 bg-zinc-800 rounded-lg">
-              <div className="flex justify-center">
-                <Crown className="w-8 h-8 text-yellow-400" />
-              </div>
-              <div className="text-center text-2xl font-bold">
-                {(() => {
-                  const sorted = [...participants].sort((a, b) => b.pulsePoints.totalPoints - a.pulsePoints.totalPoints);
-                  const currentUser = participants.find(p => p.userId === 'currentUserId');
-                  const rank = sorted.findIndex(p => p.userId === (currentUser ? currentUser.userId : '')) + 1;
-                  return rank > 0 ? `#${rank}` : '-';
-                })()}
-              </div>
-              <div className="text-center text-sm text-gray-400">Rank</div>
-            </div>
+                <div className="flex justify-center">
+                    <Crown className="w-8 h-8 text-yellow-400" />
+                </div>
+                <div className="text-center text-2xl font-bold">
+                    {(() => {
+                    const sorted = [...participants].sort((a, b) => b.pulsePoints.totalPoints - a.pulsePoints.totalPoints);
+                    const userChallenge = participants.find(p => p.userId === currentUser?.id);
+                    const rank = sorted.findIndex(p => p.userId === (userChallenge ? userChallenge.userId : '')) + 1;
+                    return rank > 0 ? `#${rank}` : '-';
+                    })()}
+                </div>
+                <div className="text-center text-sm text-gray-400">Rank</div>
+                </div>
           </div>
         </div>
       </div>
@@ -315,27 +370,27 @@ const RoundWrapup: React.FC = () => {
       <div className="mb-12 px-4">
         <h3 className="text-2xl font-bold mb-6">Round Highlights</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {mostEncouraging && (
+        {mostEncouraging && mostEncouraging.count > 0 && (
             <div className="bg-zinc-800 p-4 rounded-lg">
-              <div className="flex items-center mb-4">
+                <div className="flex items-center mb-4">
                 <Heart className="w-6 h-6 text-red-400 mr-2" />
                 <span className="font-bold">Most Encouraging</span>
-              </div>
-              <div className="flex items-center">
+                </div>
+                <div className="flex items-center">
                 <div className="w-12 h-12 rounded-full bg-zinc-700 overflow-hidden mr-3">
-                  <img
+                    <img
                     src={mostEncouraging.user.profileImage?.profileImageURL || '/default-avatar.png'}
                     alt={mostEncouraging.user.username}
                     className="w-full h-full object-cover"
-                  />
+                    />
                 </div>
                 <div>
-                  <div className="font-bold">{mostEncouraging.user.username}</div>
-                  <div className="text-sm text-zinc-400">{mostEncouraging.count} encouragements</div>
+                    <div className="font-bold">{mostEncouraging.user.username}</div>
+                    <div className="text-sm text-zinc-400">{mostEncouraging.count} encouragements</div>
                 </div>
-              </div>
+                </div>
             </div>
-          )}
+            )}
 
           {topStreakHolder && (
             <div className="bg-zinc-800 p-4 rounded-lg">
@@ -402,22 +457,6 @@ const RoundWrapup: React.FC = () => {
               </div>
             </div>
           )}
-        </div>
-      </div>
-
-      {/* Points Distribution Chart */}
-      <div className="mb-12 px-4">
-        <h3 className="text-2xl font-bold mb-6">Points Distribution</h3>
-        <div className="h-80 w-full">
-          <ResponsiveContainer>
-            <BarChart data={rankedParticipants}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="username" />
-              <YAxis />
-              <Tooltip />
-              <Bar dataKey="pulsePoints.totalPoints" fill="#E0FE10" />
-            </BarChart>
-          </ResponsiveContainer>
         </div>
       </div>
 

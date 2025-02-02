@@ -360,6 +360,7 @@ export class SweatlistCollection {
   id: string;
   title: string;
   subtitle: string;
+  pin: string | null;
   challenge?: Challenge;
   publishedStatus?: boolean;
   participants: string[];
@@ -373,6 +374,7 @@ export class SweatlistCollection {
     this.id = data.id;
     this.title = data.title || '';
     this.subtitle = data.subtitle || '';
+    this.pin = data.pin || null;
     this.challenge = data.challenge ? new Challenge(data.challenge) : undefined;
     this.sweatlistIds = (data.sweatlistIds || []).map((item: any) => ({
       id: item.id || '',
@@ -403,6 +405,7 @@ export class SweatlistCollection {
       id: this.id,
       title: this.title,
       subtitle: this.subtitle,
+      pin: this.pin,
       challenge: this.challenge ? this.challenge.toDictionary() : null,
       sweatlistIds: this.sweatlistIds.map(item => ({
         id: item.id,
@@ -422,6 +425,7 @@ export class SweatlistCollection {
         id: { stringValue: this.id },
         title: { stringValue: this.title },
         subtitle: { stringValue: this.subtitle },
+        pin: { stringValue: this.pin },
         // ownerId as an array of string values
         ownerId: {
           arrayValue: {
@@ -606,25 +610,25 @@ class UserChallenge {
     this.progress = data.progress ?? 0;
     this.referralChains = data.referralChains ? new ReferralChain(data.referralChains) : new ReferralChain({ originalHostId: '', sharedBy: '' });
     this.completedWorkouts = Array.isArray(data.completedWorkouts)
-      ? data.completedWorkouts.map((cw: any) => ({
-          id: cw.id || '',
-          workoutId: cw.workoutId || '',
-          completedAt: cw.completedAt || 0,
-        }))
-      : [];
+    ? data.completedWorkouts.map((cw: any) => ({
+        id: cw.id || '',
+        workoutId: cw.workoutId || '',
+        completedAt: convertFirestoreTimestamp(cw.completedAt),  // Use convertFirestoreTimestamp here
+      }))
+    : [];
     this.isCompleted = data.isCompleted ?? false;
     this.location = data.location ? new UserLocation(data.location) : undefined;
     this.city = data.city || '';
     this.country = data.country || '';
     this.timezone = data.timezone || '';
-    this.joinDate = data.joinDate ? new Date(data.joinDate) : new Date();
-    this.createdAt = data.createdAt ? new Date(data.createdAt) : new Date();
-    this.updatedAt = data.updatedAt ? new Date(data.updatedAt) : new Date();
+    this.joinDate = convertFirestoreTimestamp(data.joinDate);
+    this.createdAt = convertFirestoreTimestamp(data.createdAt);
+    this.updatedAt = convertFirestoreTimestamp(data.updatedAt);
     this.pulsePoints = data.pulsePoints ? new PulsePoints(data.pulsePoints) : new PulsePoints({});
     this.currentStreak = data.currentStreak ?? 0;
     this.encouragedUsers = Array.isArray(data.encouragedUsers) ? data.encouragedUsers : [];
     this.encouragedByUsers = Array.isArray(data.encouragedByUsers) ? data.encouragedByUsers : [];
-    this.checkIns = Array.isArray(data.checkIns) ? data.checkIns.map((d: any) => new Date(d)) : [];
+    this.checkIns = Array.isArray(data.checkIns) ? data.checkIns.map((d: any) => convertFirestoreTimestamp(d)) : [];
   }
 
   // Optionally, you can add a static method to create an instance from Firestore data
@@ -642,20 +646,23 @@ class UserChallenge {
       profileImage: this.profileImage ? this.profileImage.toDictionary() : null,
       progress: this.progress,
       referralChains: this.referralChains ? this.referralChains.toDictionary() : {},
-      completedWorkouts: this.completedWorkouts,
+      completedWorkouts: this.completedWorkouts.map(workout => ({
+        ...workout,
+        completedAt: Math.floor(new Date(workout.completedAt).getTime() / 1000)
+      })),
       isCompleted: this.isCompleted,
       location: this.location ? this.location.toDictionary() : null,
       city: this.city,
       country: this.country,
       timezone: this.timezone,
-      joinDate: this.joinDate.getTime(),
-      createdAt: this.createdAt.getTime(),
-      updatedAt: this.updatedAt.getTime(),
+      joinDate: Math.floor(this.joinDate.getTime() / 1000), // Convert to seconds
+      createdAt: Math.floor(this.createdAt.getTime() / 1000),
+      updatedAt: Math.floor(this.updatedAt.getTime() / 1000),
       pulsePoints: this.pulsePoints ? this.pulsePoints.toDictionary() : {},
       currentStreak: this.currentStreak,
       encouragedUsers: this.encouragedUsers,
       encouragedByUsers: this.encouragedByUsers,
-      checkIns: this.checkIns.map(date => date.getTime()),
+      checkIns: this.checkIns.map(date => Math.floor(date.getTime() / 1000)),
     };
   }
 }
