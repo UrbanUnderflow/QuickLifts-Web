@@ -267,10 +267,10 @@ interface PINEntryProps {
 }
 
 const PINEntry: React.FC<PINEntryProps> = ({ expectedPIN, onSuccess, onError }) => {
-  const [pin, setPin] = useState<string[]>(Array(9).fill(''));
+  const [pin, setPin] = useState<string[]>(Array(6).fill(''));
   const [showError, setShowError] = useState(false);
   const [showEnterButton, setShowEnterButton] = useState(false);
-  const inputRefs = useRef<(HTMLInputElement | null)[]>(Array(9).fill(null));
+  const inputRefs = useRef<(HTMLInputElement | null)[]>(Array(6).fill(null));
 
   const handlePinChange = (index: number, value: string) => {
     if (!/^\d*$/.test(value)) return; // Only allow numbers
@@ -304,7 +304,7 @@ const PINEntry: React.FC<PINEntryProps> = ({ expectedPIN, onSuccess, onError }) 
       setShowError(true);
       onError('Incorrect PIN. Please try again.');
       // Clear PIN and focus first input
-      setPin(Array(9).fill(''));
+      setPin(Array(6).fill(''));
       inputRefs.current[0]?.focus();
       setShowEnterButton(false);
     }

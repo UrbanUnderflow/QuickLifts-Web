@@ -681,10 +681,10 @@ async fetchUserChallengesByChallengeId(challengeId: string): Promise<UserChallen
 }
 
 async getCollectionById(id: string): Promise<SweatlistCollection> {
+  console.log("Fetching collection with id:", id);
   try {
     const docRef = doc(db, "sweatlist-collection", id);
     const docSnap = await getDoc(docRef);
-
     if (docSnap.exists()) {
       return new SweatlistCollection({
         id: docSnap.id,
@@ -698,6 +698,7 @@ async getCollectionById(id: string): Promise<SweatlistCollection> {
     throw error;
   }
 }
+
   
     /**
    * Fetch user challenges by userId and filter for active challenges.

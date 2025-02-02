@@ -136,7 +136,7 @@ export const ChallengeWaitingRoomView: React.FC<ChallengeWaitingRoomViewProps> =
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white">
+    <div className="min-h-screen bg-[#141A1E] text-white">
       {/* Header */}
       <div className="flex items-center justify-between p-4">
         {/* <button onClick={() => viewModel.appCoordinator.closeModals()} className="p-2">
@@ -159,12 +159,12 @@ export const ChallengeWaitingRoomView: React.FC<ChallengeWaitingRoomViewProps> =
         {/* Welcome Section */}
         <div className="flex flex-col items-center space-y-4">
           <div className="relative">
-            <div className="w-20 h-20 rounded-full bg-green-500 bg-opacity-15 flex items-center justify-center">
-            <Flag className="h-5 w-5 text-green-500" />
+            <div className="w-20 h-20 rounded-full bg-[#DFFD10] bg-opacity-15 flex items-center justify-center">
+            <Flag className="h-5 w-5 text-[#DFFD10]" />
             </div>
           </div>
           <div className="text-center space-y-1">
-            <p className="font-bold text-green-500 uppercase text-sm">Welcome</p>
+            <p className="font-bold text-[#DFFD10] uppercase text-sm">Welcome</p>
             <h1 className="text-3xl font-extrabold">
               {viewModel.challenge?.title || 'the Round'}
             </h1>
@@ -177,7 +177,7 @@ export const ChallengeWaitingRoomView: React.FC<ChallengeWaitingRoomViewProps> =
         {/* Host Info Section */}
         <div className="mt-8">
           <div className="flex items-center space-x-2">
-          <Users className="h-5 w-5 text-green-500" />
+          <Users className="h-5 w-5 text-[#DFFD10]" />
           <p className="text-sm text-gray-400">Hosted by</p>
           </div>
           <div className="mt-2 overflow-x-auto">
@@ -202,7 +202,7 @@ export const ChallengeWaitingRoomView: React.FC<ChallengeWaitingRoomViewProps> =
             <div>
               <h2 className="text-lg font-semibold">THE WAITING ROOM</h2>
               <div className="flex items-center justify-center space-x-2">
-              <Clock className="h-5 w-5 text-green-500" />
+              <Clock className="h-5 w-5 text-[#DFFD10]" />
               <h2 className="text-lg font-semibold">Round is being prepared</h2>
               </div>
               {userChallenge === null ? (
@@ -218,20 +218,20 @@ export const ChallengeWaitingRoomView: React.FC<ChallengeWaitingRoomViewProps> =
           ) : (
             <div>
               <div className="flex items-center justify-center space-x-2">
-                <span className="material-icons text-green-500">access_time</span>
+                <span className="material-icons text-[#DFFD10]">access_time</span>
                 <h2 className="text-lg font-semibold">Round starts in</h2>
               </div>
               <div className="flex justify-center space-x-6 mt-4">
                 <div className="flex flex-col items-center">
-                  <p className="text-3xl font-bold text-green-500">{countdown.days}</p>
+                  <p className="text-3xl font-bold text-[#DFFD10]">{countdown.days}</p>
                   <p className="text-sm text-gray-400">Days</p>
                 </div>
                 <div className="flex flex-col items-center">
-                  <p className="text-3xl font-bold text-green-500">{countdown.hours}</p>
+                  <p className="text-3xl font-bold text-[#DFFD10]">{countdown.hours}</p>
                   <p className="text-sm text-gray-400">Hours</p>
                 </div>
                 <div className="flex flex-col items-center">
-                  <p className="text-3xl font-bold text-green-500">{countdown.minutes}</p>
+                  <p className="text-3xl font-bold text-[#DFFD10]">{countdown.minutes}</p>
                   <p className="text-sm text-gray-400">Minutes</p>
                 </div>
               </div>
@@ -252,9 +252,9 @@ export const ChallengeWaitingRoomView: React.FC<ChallengeWaitingRoomViewProps> =
         <div className="mt-8">
           <div className="flex items-center justify-between px-2">
             <div className="flex items-center space-x-2">
-            <Users className="h-5 w-5 text-green-500" />
+            <Users className="h-5 w-5 text-[#DFFD10]" />
             <h2 className="text-lg font-semibold">Who's joining</h2>
-              <span className="text-sm text-green-500">({participants.length} challengers)</span>
+              <span className="text-sm text-[#DFFD10]">({participants.length} challengers)</span>
             </div>
           </div>
           <div className="mt-4 overflow-x-auto">
@@ -262,12 +262,12 @@ export const ChallengeWaitingRoomView: React.FC<ChallengeWaitingRoomViewProps> =
               {userChallenge === null && (
                 <button
                   onClick={handleJoin}
-                  className="flex flex-col items-center p-4 bg-gray-700 rounded-lg border border-green-500 hover:bg-gray-600 transition-colors"
+                  className="flex flex-col items-center p-4 bg-gray-700 rounded-lg border border-[#DFFD10] hover:bg-gray-600 transition-colors"
                 >
-                  <div className="w-12 h-12 rounded-full border-2 border-green-500 flex items-center justify-center">
-                    <span className="material-icons text-green-500">add</span>
+                  <div className="w-12 h-12 rounded-full border-2 border-[#DFFD10] flex items-center justify-center">
+                    <span className="material-icons text-[#DFFD10]">add</span>
                   </div>
-                  <p className="text-xs mt-2 text-green-500">Join Round</p>
+                  <p className="text-xs mt-2 text-[#DFFD10]">Join Round</p>
                 </button>
               )}
               {participants.map((participant) => (
@@ -276,10 +276,10 @@ export const ChallengeWaitingRoomView: React.FC<ChallengeWaitingRoomViewProps> =
                     <img
                       src={participant.profileImage.profileImageURL}
                       alt={participant.username}
-                      className="w-12 h-12 rounded-full object-cover border-2 border-green-500"
+                      className="w-12 h-12 rounded-full object-cover border-2 border-[#DFFD10]"
                     />
                   ) : (
-                    <div className="w-12 h-12 rounded-full bg-green-500 flex items-center justify-center">
+                    <div className="w-12 h-12 rounded-full bg-[#DFFD10] flex items-center justify-center">
                       <span className="text-white text-lg">{participant.username.charAt(0).toUpperCase()}</span>
                     </div>
                   )}

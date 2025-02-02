@@ -9,7 +9,7 @@ interface OnboardingStep {
 
 const ChallengeCTA: React.FC<{ challenge: any }> = ({ challenge }) => {
   const [showInstructions, setShowInstructions] = useState(false);
-
+  
   const steps: OnboardingStep[] = [
     {
       title: "Download Pulse",
@@ -29,25 +29,32 @@ const ChallengeCTA: React.FC<{ challenge: any }> = ({ challenge }) => {
   ];
 
   const appStoreUrl = 'https://apps.apple.com/ca/app/pulse-community-workouts/id6451497729';
-
-  // Construct the deep link URL
+  
+  // Create the base URL with properly encoded parameters for deep linking
   const baseUrl = `https://www.quickliftsapp.com/?linkType=round&roundId=${challenge.id}`;
   const encodedBaseUrl = encodeURIComponent(baseUrl);
   const deepLinkUrl = `https://quicklifts.page.link/?link=${encodedBaseUrl}&apn=com.pulse.fitnessapp&ibi=Tremaine.QuickLifts&isi=6451497729`;
 
+  // Choose the endpoint based on the environment
+  const endpoint =
+    process.env.NODE_ENV === 'development'
+      ? 'http://localhost:8888'
+      : 'https://fitwithpulse.ai';
+
+  // Construct the web app URL using dynamic values from challenge.
+  // Assumes that challenge.ownerId is an array and uses its first element.
+  const webAppUrl = `${endpoint}/round/${challenge.id};`
+
   const handleJoinChallenge = () => {
-    // Attempt to launch the app via deep link
-    window.location.href = deepLinkUrl;
-    // After a short delay, if the document is still visible, assume the app didn't launch
-    setTimeout(() => {
-      if (!document.hidden) {
-        setShowInstructions(true);
-      }
-    }, 1500);
+    setShowInstructions(true);
   };
 
   const handleOpenInApp = () => {
     window.location.href = deepLinkUrl;
+  };
+
+  const handleWebApp = () => {
+    window.location.href = webAppUrl;
   };
 
   if (showInstructions) {
@@ -65,7 +72,9 @@ const ChallengeCTA: React.FC<{ challenge: any }> = ({ challenge }) => {
                   <div key={index} className="flex items-start space-x-4">
                     <div className="flex-shrink-0">{step.icon}</div>
                     <div className="flex-1">
-                      <h3 className="text-lg font-semibold text-white">{step.title}</h3>
+                      <h3 className="text-lg font-semibold text-white">
+                        {step.title}
+                      </h3>
                       <p className="text-zinc-400 mt-1">{step.description}</p>
                     </div>
                     {index < steps.length - 1 && (
@@ -80,13 +89,19 @@ const ChallengeCTA: React.FC<{ challenge: any }> = ({ challenge }) => {
                   href={appStoreUrl}
                   className="w-full flex items-center justify-center px-8 py-3 border border-transparent text-base font-medium rounded-xl text-black bg-[#E0FE10] hover:bg-[#E0FE10]/90"
                 >
-                  Download App
+                  Download iOS App
                 </a>
                 <button
                   onClick={handleOpenInApp}
                   className="w-full px-8 py-3 text-base font-medium rounded-xl text-white bg-zinc-800 hover:bg-zinc-700"
                 >
-                  I already have the app
+                  I already have the iOS app
+                </button>
+                <button
+                  onClick={handleWebApp}
+                  className="w-full px-8 py-3 text-base font-medium rounded-xl text-white bg-zinc-800 hover:bg-zinc-700"
+                >
+                  I'm on a laptop or Android Device
                 </button>
               </div>
             </div>
