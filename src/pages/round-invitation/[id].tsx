@@ -327,7 +327,8 @@ const PINEntry: React.FC<PINEntryProps> = ({ expectedPIN, onSuccess, onError }) 
                     inputRefs.current[index] = el;
                   }
                 }}
-                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 maxLength={1}
                 value={digit}
                 onChange={(e) => handlePinChange(index, e.target.value)}
