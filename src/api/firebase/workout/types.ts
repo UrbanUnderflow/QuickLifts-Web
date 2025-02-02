@@ -333,10 +333,27 @@ export enum SweatlistType {
   Locked = 'locked'
 }
 
-export interface ReferralChain {
+export class ReferralChain {
   originalHostId: string;
-  shares: string[];
- }
+  sharedBy: string;
+
+  constructor(data: any) {
+    this.originalHostId = data.originalHostId || '';
+    this.sharedBy = data.sharedBy || '';
+  }
+
+  toDictionary(): any {
+    return {
+      originalHostId: this.originalHostId,
+      sharedBy: this.sharedBy,
+    };
+  }
+
+  static fromFirestore(data: any): ReferralChain {
+    return new ReferralChain(data);
+  }
+}
+
 
 // Main SweatlistCollection interface
 export class SweatlistCollection {
@@ -347,7 +364,7 @@ export class SweatlistCollection {
   publishedStatus?: boolean;
   participants: string[];
   sweatlistIds: SweatlistIdentifiers[];
-  ownerId: string;
+  ownerId: string[]; // Updated to be an array
   privacy: SweatlistType;
   createdAt: Date;
   updatedAt: Date;
@@ -363,8 +380,15 @@ export class SweatlistCollection {
       sweatlistName: item.sweatlistName || '',
       order: item.order || 0,
     }));
-    this.ownerId = data.ownerId || '';
-    this.privacy = data.challenge ? SweatlistType.Together : SweatlistType.Solo;
+    // If ownerId is not an array, wrap it in an array.
+    if (Array.isArray(data.ownerId)) {
+      this.ownerId = data.ownerId;
+    } else if (data.ownerId) {
+      this.ownerId = [data.ownerId];
+    } else {
+      this.ownerId = [];
+    }
+    this.privacy = this.challenge ? SweatlistType.Together : SweatlistType.Solo;
     this.participants = (data.participants || []).map((participant: any) => participant || '');
     this.createdAt = convertFirestoreTimestamp(data.createdAt);
     this.updatedAt = convertFirestoreTimestamp(data.updatedAt);
@@ -385,7 +409,7 @@ export class SweatlistCollection {
         sweatlistAuthorId: item.sweatlistAuthorId,
         order: item.order
       })),
-      ownerId: this.ownerId,
+      ownerId: this.ownerId, // Updated to be an array
       privacy: this.privacy,
       createdAt: this.createdAt,
       updatedAt: this.updatedAt
@@ -398,7 +422,12 @@ export class SweatlistCollection {
         id: { stringValue: this.id },
         title: { stringValue: this.title },
         subtitle: { stringValue: this.subtitle },
-        ownerId: { stringValue: this.ownerId },
+        // ownerId as an array of string values
+        ownerId: {
+          arrayValue: {
+            values: this.ownerId.map(owner => ({ stringValue: owner }))
+          }
+        },
         sweatlistIds: {
           arrayValue: {
             values: this.sweatlistIds.map(item => ({
@@ -424,34 +453,126 @@ export class SweatlistCollection {
   }
 }
 
-// Types for user profile image
-interface ProfileImage {
+class ProfileImage {
   profileImageURL: string;
   thumbnailURL?: string;
+
+  constructor(data: any) {
+    this.profileImageURL = data.profileImageURL || '';
+    this.thumbnailURL = data.thumbnailURL || '';
+  }
+
+  toDictionary(): any {
+    return {
+      profileImageURL: this.profileImageURL,
+      thumbnailURL: this.thumbnailURL || null,
+    };
+  }
+
+  static fromFirestore(data: any): ProfileImage {
+    return new ProfileImage(data);
+  }
 }
 
-// Types for location
-interface UserLocation {
+class UserLocation {
   latitude: number;
   longitude: number;
+
+  constructor(data: any) {
+    this.latitude = data.latitude || 0;
+    this.longitude = data.longitude || 0;
+  }
+
+  toDictionary(): any {
+    return {
+      latitude: this.latitude,
+      longitude: this.longitude,
+    };
+  }
+
+  static fromFirestore(data: any): UserLocation {
+    return new UserLocation(data);
+  }
 }
 
-// Types for pulse points
-interface PulsePoints {
-  baseCompletion: number;
-  firstCompletion: number;
-  streakBonus: number;
-  checkInBonus: number;
-  effortRating: number;
-  chatParticipation: number;
-  locationCheckin: number;
-  contentEngagement: number;
-  encouragementSent: number;
-  encouragementReceived: number;
+class PulsePoints {
+  baseCompletion: number;      // e.g. 100 points
+  firstCompletion: number;     // e.g. 50 points
+  streakBonus: number;         // e.g. 25 points per day
+  checkInBonus: number;        // e.g. 25 points
+  effortRating: number;        // e.g. 10 points
+  chatParticipation: number;   // e.g. 25 points
+  locationCheckin: number;     // e.g. 25 points
+  contentEngagement: number;   // e.g. 10 points per interaction
+  encouragementSent: number;   // e.g. 15 points per unique user
+  encouragementReceived: number; // e.g. 10 points per unique user
+  cumulativeStreakBonus: number;
+
+  constructor(data: any) {
+    this.baseCompletion = data.baseCompletion ?? 0;
+    this.firstCompletion = data.firstCompletion ?? 0;
+    this.streakBonus = data.streakBonus ?? 0;
+    this.checkInBonus = data.checkInBonus ?? 0;
+    this.effortRating = data.effortRating ?? 0;
+    this.chatParticipation = data.chatParticipation ?? 0;
+    this.locationCheckin = data.locationCheckin ?? 0;
+    this.contentEngagement = data.contentEngagement ?? 0;
+    this.encouragementSent = data.encouragementSent ?? 0;
+    this.encouragementReceived = data.encouragementReceived ?? 0;
+    this.cumulativeStreakBonus = data.cumulativeStreakBonus ?? 0;
+  }
+
+  get totalStackPoints(): number {
+    return (
+      this.baseCompletion +
+      this.firstCompletion +
+      this.streakBonus +
+      this.checkInBonus +
+      this.effortRating
+    );
+  }
+
+  get totalCommunityPoints(): number {
+    return (
+      this.chatParticipation +
+      this.locationCheckin +
+      this.contentEngagement +
+      this.encouragementSent +
+      this.encouragementReceived
+    );
+  }
+
+  get totalPoints(): number {
+    return this.totalStackPoints + this.totalCommunityPoints + this.cumulativeStreakBonus;
+  }
+
+  toDictionary(): any {
+    return {
+      baseCompletion: this.baseCompletion,
+      firstCompletion: this.firstCompletion,
+      streakBonus: this.streakBonus,
+      checkInBonus: this.checkInBonus,
+      effortRating: this.effortRating,
+      chatParticipation: this.chatParticipation,
+      locationCheckin: this.locationCheckin,
+      contentEngagement: this.contentEngagement,
+      encouragementSent: this.encouragementSent,
+      encouragementReceived: this.encouragementReceived,
+      cumulativeStreakBonus: this.cumulativeStreakBonus,
+      totalStackPoints: this.totalStackPoints,
+      totalCommunityPoints: this.totalCommunityPoints,
+      totalPoints: this.totalPoints,
+    };
+  }
+
+  static fromFirestore(data: any): PulsePoints {
+    return new PulsePoints(data);
+  }
 }
+
 
 // Types for user in challenge
-interface UserChallenge {
+class UserChallenge {
   id: string;
   challenge?: Challenge;
   challengeId: string;
@@ -460,11 +581,7 @@ interface UserChallenge {
   profileImage?: ProfileImage;
   progress: number;
   referralChains: ReferralChain;
-  completedWorkouts: { 
-    id: string; 
-    workoutId: string;
-    completedAt: number;
-  }[];
+  completedWorkouts: { id: string; workoutId: string; completedAt: number }[];
   isCompleted: boolean;
   location?: UserLocation;
   city: string;
@@ -478,6 +595,69 @@ interface UserChallenge {
   encouragedUsers: string[];
   encouragedByUsers: string[];
   checkIns: Date[];
+
+  constructor(id: string, data: any) {
+    this.id = id;
+    this.challenge = data.challenge ? new Challenge(data.challenge) : undefined;
+    this.challengeId = data.challengeId || '';
+    this.userId = data.userId || '';
+    this.username = data.username || '';
+    this.profileImage = data.profileImage ? new ProfileImage(data.profileImage) : undefined;
+    this.progress = data.progress ?? 0;
+    this.referralChains = data.referralChains ? new ReferralChain(data.referralChains) : new ReferralChain({ originalHostId: '', sharedBy: '' });
+    this.completedWorkouts = Array.isArray(data.completedWorkouts)
+      ? data.completedWorkouts.map((cw: any) => ({
+          id: cw.id || '',
+          workoutId: cw.workoutId || '',
+          completedAt: cw.completedAt || 0,
+        }))
+      : [];
+    this.isCompleted = data.isCompleted ?? false;
+    this.location = data.location ? new UserLocation(data.location) : undefined;
+    this.city = data.city || '';
+    this.country = data.country || '';
+    this.timezone = data.timezone || '';
+    this.joinDate = data.joinDate ? new Date(data.joinDate) : new Date();
+    this.createdAt = data.createdAt ? new Date(data.createdAt) : new Date();
+    this.updatedAt = data.updatedAt ? new Date(data.updatedAt) : new Date();
+    this.pulsePoints = data.pulsePoints ? new PulsePoints(data.pulsePoints) : new PulsePoints({});
+    this.currentStreak = data.currentStreak ?? 0;
+    this.encouragedUsers = Array.isArray(data.encouragedUsers) ? data.encouragedUsers : [];
+    this.encouragedByUsers = Array.isArray(data.encouragedByUsers) ? data.encouragedByUsers : [];
+    this.checkIns = Array.isArray(data.checkIns) ? data.checkIns.map((d: any) => new Date(d)) : [];
+  }
+
+  // Optionally, you can add a static method to create an instance from Firestore data
+  static fromFirestore(id: string, data: any): UserChallenge {
+    return new UserChallenge(id, data);
+  }
+
+  // Optionally, add a method to convert to a plain dictionary (for saving to Firestore)
+  toDictionary(): any {
+    return {
+      challenge: this.challenge ? this.challenge.toDictionary() : null,
+      challengeId: this.challengeId,
+      userId: this.userId,
+      username: this.username,
+      profileImage: this.profileImage ? this.profileImage.toDictionary() : null,
+      progress: this.progress,
+      referralChains: this.referralChains ? this.referralChains.toDictionary() : {},
+      completedWorkouts: this.completedWorkouts,
+      isCompleted: this.isCompleted,
+      location: this.location ? this.location.toDictionary() : null,
+      city: this.city,
+      country: this.country,
+      timezone: this.timezone,
+      joinDate: this.joinDate.getTime(),
+      createdAt: this.createdAt.getTime(),
+      updatedAt: this.updatedAt.getTime(),
+      pulsePoints: this.pulsePoints ? this.pulsePoints.toDictionary() : {},
+      currentStreak: this.currentStreak,
+      encouragedUsers: this.encouragedUsers,
+      encouragedByUsers: this.encouragedByUsers,
+      checkIns: this.checkIns.map(date => date.getTime()),
+    };
+  }
 }
 
 // Challenge status enum
@@ -531,7 +711,7 @@ class Challenge {
     id: string;
     title: string;
     subtitle: string;
-    participants: UserChallenge[];
+    participants?: UserChallenge[]; // make optional in case it's missing
     status: ChallengeStatus;
     startDate: Date;
     endDate: Date;
@@ -539,132 +719,131 @@ class Challenge {
     updatedAt: Date;
     introVideos?: IntroVideo[];
     introVideoURL?: string; // Add this for backwards compatibility
-   }) {
+  }) {
     this.id = data.id;
     this.title = data.title;
     this.subtitle = data.subtitle;
-    this.participants = data.participants;
+    // Use an empty array if participants is missing.
+    this.participants = Array.isArray(data.participants) ? data.participants : [];
     this.status = data.status;
     this.startDate = convertFirestoreTimestamp(data.startDate);
     this.endDate = convertFirestoreTimestamp(data.endDate);
     this.createdAt = convertFirestoreTimestamp(data.createdAt);
     this.updatedAt = convertFirestoreTimestamp(data.updatedAt);
-   
-    // Handle both old and new format
-    if (data.introVideos) {
+
+    // Handle both old and new format for intro videos.
+    if (Array.isArray(data.introVideos)) {
       this.introVideos = data.introVideos.map(video => new IntroVideo(video));
-    } else if (data.introVideoURL) {
-      this.introVideos = [new IntroVideo({
-        id: '1',
-        userId: data.participants[0]?.userId || '',
-        videoUrl: data.introVideoURL
-      })];
+    } else if (data.introVideoURL && Array.isArray(data.participants) && data.participants.length > 0) {
+      this.introVideos = [
+        new IntroVideo({
+          id: '1',
+          userId: data.participants[0].userId,
+          videoUrl: data.introVideoURL
+        })
+      ];
     } else {
       this.introVideos = [];
     }
-   
+
     this.durationInDays = this.calculateDurationInDays();
-   }
+  }
 
-    toDictionary(): any {
-      return {
-        id: this.id,
-        title: this.title,
-        subtitle: this.subtitle,
-        participants: this.participants.map(participant => ({
-          id: participant.id,
-          challengeId: participant.challengeId,
-          userId: participant.userId,
-          username: participant.username,
-          profileImage: participant.profileImage,
-          progress: participant.progress,
-          completedWorkouts: participant.completedWorkouts,
-          isCompleted: participant.isCompleted,
-          location: participant.location,
-          city: participant.city,
-          country: participant.country,
-          timezone: participant.timezone,
-          joinDate: participant.joinDate,
-          createdAt: participant.createdAt,
-          updatedAt: participant.updatedAt,
-          pulsePoints: participant.pulsePoints,
-          currentStreak: participant.currentStreak,
-          encouragedUsers: participant.encouragedUsers,
-          encouragedByUsers: participant.encouragedByUsers,
-          checkIns: participant.checkIns
-        })),
-        status: this.status,
-        startDate: this.startDate,
-        endDate: this.endDate,
-        createdAt: this.createdAt,
-        updatedAt: this.updatedAt,
-        durationInDays: this.durationInDays,
-        introVideos: this.introVideos.map(video => video.toDictionary())
-
-      };
-    }
-
+  toDictionary(): any {
+    return {
+      id: this.id,
+      title: this.title,
+      subtitle: this.subtitle,
+      participants: this.participants.map(participant => ({
+        id: participant.id,
+        challengeId: participant.challengeId,
+        userId: participant.userId,
+        username: participant.username,
+        profileImage: participant.profileImage,
+        progress: participant.progress,
+        completedWorkouts: participant.completedWorkouts,
+        isCompleted: participant.isCompleted,
+        location: participant.location,
+        city: participant.city,
+        country: participant.country,
+        timezone: participant.timezone,
+        joinDate: participant.joinDate,
+        createdAt: participant.createdAt,
+        updatedAt: participant.updatedAt,
+        pulsePoints: participant.pulsePoints,
+        currentStreak: participant.currentStreak,
+        encouragedUsers: participant.encouragedUsers,
+        encouragedByUsers: participant.encouragedByUsers,
+        checkIns: participant.checkIns
+      })),
+      status: this.status,
+      startDate: this.startDate,
+      endDate: this.endDate,
+      createdAt: this.createdAt,
+      updatedAt: this.updatedAt,
+      durationInDays: this.durationInDays,
+      introVideos: this.introVideos.map(video => video.toDictionary())
+    };
+  }
 
   /**
    * Calculates the duration in days between the startDate and endDate.
    * @returns The number of days between the two dates.
    */
   private calculateDurationInDays(): number {
-    // Convert dates to timestamps using valueOf()
     const start = this.startDate?.valueOf();
     const end = this.endDate?.valueOf();
 
-    // Ensure converted dates are valid
     if (!start || !end || isNaN(start) || isNaN(end)) {
       throw new Error('Invalid startDate or endDate');
     }
 
-    // Calculate the difference in milliseconds and convert to days
     const durationInMilliseconds = end - start;
     return Math.ceil(durationInMilliseconds / (1000 * 60 * 60 * 24));
   }
 
   static toFirestoreObject(obj: any): any {
-      if (obj === null || typeof obj !== 'object') {
-        return obj;
-      }
-    
-      if (obj instanceof Date) {
-        return obj;
-      }
-    
-      if (Array.isArray(obj)) {
-        return obj.map(item => this.toFirestoreObject(item));
-      }
-    
-      if (obj instanceof Challenge) {
-        return {
-          id: obj.id,
-          title: obj.title,
-          subtitle: obj.subtitle,
-          participants: obj.participants,
-          status: obj.status,
-          startDate: obj.startDate,
-          endDate: obj.endDate,
-          createdAt: obj.createdAt,
-          updatedAt: obj.updatedAt,
-          introVideos: obj.introVideos.map(video => ({
-            id: video.id,
-            userId: video.userId,
-            videoUrl: video.videoUrl
-          }))
-        };
-      }
-    
-      const plainObject: {[key: string]: any} = {};
-      for (const key in obj) {
-        if (Object.prototype.hasOwnProperty.call(obj, key)) {
-          plainObject[key] = this.toFirestoreObject(obj[key]);
-        }
-      }
-      return plainObject;
+    if (obj === null || typeof obj !== 'object') {
+      return obj;
     }
+
+    if (obj instanceof Date) {
+      return obj;
+    }
+
+    if (Array.isArray(obj)) {
+      return obj.map(item => this.toFirestoreObject(item));
+    }
+
+    if (obj instanceof Challenge) {
+      return {
+        id: obj.id,
+        title: obj.title,
+        subtitle: obj.subtitle,
+        participants: obj.participants,
+        status: obj.status,
+        startDate: obj.startDate,
+        endDate: obj.endDate,
+        createdAt: obj.createdAt,
+        updatedAt: obj.updatedAt,
+        introVideos: obj.introVideos.map(video => ({
+          id: video.id,
+          userId: video.userId,
+          videoUrl: video.videoUrl
+        }))
+      };
+    }
+
+    const plainObject: { [key: string]: any } = {};
+    for (const key in obj) {
+      if (Object.prototype.hasOwnProperty.call(obj, key)) {
+        plainObject[key] = this.toFirestoreObject(obj[key]);
+      }
+    }
+    return plainObject;
+  }
 }
+
 
 // Props interface for the component
 interface ChallengeInvitationProps {
@@ -677,8 +856,7 @@ export type {
   ProfileImage,
   UserLocation,
   PulsePoints,
-  UserChallenge,
   ChallengeInvitationProps
 };
 
-export { ChallengeStatus, Challenge };
+export { ChallengeStatus, Challenge, UserChallenge };

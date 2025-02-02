@@ -39,29 +39,6 @@ const ParticipantsSection: React.FC<ParticipantsSectionProps> = ({
     setPreviousRanks(sortedParticipants.map((_, index) => index + 1));
   }, [participants.length]);
 
-  // Update the getRankIndicator function
-  const getRankIndicator = (currentRank: number, previousRank?: number): JSX.Element | null => {
-    if (previousRank === undefined) {
-      return null;
-    }
-
-    const change = previousRank - currentRank;
-
-    if (change === 0) {
-      return <span className="text-zinc-400 text-sm">―</span>;
-    }
-
-    return change > 0 ? (
-      <span className="text-green-500 text-sm flex items-center gap-1">
-        ↑<span className="text-xs">{change}</span>
-      </span>
-    ) : (
-      <span className="text-red-500 text-sm flex items-center gap-1">
-        ↓<span className="text-xs">{Math.abs(change)}</span>
-      </span>
-    );
-  };
-
   const toggleShowAll = () => {
     setShowAllParticipants((prev) => !prev);
   };
@@ -114,10 +91,6 @@ const ParticipantsSection: React.FC<ParticipantsSectionProps> = ({
               <div>
                 <div className="flex items-center space-x-2">
                   <span className="text-white font-medium">{participant.username}</span>
-                  {getRankIndicator(index + 1, previousRanks[index])}
-                </div>
-                <div className="text-sm text-zinc-400">
-                  {participant.city}, {participant.country}
                 </div>
               </div>
             </div>

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Calendar, ChevronDown } from 'lucide-react';
+import { Calendar, ChevronDown, Users, Clock, Flag } from 'lucide-react';
 import { SweatlistCollection, SweatlistIdentifiers } from '../../api/firebase/workout/types';
-import { ChallengeStatus, UserChallenge } from '../../api/firebase/workout/types';
+import { ChallengeStatus, UserChallenge, Challenge } from '../../api/firebase/workout/types';
 import { StackCard, RestDayCard } from '../../components/Rounds/StackCard';
 import { Workout, WorkoutStatus, BodyZone } from '../../api/firebase/workout/types';
 import ParticipantsSection from '../../components/Rounds/ParticipantsSection';
@@ -14,6 +14,7 @@ import { RootState } from '../../redux/store';
 import { useSelector } from 'react-redux';
 
 import { ChatService } from '../../api/firebase/chat/service';
+import { ChallengeWaitingRoomView, ChallengeWaitingRoomViewModel } from '../../components/Rounds/ChallengeWaitingRoomView'
 
 const ChallengeDetailView = () => {
   const router = useRouter();
@@ -32,9 +33,18 @@ const ChallengeDetailView = () => {
   const [chatExpanded, setChatExpanded] = useState(true);
 
   const [participantsLoading, setParticipantsLoading] = useState(true);
-
+  const [hosts, setHosts] = useState<User[]>([]);
 
   const { currentUser } = useSelector((state: RootState) => state.user);
+
+  // 2. Fetch the host users using the collection.ownerId once the collection is loaded:
+  useEffect(() => {
+    if (collection && collection.ownerId && collection.ownerId.length > 0) {
+      userService.getUsersByIds(collection.ownerId)
+        .then(setHosts)
+        .catch(err => console.error("Error fetching hosts:", err));
+    }
+  }, [collection]);
 
   useEffect(() => {
     const fetchMessages = async () => {
@@ -333,6 +343,83 @@ const ChallengeDetailView = () => {
   const daysInfo = calculateDays();
   const progress = calculateProgress();
 
+  // Determine if the challenge has started
+  const challengeHasStarted = collection?.challenge?.startDate
+  ? new Date() >= new Date(collection.challenge.startDate)
+  : false;
+
+  // Determine if the waiting room should be shown:
+  // Show waiting room if:
+  //   - A collection exists,
+  //   - A current user exists,
+  //   - The current user is NOT an owner,
+  //   - AND either the challenge is still in Draft status OR it hasn't started yet.
+  const shouldShowWaitingRoom =
+  collection &&
+  currentUser &&
+  !collection.ownerId.includes(currentUser.id) &&
+  (collection.challenge?.status === ChallengeStatus.Draft || !challengeHasStarted);
+
+  if (shouldShowWaitingRoom) {
+    // Create a minimal waiting room view model:
+    const waitingRoomVM: ChallengeWaitingRoomViewModel = {
+      challenge: collection!.challenge, // non-null assertion is safe since waiting room is shown only when collection exists
+      challengeDetailViewModel: { collection: collection! },
+      fetchChatMessages: () => {
+        // Fetch messages for the challenge.
+        ChatService.getInstance()
+          .fetchChallengeMessages(collection!.challenge!.id)
+          .then(() => {})
+          .catch((err: any) => console.error(err));
+      },
+      joinChallenge: (challenge: Challenge, completion: (uc: UserChallenge | null) => void) => {
+        // Replace this with your join logic.
+        workoutService.joinChallenge({ username: currentUser!.username, challengeId: challenge.id })
+          .then(() => {
+            // After join, you can fetch the challenge or pass a dummy userChallenge.
+            completion(null);
+          })
+          .catch((err: any) => {
+            console.error(err);
+            completion(null);
+          });
+      },
+      // Add appCoordinator if required.
+  };
+
+  if (shouldShowWaitingRoom) {
+    // Create a minimal waiting room view model:
+    const waitingRoomVM: ChallengeWaitingRoomViewModel = {
+      challenge: collection!.challenge, // safe to assert because waiting room shows only when collection exists
+      challengeDetailViewModel: { collection: collection! },
+      fetchChatMessages: () => {
+        ChatService.getInstance()
+          .fetchChallengeMessages(collection!.challenge!.id)
+          .then(() => {})
+          .catch((err: any) => console.error(err));
+      },
+      joinChallenge: (challenge: Challenge, completion: (uc: UserChallenge | null) => void) => {
+        workoutService.joinChallenge({ username: currentUser!.username, challengeId: challenge.id })
+          .then(() => {
+            // After joining, pass a dummy value (or re-fetch as needed)
+            completion(null);
+          })
+          .catch((err: any) => {
+            console.error(err);
+            completion(null);
+          });
+      },
+      // If you need to include appCoordinator, add it here.
+    };
+  
+    return (
+      <ChallengeWaitingRoomView 
+        viewModel={waitingRoomVM}
+        initialParticipants={userChallenges || []}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-zinc-900">
       <div className="h-48 bg-gradient-to-b from-zinc-800 to-zinc-900" />
@@ -377,6 +464,24 @@ const ChallengeDetailView = () => {
                 </div>
               </div>
             </div>
+
+            {hosts.length > 0 && (
+              <div className="mt-4">
+                <h2 className="text-lg font-semibold text-white">Hosted by</h2>
+                <div className="flex space-x-4 mt-2 overflow-x-auto">
+                  {hosts.map((host) => (
+                    <div key={host.id} className="flex flex-col items-center">
+                      <img
+                        src={host.profileImage.profileImageURL}
+                        alt={host.username}
+                        className="w-10 h-10 rounded-full object-cover"
+                      />
+                      <span className="text-sm text-gray-300">@{host.username}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Progress Card */}
             <div className="mt-6 bg-zinc-800 rounded-xl p-6">
@@ -539,5 +644,5 @@ const ChallengeDetailView = () => {
     </div>
   );
 };
-
+};
 export default ChallengeDetailView;

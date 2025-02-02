@@ -10,6 +10,7 @@ import {
   orderBy, 
   DocumentData,
   QueryDocumentSnapshot,
+  collection as fsCollection,
   setDoc,
   deleteDoc,
   writeBatch
@@ -25,6 +26,7 @@ import { format } from 'date-fns';
 import { convertTimestamp, serverTimestamp } from '../../../utils/timestamp'; // Adjust the import path
 import { convertFirestoreTimestamp } from '../../../utils/formatDate';
 import { Challenge, ChallengeStatus, UserChallenge } from '../../../api/firebase/workout/types';
+
 
 interface FirestoreError {
   code: string;
@@ -137,6 +139,26 @@ class WorkoutService {
       const firestoreError = error as FirestoreError;
       console.error('Error fetching sweatlists:', firestoreError.message);
       throw new Error('Failed to fetch sweatlists');
+    }
+  }
+
+  async getUserChallengesByChallengeId(challengeId: string): Promise<{ userChallenges: UserChallenge[]; error?: string }> {
+    const userChallengesRef = collection(db, 'user-challenge');
+    const q = query(userChallengesRef, where('challengeId', '==', challengeId));
+    try {
+      const snapshot = await getDocs(q);
+      const userChallenges: UserChallenge[] = snapshot.docs.map((doc: DocumentData) => {
+        const data = doc.data();
+        return new UserChallenge(doc.id, data);
+      });
+      if (userChallenges.length > 0) {
+        return { userChallenges };
+      } else {
+        return { userChallenges: [], error: 'No user challenges found for this challenge.' };
+      }
+    } catch (error) {
+      console.error('Error fetching user challenges by challengeId:', error);
+      return { userChallenges: [], error: error instanceof Error ? error.message : 'Unknown error' };
     }
   }
   
@@ -1035,6 +1057,34 @@ async getCollectionById(id: string): Promise<SweatlistCollection> {
     } catch (error) {
       console.error('Error fetching workout sessions:', error);
       throw error;
+    }
+  }
+
+  async updateCollection(collection: SweatlistCollection): Promise<SweatlistCollection> {
+    try {
+      const collRef = fsCollection(db, "sweatlist-collection");
+  
+      // If collection.id is empty, generate a new doc ID and assign it.
+      if (!collection.id || collection.id.trim() === "") {
+        const newDocRef = doc(collRef);
+        collection.id = newDocRef.id;
+      }
+  
+      // Ensure the challenge id matches the collection id.
+      if (collection.challenge) {
+        collection.challenge.id = collection.id;
+      }
+  
+      // Update the updatedAt field.
+      collection.updatedAt = new Date();
+  
+      // Save the collection to Firestore.
+      await setDoc(doc(collRef, collection.id), collection.toDictionary());
+      console.log("Collection updated successfully");
+      return collection;
+    } catch (error) {
+      console.error("Error updating collection document:", error);
+      throw new Error("Error while updating the collection");
     }
   }
   
