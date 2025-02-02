@@ -357,35 +357,8 @@ const ChallengeDetailView = () => {
   const shouldShowWaitingRoom =
   collection &&
   currentUser &&
-  !collection.ownerId.includes(currentUser.id) &&
+  // !collection.ownerId.includes(currentUser.id) &&
   (collection.challenge?.status === ChallengeStatus.Draft || !challengeHasStarted);
-
-  if (shouldShowWaitingRoom) {
-    // Create a minimal waiting room view model:
-    const waitingRoomVM: ChallengeWaitingRoomViewModel = {
-      challenge: collection!.challenge, // non-null assertion is safe since waiting room is shown only when collection exists
-      challengeDetailViewModel: { collection: collection! },
-      fetchChatMessages: () => {
-        // Fetch messages for the challenge.
-        ChatService.getInstance()
-          .fetchChallengeMessages(collection!.challenge!.id)
-          .then(() => {})
-          .catch((err: any) => console.error(err));
-      },
-      joinChallenge: (challenge: Challenge, completion: (uc: UserChallenge | null) => void) => {
-        // Replace this with your join logic.
-        workoutService.joinChallenge({ username: currentUser!.username, challengeId: challenge.id })
-          .then(() => {
-            // After join, you can fetch the challenge or pass a dummy userChallenge.
-            completion(null);
-          })
-          .catch((err: any) => {
-            console.error(err);
-            completion(null);
-          });
-      },
-      // Add appCoordinator if required.
-  };
 
   if (shouldShowWaitingRoom) {
     // Create a minimal waiting room view model:
@@ -644,5 +617,5 @@ const ChallengeDetailView = () => {
     </div>
   );
 };
-};
+
 export default ChallengeDetailView;

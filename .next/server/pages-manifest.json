@@ -3,5 +3,6 @@
   "/_error": "pages/_error.js",
   "/_document": "pages/_document.js",
   "/round/[id]/wrapup": "pages/round/[id]/wrapup.js",
+  "/round/[id]": "pages/round/[id].js",
   "/round-invitation/[id]": "pages/round-invitation/[id].js"
 }
