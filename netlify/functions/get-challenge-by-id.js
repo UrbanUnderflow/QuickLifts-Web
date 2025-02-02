@@ -112,6 +112,7 @@ async function getCollectionById(collectionId) {
 
     const data = doc.data();
     console.log('Raw Firestore data:', JSON.stringify(data, null, 2));
+    console.log("THIS IS THE PIN: " + data.pin);
 
     // Fetch participants from user-challenge collection
     const participants = await getUserChallenges(collectionId);
@@ -123,6 +124,7 @@ async function getCollectionById(collectionId) {
       id: doc.id,
       title: data.title || '',
       subtitle: data.subtitle || '',
+      pin: data.pin || null, 
       createdAt: convertTimestamp(data.createdAt),
       updatedAt: convertTimestamp(data.updatedAt),
       challenge: data.challenge ? {
