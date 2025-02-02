@@ -1,6 +1,7 @@
 import { User, FollowRequest } from './types';
 import { Exercise, ExerciseVideo } from '../exercise/types';
-import { doc, getDoc, setDoc, collection, query, where, getDocs, limit } from 'firebase/firestore';
+
+import { doc, getDoc, setDoc, documentId, collection, query, where, getDocs, limit } from 'firebase/firestore';
 import { db } from '../config';
 
 class UserService {
@@ -28,6 +29,22 @@ class UserService {
   async updateUser(userId: string, user: User): Promise<void> {
     const userRef = doc(db, 'users', userId);
     await setDoc(userRef, user.toFirestore(), { merge: true });
+  }
+
+  async getUsersByIds(ids: string[]): Promise<User[]> {
+    if (!ids.length) return [];
+    const users: User[] = [];
+    const chunkSize = 10; // Firestore 'in' queries support up to 10 values
+    for (let i = 0; i < ids.length; i += chunkSize) {
+      const chunk = ids.slice(i, i + chunkSize);
+      const usersRef = collection(db, 'users');
+      const q = query(usersRef, where(documentId(), 'in', chunk));
+      const querySnapshot = await getDocs(q);
+      querySnapshot.docs.forEach(doc => {
+        users.push(User.fromFirebase({ id: doc.id, ...doc.data() }));
+      });
+    }
+    return users;
   }
 
   async fetchUserVideos(userId?: string): Promise<Exercise[]> {
