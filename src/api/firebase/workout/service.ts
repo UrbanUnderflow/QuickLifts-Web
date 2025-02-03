@@ -414,47 +414,6 @@ private createDefaultExercise(): Exercise {
   };
 }
 
-private parseExerciseLogData(data: DocumentData): ExerciseLog {
-  return {
-    id: data.id || '',
-    workoutId: data.workoutId || '',
-    userId: data.userId || '',
-    exercise: data.exercise 
-      ? this.parseExercise(data.exercise) 
-      : this.createDefaultExercise(),
-    logs: (data.log || []).map((logEntry: any) => ({
-      reps: parseInt(logEntry.reps || '0'),
-      weight: parseFloat(logEntry.weight || '0'),
-      leftReps: parseInt(logEntry.leftReps || '0'),
-      leftWeight: parseFloat(logEntry.leftWeight || '0'),
-      isSplit: logEntry.isSplit || false,
-      isBodyWeight: logEntry.isBodyWeight || false,
-      isCompleted: logEntry.isCompleted || false,
-      duration: parseInt(logEntry.duration || '0'),
-      calories: parseInt(logEntry.calories || '0'),
-      bpm: parseInt(logEntry.bpm || '0')
-    })),
-    feedback: data.feedback || '',
-    note: data.note || '',
-    recommendedWeight: data.recommendedWeight,
-    isSplit: data.isSplit || false,
-    isBodyWeight: data.isBodyWeight || false,
-    logSubmitted: data.logSubmitted || false,
-    logIsEditing: data.logIsEditing || false,
-    isCompleted: data.isCompleted || false,
-    createdAt: data.createdAt instanceof Date 
-      ? data.createdAt 
-      : (typeof data.createdAt?.toDate === 'function' 
-        ? data.createdAt.toDate() 
-        : (data.createdAt ? new Date(data.createdAt) : new Date())),
-    updatedAt: data.updatedAt instanceof Date 
-      ? data.updatedAt 
-      : (typeof data.updatedAt?.toDate === 'function' 
-        ? data.updatedAt.toDate() 
-        : (data.updatedAt ? new Date(data.updatedAt) : new Date()))
-  };
-}
-
 // You'll also need to implement parseExercise similar to the original implementation
 private parseExercise(fields: any): Exercise {
   return {
@@ -609,6 +568,7 @@ async fetchSavedWorkout(userId: string, workoutId: string): Promise<[Workout | n
         logSubmitted: logData.logSubmitted || false,
         logIsEditing: logData.logIsEditing || false,
         isCompleted: logData.isCompleted || false,
+        completedAt: convertFirestoreTimestamp(logData.completedAt),
         createdAt: convertFirestoreTimestamp(logData.createdAt),
         updatedAt: convertFirestoreTimestamp(logData.updatedAt)
       };
@@ -809,6 +769,56 @@ async getCollectionById(id: string): Promise<SweatlistCollection> {
     } catch (error) {
       console.error('Error fetching user challenges:', error);
       throw new Error('Failed to fetch user challenges');
+    }
+  }
+  
+  //update the workout summary,
+  async updateWorkoutSummary({
+    userId,
+    workoutId,
+    summary
+  }: {
+    userId: string,
+    workoutId: string,
+    summary: WorkoutSummary
+  }): Promise<void> {
+    if (!userId) {
+      throw new Error('No user ID provided');
+    }
+  
+    try {
+      // Create a reference to the collection
+      const summaryRef = doc(db, 'users', userId, 'workoutSummary', summary.id);
+  
+      // Convert summary to a plain object for Firestore
+      const summaryData = {
+        id: summary.id,
+        workoutId: summary.workoutId,
+        exercises: summary.exercises,
+        bodyParts: summary.bodyParts,
+        secondaryBodyParts: summary.secondaryBodyParts,
+        workoutTitle: summary.workoutTitle,
+        caloriesBurned: summary.caloriesBurned,
+        workoutRating: summary.workoutRating,
+        exercisesCompleted: summary.exercisesCompleted,
+        aiInsight: summary.aiInsight,
+        recommendations: summary.recommendations,
+        gifURLs: summary.gifURLs,
+        recommendedWork: summary.recommendedWork,
+        isCompleted: summary.isCompleted,
+        createdAt: summary.createdAt,
+        updatedAt: new Date(),
+        completedAt: summary.completedAt,
+        duration: summary.duration
+      };
+  
+      // Set data with merge enabled (equivalent to Swift's setData with merge: true)
+      await setDoc(summaryRef, summaryData, { merge: true });
+  
+      console.log('Workout summary document updated successfully');
+    } catch (error) {
+      console.error('Error updating workout summary:', error);
+      throw error;
     }
   }
 

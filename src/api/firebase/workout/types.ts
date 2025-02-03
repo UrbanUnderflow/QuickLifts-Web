@@ -26,8 +26,7 @@ export enum BodyZone {
 
 }
   
-// types/RepsAndWeightLog.ts
-export interface RepsAndWeightLog {
+export class RepsAndWeightLog {
   reps: number;
   weight: number;
   leftReps: number;
@@ -37,31 +36,55 @@ export interface RepsAndWeightLog {
   duration: number;
   calories: number;
   bpm: number;
- }
- 
- export function fromFirebase(data: any): RepsAndWeightLog {
-  return {
-    reps: data.reps || 0,
-    weight: data.weight || 0,
-    leftReps: data.leftReps || 0,
-    leftWeight: data.leftWeight || 0,
-    isSplit: data.isSplit || false,
-    isBodyWeight: data.isBodyWeight || false,
-    duration: data.duration || 0,
-    calories: data.calories || 0,
-    bpm: data.bpm || 0
-  };
- }
- 
- export class RepsAndWeightLog {
-  static fromFirebase(data: any): RepsAndWeightLog {
-    return fromFirebase(data);
+
+  constructor(data: any) {
+    this.reps = data.reps || 0;
+    this.weight = data.weight || 0;
+    this.leftReps = data.leftReps || 0;
+    this.leftWeight = data.leftWeight || 0;
+    this.isSplit = data.isSplit || false;
+    this.isBodyWeight = data.isBodyWeight || false;
+    this.duration = data.duration || 0;
+    this.calories = data.calories || 0;
+    this.bpm = data.bpm || 0;
   }
- }
-  
+
+  static fromFirebase(data: any): RepsAndWeightLog {
+    if (!data) {
+      return new RepsAndWeightLog({});
+    }
+
+    return new RepsAndWeightLog({
+      reps: data.reps || 0,
+      weight: data.weight || 0,
+      leftReps: data.leftReps || 0,
+      leftWeight: data.leftWeight || 0,
+      isSplit: data.isSplit || false,
+      isBodyWeight: data.isBodyWeight || false,
+      duration: data.duration || 0,
+      calories: data.calories || 0,
+      bpm: data.bpm || 0
+    });
+  }
+
+  toDictionary(): { [key: string]: any } {
+    return {
+      reps: this.reps,
+      weight: this.weight,
+      leftReps: this.leftReps,
+      leftWeight: this.leftWeight,
+      isSplit: this.isSplit,
+      isBodyWeight: this.isBodyWeight,
+      duration: this.duration,
+      calories: this.calories,
+      bpm: this.bpm
+    };
+  }
+}
+
 // WorkoutClass.ts
 
- export class Workout {
+export class Workout {
   id: string;
   collectionId?: string[];
   roundWorkoutId: string;
@@ -78,11 +101,12 @@ export interface RepsAndWeightLog {
   startTime?: Date;
   order?: number;
   author: string;
+  assignedDate?: Date;
   createdAt: Date;
   updatedAt: Date;
   zone: BodyZone;
 
-  constructor(data: Workout) {
+  constructor(data: any) {
     this.id = data.id;
     this.collectionId = data.collectionId;
     this.roundWorkoutId = data.roundWorkoutId;
@@ -99,9 +123,30 @@ export interface RepsAndWeightLog {
     this.startTime = data.startTime;
     this.order = data.order;
     this.author = data.author;
+    this.assignedDate = data.assignedDate;
     this.createdAt = data.createdAt;
     this.updatedAt = data.updatedAt;
     this.zone = Workout.determineWorkoutZone(data.exercises);
+  }
+
+  get isTimedWorkout(): boolean {
+    if (!this.logs) return false;
+    return this.logs.some(log => {
+      if (log.exercise.category.type === 'weightTraining') {
+        return log.exercise.category.details?.screenTime !== 0;
+      } else if (log.exercise.category.type === 'cardio') {
+        return log.exercise.category.details?.screenTime !== 0;
+      }
+      return false;
+    });
+  }
+
+  fetchPrimaryBodyParts(): BodyPart[] {
+    return this.exercises.flatMap(exerciseRef => exerciseRef.exercise.primaryBodyParts);
+  }
+
+  fetchSecondaryBodyParts(): BodyPart[] {
+    return this.exercises.flatMap(exerciseRef => exerciseRef.exercise.secondaryBodyParts);
   }
 
   static estimatedDuration(exercises: ExerciseReference[]): number {
@@ -205,32 +250,52 @@ export interface RepsAndWeightLog {
     } else if (hasCore) {
       return BodyZone.Core;
     } else {
-      return BodyZone.FullBody; // Default case
+      return BodyZone.FullBody;
     }
   }
 
-  static toDictionary(workout: Workout): { [key: string]: any } {
-    return {
-      id: workout.id,
-      collectionId: workout.collectionId,
-      roundWorkoutId: workout.roundWorkoutId,
-      exercises: workout.exercises,
-      challenge: workout.challenge,
-      logs: workout.logs,
-      title: workout.title,
-      description: workout.description,
-      duration: workout.duration,
-      workoutRating: workout.workoutRating,
-      useAuthorContent: workout.useAuthorContent,
-      isCompleted: workout.isCompleted,
-      workoutStatus: workout.workoutStatus,
-      startTime: workout.startTime,
-      order: workout.order,
-      author: workout.author,
-      createdAt: workout.createdAt,
-      updatedAt: workout.updatedAt,
-      zone: workout.zone,
+  toDictionary(): { [key: string]: any } {
+    const data: { [key: string]: any } = {
+      id: this.id,
+      exercises: this.exercises.map(ex => ({
+        exercise: ex.exercise,
+        groupId: ex.groupId
+      })),
+      logs: this.logs?.map(log => log.toDictionary()) ?? [],
+      title: this.title,
+      description: this.description,
+      zone: this.zone,
+      duration: this.duration,
+      workoutRating: this.workoutRating,
+      useAuthorContent: this.useAuthorContent,
+      isCompleted: this.isCompleted,
+      workoutStatus: this.workoutStatus,
+      author: this.author,
+      createdAt: this.createdAt.getTime(),
+      updatedAt: this.updatedAt.getTime()
     };
+
+    if (this.challenge) {
+      data.challenge = this.challenge;
+    }
+
+    if (this.order !== undefined) {
+      data.order = this.order;
+    }
+
+    if (this.collectionId) {
+      data.collectionId = this.collectionId;
+    }
+
+    if (this.startTime) {
+      data.startTime = this.startTime.getTime();
+    }
+
+    if (this.assignedDate) {
+      data.assignedDate = this.assignedDate.getTime();
+    }
+
+    return data;
   }
 }
 

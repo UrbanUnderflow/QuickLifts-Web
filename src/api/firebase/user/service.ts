@@ -1,5 +1,6 @@
 import { User, FollowRequest } from './types';
-import { Exercise, ExerciseVideo } from '../exercise/types';
+import { Exercise, ExerciseVideo, ExerciseAuthor } from '../exercise/types';
+import { ProfileImage } from '../user';
 
 import { doc, getDoc, setDoc, documentId, collection, query, where, getDocs, limit } from 'firebase/firestore';
 import { db } from '../config';
@@ -74,7 +75,7 @@ class UserService {
           return;
         }
   
-        const video: ExerciseVideo = {
+        const video = new ExerciseVideo({
           id: doc.id,
           exerciseId: videoData.exerciseId || '',
           username: videoData.username || '',
@@ -82,7 +83,7 @@ class UserService {
           videoURL: videoData.videoURL || '',
           fileName: videoData.fileName || '',
           exercise: exerciseName,
-          profileImage: videoData.profileImage || {},
+          profileImage: new ProfileImage(videoData.profileImage || {}),  // Use ProfileImage constructor
           caption: videoData.caption || '',
           gifURL: videoData.gifURL || '',
           thumbnail: videoData.thumbnail || '',
@@ -96,7 +97,7 @@ class UserService {
           bookmarked: videoData.bookmarked || false,
           createdAt: videoData.createdAt ? new Date(videoData.createdAt) : new Date(),
           updatedAt: videoData.updatedAt ? new Date(videoData.updatedAt) : new Date()
-        };
+        });
   
         if (!videosByExerciseName[exerciseName]) {
           videosByExerciseName[exerciseName] = [];
@@ -115,7 +116,8 @@ class UserService {
           const exerciseName = exerciseData.name;
           
           // Create base exercise
-          const exercise: Exercise = {
+          // For the Exercise:
+          const exercise = new Exercise({
             id: doc.id,
             name: exerciseName,
             category: exerciseData.category,
@@ -130,13 +132,13 @@ class UserService {
             reps: exerciseData.reps || '',
             sets: exerciseData.sets || 0,
             weight: exerciseData.weight || 0,
-            author: {
+            author: new ExerciseAuthor({  // Use ExerciseAuthor constructor
               userId: exerciseData.author?.userId || '',
               username: exerciseData.author?.username || ''
-            },
+            }),
             createdAt: exerciseData.createdAt ? new Date(exerciseData.createdAt) : new Date(),
             updatedAt: exerciseData.updatedAt ? new Date(exerciseData.updatedAt) : new Date()
-          };
+          });
   
           return exercise;
         })

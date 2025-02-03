@@ -12,7 +12,7 @@ import { SelectedRootTabs } from '../types/DashboardTypes';
 import { RootState } from '../redux/store';
 import WorkoutPanel from '../components/App/Dashboard/WorkoutPanel';
 import { ExerciseLog } from '../api/firebase/exercise/types';
-import { Workout, WorkoutStatus } from '../api/firebase/workout/types';
+import { Workout, WorkoutStatus, WorkoutSummary, RepsAndWeightLog } from '../api/firebase/workout/types';
 import { workoutService } from '../api/firebase/workout/service';
 import UserMenu from '../components/UserMenu'; 
 
@@ -43,10 +43,20 @@ import { setCurrentWorkout, setCurrentExerciseLogs } from '../redux/workoutSlice
             session.workout?.workoutStatus === WorkoutStatus.InProgress
           );
 
+          console.log("Queued up session count: " + queuedUpSessions)
+          console.log("In Progress session count: " + inProgressSessions)
+
+
           if (inProgressSessions.length > 0) {
             const currentSession = inProgressSessions[0];
+          
+            console.log("There are " + currentSession.logs?.length + " In this session");
+            const nextExerciseIndex = currentSession.logs?.findIndex(log => !log.isCompleted) ?? 0;
+
             dispatch(setCurrentWorkout(currentSession.workout));
             dispatch(setCurrentExerciseLogs(currentSession.logs || []));
+            setCurrentExerciseIndex(nextExerciseIndex >= 0 ? nextExerciseIndex : 0);
+
           } else if (queuedUpSessions.length > 0) {
             const currentSession = queuedUpSessions[0];
             dispatch(setCurrentWorkout(currentSession.workout));
@@ -73,14 +83,14 @@ import { setCurrentWorkout, setCurrentExerciseLogs } from '../redux/workoutSlice
     // Function to begin the workout (move from ready to in-progress)
     const beginWorkout = () => {
       if (currentWorkoutSession) {
-        dispatch(setCurrentWorkout({
+        const updatedWorkout = new Workout({
           ...currentWorkoutSession,
           workoutStatus: WorkoutStatus.InProgress
-        }));
+        });
+        dispatch(setCurrentWorkout(updatedWorkout));
       }
     };
   
-    // Function to complete an exercise
     const completeExercise = async () => {
       // Validate inputs
       if (!currentWorkoutSession || !currentExerciseLogs.length) {
@@ -88,26 +98,51 @@ import { setCurrentWorkout, setCurrentExerciseLogs } from '../redux/workoutSlice
         return;
       }
     
-      // Determine if the current exercise is a bodyweight exercise
+      // Get current exercise
       const currentExercise = currentExerciseLogs[currentExerciseIndex]?.exercise;
       const isBodyWeight = currentExerciseLogs[currentExerciseIndex]?.isBodyWeight;
     
-      // Mark the current exercise as completed
+      // Mark the current exercise as submitted
       const updatedLogs = [...currentExerciseLogs];
-      updatedLogs[currentExerciseIndex] = {
+      updatedLogs[currentExerciseIndex] = new ExerciseLog({
         ...updatedLogs[currentExerciseIndex],
-        isCompleted: true
-      };
+        logSubmitted: true,
+        completedAt: new Date(),
+        updatedAt: new Date()
+      });
     
       console.log('Exercise completed:', currentExercise?.name);
     
       try {
         // Update logs in the current workout
         if (currentWorkoutSession && userId) {
+          // Update workout logs
           await workoutService.updateWorkoutLogs({
             userId,
             workoutId: currentWorkoutSession.id,
             logs: updatedLogs
+          });
+    
+          // Update workout summary
+          const workoutSummary = new WorkoutSummary({
+            id: currentWorkoutSession.id,
+            workoutId: currentWorkoutSession.id,
+            userId,
+            exercises: updatedLogs,
+            bodyParts: currentWorkoutSession.fetchPrimaryBodyParts(),
+            secondaryBodyParts: currentWorkoutSession.fetchSecondaryBodyParts(),
+            workoutTitle: currentWorkoutSession.title,
+            exercisesCompleted: updatedLogs.filter(log => log.logSubmitted),
+            isCompleted: false,
+            startTime: currentWorkoutSession.startTime || new Date(),
+            createdAt: currentWorkoutSession.createdAt || new Date(),
+            updatedAt: new Date()
+          });
+    
+          await workoutService.updateWorkoutSummary({
+            userId,
+            workoutId: currentWorkoutSession.id,
+            summary: workoutSummary
           });
         }
     
@@ -118,6 +153,9 @@ import { setCurrentWorkout, setCurrentExerciseLogs } from '../redux/workoutSlice
           await performExerciseSubmission(updatedLogs);
         }
     
+        // Update Redux state
+        dispatch(setCurrentExerciseLogs(updatedLogs));
+    
         // Move to the next exercise
         if (currentExerciseIndex < updatedLogs.length - 1) {
           setCurrentExerciseIndex(prev => prev + 1);
@@ -127,22 +165,21 @@ import { setCurrentWorkout, setCurrentExerciseLogs } from '../redux/workoutSlice
         }
       } catch (error) {
         console.error('Error submitting exercise:', error);
-        // Handle error (show toast, etc.)
       }
     };
   
     const performBodyWeightSubmission = (updatedLogs: ExerciseLog[]) => {
       // Similar to Swift version, but simplified for React
-      const updatedLogsWithBodyWeight = updatedLogs.map(log => ({
+      const updatedLogsWithBodyWeight = updatedLogs.map(log => new ExerciseLog({
         ...log,
-        logs: log.logs.map(logItem => ({
+        logs: log.logs.map(logItem => new RepsAndWeightLog({
           ...logItem,
           weight: 0.0,
           isBodyWeight: true,
-          reps: logItem.reps || 0  // Ensure reps are set
+          reps: logItem.reps || 0
         }))
       }));
-  
+      
       return performExerciseSubmission(updatedLogsWithBodyWeight);
     };
   
@@ -226,6 +263,15 @@ import { setCurrentWorkout, setCurrentExerciseLogs } from '../redux/workoutSlice
   // Render workout views based on status
   const renderWorkoutView = () => {
     if (!currentWorkoutSession) return null;
+
+    console.log('Workout Session Debug:', {
+      workoutStatus: currentWorkoutSession.workoutStatus,
+      sessionLogs: currentWorkoutSession.logs?.length,
+      currentExerciseIndex,
+      currentExerciseLogs: currentExerciseLogs?.length,
+      logsValid: Boolean(currentWorkoutSession.logs?.length),
+      indexValid: currentExerciseIndex >= 0 && currentExerciseIndex < (currentWorkoutSession.logs?.length || 0)
+    });
   
     switch (currentWorkoutSession.workoutStatus) {
       case WorkoutStatus.QueuedUp:

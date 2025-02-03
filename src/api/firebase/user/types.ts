@@ -24,26 +24,37 @@ export interface FollowRequest {
   updatedAt: Date
 }
 
-// types/ProfileImage.ts
-export interface ProfileImage {
-    profileImageURL: string;
-    imageOffsetWidth: number;
-    imageOffsetHeight: number;
- }
- 
- export function fromFirebase(data: any): ProfileImage {
-    return {
-        profileImageURL: data.profileImageURL || '',
-        imageOffsetWidth: data.imageOffsetWidth || 0,
-        imageOffsetHeight: data.imageOffsetHeight || 0
-    };
- }
- 
- export class ProfileImage {
-    static fromFirebase(data: any): ProfileImage {
-        return fromFirebase(data);
+export class ProfileImage {
+  profileImageURL: string;
+  imageOffsetWidth: number;
+  imageOffsetHeight: number;
+
+  constructor(data: any) {
+    this.profileImageURL = data.profileImageURL || '';
+    this.imageOffsetWidth = data.imageOffsetWidth || 0;
+    this.imageOffsetHeight = data.imageOffsetHeight || 0;
+  }
+
+  static fromFirebase(data: any): ProfileImage {
+    if (!data) {
+      return new ProfileImage({});
     }
- }
+
+    return new ProfileImage({
+      profileImageURL: data.profileImageURL || '',
+      imageOffsetWidth: data.imageOffsetWidth || 0,
+      imageOffsetHeight: data.imageOffsetHeight || 0
+    });
+  }
+
+  toDictionary(): { [key: string]: any } {
+    return {
+      profileImageURL: this.profileImageURL,
+      imageOffsetWidth: this.imageOffsetWidth,
+      imageOffsetHeight: this.imageOffsetHeight
+    };
+  }
+}
 
  export class User {
    id: string;
