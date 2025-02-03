@@ -4,12 +4,14 @@ type FAQItemProps = {
   question: string;
   answer: string;
   theme?: 'light' | 'dark';
+  isLast?: boolean;
 };
 
 const FAQItem: React.FC<FAQItemProps> = ({ 
   question, 
   answer,
-  theme = 'light'
+  theme = 'dark',
+  isLast = false
 }) => {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -20,16 +22,16 @@ const FAQItem: React.FC<FAQItemProps> = ({
   const getThemeClasses = () => {
     if (theme === 'dark') {
       return {
-        question: 'text-white',
+        question: 'text-white hover:text-[#E0FE10]',
         answer: 'text-zinc-400',
-        icon: 'text-white',
+        icon: 'text-[#E0FE10]',
         divider: 'border-zinc-800'
       };
     }
     return {
-      question: 'text-gray-900',
+      question: 'text-gray-900 hover:text-orange-500',
       answer: 'text-gray-700',
-      icon: 'text-gray-700',
+      icon: 'text-orange-500',
       divider: 'border-gray-200'
     };
   };
@@ -37,16 +39,16 @@ const FAQItem: React.FC<FAQItemProps> = ({
   const themeClasses = getThemeClasses();
 
   return (
-    <div className="mb-8">
+    <div className={`${!isLast ? 'border-b' : ''} ${themeClasses.divider}`}>
       <button 
-        className="flex justify-between items-center w-full text-left" 
+        className="flex justify-between items-start w-full text-left py-6 transition-colors duration-200" 
         onClick={() => setIsOpen(!isOpen)}
       >
-        <p className={`text-lg font-semibold ${themeClasses.question}`}>
+        <p className={`text-lg font-medium pr-8 transition-colors duration-200 ${themeClasses.question}`}>
           {question}
         </p>
         <svg 
-          className={`w-6 h-6 transform transition-transform ${isOpen ? 'rotate-180' : ''} ${themeClasses.icon}`} 
+          className={`w-6 h-6 flex-shrink-0 transform transition-all duration-300 ${isOpen ? 'rotate-180' : ''} ${themeClasses.icon}`} 
           fill="none" 
           stroke="currentColor" 
           viewBox="0 0 24 24" 
@@ -60,13 +62,16 @@ const FAQItem: React.FC<FAQItemProps> = ({
           />
         </svg>
       </button>
-      <hr className={`my-2 ${themeClasses.divider}`} />
-      {isOpen && (
+      <div 
+        className={`overflow-hidden transition-all duration-300 ${
+          isOpen ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
+        }`}
+      >
         <div 
-          className={`mt-2 ${themeClasses.answer}`}
+          className={`pb-6 pr-8 ${themeClasses.answer}`}
           dangerouslySetInnerHTML={createMarkup(answer)}
         />
-      )}
+      </div>
     </div>
   );
 };

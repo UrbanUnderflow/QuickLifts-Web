@@ -1,7 +1,7 @@
 import React from 'react';
 import SubscriptionCard from '../components/SubscriptionCard';
 import FAQ from '../components/FAQ';
-
+import { useScrollFade } from '../hooks/useScrollFade';
 
 const Subscribe: React.FC = () => {
   const openPaymentLink = (url: string) => {
@@ -44,170 +44,189 @@ const Subscribe: React.FC = () => {
   ];
 
   return (
-    <div className="">
-      <div className="mb-48 bg-white">
-        {/* Title Section */}
-        <div className="max-w-[1052.76px] mx-auto text-center my-10 mt-20">
-          {/* Title Section */}
-          <span className="text-black text-[56px] sm:text-[93.93px] font-normal font-['Thunder'] leading-[60px] sm:leading-[107.08px] tracking-wide">Become a member of </span>
-          <span className="text-orange-500 text-[56px] sm:text-[93.93px] font-normal font-['Thunder'] leading-[60px] sm:leading-[107.08px] tracking-wide">The Fitness Collective</span>
-          <br />
-          <span className="text-black text-[30px] sm:text-[40px] font-normal font-['Thunder'] leading-[60px] sm:leading-[107.08px] tracking-wide">The first month is on us!</span>
-        </div>
+    <div className="min-h-screen bg-zinc-900">
+      <div className="pt-10 pb-10"> {/* explicit padding instead of margin */}
+      {/* Hero Section */}
+        <section className="max-w-[1052.76px] mx-auto text-center my-10" ref={useScrollFade()}>
+          <h2 className="text-[#E0FE10] uppercase tracking-wide font-semibold mb-4">
+            Membership
+          </h2>
+          <h1 className="text-white text-5xl sm:text-6xl font-bold mb-6">
+            Join The Fitness Collective
+          </h1>
+          <p className="text-zinc-400 text-xl">
+            First month on us!
+          </p>
+        </section>
 
         {/* Feature List */}
-        <div className="flex flex-col space-y-6 max-w-[500px] mx-auto text-left mt-8 mb-40 px-4 sm:px-0">
+        <section className="flex flex-col space-y-6 max-w-[500px] mx-auto text-left mt-8 mb-20 px-4 sm:px-0" ref={useScrollFade()}>
           <div className="flex items-center gap-4">
-            <span className="text-black text-xl font-medium font-['HK Grotesk'] leading-7">Unlock your potential with:</span>
+            <span className="text-zinc-400 text-xl font-medium leading-7">Unlock your potential with:</span>
           </div>
           <div className="flex items-center gap-4">
-            <img src="/orange-check.png" alt="Check" className="w-[22px] h-[22px] object-cover" />
-            <span className="text-black text-xl font-medium font-['HK Grotesk'] leading-7">Quick and easy access to workouts when you need them.</span>
+            <div className="w-[22px] h-[22px] flex items-center justify-center bg-[#E0FE10] rounded-full">
+              <span className="text-black">✓</span>
+            </div>
+            <span className="text-zinc-400 text-xl font-medium leading-7">Quick and easy access to workouts when you need them.</span>
           </div>
-
           <div className="flex items-center gap-4">
-            <img src="/orange-check.png" alt="Check" className="w-[22px] h-[22px] object-cover" />
-            <span className="text-black text-xl font-medium font-['HK Grotesk'] leading-7">Videos from community members that makes your exercises selection, endless.</span>
+            <div className="w-[22px] h-[22px] flex items-center justify-center bg-[#E0FE10] rounded-full">
+              <span className="text-black">✓</span>
+            </div>
+            <span className="text-zinc-400 text-xl font-medium leading-7">Videos from community members that makes your exercises selection, endless.</span>
           </div>
-
           <div className="flex items-center gap-4">
-            <img src="/orange-check.png" alt="Check" className="w-[22px] h-[22px] object-cover" />
-            <span className="text-black text-xl font-medium font-['HK Grotesk'] leading-7">Intelligent workout tracking using AI, to create deep insight into your workouts</span>
+            <div className="w-[22px] h-[22px] flex items-center justify-center bg-[#E0FE10] rounded-full">
+              <span className="text-black">✓</span>
+            </div>
+            <span className="text-zinc-400 text-xl font-medium leading-7">Intelligent workout tracking using AI, to create deep insight into your workouts</span>
           </div>
-
           <div className="flex items-center gap-4">
-            <img src="/orange-check.png" alt="Check" className="w-[22px] h-[22px] object-cover" />
-            <span className="text-black text-xl font-medium font-['HK Grotesk'] leading-7">You get 30 days free trial on us!</span>
+            <div className="w-[22px] h-[22px] flex items-center justify-center bg-[#E0FE10] rounded-full">
+              <span className="text-black">✓</span>
+            </div>
+            <span className="text-zinc-400 text-xl font-medium leading-7">You get 30 days free trial on us!</span>
           </div>
-        </div>
-
+        </section>
 
         {/* Subscription Cards */}
-        <div className="flex flex-col items-center">
-          <div className="w-full bg-gray-100 p-20 sm:p-16 mb-64">
-            {/* Subscription Cards */}
-            <div className="flex flex-col sm:flex-row justify-center items-center gap-8">
-              <SubscriptionCard
-                price="$4.99"
-                period="mo"
-                description="Flexible, in case you decide to go it alone after a month."
-                titleColor="text-black"
-                textColor="text-black"
-                backgroundColor="bg-white"
-                actionText="Subscribe Now"
-                actionBgColor="bg-neutral-800"
-                actionTextColor="text-white"
-                onActionClick={() => openPaymentLink('https://buy.stripe.com/9AQaFieX9bv26fSfYY')}
-              />
+        <section className="w-full bg-zinc-800 py-20" ref={useScrollFade()}>
+          <div className="flex flex-col sm:flex-row justify-center items-center gap-8 max-w-[1052.76px] mx-auto">
+            <SubscriptionCard
+              price="$4.99"
+              period="mo"
+              description="Flexible, in case you decide to go it alone after a month."
+              titleColor="text-white"
+              textColor="text-zinc-400"
+              backgroundColor="bg-zinc-900"
+              actionText="Subscribe Now"
+              actionBgColor="bg-[#E0FE10]"
+              actionTextColor="text-black"
+              onActionClick={() => openPaymentLink('https://buy.stripe.com/9AQaFieX9bv26fSfYY')}
+            />
 
-              <SubscriptionCard
-                price="$39.99"
-                period="yr"
-                description="Cost Effective, with commitment to your journey."
-                titleColor="text-white"
-                textColor="text-white"
-                backgroundColor="bg-neutral-800"
-                actionBgColor="bg-[#E0FE10]"
-                actionText="Try now for 30 days"
-                actionTextColor="text-zinc-800"
-                onActionClick={() => openPaymentLink('https://buy.stripe.com/28obJm2an8iQdIk289')}
-              />
+            <SubscriptionCard
+              price="$39.99"
+              period="yr"
+              description="Cost Effective, with commitment to your journey."
+              titleColor="text-white"
+              textColor="text-zinc-400"
+              backgroundColor="bg-zinc-900"
+              actionBgColor="bg-[#E0FE10]"
+              actionText="Try now for 30 days"
+              actionTextColor="text-black"
+              onActionClick={() => openPaymentLink('https://buy.stripe.com/28obJm2an8iQdIk289')}
+            />
+          </div>
+        </section>
+
+        {/* Features Grid */}
+        <section className="max-w-[1052.76px] mx-auto px-4 py-20" ref={useScrollFade()}>
+          <div className="flex flex-col gap-4 sm:gap-6 mb-12">
+            <div className="text-[#E0FE10] text-3xl sm:text-4xl font-normal uppercase leading-9">
+              Our users are most excited about
+            </div>
+            <div className="text-white text-[40px] sm:text-[64px] font-bold leading-[45px] sm:leading-[79px]">
+              Stand out features that Pulse has to offer
             </div>
           </div>
-        </div>
 
-
-        {/* App Features Section */}
-        <div className="flex flex-col gap-8 items-center justify-center mb-64 px-4 sm:px-0">
-          {/* Container for Title and Grid */}
-          <div className="w-full max-w-[1052.76px] flex flex-col gap-8">
-            {/* Section Title */}
-            <div className="flex flex-col gap-4 sm:gap-6">
-              <div className="text-zinc-600 text-3xl sm:text-4xl font-normal font-['Thunder'] uppercase leading-9">Our users are most excited about</div>
-              <div className="w-full max-w-[791.1px] text-black text-[40px] sm:text-[64px] font-medium font-['Thunder'] leading-[45px] sm:leading-[79px]">Here are some of the stand out features that Pulse has to offer</div>
-            </div>
-
-            {/* Grid for App Features */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8">
-              {/* First Feature */}
-              <div className="flex flex-col gap-2">
-                <div className="w-5 h-5"></div>
-                {/* Feature Image Placeholder */}
-                <div className="w-[305px] h-[373.87px] bg-gray-50">
-                  <img src="/choose-body-parts-phone.png" alt="Feature 1" />
-                </div>
-                <div className="text-black text-[22.5px] font-bold font-['HK Grotesk'] leading-loose">Body Part Selection</div>
-                <div className="w-[319px] text-neutral-600 text-base font-normal font-['HK Grotesk'] leading-tight">You can select exactly which body parts you want to workout, and you will instantly be delivered a list of complimentary exercises for your workout.</div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8">
+            {/* Feature 1 */}
+            <div className="bg-zinc-800 rounded-xl p-6">
+              <div className="aspect-[9/11] bg-zinc-900 rounded-lg overflow-hidden">
+                <img src="/choose-body-parts-phone.png" alt="Body Part Selection" className="w-full h-full object-cover" />
               </div>
-
-              {/* Second Feature */}
-              <div className="flex flex-col gap-2">
-                <div className="w-5 h-5"></div>
-                {/* Feature Image Placeholder */}
-                <div className="w-[305px] h-[373.87px] bg-gray-50">
-                  <img src="/discover-exercise-phone.png" alt="Feature 2" />
-                </div>
-                <div className="text-black text-[22.5px] font-bold font-['HK Grotesk'] leading-loose">Exercise Discovery</div>
-                <div className="w-[319px] text-neutral-600 text-base font-normal font-['HK Grotesk'] leading-tight">Find your exercise, and create workouts that complement each other based off of cool exercise that you discover. In our vast database of community driven exercises, the selection is endless.</div>
-              </div>
-
-              {/* Third Feature */}
-              <div className="flex flex-col gap-2">
-                <div className="w-5 h-5"></div>
-                {/* Feature Image Placeholder */}
-                <div className="w-[305px] h-[373.87px] bg-gray-50">
-                  <img src="/progress-log.png" alt="Feature 3" />
-                </div>
-                <div className="text-black text-[22.5px] font-bold font-['HK Grotesk'] leading-loose">Progress Logs</div>
-                <div className="w-[319px] text-neutral-600 text-base font-normal font-['HK Grotesk'] leading-tight">Logging reps, sets, and weight allows you to view your history of every workout, so you never have to guess your weights again.</div>
+              <div className="text-white text-[22.5px] font-bold leading-loose mt-4">Body Part Selection</div>
+              <div className="text-zinc-400 text-base leading-tight">
+                Select exactly which body parts you want to workout, with instant access to complementary exercises.
               </div>
             </div>
 
-            {/* Additional Features (Second Grid) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8">
-              {/* Fourth Feature */}
-              <div className="flex flex-col gap-2">
-                <div className="w-5 h-5"></div>
-                {/* Feature Image Placeholder */}
-                <div className="w-[305px] h-[373.87px] bg-gray-50">
-                  <img src="/workout-log-phone.png" alt="workout log" />
-                </div>
-                <div className="text-black text-[22.5px] font-bold font-['HK Grotesk'] leading-loose">Workout Logging</div>
-                <div className="w-[319px] text-neutral-600 text-base font-normal font-['HK Grotesk'] leading-tight">Log your sets, reps, and weight to achieve results through progressive overload. Use your workout score to help you push further each workout.</div>
+            {/* Feature 2 */}
+            <div className="bg-zinc-800 rounded-xl p-6">
+              <div className="aspect-[9/11] bg-zinc-900 rounded-lg overflow-hidden">
+                <img src="/discover-exercise-phone.png" alt="Exercise Discovery" className="w-full h-full object-cover" />
               </div>
-
-              {/* Fifth Feature */}
-              <div className="flex flex-col gap-2">
-                <div className="w-5 h-5"></div>
-                {/* Feature Image Placeholder */}
-                <div className="w-[305px] h-[373.87px] bg-gray-50">
-                  <img src="/record-exercise-phone.png" alt="record exercise" />
-                </div>
-                <div className="text-black text-[22.5px] font-bold font-['HK Grotesk'] leading-loose">Record Your Exercise</div>
-                <div className="w-[319px] text-neutral-600 text-base font-normal font-['HK Grotesk'] leading-tight">Whether it's to track your progress, or inspire others, you can record yourself performing each of your workouts and then edit the videos for optimal results.</div>
+              <div className="text-white text-[22.5px] font-bold leading-loose mt-4">Exercise Discovery</div>
+              <div className="text-zinc-400 text-base leading-tight">
+                Find your exercise, and create workouts that complement each other based off of cool exercise that you discover.
               </div>
-
-              {/* Sixth Feature */}
-              <div className="flex flex-col gap-2">
-                <div className="w-5 h-5"></div>
-                {/* Feature Image Placeholder */}
-                <div className="w-[305px] h-[373.87px] bg-gray-50">
-                  <img src="/exercise-vault-phone.png" alt="exercise vault" />
-                </div>
-                <div className="text-black text-[22.5px] font-bold font-['HK Grotesk'] leading-loose">The Exercise Vault</div>
-                <div className="w-[319px] text-neutral-600 text-base font-normal font-['HK Grotesk'] leading-tight">Search across our database of exercises we call "The Exercise Vault" to quickly find the exercises you are looking for.</div>
-              </div>
-
-              <div>
-              <FAQ title="Frequently Asked Questions" items={faqData} />
             </div>
-            
+
+            {/* Feature 3 */}
+            <div className="bg-zinc-800 rounded-xl p-6">
+              <div className="aspect-[9/11] bg-zinc-900 rounded-lg overflow-hidden">
+                <img src="/progress-log.png" alt="Progress Logs" className="w-full h-full object-cover" />
+              </div>
+              <div className="text-white text-[22.5px] font-bold leading-loose mt-4">Progress Logs</div>
+              <div className="text-zinc-400 text-base leading-tight">
+                Logging reps, sets, and weight allows you to view your history of every workout.
+              </div>
+            </div>
+
+            {/* Additional Features */}
+            <div className="bg-zinc-800 rounded-xl p-6">
+              <div className="aspect-[9/11] bg-zinc-900 rounded-lg overflow-hidden">
+                <img src="/workout-log-phone.png" alt="Workout Logging" className="w-full h-full object-cover" />
+              </div>
+              <div className="text-white text-[22.5px] font-bold leading-loose mt-4">Workout Logging</div>
+              <div className="text-zinc-400 text-base leading-tight">
+                Log your sets, reps, and weight to achieve results through progressive overload.
+              </div>
+            </div>
+
+            <div className="bg-zinc-800 rounded-xl p-6">
+              <div className="aspect-[9/11] bg-zinc-900 rounded-lg overflow-hidden">
+                <img src="/record-exercise-phone.png" alt="Record Exercise" className="w-full h-full object-cover" />
+              </div>
+              <div className="text-white text-[22.5px] font-bold leading-loose mt-4">Record Your Exercise</div>
+              <div className="text-zinc-400 text-base leading-tight">
+                Record yourself performing each of your workouts and then edit the videos for optimal results.
+              </div>
+            </div>
+
+            <div className="bg-zinc-800 rounded-xl p-6">
+              <div className="aspect-[9/11] bg-zinc-900 rounded-lg overflow-hidden">
+                <img src="/exercise-vault-phone.png" alt="Exercise Vault" className="w-full h-full object-cover" />
+              </div>
+              <div className="text-white text-[22.5px] font-bold leading-loose mt-4">The Exercise Vault</div>
+              <div className="text-zinc-400 text-base leading-tight">
+                Search across our database of exercises we call "The Exercise Vault" to quickly find exercises.
+              </div>
             </div>
           </div>
-        </div>
+        </section>
 
-
+        {/* FAQ Section */}
+        <section className="bg-zinc-800" ref={useScrollFade()}>
+          <FAQ title="Frequently Asked Questions" items={faqData} theme="dark" />
+        </section>
       </div>
+
+      {/* Call to Action */}
+      <section ref={useScrollFade()} className="min-h-[50vh] bg-black flex flex-col items-center justify-center text-center p-8">
+        <h2 className="text-white text-5xl sm:text-6xl font-bold mb-6">
+          Ready to start recording?
+        </h2>
+        <p className="text-zinc-400 text-xl max-w-2xl mb-10">
+          Join the Pulse community and start building your Move library today.
+        </p>
+        <a 
+          href="https://apps.apple.com/ca/app/pulse-community-workouts/id6451497729"
+          className="bg-[#E0FE10] text-black px-12 py-4 rounded-full text-lg font-semibold hover:bg-[#E0FE10]/90 transition-colors"
+        >
+          Download iOS App Now
+        </a>
+
+        <a 
+          href="https://fitwithpulse.ai"
+          className="text-[#E0FE10] px-12 py-4 rounded-full text-lg font-semibold hover:text-[#E0FE10]/90 transition-colors"
+        >
+          Use Our Web App
+        </a>
+      </section>
     </div>
   );
 };
