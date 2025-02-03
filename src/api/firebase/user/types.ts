@@ -170,12 +170,12 @@ export interface ProfileImage {
  }
  
  export enum SubscriptionType {
-   Unsubscribed = "Unsubscribed",
-   Beta = "Beta User",
-   Monthly = "Monthly Subscriber",
-   Annual = "Annual Subscriber",
-   SweatEquityPartner = "Sweat Equity Partner",
-   ExecutivePartner = "Executive Partner",
+   unsubscribed = "Unsubscribed",
+   beta = "Beta User",
+   monthly = "Monthly Subscriber",
+   annual = "Annual Subscriber",
+   sweatEquityPartner = "Sweat Equity Partner",
+   executivePartner = "Executive Partner",
  }
  
  export enum UserLevel {
