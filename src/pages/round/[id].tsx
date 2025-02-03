@@ -185,7 +185,7 @@ const ChallengeDetailView = () => {
         sweatlistGroup.forEach(sweatlistId => {
           if (sweatlistId.sweatlistName === "Rest") {
             // Create rest workout placeholder
-            const restWorkout: Workout = {
+            const restWorkout = new Workout({
               id: "rest",
               roundWorkoutId: "rest", 
               title: "Rest Day",
@@ -205,7 +205,7 @@ const ChallengeDetailView = () => {
               startTime: undefined,
               order: 0,
               workoutRating: undefined
-            };
+            });
             allWorkouts.push(restWorkout);
           } else {
             const workout = sweatlists?.find(sl => sl.id === sweatlistId.id);

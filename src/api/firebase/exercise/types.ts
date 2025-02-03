@@ -1,6 +1,7 @@
 import { RepsAndWeightLog } from "../workout/types";
 import { ProfileImage } from '../user/types';
 import { DocumentSnapshot } from 'firebase/firestore';
+import { convertFirestoreTimestamp } from '../../../utils/formatDate';
 
 export interface ExerciseService {
   fetchExercises: () => Promise<void>;
@@ -76,6 +77,7 @@ export class ExerciseLog {
   logIsEditing: boolean;
   isCompleted: boolean;
   order?: number;
+  completedAt: Date;
   createdAt: Date;
   updatedAt: Date;
 
@@ -94,11 +96,17 @@ export class ExerciseLog {
     this.logIsEditing = data.logIsEditing || false;
     this.isCompleted = data.isCompleted || false;
     this.order = data.order;
-    this.createdAt = data.createdAt ? new Date(data.createdAt) : new Date();
-    this.updatedAt = data.updatedAt ? new Date(data.updatedAt) : new Date();
+    this.completedAt = convertFirestoreTimestamp(data.completedAt);
+    this.createdAt = convertFirestoreTimestamp(data.createdAt);
+    this.updatedAt = convertFirestoreTimestamp(data.updatedAt);
   }
 
   static fromFirebase(data: any): ExerciseLog {
+    if (!data) {
+      // Return a default ExerciseLog instead of null
+      return new ExerciseLog({});
+    }
+    
     return new ExerciseLog({
       id: data.id || '',
       workoutId: data.workoutId || '',
@@ -114,9 +122,40 @@ export class ExerciseLog {
       logIsEditing: data.logIsEditing || false,
       isCompleted: data.isCompleted || false,
       order: data.order,
+      completedAt: data.completedAt,
       createdAt: data.createdAt,
       updatedAt: data.updatedAt
     });
+  }
+
+  toDictionary(): { [key: string]: any } {
+    const data: { [key: string]: any } = {
+      id: this.id,
+      workoutId: this.workoutId,
+      userId: this.userId,
+      exercise: this.exercise.toDictionary(),
+      logs: this.logs.map(log => log.toDictionary()),
+      feedback: this.feedback,
+      note: this.note,
+      isSplit: this.isSplit,
+      isBodyWeight: this.isBodyWeight,
+      logSubmitted: this.logSubmitted,
+      logIsEditing: this.logIsEditing,
+      isCompleted: this.isCompleted,
+      createdAt: this.createdAt.getTime(),
+      updatedAt: this.updatedAt.getTime(),
+      completedAt: this.completedAt.getTime()
+    };
+
+    if (this.recommendedWeight !== undefined) {
+      data.recommendedWeight = this.recommendedWeight;
+    }
+
+    if (this.order !== undefined) {
+      data.order = this.order;
+    }
+
+    return data;
   }
 }
 
@@ -191,26 +230,6 @@ export const ExerciseCategory = {
 // const id = ExerciseCategory.identifier(weightTraining);
 
 
-export interface Exercise {
-  id: string;
-  name: string;
-  category: ExerciseCategory;
-  primaryBodyParts: BodyPart[];
-  secondaryBodyParts: BodyPart[];
-  tags: string[];
-  description: string;
-  visibility: ExerciseVisibility;
-  steps: string[];
-  videos: ExerciseVideo[];
-  currentVideoPosition: number;
-  reps: string;
-  sets: number;
-  weight: number;
-  author: ExerciseAuthor;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
 export class Exercise {
   id: string;
   name: string;
@@ -245,8 +264,8 @@ export class Exercise {
     this.reps = data.reps || '';
     this.weight = data.weight || 0;
     this.author = ExerciseAuthor.fromFirebase(data.author || {});
-    this.createdAt = data.createdAt ? new Date(data.createdAt) : new Date();
-    this.updatedAt = data.updatedAt ? new Date(data.updatedAt) : new Date();
+    this.createdAt = convertFirestoreTimestamp(data.createdAt);
+    this.updatedAt = convertFirestoreTimestamp(data.updatedAt);
 
     // Handle category parsing
     const categoryData = data.category || {};
@@ -278,7 +297,6 @@ export class Exercise {
         break;
 
       default:
-        // Fallback to weight training if unknown
         this.category = ExerciseCategory.weightTraining({
           reps: '12',
           sets: 3,
@@ -289,6 +307,10 @@ export class Exercise {
   }
 
   static fromFirebase(data: any): Exercise {
+    if (!data) {
+      return new Exercise({});
+    }
+
     return new Exercise({
       id: data.id || '',
       name: data.name || '',
@@ -309,12 +331,40 @@ export class Exercise {
       updatedAt: data.updatedAt
     });
   }
-}
 
+  toDictionary(): { [key: string]: any } {
+    const data: { [key: string]: any } = {
+      id: this.id,
+      name: this.name,
+      description: this.description,
+      category: {
+        id: this.category.type,
+        ...this.category.details,
+        selectedVideo: this.category.details?.selectedVideo?.toDictionary()
+      },
+      primaryBodyParts: this.primaryBodyParts,
+      secondaryBodyParts: this.secondaryBodyParts,
+      tags: this.tags,
+      videos: this.videos.map(video => video.toDictionary()),
+      steps: this.steps,
+      visibility: this.visibility,
+      currentVideoPosition: this.currentVideoPosition,
+      sets: this.sets,
+      reps: this.reps,
+      weight: this.weight,
+      author: this.author.toDictionary(),
+      createdAt: this.createdAt.getTime(),
+      updatedAt: this.updatedAt.getTime()
+    };
+
+    return data;
+  }
+}
 
 // types/ExerciseVideo.ts
 export type ExerciseVideoVisibility = 'open' | 'private' | 'followers';
 
+// ExerciseVideo.ts
 export class ExerciseVideo {
   id: string;
   exerciseId: string;
@@ -358,11 +408,15 @@ export class ExerciseVideo {
     this.isApproved = data.isApproved || false;
     this.liked = data.liked || false;
     this.bookmarked = data.bookmarked || false;
-    this.createdAt = data.createdAt ? new Date(data.createdAt) : new Date();
-    this.updatedAt = data.updatedAt ? new Date(data.updatedAt) : new Date();
+    this.createdAt = convertFirestoreTimestamp(data.createdAt);
+    this.updatedAt = convertFirestoreTimestamp(data.updatedAt);
   }
 
   static fromFirebase(data: any): ExerciseVideo {
+    if (!data) {
+      return new ExerciseVideo({});
+    }
+
     return new ExerciseVideo({
       id: data.id || '',
       exerciseId: data.exerciseId || '',
@@ -387,23 +441,62 @@ export class ExerciseVideo {
       updatedAt: data.updatedAt
     });
   }
+
+  toDictionary(): { [key: string]: any } {
+    const data: { [key: string]: any } = {
+      id: this.id,
+      exerciseId: this.exerciseId,
+      username: this.username,
+      userId: this.userId,
+      videoURL: this.videoURL,
+      fileName: this.fileName,
+      exercise: this.exercise,
+      profileImage: this.profileImage.toDictionary(),
+      visibility: this.visibility,
+      totalAccountsReached: this.totalAccountsReached,
+      totalAccountLikes: this.totalAccountLikes,
+      totalAccountBookmarked: this.totalAccountBookmarked,
+      totalAccountUsage: this.totalAccountUsage,
+      isApproved: this.isApproved,
+      createdAt: this.createdAt.getTime(),
+      updatedAt: this.updatedAt.getTime()
+    };
+
+    if (this.caption) data.caption = this.caption;
+    if (this.gifURL) data.gifURL = this.gifURL;
+    if (this.thumbnail) data.thumbnail = this.thumbnail;
+    if (this.liked !== undefined) data.liked = this.liked;
+    if (this.bookmarked !== undefined) data.bookmarked = this.bookmarked;
+
+    return data;
+  }
 }
 
-// types/ExerciseAuthor.ts
-export interface ExerciseAuthor {
+// ExerciseAuthor.ts
+export class ExerciseAuthor {
   userId: string;
   username: string;
- }
- 
- export function fromFirebase(data: any): ExerciseAuthor {
-  return {
-    userId: data.userId || '',
-    username: data.username || ''
-  };
- }
- 
- export class ExerciseAuthor {
-  static fromFirebase(data: any): ExerciseAuthor {
-    return fromFirebase(data);
+
+  constructor(data: any) {
+    this.userId = data.userId || '';
+    this.username = data.username || '';
   }
- }
+
+  static fromFirebase(data: any): ExerciseAuthor {
+    if (!data) {
+      return new ExerciseAuthor({});
+    }
+
+    return new ExerciseAuthor({
+      userId: data.userId || '',
+      username: data.username || ''
+    });
+  }
+
+  toDictionary(): { [key: string]: any } {
+    return {
+      userId: this.userId,
+      username: this.username
+    };
+  }
+}

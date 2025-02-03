@@ -3,7 +3,6 @@
   "/_error": "pages/_error.js",
   "/_document": "pages/_document.js",
   "/round/[id]": "pages/round/[id].js",
-  "/subscribe": "pages/subscribe.js",
-  "/moves": "pages/moves.js",
-  "/": "pages/index.js"
+  "/": "pages/index.js",
+  "/subscribe": "pages/subscribe.js"
 }

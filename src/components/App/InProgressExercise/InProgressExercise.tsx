@@ -78,10 +78,17 @@ const InProgressExercise: React.FC<InProgressExerciseProps> = ({
     );
   }
 
+  // At the top of the component, after validations:
+  console.log('Exercise Logs Debug:', currentExerciseLogs.map(log => ({
+    exerciseName: log.exercise?.name,
+    isCompleted: log.isCompleted,
+    logSubmitted: log.logSubmitted,
+    exercise: log.exercise
+  })));
+
   // Timer state management
-  const [timeRemaining, setTimeRemaining] = useState(() =>
-    getScreenTime(currentExercise)
-  );
+  const screenTime = getScreenTime(currentExercise);
+  const [timeRemaining, setTimeRemaining] = useState(screenTime);
   const [isPaused, setIsPaused] = useState(false);
 
   // Reset timer when exercise changes
@@ -91,23 +98,26 @@ const InProgressExercise: React.FC<InProgressExerciseProps> = ({
 
   // Countdown logic
   useEffect(() => {
+    // Only run timer if there's actually a screen time set
+    if (screenTime <= 0) return;
+  
     // If time is up, move to next exercise
     if (timeRemaining <= 0) {
       onComplete();
       return;
     }
-
+  
     // Pause check
     if (isPaused) return;
-
+  
     // Countdown timer
     const timer = setInterval(() => {
       setTimeRemaining((prev) => prev - 1);
     }, 1000);
-
+  
     // Cleanup
     return () => clearInterval(timer);
-  }, [timeRemaining, isPaused, onComplete]);
+  }, [timeRemaining, isPaused, onComplete, screenTime]);
 
   // Video URL retrieval with comprehensive error handling
   const getCurrentVideoUrl = (): string => {
@@ -156,71 +166,80 @@ const InProgressExercise: React.FC<InProgressExerciseProps> = ({
             console.error('Video error:', e);
           }}
         />
-
+  
         {/* Gradient Overlay */}
-        <div className="absolute bottom-0 left-0 right-0 h-48 bg-gradient-to-t from-black/70 to-transparent pointer-events-none"></div>
-
-        {/* Timer Overlay */}
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-black/50 rounded-full px-6 py-2 flex items-center gap-4">
-          {/* Pause/Play Toggle */}
-          <button
-            onClick={() => setIsPaused(!isPaused)}
-            className="text-white"
-          >
-            {isPaused ? '▶️' : '⏸️'}
-          </button>
-
-          {/* Timer Display */}
-          <span className="text-white font-mono text-2xl">
-            {Math.floor(timeRemaining / 60)}:
-            {(timeRemaining % 60).toString().padStart(2, '0')}
-          </span>
-        </div>
-
+        <div className="absolute bottom-0 left-0 right-0 h-48 bg-gradient-to-t from-black/70 to-transparent pointer-events-none" />
+  
+        {/* Timer Overlay - Only show if there's screen time */}
+        {screenTime > 0 && (
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-black/50 rounded-full px-6 py-2 flex items-center gap-4">
+            <button
+              onClick={() => setIsPaused(!isPaused)}
+              className="text-white"
+            >
+              {isPaused ? '▶️' : '⏸️'}
+            </button>
+            <span className="text-white font-mono text-2xl">
+              {Math.floor(timeRemaining / 60)}:
+              {(timeRemaining % 60).toString().padStart(2, '0')}
+            </span>
+          </div>
+        )}
+  
         {/* Exercise Name Section */}
         <div className="absolute bottom-24 left-0 right-0 px-4 z-10">
           <h2 className="text-white text-4xl font-bold">
             {currentExercise?.name || 'Exercise'}
           </h2>
         </div>
-
+  
         {/* Exercise Navigation Bubbles */}
         <div className="absolute bottom-8 left-0 right-0 z-10">
           <div className="px-4 overflow-x-auto">
             <div className="flex gap-2 w-fit">
-              {currentExerciseLogs.map((exerciseLog, idx) => (
-                <div
-                  key={exerciseLog.id || idx}
-                  className={`flex-shrink-0 relative w-10 h-10 rounded-full overflow-hidden border-2 
-                    ${
-                      idx === currentExerciseIndex
-                        ? 'border-[#E0FE10]'
-                        : exerciseLog.isCompleted
-                        ? 'border-zinc-600'
-                        : 'border-zinc-400'
-                    }`}
-                >
-                  {exerciseLog.isCompleted ? (
-                    <div className="bg-[#E0FE10] w-full h-full flex items-center justify-center">
-                      <span className="text-black">✓</span>
-                    </div>
-                  ) : (
-                    <img
-                      src={exerciseLog.exercise?.videos?.[0]?.gifURL || '/placeholder-exercise.gif'}
-                      alt={exerciseLog.exercise?.name || 'Exercise'}
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        console.error(`Error loading GIF for exercise ${idx}:`, e);
-                        (e.target as HTMLImageElement).src = '/placeholder-exercise.gif';
-                      }}
-                    />
-                  )}
-                </div>
-              ))}
+            {currentExerciseLogs.map((exerciseLog, idx) => (
+              <div
+                key={exerciseLog.id || idx}
+                className={`flex-shrink-0 relative w-10 h-10 rounded-full overflow-hidden border-2 
+                  ${
+                    idx === currentExerciseIndex
+                      ? 'border-[#E0FE10]'
+                      : idx < currentExerciseIndex
+                      ? 'border-zinc-600'  // completed exercises
+                      : 'border-zinc-400'  // upcoming exercises
+                  }`}
+              >
+                {exerciseLog.logSubmitted ? (
+                  <div className="bg-[#E0FE10] w-full h-full flex items-center justify-center">
+                    <span className="text-black">✓</span>
+                  </div>
+                ) : (
+                  <img
+                    src={exerciseLog.exercise?.videos?.[0]?.gifURL || '/placeholder-exercise.gif'}
+                    alt={exerciseLog.exercise?.name || 'Exercise'}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      console.error(`Error loading GIF for exercise ${idx}:`, e);
+                      (e.target as HTMLImageElement).src = '/placeholder-exercise.gif';
+                    }}
+                  />
+                )}
+              </div>
+            ))}
             </div>
           </div>
         </div>
 
+        {/* Complete Exercise Button */}
+      <div className="absolute bottom-4 left-0 right-0 flex justify-center z-20">
+        <button
+          onClick={onComplete}
+          className="bg-[#E0FE10] text-black px-8 py-3 rounded-full font-medium hover:bg-[#E0FE10]/90 transition-colors"
+        >
+          Complete Exercise
+        </button>
+      </div>
+  
         {/* Close (X) Button */}
         <button
           onClick={onClose}
