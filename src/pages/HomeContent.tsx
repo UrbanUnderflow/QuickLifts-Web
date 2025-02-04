@@ -28,6 +28,7 @@ import { setCurrentWorkout, setCurrentExerciseLogs, setWorkoutSummary } from '..
   const userId = currentUser?.id;
   const currentWorkoutSession = useSelector((state: RootState) => state.workout.currentWorkout);
   const currentExerciseLogs = useSelector((state: RootState) => state.workout.currentExerciseLogs);
+  const workoutSummary = useSelector((state: RootState) => state.workout.workoutSummary); // Add this
 
   const dispatch = useDispatch();
 
@@ -43,14 +44,10 @@ import { setCurrentWorkout, setCurrentExerciseLogs, setWorkoutSummary } from '..
             session.workout?.workoutStatus === WorkoutStatus.InProgress
           );
 
-          console.log("Queued up session count: " + queuedUpSessions)
-          console.log("In Progress session count: " + inProgressSessions)
-
 
           if (inProgressSessions.length > 0) {
             const currentSession = inProgressSessions[0];
           
-            console.log("There are " + currentSession.logs?.length + " In this session");
             const nextExerciseIndex = currentSession.logs?.findIndex(log => !log.logSubmitted) ?? 0;
 
             dispatch(setCurrentWorkout(currentSession.workout));
@@ -110,9 +107,7 @@ import { setCurrentWorkout, setCurrentExerciseLogs, setWorkoutSummary } from '..
         completedAt: new Date(),
         updatedAt: new Date()
       });
-    
-      console.log('Exercise completed:', currentExercise?.name);
-    
+        
       try {
         // Update logs in the current workout
         if (currentWorkoutSession && userId) {
@@ -194,7 +189,6 @@ import { setCurrentWorkout, setCurrentExerciseLogs, setWorkoutSummary } from '..
         // Update logs in the current workout
         if (currentWorkoutSession) {
           if (userId) {
-            console.log('Updating workout logs in the database');
             await workoutService.updateWorkoutLogs({
               userId: userId,
               workoutId: currentWorkoutSession.id,
@@ -205,12 +199,10 @@ import { setCurrentWorkout, setCurrentExerciseLogs, setWorkoutSummary } from '..
   
         // Update Redux state
         dispatch(setCurrentExerciseLogs(updatedLogs));
-        console.log('Updated currentExerciseLogs in Redux');
   
         // Move to next exercise or complete workout
         if (currentExerciseIndex < updatedLogs.length - 1) {
           setCurrentExerciseIndex(prev => prev + 1);
-          console.log('Moving to next exercise');
         } else {
           // Complete the entire workout
           await completeWorkout();
@@ -262,7 +254,6 @@ import { setCurrentWorkout, setCurrentExerciseLogs, setWorkoutSummary } from '..
   // Function to reset workout
   const handleCancelWorkout = async () => {
     if (currentWorkoutSession && userId) {
-      const workoutSummary = useSelector((state: RootState) => state.workout.workoutSummary);
       try {
         await workoutService.cancelWorkout(currentWorkoutSession, workoutSummary);
         setCurrentExerciseIndex(0);
@@ -275,15 +266,6 @@ import { setCurrentWorkout, setCurrentExerciseLogs, setWorkoutSummary } from '..
   // Render workout views based on status
   const renderWorkoutView = () => {
     if (!currentWorkoutSession) return null;
-
-    console.log('Workout Session Debug:', {
-      workoutStatus: currentWorkoutSession.workoutStatus,
-      sessionLogs: currentWorkoutSession.logs?.length,
-      currentExerciseIndex,
-      currentExerciseLogs: currentExerciseLogs?.length,
-      logsValid: Boolean(currentWorkoutSession.logs?.length),
-      indexValid: currentExerciseIndex >= 0 && currentExerciseIndex < (currentWorkoutSession.logs?.length || 0)
-    });
   
     switch (currentWorkoutSession.workoutStatus) {
       case WorkoutStatus.QueuedUp:

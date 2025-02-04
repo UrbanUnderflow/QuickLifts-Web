@@ -123,14 +123,14 @@ const Discover: React.FC = () => {
     setExercises((prev) =>
       prev.map((exercise, idx) =>
         idx === exerciseIndex
-          ? {
-              ...exercise,
-              currentVideoPosition: videoIndex,
-            }
-          : exercise
+          ? new Exercise({
+              ...exercise, // Copy all existing properties
+              currentVideoPosition: videoIndex, // Update the video position
+            })
+          : exercise // Keep existing `Exercise` instances unchanged
       )
     );
-  };
+  };  
 
   if (loading && exercises.length === 0) {
     return <div className="text-white text-center">Loading exercises...</div>;

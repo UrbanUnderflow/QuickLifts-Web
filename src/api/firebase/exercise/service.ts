@@ -9,7 +9,8 @@ import {
   } from 'firebase/firestore';
 import { db } from '../config';
 import { Exercise } from './types';
-import { ExerciseVideo } from '../../firebase/exercise/types';
+import { ExerciseVideo, ExerciseAuthor } from '../../firebase/exercise/types';
+import { convertFirestoreTimestamp } from '../../../utils/formatDate';
 
 class ExerciseService {
     private _allExercises: Exercise[] = [];
@@ -29,44 +30,27 @@ class ExerciseService {
     
         // Fetch all videos
         const videoSnapshot = await getDocs(collection(db, 'exerciseVideos'));
-        const exerciseVideos: ExerciseVideo[] = videoSnapshot.docs.map((doc) => ({
-          id: doc.id,
-          exerciseId: doc.data().exerciseId || '',
-          username: doc.data().username || '',
-          userId: doc.data().userId || '',
-          videoURL: doc.data().videoURL || '',
-          fileName: doc.data().fileName || '',
-          exercise: doc.data().exercise || '',
-          profileImage: doc.data().profileImage || { profileImageURL: '' },
-          caption: doc.data().caption || '',
-          gifURL: doc.data().gifURL || '',
-          thumbnail: doc.data().thumbnail || '',
-          visibility: doc.data().visibility || 'open',
-          totalAccountsReached: doc.data().totalAccountsReached || 0,
-          totalAccountLikes: doc.data().totalAccountLikes || 0,
-          totalAccountBookmarked: doc.data().totalAccountBookmarked || 0,
-          totalAccountUsage: doc.data().totalAccountUsage || 0,
-          isApproved: doc.data().isApproved || false,
-          liked: doc.data().liked || false,
-          bookmarked: doc.data().bookmarked || false,
-          createdAt: doc.data().createdAt ? new Date(doc.data().createdAt.seconds * 1000) : new Date(),
-          updatedAt: doc.data().updatedAt ? new Date(doc.data().updatedAt.seconds * 1000) : new Date(),
-        }));
+        const exerciseVideos: ExerciseVideo[] = videoSnapshot.docs.map((doc) =>
+          ExerciseVideo.fromFirebase({
+            id: doc.id,
+            ...doc.data(),
+          })
+        );
     
         // Map videos to their corresponding exercises by name
         const mappedExercises = exercises.map((exercise) => {
-          const videosForExercise = exerciseVideos.filter((video) => 
-            video.exercise.toLowerCase() === exercise.name.toLowerCase()
-          );
-    
-          return {
-            ...exercise,
-            videos: videosForExercise,
-          };
+          const videosForExercise = exerciseVideos
+            .filter((video) => video.exercise.toLowerCase() === exercise.name.toLowerCase())
+            .map((video) => ExerciseVideo.fromFirebase(video)); // Ensure proper ExerciseVideo instances
+        
+          return new Exercise({
+            ...exercise, // Keep existing properties
+            videos: videosForExercise, // Ensure videos are instances of ExerciseVideo
+          });
         });
     
         // Filter out exercises without videos
-        this._allExercises = mappedExercises.filter((exercise) => exercise.videos.length > 0);
+        this._allExercises = mappedExercises.filter((exercise: Exercise) => exercise.videos.length > 0);
     
         // console.log(`Fetched ${this._allExercises.length} exercises with videos.`);
         
@@ -95,42 +79,41 @@ class ExerciseService {
     
         // Fetch all videos
         const videoSnapshot = await getDocs(collection(db, 'exerciseVideos'));
-        const exerciseVideos: ExerciseVideo[] = videoSnapshot.docs.map((doc) => ({
-          id: doc.id,
-          exerciseId: doc.data().exerciseId || '',
-          username: doc.data().username || '',
-          userId: doc.data().userId || '',
-          videoURL: doc.data().videoURL || '',
-          fileName: doc.data().fileName || '',
-          exercise: doc.data().exercise || '',
-          profileImage: doc.data().profileImage || { profileImageURL: '' },
-          caption: doc.data().caption || '',
-          gifURL: doc.data().gifURL || '',
-          thumbnail: doc.data().thumbnail || '',
-          visibility: doc.data().visibility || 'open',
-          totalAccountsReached: doc.data().totalAccountsReached || 0,
-          totalAccountLikes: doc.data().totalAccountLikes || 0,
-          totalAccountBookmarked: doc.data().totalAccountBookmarked || 0,
-          totalAccountUsage: doc.data().totalAccountUsage || 0,
-          isApproved: doc.data().isApproved || false,
-          liked: doc.data().liked || false,
-          bookmarked: doc.data().bookmarked || false,
-          createdAt: doc.data().createdAt ? new Date(doc.data().createdAt.seconds * 1000) : new Date(),
-          updatedAt: doc.data().updatedAt ? new Date(doc.data().updatedAt.seconds * 1000) : new Date(),
-        }));
+        const exerciseVideos: ExerciseVideo[] = videoSnapshot.docs.map((doc) =>
+          ExerciseVideo.fromFirebase({
+            id: doc.id,
+            ...doc.data(),
+          })
+        );
     
         // Map videos to exercises and filter for those with GIFs
-        const mappedExercises = exercises
-          .map(exercise => {
-            const videosForExercise = exerciseVideos.filter(
-              video => video.exercise === exercise.name && video.gifURL
-            );
-            return {
-              ...exercise,
-              videos: videosForExercise,
-            };
-          })
-          .filter(exercise => exercise.videos.length > 0);
+        const mappedExercises = exercises.map((exerciseData) => {
+          // Ensure that each video is properly instantiated as an `ExerciseVideo`
+          const videosForExercise = (exerciseVideos
+            .filter((video) => video.exercise.toLowerCase() === exerciseData.name.toLowerCase())
+            .map((video) => ExerciseVideo.fromFirebase(video))) as ExerciseVideo[];
+        
+          return new Exercise({
+            id: exerciseData.id,
+            name: exerciseData.name,
+            description: exerciseData.description,
+            category: exerciseData.category || {}, // Ensure proper category handling
+            primaryBodyParts: exerciseData.primaryBodyParts || [],
+            secondaryBodyParts: exerciseData.secondaryBodyParts || [],
+            tags: exerciseData.tags || [],
+            videos: videosForExercise, // Attach properly mapped videos
+            steps: exerciseData.steps || [],
+            visibility: exerciseData.visibility || 'live',
+            currentVideoPosition: exerciseData.currentVideoPosition || 0,
+            sets: exerciseData.sets || 0,
+            reps: exerciseData.reps || '',
+            weight: exerciseData.weight || 0,
+            author: ExerciseAuthor.fromFirebase(exerciseData.author || {}),
+            createdAt: convertFirestoreTimestamp(exerciseData.createdAt),
+            updatedAt: convertFirestoreTimestamp(exerciseData.updatedAt),
+          });
+        });
+        
     
         // Shuffle and limit results
         const shuffledExercises = mappedExercises
@@ -168,50 +151,35 @@ class ExerciseService {
     
           // Fetch exercise videos separately
           const videoSnapshot = await getDocs(collection(db, 'exerciseVideos'));
-          const exerciseVideos: ExerciseVideo[] = videoSnapshot.docs.map((doc) => ({
-            id: doc.id,
-            exerciseId: doc.data().exerciseId || '',
-            username: doc.data().username || '',
-            userId: doc.data().userId || '',
-            videoURL: doc.data().videoURL || '',
-            fileName: doc.data().fileName || '',
-            exercise: doc.data().exercise || '',
-            profileImage: doc.data().profileImage || { profileImageURL: '' },
-            caption: doc.data().caption || '',
-            gifURL: doc.data().gifURL || '',
-            thumbnail: doc.data().thumbnail || '',
-            visibility: doc.data().visibility || 'open',
-            totalAccountsReached: doc.data().totalAccountsReached || 0,
-            totalAccountLikes: doc.data().totalAccountLikes || 0,
-            totalAccountBookmarked: doc.data().totalAccountBookmarked || 0,
-            totalAccountUsage: doc.data().totalAccountUsage || 0,
-            isApproved: doc.data().isApproved || false,
-            liked: doc.data().liked || false,
-            bookmarked: doc.data().bookmarked || false,
-            createdAt: doc.data().createdAt ? new Date(doc.data().createdAt.seconds * 1000) : new Date(),
-            updatedAt: doc.data().updatedAt ? new Date(doc.data().updatedAt.seconds * 1000) : new Date(),
-          }));
-    
+          const exerciseVideos: ExerciseVideo[] = videoSnapshot.docs.map((doc) =>
+            ExerciseVideo.fromFirebase({
+              id: doc.id,
+              ...doc.data(),
+            })
+          );
+          
           const exercises: Exercise[] = exerciseSnapshot.docs.map((doc) =>
             Exercise.fromFirebase({ id: doc.id, ...doc.data() })
           );
-    
-          // Map videos to exercises
-          const mappedExercises = exercises.map((exercise) => {
-            const videosForExercise = exerciseVideos.filter((video) => video.exerciseId === exercise.id);
-            return {
-              ...exercise,
-              videos: videosForExercise,
-            };
+          
+          // Map videos to exercises and ensure correct instantiation
+          const mappedExercises: Exercise[] = exercises.map((exerciseData) => {
+            const videosForExercise = exerciseVideos.filter((video) => video.exerciseId === exerciseData.id);
+          
+            return new Exercise({
+              ...exerciseData, // Copy existing properties
+              videos: videosForExercise, // Assign filtered videos
+            });
           });
-    
+          
           // Filter exercises with videos
-          const filteredExercises = mappedExercises.filter((exercise) => exercise.videos.length > 0);
-    
+          const filteredExercises: Exercise[] = mappedExercises.filter((exercise) => exercise.videos.length > 0);
+          
           // Update the last visible document for pagination
-          const lastVisible = exerciseSnapshot.docs[exerciseSnapshot.docs.length - 1];
-    
+          const lastVisible = exerciseSnapshot.docs.length > 0 ? exerciseSnapshot.docs[exerciseSnapshot.docs.length - 1] : null;
+          
           return { exercises: filteredExercises, lastVisible };
+          
         } catch (error) {
           console.error('Error fetching paginated exercises:', error);
           throw error;

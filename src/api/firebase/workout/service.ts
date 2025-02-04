@@ -28,7 +28,7 @@ import { convertFirestoreTimestamp } from '../../../utils/formatDate';
 import { Challenge, ChallengeStatus, UserChallenge } from '../../../api/firebase/workout/types';
 
 import { store } from '../../../redux/store';
-import { setCurrentWorkout, setCurrentExerciseLogs, resetWorkoutState } from '../../../redux/workoutSlice';
+import { setCurrentWorkout, setCurrentExerciseLogs, resetWorkoutState, setWorkoutSummary } from '../../../redux/workoutSlice';
 
 
 interface FirestoreError {
@@ -56,6 +56,15 @@ class WorkoutService {
   set currentWorkoutLogs(logs: ExerciseLog[]) {
     store.dispatch(setCurrentExerciseLogs(logs));
   }
+
+  get currentWorkoutSummary(): WorkoutSummary | null {
+    return store.getState().workout.workoutSummary;
+  }
+
+  set currentWorkoutSummary(workoutSummary: WorkoutSummary) {
+    store.dispatch(setWorkoutSummary(workoutSummary));
+  }
+
 
   /**
    * Fetch the user's current workout (either QueuedUp or InProgress).
@@ -665,7 +674,11 @@ async getCollectionById(id: string): Promise<SweatlistCollection> {
 
   // The cancelWorkout method – it deletes the workout session and summary (if any),
 // cleans up the local state, and logs the cancellation.
-async cancelWorkout(workout: Workout, workoutSummary: WorkoutSummary | null): Promise<void> {
+async cancelWorkout(workout: Workout | null, workoutSummary: WorkoutSummary | null): Promise<void> {
+  if (!userService.currentUser?.id || !workout) {
+    throw new Error("User not authenticated.");
+  }
+
   try {    
       await this.deleteWorkoutSession(workout.id);
       if (workoutSummary) {
@@ -681,8 +694,8 @@ async cancelWorkout(workout: Workout, workoutSummary: WorkoutSummary | null): Pr
 }
   
 // Deletes a workout session document and all its subcollection "logs"
-async deleteWorkoutSession(workoutId: string): Promise<void> {
-  if (!userService.currentUser?.id) {
+async deleteWorkoutSession(workoutId: string | null): Promise<void> {
+  if (!userService.currentUser?.id || !workoutId) {
     throw new Error("User not authenticated.");
   }
   const userId = userService.currentUser.id;
