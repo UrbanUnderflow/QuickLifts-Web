@@ -41,7 +41,7 @@ const WorkoutReadyView: React.FC<WorkoutReadyViewProps> = ({
     }
 
     try {
-      await workoutService.cancelWorkoutSession(userId, currentWorkoutSession.id);
+      await workoutService.cancelWorkout(currentWorkoutSession, workoutService.currentWorkoutSummary);
 
       // 3. Clear the current workout session and logs from the Redux store
       dispatch(setCurrentWorkout(null));

@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import { ExerciseLog, Exercise } from '../../../api/firebase/exercise/types';
+import Modal from '../../../components/Modal';
+import { workoutService } from '../../../api/firebase/workout';
 
 interface InProgressExerciseProps {
   exercises: ExerciseLog[];
@@ -80,18 +82,11 @@ const InProgressExercise: React.FC<InProgressExerciseProps> = ({
     );
   }
 
-  // At the top of the component, after validations:
-  console.log('Exercise Logs Debug:', currentExerciseLogs.map(log => ({
-    exerciseName: log.exercise?.name,
-    isCompleted: log.isCompleted,
-    logSubmitted: log.logSubmitted,
-    exercise: log.exercise
-  })));
-
   // Timer state management
   const screenTime = getScreenTime(currentExercise);
   const [timeRemaining, setTimeRemaining] = useState(screenTime);
   const [isPaused, setIsPaused] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Reset timer when exercise changes
   useEffect(() => {
@@ -123,12 +118,6 @@ const InProgressExercise: React.FC<InProgressExerciseProps> = ({
 
   // Video URL retrieval with comprehensive error handling
   const getCurrentVideoUrl = (): string => {
-    // Detailed logging of exercise and video information
-    console.log('Current Exercise Details:', {
-      name: currentExercise?.name,
-      videos: currentExercise?.videos,
-      currentVideoPosition: currentExercise?.currentVideoPosition
-    });
 
     // Comprehensive video retrieval
     const videos = currentExercise?.videos || [];
@@ -243,9 +232,8 @@ const InProgressExercise: React.FC<InProgressExerciseProps> = ({
           </div>
    
           <button
-            onClick={onClose}
-            className="absolute top-4 right-4 w-10 h-10 rounded-full bg-black/50 flex items-center justify-center"
-          >
+            onClick={() => setIsModalOpen(true)}  // Changed from onClose
+            className="absolute top-4 right-4 w-10 h-10 rounded-full bg-black/50 flex items-center justify-center">
             <X className="text-white" size={20} />
           </button>
         </div>
@@ -353,6 +341,21 @@ const InProgressExercise: React.FC<InProgressExerciseProps> = ({
           </button>
         </div>
       </div>
+
+      <Modal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        title="Cancel Workout"
+        message="Are you sure you want to cancel this workout? All progress will be lost."
+        primaryButtonText="Yes, Cancel Workout"
+        secondaryButtonText="No, Continue"
+        onPrimaryAction={() => {
+          onClose();
+          setIsModalOpen(false);
+        }}
+        onSecondaryAction={() => setIsModalOpen(false)}
+        theme="dark"
+      />
     </div>
    );
 };
