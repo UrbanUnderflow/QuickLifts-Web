@@ -16,7 +16,7 @@ import { Workout, WorkoutStatus, WorkoutSummary, RepsAndWeightLog } from '../api
 import { workoutService } from '../api/firebase/workout/service';
 import UserMenu from '../components/UserMenu'; 
 
-import { setCurrentWorkout, setCurrentExerciseLogs } from '../redux/workoutSlice';
+import { setCurrentWorkout, setCurrentExerciseLogs, setWorkoutSummary } from '../redux/workoutSlice';
 
 
   const HomeContent = () => {
@@ -51,7 +51,7 @@ import { setCurrentWorkout, setCurrentExerciseLogs } from '../redux/workoutSlice
             const currentSession = inProgressSessions[0];
           
             console.log("There are " + currentSession.logs?.length + " In this session");
-            const nextExerciseIndex = currentSession.logs?.findIndex(log => !log.isCompleted) ?? 0;
+            const nextExerciseIndex = currentSession.logs?.findIndex(log => !log.logSubmitted) ?? 0;
 
             dispatch(setCurrentWorkout(currentSession.workout));
             dispatch(setCurrentExerciseLogs(currentSession.logs || []));
@@ -123,27 +123,32 @@ import { setCurrentWorkout, setCurrentExerciseLogs } from '../redux/workoutSlice
             logs: updatedLogs
           });
     
-          // Update workout summary
-          const workoutSummary = new WorkoutSummary({
-            id: currentWorkoutSession.id,
-            workoutId: currentWorkoutSession.id,
-            userId,
-            exercises: updatedLogs,
-            bodyParts: currentWorkoutSession.fetchPrimaryBodyParts(),
-            secondaryBodyParts: currentWorkoutSession.fetchSecondaryBodyParts(),
-            workoutTitle: currentWorkoutSession.title,
-            exercisesCompleted: updatedLogs.filter(log => log.logSubmitted),
-            isCompleted: false,
-            startTime: currentWorkoutSession.startTime || new Date(),
-            createdAt: currentWorkoutSession.createdAt || new Date(),
-            updatedAt: new Date()
+          // Update workoutSummary creation
+          const updatedSummary = new WorkoutSummary({
+              id: currentWorkoutSession.id,
+              workoutId: currentWorkoutSession.id,
+              userId,
+              exercises: updatedLogs.map(log => log.toDictionary()),
+              bodyParts: currentWorkoutSession.fetchPrimaryBodyParts(),
+              secondaryBodyParts: currentWorkoutSession.fetchSecondaryBodyParts(),
+              workoutTitle: currentWorkoutSession.title,
+              exercisesCompleted: updatedLogs
+                .filter(log => log.logSubmitted)
+                .map(log => log.toDictionary()),
+              isCompleted: false,
+              startTime: currentWorkoutSession.startTime || new Date(),
+              createdAt: currentWorkoutSession.createdAt || new Date(),
+              updatedAt: new Date()
           });
-    
-          await workoutService.updateWorkoutSummary({
-            userId,
-            workoutId: currentWorkoutSession.id,
-            summary: workoutSummary
-          });
+        
+        dispatch(setWorkoutSummary(updatedSummary));
+
+        await workoutService.updateWorkoutLogs({
+          userId,
+          workoutId: currentWorkoutSession.id,
+          logs: updatedLogs
+        });
+
         }
     
         // Handle bodyweight exercises
@@ -155,12 +160,13 @@ import { setCurrentWorkout, setCurrentExerciseLogs } from '../redux/workoutSlice
     
         // Update Redux state
         dispatch(setCurrentExerciseLogs(updatedLogs));
-    
+
         // Move to the next exercise
-        if (currentExerciseIndex < updatedLogs.length - 1) {
-          setCurrentExerciseIndex(prev => prev + 1);
+        const nextIndex = updatedLogs.findIndex(log => !log.logSubmitted);
+        if (nextIndex !== -1) {
+          setCurrentExerciseIndex(nextIndex);
         } else {
-          // Complete the entire workout
+          // If no incomplete exercise is found, complete the entire workout.
           await completeWorkout();
         }
       } catch (error) {
@@ -254,10 +260,16 @@ import { setCurrentWorkout, setCurrentExerciseLogs } from '../redux/workoutSlice
   };
 
   // Function to reset workout
-  const resetWorkout = () => {
-    dispatch(setCurrentWorkout(null));
-    dispatch(setCurrentExerciseLogs([]));
-    setCurrentExerciseIndex(0);
+  const handleCancelWorkout = async () => {
+    if (currentWorkoutSession && userId) {
+      const workoutSummary = useSelector((state: RootState) => state.workout.workoutSummary);
+      try {
+        await workoutService.cancelWorkout(currentWorkoutSession, workoutSummary);
+        setCurrentExerciseIndex(0);
+      } catch (error) {
+        console.error('Error canceling workout:', error);
+      }
+    }
   };
 
   // Render workout views based on status
@@ -278,7 +290,7 @@ import { setCurrentWorkout, setCurrentExerciseLogs } from '../redux/workoutSlice
         return (
           <WorkoutReadyView 
             workout={currentWorkoutSession}
-            onClose={resetWorkout}
+            onClose={handleCancelWorkout}
             onStartWorkout={beginWorkout}
           />
         );
@@ -289,7 +301,8 @@ import { setCurrentWorkout, setCurrentExerciseLogs } from '../redux/workoutSlice
             currentExerciseLogs={currentExerciseLogs}
             currentExerciseIndex={currentExerciseIndex}
             onComplete={completeExercise}
-            onClose={resetWorkout}
+            onClose={handleCancelWorkout}
+            onExerciseSelect={setCurrentExerciseIndex}
           />
         );
       default:

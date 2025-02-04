@@ -4,5 +4,5 @@
   "/_document": "pages/_document.js",
   "/round/[id]": "pages/round/[id].js",
   "/": "pages/index.js",
-  "/subscribe": "pages/subscribe.js"
+  "/review/jan25": "pages/review/jan25.js"
 }

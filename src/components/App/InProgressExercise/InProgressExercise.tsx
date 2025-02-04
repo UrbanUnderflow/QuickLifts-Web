@@ -8,6 +8,7 @@ interface InProgressExerciseProps {
   currentExerciseIndex: number;
   onComplete: () => void; // callback from parent to go to next exercise
   onClose: () => void;    // callback to close the workout
+  onExerciseSelect: (index: number) => void; // Add this
 }
 
 const getScreenTime = (exercise: Exercise | undefined): number => {
@@ -20,6 +21,7 @@ const InProgressExercise: React.FC<InProgressExerciseProps> = ({
   currentExerciseIndex,
   onComplete,
   onClose,
+  onExerciseSelect,
 }) => {
   // Comprehensive initial validation
   if (!exercises || exercises.length === 0) {
@@ -56,7 +58,7 @@ const InProgressExercise: React.FC<InProgressExerciseProps> = ({
   }
 
   // Current exercise log and exercise
-  const currentExerciseLog = exercises[currentExerciseIndex];
+  const currentExerciseLog = currentExerciseLogs[currentExerciseIndex];
   const currentExercise = currentExerciseLog?.exercise;
 
   // Validate current exercise
@@ -153,103 +155,206 @@ const InProgressExercise: React.FC<InProgressExerciseProps> = ({
 
   return (
     <div className="fixed inset-0 bg-zinc-900 flex flex-col">
-      {/* Video Section */}
-      <div className="relative flex-1">
-        <video
-          src={getCurrentVideoUrl()}
-          className="absolute inset-0 w-full h-full object-cover"
-          autoPlay
-          loop
-          muted
-          playsInline
-          onError={(e) => {
-            console.error('Video error:', e);
-          }}
-        />
-  
-        {/* Gradient Overlay */}
-        <div className="absolute bottom-0 left-0 right-0 h-48 bg-gradient-to-t from-black/70 to-transparent pointer-events-none" />
-  
-        {/* Timer Overlay - Only show if there's screen time */}
-        {screenTime > 0 && (
-          <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-black/50 rounded-full px-6 py-2 flex items-center gap-4">
-            <button
-              onClick={() => setIsPaused(!isPaused)}
-              className="text-white"
-            >
-              {isPaused ? '▶️' : '⏸️'}
-            </button>
-            <span className="text-white font-mono text-2xl">
-              {Math.floor(timeRemaining / 60)}:
-              {(timeRemaining % 60).toString().padStart(2, '0')}
-            </span>
-          </div>
-        )}
-  
-        {/* Exercise Name Section */}
-        <div className="absolute bottom-24 left-0 right-0 px-4 z-10">
-          <h2 className="text-white text-4xl font-bold">
-            {currentExercise?.name || 'Exercise'}
-          </h2>
-        </div>
-  
-        {/* Exercise Navigation Bubbles */}
-        <div className="absolute bottom-8 left-0 right-0 z-10">
-          <div className="px-4 overflow-x-auto">
-            <div className="flex gap-2 w-fit">
-            {currentExerciseLogs.map((exerciseLog, idx) => (
-              <div
-                key={exerciseLog.id || idx}
-                className={`flex-shrink-0 relative w-10 h-10 rounded-full overflow-hidden border-2 
-                  ${
-                    idx === currentExerciseIndex
-                      ? 'border-[#E0FE10]'
-                      : idx < currentExerciseIndex
-                      ? 'border-zinc-600'  // completed exercises
-                      : 'border-zinc-400'  // upcoming exercises
-                  }`}
-              >
-                {exerciseLog.logSubmitted ? (
-                  <div className="bg-[#E0FE10] w-full h-full flex items-center justify-center">
-                    <span className="text-black">✓</span>
+      <div className="relative flex h-full">
+        <div className="w-full lg:w-2/3 relative bg-black">
+          <div className="relative w-full h-full flex items-center justify-center">
+            <div className="w-[700px] h-[900px] relative rounded-2xl overflow-hidden">
+              <video
+                src={getCurrentVideoUrl()}
+                className="absolute inset-0 w-full h-full object-cover"
+                autoPlay
+                loop
+                muted
+                playsInline
+                onError={(e) => console.error('Video error:', e)}
+              />
+   
+              {/* Desktop Controls */}
+              <div className="hidden lg:block absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent">
+                <div className="p-8">
+                  <h2 className="text-white text-3xl font-bold mb-4">
+                    {currentExercise?.name || 'Exercise'}
+                  </h2>
+   
+                  <div className="flex items-center justify-between">
+                    <div className="text-center">
+                      <span className="text-[#E0FE10] text-lg font-bold">
+                        {Math.floor((screenTime - timeRemaining) / 60)}m
+                      </span>
+                      <p className="text-zinc-400 text-sm">elapsed</p>
+                    </div>
+   
+                    {screenTime > 0 && (
+                      <button 
+                        onClick={() => setIsPaused(!isPaused)}
+                        className="bg-black/30 hover:bg-black/50 p-4 rounded-xl border border-[#E0FE10]/20 backdrop-blur-sm transition-all duration-200 group"
+                      >
+                        {isPaused ? (
+                          <svg className="w-6 h-6 text-[#E0FE10] group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        ) : (
+                          <svg className="w-6 h-6 text-[#E0FE10] group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        )}
+                      </button>
+                    )}
+   
+                    <div className="text-center">
+                      <span className="text-[#E0FE10] text-lg font-bold">
+                        {currentExerciseIndex + 1}/{currentExerciseLogs.length}
+                      </span>
+                      <p className="text-zinc-400 text-sm">exercises</p>
+                    </div>
                   </div>
-                ) : (
-                  <img
-                    src={exerciseLog.exercise?.videos?.[0]?.gifURL || '/placeholder-exercise.gif'}
-                    alt={exerciseLog.exercise?.name || 'Exercise'}
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      console.error(`Error loading GIF for exercise ${idx}:`, e);
-                      (e.target as HTMLImageElement).src = '/placeholder-exercise.gif';
-                    }}
-                  />
-                )}
+                </div>
               </div>
-            ))}
+   
+              {/* Mobile Controls */}
+              <div className="lg:hidden absolute top-0 left-0 right-0 bg-gradient-to-b from-black/90 to-transparent">
+                <div className="p-4 flex items-center justify-between">
+                  <div className="text-center">
+                    <span className="text-[#E0FE10] text-lg font-bold">
+                      {Math.floor((screenTime - timeRemaining) / 60)}m
+                    </span>
+                    <p className="text-zinc-400 text-xs">elapsed</p>
+                  </div>
+   
+                  {screenTime > 0 && (
+                    <button 
+                      onClick={() => setIsPaused(!isPaused)}
+                      className="bg-black/30 hover:bg-black/50 p-3 rounded-xl border border-[#E0FE10]/20 backdrop-blur-sm"
+                    >
+                      {/* Same SVGs as desktop */}
+                    </button>
+                  )}
+   
+                  <div className="text-center">
+                    <span className="text-[#E0FE10] text-lg font-bold">
+                      {currentExerciseIndex + 1}/{currentExerciseLogs.length}
+                    </span>
+                    <p className="text-zinc-400 text-xs">exercises</p>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
+   
+          <button
+            onClick={onClose}
+            className="absolute top-4 right-4 w-10 h-10 rounded-full bg-black/50 flex items-center justify-center"
+          >
+            <X className="text-white" size={20} />
+          </button>
         </div>
-
-        {/* Complete Exercise Button */}
-      <div className="absolute bottom-4 left-0 right-0 flex justify-center z-20">
-        <button
-          onClick={onComplete}
-          className="bg-[#E0FE10] text-black px-8 py-3 rounded-full font-medium hover:bg-[#E0FE10]/90 transition-colors"
-        >
-          Complete Exercise
-        </button>
-      </div>
-  
-        {/* Close (X) Button */}
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 w-10 h-10 rounded-full bg-black/50 flex items-center justify-center"
-        >
-          <X className="text-white" size={20} />
-        </button>
+   
+        {/* Right side panel */}
+        <div className="hidden lg:flex lg:w-1/3 p-6">
+          <div className="w-full bg-black/50 rounded-2xl p-6 flex flex-col">
+            <h2 className="text-white text-2xl font-bold mb-6">Workout Progress</h2>
+            <div className="flex-1 overflow-y-auto pr-2">
+              {currentExerciseLogs.map((exerciseLog, idx) => (
+                <div 
+                  key={exerciseLog.id || idx}
+                  onClick={() => onExerciseSelect(idx)}
+                  className={`mb-4 p-4 rounded-lg cursor-pointer hover:bg-zinc-700/50 transition-colors ${
+                    idx === currentExerciseIndex 
+                      ? 'bg-[#E0FE10]/10 border border-[#E0FE10]' 
+                      : 'bg-zinc-800/50'
+                  }`}
+                >
+                  <div className="flex items-center gap-4">
+                    <div className={`w-12 h-12 rounded-full overflow-hidden border-2 
+                      ${idx === currentExerciseIndex 
+                        ? 'border-[#E0FE10]' 
+                        : idx < currentExerciseIndex 
+                        ? 'border-zinc-600' 
+                        : 'border-zinc-400'
+                      }`}
+                    >
+                      {exerciseLog.logSubmitted ? (
+                        <div className="bg-[#E0FE10] w-full h-full flex items-center justify-center">
+                          <span className="text-black">✓</span>
+                        </div>
+                      ) : (
+                        <img
+                          src={exerciseLog.exercise?.videos?.[0]?.gifURL || '/placeholder-exercise.gif'}
+                          alt={exerciseLog.exercise?.name || 'Exercise'}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = '/placeholder-exercise.gif';
+                          }}
+                        />
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-white font-medium">{exerciseLog.exercise?.name}</p>
+                      <p className="text-zinc-400 text-sm">
+                        {exerciseLog.logSubmitted ? 'Completed' : 'Pending'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={onComplete}
+              className="w-full bg-[#E0FE10] text-black px-8 py-3 rounded-full font-medium hover:bg-[#E0FE10]/90 transition-colors mt-4"
+            >
+              Complete Move
+            </button>
+          </div>
+        </div>
+   
+        {/* Mobile bubbles and button */}
+        <div className="lg:hidden absolute bottom-0 left-0 right-0 flex flex-col items-center py-10 space-y-4 z-20">
+          <h2 className="text-white text-2xl font-bold mb-2">
+            {currentExercise?.name || ''}
+          </h2>
+          <div className="px-4 overflow-x-auto">
+            <div className="flex gap-2 w-fit">
+              {currentExerciseLogs.map((exerciseLog, idx) => (
+                <div
+                  key={exerciseLog.id || idx}
+                  onClick={() => onExerciseSelect(idx)}
+                  className={`flex-shrink-0 relative w-10 h-10 rounded-full overflow-hidden border-2 
+                    ${idx === currentExerciseIndex 
+                      ? 'border-[#E0FE10]'
+                      : idx < currentExerciseIndex
+                      ? 'border-zinc-600'
+                      : 'border-zinc-400'
+                    }`}
+                >
+                  {exerciseLog.logSubmitted ? (
+                    <div className="bg-[#E0FE10] w-full h-full flex items-center justify-center">
+                      <span className="text-black">✓</span>
+                    </div>
+                  ) : (
+                    <img
+                      src={exerciseLog.exercise?.videos?.[0]?.gifURL || '/placeholder-exercise.gif'}
+                      alt={exerciseLog.exercise?.name || 'Exercise'}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = '/placeholder-exercise.gif';
+                      }}
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+          <button
+            onClick={onComplete}
+            className="bg-[#E0FE10] text-black px-8 py-3 rounded-full font-medium hover:bg-[#E0FE10]/90 transition-colors"
+          >
+            Complete Move
+          </button>
+        </div>
       </div>
     </div>
-  );
+   );
 };
 
 export default InProgressExercise;

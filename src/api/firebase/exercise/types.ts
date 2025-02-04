@@ -76,7 +76,7 @@ export class ExerciseLog {
   logSubmitted: boolean;
   logIsEditing: boolean;
   isCompleted: boolean;
-  order?: number;
+  order?: number | null;
   completedAt: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -95,7 +95,7 @@ export class ExerciseLog {
     this.logSubmitted = data.logSubmitted || false;
     this.logIsEditing = data.logIsEditing || false;
     this.isCompleted = data.isCompleted || false;
-    this.order = data.order;
+    this.order = data.order || null;
     this.completedAt = convertFirestoreTimestamp(data.completedAt);
     this.createdAt = convertFirestoreTimestamp(data.createdAt);
     this.updatedAt = convertFirestoreTimestamp(data.updatedAt);
@@ -121,7 +121,7 @@ export class ExerciseLog {
       logSubmitted: data.logSubmitted || false,
       logIsEditing: data.logIsEditing || false,
       isCompleted: data.isCompleted || false,
-      order: data.order,
+      order: data.order || null,
       completedAt: data.completedAt,
       createdAt: data.createdAt,
       updatedAt: data.updatedAt
@@ -144,19 +144,19 @@ export class ExerciseLog {
       isCompleted: this.isCompleted,
       createdAt: this.createdAt.getTime(),
       updatedAt: this.updatedAt.getTime(),
-      completedAt: this.completedAt.getTime()
-    };
-
-    if (this.recommendedWeight !== undefined) {
-      data.recommendedWeight = this.recommendedWeight;
-    }
-
-    if (this.order !== undefined) {
-      data.order = this.order;
+      completedAt: this.completedAt.getTime(),
+      recommendedWeight: this.recommendedWeight,
+    };  
+   
+    if (this.order != null) {
+        data["order"] = this.order;
     }
 
     return data;
+
   }
+  
+  
 }
 
 export interface WeightTrainingExercise {
@@ -164,7 +164,7 @@ export interface WeightTrainingExercise {
   sets: number;
   weight: number;
   screenTime: number;
-  selectedVideo?: ExerciseVideo;
+  selectedVideo?: ExerciseVideo | null;
 }
 
 export interface CardioExercise {
@@ -172,7 +172,7 @@ export interface CardioExercise {
   bpm: number;
   calories: number;
   screenTime: number;
-  selectedVideo?: ExerciseVideo;
+  selectedVideo?: ExerciseVideo | null;
 }
 
 export type ExerciseCategory = 
@@ -198,7 +198,7 @@ export const ExerciseCategory = {
           sets: 3,
           weight: 0.0, 
           screenTime: 0,
-          selectedVideo: undefined
+          selectedVideo: null
         });
       case 'cardio':
         return ExerciseCategory.cardio({
@@ -206,7 +206,7 @@ export const ExerciseCategory = {
           bpm: 125,
           calories: 0,
           screenTime: 0,
-          selectedVideo: undefined
+          selectedVideo: null
         });
       default:
         return null;
@@ -278,9 +278,9 @@ export class Exercise {
           sets: categoryData.sets || 3,
           weight: categoryData.weight || 0,
           screenTime: categoryData.screenTime || 0,
-          selectedVideo: categoryData.selectedVideo 
+          selectedVideo: categoryData.selectedVideo
             ? ExerciseVideo.fromFirebase(categoryData.selectedVideo)
-            : undefined
+            : null
         });
         break;
 
@@ -290,7 +290,7 @@ export class Exercise {
           bpm: categoryData.bpm || 0,
           calories: categoryData.calories || 0,
           screenTime: categoryData.screenTime || 0,
-          selectedVideo: categoryData.selectedVideo 
+          selectedVideo: categoryData.selectedVideo
             ? ExerciseVideo.fromFirebase(categoryData.selectedVideo)
             : undefined
         });
@@ -321,7 +321,7 @@ export class Exercise {
       tags: data.tags || [],
       videos: data.videos || [],
       steps: data.steps || [],
-      visibility: data.visibility || [],
+      visibility: data.visibility || 'live',
       currentVideoPosition: data.currentVideoPosition || 0,
       sets: data.sets || 0,
       reps: data.reps || '',
@@ -333,19 +333,25 @@ export class Exercise {
   }
 
   toDictionary(): { [key: string]: any } {
+    // Create the category object:
+    const categoryData = {
+      id: this.category.type,
+      ...this.category.details,
+      // Only include selectedVideo if it is defined.
+      ...(this.category.details?.selectedVideo
+        ? { selectedVideo: this.category.details.selectedVideo.toDictionary() }
+        : {})
+    };
+
     const data: { [key: string]: any } = {
       id: this.id,
       name: this.name,
       description: this.description,
-      category: {
-        id: this.category.type,
-        ...this.category.details,
-        selectedVideo: this.category.details?.selectedVideo?.toDictionary()
-      },
+      category: categoryData,
       primaryBodyParts: this.primaryBodyParts,
       secondaryBodyParts: this.secondaryBodyParts,
       tags: this.tags,
-      videos: this.videos.map(video => video.toDictionary()),
+      videos: this.videos.map((video) => video.toDictionary()),
       steps: this.steps,
       visibility: this.visibility,
       currentVideoPosition: this.currentVideoPosition,
