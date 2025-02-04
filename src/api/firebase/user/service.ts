@@ -5,15 +5,16 @@ import { ProfileImage } from '../user';
 import { doc, getDoc, setDoc, documentId, collection, query, where, getDocs, limit } from 'firebase/firestore';
 import { db } from '../config';
 
-class UserService {
-  private _currentUser: User | null = null;
+import { store } from '../../../redux/store';
+import { setUser } from '../../../redux/userSlice';
 
+class UserService {
   get currentUser(): User | null {
-    return this._currentUser;
+    return store.getState().user.currentUser;
   }
 
   set currentUser(user: User | null) {
-    this._currentUser = user;
+    store.dispatch(setUser(user));
   }
 
   async fetchUserFromFirestore(userId: string): Promise<User> {

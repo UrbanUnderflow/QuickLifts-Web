@@ -27,6 +27,9 @@ import { convertTimestamp, serverTimestamp } from '../../../utils/timestamp'; //
 import { convertFirestoreTimestamp } from '../../../utils/formatDate';
 import { Challenge, ChallengeStatus, UserChallenge } from '../../../api/firebase/workout/types';
 
+import { store } from '../../../redux/store';
+import { setCurrentWorkout, setCurrentExerciseLogs, resetWorkoutState } from '../../../redux/workoutSlice';
+
 
 interface FirestoreError {
   code: string;
@@ -36,27 +39,22 @@ interface FirestoreError {
 }
 
 class WorkoutService {
-  private _currentWorkout: Workout | null = null;
-  private _currentWorkoutLogs: ExerciseLog[] = [];
 
-  // Getter for current workout
+// Replace getters/setters to use Redux
   get currentWorkout(): Workout | null {
-    return this._currentWorkout;
+    return store.getState().workout.currentWorkout;
   }
 
-  // Setter for current workout
   set currentWorkout(workout: Workout | null) {
-    this._currentWorkout = workout;
+    store.dispatch(setCurrentWorkout(workout));
   }
 
-  // Getter for current workout logs
   get currentWorkoutLogs(): ExerciseLog[] {
-    return this._currentWorkoutLogs;
+    return store.getState().workout.currentExerciseLogs;
   }
 
-  // Setter for current workout logs
   set currentWorkoutLogs(logs: ExerciseLog[]) {
-    this._currentWorkoutLogs = logs;
+    store.dispatch(setCurrentExerciseLogs(logs));
   }
 
   /**
@@ -315,211 +313,6 @@ async fetchCollectionWithSweatLists(collectionId: string): Promise<{ collection:
   }
 }
 
-// Optional helper methods for parsing if needed
-private parseWorkoutData(data: DocumentData): Workout {
-  return new Workout({
-    id: data.id || '',
-    roundWorkoutId: data.roundWorkoutId || '',
-    collectionId: data.collectionId || [],
-    exercises: data.exercises || [],
-    challenge: data.challenge 
-      ? new Challenge({
-          id: data.challenge.id,
-          title: data.challenge.title,
-          subtitle: data.challenge.subtitle,
-          participants: data.challenge.participants || [],
-          status: data.challenge.status as ChallengeStatus,
-          startDate: data.challenge.startDate instanceof Date 
-            ? data.challenge.startDate 
-            : (data.challenge.startDate ? new Date(data.challenge.startDate) : new Date()),
-          endDate: data.challenge.endDate instanceof Date 
-            ? data.challenge.endDate 
-            : (data.challenge.endDate ? new Date(data.challenge.endDate) : new Date()),
-          createdAt: data.challenge.createdAt instanceof Date 
-            ? data.challenge.createdAt 
-            : (data.challenge.createdAt ? new Date(data.challenge.createdAt) : new Date()),
-          updatedAt: data.challenge.updatedAt instanceof Date 
-            ? data.challenge.updatedAt 
-            : (data.challenge.updatedAt ? new Date(data.challenge.updatedAt) : new Date()),
-            introVideos: (data.challenge.introVideos || []).map((v: any) => 
-              new IntroVideo({
-                id: v.id,
-                userId: v.userId,
-                videoUrl: v.videoUrl
-              })
-            )
-        })
-      : undefined,
-    logs: data.logs || [],
-    title: data.title || '',
-    description: data.description || '',
-    duration: data.duration || 0,
-    workoutRating: data.workoutRating,
-    useAuthorContent: data.useAuthorContent || false,
-    isCompleted: data.isCompleted || false,
-    workoutStatus: data.workoutStatus || WorkoutStatus.QueuedUp,
-    startTime: data.startTime instanceof Date 
-      ? data.startTime 
-      : (data.startTime ? new Date(data.startTime) : undefined),
-    order: data.order || 0,
-    author: data.author || '',
-    createdAt: data.createdAt instanceof Date 
-      ? data.createdAt 
-      : (typeof data.createdAt?.toDate === 'function' 
-        ? data.createdAt.toDate() 
-        : (data.createdAt ? new Date(data.createdAt) : new Date())),
-    updatedAt: data.updatedAt instanceof Date 
-      ? data.updatedAt 
-      : (typeof data.updatedAt?.toDate === 'function' 
-        ? data.updatedAt.toDate() 
-        : (data.updatedAt ? new Date(data.updatedAt) : new Date())),
-    zone: data.zone || BodyZone.FullBody,
-    estimatedDuration: () => data.duration || 0,
-    determineWorkoutZone: () => data.zone || BodyZone.FullBody,
-    toDictionary: () => ({}) // Placeholder, implement as needed
-  } as Workout);
-}
-
-private createDefaultExercise(): Exercise {
-  return {
-    id: '',
-    name: '',
-    category: {
-      type: 'weightTraining',
-      details: {
-        reps: '',
-        sets: 0,
-        weight: 0,
-        screenTime: 0,
-        selectedVideo: this.parseExerciseVideo({}) // Use existing method to create a default video
-      }
-    },
-    primaryBodyParts: [],
-    secondaryBodyParts: [],
-    tags: [],
-    description: '',
-    visibility: 'live', // Default to 'limited'
-    steps: [],
-    videos: [],
-    currentVideoPosition: 0,
-    reps: '',
-    sets: 0,
-    weight: 0,
-    author: {
-      userId: '',
-      username: ''
-    },
-    createdAt: new Date(),
-    updatedAt: new Date()
-  };
-}
-
-// You'll also need to implement parseExercise similar to the original implementation
-private parseExercise(fields: any): Exercise {
-  return {
-    id: fields.id?.stringValue || fields.id || '',
-    name: fields.name?.stringValue || fields.name || '',
-    category: this.parseExerciseCategory(fields.category?.mapValue?.fields || fields.category || {}),
-    primaryBodyParts: this.parseBodyParts(fields.primaryBodyParts),
-    secondaryBodyParts: this.parseBodyParts(fields.secondaryBodyParts),
-    tags: (fields.tags?.arrayValue?.values || fields.tags || []).map((tag: any) => tag.stringValue || tag),
-    description: fields.description?.stringValue || fields.description || '',
-    visibility: (fields.visibility?.arrayValue?.values || fields.visibility || []).map((v: any) => v.stringValue || v),
-    steps: (fields.steps?.arrayValue?.values || fields.steps || []).map((step: any) => step.stringValue || step),
-    videos: this.parseVideos(fields.videos),
-    currentVideoPosition: parseInt(fields.currentVideoPosition?.integerValue || fields.currentVideoPosition || '0'),
-    reps: fields.reps?.stringValue || fields.reps || '',
-    sets: parseInt(fields.sets?.integerValue || fields.sets || '0'),
-    weight: parseFloat(fields.weight?.doubleValue || fields.weight || '0'),
-    
-    author: this.parseExerciseAuthor(fields.author?.mapValue?.fields || fields.author || {}),
-    createdAt: new Date(parseFloat(fields.createdAt?.doubleValue || fields.createdAt || '0') * 1000),
-    updatedAt: new Date(parseFloat(fields.updatedAt?.doubleValue || fields.updatedAt || '0') * 1000)
-  };
-}
-
-// You'll need to implement these helper methods as well
-private parseExerciseCategory(fields: any): ExerciseCategory {
-  // Implementation similar to the original service
-  const categoryId = fields.id?.stringValue || fields.id || '';
-  if (categoryId === 'cardio') {
-    return {
-      type: 'cardio',
-      details: {
-        duration: parseInt(fields.duration?.integerValue || fields.duration || '0'),
-        bpm: parseInt(fields.bpm?.integerValue || fields.bpm || '0'),
-        calories: parseInt(fields.calories?.integerValue || fields.calories || '0'),
-        screenTime: parseInt(fields.screenTime?.integerValue || fields.screenTime || '0'),
-        selectedVideo: this.parseExerciseVideo(fields.selectedVideo?.mapValue?.fields || fields.selectedVideo)  
-      }
-    };
-  } else {
-    return {
-      type: 'weightTraining',
-      details: {
-        reps: fields.reps?.stringValue || fields.reps || '',
-        sets: parseInt(fields.sets?.integerValue || fields.sets || '0'),
-        weight: parseFloat(fields.weight?.doubleValue || fields.weight || '0'),
-        screenTime: parseInt(fields.screenTime?.integerValue || fields.screenTime || '0'),
-        selectedVideo: this.parseExerciseVideo(fields.selectedVideo?.mapValue?.fields || fields.selectedVideo)
-      }
-    };
-  }
-}
-
-private parseBodyParts(bodyPartsField: any): BodyPart[] {
-  const bodyPartsArray = bodyPartsField?.arrayValue?.values || bodyPartsField || [];
-  return bodyPartsArray.map((part: any) => part.stringValue || part);
-}
-
-private parseVideos(videosField: any): ExerciseVideo[] {
-  const videosArray = videosField?.arrayValue?.values || videosField || [];
-  return videosArray.map((videoData: any) => 
-    this.parseExerciseVideo(videoData.mapValue?.fields || videoData)
-  );
-}
-
-private parseExerciseVideo(fields: any): ExerciseVideo {
-  return {
-    id: fields.id?.stringValue || fields.id || '',
-    exerciseId: fields.exerciseId?.stringValue || fields.exerciseId || '',
-    username: fields.username?.stringValue || fields.username || '',
-    userId: fields.userId?.stringValue || fields.userId || '',
-    videoURL: fields.videoURL?.stringValue || fields.videoURL || '',
-    fileName: fields.fileName?.stringValue || fields.fileName || '',
-    exercise: fields.exercise?.stringValue || fields.exercise || '',
-    profileImage: this.parseProfileImage(fields.profileImage?.mapValue?.fields || fields.profileImage || {}),
-    caption: fields.caption?.stringValue || fields.caption || '',
-    gifURL: fields.gifURL?.stringValue || fields.gifURL || '',
-    thumbnail: fields.thumbnail?.stringValue || fields.thumbnail || '',
-    visibility: fields.visibility?.stringValue || fields.visibility || 'open',
-    totalAccountsReached: parseInt(fields.totalAccountsReached?.integerValue || fields.totalAccountsReached || '0'),
-    totalAccountLikes: parseInt(fields.totalAccountLikes?.integerValue || fields.totalAccountLikes || '0'),
-    totalAccountBookmarked: parseInt(fields.totalAccountBookmarked?.integerValue || fields.totalAccountBookmarked || '0'),
-    totalAccountUsage: parseInt(fields.totalAccountUsage?.integerValue || fields.totalAccountUsage || '0'),
-    isApproved: fields.isApproved?.booleanValue || fields.isApproved || false,
-    liked: fields.liked?.booleanValue || fields.liked,
-    bookmarked: fields.bookmarked?.booleanValue || fields.bookmarked,
-    createdAt: new Date(parseFloat(fields.createdAt?.doubleValue || fields.createdAt || '0') * 1000),
-    updatedAt: new Date(parseFloat(fields.updatedAt?.doubleValue || fields.updatedAt || '0') * 1000)
-  };
-}
-
-private parseProfileImage(fields: any): ProfileImage {
-  return {
-    profileImageURL: fields.profileImageURL?.stringValue || fields.profileImageURL || '',
-    imageOffsetWidth: parseFloat(fields.imageOffsetWidth?.doubleValue || fields.imageOffsetWidth || '0'),
-    imageOffsetHeight: parseFloat(fields.imageOffsetHeight?.doubleValue || fields.imageOffsetHeight || '0')
-  };
-}
-
-private parseExerciseAuthor(fields: any): ExerciseAuthor {
-  return {
-    userId: fields.userId?.stringValue || fields.userId || '',
-    username: fields.username?.stringValue || fields.username || ''
-  };
-}
-
 async fetchSavedWorkout(userId: string, workoutId: string): Promise<[Workout | null, ExerciseLog[] | null]> {
   try {
     // Fetch the workout document
@@ -544,7 +337,27 @@ async fetchSavedWorkout(userId: string, workoutId: string): Promise<[Workout | n
     });
 
     workoutData.exercises = mappedExercises;
-    const workout = this.parseWorkoutData(workoutData);
+    const workout = new Workout({
+      id: workoutData.id,
+      roundWorkoutId: workoutData.roundWorkoutId,
+      collectionId: workoutData.collectionId,
+      exercises: workoutData.exercises,
+      challenge: workoutData.challenge,
+      logs: workoutData.logs,
+      title: workoutData.title,
+      description: workoutData.description,
+      duration: workoutData.duration,
+      workoutRating: workoutData.workoutRating,
+      useAuthorContent: workoutData.useAuthorContent,
+      isCompleted: workoutData.isCompleted,
+      workoutStatus: workoutData.workoutStatus,
+      startTime: workoutData.startTime,
+      order: workoutData.order,
+      author: workoutData.author,
+      assignedDate: workoutData.assignedDate,
+      createdAt: workoutData.createdAt,
+      updatedAt: workoutData.updatedAt
+    });
 
     // Fetch logs
     const logsRef = collection(workoutRef, 'logs');
@@ -554,7 +367,7 @@ async fetchSavedWorkout(userId: string, workoutId: string): Promise<[Workout | n
       const logData = logDoc.data();
       const fullExercise = exercisesWithVideos.find(ex => ex.name === logData.exercise.name);
       
-      return {
+      return new ExerciseLog({
         id: logDoc.id,
         workoutId: workoutId,
         userId: userId,
@@ -571,7 +384,7 @@ async fetchSavedWorkout(userId: string, workoutId: string): Promise<[Workout | n
         completedAt: convertFirestoreTimestamp(logData.completedAt),
         createdAt: convertFirestoreTimestamp(logData.createdAt),
         updatedAt: convertFirestoreTimestamp(logData.updatedAt)
-      };
+      });
     });
 
     workout.logs = logs;
@@ -832,21 +645,14 @@ async getCollectionById(id: string): Promise<SweatlistCollection> {
     logs: ExerciseLog[]
   }): Promise<void> {
     try {
-      // Update logs in Firestore
       const workoutRef = doc(db, 'users', userId, 'workoutSessions', workoutId);
-      
-      // Update logs subcollection
       const logsRef = collection(workoutRef, 'logs');
-      
-      // Batch write to update logs
       const batch = writeBatch(db);
       
       logs.forEach(log => {
         const logDocRef = doc(logsRef, log.id);
         batch.update(logDocRef, {
-          isCompleted: log.isCompleted,
-          logs: log.logs,
-          updatedAt: serverTimestamp()
+          ...log.toDictionary()
         });
       });
   
@@ -856,7 +662,74 @@ async getCollectionById(id: string): Promise<SweatlistCollection> {
       throw error;
     }
   }
+
+  // The cancelWorkout method – it deletes the workout session and summary (if any),
+// cleans up the local state, and logs the cancellation.
+async cancelWorkout(workout: Workout, workoutSummary: WorkoutSummary | null): Promise<void> {
+  try {    
+      await this.deleteWorkoutSession(workout.id);
+      if (workoutSummary) {
+        await this.deleteWorkoutSummary(workoutSummary.id);
+      }
+      
+      this.cleanUpWorkoutInProgress();
+      console.log("Workout canceled and cleaned up successfully.");
+  } catch (error) {
+    console.error("Error canceling workout:", error);
+    throw error;
+  }
+}
   
+// Deletes a workout session document and all its subcollection "logs"
+async deleteWorkoutSession(workoutId: string): Promise<void> {
+  if (!userService.currentUser?.id) {
+    throw new Error("User not authenticated.");
+  }
+  const userId = userService.currentUser.id;
+  const workoutRef = doc(db, "users", userId, "workoutSessions", workoutId);
+  
+  try {
+    // Delete all logs in the subcollection
+    const logsRef = collection(workoutRef, "logs");
+    const logsSnapshot = await getDocs(logsRef);
+    const batch = writeBatch(db);
+    
+    logsSnapshot.docs.forEach((logDoc) => {
+      batch.delete(logDoc.ref);
+    });
+    
+    // Delete the main workout document
+    batch.delete(workoutRef);
+    
+    await batch.commit();
+    console.log("Workout session and logs deleted successfully.");
+  } catch (error) {
+    console.error("Error deleting workout session:", error);
+    throw error;
+  }
+}
+
+  // Deletes the workout summary document.
+  async deleteWorkoutSummary(workoutSummaryId: string): Promise<void> {
+    if (!workoutSummaryId || !userService.currentUser?.id) {
+      return;
+    }
+    
+    try {
+      const summaryRef = doc(db, "users", userService.currentUser.id, "workoutSummary", workoutSummaryId);
+      await deleteDoc(summaryRef);
+      console.log("Workout summary deleted successfully.");
+    } catch (error) {
+      console.error("Error deleting workout summary:", error);
+      throw error;
+    }
+  }
+
+  // Clean up local storage and in-memory workout state.
+    cleanUpWorkoutInProgress(): void {
+      store.dispatch(resetWorkoutState());
+    }
+      
   
   /**
    * Fetch the workout session from Firestore, returning { workout, logs }.
@@ -865,85 +738,53 @@ async getCollectionById(id: string): Promise<SweatlistCollection> {
   async fetchCurrentWorkoutSession(userId: string): Promise<{
     workout: Workout | null;
     logs: ExerciseLog[] | null;
-  }> {
-    if (!userId) {
-      throw new Error('No user ID provided');
-    }
-  
-    // 1. Fetch all exercises with their videos
+   }> {
+    if (!userId) throw new Error('No user ID provided');
+   
     const exerciseSnapshot = await getDocs(collection(db, 'exercises'));
     const videoSnapshot = await getDocs(collection(db, 'exerciseVideos'));
-  
-    // Map videos to exercises
-    const exerciseVideos: ExerciseVideo[] = videoSnapshot.docs.map((doc) => 
+   
+    const exerciseVideos = videoSnapshot.docs.map((doc) => 
       ExerciseVideo.fromFirebase({
         id: doc.id,
         ...doc.data()
       })
     );
-  
+   
     const exercisesWithVideos = exerciseSnapshot.docs.map(doc => {
       const exercise = Exercise.fromFirebase({
         id: doc.id,
         ...doc.data()
       });
-  
-      // Attach videos to exercise
+   
       const matchingVideos = exerciseVideos.filter(
         (video) => video.exercise.toLowerCase() === exercise.name.toLowerCase()
       );
-  
-      return {
+   
+      return new Exercise({
         ...exercise,
         videos: matchingVideos
-      };
+      });
     });
-  
-    // Reference to user's workoutSessions
+   
     const workoutSessionsRef = collection(db, 'users', userId, 'workoutSessions');
-  
-    // 1) Check for QueuedUp
+   
     let q = query(workoutSessionsRef, where('status', '==', WorkoutStatus.QueuedUp));
     let snap = await getDocs(q);
-  
+   
     if (!snap.empty) {
       return this.processWorkoutSessionDocument(snap.docs[0], exercisesWithVideos);
     }
-  
-    // 2) Check for InProgress
+   
     q = query(workoutSessionsRef, where('status', '==', WorkoutStatus.InProgress));
     snap = await getDocs(q);
-  
+   
     if (!snap.empty) {
       return this.processWorkoutSessionDocument(snap.docs[0], exercisesWithVideos);
     }
-  
-    // None found
+   
     return { workout: null, logs: null };
-  }
-
-  async cancelWorkoutSession(userId: string, workoutId: string): Promise<void> {
-    try {
-      // 1. Delete all logs in the logs subcollection
-      const logsRef = collection(db, 'users', userId, 'workoutSessions', workoutId, 'logs');
-      const logsSnapshot = await getDocs(logsRef);
-      const logBatch = writeBatch(db);
-  
-      if (!logsSnapshot.empty) {
-        logsSnapshot.docs.forEach((logDoc) => {
-          logBatch.delete(logDoc.ref);
-        });
-        await logBatch.commit();
-      }
-  
-      // 2. Delete the workout session document
-      const workoutSessionRef = doc(db, 'users', userId, 'workoutSessions', workoutId);
-      await deleteDoc(workoutSessionRef);
-    } catch (error) {
-      console.error('Error canceling workout session:', error);
-      throw error;
-    }
-  }
+   }
 
   private async fetchAndMapExercisesWithVideos(): Promise<Exercise[]> {
     try {
@@ -974,12 +815,12 @@ async getCollectionById(id: string): Promise<SweatlistCollection> {
         const matchingVideos = exerciseVideos.filter(
           (video) => video.exercise.toLowerCase() === exercise.name.toLowerCase()
         );
-    
-        return {
+       
+        return new Exercise({
           ...exercise,
           videos: matchingVideos
-        };
-      });
+        });
+       });
   
       // console.log('Finished mapping exercises with videos');
       // console.log(`Total exercises with videos: ${exercisesWithVideos.length}`);
@@ -997,13 +838,12 @@ async getCollectionById(id: string): Promise<SweatlistCollection> {
   async fetchAllWorkoutSessions(userId: string): Promise<{
     workout: Workout | null;
     logs: ExerciseLog[] | null;
-  }[]> {
+   }[]> {
     if (!userId) {
       throw new Error('No user ID provided');
     }
-  
+   
     try {
-      // 1. Fetch all exercises 
       const exerciseSnapshot = await getDocs(collection(db, 'exercises'));
       const exercises = exerciseSnapshot.docs.map((doc) => 
         Exercise.fromFirebase({
@@ -1011,8 +851,7 @@ async getCollectionById(id: string): Promise<SweatlistCollection> {
           ...doc.data()
         })
       );
-  
-      // 2. Fetch all videos
+   
       const videoSnapshot = await getDocs(collection(db, 'exerciseVideos'));
       const exerciseVideos = videoSnapshot.docs.map((doc) => 
         ExerciseVideo.fromFirebase({
@@ -1020,29 +859,26 @@ async getCollectionById(id: string): Promise<SweatlistCollection> {
           ...doc.data()
         })
       );
-  
-      // 3. Map videos to exercises
+   
       const exercisesWithVideos = exercises.map(exercise => {
         const matchingVideos = exerciseVideos.filter(
           (video) => video.exercise.toLowerCase() === exercise.name.toLowerCase()
         );
-  
-        return {
+   
+        return new Exercise({
           ...exercise,
           videos: matchingVideos
-        };
+        });
       });
-  
-      // 4. Fetch workout sessions
+   
       const workoutSessionsRef = collection(db, 'users', userId, 'workoutSessions');
       const snap = await getDocs(workoutSessionsRef);
-  
+   
       if (snap.empty) {
         console.log('No workout sessions found for user');
         return [];
       }
-  
-      // 5. Process each workout session
+   
       const sessions = await Promise.all(
         snap.docs.map(async (doc) => {
           const sessionData = await this.processWorkoutSessionDocument(
@@ -1050,7 +886,6 @@ async getCollectionById(id: string): Promise<SweatlistCollection> {
             exercisesWithVideos
           );
           
-          // Sort the logs by the 'order' property, if available
           if (sessionData.logs) {
             sessionData.logs.sort((a, b) => {
               const orderA = a.order ?? 0;
@@ -1058,18 +893,17 @@ async getCollectionById(id: string): Promise<SweatlistCollection> {
               return orderA - orderB;
             });
           }
-  
+   
           return sessionData;
         })
       );
-  
-      // console.log(`Found ${sessions.length} workout sessions`);
+   
       return sessions;
     } catch (error) {
       console.error('Error fetching workout sessions:', error);
       throw error;
     }
-  }
+   }
 
   async updateCollection(collection: SweatlistCollection): Promise<SweatlistCollection> {
     try {
