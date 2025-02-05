@@ -160,7 +160,7 @@ export class ExerciseLog {
 }
 
 export interface WeightTrainingExercise {
-  reps: string;
+  reps: string[];
   sets: number;
   weight: number;
   screenTime: number;
@@ -194,7 +194,7 @@ export const ExerciseCategory = {
     switch (identifier) {
       case 'weight-training':
         return ExerciseCategory.weightTraining({
-          reps: '12',
+          reps: ['12'],
           sets: 3,
           weight: 0.0, 
           screenTime: 0,
@@ -298,7 +298,7 @@ export class Exercise {
 
       default:
         this.category = ExerciseCategory.weightTraining({
-          reps: '12',
+          reps: ['12'],
           sets: 3,
           weight: 0,
           screenTime: 0
@@ -475,6 +475,45 @@ export class ExerciseVideo {
     if (this.bookmarked !== undefined) data.bookmarked = this.bookmarked;
 
     return data;
+  }
+}
+
+export interface ExerciseDetailProps {
+  id?: string;
+  exerciseName: string;
+  exercise: Exercise;
+  exerciseLogId?: string;
+  category: ExerciseCategory;
+  notes: string;
+  isSplit: boolean;
+  isMissing: boolean;
+  groupId: number;
+  closestMatch: Exercise[];
+}
+
+export class ExerciseDetail {
+  id: string;
+  exerciseName: string;
+  exercise: Exercise;
+  exerciseLogId?: string;
+  category: ExerciseCategory;
+  notes: string;
+  isSplit: boolean;
+  isMissing: boolean;
+  groupId: number;
+  closestMatch: Exercise[];
+
+  constructor(props: ExerciseDetailProps) {
+    this.id = props.id || '';
+    this.exerciseName = props.exerciseName;
+    this.exercise = props.exercise;
+    this.exerciseLogId = props.exerciseLogId;
+    this.category = props.category;
+    this.notes = props.notes;
+    this.isSplit = props.isSplit;
+    this.isMissing = props.isMissing;
+    this.groupId = props.groupId;
+    this.closestMatch = props.closestMatch;
   }
 }
 

@@ -258,7 +258,7 @@ export class Workout {
     const data: { [key: string]: any } = {
       id: this.id,
       exercises: this.exercises.map(ex => ({
-        exercise: ex.exercise,
+        exercise: ex.exercise.toDictionary(),
         groupId: ex.groupId
       })),
       logs: this.logs?.map(log => log.toDictionary()) ?? [],

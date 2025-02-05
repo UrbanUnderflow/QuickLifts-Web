@@ -1,8 +1,9 @@
 import { User, FollowRequest } from './types';
-import { Exercise, ExerciseVideo, ExerciseAuthor } from '../exercise/types';
+import { Workout } from '../workout';
+import { Exercise, ExerciseVideo, ExerciseAuthor, ExerciseLog } from '../exercise/types';
 import { ProfileImage } from '../user';
 
-import { doc, getDoc, setDoc, documentId, collection, query, where, getDocs, limit } from 'firebase/firestore';
+import { doc, getDoc, setDoc, documentId, collection, query, where, getDocs, limit, writeBatch } from 'firebase/firestore';
 import { db } from '../config';
 
 import { store } from '../../../redux/store';
@@ -47,6 +48,76 @@ class UserService {
       });
     }
     return users;
+  }
+
+  async createStack(workout: Workout, exerciseLogs?: ExerciseLog[]): Promise<void> {
+    if (!this.currentUser?.id) {
+      console.error('No user is signed in.');
+      return;
+    }
+
+    // Reference to the new stack document under the user's MyCreatedWorkouts subcollection
+    const userWorkoutRef = doc(
+      collection(db, 'users', this.currentUser.id, 'MyCreatedWorkouts'),
+      workout.id
+    );
+
+    try {
+      // Save the workout document
+      await setDoc(userWorkoutRef, workout.toDictionary());
+      console.log('Stack created successfully');
+
+      // If there are exercise logs, save them in a batch to the "logs" subcollection
+      if (exerciseLogs && exerciseLogs.length > 0) {
+        const batch = writeBatch(db);
+        exerciseLogs.forEach((log, index) => {
+          // Set the order (index + 1)
+          log.order = index + 1;
+          const logRef = doc(collection(userWorkoutRef, 'logs'), log.id);
+          batch.set(logRef, log.toDictionary());
+        });
+        await batch.commit();
+        console.log('Exercise logs saved successfully');
+      }
+    } catch (error) {
+      console.error('Error creating stack:', error);
+      throw error;
+    }
+  }
+
+  async fetchUserStacks(userId?: string): Promise<Workout[]> {
+    const currentUserId = userId || this.currentUser?.id;
+    
+    if (!currentUserId) {
+      throw new Error('No user ID provided');
+    }
+  
+    try {
+      const stacksRef = collection(db, 'users', currentUserId, 'MyCreatedWorkouts');
+      const querySnapshot = await getDocs(stacksRef);
+      
+      const stacks = await Promise.all(querySnapshot.docs.map(async doc => {
+        const stackData = doc.data();
+        
+        // Fetch logs for this stack
+        const logsRef = collection(doc.ref, 'logs');
+        const logsSnapshot = await getDocs(logsRef);
+        const logs = logsSnapshot.docs.map(logDoc => 
+          ExerciseLog.fromFirebase({ id: logDoc.id, ...logDoc.data() })
+        );
+  
+        return new Workout({
+          ...stackData,
+          id: doc.id,
+          logs
+        });
+      }));
+  
+      return stacks;
+    } catch (error) {
+      console.error('Error fetching user stacks:', error);
+      throw error;
+    }
   }
 
   async fetchUserVideos(userId?: string): Promise<Exercise[]> {

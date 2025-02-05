@@ -6,6 +6,7 @@ import {
     limit,
     startAfter,
     DocumentSnapshot,
+    doc,
   } from 'firebase/firestore';
 import { db } from '../config';
 import { Exercise } from './types';
@@ -184,6 +185,14 @@ class ExerciseService {
           console.error('Error fetching paginated exercises:', error);
           throw error;
         }
+      }
+
+      generateExerciseLogID(workoutId: string, userId: string): string {
+        // Create a document reference in the logs subcollection of the workout,
+        // then return its generated ID.
+        return doc(
+          collection(db, 'users', userId, 'MyCreatedWorkouts', workoutId, 'logs')
+        ).id;
       }
   }
   

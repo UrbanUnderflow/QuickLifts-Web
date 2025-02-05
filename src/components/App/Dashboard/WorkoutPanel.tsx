@@ -13,6 +13,8 @@ import { userService } from '../../../api/firebase/user';
 import { workoutService } from '../../../api/firebase/workout'
 import { RootState } from '../../../redux/store';
 import { setCurrentWorkout, setCurrentExerciseLogs } from '../../../redux/workoutSlice';
+import InProgressCard from '../../../components/App/Dashboard/InProgressCard';
+import WorkoutReadyCard from '../../../components/App/Dashboard/WorkoutReadyCard';
 
 
 interface WorkoutPanelProps {
@@ -41,7 +43,7 @@ const WorkoutPanel: React.FC<WorkoutPanelProps> = ({
 
   useEffect(() => {
     if (isVisible) {
-      console.log("We are visible!")
+      console.log("We are visible!: " + currentWorkout)
       fetchWorkoutData();
       fetchActiveChallenges();
       fetchRecentWorkouts();
@@ -225,7 +227,7 @@ const WorkoutPanel: React.FC<WorkoutPanelProps> = ({
       );
     }
 
-    if (!currentWorkout) {
+    if (!workoutService.currentWorkout) {
       return (
         <div className="flex flex-col p-8 bg-[#E0FE10] rounded-lg">
           <h3 className="text-2xl font-bold text-black mb-4">
@@ -268,30 +270,32 @@ const WorkoutPanel: React.FC<WorkoutPanelProps> = ({
     }
 
     // Workout In Progress View
-    return (
-      <div className="flex flex-col p-6 bg-[#E0FE10] rounded-lg">
-        <div className="mb-4">
-          <h2 className="text-xl font-bold text-black">Workout In Progress</h2>
-        </div>
-        <div className="rounded-lg bg-black text-white p-4 flex flex-col gap-4">
-          <h3 className="font-bold">{currentWorkout.title || 'My Workout'}</h3>
-          <div className="flex gap-4">
-            <button
-              onClick={handleStartWorkout}
-              className="px-4 py-2 rounded-md bg-green-200 text-black"
-            >
-              Resume
-            </button>
-            <button
-              onClick={handleCancelWorkout}
-              className="px-4 py-2 rounded-md bg-red-200 text-black"
-            >
-              Cancel
-            </button>
+    switch (workoutService.currentWorkout.workoutStatus) {
+      case WorkoutStatus.QueuedUp:
+        return (
+          <div className="p-6">
+            <WorkoutReadyCard 
+              workout={workoutService.currentWorkout} 
+              onStart={handleStartWorkout} 
+              onCancel={handleCancelWorkout}
+            />
           </div>
-        </div>
-      </div>
-    );
+        );
+      
+      case WorkoutStatus.InProgress:
+        return (
+          <div className="p-6">
+            <InProgressCard
+              workout={workoutService.currentWorkout}
+              onResume={handleStartWorkout}
+              onCancel={handleCancelWorkout}
+            />
+          </div>
+        );
+  
+      default:
+        return null;
+    }
   };
 
   const handleChallengeSelect = (challenge: UserChallenge) => {
