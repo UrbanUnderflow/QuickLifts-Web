@@ -8,6 +8,8 @@ import { ExerciseLog, ExerciseReference } from '../../../api/firebase/exercise/t
 import { Workout } from '../../../api/firebase/workout/types';
 import { userService } from '../../../api/firebase/user/service';
 import { RootState } from '../../../redux/store';
+import { useDispatch } from 'react-redux';
+import { setCurrentWorkout, setCurrentExerciseLogs } from '../../../redux/workoutSlice';
 
 const WorkoutPreviewer: React.FC = () => {
   const router = useRouter();
@@ -63,7 +65,10 @@ const WorkoutPreviewer: React.FC = () => {
   
     return roundedTime;
   }
-
+  
+  // Inside the component
+  const dispatch = useDispatch();
+  
   const handleStartWorkout = async () => {
     if (!workout || !logs.length) {
       setError("Unable to start workout");
@@ -72,17 +77,23 @@ const WorkoutPreviewer: React.FC = () => {
   
     try {
       if (userId) {
-        // Save the workout session (queue it up)
+        // Save workout session in Firestore
         const savedWorkout = await workoutService.saveWorkoutSession({
           userId,
           workout,
           logs
         });
-    
-        console.log("We have queued up saved workout:", savedWorkout);
-    
+  
         if (savedWorkout) {
-          // Navigate back to the home page
+          console.log("Queued workout:", savedWorkout);
+          console.log("✅ Queued Workout ID:", savedWorkout.id); // 🔥 Logs workout ID
+
+  
+          // ✅ Dispatch Redux actions to store workout data
+          dispatch(setCurrentWorkout(savedWorkout));
+          dispatch(setCurrentExerciseLogs(logs));
+  
+          // ✅ Navigate back to home, which handles the workout state
           router.push('/');
         } else {
           setError("Failed to save workout session");
@@ -93,6 +104,7 @@ const WorkoutPreviewer: React.FC = () => {
       setError("Failed to start workout");
     }
   };
+  
 
   if (isLoading) {
     return <div className="text-white text-center pt-20">Loading workout...</div>;
