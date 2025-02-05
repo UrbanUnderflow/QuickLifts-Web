@@ -65,6 +65,9 @@ class WorkoutService {
     store.dispatch(setWorkoutSummary(workoutSummary));
   }
 
+  generateId(): string {
+    return doc(collection(db, 'workouts')).id;
+  }
 
   /**
    * Fetch the user's current workout (either QueuedUp or InProgress).
@@ -1057,7 +1060,7 @@ async deleteWorkoutSession(workoutId: string | null): Promise<void> {
        });
    
       const workoutSessionRef = doc(collection(db, 'users', userId, 'workoutSessions'));
-      await setDoc(workoutSessionRef, cleanWorkout);
+      await setDoc(workoutSessionRef, cleanWorkout.toDictionary());
    
       const logsRef = collection(workoutSessionRef, 'logs');
       const logBatch = writeBatch(db);
@@ -1067,19 +1070,14 @@ async deleteWorkoutSession(workoutId: string | null): Promise<void> {
         logBatch.set(logDocRef, {
           id: logDocRef.id,
           workoutId: workoutSessionRef.id,
-          exercise: {
-            id: log.exercise.id,
-            name: log.exercise.name,
-            category: log.exercise.category,
-            videos: log.exercise.videos || []
-          },
+          exercise: log.exercise.toDictionary(), // convert the custom Exercise object
           order: index,
-          createdAt: currentDate,
-          updatedAt: currentDate,
+          createdAt: currentDate.getTime(),
+          updatedAt: currentDate.getTime(),
           logSubmitted: false,
           isCompleted: false
         });
-      });
+      }); 
    
       await logBatch.commit();
       

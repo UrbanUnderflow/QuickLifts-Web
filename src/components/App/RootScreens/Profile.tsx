@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { userService, FollowRequest } from '../../../api/firebase/user';
 import { Exercise } from '../../../api/firebase/exercise/types';
-import { Challenge } from '../../../api/firebase/workout/types';
+import { Challenge, Workout } from '../../../api/firebase/workout/types';
 import { WorkoutSummary } from '../../../api/firebase/workout/types';
 import { workoutService } from '../../../api/firebase/workout/service'
 import { UserActivity } from '../../../types/Activity';
@@ -11,10 +11,52 @@ import { ChallengesTab } from '../../ChallengesTab';
 import ExerciseGrid from '../../ExerciseGrid';
 import FullScreenExerciseView from '../../../pages/FullscreenExerciseView';
 import { parseActivityType } from '../../../utils/activityParser';
+import { StackCard } from '../../../components/Rounds/StackCard';
+import { useRouter } from 'next/router';
+
+interface StackGridProps {
+  stacks: Workout[];
+  onSelectStack: (stack: Workout) => void;
+}
+
+const StackGrid: React.FC<StackGridProps> = ({ stacks, onSelectStack }) => {
+  const router = useRouter();
+
+  return (
+    <div className="grid grid-cols-1 gap-4">
+      {stacks.map((stack, index) => (
+        <button
+          key={stack.id}
+          onClick={() => onSelectStack(stack)}
+          className="w-full text-left"
+        >
+          <StackCard
+            workout={stack}
+            gifUrls={
+              stack.exercises?.map(ex => 
+                ex.exercise.videos?.[0]?.gifURL || ''
+              ) || []
+            }
+            maxOrder={index}
+            showArrows={false}
+            showCalendar={true}
+            onPrimaryAction={() => {
+              const username = userService.currentUser?.username;
+              router.push(`/workout/${username}/${stack.id}`);
+            }}
+      
+          />
+        </button>
+      ))}
+    </div>
+  );
+};
+
 
 const TABS = {
   ACTIVITY: 'activity',
   EXERCISES: 'moves',
+  STACKS: 'stacks',
   CHALLENGES: 'rounds',
 } as const;
 
@@ -25,6 +67,7 @@ const Profile: React.FC = () => {
   const [userVideos, setUserVideos] = useState<Exercise[]>([]);
   const [activeChallenges, setActiveChallenges] = useState<Challenge[]>([]);
   const [workoutSummaries, setWorkoutSummaries] = useState<WorkoutSummary[]>([]);
+  const [userStacks, setUserStacks] = useState<Workout[]>([]);
   const [activities, setActivities] = useState<UserActivity[]>([]);
   const [followers, setFollowers] = useState<FollowRequest[]>([]);
   const [following, setFollowing] = useState<FollowRequest[]>([]);
@@ -77,6 +120,21 @@ const Profile: React.FC = () => {
     };
   
     fetchUserData();
+  }, [currentUser?.id]);
+
+  useEffect(() => {
+    const fetchUserStacks = async () => {
+      if (!currentUser?.id) return;
+      
+      try {
+        const stacks = await userService.fetchUserStacks();
+        setUserStacks(stacks);
+      } catch (error) {
+        console.error('Error fetching stacks:', error);
+      }
+    };
+
+    fetchUserStacks();
   }, [currentUser?.id]);
 
   useEffect(() => {
@@ -203,6 +261,21 @@ const Profile: React.FC = () => {
                   )}
                 </div>
               )}
+
+                {selectedTab === TABS.STACKS && (
+                  <div className="px-5">
+                    <h2 className="text-xl text-white font-semibold mb-4">
+                      Your Stacks ({userStacks.length})
+                    </h2>
+                    <StackGrid
+                      stacks={userStacks}
+                      onSelectStack={(stack) => {
+                        console.log('Selected stack:', stack);
+                        // Handle stack selection
+                      }}
+                    />
+                  </div>
+                )}
 
               {selectedTab === TABS.EXERCISES && (
                 <div className="px-5">
