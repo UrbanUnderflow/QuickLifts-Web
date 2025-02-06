@@ -50,6 +50,24 @@ class UserService {
     return users;
   }
 
+  async getUserById(userId: string): Promise<User> {
+    try {
+      const userDoc = await getDoc(doc(db, 'users', userId));
+      if (!userDoc.exists()) {
+        throw new Error('User not found');
+      }
+   
+      return new User({
+        id: userDoc.id,
+        ...userDoc.data()
+      });
+   
+    } catch (error) {
+      console.error('Error getting user by ID:', error);
+      throw error;
+    }
+   }
+
   async createStack(workout: Workout, exerciseLogs?: ExerciseLog[]): Promise<Workout> {
     if (!this.currentUser?.id) {
       throw new Error('No user is signed in.');

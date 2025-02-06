@@ -203,6 +203,16 @@ class WorkoutService {
     }
   }
 
+  // In WorkoutService
+  async revertAuthorFormat(workoutId: string, authorId: string) {
+    if (!userService.currentUser?.id) throw new Error('No user signed in');
+    
+    const workoutRef = doc(db, 'users', userService.currentUser.id, 'MyCreatedWorkouts', workoutId);
+    await updateDoc(workoutRef, {
+      author: authorId
+    });
+   }
+
 async updateWorkout(workout: Workout): Promise<void> {
   if (!userService.currentUser?.id) {
     throw new Error('No user is signed in');

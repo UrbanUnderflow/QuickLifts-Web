@@ -101,7 +101,7 @@ export class Workout {
   workoutStatus: WorkoutStatus;
   startTime?: Date | null;
   order?: number | null;
-  author: ExerciseAuthor;
+  author: string;
   assignedDate?: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -142,20 +142,13 @@ export class Workout {
     // For order, default to null if not provided.
     this.order = data.order !== undefined ? data.order : null;
 
-    if (typeof data.author === 'string') {
-      // Legacy case - only user ID
-      this.author = new ExerciseAuthor({
-        userId: data.author,
-        username: '' // Will be populated later
-      });
-      
-      // Queue async update
-      this.updateLegacyAuthor(data.author);
+    // In Workout constructor:
+    if (data.author?.username) {
+      this.author = data.author.userId;
+      workoutService.revertAuthorFormat(this.id, this.author);
     } else {
-      // New case - full author object
-      this.author = new ExerciseAuthor(data.author);
+      this.author = data.author
     }
-    
     // For zone, default to FullBody (or any other default you prefer)
     this.zone = data.zone !== undefined ? data.zone : BodyZone.FullBody;
   }
@@ -170,23 +163,6 @@ export class Workout {
       }
       return false;
     });
-  }
-
-  private async updateLegacyAuthor(userId: string) {
-    try {
-      const user = await workoutService.getUserById(userId);
-      if (user) {
-        this.author = new ExerciseAuthor({
-          userId: user.id,
-          username: user.username
-        });
-        
-        // Save updated workout back to database
-        await workoutService.updateWorkout(this);
-      }
-    } catch (error) {
-      console.error('Failed to update legacy author:', error);
-    }
   }
 
   fetchPrimaryBodyParts(): BodyPart[] {
@@ -364,7 +340,7 @@ export class Workout {
       useAuthorContent: this.useAuthorContent,
       isCompleted: this.isCompleted,
       workoutStatus: this.workoutStatus,
-      author: this.author.toDictionary(),
+      author: this.author, // Just save the ID
       createdAt: this.createdAt.getTime(),
       updatedAt: this.updatedAt.getTime(),
       assignedDate: this.assignedDate ? this.assignedDate.getTime() : null,
