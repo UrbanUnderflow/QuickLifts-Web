@@ -354,6 +354,25 @@ class UserService {
     }
   }
 
+  // In userService
+  async getUserByUsername(username: string): Promise<User | null> {
+    try {
+      const usersRef = collection(db, 'users');
+      const q = query(usersRef, where('username', '==', username));
+      const querySnapshot = await getDocs(q);
+      
+      if (querySnapshot.empty) {
+        return null;
+      }
+
+      const userData = querySnapshot.docs[0].data();
+      return new User({ id: querySnapshot.docs[0].id, ...userData });
+    } catch (error) {
+      console.error('Error fetching user by username:', error);
+      throw error;
+    }
+  }
+
   async fetchUsersWithVideosUploaded(): Promise<User[]> {
     try {
       // Create a query against the users collection

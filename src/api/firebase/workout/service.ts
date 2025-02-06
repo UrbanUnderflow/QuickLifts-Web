@@ -65,7 +65,7 @@ class WorkoutService {
     store.dispatch(setWorkoutSummary(workoutSummary));
   }
 
-  generateId(): string {
+   generateId(): string {
     return doc(collection(db, 'workouts')).id;
   }
 
@@ -327,21 +327,36 @@ async fetchCollectionWithSweatLists(collectionId: string): Promise<{ collection:
 
 async fetchSavedWorkout(userId: string, workoutId: string): Promise<[Workout | null, ExerciseLog[] | null]> {
   try {
+    console.log('Starting fetchSavedWorkout with:', { userId, workoutId });
+
     // Fetch the workout document
     const workoutRef = doc(db, 'users', userId, 'MyCreatedWorkouts', workoutId);
+    console.log('Fetching workout document from:', workoutRef.path);
+    
     const workoutSnap = await getDoc(workoutRef);
+    console.log('Workout document exists:', workoutSnap.exists());
 
     if (!workoutSnap.exists()) {
+      console.log('No workout document found');
       return [null, null];
     }
 
-    // Get exercises with videos mapped
-    const exercisesWithVideos = await this.fetchAndMapExercisesWithVideos();
     const workoutData = workoutSnap.data();
+    console.log('Raw workout data:', workoutData);
 
-    // Map the exercises in the workout to the full exercise objects with videos
+    // Get exercises with videos mapped
+    console.log('Fetching exercises with videos...');
+    const exercisesWithVideos = await this.fetchAndMapExercisesWithVideos();
+    console.log('Fetched exercises with videos:', exercisesWithVideos);
+
+    // Map the exercises
+    console.log('Mapping exercises in workout:', workoutData.exercises);
     const mappedExercises = (workoutData.exercises || []).map((exerciseRef: any) => {
       const fullExercise = exercisesWithVideos.find(ex => ex.name === exerciseRef.exercise.name);
+      console.log('Mapping exercise:', {
+        name: exerciseRef.exercise.name,
+        foundMatch: !!fullExercise
+      });
       return {
         ...exerciseRef,
         exercise: fullExercise || exerciseRef.exercise
@@ -349,35 +364,33 @@ async fetchSavedWorkout(userId: string, workoutId: string): Promise<[Workout | n
     });
 
     workoutData.exercises = mappedExercises;
-    const workout = new Workout({
+
+    // Create workout instance
+    console.log('Creating Workout instance with data:', {
       id: workoutData.id,
-      roundWorkoutId: workoutData.roundWorkoutId,
-      collectionId: workoutData.collectionId,
-      exercises: workoutData.exercises,
-      challenge: workoutData.challenge,
-      logs: workoutData.logs,
       title: workoutData.title,
-      description: workoutData.description,
-      duration: workoutData.duration,
-      workoutRating: workoutData.workoutRating,
-      useAuthorContent: workoutData.useAuthorContent,
-      isCompleted: workoutData.isCompleted,
-      workoutStatus: workoutData.workoutStatus,
-      startTime: workoutData.startTime,
-      order: workoutData.order,
-      author: workoutData.author,
-      assignedDate: workoutData.assignedDate,
-      createdAt: workoutData.createdAt,
-      updatedAt: workoutData.updatedAt
+      exerciseCount: mappedExercises.length
+    });
+
+    const workout = new Workout({
+      id: workoutId, // Use the workoutId passed to the function instead of from data
+      ...workoutData
     });
 
     // Fetch logs
+    console.log('Fetching workout logs...');
     const logsRef = collection(workoutRef, 'logs');
     const logsSnapshot = await getDocs(logsRef);
+    console.log('Found logs count:', logsSnapshot.size);
 
     const logs: ExerciseLog[] = logsSnapshot.docs.map(logDoc => {
       const logData = logDoc.data();
       const fullExercise = exercisesWithVideos.find(ex => ex.name === logData.exercise.name);
+      console.log('Processing log:', {
+        logId: logDoc.id,
+        exerciseName: logData.exercise.name,
+        foundExerciseMatch: !!fullExercise
+      });
       
       return new ExerciseLog({
         id: logDoc.id,
@@ -387,7 +400,7 @@ async fetchSavedWorkout(userId: string, workoutId: string): Promise<[Workout | n
         logs: logData.log || [],
         feedback: logData.feedback || '',
         note: logData.note || '',
-        recommendedWeight: logData.recommendedWeight,
+        recommendedWeight: logData.recommendedWeight || 'calculating...',
         isSplit: logData.isSplit || false,
         isBodyWeight: logData.isBodyWeight || false,
         logSubmitted: logData.logSubmitted || false,
@@ -400,10 +413,15 @@ async fetchSavedWorkout(userId: string, workoutId: string): Promise<[Workout | n
     });
 
     workout.logs = logs;
+    console.log('Returning workout and logs:', {
+      workoutId: workout.id,
+      logsCount: logs.length
+    });
+
     return [workout, logs];
   } catch (error) {
     console.error('Error fetching saved workout:', error);
-    return [null, null];
+    throw error; // Throw the error to see the full stack trace
   }
 }
 
