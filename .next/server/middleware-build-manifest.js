@@ -29,6 +29,11 @@ self.__BUILD_MANIFEST = {
       "static/chunks/main.js",
       "static/chunks/pages/createRound.js"
     ],
+    "/round-invitation/[id]": [
+      "static/chunks/webpack.js",
+      "static/chunks/main.js",
+      "static/chunks/pages/round-invitation/[id].js"
+    ],
     "/round/[id]": [
       "static/chunks/webpack.js",
       "static/chunks/main.js",

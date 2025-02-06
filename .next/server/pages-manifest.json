@@ -4,5 +4,6 @@
   "/_document": "pages/_document.js",
   "/round/[id]": "pages/round/[id].js",
   "/createRound": "pages/createRound.js",
-  "/": "pages/index.js"
+  "/": "pages/index.js",
+  "/round-invitation/[id]": "pages/round-invitation/[id].js"
 }

@@ -54,6 +54,7 @@ const ChallengeCTA: React.FC<{ challenge: any }> = ({ challenge }) => {
   };
 
   const handleWebApp = () => {
+    console.log("the web url is: ", webAppUrl);
     window.location.href = webAppUrl;
   };
 
