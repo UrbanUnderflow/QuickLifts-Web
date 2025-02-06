@@ -27,25 +27,25 @@
       "static/chunks/main.js",
       "static/chunks/pages/_error.js"
     ],
+    "/about": [
+      "static/chunks/webpack.js",
+      "static/chunks/main.js",
+      "static/chunks/pages/about.js"
+    ],
     "/createStack": [
       "static/chunks/webpack.js",
       "static/chunks/main.js",
       "static/chunks/pages/createStack.js"
     ],
-    "/starter-pack": [
+    "/round/[id]": [
       "static/chunks/webpack.js",
       "static/chunks/main.js",
-      "static/chunks/pages/starter-pack.js"
+      "static/chunks/pages/round/[id].js"
     ],
-    "/subscribe": [
+    "/workout/[username]/[id]": [
       "static/chunks/webpack.js",
       "static/chunks/main.js",
-      "static/chunks/pages/subscribe.js"
-    ],
-    "/terms": [
-      "static/chunks/webpack.js",
-      "static/chunks/main.js",
-      "static/chunks/pages/terms.js"
+      "static/chunks/pages/workout/[username]/[id].js"
     ]
   },
   "ampFirstPages": []

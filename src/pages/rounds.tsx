@@ -1,16 +1,13 @@
 import type { NextPage } from 'next';
 import Head from 'next/head';
 import React, { useState } from 'react';
-import Header, { Section } from '../components/Header';
-import SignInModal from '../components/SignInModal';
-import Footer from '../components/Footer/Footer';
+import { Section } from '../components/Header';
 import { useScrollFade } from '../hooks/useScrollFade';
 
 
 const RoundsPage: NextPage = () => {
   const [currentSection, setCurrentSection] = useState<Section>('home');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isSignInModalVisible, setIsSignInModalVisible] = useState(false);
 
   const handleSectionChange = (section: Section) => {
     setCurrentSection(section);
@@ -152,18 +149,6 @@ const RoundsPage: NextPage = () => {
           Join Now
         </a>
       </section>
-
-      {/* SignIn Modal */}
-      <SignInModal
-        isVisible={isSignInModalVisible}
-        onSignInSuccess={() => setIsSignInModalVisible(false)}
-        onSignInError={(error) => console.error('Sign-in error:', error)}
-        onSignUpSuccess={() => setIsSignInModalVisible(false)}
-        onSignUpError={(error) => console.error('Sign-up error:', error)}
-        onQuizComplete={() => console.log('Quiz completed')}
-        onQuizSkipped={() => console.log('Quiz skipped')}
-      />
-
     </div>
   );
 };

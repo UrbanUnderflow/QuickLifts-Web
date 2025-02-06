@@ -2,7 +2,6 @@ import type { NextPage } from 'next';
 import Head from 'next/head';
 import React, { useState } from 'react';
 import Header, { Section } from '../components/Header';
-import SignInModal from '../components/SignInModal';
 import Footer from '../components/Footer/Footer';
 import FAQ from '../components/FAQ';
 import { useScrollFade } from '../hooks/useScrollFade';
@@ -12,7 +11,6 @@ import { useScrollFade } from '../hooks/useScrollFade';
 const AboutPage: NextPage = () => {
   const [currentSection, setCurrentSection] = useState<Section>('home');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isSignInModalVisible, setIsSignInModalVisible] = useState(false);
 
   const faqData = [
     {
@@ -60,15 +58,6 @@ const AboutPage: NextPage = () => {
         <title>About Pulse - The Fitness Collective</title>
         <meta name="description" content="Discover how Pulse is transforming fitness through community-driven workouts and shared experiences." />
       </Head>
-
-      {/* Header */}
-      <Header 
-        onSectionChange={handleSectionChange}
-        currentSection={currentSection}
-        toggleMobileMenu={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-        setIsSignInModalVisible={() => setIsSignInModalVisible(true)}
-        theme="dark"
-      />
 
       {/* What is Pulse Section */}
       <section ref={useScrollFade()} className="min-h-screen bg-zinc-900 flex flex-col items-center justify-center text-center px-8 py-20">
@@ -230,17 +219,6 @@ const AboutPage: NextPage = () => {
         theme="dark"
          />
       </section>
-
-      {/* SignIn Modal */}
-      <SignInModal
-        isVisible={isSignInModalVisible}
-        onSignInSuccess={() => setIsSignInModalVisible(false)}
-        onSignInError={(error) => console.error('Sign-in error:', error)}
-        onSignUpSuccess={() => setIsSignInModalVisible(false)}
-        onSignUpError={(error) => console.error('Sign-up error:', error)}
-        onQuizComplete={() => console.log('Quiz completed')}
-        onQuizSkipped={() => console.log('Quiz skipped')}
-      />
 
       <Footer />
     </div>

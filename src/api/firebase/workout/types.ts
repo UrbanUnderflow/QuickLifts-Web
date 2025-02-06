@@ -86,47 +86,64 @@ export class RepsAndWeightLog {
 
 export class Workout {
   id: string;
-  collectionId?: string[];
+  collectionId?: string[] | null;
   roundWorkoutId: string;
   exercises: ExerciseReference[];
-  challenge?: Challenge;
-  logs?: ExerciseLog[];
+  challenge?: Challenge | null;
+  logs?: ExerciseLog[] | null;
   title: string;
   description: string;
   duration: number;
-  workoutRating?: WorkoutRating;
+  workoutRating?: WorkoutRating | null;
   useAuthorContent: boolean;
   isCompleted: boolean;
   workoutStatus: WorkoutStatus;
-  startTime?: Date;
-  order?: number;
+  startTime?: Date | null;
+  order?: number | null;
   author: string;
-  assignedDate?: Date;
+  assignedDate?: Date | null;
   createdAt: Date;
   updatedAt: Date;
   zone: BodyZone;
-
+ 
   constructor(data: any) {
-    this.id = data.id;
-    this.collectionId = data.collectionId;
-    this.roundWorkoutId = data.roundWorkoutId;
-    this.exercises = data.exercises;
-    this.challenge = data.challenge;
-    this.logs = data.logs;
-    this.title = data.title;
-    this.description = data.description;
-    this.duration = data.duration;
-    this.workoutRating = data.workoutRating;
-    this.useAuthorContent = data.useAuthorContent;
-    this.isCompleted = data.isCompleted;
-    this.workoutStatus = data.workoutStatus;
-    this.startTime = data.startTime;
-    this.order = data.order;
-    this.author = data.author;
-    this.assignedDate = data.assignedDate;
-    this.createdAt = data.createdAt;
-    this.updatedAt = data.updatedAt;
-    this.zone = Workout.determineWorkoutZone(data.exercises);
+    // For string fields, default to empty string if not provided.
+    this.id = data.id !== undefined ? data.id : '';
+    this.roundWorkoutId = data.roundWorkoutId !== undefined ? data.roundWorkoutId : '';
+    this.title = data.title !== undefined ? data.title : '';
+    this.description = data.description !== undefined ? data.description : '';
+    this.author = data.author !== undefined ? data.author : '';
+    
+    // For numeric fields, default to 0.
+    this.duration = data.duration !== undefined ? data.duration : 0;
+    
+    // For boolean fields, default to false.
+    this.useAuthorContent = data.useAuthorContent !== undefined ? data.useAuthorContent : false;
+    this.isCompleted = data.isCompleted !== undefined ? data.isCompleted : false;
+    
+    // For enum fields (workoutStatus, workoutRating), you can either default to a specific value or null.
+    this.workoutStatus = data.workoutStatus !== undefined ? data.workoutStatus : WorkoutStatus.Archived;
+    this.workoutRating = data.workoutRating !== undefined ? data.workoutRating : null;
+    
+    // For arrays, default to an empty array.
+    this.exercises = data.exercises !== undefined ? data.exercises : [];
+    
+    // For optional objects, default to null if missing.
+    this.challenge = data.challenge !== undefined ? data.challenge : null;
+    this.logs = data.logs !== undefined ? data.logs : null;
+    this.collectionId = data.collectionId !== undefined ? data.collectionId : null;
+    
+    // For dates, if the field exists and is a Date, use it; otherwise default to null (or new Date() for createdAt/updatedAt)
+    this.startTime = data.startTime && data.startTime instanceof Date ? data.startTime : null;
+    this.assignedDate = data.assignedDate && data.assignedDate instanceof Date ? data.assignedDate : null;
+    this.createdAt = data.createdAt && data.createdAt instanceof Date ? data.createdAt : new Date();
+    this.updatedAt = data.updatedAt && data.updatedAt instanceof Date ? data.updatedAt : new Date();
+    
+    // For order, default to null if not provided.
+    this.order = data.order !== undefined ? data.order : null;
+    
+    // For zone, default to FullBody (or any other default you prefer)
+    this.zone = data.zone !== undefined ? data.zone : BodyZone.FullBody;
   }
 
   get isTimedWorkout(): boolean {
@@ -254,6 +271,52 @@ export class Workout {
     }
   }
 
+  private findUndefinedValues(obj: any, path: string = ''): string[] {
+    const undefinedPaths: string[] = [];
+
+    function recursiveCheck(current: any, currentPath: string) {
+      if (current === undefined) {
+        undefinedPaths.push(currentPath);
+        return;
+      }
+
+      if (current === null || typeof current !== 'object') {
+        return;
+      }
+
+      if (Array.isArray(current)) {
+        current.forEach((item, index) => {
+          recursiveCheck(item, `${currentPath}[${index}]`);
+        });
+        return;
+      }
+
+      Object.entries(current).forEach(([key, value]) => {
+        const newPath = currentPath ? `${currentPath}.${key}` : key;
+        if (value === undefined) {
+          undefinedPaths.push(newPath);
+        } else {
+          recursiveCheck(value, newPath);
+        }
+      });
+    }
+
+    recursiveCheck(obj, path);
+    return undefinedPaths;
+  }
+
+  private checkForUndefined(data: any, label: string = 'Data'): boolean {
+    const undefinedPaths = this.findUndefinedValues(data);
+    if (undefinedPaths.length > 0) {
+      console.error(`🚨 Found undefined values in ${label}:`);
+      undefinedPaths.forEach(path => {
+        console.error(`  - ${path}`);
+      });
+      return false;
+    }
+    return true;
+  }
+
   toDictionary(): { [key: string]: any } {
     const data: { [key: string]: any } = {
       id: this.id,
@@ -261,7 +324,7 @@ export class Workout {
         exercise: ex.exercise.toDictionary(),
         groupId: ex.groupId
       })),
-      logs: this.logs?.map(log => log.toDictionary()) ?? [],
+      logs: this.logs ? this.logs.map(log => log.toDictionary()) : [],
       title: this.title,
       description: this.description,
       zone: this.zone,
@@ -272,32 +335,23 @@ export class Workout {
       workoutStatus: this.workoutStatus,
       author: this.author,
       createdAt: this.createdAt.getTime(),
-      updatedAt: this.updatedAt.getTime()
+      updatedAt: this.updatedAt.getTime(),
+      assignedDate: this.assignedDate ? this.assignedDate.getTime() : null,
+      startTime: this.startTime ? this.startTime.getTime() : null,
+      order: this.order || null,
+      collectionId: this.collectionId || null,
+      challenge: this.challenge || null
     };
 
-    if (this.challenge) {
-      data.challenge = this.challenge;
-    }
-
-    if (this.order !== undefined) {
-      data.order = this.order;
-    }
-
-    if (this.collectionId) {
-      data.collectionId = this.collectionId;
-    }
-
-    if (this.startTime) {
-      data.startTime = this.startTime.getTime();
-    }
-
-    if (this.assignedDate) {
-      data.assignedDate = this.assignedDate.getTime();
+    // Validate data before returning
+    if (!this.checkForUndefined(data, 'Workout Dictionary')) {
+      throw new Error('Workout contains undefined values');
     }
 
     return data;
   }
 }
+
 
 export class WorkoutSummary {
     id: string;
@@ -479,8 +533,8 @@ export class SweatlistCollection {
       })),
       ownerId: this.ownerId, // Updated to be an array
       privacy: this.privacy,
-      createdAt: this.createdAt,
-      updatedAt: this.updatedAt
+      createdAt: this.createdAt.getTime(),
+      updatedAt: this.updatedAt.getTime()
     };
   }
 
@@ -849,10 +903,10 @@ class Challenge {
         checkIns: participant.checkIns
       })),
       status: this.status,
-      startDate: this.startDate,
-      endDate: this.endDate,
-      createdAt: this.createdAt,
-      updatedAt: this.updatedAt,
+      startDate: this.startDate.getTime(),
+      endDate: this.endDate.getTime(),
+      createdAt: this.createdAt.getTime(),
+      updatedAt: this.updatedAt.getTime(),
       durationInDays: this.durationInDays,
       introVideos: this.introVideos.map(video => video.toDictionary())
     };
