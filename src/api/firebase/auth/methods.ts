@@ -4,6 +4,7 @@ import {
   signInWithPopup,
   signInWithRedirect, 
   GoogleAuthProvider,
+  browserPopupRedirectResolver,
   OAuthProvider,
 } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
@@ -44,46 +45,7 @@ import { User } from '../../firebase/user';
       provider.addScope('profile');
       
       try {
-        const result = await signInWithPopup(auth, provider);
-        const isNewUser = result.user.metadata.creationTime === result.user.metadata.lastSignInTime;
-        
-        if (isNewUser) {
-          // Create new user using your User model structure
-          const newUser = new User({
-            id: result.user.uid,
-            displayName: result.user.displayName || '',
-            email: result.user.email || '',
-            username: result.user.displayName?.toLowerCase().replace(/\s+/g, '_') || '',
-            bio: '',
-            profileImage: {
-              profileImageURL: result.user.photoURL || '',
-              imageOffsetWidth: 0,
-              imageOffsetHeight: 0,
-            },
-            followerCount: 0,
-            followingCount: 0,
-            bodyWeight: [],
-            workoutCount: 0,
-            creator: {
-              type: [],
-              instagramHandle: '',
-              twitterHandle: '',
-              youtubeUrl: '',
-              acceptCodeOfConduct: false,
-              acceptExecutiveTerms: false,
-              acceptGeneralTerms: false,
-              acceptSweatEquityPartnership: false,
-              onboardingStatus: '',
-              onboardingLink: '',
-              onboardingExpirationDate: 0,
-            },
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          });
-    
-          await setDoc(doc(db, 'users', result.user.uid), newUser);
-        }
-    
+        const result = await signInWithPopup(auth, provider, browserPopupRedirectResolver);
         return result;
       } catch (error) {
         console.error('Error in signInWithGoogle:', error);

@@ -56,122 +56,113 @@ export class ProfileImage {
   }
 }
 
- export class User {
-   id: string;
-   displayName: string;
-   email: string;
-   username: string;
-   bio?: string;
-   profileImage: ProfileImage;
-   followerCount: number;
-   followingCount: number;
-   bodyWeight: BodyWeight[];
-   workoutCount: number;
-   fcmToken?: string;
-   level: UserLevel = UserLevel.Novice;
-   videoCount: number = 0;
-   creator?: {
-     type?: string[];
-     instagramHandle?: string;
-     twitterHandle?: string;
-     youtubeUrl?: string;
-     acceptCodeOfConduct?: boolean;
-     acceptExecutiveTerms?: boolean;
-     acceptGeneralTerms?: boolean;
-     acceptSweatEquityPartnership?: boolean;
-     onboardingStatus?: string;
-     onboardingLink?: string;
-     onboardingExpirationDate?: number;
-   };
-   createdAt: Date;
-   updatedAt: Date;
- 
-   constructor(data: any) {
-     this.id = data.id || '';
-     this.displayName = data.displayName || '';
-     this.email = data.email || '';
-     this.username = data.username || '';
-     this.bio = data.bio || '';
-     this.profileImage = ProfileImage.fromFirebase(data.profileImage || {});
-     this.fcmToken = data.fcmToken || '';
-      this.level = data.level || UserLevel.Novice;
-      this.videoCount = data.videoCount || 0;
-     this.followerCount = data.followerCount || 0;
-     this.followingCount = data.followingCount || 0;
-     this.bodyWeight = Array.isArray(data.bodyWeight)
-        ? data.bodyWeight.map((weight: any) => BodyWeight.fromFirebase(weight))
-        : [];
-     this.workoutCount = data.workoutCount || 0;
-     this.creator = {
-       type: data.creator?.type || [],
-       instagramHandle: data.creator?.instagramHandle || '',
-       twitterHandle: data.creator?.twitterHandle || '',
-       youtubeUrl: data.creator?.youtubeUrl || '',
-       acceptCodeOfConduct: data.creator?.acceptCodeOfConduct || false,
-       acceptExecutiveTerms: data.creator?.acceptExecutiveTerms || false,
-       acceptGeneralTerms: data.creator?.acceptGeneralTerms || false,
-       acceptSweatEquityPartnership: data.creator?.acceptSweatEquityPartnership || false,
-       onboardingStatus: data.creator?.onboardingStatus || '',
-       onboardingLink: data.creator?.onboardingLink || '',
-       onboardingExpirationDate: data.creator?.onboardingExpirationDate || 0
-     };
-     // Update existing properties
-    this.bodyWeight = Array.isArray(data.bodyWeight)
-    ? data.bodyWeight.map((weight: any) => BodyWeight.fromFirebase(weight))
-    : [];
-     this.createdAt = data.createdAt ? new Date(data.createdAt) : new Date();
-     this.updatedAt = data.updatedAt ? new Date(data.updatedAt) : new Date();
-   }
- 
-   static toShortUser(user: User): ShortUser {
-    return {
-      id: user.id,
-      displayName: user.displayName,
-      email: user.email,
-      username: user.username,
-      level: user.level || UserLevel.Novice, // You might want to add a 'level' property to the User class if it doesn't exist
-      videoCount: user.workoutCount, // Assuming workoutCount is equivalent to videoCount
-      profileImage: user.profileImage,
-      fcmToken: user.fcmToken // Add this property to the User class if it doesn't exist
-    }
-  };
+export class User {
+  id: string;
+  displayName: string;
+  email: string;
+  username: string;
+  homeGym?: Gym;
+  encouragement?: Encouragement[];
+  birthdate?: Date;
+  gender?: Gender;
+  selfDisclosedGender?: string;
+  height?: UserHeight;
+  location?: Location;
+  bio: string;
+  fcmToken?: string;
+  workoutBuddy?: string;
+  workoutBuddyUser?: ShortUser;
+  additionalGoals: string;
+  blockedUsers: string[];
+  level: UserLevel = UserLevel.Novice;
+  goal: WorkoutGoal[];
+  bodyWeight: BodyWeight[];
+  macros: Record<string, MacroRecommendations>;
+  profileImage: ProfileImage;
+  registrationComplete: boolean;
+  creator?: Creator;
+  subscriptionType: SubscriptionType;
+  subscriptionPlatform: SubscriptionPlatform;
+  referrer?: string;
+  isCurrentlyActive: boolean;
+  videoCount: number;
+  createdAt: Date;
+  updatedAt: Date;
 
-   static fromFirebase(data: any): User {
-    return new User({
-      id: data.id || '',
-      displayName: data.displayName || '',
-      username: data.username || '',
-      bio: data.bio || '',
-      profileImage: data.profileImage || {},
-      followerCount: data.followerCount || 0,
-      followingCount: data.followingCount || 0,
-      bodyWeight: Array.isArray(data.bodyWeight) 
-        ? data.bodyWeight.map((weight: any) => BodyWeight.fromFirebase(weight))
-        : [],
-      workoutCount: data.workoutCount || 0,
-      creator: data.creator || {},
-      createdAt: data.createdAt,
-      updatedAt: data.updatedAt
-    });
+  constructor(data: any) {
+    this.id = data.id || '';
+    this.displayName = data.displayName || '';
+    this.email = data.email || '';
+    this.username = data.username || '';
+    this.homeGym = data.homeGym || null;
+    this.encouragement = data.encouragement || [];
+    this.birthdate = data.birthdate ? new Date(data.birthdate) : undefined;
+    this.gender = data.gender || undefined;
+    this.selfDisclosedGender = data.selfDisclosedGender || '';
+    this.height = data.height || undefined;
+    this.location = data.location || undefined;
+    this.bio = data.bio || '';
+    this.fcmToken = data.fcmToken || '';
+    this.workoutBuddy = data.workoutBuddy || '';
+    this.workoutBuddyUser = data.workoutBuddyUser || undefined;
+    this.additionalGoals = data.additionalGoals || '';
+    this.blockedUsers = data.blockedUsers || [];
+    this.level = data.level || UserLevel.Novice;
+    this.goal = data.goal || [];
+    this.bodyWeight = Array.isArray(data.bodyWeight)
+      ? data.bodyWeight.map((weight: any) => BodyWeight.fromFirebase(weight))
+      : [];
+    this.macros = data.macros || {};
+    this.profileImage = ProfileImage.fromFirebase(data.profileImage || {});
+    this.registrationComplete = data.registrationComplete || false;
+    this.creator = data.creator || undefined;
+    this.subscriptionType = data.subscriptionType || SubscriptionType.unsubscribed;
+    this.subscriptionPlatform = data.subscriptionPlatform || SubscriptionPlatform.Web;
+    this.referrer = data.referrer || '';
+    this.isCurrentlyActive = data.isCurrentlyActive || false;
+    this.videoCount = data.videoCount || 0;
+    this.createdAt = data.createdAt ? new Date(data.createdAt) : new Date();
+    this.updatedAt = data.updatedAt ? new Date(data.updatedAt) : new Date();
   }
- 
-   toFirestore(): Record<string, any> {
-     return {
-       id: this.id,
-       displayName: this.displayName,
-       username: this.username,
-       bio: this.bio,
-       profileImage: this.profileImage,
-       followerCount: this.followerCount,
-       followingCount: this.followingCount,
-       bodyWeight: this.bodyWeight,
-       workoutCount: this.workoutCount,
-       creator: this.creator,
-       createdAt: this.createdAt,
-       updatedAt: this.updatedAt
-     };
-   }
- }
+
+  toDictionary(): Record<string, any> {
+    const userDict: Record<string, any> = {
+      id: this.id,
+      displayName: this.displayName,
+      email: this.email,
+      username: this.username,
+      homeGym: this.homeGym,
+      encouragement: this.encouragement,
+      birthdate: this.birthdate?.getTime(),
+      gender: this.gender,
+      selfDisclosedGender: this.selfDisclosedGender,
+      height: this.height,
+      location: this.location,
+      bio: this.bio,
+      fcmToken: this.fcmToken,
+      workoutBuddy: this.workoutBuddy,
+      workoutBuddyUser: this.workoutBuddyUser,
+      additionalGoals: this.additionalGoals,
+      blockedUsers: this.blockedUsers,
+      level: this.level,
+      goal: this.goal,
+      bodyWeight: this.bodyWeight,
+      macros: this.macros,
+      profileImage: this.profileImage.toDictionary(),
+      registrationComplete: this.registrationComplete,
+      creator: this.creator,
+      subscriptionType: this.subscriptionType,
+      subscriptionPlatform: this.subscriptionPlatform,
+      referrer: this.referrer,
+      isCurrentlyActive: this.isCurrentlyActive,
+      videoCount: this.videoCount,
+      createdAt: this.createdAt.getTime(),
+      updatedAt: this.updatedAt.getTime()
+    };
+
+    return userDict;
+  }
+}
  
  export interface MacroRecommendations {
    calories: number;
@@ -240,6 +231,7 @@ export class ProfileImage {
  
  export enum SubscriptionPlatform {
    iOS = "ios",
+   Web = "web",
    Android = "android",
  }
  

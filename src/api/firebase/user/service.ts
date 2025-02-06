@@ -18,20 +18,20 @@ class UserService {
     store.dispatch(setUser(user));
   }
 
-  async fetchUserFromFirestore(userId: string): Promise<User> {
+  async fetchUserFromFirestore(userId: string): Promise<User | null> {
     const userRef = doc(db, 'users', userId);
     const userDoc = await getDoc(userRef);
 
     if (!userDoc.exists()) {
-      throw new Error('User not found');
+      return null;
     }
 
-    return User.fromFirebase(userDoc.data());
-  }
+    return new User(userDoc.data());
+}
 
   async updateUser(userId: string, user: User): Promise<void> {
     const userRef = doc(db, 'users', userId);
-    await setDoc(userRef, user.toFirestore(), { merge: true });
+    await setDoc(userRef, user.toDictionary(), { merge: true });
   }
 
   async getUsersByIds(ids: string[]): Promise<User[]> {
@@ -44,7 +44,7 @@ class UserService {
       const q = query(usersRef, where(documentId(), 'in', chunk));
       const querySnapshot = await getDocs(q);
       querySnapshot.docs.forEach(doc => {
-        users.push(User.fromFirebase({ id: doc.id, ...doc.data() }));
+        users.push(new User({ id: doc.id, ...doc.data() }));
       });
     }
     return users;
@@ -366,7 +366,7 @@ class UserService {
       const querySnapshot = await getDocs(usersRef);
       
       return querySnapshot.docs
-        .map(doc => User.fromFirebase({ id: doc.id, ...doc.data() }))
+        .map(doc => new User({ id: doc.id, ...doc.data() }))
         .filter(user => user.profileImage?.profileImageURL); // Only return users with profile images
         
     } catch (error) {
@@ -407,9 +407,9 @@ class UserService {
       
       // Map the documents to User objects
       const users = querySnapshot.docs
-        .map(doc => {
-          const data = doc.data();
-          return User.fromFirebase({ id: doc.id, ...data });
+      .map(doc => {
+            const data = doc.data();
+            return new User({ id: doc.id, ...data });
         })
         // Filter out users without profile images
         .filter(user => user.profileImage?.profileImageURL)
