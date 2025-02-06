@@ -600,10 +600,15 @@ const ChallengeDetailView = () => {
                     userChallenge={userChallenges?.find(uc => uc.userId === currentUser?.id)}
                     allWorkoutSummaries={[]} // Replace with actual workout summaries
                     index={index}
-                    onPrimaryAction={() => {
-                      const username = workout.author.username;
-                      router.push(`/workout/${username}/${workout.id}`);
-                    }}
+                    onPrimaryAction={async () => {
+                      try {
+                        const user = await userService.getUserById(workout.author);
+                        router.push(`/workout/${user.username}/${workout.id}`);
+                      } catch (error) {
+                        console.error('Error getting user:', error);
+                        // Handle error appropriately
+                      }
+                     }}
                     onCalendarTap={(date) => handleCalendarTap(workout, date)}
                     onUpdateOrder={(newOrder) => handleSwapOrder(workout, newOrder)}
                   />

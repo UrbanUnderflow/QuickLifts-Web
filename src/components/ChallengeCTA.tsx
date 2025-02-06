@@ -43,7 +43,7 @@ const ChallengeCTA: React.FC<{ challenge: any }> = ({ challenge }) => {
 
   // Construct the web app URL using dynamic values from challenge.
   // Assumes that challenge.ownerId is an array and uses its first element.
-  const webAppUrl = `${endpoint}/round/${challenge.id};`
+  const webAppUrl = `${endpoint}/round/${challenge.id}`
 
   const handleJoinChallenge = () => {
     setShowInstructions(true);
