@@ -64,6 +64,7 @@ class UserService {
 
     try {
       // Save the workout document
+      console.log("Right before we save: " + JSON.stringify(workout.toDictionary()));
       await setDoc(userWorkoutRef, workout.toDictionary());
       console.log('Stack created successfully');
 
@@ -335,6 +336,21 @@ class UserService {
     } catch (error) {
       console.error('Error fetching user ID by username:', error);
       return null;
+    }
+  }
+
+  async getAllUsers(): Promise<User[]> {
+    try {
+      const usersRef = collection(db, 'users');
+      const querySnapshot = await getDocs(usersRef);
+      
+      return querySnapshot.docs
+        .map(doc => User.fromFirebase({ id: doc.id, ...doc.data() }))
+        .filter(user => user.profileImage?.profileImageURL); // Only return users with profile images
+        
+    } catch (error) {
+      console.error('Error fetching users:', error);
+      return [];
     }
   }
 

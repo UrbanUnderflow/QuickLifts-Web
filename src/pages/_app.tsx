@@ -1,7 +1,7 @@
 import React from 'react';
 import type { AppProps } from 'next/app';
 import { Provider } from 'react-redux';
-import { store } from '../redux/store'; // Make sure this path is correct
+import { store } from '../redux/store'; 
 import '../components/Footer/GlisteningButton.css';
 import '../index.css';
 import '../styles/animations.css';

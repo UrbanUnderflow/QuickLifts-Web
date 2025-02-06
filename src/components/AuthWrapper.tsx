@@ -29,14 +29,13 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     '/starter-pack', 
     '/stacks', 
     '/moves',
-    '/terms',
-  ].map(route => route.toLowerCase());  // Normalize all routes
+    '/terms',,
+  ].map(route => route?.toLowerCase());  // Normalize all routes
   
   const publicPathPatterns = [
     '/round-invitation', 
     '/profile', 
     '/challenge',
-    '/about',
   ].map(pattern => pattern.toLowerCase());  // Normalize all patterns
   
   const isPublicRoute = (path: string) => {

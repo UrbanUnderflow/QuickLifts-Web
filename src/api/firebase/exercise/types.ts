@@ -89,7 +89,7 @@ export class ExerciseLog {
     this.logs = (data.logs || []).map((log: any) => RepsAndWeightLog.fromFirebase(log));
     this.feedback = data.feedback || '';
     this.note = data.note || '';
-    this.recommendedWeight = data.recommendedWeight;
+    this.recommendedWeight = data.recommendedWeight || 'calculating...';  
     this.isSplit = data.isSplit || false;
     this.isBodyWeight = data.isBodyWeight || false;
     this.logSubmitted = data.logSubmitted || false;
@@ -292,7 +292,7 @@ export class Exercise {
           screenTime: categoryData.screenTime || 0,
           selectedVideo: categoryData.selectedVideo
             ? ExerciseVideo.fromFirebase(categoryData.selectedVideo)
-            : undefined
+            : null
         });
         break;
 
@@ -434,7 +434,7 @@ export class ExerciseVideo {
       profileImage: data.profileImage || {},
       caption: data.caption,
       gifURL: data.gifURL,
-      thumbnail: data.thumbnail,
+      thumbnail: data.thumbnail || null,
       visibility: data.visibility || 'private',
       totalAccountsReached: data.totalAccountsReached || 0,
       totalAccountLikes: data.totalAccountLikes || 0,
@@ -471,8 +471,8 @@ export class ExerciseVideo {
     if (this.caption) data.caption = this.caption;
     if (this.gifURL) data.gifURL = this.gifURL;
     if (this.thumbnail) data.thumbnail = this.thumbnail;
-    if (this.liked !== undefined) data.liked = this.liked;
-    if (this.bookmarked !== undefined) data.bookmarked = this.bookmarked;
+    if (this.liked !== null) data.liked = this.liked;
+    if (this.bookmarked !== null) data.bookmarked = this.bookmarked;
 
     return data;
   }

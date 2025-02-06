@@ -357,7 +357,7 @@ const ChallengeDetailView = () => {
   const shouldShowWaitingRoom =
   collection &&
   currentUser &&
-  // !collection.ownerId.includes(currentUser.id) &&
+  !collection.ownerId.includes(currentUser.id) &&
   (collection.challenge?.status === ChallengeStatus.Draft || !challengeHasStarted);
 
   if (shouldShowWaitingRoom) {
