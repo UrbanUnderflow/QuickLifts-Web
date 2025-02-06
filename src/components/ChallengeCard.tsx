@@ -56,7 +56,7 @@ export const ChallengeCard: React.FC<ChallengeCardProps> = ({
             <div>
               <p className="text-xs text-white/50">Starts</p>
               <p className="text-sm text-white">
-                {startDate.toLocaleDateString()}
+                {new Date(startDate).toLocaleDateString()}
               </p>
             </div>
           </div>
@@ -66,7 +66,7 @@ export const ChallengeCard: React.FC<ChallengeCardProps> = ({
             <div>
               <p className="text-xs text-white/50">Ends</p>
               <p className="text-sm text-white">
-                {endDate.toLocaleDateString()}
+                {new Date(endDate).toLocaleDateString()}
               </p>
             </div>
           </div>

@@ -2,9 +2,7 @@
   "/_app": "pages/_app.js",
   "/_error": "pages/_error.js",
   "/_document": "pages/_document.js",
-  "/": "pages/index.js",
-  "/about": "pages/about.js",
   "/round/[id]": "pages/round/[id].js",
-  "/createStack": "pages/createStack.js",
-  "/workout/[username]/[id]": "pages/workout/[username]/[id].js"
+  "/about": "pages/about.js",
+  "/": "pages/index.js"
 }

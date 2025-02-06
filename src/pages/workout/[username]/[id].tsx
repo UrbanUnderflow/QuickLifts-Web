@@ -28,10 +28,16 @@ const WorkoutPreviewer: React.FC = () => {
 
     const fetchWorkoutByUsernameAndId = async () => {
       try {
-        const [fetchedWorkout, fetchedLogs] = await workoutService.fetchSavedWorkout(username as string, id as string);
+        // First get the user ID from the username
+        const user = await userService.getUserByUsername(username as string);
+        
+        if (!user) {
+          setError("User not found");
+          return;
+        }
 
-        console.log("fetched workouts:", JSON.stringify(fetchedWorkout, null, 2));
-        console.log("fetched logs:", JSON.stringify(fetchedLogs, null, 2));
+        // Now fetch the workout using the user's ID
+        const [fetchedWorkout, fetchedLogs] = await workoutService.fetchSavedWorkout(user.id, id as string);
 
         if (fetchedWorkout) {
           setWorkout(fetchedWorkout);
@@ -106,18 +112,34 @@ const WorkoutPreviewer: React.FC = () => {
   };
   
 
+  // Add loading and error state checks with more visibility
   if (isLoading) {
-    return <div className="text-white text-center pt-20">Loading workout...</div>;
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="text-white text-xl">Loading workout...</div>
+      </div>
+    );
   }
 
   if (error || !workout) {
-    return <div className="text-white text-center pt-20">Error loading workout: {error || "Unknown error"}</div>;
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="text-white text-xl">
+          Error loading workout: {error || "No workout data available"}
+        </div>
+      </div>
+    );
   }
 
   const videoURLs = workout.exercises
-  .filter(exerciseRef => exerciseRef.exercise.videos?.length > 0)
+  .filter(exerciseRef => {
+    console.log("Exercise videos:", exerciseRef.exercise.videos);
+    return exerciseRef.exercise.videos?.length > 0;
+  })
   .flatMap(exerciseRef => exerciseRef.exercise.videos.map(video => video.videoURL))
   .filter(url => url);
+
+  console.log("Filtered video URLs:", videoURLs);
   
   const duration = estimatedDuration(workout.exercises);
 
