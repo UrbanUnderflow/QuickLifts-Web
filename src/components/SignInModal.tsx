@@ -9,12 +9,13 @@ import {
 } from "firebase/auth";
 import { Camera, X } from "lucide-react";
 import { FitnessGoal, QuizData, SignUpStep } from "../types/AuthTypes";
+import { Gender, WorkoutGoal, } from "../api/firebase/user";
 import { SubscriptionType } from "../api/firebase/user";
 import authService from "../api/firebase/auth";
-import { userService, User } from "../api/firebase/user";
+import { userService, User, UserLevel, BodyWeight } from "../api/firebase/user";
 import { auth } from "../api/firebase/config";
 import { useRouter } from 'next/router';
-import Link from "next/link";
+import { firebaseStorageService, UploadImageType } from '../api/firebase/storage/service';
 
 // type SignUpStep = 'initial' | 'password' | 'profile';
 interface SignInModalProps {
@@ -27,6 +28,7 @@ interface SignInModalProps {
   onSignUpError?: (error: Error) => void;
   onQuizComplete?: () => void;
   onQuizSkipped?: () => void;
+  onRegistrationComplete?: () => void;
 }
 
 const SignInModal: React.FC<SignInModalProps> = ({
@@ -39,6 +41,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
   onSignUpError,
   onQuizComplete,
   onQuizSkipped,
+  onRegistrationComplete,
 }) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -57,6 +60,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeProvider, setActiveProvider] = useState<string | null>(null);
+  const [isImageUploading, setIsImageUploading] = useState(false);
 
   // Password validation states
   const hasUppercase = /[A-Z]/.test(password);
@@ -97,15 +101,19 @@ const SignInModal: React.FC<SignInModalProps> = ({
     } catch (err) {
       console.error("Error syncing subscription:", err);
     }
-    // If unsubscribed, redirect to subscribe page
-    if (
-      user.subscription === "Unsubscribed" ||
-      user.subscription === (SubscriptionType && SubscriptionType.unsubscribed)
-    ) {
-      router.push("/subscribe");
-    } else {
-      onSignInSuccess?.(user);
-      onClose?.();
+    
+    // Only close if we have a username
+    const firestoreUser = await userService.fetchUserFromFirestore(user.uid);
+    if (firestoreUser?.username) {
+      if (
+        user.subscription === "Unsubscribed" ||
+        user.subscription === (SubscriptionType && SubscriptionType.unsubscribed)
+      ) {
+        router.push("/subscribe");
+      } else {
+        onSignInSuccess?.(user);
+        onClose?.();
+      }
     }
   };
 
@@ -160,36 +168,98 @@ const SignInModal: React.FC<SignInModalProps> = ({
             }
           }
         }
-      } else if (provider === "google") {
-        // Existing Google sign-in logic
+      } else if (provider === 'google') {
         const result = await authService.signInWithGoogle();
         const user = result.user;
-        const firestoreUser = await userService.fetchUserFromFirestore(user.uid);
+        const isNewUser = result.user.metadata.creationTime === result.user.metadata.lastSignInTime;
+      
+        // Attempt to fetch existing user data
+        let firestoreUser = await userService.fetchUserFromFirestore(user.uid);
+      
+        if (!firestoreUser) {
+          // Create new user if they don't exist in Firestore
+          firestoreUser = new User({});
+          firestoreUser.id = user.uid;
+          firestoreUser.email = user.email || "";
+          firestoreUser.displayName = user.displayName || "";
+      
+          // Create the base user in Firestore
+          await userService.updateUser(user.uid, firestoreUser);
+        }
+        console.log("The User is: ", firestoreUser);
+        // Set the current user in the service
         userService.currentUser = firestoreUser;
-        await checkSubscriptionAndProceed(user);
-      }
-    } catch (err: unknown) {
-      console.error("Main error:", err);
-      if (err instanceof Error) {
-        setError(err.message);
-        if (isSignUp) {
-          onSignUpError?.(err);
+      
+        // Check if username is empty or not set
+        console.log("Username is empty?: ", firestoreUser.username == '');
+
+        if (firestoreUser.username == '') {
+          console.log("Starting registraiton");
+
+          // Set isSignUp to true and move to profile step
+          setIsSignUp(true);
+          setSignUpStep("profile");
+          return; // Don't proceed with subscription check yet
         } else {
-          onSignInError?.(err);
+          console.log("Checking Subs");
+          // If we have a username, proceed with normal flow
+          await checkSubscriptionAndProceed(user);
         }
+        
+      }
+  } catch (error: unknown) {
+    // Keep your existing error handling
+    console.error(`${provider} sign-in error:`, error);
+    let errorMessage = "An unexpected error occurred";
+    
+    if (error instanceof Error) {
+      // Handle specific Firebase Auth error codes
+      switch ((error as any).code) {
+        case 'auth/popup-blocked':
+          errorMessage = "Please enable popups for this site and try again";
+          break;
+        case 'auth/popup-closed-by-user':
+          errorMessage = "Sign-in cancelled. Please try again";
+          break;
+        case 'auth/cancelled-popup-request':
+          errorMessage = "Another sign-in attempt is already in progress";
+          break;
+        case 'auth/account-exists-with-different-credential':
+          errorMessage = "An account already exists with the same email address but different sign-in credentials. Please sign in using the original account method.";
+          break;
+        case 'auth/network-request-failed':
+          errorMessage = "Network error. Please check your internet connection and try again";
+          break;
+        case 'auth/user-disabled':
+          errorMessage = "This account has been disabled. Please contact support";
+          break;
+        case 'auth/operation-not-allowed':
+          errorMessage = "This sign-in method is not enabled. Please contact support";
+          break;
+        default:
+          errorMessage = error.message;
+      }
+      
+      setError(errorMessage);
+      
+      if (isSignUp) {
+        onSignUpError?.(error);
       } else {
-        const genericError = new Error("An unknown error occurred");
-        setError(genericError.message);
-        if (isSignUp) {
-          onSignUpError?.(genericError);
-        } else {
-          onSignInError?.(genericError);
-        }
+        onSignInError?.(error);
       }
-    } finally {
-      setIsLoading(false);
-      setActiveProvider(null);
+    } else {
+      setError(errorMessage);
+      const genericError = new Error(errorMessage);
+      if (isSignUp) {
+        onSignUpError?.(genericError);
+      } else {
+        onSignInError?.(genericError);
+      }
     }
+  } finally {
+    setIsLoading(false);
+    setActiveProvider(null);
+  }
   };
 
   const addLog = (log: string) => {
@@ -331,55 +401,18 @@ const SignInModal: React.FC<SignInModalProps> = ({
             try {
               setIsLoading(true);
               setError(null);
-
-              const result = await authService.signUpWithEmail({
-                email,
-                password,
-                username,
-              });
-
-              // Create the user object
-              const newUser = new User({
-                id: result.user.uid,
-                displayName: "", // Default, can be updated in profile step
-                email,
-                username,
-                bio: "", // Default
-                profileImage: {
-                  profileImageURL: "",
-                  imageOffsetWidth: 0,
-                  imageOffsetHeight: 0,
-                },
-                followerCount: 0,
-                followingCount: 0,
-                bodyWeight: [],
-                workoutCount: 0,
-                creator: {
-                  type: [],
-                  instagramHandle: "",
-                  twitterHandle: "",
-                  youtubeUrl: "",
-                  acceptCodeOfConduct: false,
-                  acceptExecutiveTerms: false,
-                  acceptGeneralTerms: false,
-                  acceptSweatEquityPartnership: false,
-                  onboardingStatus: "",
-                  onboardingLink: "",
-                  onboardingExpirationDate: 0,
-                },
-                createdAt: new Date(),
-                updatedAt: new Date(),
-              });
-
-              // Save the user globally
-              userService.currentUser = newUser;
-
-              console.log("Sign-up successful:", newUser);
-
+        
+              // Update the user with the new username
+              if (userService.currentUser) {
+                userService.currentUser.username = username;
+                await userService.updateUser(userService.currentUser.id, userService.currentUser);
+                onRegistrationComplete?.(); // This will close the modal
+              }
+        
               setSignUpStep("quiz-prompt");
             } catch (err) {
               const error = err as Error;
-              console.error("Error during sign-up:", error);
+              console.error("Error during profile update:", error);
               setError(error.message);
             } finally {
               setIsLoading(false);
@@ -428,39 +461,10 @@ const SignInModal: React.FC<SignInModalProps> = ({
       }
 
       // Construct the user object with default or empty values
-      const user = new User({
-        id: userId,
-        displayName: "", // Default value, can be updated later
-        email: email,
-        username: username,
-        bio: "", // Default value
-        profileImage: { profileImageURL: "", imageOffsetWidth: 0, imageOffsetHeight: 0 }, // Empty profile image
-        followerCount: 0,
-        followingCount: 0,
-        bodyWeight: [], // No body weight records yet
-        workoutCount: 0,
-        creator: {
-          type: [],
-          instagramHandle: "",
-          twitterHandle: "",
-          youtubeUrl: "",
-          acceptCodeOfConduct: false,
-          acceptExecutiveTerms: false,
-          acceptGeneralTerms: false,
-          acceptSweatEquityPartnership: false,
-          onboardingStatus: "",
-          onboardingLink: "",
-          onboardingExpirationDate: 0,
-        },
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
+      var user = userService.currentUser;
 
-      // Update the user document
-      await userService.updateUser(userId, user);
-
-      console.log("User document updated successfully");
       onQuizComplete?.(); // Notify that the quiz is complete
+      router.push('/'); // Add this line to route to root
     } catch (err) {
       const error = err as Error;
       console.error("Error updating user data:", error);
@@ -514,8 +518,32 @@ const SignInModal: React.FC<SignInModalProps> = ({
         {["Man", "Woman", "I'd rather self describe"].map((option) => (
           <button
             key={option}
-            onClick={() => {
+            onClick={async () => {
+              let genderValue: Gender;
+              
+              // Convert option to proper Gender enum
+              switch(option) {
+                case "Man":
+                  genderValue = Gender.Man;
+                  break;
+                case "Woman":
+                  genderValue = Gender.Woman;
+                  break;
+                default:
+                  genderValue = Gender.SelfDescribe;
+              }
+            
               setQuizData({ ...quizData, gender: option as any });
+            
+              // Update user data
+              if (auth.currentUser?.uid && userService.currentUser) {
+                const updatedUser = userService.currentUser;
+                updatedUser.gender = genderValue;
+                updatedUser.updatedAt = new Date();
+                
+                await userService.updateUser(auth.currentUser.uid, updatedUser);
+              }
+              
               setQuizStep(quizStep + 1);
             }}
             className={`w-full p-4 rounded-lg border ${
@@ -546,15 +574,21 @@ const SignInModal: React.FC<SignInModalProps> = ({
           <input
             type="number"
             value={quizData.height.feet || ""}
-            onChange={(e) =>
-              setQuizData({
-                ...quizData,
-                height: {
-                  ...quizData.height,
-                  feet: Number(e.target.value),
-                },
-              })
-            }
+            onChange={async (e) => {
+              const newFeet = Number(e.target.value);
+              const newHeight = { ...quizData.height, feet: newFeet };
+              setQuizData({ ...quizData, height: newHeight });
+              
+              if (auth.currentUser?.uid && userService.currentUser) {
+                const updatedUser = new User({
+                  ...userService.currentUser.toDictionary(),
+                  height: newHeight,
+                  updatedAt: new Date()
+                });
+                
+                await userService.updateUser(auth.currentUser.uid, updatedUser);
+              }
+            }}
             min="0"
             max="8"
             className="w-full bg-zinc-800 border border-zinc-600 rounded-lg p-3 text-white placeholder-zinc-400 focus:outline-none focus:border-[#E0FE10] focus:ring-1 focus:ring-[#E0FE10] transition-colors"
@@ -567,15 +601,21 @@ const SignInModal: React.FC<SignInModalProps> = ({
           <input
             type="number"
             value={quizData.height.inches || ""}
-            onChange={(e) =>
-              setQuizData({
-                ...quizData,
-                height: {
-                  ...quizData.height,
-                  inches: Number(e.target.value),
-                },
-              })
-            }
+            onChange={async (e) => {
+              const newInches = Number(e.target.value);
+              const newHeight = { ...quizData.height, inches: newInches };
+              setQuizData({ ...quizData, height: newHeight });
+              
+              if (auth.currentUser?.uid && userService.currentUser) {
+                const updatedUser = new User({
+                  ...userService.currentUser.toDictionary(),
+                  height: newHeight,
+                  updatedAt: new Date()
+                });
+                
+                await userService.updateUser(auth.currentUser.uid, updatedUser);
+              }
+            }}
             min="0"
             max="11"
             className="w-full bg-zinc-800 border border-zinc-600 rounded-lg p-3 text-white placeholder-zinc-400 focus:outline-none focus:border-[#E0FE10] focus:ring-1 focus:ring-[#E0FE10] transition-colors"
@@ -602,9 +642,27 @@ const SignInModal: React.FC<SignInModalProps> = ({
         <input
           type="number"
           value={quizData.weight || ""}
-          onChange={(e) =>
-            setQuizData({ ...quizData, weight: Number(e.target.value) })
-          }
+          onChange={async (e) => {
+            const newWeight = Number(e.target.value);
+            setQuizData({ ...quizData, weight: newWeight });
+            
+            if (auth.currentUser?.uid && userService.currentUser) {
+              const newBodyWeight = new BodyWeight({
+                oldWeight: userService.currentUser.bodyWeight.length > 0 
+                  ? userService.currentUser.bodyWeight[userService.currentUser.bodyWeight.length - 1].newWeight 
+                  : 0,
+                newWeight: newWeight
+              });
+              
+              const updatedUser = new User({
+                ...userService.currentUser.toDictionary(),
+                bodyWeight: [...userService.currentUser.bodyWeight, newBodyWeight],
+                updatedAt: new Date()
+              });
+              
+              await userService.updateUser(auth.currentUser.uid, updatedUser);
+            }
+          }}
           className="w-full bg-zinc-800 border border-zinc-600 rounded-lg p-3 text-white"
           placeholder="Enter weight in lbs"
           min="0"
@@ -624,9 +682,26 @@ const SignInModal: React.FC<SignInModalProps> = ({
         {["Novice", "Intermediate", "Expert"].map((level) => (
           <button
             key={level}
-            onClick={() => {
+            onClick={async () => {
+              const levelMap = {
+                "Novice": UserLevel.Novice,
+                "Intermediate": UserLevel.Intermediate,
+                "Expert": UserLevel.Expert
+              };
+            
               setQuizData({ ...quizData, gymExperience: level as any });
-              setQuizStep(quizStep + 1);
+              
+              if (auth.currentUser?.uid && userService.currentUser) {
+                const updatedUser = new User({
+                  ...userService.currentUser.toDictionary(),
+                  level: levelMap[level as keyof typeof levelMap],
+                  updatedAt: new Date()
+                });
+                
+                await userService.updateUser(auth.currentUser.uid, updatedUser);
+                
+                setQuizStep(quizStep + 1);
+              }
             }}
             className={`w-full p-4 rounded-lg border ${
               quizData.gymExperience === level
@@ -655,13 +730,38 @@ const SignInModal: React.FC<SignInModalProps> = ({
           <button
             type="button"
             key={goal}
-            onClick={() => {
+            onClick={async () => {
+              const goalsMap = {
+                "Lose weight": WorkoutGoal.LoseWeight,
+                "Gain muscle mass": WorkoutGoal.GainWeight,
+                "Tone up": WorkoutGoal.ToneUp,
+                "General Fitness": WorkoutGoal.GeneralFitness
+              };
+            
+              // Determine updated goals
+              const updatedGoals = quizData.fitnessGoals.includes(goal)
+                ? quizData.fitnessGoals.filter((g) => g !== goal)
+                : [...quizData.fitnessGoals, goal];
+            
               setQuizData((prev: QuizData) => ({
                 ...prev,
-                fitnessGoals: prev.fitnessGoals.includes(goal)
-                  ? prev.fitnessGoals.filter((g) => g !== goal)
-                  : [...prev.fitnessGoals, goal],
+                fitnessGoals: updatedGoals,
               }));
+              
+              if (auth.currentUser?.uid && userService.currentUser) {
+                const updatedUser = new User({
+                  ...userService.currentUser.toDictionary(),
+                  goal: updatedGoals.map(g => goalsMap[g]),
+                  updatedAt: new Date()
+                });
+                
+                await userService.updateUser(auth.currentUser.uid, updatedUser);
+                
+                // Only move to next step if at least one goal is selected
+                if (updatedGoals.length > 0) {
+                  setQuizStep(quizStep + 1);
+                }
+              }
             }}
             className={`w-full p-4 rounded-lg border ${
               quizData.fitnessGoals.includes(goal)
@@ -701,7 +801,18 @@ const SignInModal: React.FC<SignInModalProps> = ({
           onChange={(e) => {
             const date = new Date(quizData.birthdate || new Date());
             date.setMonth(parseInt(e.target.value));
+            
             setQuizData({ ...quizData, birthdate: date });
+            
+            if (auth.currentUser?.uid && userService.currentUser) {
+              const updatedUser = new User({
+                ...userService.currentUser.toDictionary(),
+                birthdate: date,
+                updatedAt: new Date()
+              });
+              
+              userService.updateUser(auth.currentUser.uid, updatedUser);
+            }
           }}
         >
           {Array.from({ length: 12 }, (_, i) => (
@@ -789,9 +900,26 @@ const SignInModal: React.FC<SignInModalProps> = ({
     setIsUsernameAvailable(/^[a-zA-Z0-9_]{3,}$/.test(value));
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files?.[0]) {
-      setProfileImage(e.target.files[0]);
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      try {
+        setIsImageUploading(true);
+        setProfileImage(file);
+        
+        const uploadResult = await firebaseStorageService.uploadImage(
+          file, 
+          UploadImageType.Profile
+        );
+    
+        console.log('Profile image uploaded successfully', uploadResult);
+      } catch (error) {
+        console.error('Profile image upload failed', error);
+        setError('Failed to upload profile image');
+        setProfileImage(null);
+      } finally {
+        setIsImageUploading(false);
+      }
     }
   };
 
@@ -825,6 +953,13 @@ const SignInModal: React.FC<SignInModalProps> = ({
               <Camera size={16} className="text-black" />
               <input type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
             </label>
+
+            {/* PLACE LOADING STATE HERE */}
+            {isImageUploading && (
+              <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+                <div className="loader border-t-transparent border-4 border-white rounded-full w-8 h-8 animate-spin"></div>
+              </div>
+            )}
           </div>
         </div>
 
