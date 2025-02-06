@@ -1,6 +1,7 @@
-import { ExerciseReference, ExerciseLog } from '../exercise/types';
+import { ExerciseReference, ExerciseLog, ExerciseAuthor } from '../exercise/types';
 import { BodyPart, ExerciseCategory } from '../exercise/types';
 import { convertFirestoreTimestamp } from '../../../utils/formatDate';
+import { workoutService } from '../workout/service';
 
 // src/types/WorkoutTypes.ts
 export enum WorkoutStatus {
@@ -100,7 +101,7 @@ export class Workout {
   workoutStatus: WorkoutStatus;
   startTime?: Date | null;
   order?: number | null;
-  author: string;
+  author: ExerciseAuthor;
   assignedDate?: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -112,7 +113,6 @@ export class Workout {
     this.roundWorkoutId = data.roundWorkoutId !== undefined ? data.roundWorkoutId : '';
     this.title = data.title !== undefined ? data.title : '';
     this.description = data.description !== undefined ? data.description : '';
-    this.author = data.author !== undefined ? data.author : '';
     
     // For numeric fields, default to 0.
     this.duration = data.duration !== undefined ? data.duration : 0;
@@ -141,6 +141,20 @@ export class Workout {
     
     // For order, default to null if not provided.
     this.order = data.order !== undefined ? data.order : null;
+
+    if (typeof data.author === 'string') {
+      // Legacy case - only user ID
+      this.author = new ExerciseAuthor({
+        userId: data.author,
+        username: '' // Will be populated later
+      });
+      
+      // Queue async update
+      this.updateLegacyAuthor(data.author);
+    } else {
+      // New case - full author object
+      this.author = new ExerciseAuthor(data.author);
+    }
     
     // For zone, default to FullBody (or any other default you prefer)
     this.zone = data.zone !== undefined ? data.zone : BodyZone.FullBody;
@@ -156,6 +170,23 @@ export class Workout {
       }
       return false;
     });
+  }
+
+  private async updateLegacyAuthor(userId: string) {
+    try {
+      const user = await workoutService.getUserById(userId);
+      if (user) {
+        this.author = new ExerciseAuthor({
+          userId: user.id,
+          username: user.username
+        });
+        
+        // Save updated workout back to database
+        await workoutService.updateWorkout(this);
+      }
+    } catch (error) {
+      console.error('Failed to update legacy author:', error);
+    }
   }
 
   fetchPrimaryBodyParts(): BodyPart[] {
@@ -333,7 +364,7 @@ export class Workout {
       useAuthorContent: this.useAuthorContent,
       isCompleted: this.isCompleted,
       workoutStatus: this.workoutStatus,
-      author: this.author,
+      author: this.author.toDictionary(),
       createdAt: this.createdAt.getTime(),
       updatedAt: this.updatedAt.getTime(),
       assignedDate: this.assignedDate ? this.assignedDate.getTime() : null,

@@ -1,25 +1,25 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { 
-    CheckCircle, 
-    Plus, 
-    Trash2, 
-    ChevronDown,
     Users,
     Lock,
-    Calendar,
-    Clock,
-    Search,
-    ArrowUp,
-    ArrowDown,
+    Dumbbell,
+    Brain,
+    UserCircle,
+    Sparkles,
     X,
-    Edit
   } from 'lucide-react';
+
 import { userService } from '../api/firebase/user';
 import { workoutService } from '../api/firebase/workout/service';
-import { Workout, SweatlistCollection, Challenge, ChallengeStatus } from '../api/firebase/workout/types';
+import { exerciseService } from '../api/firebase/exercise/service';
+import { Exercise, ExerciseDetail, ExerciseCategory } from '../api/firebase/exercise/types';
+import { Workout, SweatlistCollection, Challenge, ChallengeStatus, WorkoutStatus } from '../api/firebase/workout/types';
 import { StackCard } from '../components/Rounds/StackCard'
-
+import { ExerciseGrid } from '../components/App/ExerciseGrid/ExerciseGrid';
+import { MultiUserSelector } from '../components/App/MultiSelectUser/MultiSelectUser';
+import { GeminiService } from '../api/firebase/gemini/service';
+import { generateId } from '../utils/generateId';
 
 // Type definitions
 export enum SweatlistType {
@@ -327,6 +327,21 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
     const [searchTerm, setSearchTerm] = useState('');
     const [allStacks, setAllStacks] = useState<Workout[]>([]);
     const [selectedStacks, setSelectedStacks] = useState<Workout[]>([]);
+    const [isAIMode, setIsAIMode] = useState(false);
+
+    // Add these states in DesktopChallengeSetupView
+    const [aiPromptText, setAiPromptText] = useState('');
+    const [selectedPreferences, setSelectedPreferences] = useState<string[]>([]);
+
+    const [activeTab, setActiveTab] = useState<'preferences' | 'moves' | 'creators'>('preferences');
+    const [selectedCreators, setSelectedCreators] = useState<string[]>([]);
+    const [selectedMoves, setSelectedMoves] = useState<Exercise[]>([]);
+    const [allExercises, setAllExercises] = useState<Exercise[]>([]);
+
+    const [isGenerating, setIsGenerating] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+
     const router = useRouter();
     
     const filteredStacksList = () => (
@@ -347,6 +362,18 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
 
         </div>
       );
+
+    useEffect(() => {
+        const fetchData = async () => {
+            try {
+            await exerciseService.fetchExercises();
+            setAllExercises(exerciseService.allExercises);
+            } catch (error) {
+            console.error('Error fetching exercises:', error);
+            }
+        };
+        fetchData();
+    }, []);
   
     useEffect(() => {
       const fetchStacks = async () => {
@@ -365,7 +392,6 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
     stack.title.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  
   const handleStackSelect = (stack: Workout) => {
     setSelectedStacks((prev: Workout[]) => {
       // First check if we already have this stack
@@ -463,6 +489,215 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
     return true;
   };
 
+  // Helper function to find complete exercise data and preferred creator video
+  const enrichExerciseData = (
+    exerciseData: any,  // The raw exercise data from AI
+    allExercises: Exercise[],
+    creatorExercises: Exercise[]
+  ): ExerciseDetail | null => {
+    // Find the base exercise from all exercises
+    const baseExercise = allExercises.find(ex => 
+      ex.name.toLowerCase() === exerciseData.name.toLowerCase()
+    );
+  
+    if (!baseExercise) {
+      console.warn(`Exercise not found in database: ${exerciseData.name}`);
+      return null;
+    }
+  
+    // Check if any preferred creators have a video for this exercise
+    const creatorVersion = creatorExercises.find(ex => 
+      ex.name.toLowerCase() === exerciseData.name.toLowerCase()
+    );
+  
+    // Create category with AI-generated details AND video if available
+    const category: ExerciseCategory = {
+      type: 'weightTraining',
+      details: {
+        // Use AI-generated details
+        reps: exerciseData.category.details.reps,
+        sets: exerciseData.category.details.sets,
+        weight: exerciseData.category.details.weight,
+        screenTime: exerciseData.category.details.screenTime || 45,
+        // Add video from creator or base exercise
+        selectedVideo: creatorVersion?.videos?.[0] || baseExercise.videos?.[0] || null
+      }
+    };
+  
+    // Log to verify we're using AI-generated details
+    console.log('AI Exercise Details:', exerciseData.category.details);
+    console.log('Final Category Details:', category.details);
+  
+    return new ExerciseDetail({
+      id: generateId(),
+      exercise: baseExercise,
+      exerciseName: exerciseData.name,
+      isMissing: false,
+      groupId: 0,
+      category: category,  // Use our new category with AI-generated details
+      notes: '',
+      isSplit: false,
+      closestMatch: []
+    });
+  };
+
+  const handleGenerateAIRound = async () => {
+    try {
+      setIsGenerating(true);
+  
+      const geminiService = GeminiService.getInstance();
+      
+      // Get all exercises from selected creators
+      const creatorExercises = await Promise.all(
+        selectedCreators.map(async (creatorId) => {
+          const exercises = await exerciseService.getExercisesByAuthor(creatorId);
+          return exercises;
+        })
+      );
+      
+      // Flatten the array of creator exercises
+      const allCreatorExercises = creatorExercises.flat();
+  
+      // Get the selected exercises from the "Must-Include Moves" tab
+      const mustIncludeExercises = selectedMoves.map(move => move.name);
+  
+      // Get the preferences from the "AI Preferences" tab
+      const preferences = [
+        "Include rest days",
+      ].filter(pref => selectedPreferences.includes(pref));
+  
+      // Generate the round structure using Gemini
+      const generatedRound = await geminiService.generateRound(
+        mustIncludeExercises,
+        aiPromptText,
+        preferences,
+        allCreatorExercises,
+        allExercises,
+        challengeData.startDate,
+        challengeData.endDate
+      );
+  
+      console.log('Generated round data:', generatedRound);
+      var createdStacks = [];
+  
+      // Create stacks one at a time and collect them
+      for (const stackData of generatedRound.stacks) {
+        try {
+          // Enrich exercise data and filter out any that couldn't be found
+          const enrichedExercises = stackData.exercises
+            .map((ex) => {
+              try {
+                const enrichedExercise = enrichExerciseData(ex, allExercises, allCreatorExercises);
+                return enrichedExercise;
+              } catch (error) {
+                console.warn(`Skipping exercise ${ex.name}: ${error}`);
+                return null;
+              }
+            })
+            .filter((exercise): exercise is ExerciseDetail => exercise !== null);
+
+          // Only create stack if we have at least one valid exercise
+          if (enrichedExercises.length > 0) {
+            // Create the workout and logs
+            const { workout, exerciseLogs } = await workoutService.formatWorkoutAndInitializeLogs(
+              enrichedExercises,
+              userService.currentUser?.id
+            );
+
+            // Update workout with stack data
+            workout.title = stackData.title;
+            workout.description = `${stackData.description} (${enrichedExercises.length} exercises)`;
+            workout.workoutStatus = WorkoutStatus.Archived;
+
+            // Create the stack and store the result
+            const createdStack = await userService.createStack(workout, exerciseLogs);
+            console.log('Created individual stack:', createdStack);
+            
+            if (createdStack) {
+              createdStacks.push(createdStack);
+            }
+          } else {
+            console.warn(`Skipping stack "${stackData.title}" as no valid exercises were found`);
+          }
+        } catch (error) {
+          console.error('Error creating stack:', stackData.title, error);
+          // Continue with next stack instead of throwing
+          continue;
+        }
+      }
+  
+      console.log('All created stacks:', createdStacks);
+  
+      if (createdStacks.length === 0) {
+        throw new Error('No stacks were successfully created');
+      }
+  
+      // Now create the round with the collected stacks
+      const createdAt = new Date();
+      const currentUser = userService.currentUser;
+  
+      if (!currentUser?.id) {
+        throw new Error("No user logged in");
+      }
+  
+      // Create challenge object with form data
+      const challenge = new Challenge({
+        id: "",
+        title: challengeData.challengeName,  // Use form input
+        subtitle: challengeData.challengeDesc,  // Use form input
+        participants: [],
+        status: ChallengeStatus.Draft,
+        startDate: challengeData.startDate,  // Use form input
+        endDate: challengeData.endDate,  // Use form input
+        createdAt,
+        updatedAt: createdAt
+      });
+  
+      // Create the collection with form data
+      const collection = new SweatlistCollection({
+        id: "",
+        title: challengeData.challengeName,  // Use form input
+        subtitle: challengeData.challengeDesc,  // Use form input
+        pin: challengeData.pinCode,  // Use form input
+        challenge,
+        sweatlistIds: createdStacks.map((stack, index) => ({
+          id: stack.id,
+          sweatlistAuthorId: currentUser.id,
+          sweatlistName: stack.title,
+          order: index + 1
+        })),
+        ownerId: [currentUser.id],
+        participants: [],
+        privacy: challengeData.roundType,  // Use form input
+        createdAt,
+        updatedAt: createdAt
+      });
+  
+      console.log('Collection metadata:', {
+        title: collection.title,
+        subtitle: collection.subtitle,
+        startDate: collection.challenge?.startDate,
+        endDate: collection.challenge?.endDate,
+        type: collection.privacy,
+        pin: collection.pin
+      });
+  
+      const updatedCollection = await workoutService.updateCollection(collection);
+      console.log("Created collection:", updatedCollection);
+      
+      if (updatedCollection) {
+        router.push(`/round/${updatedCollection.id}`);
+      }
+    } catch (error) {
+      console.error('Error in handleGenerateAIRound:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to generate workout round. Please try again.';
+      setError(errorMessage);
+
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   const handleCreateRound = async () => {
     if (!validateChallengeInput()) return;
   
@@ -513,58 +748,462 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
       // Update collection in Firestore
       const updatedCollection = await workoutService.updateCollection(collection);
       
+      console.log("The collection is: ", updatedCollection);
       if (updatedCollection) {  
         router.push(`/round/${updatedCollection.id}`);
       }
     } catch (error) {
       console.error('Error creating round:', error);
-     
+      const errorMessage = error instanceof Error ? error.message : 'Failed to generate workout round. Please try again.';
+      setError(errorMessage);
     }
   };
 
   return (
+    
     <div className="h-screen flex justify-center gap-6 bg-zinc-900 p-6">
+      {error && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-zinc-900 p-8 rounded-2xl shadow-xl max-w-md w-full mx-4">
+            <div className="flex flex-col items-center gap-4">
+              <div className="h-12 w-12 rounded-full bg-red-500/10 flex items-center justify-center">
+                <X className="h-6 w-6 text-red-500" />
+              </div>
+              <h3 className="text-xl font-semibold text-white">Generation Failed</h3>
+              <p className="text-zinc-400 text-center">
+                {error}
+              </p>
+              <div className="flex gap-2 w-full">
+                <button
+                  onClick={() => setError(null)}
+                  className="flex-1 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    setError(null);
+                    handleGenerateAIRound();
+                  }}
+                  className="flex-1 px-4 py-2 bg-[#E0FE10] hover:bg-[#E0FE10]/90 text-black rounded-lg transition-colors"
+                >
+                  Try Again
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isGenerating && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-zinc-900 p-8 rounded-2xl shadow-xl max-w-md w-full mx-4">
+            <div className="flex flex-col items-center gap-4">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#E0FE10]" />
+              <h3 className="text-xl font-semibold text-white">Generating Round</h3>
+              <p className="text-zinc-400 text-center">
+                Creating your personalized training program using AI. This may take a moment...
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Left Panel: Challenge Setup Form */}
-      <div className="w-[500px] bg-zinc-800 rounded-xl shadow-xl relative flex flex-col">
+      <div className="fixed top-6 right-6 z-10">
+        <button
+            onClick={() => setIsAIMode(!isAIMode)}
+            className="group relative px-4 py-2 rounded-lg bg-black/20 backdrop-blur-sm 
+                    border border-zinc-800 hover:border-[#E0FE10]/50 transition-all"
+        >
+            {/* Glow effect */}
+            <div className="absolute inset-0 rounded-lg bg-gradient-to-r from-[#E0FE10] via-purple-500 to-[#E0FE10] opacity-20 
+                            blur-xl group-hover:opacity-30 transition-opacity" />
+            
+            <div className="relative flex items-center gap-2">
+            <Sparkles className="w-5 h-5 text-[#E0FE10]" />
+            <span className="text-white font-medium">AI Round</span>
+            </div>
+        </button>
+        </div>
+
+        <div className="w-[600px] bg-zinc-800 rounded-xl shadow-xl relative flex flex-col">
         <div className="h-full overflow-y-auto p-6 scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-transparent hover:scrollbar-thumb-zinc-600">
-          <MobileChallengeSetupView
-            setChallengeData={setChallengeData}
-            currentChallengeData={challengeData}
-            selectedStacks={selectedStacks}
-            onRemoveStack={handleRemoveStack}
-            viewModel={viewModel}
+            {isAIMode ? (
+            <div className="space-y-6">
+                <div>
+                <h1 className="text-2xl font-semibold text-white text-center mb-2">Create AI Round</h1>
+                <p className="text-zinc-400 text-center text-sm">
+                    Describe the type of round that you want to create. For example, a round that focuses on improving 
+                    the back and shoulders, or a round that focuses on legs. Be as descriptive as possible for best results.
+                </p>
+                </div>
+
+                {/* Add Round Title & Subtitle fields */}
+                <div>
+                  <label className="text-sm text-zinc-400 mb-2 block">Round Title</label>
+                  <input
+                    type="text"
+                    value={challengeData.challengeName}
+                    onChange={(e) => setChallengeData(
+                      challengeData.startDate,
+                      challengeData.endDate,
+                      e.target.value,
+                      challengeData.challengeDesc,
+                      challengeData.roundType,
+                      challengeData.pinCode
+                    )}
+                    placeholder="Name your round"
+                    className="w-full p-3 bg-zinc-900/50 rounded-lg border border-zinc-700/50 
+                              text-white placeholder:text-zinc-600
+                              focus:border-[#E0FE10] focus:outline-none transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm text-zinc-400 mb-2 block">Round Description</label>
+                  <textarea
+                    value={challengeData.challengeDesc}
+                    onChange={(e) => setChallengeData(
+                      challengeData.startDate,
+                      challengeData.endDate,
+                      challengeData.challengeName,
+                      e.target.value,
+                      challengeData.roundType,
+                      challengeData.pinCode
+                    )}
+                    placeholder="Describe the purpose, or goals of this round(Members will see this)"
+                    rows={4}
+                    className="w-full p-3 bg-zinc-900/50 rounded-lg border border-zinc-700/50 
+                                text-white placeholder:text-zinc-600 
+                                focus:border-[#E0FE10] focus:outline-none transition-all resize-none"
+                    />
+                </div>
+
+                {/* Round Type */}
+<div className="mb-8">
+  <label className="text-sm text-zinc-400 mb-2 block">Round Type</label>
+  <div className="grid grid-cols-2 gap-3">
+    <button
+      onClick={() => setChallengeData(
+        challengeData.startDate,
+        challengeData.endDate,
+        challengeData.challengeName,
+        challengeData.challengeDesc,
+        SweatlistType.together,
+        challengeData.pinCode
+      )}
+      className={`p-4 rounded-lg flex flex-col items-center ${
+        challengeData.roundType === SweatlistType.together 
+          ? "bg-[#E0FE10] text-black" 
+          : "bg-zinc-900/50 border border-zinc-700/50 text-zinc-400"
+      }`}
+    >
+      <Users className="h-5 w-5 mb-2" />
+      <span className="font-medium text-sm">Together</span>
+      <span className="text-xs mt-1">Train with the community</span>
+    </button>
+
+    <button
+      onClick={() => setChallengeData(
+        challengeData.startDate,
+        challengeData.endDate,
+        challengeData.challengeName,
+        challengeData.challengeDesc,
+        SweatlistType.locked,
+        challengeData.pinCode
+      )}
+      className={`p-4 rounded-lg flex flex-col items-center ${
+        challengeData.roundType === SweatlistType.locked 
+          ? "bg-[#E0FE10] text-black" 
+          : "bg-zinc-900/50 border border-zinc-700/50 text-zinc-400"
+          }`}
+        >
+          <Lock className="h-5 w-5 mb-2" />
+          <span className="font-medium text-sm">Private</span>
+          <span className="text-xs mt-1">Invite-only training</span>
+        </button>
+      </div>
+    </div>
+
+    {/* Dates */}
+    <div className="mb-8">
+      <label className="text-sm text-zinc-400 mb-2 block">Round Dates</label>
+      <div className="space-y-2">
+        <div>
+          <label className="text-xs text-zinc-500 block mb-1">Start Date</label>
+          <input
+            type="date"
+            value={challengeData.startDate.toISOString().split('T')[0]}
+            onChange={(e) => setChallengeData(
+              new Date(e.target.value),
+              challengeData.endDate,
+              challengeData.challengeName,
+              challengeData.challengeDesc,
+              challengeData.roundType,
+              challengeData.pinCode
+            )}
+            className="w-full p-3 rounded-lg bg-zinc-900/50 border border-zinc-700/50 
+                    text-white placeholder:text-zinc-600
+                    focus:border-[#E0FE10] focus:outline-none transition-all
+                    [color-scheme:dark]"
           />
+        </div>
+        <div>
+          <label className="text-xs text-zinc-500 block mb-1">End Date</label>
+          <input
+            type="date"
+            value={challengeData.endDate.toISOString().split('T')[0]}
+            min={challengeData.startDate.toISOString().split('T')[0]}
+            onChange={(e) => setChallengeData(
+              challengeData.startDate,
+              new Date(e.target.value),
+              challengeData.challengeName,
+              challengeData.challengeDesc,
+              challengeData.roundType,
+              challengeData.pinCode
+            )}
+            className="w-full p-3 rounded-lg bg-zinc-900/50 border border-zinc-700/50 
+                    text-white placeholder:text-zinc-600
+                    focus:border-[#E0FE10] focus:outline-none transition-all
+                    [color-scheme:dark]"
+          />
+        </div>
+      </div>
+    </div>
+
+    {/* PIN input if Private */}
+    {challengeData.roundType === SweatlistType.locked && (
+      <div className="mb-8">
+        <label className="text-sm text-zinc-400 mb-2 block">PIN Code</label>
+        <input
+          type="text"
+          maxLength={9}
+          minLength={9}
+          value={challengeData.pinCode}
+          onChange={(e) => setChallengeData(
+            challengeData.startDate,
+            challengeData.endDate,
+            challengeData.challengeName,
+            challengeData.challengeDesc,
+            challengeData.roundType,
+            e.target.value
+          )}
+          placeholder="Set 9-digit PIN"
+          className="w-full p-3 rounded-lg bg-zinc-900/50 border border-zinc-700/50 
+                    text-white placeholder:text-zinc-600
+                    focus:border-[#E0FE10] focus:outline-none transition-all"
+        />
+      </div>
+    )}
+
+                <div>
+                <label className="text-sm text-zinc-400 mb-2 block">Round Prompt - AI will use this description create your workout.</label>
+                <textarea
+                value={aiPromptText}
+                onChange={(e) => setAiPromptText(e.target.value)}
+                placeholder="E.g., Create a 4-week strength program focused on building muscle in my shoulders and upper back. 
+                I want to train 3 times per week with progressive overload. Include compound movements like rows and presses, 
+                and isolation work for rear delts and traps. I prefer moderate weight with 8-12 reps for hypertrophy."
+                rows={10}
+                className="w-full p-3 bg-zinc-900/50 rounded-lg border border-zinc-700/50 
+                            text-white placeholder:text-zinc-600 
+                            focus:border-[#E0FE10] focus:outline-none transition-all resize-none"
+                />
+                </div>
+
+                <button
+                className="w-full py-4 bg-gradient-to-r from-[#E0FE10] via-purple-500 to-[#E0FE10] 
+                            text-black rounded-lg font-semibold hover:opacity-90 transition-opacity"
+                onClick={handleGenerateAIRound}
+                >
+                <div className="flex items-center justify-center gap-2">
+                    <Sparkles className="w-5 h-5" />
+                    <span>Generate Round</span>
+                </div>
+                </button>
+
+                <button
+                onClick={() => setIsAIMode(false)}
+                className="w-full py-2 text-zinc-400 hover:text-white transition-colors text-sm"
+                >
+                Cancel and return to manual creation
+                </button>
+            </div>
+            ) : (
+            <MobileChallengeSetupView
+                setChallengeData={setChallengeData}
+                currentChallengeData={challengeData}
+                selectedStacks={selectedStacks}
+                onRemoveStack={handleRemoveStack}
+                viewModel={viewModel}
+            />
+            )}
         </div>
         
-         {/* Fixed Create Round Button */}
-         <div className="absolute bottom-0 left-0 right-0 p-6 bg-zinc-800 border-t border-zinc-700 rounded-b-xl">
-          <button
-            className="w-full py-4 bg-[#E0FE10] text-black rounded-lg font-semibold hover:opacity-90 transition-opacity"
-            onClick={handleCreateRound}
-          >
-            Create Round
-          </button>
+        {/* Only show the create button in non-AI mode */}
+        {!isAIMode && (
+            <div className="absolute bottom-0 left-0 right-0 p-6 bg-zinc-800 border-t border-zinc-700 rounded-b-xl">
+            <button
+                className="w-full py-4 bg-[#E0FE10] text-black rounded-lg font-semibold hover:opacity-90 transition-opacity"
+                onClick={handleCreateRound}
+            >
+                Create Round
+            </button>
+            </div>
+        )}
         </div>
-      </div>
-  
-      {/* Right Panel: Stack Selector */}
-      <div className="w-[400px] bg-zinc-800 rounded-xl shadow-xl relative flex flex-col">
-        <div className="h-full overflow-y-auto p-6 pb-24 scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-transparent hover:scrollbar-thumb-zinc-600">
-          <h2 className="text-white text-2xl font-bold mb-4">Your Stacks</h2>
-          <input
-            type="text"
-            placeholder="Search stacks..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full p-4 bg-zinc-900 text-white rounded-lg border border-zinc-700 focus:border-[#E0FE10] transition-colors mb-4"
-          />
-          {filteredStacks.length === 0 ? (
-            <p className="text-center text-zinc-500">No stacks found</p>
-          ) : (
-            filteredStacksList()
-          )}
+
+        {/* Right Panel: AI Preferences or Stack Selector */}
+        <div className="w-[550px] bg-zinc-800 rounded-xl shadow-xl relative flex flex-col">
+        {isAIMode ? (
+            <>
+            {/* Tabs */}
+            <div className="px-6 pt-6">
+                <div className="flex space-x-1 bg-zinc-900/50 p-1 rounded-lg">
+                <button
+                    onClick={() => setActiveTab('preferences')}
+                    className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-all
+                    ${activeTab === 'preferences' 
+                        ? 'bg-[#E0FE10] text-black' 
+                        : 'text-zinc-400 hover:text-white'}`}
+                >
+                    <Brain size={16} />
+                    <span>AI Preferences</span>
+                </button>
+                <button
+                    onClick={() => setActiveTab('moves')}
+                    className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-all
+                    ${activeTab === 'moves' 
+                        ? 'bg-[#E0FE10] text-black' 
+                        : 'text-zinc-400 hover:text-white'}`}
+                >
+                    <Dumbbell size={16} />
+                    <span>Must-Include Moves</span>
+                </button>
+                <button
+                    onClick={() => setActiveTab('creators')}
+                    className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-all
+                    ${activeTab === 'creators' 
+                        ? 'bg-[#E0FE10] text-black' 
+                        : 'text-zinc-400 hover:text-white'}`}
+                >
+                    <UserCircle size={16} />
+                    <span>Preferred Creators</span>
+                </button>
+                </div>
+            </div>
+
+            {/* Tab Content */}
+            <div className="flex-1 overflow-y-auto p-6 scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-transparent">
+                {activeTab === 'preferences' && (
+                <div className="space-y-4">
+                    <div className="bg-zinc-900/50 rounded-lg p-4 border border-zinc-700/50">
+                    <h3 className="font-medium text-white mb-2">AI Preferences</h3>
+                    <p className="text-sm text-zinc-400">
+                        Additional preferences to help generate your perfect round.
+                    </p>
+                    </div>
+                    
+                    {/* Preferences Options */}
+                    <div className="space-y-3">
+                    <label className="flex items-center bg-zinc-900/30 p-3 rounded-lg cursor-pointer hover:bg-zinc-900/50 transition-colors">
+                    <input 
+                        type="checkbox" 
+                        checked={selectedPreferences.includes("Include rest days")}
+                        onChange={(e) => {
+                        if (e.target.checked) {
+                            setSelectedPreferences(prev => [...prev, "Include rest days"]);
+                        } else {
+                            setSelectedPreferences(prev => prev.filter(p => p !== "Include rest days"));
+                        }
+                        }}
+                        className="form-checkbox text-[#E0FE10]" 
+                    />
+                    <span className="ml-2 text-sm text-zinc-300">Include rest days</span>
+                    </label>
+                    </div>
+                </div>
+                )}
+
+                {activeTab === 'moves' && (
+                <div className="space-y-4">
+                    <input
+                    type="text"
+                    placeholder="Search moves to include..."
+                    className="w-full p-4 bg-zinc-900 text-white rounded-lg border border-zinc-700 focus:border-[#E0FE10] transition-colors"
+                    />
+                    <ExerciseGrid
+                    userVideos={allExercises}
+                    multiSelection={true}
+                    selectedExercises={selectedMoves}
+                    onToggleSelection={(exercise) => {
+                        setSelectedMoves(prev => 
+                        prev.some(e => e.id === exercise.id)
+                            ? prev.filter(e => e.id !== exercise.id)
+                            : [...prev, exercise]
+                        )
+                    }}
+                    onSelectVideo={(exercise) => {
+                        // This can be the same as onToggleSelection since we're using multiSelection
+                        setSelectedMoves(prev => 
+                        prev.some(e => e.id === exercise.id)
+                            ? prev.filter(e => e.id !== exercise.id)
+                            : [...prev, exercise]
+                        )
+                    }}
+                    />
+                </div>
+                )}
+
+                {activeTab === 'creators' && (
+                <div className="space-y-4">
+                    <MultiUserSelector
+                    selectedUserIds={selectedCreators}
+                    onUserSelect={(userId) => {
+                        setSelectedCreators(prev => [...prev, userId]);
+                    }}
+                    onUserRemove={(userId) => {
+                        setSelectedCreators(prev => prev.filter(id => id !== userId));
+                    }}
+                    />
+                </div>
+                )}
+            </div>
+
+            {/* Summary Footer */}
+            <div className="p-4 border-t border-zinc-700/50 bg-zinc-900/50">
+                <div className="flex items-center justify-between text-sm">
+                <span className="text-zinc-400">
+                    {selectedMoves.length} moves selected
+                </span>
+                <span className="text-zinc-400">
+                    {selectedCreators.length} creators selected
+                </span>
+                </div>
+            </div>
+            </>
+        ) : (
+            // Original Stack Selector Content
+            <div className="h-full overflow-y-auto p-6 pb-24 scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-transparent">
+                <div className="h-full overflow-y-auto p-6 pb-24 scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-transparent">
+                    <h2 className="text-white text-2xl font-bold mb-4">Your Stacks</h2>
+                    <input
+                        type="text"
+                        placeholder="Search stacks..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full p-4 bg-zinc-900 text-white rounded-lg border border-zinc-700 focus:border-[#E0FE10] transition-colors mb-4"
+                    />
+                    {filteredStacks.length === 0 ? (
+                        <p className="text-center text-zinc-500">No stacks found</p>
+                    ) : (
+                        filteredStacksList()
+                    )}
+                </div>
+            </div>
+        )}
         </div>
-      </div>
     </div>
   );
 };

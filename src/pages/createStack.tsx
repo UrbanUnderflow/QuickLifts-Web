@@ -19,6 +19,9 @@ import {
   RepsAndWeightLog,
 } from '../api/firebase/workout';
 import { ExerciseVideo } from '../api/firebase/exercise/types';
+import { UserFilter } from '../components/App/UserFilter/UserFilter';
+import { ExerciseGrid } from '../components/App/ExerciseGrid/ExerciseGrid';
+
 
 // CreateWorkoutExerciseCardView Component
 interface CreateWorkoutExerciseCardViewProps {
@@ -317,181 +320,22 @@ const CreateWorkoutExerciseCardView: React.FC<CreateWorkoutExerciseCardViewProps
             />
           </div>
 
-{/* Save Button */}
-<button
-  type="button"
-  onClick={() => {
-    setExpanded(false);
-    returnExerciseDescription(exerciseDetail!);
-  }}
-  className="w-full py-3 bg-[#E0FE10] text-black rounded-lg font-semibold hover:opacity-90 transition-opacity"
->
-  Save Details
-</button>
-</form>
-)}
-</div>
-);
-};
-
-interface UserFilterProps {
-  selectedUserId: string | null;
-  onUserSelect: (userId: string | null) => void;
-}
-
-const UserFilter: React.FC<UserFilterProps> = ({ selectedUserId, onUserSelect }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [users, setUsers] = useState<User[]>([]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [loading, setLoading] = useState(true);
-  
-  useEffect(() => {
-    const fetchUsers = async () => {
-      try {
-        // Replace with your actual user fetching logic
-        const fetchedUsers = await userService.getAllUsers();
-        setUsers(fetchedUsers);
-        setLoading(false);
-      } catch (error) {
-        console.error('Error fetching users:', error);
-        setLoading(false);
-      }
-    };
-    
-    fetchUsers();
-  }, []);
-
-  const filteredUsers = users.filter(user => 
-    user.username.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  const selectedUser = users.find(u => u.id === selectedUserId);
-
-  return (
-    <div className="relative">
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="w-full p-4 bg-zinc-800 text-white rounded-lg border border-zinc-700 flex justify-between items-center"
-      >
-        <span>{selectedUserId ? selectedUser?.username : 'All Users'}</span>
-        <ChevronDown className={`transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-      </button>
-
-      {isOpen && (
-        <div className="absolute mt-2 w-full bg-zinc-800 border border-zinc-700 rounded-lg shadow-lg z-20">
-          <div className="p-2">
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search users..."
-              className="w-full p-2 bg-zinc-700 text-white rounded-md"
-            />
-          </div>
-
-          <div className="max-h-60 overflow-y-auto">
-            <button
-              onClick={() => {
-                onUserSelect(null);
-                setIsOpen(false);
-              }}
-              className={`w-full p-3 text-left hover:bg-zinc-700 ${!selectedUserId ? 'bg-[#E0FE10] text-black' : 'text-white'}`}
-            >
-              All Users
-            </button>
-            
-            {loading ? (
-              <div className="p-3 text-zinc-400">Loading users...</div>
-            ) : (
-              filteredUsers.map(user => (
-                <button
-                  key={user.id}
-                  onClick={() => {
-                    onUserSelect(user.id);
-                    setIsOpen(false);
-                  }}
-                  className={`w-full p-3 text-left hover:bg-zinc-700 ${selectedUserId === user.id ? 'bg-[#E0FE10] text-black' : 'text-white'}`}
-                >
-                  {user.username}
-                </button>
-              ))
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// ExerciseGrid Component
-interface ExerciseGridProps {
-  userVideos: Exercise[];
-  onSelectVideo: (exercise: Exercise) => void;
-  multiSelection?: boolean;
-  selectedExercises?: Exercise[];
-  onToggleSelection?: (exercise: Exercise) => void;
-}
-
-const ExerciseGrid: React.FC<ExerciseGridProps> = ({
-  userVideos,
-  onSelectVideo,
-  multiSelection = false,
-  selectedExercises = [],
-  onToggleSelection,
-}) => {
-
-const seenGifUrls = new Set<string>();
-
-const filteredVideos = userVideos.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).filter((exercise) => {
-  const gifUrl = exercise.videos[0]?.gifURL;
-  if (seenGifUrls.has(gifUrl || '')) return false;
-    seenGifUrls.add(gifUrl || '');
-    return true;
-  });
-
-if (filteredVideos.length === 0) {
-  return (
-    <div className="flex items-center justify-center h-64 text-zinc-500 text-lg">
-    No moves available
-    </div>
-  );
-}
-
-return (
-<div className="grid grid-cols-2 sm:grid-cols-3 gap-4 p-4">
-{filteredVideos.map((exercise) => {
-const isSelected = multiSelection && selectedExercises.some((sel) => sel.id === exercise.id);
-return (
-<div
-  key={`${exercise.id}-${new Date(exercise.createdAt).getTime()}`}
-  onClick={() => {
-    if (multiSelection && onToggleSelection) {
-      onToggleSelection(exercise);
-    } else {
-      onSelectVideo(exercise);
-    }
-  }}
-  className="relative cursor-pointer group"
->
-  <div className="relative rounded-lg overflow-hidden aspect-square">
-    <img
-      src={exercise.videos[0]?.gifURL}
-      alt={exercise.name}
-      className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
-    />
-    {multiSelection && isSelected && (
-      <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-        <CheckCircle className="text-[#E0FE10]" size={32} />
-      </div>
-    )}
-  </div>
-  <p className="mt-2 text-white text-sm font-medium truncate">{exercise.name}</p>
-</div>
-);
-})}
-</div>
-);
-};
+        {/* Save Button */}
+          <button
+            type="button"
+            onClick={() => {
+              setExpanded(false);
+              returnExerciseDescription(exerciseDetail!);
+            }}
+          className="w-full py-3 bg-[#E0FE10] text-black rounded-lg font-semibold hover:opacity-90 transition-opacity"
+          >
+            Save Details
+          </button>
+        </form>
+        )}
+     </div>
+    );
+  };
 
 // MobileStackView Component
 interface MobileStackViewProps {
@@ -715,111 +559,7 @@ const [isLoading, setIsLoading] = useState(false);
 const router = useRouter();
 
 
-  // Update the formatWorkoutAndInitializeLogs function
-async function formatWorkoutAndInitializeLogs(
-  exerciseDetails: ExerciseDetail[],
-  workoutAuthor?: string
-): Promise<{ workout: Workout; exerciseLogs: ExerciseLog[] }> {
-  const workId = workoutService.generateId();
-  const exerciseReferences: ExerciseReference[] = [];
-  const exerciseLogs: ExerciseLog[] = [];
 
-  // Ensure exercise details are valid before processing
-  const validExerciseDetails = exerciseDetails.filter(detail => detail?.exercise && detail.exercise.id);
-
-  validExerciseDetails.forEach((detail, index) => {
-    // Ensure exercise instance has all required fields
-    const exerciseInstance = new Exercise({
-      ...detail.exercise,
-      id: detail.exercise.id || workoutService.generateId(),
-      name: detail.exercise.name || '',
-      author: detail.exercise.author || {
-        userId: workoutAuthor || 'PulseAI',
-        username: workoutAuthor || 'PulseAI'
-      },
-      description: detail.exercise.description || '',
-      category: detail.exercise.category || { type: 'weightTraining', details: null },
-      primaryBodyParts: detail.exercise.primaryBodyParts || [],
-      secondaryBodyParts: detail.exercise.secondaryBodyParts || [],
-      tags: detail.exercise.tags || [],
-      videos: detail.exercise.videos || [],
-      createdAt: detail.exercise.createdAt || new Date(),
-      updatedAt: detail.exercise.updatedAt || new Date()
-    });
-
-    // Create exercise reference with required fields
-    const exerciseRef: ExerciseReference = {
-      exercise: exerciseInstance,
-      groupId: detail.groupId || 0
-    };
-    exerciseReferences.push(exerciseRef);
-
-    // Set default values for exercise parameters
-    const category = detail.category?.type === 'weightTraining' ? detail.category : {
-      type: 'weightTraining',
-      details: { sets: 3, reps: ['12'], weight: 0, screenTime: 0 }
-    };
-
-    const sets = category.details?.sets ?? 3;
-    const reps = category.details?.reps ?? ['12'];
-    const weight = category.details?.weight ?? 0;
-
-    // Create logs for each set with validated data
-    const setsLogs = Array.from({ length: sets }, () => 
-      new RepsAndWeightLog({
-        reps: parseInt(reps[0] || '12', 10),
-        weight: weight || 0
-      })
-    );
-
-    // Create exercise log with validated data
-    const exerciseLogId = exerciseService.generateExerciseLogID(
-      workId,
-      userService.currentUser?.id || 'anonymous'
-    );
-
-    const log = new ExerciseLog({
-      id: exerciseLogId,
-      workoutId: workId,
-      userId: userService.currentUser?.id || 'anonymous',
-      exercise: exerciseInstance,
-      logs: setsLogs,
-      feedback: '',
-      note: detail.notes || '',
-      isSplit: detail.isSplit || false,
-      logSubmitted: false,
-      logIsEditing: false,
-      isCompleted: false,
-      order: index + 1,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      completedAt: new Date()
-    });
-    
-    exerciseLogs.push(log);
-  });
-
-  // Create workout with validated data
-  const newWorkout = new Workout({
-    id: workId,
-    roundWorkoutId: '',
-    exercises: exerciseReferences,
-    logs: exerciseLogs,
-    title: '',
-    description: '',
-    duration: Workout.estimatedDuration(exerciseReferences) || 0,
-    workoutRating: 'none' as WorkoutRating,
-    useAuthorContent: false,
-    isCompleted: false,
-    workoutStatus: 'archived' as WorkoutStatus,
-    author: userService.currentUser?.id || 'PulseAI',
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    zone: Workout.determineWorkoutZone(exerciseReferences) || 'full' as BodyZone
-  });
-
-  return { workout: newWorkout, exerciseLogs };
-}
 
 
   const onCreateStack = async () => {
@@ -841,7 +581,7 @@ async function formatWorkoutAndInitializeLogs(
     setIsLoading(true);
 
     try {
-      const { workout, exerciseLogs } = await formatWorkoutAndInitializeLogs(
+      const { workout, exerciseLogs } = await workoutService.formatWorkoutAndInitializeLogs(
         exerciseDetails,
         userService.currentUser.id
       );
