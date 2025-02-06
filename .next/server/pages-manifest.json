@@ -2,7 +2,8 @@
   "/_app": "pages/_app.js",
   "/_error": "pages/_error.js",
   "/_document": "pages/_document.js",
+  "/workout/[username]/[id]": "pages/workout/[username]/[id].js",
   "/round/[id]": "pages/round/[id].js",
-  "/about": "pages/about.js",
+  "/createRound": "pages/createRound.js",
   "/": "pages/index.js"
 }

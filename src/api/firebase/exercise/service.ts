@@ -7,6 +7,7 @@ import {
     startAfter,
     DocumentSnapshot,
     doc,
+    where,
   } from 'firebase/firestore';
 import { db } from '../config';
 import { Exercise } from './types';
@@ -124,6 +125,41 @@ class ExerciseService {
         return shuffledExercises;
       } catch (error) {
         console.error('Error fetching featured exercises:', error);
+        return [];
+      }
+    }
+
+    async getExercisesByAuthor(userId: string): Promise<Exercise[]> {
+      try {
+        // Query exerciseVideos collection instead
+        const videosRef = collection(db, 'exerciseVideos');
+        const q = query(videosRef, where('userId', '==', userId));
+        const querySnapshot = await getDocs(q);
+        
+        // Create a Set to store unique exercise names
+        const uniqueExerciseNames = new Set<string>();
+        
+        // Collect all unique exercise names from the videos
+        querySnapshot.forEach((doc) => {
+          const videoData = doc.data();
+          if (videoData.exerciseName) {
+            uniqueExerciseNames.add(videoData.exerciseName);
+          }
+        });
+  
+        // Convert to array and create Exercise objects
+        const exercises = Array.from(uniqueExerciseNames).map(name => {
+          return new Exercise({
+            id: name, // Using name as ID since we just need unique identifiers
+            name: name,
+            author: { userId: userId }
+            // Add other required Exercise properties as needed
+          });
+        });
+        
+        return exercises;
+      } catch (error) {
+        console.error('Error fetching exercises by author:', error);
         return [];
       }
     }

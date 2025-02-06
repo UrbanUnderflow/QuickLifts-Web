@@ -18,9 +18,19 @@ import {
 
 import { db } from '../config';
 import { userService } from '../user';
-import { ExerciseLog, ExerciseCategory, Exercise, BodyPart, ExerciseVideo, ExerciseAuthor, ExerciseVideoVisibility } from '../exercise/types';
-import {ProfileImage} from '../user/types'
-import { Workout, WorkoutSummary, BodyZone, IntroVideo } from '../workout/types';
+import { 
+  ExerciseLog, 
+  ExerciseCategory, 
+  Exercise, 
+  BodyPart, 
+  ExerciseVideo, 
+  ExerciseAuthor, 
+  ExerciseVideoVisibility, 
+  ExerciseDetail, 
+  ExerciseReference } from '../exercise/types';
+import { exerciseService } from '../exercise/service';
+import { ProfileImage, User } from '../user/types'
+import { Workout, WorkoutSummary, BodyZone, IntroVideo, RepsAndWeightLog, WorkoutRating } from '../workout/types';
 import { WorkoutStatus, SweatlistCollection } from './types';
 import { format } from 'date-fns'; 
 import { convertTimestamp, serverTimestamp } from '../../../utils/timestamp'; // Adjust the import path
@@ -68,6 +78,157 @@ class WorkoutService {
    generateId(): string {
     return doc(collection(db, 'workouts')).id;
   }
+
+    // Update the formatWorkoutAndInitializeLogs function
+  async formatWorkoutAndInitializeLogs(
+      exerciseDetails: ExerciseDetail[],
+      workoutAuthor?: string
+    ): Promise<{ workout: Workout; exerciseLogs: ExerciseLog[] }> {
+      const workId = this.generateId(); // Use this.generateId() since it's a class method
+      const exerciseReferences: ExerciseReference[] = [];
+      const exerciseLogs: ExerciseLog[] = [];
+
+  // Ensure exercise details are valid before processing
+  const validExerciseDetails = exerciseDetails.filter(detail => detail?.exercise && detail.exercise.id);
+
+  validExerciseDetails.forEach((detail, index) => {
+    // Ensure exercise instance has all required fields
+    const exerciseInstance = new Exercise({
+      ...detail.exercise,
+      id: detail.exercise.id || workoutService.generateId(),
+      name: detail.exercise.name || '',
+      author: detail.exercise.author || {
+        userId: workoutAuthor || 'PulseAI',
+        username: workoutAuthor || 'PulseAI'
+      },
+      description: detail.exercise.description || '',
+      category: detail.exercise.category || { type: 'weightTraining', details: null },
+      primaryBodyParts: detail.exercise.primaryBodyParts || [],
+      secondaryBodyParts: detail.exercise.secondaryBodyParts || [],
+      tags: detail.exercise.tags || [],
+      videos: detail.exercise.videos || [],
+      createdAt: detail.exercise.createdAt || new Date(),
+      updatedAt: detail.exercise.updatedAt || new Date()
+    });
+
+    // Create exercise reference with required fields
+    const exerciseRef: ExerciseReference = {
+      exercise: exerciseInstance,
+      groupId: detail.groupId || 0
+    };
+    exerciseReferences.push(exerciseRef);
+
+    // Set default values for exercise parameters
+    const category = detail.category?.type === 'weightTraining' ? detail.category : {
+      type: 'weightTraining',
+      details: { sets: 3, reps: ['12'], weight: 0, screenTime: 0 }
+    };
+
+    const sets = category.details?.sets ?? 3;
+    const reps = category.details?.reps ?? ['12'];
+    const weight = category.details?.weight ?? 0;
+
+    // Create logs for each set with validated data
+    const setsLogs = Array.from({ length: sets }, () => 
+      new RepsAndWeightLog({
+        reps: parseInt(reps[0] || '12', 10),
+        weight: weight || 0
+      })
+    );
+
+    // Create exercise log with validated data
+    const exerciseLogId = exerciseService.generateExerciseLogID(
+      workId,
+      userService.currentUser?.id || 'anonymous'
+    );
+
+    const log = new ExerciseLog({
+      id: exerciseLogId,
+      workoutId: workId,
+      userId: userService.currentUser?.id || 'anonymous',
+      exercise: exerciseInstance,
+      logs: setsLogs,
+      feedback: '',
+      note: detail.notes || '',
+      isSplit: detail.isSplit || false,
+      logSubmitted: false,
+      logIsEditing: false,
+      isCompleted: false,
+      order: index + 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      completedAt: new Date()
+    });
+    
+    exerciseLogs.push(log);
+  });
+
+  // Create workout with validated data
+  const newWorkout = new Workout({
+    id: workId,
+    roundWorkoutId: '',
+    exercises: exerciseReferences,
+    logs: exerciseLogs,
+    title: '',
+    description: '',
+    duration: Workout.estimatedDuration(exerciseReferences) || 0,
+    workoutRating: 'none' as WorkoutRating,
+    useAuthorContent: false,
+    isCompleted: false,
+    workoutStatus: 'archived' as WorkoutStatus,
+    author: userService.currentUser?.id || 'PulseAI',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    zone: Workout.determineWorkoutZone(exerciseReferences) || 'full' as BodyZone
+  });
+
+  return { workout: newWorkout, exerciseLogs };
+
+}
+
+  async getUserById(userId: string): Promise<User> {
+    try {
+      const userDoc = await getDoc(doc(db, 'users', userId));
+      if (!userDoc.exists()) {
+        throw new Error('User not found');
+      }
+  
+      return new User({
+        id: userDoc.id,
+        ...userDoc.data() 
+      });
+    } catch (error) {
+      console.error('Error getting user by ID:', error);
+      throw error;
+    }
+  }
+
+async updateWorkout(workout: Workout): Promise<void> {
+  if (!userService.currentUser?.id) {
+    throw new Error('No user is signed in');
+  }
+
+  try {
+    const workoutRef = doc(db, 'users', userService.currentUser.id, 'MyCreatedWorkouts', workout.id);
+    await setDoc(workoutRef, workout.toDictionary(), { merge: true });
+
+    // Update logs if they exist
+    if (workout.logs && workout.logs.length > 0) {
+      const batch = writeBatch(db);
+      const logsRef = collection(workoutRef, 'logs');
+
+      workout.logs.forEach(log => {
+        const logRef = doc(logsRef, log.id);
+        batch.set(logRef, log.toDictionary(), { merge: true });
+      });
+
+      await batch.commit();
+    }
+  } catch (error) {
+    console.error('Error updating workout:', error);
+    throw error;
+  }
+}
 
   /**
    * Fetch the user's current workout (either QueuedUp or InProgress).
@@ -324,6 +485,8 @@ async fetchCollectionWithSweatLists(collectionId: string): Promise<{ collection:
     throw error;
   }
 }
+
+
 
 async fetchSavedWorkout(userId: string, workoutId: string): Promise<[Workout | null, ExerciseLog[] | null]> {
   try {

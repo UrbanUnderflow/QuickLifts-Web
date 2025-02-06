@@ -601,7 +601,7 @@ const ChallengeDetailView = () => {
                     allWorkoutSummaries={[]} // Replace with actual workout summaries
                     index={index}
                     onPrimaryAction={() => {
-                      const username = workout.author;
+                      const username = workout.author.username;
                       router.push(`/workout/${username}/${workout.id}`);
                     }}
                     onCalendarTap={(date) => handleCalendarTap(workout, date)}

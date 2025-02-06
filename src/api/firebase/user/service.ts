@@ -50,10 +50,9 @@ class UserService {
     return users;
   }
 
-  async createStack(workout: Workout, exerciseLogs?: ExerciseLog[]): Promise<void> {
+  async createStack(workout: Workout, exerciseLogs?: ExerciseLog[]): Promise<Workout> {
     if (!this.currentUser?.id) {
-      console.error('No user is signed in.');
-      return;
+      throw new Error('No user is signed in.');
     }
 
     // Reference to the new stack document under the user's MyCreatedWorkouts subcollection
@@ -80,6 +79,10 @@ class UserService {
         await batch.commit();
         console.log('Exercise logs saved successfully');
       }
+
+      // After successful save, return the workout
+      return workout;
+      
     } catch (error) {
       console.error('Error creating stack:', error);
       throw error;
