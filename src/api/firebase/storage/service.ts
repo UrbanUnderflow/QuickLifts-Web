@@ -17,8 +17,60 @@ export interface UploadResult {
   downloadURL: string;
 }
 
+export const enum VideoType {
+    Exercise = "exercise",
+    Intro = "intro",
+    RoundChat = "round-chat"
+}
+
 export class FirebaseStorageService {
   private storage = getStorage();
+
+  async uploadVideo(
+      file: File, 
+      videoType: VideoType = VideoType.Exercise
+    ): Promise<UploadResult> {
+      // Ensure user is authenticated
+      const user = auth.currentUser;
+      if (!user) {
+        throw new Error("User must be authenticated to upload video");
+      }
+  
+      // Validate file type and size
+      const ALLOWED_TYPES = ['video/mp4', 'video/quicktime', 'video/x-msvideo'];
+      const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
+  
+      if (!ALLOWED_TYPES.includes(file.type)) {
+        throw new Error("Invalid file type. Only MP4, AVI, and QuickTime videos are allowed.");
+      }
+  
+      if (file.size > MAX_FILE_SIZE) {
+        throw new Error("File is too large. Maximum size is 100MB.");
+      }
+  
+      // Generate unique filename
+      const fileName = `${Date.now()}_${file.name}`;
+      const storagePath = `videos/${user.uid}/${fileName}`;
+      
+      // Create storage reference
+      const storageRef = ref(getStorage(), storagePath);
+  
+      try {
+        // Upload the file
+        const snapshot = await uploadBytes(storageRef, file);
+        
+        // Get download URL
+        const downloadURL = await getDownloadURL(snapshot.ref);
+        
+        // Construct GS URL (Google Storage URL)
+        const gsURL = `gs://${snapshot.ref.bucket}/${snapshot.ref.fullPath}`;
+  
+        return { gsURL, downloadURL };
+      } catch (error) {
+        console.error("Video upload failed", error);
+        throw error;
+      }
+    }
 
   async uploadImage(
     file: File, 

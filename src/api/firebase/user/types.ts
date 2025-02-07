@@ -1,4 +1,5 @@
 // src/api/firebase/user/types.ts
+import { convertFirestoreTimestamp } from '../../../utils/formatDate';
 
 export interface UserService {
     updateUser: (userId: string, user: User) => Promise<void>;
@@ -96,15 +97,15 @@ export class User {
     this.username = data.username || '';
     this.homeGym = data.homeGym || null;
     this.encouragement = data.encouragement || [];
-    this.birthdate = data.birthdate ? new Date(data.birthdate) : undefined;
-    this.gender = data.gender || undefined;
+    this.birthdate = convertFirestoreTimestamp(data.birthdate) || null;
+    this.gender = data.gender || null;
     this.selfDisclosedGender = data.selfDisclosedGender || '';
-    this.height = data.height || undefined;
-    this.location = data.location || undefined;
+    this.height = data.height || null;
+    this.location = data.location || null;
     this.bio = data.bio || '';
     this.fcmToken = data.fcmToken || '';
     this.workoutBuddy = data.workoutBuddy || '';
-    this.workoutBuddyUser = data.workoutBuddyUser || undefined;
+    this.workoutBuddyUser = data.workoutBuddyUser || null;
     this.additionalGoals = data.additionalGoals || '';
     this.blockedUsers = data.blockedUsers || [];
     this.level = data.level || UserLevel.Novice;
@@ -115,14 +116,14 @@ export class User {
     this.macros = data.macros || {};
     this.profileImage = ProfileImage.fromFirebase(data.profileImage || {});
     this.registrationComplete = data.registrationComplete || false;
-    this.creator = data.creator || undefined;
+    this.creator = data.creator || null;
     this.subscriptionType = data.subscriptionType || SubscriptionType.unsubscribed;
     this.subscriptionPlatform = data.subscriptionPlatform || SubscriptionPlatform.Web;
     this.referrer = data.referrer || '';
     this.isCurrentlyActive = data.isCurrentlyActive || false;
     this.videoCount = data.videoCount || 0;
-    this.createdAt = data.createdAt ? new Date(data.createdAt) : new Date();
-    this.updatedAt = data.updatedAt ? new Date(data.updatedAt) : new Date();
+    this.createdAt = convertFirestoreTimestamp(data.createdAt) || null;
+    this.updatedAt = convertFirestoreTimestamp(data.updatedAt) || null;
   }
 
   toDictionary(): Record<string, any> {

@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { userService, FollowRequest } from '../../../api/firebase/user';
+import React, { useState, useEffect, useRef } from 'react';
+import { userService, FollowRequest, User } from '../../../api/firebase/user';
 import { Exercise } from '../../../api/firebase/exercise/types';
 import { Challenge, Workout } from '../../../api/firebase/workout/types';
 import { WorkoutSummary } from '../../../api/firebase/workout/types';
@@ -13,6 +13,8 @@ import FullScreenExerciseView from '../../../pages/FullscreenExerciseView';
 import { parseActivityType } from '../../../utils/activityParser';
 import { StackCard } from '../../../components/Rounds/StackCard';
 import { useRouter } from 'next/router';
+import { firebaseStorageService, UploadImageType } from '../../../api/firebase/storage/service';
+import { Camera } from 'lucide-react';
 
 interface StackGridProps {
   stacks: Workout[];
@@ -74,6 +76,46 @@ const Profile: React.FC = () => {
   const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
 
   const currentUser = userService.currentUser;
+
+  const [isImageUploading, setIsImageUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+const handleProfileImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const file = e.target.files?.[0];
+  if (file) {
+    try {
+      setIsImageUploading(true);
+      
+      const uploadResult = await firebaseStorageService.uploadImage(
+        file, 
+        UploadImageType.Profile
+      );
+
+      // Update user's profile image in Firestore
+      if (currentUser) {
+        const updatedUser = new User({
+          ...currentUser.toDictionary(),
+          profileImage: {
+            profileImageURL: uploadResult.downloadURL,
+            imageOffsetWidth: 0,
+            imageOffsetHeight: 0
+          },
+          updatedAt: new Date()
+        });
+
+        await userService.updateUser(currentUser.id, updatedUser);
+        
+        // Optionally, update the current user in the service
+        userService.currentUser = updatedUser;
+      }
+    } catch (error) {
+      console.error('Profile image upload failed', error);
+      // Optionally show an error toast
+    } finally {
+      setIsImageUploading(false);
+    }
+  }
+};
 
   if (!currentUser) {
     return <div>Loading...</div>;
@@ -165,13 +207,36 @@ const Profile: React.FC = () => {
         
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="relative -mt-24">
-            <div className="relative inline-block">
+            
+
+          <div className="relative inline-block">
+            <input 
+              type="file" 
+              ref={fileInputRef}
+              accept="image/jpeg,image/png,image/webp"
+              onChange={handleProfileImageUpload}
+              className="hidden"
+            />
+            <div className="relative">
               <img 
                 src={currentUser.profileImage?.profileImageURL || "/api/placeholder/96/96"}
                 alt={currentUser.displayName}
-                className="w-24 h-24 rounded-full border-4 border-zinc-900"
+                className={`w-24 h-24 rounded-full border-4 border-zinc-900 ${isImageUploading ? 'opacity-50' : ''}`}
               />
+              {isImageUploading && (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="loader border-t-transparent border-4 border-white rounded-full w-8 h-8 animate-spin"></div>
+                </div>
+              )}
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="absolute bottom-0 right-0 bg-[#E0FE10] text-black p-1 rounded-full shadow-lg hover:bg-[#c8e60e] transition-colors"
+                disabled={isImageUploading}
+              >
+                <Camera size={16} />
+              </button>
             </div>
+          </div>
 
             <div className="mt-4 text-white">
               <h1 className="text-2xl font-bold">{currentUser.displayName}</h1>
