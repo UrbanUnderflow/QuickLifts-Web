@@ -316,7 +316,7 @@ const ChallengeDetailView = () => {
       }
   
       const messageData: Omit<GroupMessage, 'id'> = {
-        sender: User.toShortUser(currentUser), // Assuming you've added the toShortUser method to your User class
+        sender: currentUser.toShortUser(),
         content: message,
         timestamp: new Date(),
         readBy: {},

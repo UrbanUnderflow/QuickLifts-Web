@@ -145,64 +145,65 @@ const WorkoutPreviewer: React.FC = () => {
 
   return (
     <div className="relative h-screen bg-black">
-      <div className="fixed top-0 left-0 right-0 bg-[#E0FE10] text-black py-2 px-4 text-center z-50">
-        <p className="font-bold">
-          Ready to start your workout!
-        </p>
+      {/* Hero Section */}
+      <div className="h-[45vh] relative">
+        <div className="absolute inset-0">
+          <SequentialVideoPlayerView videoURLs={videoURLs} isMuted={true} ratio="cover" />
+          <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black" />
+        </div>
+        
+        <div className="absolute bottom-6 left-0 right-0 px-6">
+          <h1 className="text-3xl font-bold text-white mb-2">{workout.title}</h1>
+          <div className="flex gap-4">
+            <div className="flex items-center gap-2">
+              <span className="text-xl font-semibold text-[#E0FE10]">{logs.length}</span>
+              <span className="text-sm text-zinc-300">Exercises</span>
+            </div>
+            <div className="w-px h-6 bg-zinc-700" />
+            <div className="flex items-center gap-2">
+              <span className="text-xl font-semibold text-[#E0FE10]">{duration}</span>
+              <span className="text-sm text-zinc-300">Minutes</span>
+            </div>
+          </div>
+        </div>
       </div>
-
-      <SequentialVideoPlayerView videoURLs={videoURLs} isMuted={true} ratio="cover" />
-      
-      <div className="absolute inset-0 mt-80 overflow-y-auto bg-gradient-to-b from-transparent via-[#192126] via-25% to-[#192126] to-50%">
-        <div className="flex flex-col min-h-full p-4 pb-20 pt-12">
-          <div className="flex-grow">
-            <div className="text-center text-white mt-10 mb-1">
-              <h2 className="text-2xl font-bold">Your workout for today:</h2>
-              <p className="text-xl font-bold text-[#E0FE10]">{workout.title}</p>
-            </div>
-            
-            <div className="flex justify-around my-10">
-              <div className="text-center">
-                <p className="text-2xl font-bold text-[#E0FE10]">{logs.length}</p>
-                <p className="text-m text-white">Exercises</p>
-              </div>
-              <div className="h-14 w-px bg-white opacity-50"></div>
-              <div className="text-center">
-                <p className="text-2xl font-bold text-[#E0FE10]">{duration} mins</p>
-                <p className="text-m text-white">Duration</p>
-              </div>
-            </div>
-            
-            <div className="mt-6 mb-28">
+  
+      {/* Exercise List */}
+      <div className="flex-1 bg-black min-h-[55vh]">
+        <div className="px-4 -mt-6">
+          <div className="bg-zinc-900/80 backdrop-blur-sm rounded-2xl p-6 border border-zinc-800">
+            <div className="divide-y divide-zinc-800">
               {logs.map((log) => (
-               <SweatListCardView
-               key={log.id}
-               log={log}
-               gifUrls={log.exercise.videos?.map(video => video.gifURL).filter((url): url is string => !!url) || []}
-             />
+                <SweatListCardView
+                  key={log.id}
+                  log={log}
+                  gifUrls={log.exercise.videos?.map(video => video.gifURL).filter((url): url is string => !!url) || []}
+                />
               ))}
             </div>
           </div>
         </div>
       </div>
-      
-      <div className="fixed bottom-0 left-0 right-0 p-10 bg-gradient-to-t from-black to-transparent">
+  
+      {/* Start Button */}
+      <div className="fixed bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black via-black/90 to-transparent pt-20">
         <button
           onClick={handleStartWorkout}
-          className="w-full py-3 bg-[#E0FE10] text-black font-bold rounded-full text-lg"
+          className="w-full py-4 bg-[#E0FE10] text-black font-bold rounded-xl text-lg hover:bg-[#E0FE10]/90 transition-colors"
         >
-          Start this Workout
+          Start Workout
         </button>
       </div>
-
+  
+      {/* Error Modal */}
       {error && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]">
-          <div className="bg-white p-6 rounded-lg max-w-sm w-full">
-            <h2 className="text-xl font-bold mb-4">Error</h2>
-            <p className="mb-6">{error}</p>
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-[60] p-6">
+          <div className="bg-zinc-900 p-6 rounded-xl max-w-sm w-full border border-zinc-800">
+            <h2 className="text-xl font-bold text-white mb-4">Error</h2>
+            <p className="text-zinc-400 mb-6">{error}</p>
             <button 
               onClick={() => setError(null)}
-              className="px-4 py-2 bg-[#E0FE10] text-black rounded"
+              className="w-full py-3 bg-[#E0FE10] text-black rounded-xl font-medium"
             >
               Dismiss
             </button>

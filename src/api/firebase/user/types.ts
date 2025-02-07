@@ -163,6 +163,19 @@ export class User {
 
     return userDict;
   }
+
+  toShortUser(): ShortUser {
+    return {
+      id: this.id,
+      displayName: this.displayName,
+      email: this.email, 
+      fcmToken: this.fcmToken,
+      username: this.username,
+      level: this.level,
+      videoCount: this.videoCount,
+      profileImage: this.profileImage
+    }
+   }
 }
  
  export interface MacroRecommendations {
@@ -259,6 +272,7 @@ export class User {
  export enum ContentCreatorType {
    PersonalTrainer = "personal_trainer",
    FitnessEnthusiast = "fitness_enthusiast",
+
  }
  
  export enum FitnessCreatorWhy {

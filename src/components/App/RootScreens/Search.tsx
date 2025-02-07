@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { userService, User } from '../../../api/firebase/user';
+import { userService, User, ContentCreatorType } from '../../../api/firebase/user';
 import { Search as SearchIcon, Users, Dumbbell, UserCircle } from 'lucide-react';
 import { exerciseService } from '../../../api/firebase/exercise';
 import { useRouter } from 'next/router';
@@ -250,8 +250,8 @@ const Search: React.FC = () => {
                         <UserCircle className="w-12 h-12 text-zinc-600" />
                       </div>
                     )}
-                    {user.creator?.type?.includes('personalTrainer') && (
-                      <div className="absolute bottom-2 right-2">
+                    {user.creator?.type?.includes(ContentCreatorType.PersonalTrainer) && (
+                        <div className="absolute bottom-2 right-2">
                         <div className="bg-[#E0FE10] px-3 py-1 rounded-xl">
                           <span className="text-xs font-bold text-black tracking-wider">
                             T R A I N E R
