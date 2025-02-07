@@ -157,5 +157,78 @@ export class FirebaseStorageService {
   }
 }
 
+
+// In FirebaseStorageService.ts, update the VideoTrimmerService class
+
+export class VideoTrimmerService {
+    trimVideo(
+      file: File,
+      startTime: number,
+      endTime: number,
+      onProgress?: (progress: number) => void
+    ): Promise<File> {
+      return new Promise((resolve, reject) => {
+        const video = document.createElement("video");
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          return reject(new Error("Unable to get canvas context"));
+        }
+        const chunks: Blob[] = [];
+  
+        video.src = URL.createObjectURL(file);
+  
+        video.onloadedmetadata = () => {
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          video.currentTime = startTime;
+        };
+  
+        // Wait until the video has seeked to startTime before starting recording
+        video.onseeked = () => {
+          const stream = canvas.captureStream();
+          const mediaRecorder = new MediaRecorder(stream);
+  
+          mediaRecorder.ondataavailable = (e: BlobEvent) => {
+            if (e.data.size > 0) {
+              chunks.push(e.data);
+            }
+          };
+  
+          mediaRecorder.onstop = () => {
+            const blob = new Blob(chunks, { type: chunks[0]?.type || "video/webm" });
+            // Force the file type to "video/webm" so it passes the allowed formats check
+            const trimmedFile = new File([blob], file.name, { type: "video/webm" });
+            URL.revokeObjectURL(video.src);
+            resolve(trimmedFile);
+          };
+  
+          mediaRecorder.start();
+          video.play();
+  
+          video.ontimeupdate = () => {
+            if (video.currentTime >= endTime) {
+              mediaRecorder.stop();
+              video.pause();
+            } else {
+              ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+              if (onProgress) {
+                onProgress((video.currentTime - startTime) / (endTime - startTime));
+              }
+            }
+          };
+        };
+  
+        video.onerror = () => {
+          reject(new Error("Error loading video"));
+        };
+      });
+    }
+  }
+  
+  
+
+export const videoTrimmerService = new VideoTrimmerService();
+
 // Create a singleton instance
 export const firebaseStorageService = new FirebaseStorageService();
