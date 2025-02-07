@@ -1,12 +1,15 @@
 import React, { useState, useRef, DragEvent, ChangeEvent } from 'react';
 import { Camera } from 'lucide-react';
 import { firebaseStorageService, VideoType } from '../../../api/firebase/storage/service';
+import { VideoTrimmer } from '../../../components/VideoTrimmer';
+import Spacer from '../../../components/Spacer';
 
 const Create: React.FC = () => {
   const [isDragOver, setIsDragOver] = useState(false);
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [videoPreview, setVideoPreview] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [showTrimmer, setShowTrimmer] = useState(false);
   
   // New state for additional fields
   const [exerciseName, setExerciseName] = useState('');
@@ -20,9 +23,10 @@ const Create: React.FC = () => {
   const categories = [
     'Weight Training', 
     'Cardio', 
+    'Pilates',
     'Mobility', 
     'Stretching', 
-    'Bodyweight'
+    'Calisthenics'
   ];
 
   const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
@@ -57,10 +61,17 @@ const Create: React.FC = () => {
       return;
     }
 
-    // Create video preview
-    const objectUrl = URL.createObjectURL(file);
-    setVideoPreview(objectUrl);
+    // Show trimmer instead of directly setting preview
     setVideoFile(file);
+    setShowTrimmer(true);
+  };
+
+  const handleTrimComplete = (trimmedFile: File) => {
+    // Create video preview of trimmed video
+    const objectUrl = URL.createObjectURL(trimmedFile);
+    setVideoPreview(objectUrl);
+    setVideoFile(trimmedFile);
+    setShowTrimmer(false);
   };
 
   const handleAddTag = () => {
@@ -72,6 +83,14 @@ const Create: React.FC = () => {
 
   const handleRemoveTag = (tagToRemove: string) => {
     setTags(tags.filter(tag => tag !== tagToRemove));
+  };
+
+  const clearVideo = () => {
+    setVideoFile(null);
+    setVideoPreview(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
   };
 
   const handleSubmit = async () => {
@@ -103,20 +122,23 @@ const Create: React.FC = () => {
     }
   };
 
-  const clearVideo = () => {
-    setVideoFile(null);
-    setVideoPreview(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
-
   return (
     <div className="max-w-xl mx-auto px-4 py-6">
       <div className="text-center text-white mb-6">
         <h2 className="text-2xl font-bold">Create</h2>
         <p className="text-zinc-400">Start building your next workout or post.</p>
       </div>
+
+      {showTrimmer && videoFile && (
+        <VideoTrimmer 
+          file={videoFile}
+          onTrimComplete={handleTrimComplete}
+          onCancel={() => {
+            setShowTrimmer(false);
+            setVideoFile(null);
+          }}
+        />
+      )}
 
       <div 
         className={`
@@ -245,11 +267,11 @@ const Create: React.FC = () => {
           <button 
             onClick={handleSubmit}
             disabled={!exerciseName || isUploading}
-            className="w-full bg-[#E0FE10] text-black font-semibold py-3 px-4 rounded-lg hover:bg-[#c8e60e] transition-colors disabled:opacity-50"
+            className="w-full bg-[#E0FE10] text-black font-semibold py-3 px-4 mb-20 rounded-lg hover:bg-[#c8e60e] transition-colors disabled:opacity-50"
           >
             {isUploading ? 'Uploading...' : 'Post Exercise'}
           </button>
-          <div className="h-40"></div>
+          <Spacer size={100}></Spacer>
         </div>
       )}
     </div>
