@@ -1,7 +1,41 @@
 import { ExerciseReference, ExerciseLog, ExerciseAuthor } from '../exercise/types';
 import { BodyPart, ExerciseCategory } from '../exercise/types';
-import { convertFirestoreTimestamp } from '../../../utils/formatDate';
+import { convertFirestoreTimestamp, dateToUnixTimestamp } from '../../../utils/formatDate';
 import { workoutService } from '../workout/service';
+
+export class CheckIn {
+  id: string;
+  userId: string;
+  workoutId: string;
+  photoUrl: string;
+  videoUrl: string;
+  createdAt: Date;
+
+  constructor(data: any) {
+    this.id = data.id || '';
+    this.userId = data.userId || '';
+    this.workoutId = data.workoutId || '';
+    this.photoUrl = data.photoUrl || '';
+    this.videoUrl = data.videoUrl || '';
+    // If createdAt is a Unix timestamp in seconds, convert it to a Date
+    this.createdAt = data.createdAt
+      ? (typeof data.createdAt === 'number'
+          ? new Date(data.createdAt * 1000)
+          : new Date(data.createdAt))
+      : new Date();
+  }
+
+  toDictionary(): { [key: string]: any } {
+    return {
+      id: this.id,
+      userId: this.userId,
+      workoutId: this.workoutId,
+      photoUrl: this.photoUrl,
+      videoUrl: this.videoUrl,
+      createdAt: dateToUnixTimestamp(this.createdAt)
+    };
+  }
+}
 
 // src/types/WorkoutTypes.ts
 export enum WorkoutStatus {
@@ -48,24 +82,6 @@ export class RepsAndWeightLog {
     this.duration = data.duration || 0;
     this.calories = data.calories || 0;
     this.bpm = data.bpm || 0;
-  }
-
-  static fromFirebase(data: any): RepsAndWeightLog {
-    if (!data) {
-      return new RepsAndWeightLog({});
-    }
-
-    return new RepsAndWeightLog({
-      reps: data.reps || 0,
-      weight: data.weight || 0,
-      leftReps: data.leftReps || 0,
-      leftWeight: data.leftWeight || 0,
-      isSplit: data.isSplit || false,
-      isBodyWeight: data.isBodyWeight || false,
-      duration: data.duration || 0,
-      calories: data.calories || 0,
-      bpm: data.bpm || 0
-    });
   }
 
   toDictionary(): { [key: string]: any } {
@@ -134,10 +150,10 @@ export class Workout {
     this.collectionId = data.collectionId !== undefined ? data.collectionId : null;
     
     // For dates, if the field exists and is a Date, use it; otherwise default to null (or new Date() for createdAt/updatedAt)
-    this.startTime = data.startTime && data.startTime instanceof Date ? data.startTime : null;
-    this.assignedDate = data.assignedDate && data.assignedDate instanceof Date ? data.assignedDate : null;
-    this.createdAt = data.createdAt && data.createdAt instanceof Date ? data.createdAt : new Date();
-    this.updatedAt = data.updatedAt && data.updatedAt instanceof Date ? data.updatedAt : new Date();
+    this.startTime = data.startTime ? convertFirestoreTimestamp(data.startTime) : null;
+    this.assignedDate = data.assignedDate ? convertFirestoreTimestamp(data.assignedDate) : null;
+    this.createdAt = data.createdAt ? convertFirestoreTimestamp(data.createdAt) : new Date();
+    this.updatedAt = data.updatedAt ? convertFirestoreTimestamp(data.updatedAt) : new Date();
     
     // For order, default to null if not provided.
     this.order = data.order !== undefined ? data.order : null;
@@ -341,10 +357,10 @@ export class Workout {
       isCompleted: this.isCompleted,
       workoutStatus: this.workoutStatus,
       author: this.author, // Just save the ID
-      createdAt: this.createdAt.getTime(),
-      updatedAt: this.updatedAt.getTime(),
-      assignedDate: this.assignedDate ? this.assignedDate.getTime() : null,
-      startTime: this.startTime ? this.startTime.getTime() : null,
+      createdAt: dateToUnixTimestamp(this.createdAt),
+      updatedAt: dateToUnixTimestamp(this.updatedAt),
+      assignedDate: this.assignedDate ? dateToUnixTimestamp(this.assignedDate) : null,
+      startTime: this.startTime ? dateToUnixTimestamp(this.startTime) : null,
       order: this.order || null,
       collectionId: this.collectionId || null,
       challenge: this.challenge || null
@@ -383,45 +399,22 @@ export class WorkoutSummary {
     constructor(data: any) {
       this.id = data.id;
       this.workoutId = data.workoutId;
-      this.exercises = data.exercises.map((ex: any) => ExerciseLog.fromFirebase(ex));
+      this.exercises = data.exercises.map((ex: any) => new ExerciseLog(ex));
       this.bodyParts = data.bodyParts;
       this.secondaryBodyParts = data.secondaryBodyParts;
       this.workoutTitle = data.workoutTitle;
       this.caloriesBurned = data.caloriesBurned;
       this.workoutRating = data.workoutRating;
-      this.exercisesCompleted = data.exercisesCompleted.map((ex: any) => ExerciseLog.fromFirebase(ex));
+      this.exercisesCompleted = data.exercisesCompleted.map((ex: any) => new ExerciseLog(ex));
       this.aiInsight = data.aiInsight;
       this.recommendations = data.recommendations;
       this.gifURLs = data.gifURLs;
       this.recommendedWork = data.recommendedWork;
       this.isCompleted = data.isCompleted;
-      this.createdAt = data.createdAt ? new Date(data.createdAt) : new Date();
-      this.updatedAt = data.updatedAt ? new Date(data.updatedAt) : new Date();
-      this.completedAt = data.completedAt ? new Date(data.completedAt) : null;
+      this.createdAt = data.createdAt ? convertFirestoreTimestamp(data.createdAt) : new Date();
+      this.updatedAt = data.updatedAt ? convertFirestoreTimestamp(data.updatedAt) : new Date();
+      this.completedAt = data.completedAt ? convertFirestoreTimestamp(data.completedAt) : null;
       this.duration = data.duration;
-    }
-  
-    static fromFirebase(data: any): WorkoutSummary {
-      return new WorkoutSummary({
-        id: data.id || '',
-        workoutId: data.workoutId || '',
-        exercises: data.exercises || [],
-        bodyParts: data.bodyParts || [],
-        secondaryBodyParts: data.secondaryBodyParts || [],
-        workoutTitle: data.workoutTitle || '',
-        caloriesBurned: data.caloriesBurned || 0,
-        workoutRating: data.workoutRating,
-        exercisesCompleted: data.exercisesCompleted || [],
-        aiInsight: data.aiInsight || '',
-        recommendations: data.recommendations || [],
-        gifURLs: data.gifURLs || [],
-        recommendedWork: data.recommendedWork,
-        isCompleted: data.isCompleted || false,
-        createdAt: data.createdAt,
-        updatedAt: data.updatedAt,
-        completedAt: data.completedAt,
-        duration: data.duration || ''
-      });
     }
 }
 
@@ -487,7 +480,7 @@ export class SweatlistCollection {
   title: string;
   subtitle: string;
   pin: string | null;
-  challenge?: Challenge;
+  challenge?: Challenge | null;
   publishedStatus?: boolean;
   participants: string[];
   sweatlistIds: SweatlistIdentifiers[];
@@ -501,7 +494,7 @@ export class SweatlistCollection {
     this.title = data.title || '';
     this.subtitle = data.subtitle || '';
     this.pin = data.pin || null;
-    this.challenge = data.challenge ? new Challenge(data.challenge) : undefined;
+    this.challenge = data.challenge ? new Challenge(data.challenge) : null;
     this.sweatlistIds = (data.sweatlistIds || []).map((item: any) => ({
       id: item.id || '',
       sweatlistAuthorId: item.sweatlistAuthorId || '',
@@ -522,10 +515,6 @@ export class SweatlistCollection {
     this.updatedAt = convertFirestoreTimestamp(data.updatedAt);
   }
 
-  static fromFirestore(data: any): SweatlistCollection {
-    return new SweatlistCollection(data);
-  }
-
   toDictionary(): any {
     return {
       id: this.id,
@@ -540,40 +529,8 @@ export class SweatlistCollection {
       })),
       ownerId: this.ownerId, // Updated to be an array
       privacy: this.privacy,
-      createdAt: this.createdAt.getTime(),
-      updatedAt: this.updatedAt.getTime()
-    };
-  }
-
-  toRESTDictionary(): any {
-    return {
-      fields: {
-        id: { stringValue: this.id },
-        title: { stringValue: this.title },
-        subtitle: { stringValue: this.subtitle },
-        pin: { stringValue: this.pin },
-        // ownerId as an array of string values
-        ownerId: {
-          arrayValue: {
-            values: this.ownerId.map(owner => ({ stringValue: owner }))
-          }
-        },
-        sweatlistIds: {
-          arrayValue: {
-            values: this.sweatlistIds.map(item => ({
-              mapValue: {
-                fields: {
-                  id: { stringValue: item.id },
-                  sweatlistAuthorId: { stringValue: item.sweatlistAuthorId },
-                  order: { integerValue: item.order }
-                }
-              }
-            }))
-          }
-        },
-        createdAt: { doubleValue: this.createdAt.getTime() },
-        updatedAt: { doubleValue: this.updatedAt.getTime() }
-      }
+      createdAt: dateToUnixTimestamp(this.createdAt),
+      updatedAt: dateToUnixTimestamp(this.updatedAt)
     };
   }
 
@@ -724,10 +681,10 @@ class UserChallenge {
   currentStreak: number;
   encouragedUsers: string[];
   encouragedByUsers: string[];
-  checkIns: Date[];
+  checkIns: CheckIn[];
 
-  constructor(id: string, data: any) {
-    this.id = id;
+  constructor(data: any) {
+    this.id = data.id;
     this.challenge = data.challenge ? new Challenge(data.challenge) : undefined;
     this.challengeId = data.challengeId || '';
     this.userId = data.userId || '';
@@ -754,12 +711,13 @@ class UserChallenge {
     this.currentStreak = data.currentStreak ?? 0;
     this.encouragedUsers = Array.isArray(data.encouragedUsers) ? data.encouragedUsers : [];
     this.encouragedByUsers = Array.isArray(data.encouragedByUsers) ? data.encouragedByUsers : [];
-    this.checkIns = Array.isArray(data.checkIns) ? data.checkIns.map((d: any) => convertFirestoreTimestamp(d)) : [];
-  }
+    this.checkIns = Array.isArray(data.checkIns)
+    ? data.checkIns.map((d: any) => new CheckIn(d))
+    : [];  }
 
   // Optionally, you can add a static method to create an instance from Firestore data
   static fromFirestore(id: string, data: any): UserChallenge {
-    return new UserChallenge(id, data);
+    return new UserChallenge(data);
   }
 
   // Optionally, add a method to convert to a plain dictionary (for saving to Firestore)
@@ -781,14 +739,14 @@ class UserChallenge {
       city: this.city,
       country: this.country,
       timezone: this.timezone,
-      joinDate: Math.floor(this.joinDate.getTime() / 1000), // Convert to seconds
-      createdAt: Math.floor(this.createdAt.getTime() / 1000),
-      updatedAt: Math.floor(this.updatedAt.getTime() / 1000),
+      joinDate: dateToUnixTimestamp(this.joinDate),
+      createdAt: dateToUnixTimestamp(this.createdAt),
+      updatedAt: dateToUnixTimestamp(this.updatedAt),
       pulsePoints: this.pulsePoints ? this.pulsePoints.toDictionary() : {},
       currentStreak: this.currentStreak,
       encouragedUsers: this.encouragedUsers,
       encouragedByUsers: this.encouragedByUsers,
-      checkIns: this.checkIns.map(date => Math.floor(date.getTime() / 1000)),
+      checkIns: this.checkIns.map(checkIn => checkIn.toDictionary()),
     };
   }
 }
@@ -859,6 +817,8 @@ class Challenge {
     // Use an empty array if participants is missing.
     this.participants = Array.isArray(data.participants) ? data.participants : [];
     this.status = data.status;
+
+    console.log("Challenge start date", convertFirestoreTimestamp(data.startDate));
     this.startDate = convertFirestoreTimestamp(data.startDate);
     this.endDate = convertFirestoreTimestamp(data.endDate);
     this.createdAt = convertFirestoreTimestamp(data.createdAt);
@@ -910,10 +870,10 @@ class Challenge {
         checkIns: participant.checkIns
       })),
       status: this.status,
-      startDate: this.startDate.getTime(),
-      endDate: this.endDate.getTime(),
-      createdAt: this.createdAt.getTime(),
-      updatedAt: this.updatedAt.getTime(),
+      startDate: dateToUnixTimestamp(this.startDate),
+      endDate: dateToUnixTimestamp(this.endDate),
+      createdAt: dateToUnixTimestamp(this.createdAt),
+      updatedAt: dateToUnixTimestamp(this.updatedAt),
       durationInDays: this.durationInDays,
       introVideos: this.introVideos.map(video => video.toDictionary())
     };

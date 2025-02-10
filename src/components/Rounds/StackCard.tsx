@@ -239,75 +239,85 @@ export const StackCard: React.FC<{
     return index === diffDays;
   };
 
-  const debugClassName = `
-    rounded-lg overflow-hidden cursor-pointer ${backgroundColor}
-    ${index !== undefined && index < (currentDayIndex || 0) || isComplete ? 'opacity-70' : 'opacity-100'}
-    ${isToday(index, challengeStartDate) && challengeHasStarted ? 'ring-2 ring-green-500' : ''}
-  `;
+  const arrowProps = {
+    selectedOrder: selectedOrder!,
+    maxOrder: maxOrder!,
+    workoutDate,
+    showCalendar: !!showCalendar,
+    onUpdateOrder: onUpdateOrder!,
+    onCalendarTap: onCalendarTap,
+  };
 
   return (
     <div 
       onClick={onPrimaryAction}
-      className={debugClassName}
+      className={`
+        relative overflow-hidden rounded-xl border border-zinc-800/50 hover:border-zinc-700/50 transition-all
+        ${backgroundColor}
+        ${index !== undefined && index < (currentDayIndex || 0) || isComplete ? 'opacity-70' : 'opacity-100'}
+        ${isToday(index, challengeStartDate) && challengeHasStarted ? 'ring-2 ring-[#E0FE10]' : ''}
+      `}
     >
       <div className="flex">
         {showArrows && selectedOrder !== undefined && maxOrder !== undefined && onUpdateOrder && (
-          <NavigationArrows
-            selectedOrder={selectedOrder}
-            maxOrder={maxOrder}
-            workoutDate={workoutDate}
-            showCalendar={!!showCalendar}
-            onUpdateOrder={onUpdateOrder}
-            onCalendarTap={onCalendarTap}
-          />
+          <div className="border-r border-zinc-800/50">
+            <NavigationArrows {...arrowProps} />
+          </div>
         )}
 
-        <div className="flex-1 p-4">
-          <div className="flex justify-between items-start mb-4">
+        <div className="flex-1 p-6">
+          {/* Title & Stats */}
+          <div className="flex justify-between items-start mb-6">
             <div>
-              <h3 className="text-xl font-bold text-white mb-2">{workout.title}</h3>
-              <div className="flex gap-4">
-                <StatView
-                  icon={<User size={16} />}
-                  value={String(workout.exercises.length)}
-                  label="moves"
-                />
-                <StatView
-                  icon={<Clock size={16} />}
-                  value={Workout.estimatedDuration(workout.exercises) < 1 ? "< 1" : String(Workout.estimatedDuration(workout.exercises))}
-                  label="min"
-                />
+              <h3 className="text-xl font-bold text-white mb-3">{workout.title}</h3>
+              <div className="flex gap-6">
+                <div className="flex items-center gap-2">
+                  <User className="w-4 h-4 text-[#E0FE10]" />
+                  <span className="text-zinc-400">{workout.exercises.length} moves</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-[#E0FE10]" />
+                  <span className="text-zinc-400">
+                    {Workout.estimatedDuration(workout.exercises) < 1 ? "< 1" : Workout.estimatedDuration(workout.exercises)} min
+                  </span>
+                </div>
               </div>
             </div>
-            <ChevronRight className="text-gray-500" size={20} />
+            
+            <div className="flex items-center gap-4">
+              {isChallengeEnabled && (
+                <CheckCircle 
+                  className={isComplete ? 'text-[#E0FE10]' : 'text-zinc-700'} 
+                  size={20} 
+                />
+              )}
+              <ChevronRight className="text-zinc-600" size={20} />
+            </div>
           </div>
 
-          <div className="flex gap-2 mb-4 overflow-x-auto">
+          {/* Exercise Previews */}
+          <div className="flex gap-3 mb-6">
             {gifUrls.slice(0, 3).map((gifUrl, index) => (
               <div 
                 key={`${workout.id}-gif-${index}`}
-                className="w-24 h-24 rounded-lg overflow-hidden flex-shrink-0"
+                className="relative w-24 h-24 rounded-lg overflow-hidden bg-zinc-900/50"
               >
                 <GifImageViewer
-                  gifUrl={gifUrl}
-                  alt={`Exercise ${index + 1} preview`}
-                  className="w-full h-full"
+                gifUrl={gifUrl}
+                alt={`Exercise ${index + 1}`}
+                className="w-full h-full object-cover"
+                variant="rounded"
                 />
+                <div className="absolute inset-0 ring-1 ring-inset ring-white/10" />
               </div>
             ))}
           </div>
 
-          <div className="flex justify-between items-center">
-            <span className="px-3 py-1 bg-green-500 bg-opacity-20 text-green-500 rounded-full text-sm">
+          {/* Zone Tag */}
+          <div>
+            <span className="px-3 py-1.5 bg-[#E0FE10]/10 text-[#E0FE10] rounded-full text-sm font-medium">
               {workout.zone}
             </span>
-
-            {isChallengeEnabled && (
-              <CheckCircle 
-                className={isComplete ? 'text-green-500' : 'text-gray-600'} 
-                size={20} 
-              />
-            )}
           </div>
         </div>
       </div>

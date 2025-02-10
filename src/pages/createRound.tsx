@@ -354,8 +354,6 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
                 gifUrls={stack.exercises?.map(ex => ex.exercise?.videos?.[0]?.gifURL || '') || []}
                 isChallengeEnabled={false}
                 onPrimaryAction={() => handleStackSelect(stack)}
-
-                // Remove showCalendar and isComplete if they're not in the interface
             />
             </div>
             ))}
@@ -491,42 +489,27 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
 
   // Helper function to find complete exercise data and preferred creator video
   const enrichExerciseData = (
-    exerciseData: any,  // The raw exercise data from AI
+    exerciseData: any,
     allExercises: Exercise[],
-    creatorExercises: Exercise[]
+    creatorExercises: Exercise[],
+    useOnlyCreatorExercises: boolean
   ): ExerciseDetail | null => {
-    // Find the base exercise from all exercises
-    const baseExercise = allExercises.find(ex => 
+    // For exclusive creator mode, only look in creator exercises
+    const exercisePool = useOnlyCreatorExercises ? creatorExercises : allExercises;
+    
+    const baseExercise = exercisePool.find(ex => 
       ex.name.toLowerCase() === exerciseData.name.toLowerCase()
     );
   
-    if (!baseExercise) {
-      console.warn(`Exercise not found in database: ${exerciseData.name}`);
-      return null;
-    }
+    if (!baseExercise) return null;
   
-    // Check if any preferred creators have a video for this exercise
-    const creatorVersion = creatorExercises.find(ex => 
-      ex.name.toLowerCase() === exerciseData.name.toLowerCase()
-    );
-  
-    // Create category with AI-generated details AND video if available
     const category: ExerciseCategory = {
       type: 'weightTraining',
       details: {
-        // Use AI-generated details
-        reps: exerciseData.category.details.reps,
-        sets: exerciseData.category.details.sets,
-        weight: exerciseData.category.details.weight,
-        screenTime: exerciseData.category.details.screenTime || 45,
-        // Add video from creator or base exercise
-        selectedVideo: creatorVersion?.videos?.[0] || baseExercise.videos?.[0] || null
+        ...exerciseData.category.details,
+        selectedVideo: baseExercise.videos?.[0] || null
       }
     };
-  
-    // Log to verify we're using AI-generated details
-    console.log('AI Exercise Details:', exerciseData.category.details);
-    console.log('Final Category Details:', category.details);
   
     return new ExerciseDetail({
       id: generateId(),
@@ -534,7 +517,7 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
       exerciseName: exerciseData.name,
       isMissing: false,
       groupId: 0,
-      category: category,  // Use our new category with AI-generated details
+      category: category,
       notes: '',
       isSplit: false,
       closestMatch: []
@@ -564,6 +547,7 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
       // Get the preferences from the "AI Preferences" tab
       const preferences = [
         "Include rest days",
+        "Creator videos only"
       ].filter(pref => selectedPreferences.includes(pref));
   
       // Generate the round structure using Gemini
@@ -583,12 +567,13 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
       // Create stacks one at a time and collect them
       for (const stackData of generatedRound.stacks) {
         try {
+          const useOnlyCreatorExercises = selectedPreferences.includes("Creator videos only");
+
           // Enrich exercise data and filter out any that couldn't be found
           const enrichedExercises = stackData.exercises
             .map((ex) => {
               try {
-                const enrichedExercise = enrichExerciseData(ex, allExercises, allCreatorExercises);
-                return enrichedExercise;
+                return enrichExerciseData(ex, allExercises, allCreatorExercises, useOnlyCreatorExercises);
               } catch (error) {
                 console.warn(`Skipping exercise ${ex.name}: ${error}`);
                 return null;
@@ -1107,27 +1092,50 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
                     
                     {/* Preferences Options */}
                     <div className="space-y-3">
-                    <label className="flex items-center bg-zinc-900/30 p-3 rounded-lg cursor-pointer hover:bg-zinc-900/50 transition-colors">
-                    <input 
-                        type="checkbox" 
-                        checked={selectedPreferences.includes("Include rest days")}
-                        onChange={(e) => {
-                        if (e.target.checked) {
-                            setSelectedPreferences(prev => [...prev, "Include rest days"]);
-                        } else {
-                            setSelectedPreferences(prev => prev.filter(p => p !== "Include rest days"));
-                        }
-                        }}
-                        className="form-checkbox text-[#E0FE10]" 
-                    />
-                    <span className="ml-2 text-sm text-zinc-300">Include rest days</span>
-                    </label>
+                      <label className="flex items-center bg-zinc-900/30 p-3 rounded-lg cursor-pointer hover:bg-zinc-900/50 transition-colors">
+                        <input 
+                          type="checkbox" 
+                          checked={selectedPreferences.includes("Include rest days")}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedPreferences(prev => [...prev, "Include rest days"]);
+                            } else {
+                              setSelectedPreferences(prev => prev.filter(p => p !== "Include rest days"));
+                            }
+                          }}
+                          className="form-checkbox text-[#E0FE10]" 
+                        />
+                        <span className="ml-2 text-sm text-zinc-300">Include rest days</span>
+                      </label>
+
+                      <label className="flex items-center bg-zinc-900/30 p-3 rounded-lg cursor-pointer hover:bg-zinc-900/50 transition-colors">
+                        <input 
+                          type="checkbox" 
+                          checked={selectedPreferences.includes("Exclusive to selected creators")}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedPreferences(prev => [...prev, "Exclusive to selected creators"]);
+                            } else {
+                              setSelectedPreferences(prev => prev.filter(p => p !== "Exclusive to selected creators"));
+                            }
+                          }}
+                          className="form-checkbox text-[#E0FE10]" 
+                        />
+                        <span className="ml-2 text-sm text-zinc-300">Exclusive to selected creators</span>
+                      </label>
                     </div>
                 </div>
                 )}
 
                 {activeTab === 'moves' && (
                 <div className="space-y-4">
+                    <div className="bg-zinc-900/50 rounded-lg p-4 border border-zinc-700/50">
+                      <h3 className="font-medium text-white mb-2">Must-Have Moves</h3>
+                      <p className="text-sm text-zinc-400">
+                        AI will guarantee these exercises are included in your program
+                      </p>
+                    </div>
+
                     <input
                     type="text"
                     placeholder="Search moves to include..."
@@ -1158,6 +1166,12 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
 
                 {activeTab === 'creators' && (
                 <div className="space-y-4">
+                    <div className="bg-zinc-900/50 rounded-lg p-4 border border-zinc-700/50">
+                      <h3 className="font-medium text-white mb-2">Preferred Creators</h3>
+                      <p className="text-sm text-zinc-400">
+                        Select trainers whose exercise videos you want to include in your program
+                      </p>
+                    </div>
                     <MultiUserSelector
                     selectedUserIds={selectedCreators}
                     onUserSelect={(userId) => {

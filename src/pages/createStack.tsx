@@ -6,6 +6,8 @@ import {
   Exercise,
   ExerciseLog,
   ExerciseDetail,
+  WeightTrainingExercise,
+  CardioExercise,
   ExerciseReference,
 } from '../api/firebase/exercise/types';
 import { exerciseService } from '../api/firebase/exercise/service';
@@ -38,15 +40,20 @@ const CreateWorkoutExerciseCardView: React.FC<CreateWorkoutExerciseCardViewProps
   returnExerciseDescription,
 }) => {
   // Convert initial videos
-  const initialVideos = (initialExerciseDescription?.exercise?.videos || []).map((v: any) =>
-    v && (v as ExerciseVideo).exerciseId ? (v as ExerciseVideo) : ExerciseVideo.fromFirebase(v)
-  ) || [];
+  const initialVideos =
+    (initialExerciseDescription?.exercise?.videos || []).map((v: any) =>
+      v && (v as ExerciseVideo).exerciseId ? (v as ExerciseVideo) : new ExerciseVideo(v)
+    ) || [];
 
-  // State management
+  // Local state management
   const [expanded, setExpanded] = useState(false);
-  const [exerciseName, setExerciseName] = useState(initialExerciseDescription?.exerciseName || '');
+  const [exerciseName, setExerciseName] = useState(
+    initialExerciseDescription?.exerciseName || ''
+  );
   const [exerciseVideos] = useState<ExerciseVideo[]>(initialVideos);
   const [isDumbell, setIsDumbell] = useState(initialExerciseDescription?.isSplit || false);
+  
+  // For weight training fields
   const [reps, setReps] = useState(
     initialExerciseDescription?.category?.type === 'weightTraining'
       ? initialExerciseDescription.category.details?.reps.join(',') || ''
@@ -62,29 +69,11 @@ const CreateWorkoutExerciseCardView: React.FC<CreateWorkoutExerciseCardViewProps
       ? `${initialExerciseDescription.category.details?.weight}` || ''
       : ''
   );
-  const [bpm, setBpm] = useState(
-    initialExerciseDescription?.category?.type === 'cardio'
-      ? `${initialExerciseDescription.category.details?.bpm}` || ''
+  // For screenTime, use a string so the field can be cleared.
+  const [screenTime, setScreenTime] = useState<string>(
+    initialExerciseDescription?.category?.details?.screenTime !== undefined
+      ? initialExerciseDescription.category.details.screenTime.toString()
       : ''
-  );
-  const [duration, setDuration] = useState(
-    initialExerciseDescription?.category?.type === 'cardio'
-      ? `${initialExerciseDescription.category.details?.duration}` || ''
-      : ''
-  );
-  const [screenTime, setScreenTime] = useState<number>(
-    (initialExerciseDescription?.category?.type === 'weightTraining'
-      ? initialExerciseDescription.category.details?.screenTime
-      : initialExerciseDescription?.category?.type === 'cardio'
-      ? initialExerciseDescription.category.details?.screenTime
-      : 0) || 0
-  );
-  const [isTimedExercise] = useState(
-    (initialExerciseDescription?.category?.type === 'weightTraining' &&
-      initialExerciseDescription?.category?.details?.screenTime !== 0) ||
-    (initialExerciseDescription?.category?.type === 'cardio' &&
-      initialExerciseDescription?.category?.details?.screenTime !== 0) ||
-    false
   );
   const [selectedVideo, setSelectedVideo] = useState<ExerciseVideo | null>(null);
   const [notes, setNotes] = useState(initialExerciseDescription?.notes || '');
@@ -92,87 +81,166 @@ const CreateWorkoutExerciseCardView: React.FC<CreateWorkoutExerciseCardViewProps
   const [exerciseDetail, setExerciseDetail] = useState<ExerciseDetail | undefined>(
     initialExerciseDescription
   );
+  
+  // Our exerciseMode state: 'tracking' for weight training details,
+  // 'screentime' for cardio details.
+  const [exerciseMode, setExerciseMode] = useState<'tracking' | 'screentime'>(
+    initialExerciseDescription?.category?.type === 'cardio' ? 'screentime' : 'tracking'
+  );
 
-  // Update exercise detail and notify parent
-  const updateDetail = (updates: Partial<ExerciseDetail>) => {
-    const updated = { ...exerciseDetail, ...updates } as ExerciseDetail;
-    setExerciseDetail(updated);
-    returnExerciseDescription(updated);
+  // Separate update functions:
+  const updateWeightTrainingDetail = (updatedDetails: WeightTrainingExercise) => {
+    if (!exerciseDetail) return;
+    const newDetail: ExerciseDetail = {
+      ...exerciseDetail,
+      // Preserve existing category properties
+      category: {
+        ...exerciseDetail.category,
+        // Force the type to weightTraining in this update function
+        type: 'weightTraining',
+        details: updatedDetails,
+      },
+    };
+    setExerciseDetail(newDetail);
+    returnExerciseDescription(newDetail);
   };
 
-  // Field change handlers
+  const updateCardioDetail = (updatedDetails: CardioExercise) => {
+    if (!exerciseDetail) return;
+    const newDetail: ExerciseDetail = {
+      ...exerciseDetail,
+      category: {
+        ...exerciseDetail.category,
+        type: 'cardio',
+        details: updatedDetails,
+      },
+    };
+    setExerciseDetail(newDetail);
+    returnExerciseDescription(newDetail);
+  };
+
+  // Handlers for weight training fields
   const handleSetsChange = (val: string) => {
     setSets(val);
-    if (exerciseDetail && exerciseDetail.category?.type === 'weightTraining') {
-      const details = exerciseDetail.category.details || { reps: [], sets: 3, weight: 0.0, screenTime: 0 };
-      const updatedDetails = { ...details, sets: parseInt(val, 10) || 3 };
-      updateDetail({ category: { type: 'weightTraining', details: updatedDetails } });
+    if (!exerciseDetail) return;
+    if (exerciseDetail.category?.type === 'weightTraining') {
+      const details =
+        (exerciseDetail.category.details as WeightTrainingExercise) || {
+          reps: [],
+          sets: 3,
+          weight: 0,
+          screenTime: 0,
+          selectedVideo: null,
+        };
+      const updatedDetails: WeightTrainingExercise = {
+        ...details,
+        sets: parseInt(val, 10) || 3,
+      };
+      updateWeightTrainingDetail(updatedDetails);
+    } else {
+      console.error("Sets update not applicable for non-weightTraining type.");
     }
   };
 
   const handleRepsChange = (val: string) => {
     setReps(val);
-    if (exerciseDetail && exerciseDetail.category?.type === 'weightTraining') {
-      const details = exerciseDetail.category.details || { reps: [], sets: 3, weight: 0.0, screenTime: 0 };
-      const updatedDetails = { ...details, reps: val.split(',') };
-      updateDetail({ category: { type: 'weightTraining', details: updatedDetails } });
+    if (!exerciseDetail) return;
+    if (exerciseDetail.category?.type === 'weightTraining') {
+      const details =
+        (exerciseDetail.category.details as WeightTrainingExercise) || {
+          reps: [],
+          sets: 3,
+          weight: 0,
+          screenTime: 0,
+          selectedVideo: null,
+        };
+      const updatedDetails: WeightTrainingExercise = {
+        ...details,
+        reps: val.split(','),
+      };
+      updateWeightTrainingDetail(updatedDetails);
+    } else {
+      console.error("Reps update not applicable for non-weightTraining type.");
     }
   };
 
   const handleWeightChange = (val: string) => {
     setWeight(val);
-    if (exerciseDetail && exerciseDetail.category?.type === 'weightTraining') {
-      const details = exerciseDetail.category.details || { reps: [], sets: 3, weight: 0.0, screenTime: 0 };
-      const updatedDetails = { ...details, weight: parseFloat(val) || 0.0 };
-      updateDetail({ category: { type: 'weightTraining', details: updatedDetails } });
+    if (!exerciseDetail) return;
+    if (exerciseDetail.category?.type === 'weightTraining') {
+      const details =
+        (exerciseDetail.category.details as WeightTrainingExercise) || {
+          reps: [],
+          sets: 3,
+          weight: 0,
+          screenTime: 0,
+          selectedVideo: null,
+        };
+      const updatedDetails: WeightTrainingExercise = {
+        ...details,
+        weight: parseFloat(val) || 0,
+      };
+      updateWeightTrainingDetail(updatedDetails);
+    } else {
+      console.warn("Weight change not applicable for non-weightTraining type.");
     }
   };
 
-  const handleBpmChange = (val: string) => {
-    setBpm(val);
-    if (exerciseDetail && exerciseDetail.category?.type === 'cardio') {
-      const details = exerciseDetail.category.details || { duration: 60, bpm: 140, calories: 0, screenTime: 0 };
-      const updatedDetails = { ...details, bpm: parseInt(val, 10) || 140 };
-      updateDetail({ category: { type: 'cardio', details: updatedDetails } });
-    }
-  };
-
-  const handleDurationChange = (val: string) => {
-    setDuration(val);
-    if (exerciseDetail && exerciseDetail.category?.type === 'cardio') {
-      const details = exerciseDetail.category.details || { duration: 60, bpm: 140, calories: 0, screenTime: 0 };
-      const updatedDetails = { ...details, duration: parseInt(val, 10) || 60 };
-      updateDetail({ category: { type: 'cardio', details: updatedDetails } });
-    }
-  };
-
+  // Handler for screenTime (applies to both categories)
   const handleScreenTimeChange = (val: string) => {
-    const newTime = parseFloat(val) || 0;
-    setScreenTime(newTime);
-    if (exerciseDetail) {
-      if (exerciseDetail.category?.type === 'weightTraining') {
-        const details = exerciseDetail.category.details || { reps: [], sets: 3, weight: 0.0, screenTime: 0 };
-        const updatedDetails = { ...details, screenTime: newTime };
-        updateDetail({ category: { type: 'weightTraining', details: updatedDetails } });
-      } else if (exerciseDetail.category?.type === 'cardio') {
-        const details = exerciseDetail.category.details || { duration: 60, bpm: 140, calories: 0, screenTime: 0 };
-        const updatedDetails = { ...details, screenTime: newTime };
-        updateDetail({ category: { type: 'cardio', details: updatedDetails } });
-      }
+    setScreenTime(val);
+    if (!exerciseDetail) return;
+    const newTime = parseFloat(val);
+    if (exerciseDetail.category?.type === 'cardio') {
+      const details =
+        (exerciseDetail.category.details as CardioExercise) || {
+          duration: 60,
+          bpm: 140,
+          calories: 0,
+          screenTime: 0,
+          selectedVideo: null,
+        };
+      const updatedDetails: CardioExercise = {
+        ...details,
+        screenTime: !isNaN(newTime) ? newTime : 0,
+      };
+      updateCardioDetail(updatedDetails);
+    } else if (exerciseDetail.category?.type === 'weightTraining') {
+      const details =
+        (exerciseDetail.category.details as WeightTrainingExercise) || {
+          reps: [],
+          sets: 3,
+          weight: 0,
+          screenTime: 0,
+          selectedVideo: null,
+        };
+      const updatedDetails: WeightTrainingExercise = {
+        ...details,
+        screenTime: !isNaN(newTime) ? newTime : 0,
+      };
+      updateWeightTrainingDetail(updatedDetails);
+    } else {
+      console.error("Unknown category type. Cannot update screenTime.");
     }
   };
 
   const handleNotesChange = (val: string) => {
     setNotes(val);
-    updateDetail({ notes: val });
+    if (!exerciseDetail) return;
+    const newDetail: ExerciseDetail = {
+      ...exerciseDetail,
+      notes: val,
+    };
+    setExerciseDetail(newDetail);
+    returnExerciseDescription(newDetail);
   };
 
   return (
     <div className="p-4 bg-zinc-900 rounded-lg border border-zinc-800 my-2">
       <div className="flex justify-between items-center">
         <h3 className="text-lg font-semibold text-white">{exerciseName}</h3>
-        <button 
-          onClick={() => setExpanded(!expanded)} 
+        <button
+          onClick={() => setExpanded(!expanded)}
           className="text-zinc-400 hover:text-white transition-colors flex items-center gap-2"
         >
           {expanded ? (
@@ -188,56 +256,81 @@ const CreateWorkoutExerciseCardView: React.FC<CreateWorkoutExerciseCardViewProps
           )}
         </button>
       </div>
-      
       {expanded && (
         <form className="mt-4 space-y-6">
-          {/* Weight Training Fields */}
-          <div className="border-t border-zinc-800 pt-4">
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <label className="text-zinc-400 text-sm block mb-2">Sets</label>
-                <input
-                  type="number"
-                  value={sets}
-                  onChange={(e) => handleSetsChange(e.target.value)}
-                  className="w-full p-2 rounded-lg bg-zinc-800 text-white border border-zinc-700 focus:border-[#E0FE10] transition-colors"
-                />
+          {/* Toggle buttons for mode */}
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setExerciseMode('tracking')}
+              className={`px-4 py-2 rounded ${
+                exerciseMode === 'tracking'
+                  ? 'bg-[#E0FE10] text-black'
+                  : 'bg-zinc-800 text-white'
+              }`}
+            >
+              Tracking
+            </button>
+            <button
+              type="button"
+              onClick={() => setExerciseMode('screentime')}
+              className={`px-4 py-2 rounded ${
+                exerciseMode === 'screentime'
+                  ? 'bg-[#E0FE10] text-black'
+                  : 'bg-zinc-800 text-white'
+              }`}
+            >
+              Screentime
+            </button>
+          </div>
+          {/* Conditional rendering based on exerciseMode */}
+          {exerciseMode === 'tracking' && (
+            <div className="border-t border-zinc-800 pt-4">
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="text-zinc-400 text-sm block mb-2">Sets</label>
+                  <input
+                    type="number"
+                    value={sets}
+                    onChange={(e) => handleSetsChange(e.target.value)}
+                    className="w-full p-2 rounded-lg bg-zinc-800 text-white border border-zinc-700 focus:border-[#E0FE10] transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="text-zinc-400 text-sm block mb-2">Reps</label>
+                  <input
+                    type="text"
+                    value={reps}
+                    onChange={(e) => handleRepsChange(e.target.value)}
+                    className="w-full p-2 rounded-lg bg-zinc-800 text-white border border-zinc-700 focus:border-[#E0FE10] transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="text-zinc-400 text-sm block mb-2">{weightLabel}</label>
+                  <input
+                    type="text"
+                    value={weight}
+                    onChange={(e) => handleWeightChange(e.target.value)}
+                    className="w-full p-2 rounded-lg bg-zinc-800 text-white border border-zinc-700 focus:border-[#E0FE10] transition-colors"
+                  />
+                </div>
               </div>
-              <div>
-                <label className="text-zinc-400 text-sm block mb-2">Reps</label>
+            </div>
+          )}
+          {exerciseMode === 'screentime' && (
+            <div className="border-t border-zinc-800 pt-4">
+              <div className="flex items-center gap-4">
+                <label className="text-zinc-400 text-sm">Screen Time (sec)</label>
                 <input
                   type="text"
-                  value={reps}
-                  onChange={(e) => handleRepsChange(e.target.value)}
-                  className="w-full p-2 rounded-lg bg-zinc-800 text-white border border-zinc-700 focus:border-[#E0FE10] transition-colors"
-                />
-              </div>
-              <div>
-                <label className="text-zinc-400 text-sm block mb-2">{weightLabel}</label>
-                <input
-                  type="text"
-                  value={weight}
-                  onChange={(e) => handleWeightChange(e.target.value)}
-                  className="w-full p-2 rounded-lg bg-zinc-800 text-white border border-zinc-700 focus:border-[#E0FE10] transition-colors"
+                  value={screenTime}
+                  onChange={(e) => handleScreenTimeChange(e.target.value)}
+                  className="w-32 p-2 rounded-lg bg-zinc-800 text-white border border-zinc-700 focus:border-[#E0FE10] transition-colors"
+                  inputMode="numeric"
                 />
               </div>
             </div>
-          </div>
-
-          {/* Screen Time */}
-          <div className="border-t border-zinc-800 pt-4">
-            <div className="flex items-center gap-4">
-              <label className="text-zinc-400 text-sm">Screen Time (sec)</label>
-              <input
-                type="number"
-                value={screenTime}
-                onChange={(e) => handleScreenTimeChange(e.target.value)}
-                className="w-32 p-2 rounded-lg bg-zinc-800 text-white border border-zinc-700 focus:border-[#E0FE10] transition-colors"
-              />
-            </div>
-          </div>
-
-          {/* Notes Field */}
+          )}
           <div className="border-t border-zinc-800 pt-4">
             <label className="text-zinc-400 text-sm block mb-2">Notes</label>
             <textarea
@@ -247,7 +340,6 @@ const CreateWorkoutExerciseCardView: React.FC<CreateWorkoutExerciseCardViewProps
               placeholder="Add notes for this exercise..."
             />
           </div>
-
           {/* Video Selection */}
           {exerciseVideos.length > 0 && (
             <div className="border-t border-zinc-800 pt-4">
@@ -260,34 +352,38 @@ const CreateWorkoutExerciseCardView: React.FC<CreateWorkoutExerciseCardViewProps
                     onClick={() => {
                       setSelectedVideo(video);
                       if (exerciseDetail) {
-                        if (exerciseDetail.category?.type === 'weightTraining') {
-                          const details = exerciseDetail.category.details || {
-                            reps: ['12'],
-                            sets: 3,
-                            weight: 0,
-                            screenTime: 0,
-                            selectedVideo: null,
-                          };
-                          updateDetail({
-                            category: {
-                              type: 'weightTraining',
-                              details: { ...details, selectedVideo: video },
-                            },
-                          });
-                        } else if (exerciseDetail.category?.type === 'cardio') {
-                          const details = exerciseDetail.category.details || {
-                            duration: 20,
-                            bpm: 125,
-                            calories: 0,
-                            screenTime: 0,
-                            selectedVideo: null,
-                          };
-                          updateDetail({
-                            category: {
-                              type: 'cardio',
-                              details: { ...details, selectedVideo: video },
-                            },
-                          });
+                        if (exerciseMode === 'tracking') {
+                          const details =
+                            (exerciseDetail.category?.details as WeightTrainingExercise) || {
+                              reps: ['12'],
+                              sets: 3,
+                              weight: 0,
+                              screenTime: 0,
+                              selectedVideo: null,
+                            };
+                          updateWeightTrainingDetail({ ...details, selectedVideo: video });
+                        } else if (exerciseMode === 'screentime') {
+                          if (exerciseDetail.category?.type === 'cardio') {
+                            let details: CardioExercise =
+                              (exerciseDetail.category.details as CardioExercise) ?? {
+                                duration: 20,
+                                bpm: 125,
+                                calories: 0,
+                                screenTime: 0,
+                                selectedVideo: null,
+                              };
+                            updateCardioDetail(details);
+                          } else {
+                            let details: WeightTrainingExercise =
+                              (exerciseDetail.category.details as WeightTrainingExercise) ?? {
+                                reps: ['12'],
+                                sets: 3,
+                                weight: 0,
+                                screenTime: 0,
+                                selectedVideo: null,
+                              };
+                            updateWeightTrainingDetail(details);
+                          }
                         }
                       }
                     }}
@@ -305,8 +401,6 @@ const CreateWorkoutExerciseCardView: React.FC<CreateWorkoutExerciseCardViewProps
               </div>
             </div>
           )}
-
-          {/* Dumbbell Toggle */}
           <div className="border-t border-zinc-800 pt-4 flex items-center justify-between">
             <label className="text-zinc-400 text-sm">Exercise uses dumbbells</label>
             <input
@@ -314,28 +408,28 @@ const CreateWorkoutExerciseCardView: React.FC<CreateWorkoutExerciseCardViewProps
               checked={isDumbell}
               onChange={(e) => {
                 setIsDumbell(e.target.checked);
-                updateDetail({ isSplit: e.target.checked });
+                // Here we still use the generic updateDetail since it's not about details
+                setExerciseDetail({ ...exerciseDetail!, isSplit: e.target.checked });
+                returnExerciseDescription({ ...exerciseDetail!, isSplit: e.target.checked });
               }}
               className="w-5 h-5 accent-[#E0FE10]"
             />
           </div>
-
-        {/* Save Button */}
           <button
             type="button"
             onClick={() => {
               setExpanded(false);
               returnExerciseDescription(exerciseDetail!);
             }}
-          className="w-full py-3 bg-[#E0FE10] text-black rounded-lg font-semibold hover:opacity-90 transition-opacity"
+            className="w-full py-3 bg-[#E0FE10] text-black rounded-lg font-semibold hover:opacity-90 transition-opacity"
           >
             Save Details
           </button>
         </form>
-        )}
-     </div>
-    );
-  };
+      )}
+    </div>
+  );
+};
 
 // MobileStackView Component
 interface MobileStackViewProps {

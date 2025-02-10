@@ -330,7 +330,7 @@ async updateWorkout(workout: Workout): Promise<void> {
       const snapshot = await getDocs(q);
       const userChallenges: UserChallenge[] = snapshot.docs.map((doc: DocumentData) => {
         const data = doc.data();
-        return new UserChallenge(doc.id, data);
+        return new UserChallenge(data);
       });
       if (userChallenges.length > 0) {
         return { userChallenges };
@@ -368,10 +368,11 @@ async updateWorkout(workout: Workout): Promise<void> {
       const snapshot = await getDocs(q);
 
       // Map the documents to an array of WorkoutSummary objects
-      return snapshot.docs.map((doc: DocumentData) => ({
+      return snapshot.docs.map((doc: DocumentData): WorkoutSummary => ({
         id: doc.id,
         ...doc.data(),
-      })) as WorkoutSummary[];
+      }));
+      
     } catch (error) {
       const firestoreError = error as FirestoreError;
       console.error('Error fetching workout summaries:', firestoreError.message);
@@ -395,10 +396,11 @@ async updateWorkout(workout: Workout): Promise<void> {
       const snapshot = await getDocs(q);
   
       // Map the documents to an array of WorkoutSummary objects
-      return snapshot.docs.map((doc: DocumentData) => ({
+      return snapshot.docs.map((doc: DocumentData): WorkoutSummary => ({
         id: doc.id,
         ...doc.data(),
-      })) as WorkoutSummary[];
+      }));
+      
     } catch (error) {
       const firestoreError = error as FirestoreError;
       console.error('Error fetching all workout summaries:', firestoreError.message);
@@ -676,6 +678,51 @@ async getCollectionById(id: string): Promise<SweatlistCollection> {
 }
 
   
+async fetchCollections(userId: string): Promise<SweatlistCollection[]> {
+  if (!userId) {
+    throw new Error('User ID is required');
+  }
+
+  try {
+    const collectionsRef = fsCollection(db, "sweatlist-collection");
+
+    // Query for records where ownerId is an array that contains the userId.
+    const qArray = query(collectionsRef, where("ownerId", "array-contains", userId));
+    const snapshotArray = await getDocs(qArray);
+    const collectionsFromArray: SweatlistCollection[] = snapshotArray.docs.map((doc: QueryDocumentSnapshot<DocumentData>) => {
+      const data = { id: doc.id, ...doc.data() };
+      return new SweatlistCollection(data);
+    });
+
+    console.log("The array collections", collectionsFromArray);
+
+    // Query for records where ownerId is a string equal to the userId.
+    const qString = query(collectionsRef, where("ownerId", "==", userId));
+    const snapshotString = await getDocs(qString);
+    const collectionsFromString: SweatlistCollection[] = snapshotString.docs.map((doc: QueryDocumentSnapshot<DocumentData>) => {
+      const data = { id: doc.id, ...doc.data() };
+      return new SweatlistCollection(data);
+    });
+
+    console.log("The string collections", collectionsFromString);
+
+
+    // Combine both arrays and remove duplicates (if any) based on the collection id.
+    const combined = [...collectionsFromArray, ...collectionsFromString];
+    const uniqueCollections = new Map<string, SweatlistCollection>();
+    combined.forEach(collection => {
+      uniqueCollections.set(collection.id, collection);
+    });
+
+    return Array.from(uniqueCollections.values());
+  } catch (error) {
+    console.error("Error fetching sweatlists:", error);
+    throw error;
+  }
+}
+
+
+
     /**
    * Fetch user challenges by userId and filter for active challenges.
    * @returns A promise resolving to an array of active challenges.
@@ -778,10 +825,10 @@ async getCollectionById(id: string): Promise<SweatlistCollection> {
       const snapshot = await getDocs(q);
 
       // Map documents to an array of Challenge objects
-      return snapshot.docs.map((doc: DocumentData) => ({
+      return snapshot.docs.map((doc: DocumentData) => new UserChallenge({
         id: doc.id,
         ...doc.data(),
-      })) as UserChallenge[];
+      }));
     } catch (error) {
       console.error('Error fetching user challenges:', error);
       throw new Error('Failed to fetch user challenges');
@@ -952,14 +999,14 @@ async deleteWorkoutSession(workoutId: string | null): Promise<void> {
     const videoSnapshot = await getDocs(collection(db, 'exerciseVideos'));
    
     const exerciseVideos = videoSnapshot.docs.map((doc) => 
-      ExerciseVideo.fromFirebase({
+      new ExerciseVideo({
         id: doc.id,
         ...doc.data()
       })
     );
    
     const exercisesWithVideos = exerciseSnapshot.docs.map(doc => {
-      const exercise = Exercise.fromFirebase({
+      const exercise = new Exercise({
         id: doc.id,
         ...doc.data()
       });
@@ -1000,7 +1047,7 @@ async deleteWorkoutSession(workoutId: string | null): Promise<void> {
       // 1. Fetch all exercises 
       const exerciseSnapshot = await getDocs(collection(db, 'exercises'));
       const exercises = exerciseSnapshot.docs.map((doc) => 
-        Exercise.fromFirebase({
+        new Exercise({
           id: doc.id,
           ...doc.data()
         })
@@ -1010,7 +1057,7 @@ async deleteWorkoutSession(workoutId: string | null): Promise<void> {
       // 2. Fetch all videos
       const videoSnapshot = await getDocs(collection(db, 'exerciseVideos'));
       const exerciseVideos = videoSnapshot.docs.map((doc) => 
-        ExerciseVideo.fromFirebase({
+        new ExerciseVideo({
           id: doc.id,
           ...doc.data()
         })
@@ -1053,15 +1100,15 @@ async deleteWorkoutSession(workoutId: string | null): Promise<void> {
     try {
       const exerciseSnapshot = await getDocs(collection(db, 'exercises'));
       const exercises = exerciseSnapshot.docs.map((doc) => 
-        Exercise.fromFirebase({
+        new Exercise({
           id: doc.id,
           ...doc.data()
         })
       );
-   
+  
       const videoSnapshot = await getDocs(collection(db, 'exerciseVideos'));
       const exerciseVideos = videoSnapshot.docs.map((doc) => 
-        ExerciseVideo.fromFirebase({
+        new ExerciseVideo({
           id: doc.id,
           ...doc.data()
         })
@@ -1195,7 +1242,6 @@ async deleteWorkoutSession(workoutId: string | null): Promise<void> {
       zone: data.zone || BodyZone.FullBody
     });
   
-    console.log("The Workout ID is: " + workout.id);
     // Fetch logs from subcollection
     const logsRef = collection(workoutDoc.ref, 'logs');
     const logsSnapshot = await getDocs(logsRef);

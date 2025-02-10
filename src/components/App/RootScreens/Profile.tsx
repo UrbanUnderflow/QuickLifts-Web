@@ -14,46 +14,71 @@ import { parseActivityType } from '../../../utils/activityParser';
 import { StackCard } from '../../../components/Rounds/StackCard';
 import { useRouter } from 'next/router';
 import { firebaseStorageService, UploadImageType } from '../../../api/firebase/storage/service';
-import { Camera } from 'lucide-react';
+import { Camera, Trash2, CheckCircle } from 'lucide-react';
+import Spacer from '../../../components/Spacer';
 
 interface StackGridProps {
   stacks: Workout[];
   onSelectStack: (stack: Workout) => void;
 }
 
-const StackGrid: React.FC<StackGridProps> = ({ stacks, onSelectStack }) => {
+interface StackGridProps {
+  stacks: Workout[];
+  isSelecting?: boolean;
+  selectedStacks?: Set<string>;
+  onToggleSelection?: (stack: Workout) => void;
+  onSelectStack: (stack: Workout) => void;
+}
+
+const StackGrid: React.FC<StackGridProps> = ({ 
+  stacks, 
+  isSelecting,
+  selectedStacks,
+  onToggleSelection,
+  onSelectStack 
+}) => {
   const router = useRouter();
 
   return (
     <div className="grid grid-cols-1 gap-4">
       {stacks.map((stack, index) => (
-        <button
+        <div 
           key={stack.id}
-          onClick={() => onSelectStack(stack)}
-          className="w-full text-left"
+          className={`relative ${
+            isSelecting ? 'cursor-pointer' : ''
+          }`}
+          onClick={() => {
+            if (isSelecting && onToggleSelection) {
+              onToggleSelection(stack);
+            }
+          }}
         >
+          {isSelecting && (
+            <div className={`absolute -left-2 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full border-2 z-10
+              ${selectedStacks?.has(stack.id) 
+                ? 'bg-[#E0FE10] border-[#E0FE10]' 
+                : 'border-zinc-500'
+              }`}
+            />
+          )}
           <StackCard
             workout={stack}
-            gifUrls={
-              stack.exercises?.map(ex => 
-                ex.exercise.videos?.[0]?.gifURL || ''
-              ) || []
-            }
+            gifUrls={stack.exercises?.map(ex => ex.exercise.videos?.[0]?.gifURL || '') || []}
             maxOrder={index}
             showArrows={false}
             showCalendar={true}
             onPrimaryAction={() => {
-              const username = userService.currentUser?.username;
-              router.push(`/workout/${username}/${stack.id}`);
+              if (!isSelecting) {
+                const username = userService.currentUser?.username;
+                router.push(`/workout/${username}/${stack.id}`);
+              }
             }}
-      
           />
-        </button>
+        </div>
       ))}
     </div>
   );
 };
-
 
 const TABS = {
   ACTIVITY: 'activity',
@@ -73,12 +98,15 @@ const Profile: React.FC = () => {
   const [activities, setActivities] = useState<UserActivity[]>([]);
   const [followers, setFollowers] = useState<FollowRequest[]>([]);
   const [following, setFollowing] = useState<FollowRequest[]>([]);
+  const [selectedExercises, setSelectedExercises] = useState<Exercise[]>([]);
   const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
 
   const currentUser = userService.currentUser;
 
   const [isImageUploading, setIsImageUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [selectedStacks, setSelectedStacks] = useState<Set<string>>(new Set());
+  const [isSelecting, setIsSelecting] = useState(false);
 
 const handleProfileImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
   const file = e.target.files?.[0];
@@ -117,6 +145,47 @@ const handleProfileImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) 
   }
 };
 
+const handleToggleSelection = (exercise: Exercise) => {
+  setSelectedExercises(prev => {
+    // Check if exercise is already selected
+    const alreadySelected = prev.find((ex) => ex.id === exercise.id);
+    if (alreadySelected) {
+      // Remove it
+      return prev.filter((ex) => ex.id !== exercise.id);
+    } else {
+      // Add it
+      return [...prev, exercise];
+    }
+  });
+};
+
+const handleDelete = async () => {
+  if (selectedTab === TABS.EXERCISES && selectedExercises.length > 0) {
+    try {
+      await Promise.all(
+        selectedExercises.map(ex => userService.deleteUserVideo(ex.id))
+      );
+      setUserVideos(prev => prev.filter(v => !selectedExercises.some(se => se.id === v.id)));
+      setSelectedExercises([]);
+    } catch (error) {
+      console.error('Error deleting videos:', error);
+    }
+  } else if (selectedTab === TABS.STACKS && selectedStacks.size > 0) {
+    try {
+      await Promise.all(
+        Array.from(selectedStacks).map(id => userService.deleteStack(id))
+      );
+      setUserStacks(prev => prev.filter(s => !selectedStacks.has(s.id)));
+      setSelectedStacks(new Set());
+    } catch (error) {
+      console.error('Error deleting stacks:', error);
+    }
+  }
+  setIsSelecting(false);
+};
+
+
+
   if (!currentUser) {
     return <div>Loading...</div>;
   }
@@ -130,7 +199,7 @@ const handleProfileImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) 
         const [followers, following, challenges, summaries] = await Promise.all([
           userService.fetchFollowers(),
           userService.fetchFollowing(),
-          workoutService.fetchUserChallenges(),
+          workoutService.fetchCollections(currentUser.id),
           workoutService.fetchAllWorkoutSummaries()
         ]);
   
@@ -141,7 +210,7 @@ const handleProfileImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) 
         const activeChallenges = challenges
           .map(uc => uc.challenge)
           .filter(c => c !== undefined);
-        setActiveChallenges(activeChallenges);
+          setActiveChallenges(activeChallenges.filter((challenge): challenge is Challenge => challenge !== null));
   
         setWorkoutSummaries(summaries);
   
@@ -153,7 +222,6 @@ const handleProfileImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) 
           currentUser.id
         );
 
-        console.log("Parsed Activities" + JSON.stringify(parsedActivities));
         setActivities(parsedActivities);
   
       } catch (error) {
@@ -313,44 +381,103 @@ const handleProfileImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) 
                       username={currentUser.username}
                       isPublicProfile={false}
                       onWorkoutSelect={(summary) => {
-                        console.log('Selected workout summary:', summary);
+                        //select summary
                       }}
                       onVideoSelect={(exercise) => {
-                        console.log('Selected exercise:', exercise);
                         setSelectedExercise(exercise);
                       }}
                       onProfileSelect={(userId) => {
-                        console.log('Selected user profile:', userId);
+                        //oprofile view
                       }}
                     />
                   )}
                 </div>
               )}
 
-                {selectedTab === TABS.STACKS && (
-                  <div className="px-5">
-                    <h2 className="text-xl text-white font-semibold mb-4">
+              {selectedTab === TABS.STACKS && (
+                <div className="px-5">
+                  <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-xl text-white font-semibold">
                       Your Stacks ({userStacks.length})
                     </h2>
-                    <StackGrid
-                      stacks={userStacks}
-                      onSelectStack={(stack) => {
-                        console.log('Selected stack:', stack);
-                        // Handle stack selection
-                      }}
-                    />
+                    <div className="flex gap-4">
+                      <button
+                        onClick={() => setIsSelecting(!isSelecting)}
+                        className="text-zinc-400 hover:text-white"
+                      >
+                        {isSelecting ? 'Cancel' : 'Select'}
+                      </button>
+                      {isSelecting && selectedStacks.size > 0 && (
+                        <button
+                          onClick={handleDelete}
+                          className="text-red-500 hover:text-red-400"
+                        >
+                          Delete ({selectedStacks.size})
+                        </button>
+                      )}
+                    </div>
                   </div>
-                )}
+                  <StackGrid
+                    // Sort stacks by createdAt (newest first)
+                    stacks={[...userStacks].sort(
+                      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+                    )}
+                    isSelecting={isSelecting}
+                    selectedStacks={selectedStacks}
+                    onToggleSelection={(stack) => {
+                      setSelectedStacks((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(stack.id)) {
+                          next.delete(stack.id);
+                        } else {
+                          next.add(stack.id);
+                        }
+                        return next;
+                      });
+                    }}
+                    onSelectStack={(stack) => {
+                      if (!isSelecting) {
+                        // Handle normal stack selection
+                      }
+                    }}
+                  />
+                </div>
+              )}
+
 
               {selectedTab === TABS.EXERCISES && (
                 <div className="px-5">
-                  <h2 className="text-xl text-white font-semibold mb-4">
-                    Your Videos ({userVideos.length})
-                  </h2>
+                  <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-xl text-white font-semibold">
+                      Your Videos ({userVideos.length})
+                    </h2>
+                    <div className="flex gap-4">
+                      <button
+                        onClick={() => setIsSelecting(!isSelecting)}
+                        className="text-zinc-400 hover:text-white"
+                      >
+                        {isSelecting ? 'Cancel' : 'Select'}
+                      </button>
+                      {isSelecting && selectedExercises.length > 0 && (
+                        <button
+                          onClick={handleDelete}
+                          className="text-red-500 hover:text-red-400 flex items-center gap-2"
+                        >
+                          <Trash2 size={16} />
+                          <span>Delete ({selectedExercises.length})</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
                   <ExerciseGrid
                     userVideos={userVideos}
+                    multiSelection={isSelecting}
+                    selectedExercises={selectedExercises}
+                    onToggleSelection={handleToggleSelection}
                     onSelectVideo={(exercise) => {
-                      setSelectedExercise(exercise);
+                      if (!isSelecting) {
+                        setSelectedExercise(exercise);
+                      }
                     }}
                   />
                 </div>
@@ -360,12 +487,13 @@ const handleProfileImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) 
                 <ChallengesTab
                   activeChallenges={activeChallenges}
                   onSelectChallenge={(challenge) => {
-                    console.log('Selected challenge:', challenge);
+                    console.log('Selected challenge:', challenge.startDate);
                   }}
                 />
               )}
             </div>
           </div>
+          <Spacer size={100}></Spacer>
         </div>
 
         {selectedExercise && (
@@ -374,7 +502,6 @@ const handleProfileImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) 
             user={currentUser}
             onBack={() => setSelectedExercise(null)}
             onProfileClick={() => {
-              console.log('Profile clicked');
             }}
           />
         )}

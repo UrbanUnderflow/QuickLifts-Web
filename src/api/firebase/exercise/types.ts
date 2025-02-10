@@ -1,7 +1,7 @@
 import { RepsAndWeightLog } from "../workout/types";
 import { ProfileImage } from '../user/types';
 import { DocumentSnapshot } from 'firebase/firestore';
-import { convertFirestoreTimestamp } from '../../../utils/formatDate';
+import { convertFirestoreTimestamp, dateToUnixTimestamp } from '../../../utils/formatDate';
 
 export interface ExerciseService {
   fetchExercises: () => Promise<void>;
@@ -85,8 +85,8 @@ export class ExerciseLog {
     this.id = data.id || '';
     this.workoutId = data.workoutId || '';
     this.userId = data.userId || '';
-    this.exercise = Exercise.fromFirebase(data.exercise || {});
-    this.logs = (data.logs || []).map((log: any) => RepsAndWeightLog.fromFirebase(log));
+    this.exercise = new Exercise(data.exercise);
+    this.logs = (data.logs || []).map((log: any) => new RepsAndWeightLog(log));
     this.feedback = data.feedback || '';
     this.note = data.note || '';
     this.recommendedWeight = data.recommendedWeight || 'calculating...';  
@@ -99,33 +99,6 @@ export class ExerciseLog {
     this.completedAt = convertFirestoreTimestamp(data.completedAt);
     this.createdAt = convertFirestoreTimestamp(data.createdAt);
     this.updatedAt = convertFirestoreTimestamp(data.updatedAt);
-  }
-
-  static fromFirebase(data: any): ExerciseLog {
-    if (!data) {
-      // Return a default ExerciseLog instead of null
-      return new ExerciseLog({});
-    }
-    
-    return new ExerciseLog({
-      id: data.id || '',
-      workoutId: data.workoutId || '',
-      userId: data.userId || '',
-      exercise: data.exercise || {},
-      logs: data.logs || [],
-      feedback: data.feedback || '',
-      note: data.note || '',
-      recommendedWeight: data.recommendedWeight,
-      isSplit: data.isSplit || false,
-      isBodyWeight: data.isBodyWeight || false,
-      logSubmitted: data.logSubmitted || false,
-      logIsEditing: data.logIsEditing || false,
-      isCompleted: data.isCompleted || false,
-      order: data.order || null,
-      completedAt: data.completedAt,
-      createdAt: data.createdAt,
-      updatedAt: data.updatedAt
-    });
   }
 
   toDictionary(): { [key: string]: any } {
@@ -142,9 +115,9 @@ export class ExerciseLog {
       logSubmitted: this.logSubmitted,
       logIsEditing: this.logIsEditing,
       isCompleted: this.isCompleted,
-      createdAt: this.createdAt.getTime(),
-      updatedAt: this.updatedAt.getTime(),
-      completedAt: this.completedAt.getTime(),
+      createdAt: dateToUnixTimestamp(this.createdAt),
+      updatedAt: dateToUnixTimestamp(this.updatedAt),
+      completedAt: dateToUnixTimestamp(this.completedAt),
       recommendedWeight: this.recommendedWeight,
     };  
    
@@ -256,14 +229,14 @@ export class Exercise {
     this.primaryBodyParts = (data.primaryBodyParts || []) as BodyPart[];
     this.secondaryBodyParts = (data.secondaryBodyParts || []) as BodyPart[];
     this.tags = data.tags || [];
-    this.videos = (data.videos || []).map((video: any) => ExerciseVideo.fromFirebase(video));
+    this.videos = (data.videos || []).map((video: any) => new ExerciseVideo(video));
     this.steps = data.steps || [];
     this.visibility = data.visibility || 'live';
     this.currentVideoPosition = data.currentVideoPosition || 0;
     this.sets = data.sets || 0;
     this.reps = data.reps || '';
     this.weight = data.weight || 0;
-    this.author = ExerciseAuthor.fromFirebase(data.author || {});
+    this.author = new ExerciseAuthor(data.author || {});
     this.createdAt = convertFirestoreTimestamp(data.createdAt);
     this.updatedAt = convertFirestoreTimestamp(data.updatedAt);
 
@@ -278,9 +251,7 @@ export class Exercise {
           sets: categoryData.sets || 3,
           weight: categoryData.weight || 0,
           screenTime: categoryData.screenTime || 0,
-          selectedVideo: categoryData.selectedVideo
-            ? ExerciseVideo.fromFirebase(categoryData.selectedVideo)
-            : null
+          selectedVideo: categoryData.selectedVideo ? new ExerciseVideo(categoryData.selectedVideo) : null
         });
         break;
 
@@ -290,9 +261,7 @@ export class Exercise {
           bpm: categoryData.bpm || 0,
           calories: categoryData.calories || 0,
           screenTime: categoryData.screenTime || 0,
-          selectedVideo: categoryData.selectedVideo
-            ? ExerciseVideo.fromFirebase(categoryData.selectedVideo)
-            : null
+          selectedVideo: categoryData.selectedVideo ? new ExerciseVideo(categoryData.selectedVideo) : null
         });
         break;
 
@@ -304,32 +273,6 @@ export class Exercise {
           screenTime: 0
         });
     }
-  }
-
-  static fromFirebase(data: any): Exercise {
-    if (!data) {
-      return new Exercise({});
-    }
-
-    return new Exercise({
-      id: data.id || '',
-      name: data.name || '',
-      description: data.description || '',
-      category: data.category || {},
-      primaryBodyParts: data.primaryBodyParts || [],
-      secondaryBodyParts: data.secondaryBodyParts || [],
-      tags: data.tags || [],
-      videos: data.videos || [],
-      steps: data.steps || [],
-      visibility: data.visibility || 'live',
-      currentVideoPosition: data.currentVideoPosition || 0,
-      sets: data.sets || 0,
-      reps: data.reps || '',
-      weight: data.weight || 0,
-      author: data.author || {},
-      createdAt: data.createdAt,
-      updatedAt: data.updatedAt
-    });
   }
 
   toDictionary(): { [key: string]: any } {
@@ -359,8 +302,8 @@ export class Exercise {
       reps: this.reps,
       weight: this.weight,
       author: this.author.toDictionary(),
-      createdAt: this.createdAt.getTime(),
-      updatedAt: this.updatedAt.getTime()
+      createdAt: dateToUnixTimestamp(this.createdAt),
+      updatedAt: dateToUnixTimestamp(this.updatedAt),
     };
 
     return data;
@@ -402,7 +345,7 @@ export class ExerciseVideo {
     this.videoURL = data.videoURL || '';
     this.fileName = data.fileName || '';
     this.exercise = data.exercise || '';
-    this.profileImage = ProfileImage.fromFirebase(data.profileImage || {});
+    this.profileImage = new ProfileImage(data.profileImage || {});
     this.caption = data.caption;
     this.gifURL = data.gifURL;
     this.thumbnail = data.thumbnail;
@@ -416,36 +359,6 @@ export class ExerciseVideo {
     this.bookmarked = data.bookmarked || false;
     this.createdAt = convertFirestoreTimestamp(data.createdAt);
     this.updatedAt = convertFirestoreTimestamp(data.updatedAt);
-  }
-
-  static fromFirebase(data: any): ExerciseVideo {
-    if (!data) {
-      return new ExerciseVideo({});
-    }
-
-    return new ExerciseVideo({
-      id: data.id || '',
-      exerciseId: data.exerciseId || '',
-      username: data.username || '',
-      userId: data.userId || '',
-      videoURL: data.videoURL || '',
-      fileName: data.fileName || '',
-      exercise: data.exercise || '',
-      profileImage: data.profileImage || {},
-      caption: data.caption,
-      gifURL: data.gifURL,
-      thumbnail: data.thumbnail || null,
-      visibility: data.visibility || 'private',
-      totalAccountsReached: data.totalAccountsReached || 0,
-      totalAccountLikes: data.totalAccountLikes || 0,
-      totalAccountBookmarked: data.totalAccountBookmarked || 0,
-      totalAccountUsage: data.totalAccountUsage || 0,
-      isApproved: data.isApproved || false,
-      liked: data.liked || false,
-      bookmarked: data.bookmarked || false,
-      createdAt: data.createdAt,
-      updatedAt: data.updatedAt
-    });
   }
 
   toDictionary(): { [key: string]: any } {
@@ -464,8 +377,8 @@ export class ExerciseVideo {
       totalAccountBookmarked: this.totalAccountBookmarked,
       totalAccountUsage: this.totalAccountUsage,
       isApproved: this.isApproved,
-      createdAt: this.createdAt.getTime(),
-      updatedAt: this.updatedAt.getTime()
+      createdAt: dateToUnixTimestamp(this.createdAt),
+      updatedAt: dateToUnixTimestamp(this.updatedAt),
     };
 
     if (this.caption) data.caption = this.caption;
@@ -525,17 +438,6 @@ export class ExerciseAuthor {
   constructor(data: any) {
     this.userId = data.userId || '';
     this.username = data.username || '';
-  }
-
-  static fromFirebase(data: any): ExerciseAuthor {
-    if (!data) {
-      return new ExerciseAuthor({});
-    }
-
-    return new ExerciseAuthor({
-      userId: data.userId || '',
-      username: data.username || ''
-    });
   }
 
   toDictionary(): { [key: string]: any } {

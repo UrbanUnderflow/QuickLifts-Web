@@ -25,7 +25,7 @@ class ExerciseService {
       try {
         // Fetch all exercises
         const exerciseSnapshot = await getDocs(collection(db, 'exercises'));
-        const exercises: Exercise[] = exerciseSnapshot.docs.map((doc) => Exercise.fromFirebase({
+        const exercises: Exercise[] = exerciseSnapshot.docs.map((doc) => new Exercise({
           id: doc.id,
           ...doc.data(),
         }));
@@ -33,7 +33,7 @@ class ExerciseService {
         // Fetch all videos
         const videoSnapshot = await getDocs(collection(db, 'exerciseVideos'));
         const exerciseVideos: ExerciseVideo[] = videoSnapshot.docs.map((doc) =>
-          ExerciseVideo.fromFirebase({
+          new ExerciseVideo({
             id: doc.id,
             ...doc.data(),
           })
@@ -43,7 +43,7 @@ class ExerciseService {
         const mappedExercises = exercises.map((exercise) => {
           const videosForExercise = exerciseVideos
             .filter((video) => video.exercise.toLowerCase() === exercise.name.toLowerCase())
-            .map((video) => ExerciseVideo.fromFirebase(video)); // Ensure proper ExerciseVideo instances
+            .map((video) => new ExerciseVideo(video)); // Ensure proper ExerciseVideo instances
         
           return new Exercise({
             ...exercise, // Keep existing properties
@@ -73,7 +73,7 @@ class ExerciseService {
         // Fetch all exercises
         const exerciseSnapshot = await getDocs(collection(db, 'exercises'));
         const exercises: Exercise[] = exerciseSnapshot.docs.map((doc) => 
-          Exercise.fromFirebase({
+         new Exercise({
             id: doc.id,
             ...doc.data(),
           })
@@ -82,7 +82,7 @@ class ExerciseService {
         // Fetch all videos
         const videoSnapshot = await getDocs(collection(db, 'exerciseVideos'));
         const exerciseVideos: ExerciseVideo[] = videoSnapshot.docs.map((doc) =>
-          ExerciseVideo.fromFirebase({
+          new ExerciseVideo({
             id: doc.id,
             ...doc.data(),
           })
@@ -93,7 +93,7 @@ class ExerciseService {
           // Ensure that each video is properly instantiated as an `ExerciseVideo`
           const videosForExercise = (exerciseVideos
             .filter((video) => video.exercise.toLowerCase() === exerciseData.name.toLowerCase())
-            .map((video) => ExerciseVideo.fromFirebase(video))) as ExerciseVideo[];
+            .map((video) => new ExerciseVideo(video))) as ExerciseVideo[];
         
           return new Exercise({
             id: exerciseData.id,
@@ -110,7 +110,7 @@ class ExerciseService {
             sets: exerciseData.sets || 0,
             reps: exerciseData.reps || '',
             weight: exerciseData.weight || 0,
-            author: ExerciseAuthor.fromFirebase(exerciseData.author || {}),
+            author: new ExerciseAuthor(exerciseData.author || {}),
             createdAt: convertFirestoreTimestamp(exerciseData.createdAt),
             updatedAt: convertFirestoreTimestamp(exerciseData.updatedAt),
           });
@@ -189,14 +189,14 @@ class ExerciseService {
           // Fetch exercise videos separately
           const videoSnapshot = await getDocs(collection(db, 'exerciseVideos'));
           const exerciseVideos: ExerciseVideo[] = videoSnapshot.docs.map((doc) =>
-            ExerciseVideo.fromFirebase({
+            new ExerciseVideo({
               id: doc.id,
               ...doc.data(),
             })
           );
           
           const exercises: Exercise[] = exerciseSnapshot.docs.map((doc) =>
-            Exercise.fromFirebase({ id: doc.id, ...doc.data() })
+            new Exercise({ id: doc.id, ...doc.data() })
           );
           
           // Map videos to exercises and ensure correct instantiation

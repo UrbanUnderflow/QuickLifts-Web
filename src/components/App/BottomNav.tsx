@@ -11,22 +11,8 @@ interface BottomNavProps {
 
 const BottomNav: React.FC<BottomNavProps> = ({ selectedTab, onTabChange }) => {
 
-    // Add a useEffect to monitor userService.currentUser
-  React.useEffect(() => {
-    console.log('Current user in BottomNav:', userService.currentUser);
-    if (userService.currentUser?.profileImage) {
-      console.log('Profile image data:', userService.currentUser.profileImage);
-    }
-  }, []);
-
   // Also add a log when rendering to see real-time values
   const currentUser = userService.currentUser;
-  console.log('Rendering BottomNav with currentUser:', currentUser);
-  console.log('Has profile image?', 
-    currentUser && 
-    currentUser.profileImage && 
-    currentUser.profileImage.profileImageURL
-  );
 
   const tabs = [
     {

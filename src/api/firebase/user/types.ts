@@ -1,5 +1,5 @@
 // src/api/firebase/user/types.ts
-import { convertFirestoreTimestamp } from '../../../utils/formatDate';
+import { convertFirestoreTimestamp, dateToUnixTimestamp } from '../../../utils/formatDate';
 
 export interface UserService {
     updateUser: (userId: string, user: User) => Promise<void>;
@@ -34,18 +34,6 @@ export class ProfileImage {
     this.profileImageURL = data.profileImageURL || '';
     this.imageOffsetWidth = data.imageOffsetWidth || 0;
     this.imageOffsetHeight = data.imageOffsetHeight || 0;
-  }
-
-  static fromFirebase(data: any): ProfileImage {
-    if (!data) {
-      return new ProfileImage({});
-    }
-
-    return new ProfileImage({
-      profileImageURL: data.profileImageURL || '',
-      imageOffsetWidth: data.imageOffsetWidth || 0,
-      imageOffsetHeight: data.imageOffsetHeight || 0
-    });
   }
 
   toDictionary(): { [key: string]: any } {
@@ -111,10 +99,10 @@ export class User {
     this.level = data.level || UserLevel.Novice;
     this.goal = data.goal || [];
     this.bodyWeight = Array.isArray(data.bodyWeight)
-      ? data.bodyWeight.map((weight: any) => BodyWeight.fromFirebase(weight))
+      ? data.bodyWeight.map((weight: any) => new BodyWeight(weight))
       : [];
     this.macros = data.macros || {};
-    this.profileImage = ProfileImage.fromFirebase(data.profileImage || {});
+    this.profileImage = new ProfileImage(data.profileImage || {});
     this.registrationComplete = data.registrationComplete || false;
     this.creator = data.creator || null;
     this.subscriptionType = data.subscriptionType || SubscriptionType.unsubscribed;
@@ -134,7 +122,7 @@ export class User {
       username: this.username,
       homeGym: this.homeGym,
       encouragement: this.encouragement,
-      birthdate: this.birthdate?.getTime(),
+      birthdate: this.birthdate ? dateToUnixTimestamp(this.birthdate) : null,
       gender: this.gender,
       selfDisclosedGender: this.selfDisclosedGender,
       height: this.height,
@@ -157,8 +145,8 @@ export class User {
       referrer: this.referrer,
       isCurrentlyActive: this.isCurrentlyActive,
       videoCount: this.videoCount,
-      createdAt: this.createdAt.getTime(),
-      updatedAt: this.updatedAt.getTime()
+      createdAt: dateToUnixTimestamp(this.createdAt),
+      updatedAt: dateToUnixTimestamp(this.updatedAt),
     };
 
     return userDict;
@@ -299,8 +287,8 @@ export class User {
     frontUrl?: string;
     backUrl?: string;
     sideUrl?: string;
-    createdAt: number;
-    updatedAt: number;
+    createdAt: Date;
+    updatedAt: Date;
   
     constructor(data: Partial<BodyWeight>) {
       const now = Date.now() / 1000;
@@ -310,32 +298,19 @@ export class User {
       this.frontUrl = data.frontUrl || "";
       this.backUrl = data.backUrl || "";
       this.sideUrl = data.sideUrl || "";
-      this.createdAt = data.createdAt || now;
-      this.updatedAt = data.updatedAt || now;
+      this.createdAt = convertFirestoreTimestamp(data.createdAt);
+      this.updatedAt = convertFirestoreTimestamp(data.updatedAt);
     }
   
-    static fromFirebase(data: any): BodyWeight {
-      return new BodyWeight({
-        id: data.id || crypto.randomUUID(),
-        oldWeight: data.oldWeight || 0,
-        newWeight: data.newWeight || 0,
-        frontUrl: data.frontUrl || "",
-        backUrl: data.backUrl || "",
-        sideUrl: data.sideUrl || "",
-        createdAt: data.createdAt || 0,
-        updatedAt: data.updatedAt || 0
-      });
-    }
-  
-    toFirestore(): Record<string, any> {
+    toDictionary(): Record<string, any> {
       return {
         oldWeight: this.oldWeight,
         newWeight: this.newWeight,
         frontUrl: this.frontUrl,
         backUrl: this.backUrl,
         sideUrl: this.sideUrl,
-        createdAt: this.createdAt,
-        updatedAt: this.updatedAt
+        createdAt: dateToUnixTimestamp(this.createdAt),
+        updatedAt: dateToUnixTimestamp(this.updatedAt)
       };
     }
   }
