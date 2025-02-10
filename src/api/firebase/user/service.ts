@@ -3,7 +3,8 @@ import { Workout } from '../workout';
 import { Exercise, ExerciseVideo, ExerciseAuthor, ExerciseLog } from '../exercise/types';
 import { ProfileImage } from '../user';
 
-import { doc, getDoc, setDoc, documentId, collection, query, where, getDocs, limit, writeBatch } from 'firebase/firestore';
+import { doc, getDoc, setDoc, documentId, collection, query, where, getDocs, limit, writeBatch, deleteDoc } from 'firebase/firestore';
+import { ref, deleteObject, getStorage } from 'firebase/storage';
 import { db } from '../config';
 
 import { store } from '../../../redux/store';
@@ -68,6 +69,66 @@ class UserService {
     }
    }
 
+   async deleteUserVideo(exerciseId: string): Promise<void> {
+    if (!this.currentUser?.id) {
+      throw new Error('No user is signed in');
+    }
+  
+    try {
+      const exerciseRef = doc(db, 'exercises', exerciseId);
+      const exerciseDoc = await getDoc(exerciseRef);
+  
+      if (exerciseDoc.exists()) {
+        const videos = exerciseDoc.data().videos || [];
+        
+        // Delete video files from storage
+        await Promise.all(
+          videos.map(async (video: { videoURL?: string, gifURL?: string }) => {
+            if (video.videoURL) {
+              const videoRef = ref(getStorage(), video.videoURL);
+              await deleteObject(videoRef);
+            }
+            if (video.gifURL) {
+              const gifRef = ref(getStorage(), video.gifURL);
+              await deleteObject(gifRef);
+            }
+          })
+        );
+      }
+  
+      // Delete exercise document
+      await deleteDoc(exerciseRef);
+  
+    } catch (error) {
+      console.error('Error deleting user video:', error);
+      throw error;
+    }
+  }
+  
+  async deleteStack(stackId: string): Promise<void> {
+    if (!this.currentUser?.id) {
+      throw new Error('No user is signed in');
+    }
+  
+    try {
+      const stackRef = doc(db, 'users', this.currentUser.id, 'MyCreatedWorkouts', stackId);
+      
+      // Delete associated logs
+      const logsRef = collection(stackRef, 'logs');
+      const logsSnapshot = await getDocs(logsRef);
+      await Promise.all(
+        logsSnapshot.docs.map(doc => deleteDoc(doc.ref))
+      );
+  
+      // Delete stack document
+      await deleteDoc(stackRef);
+  
+    } catch (error) {
+      console.error('Error deleting stack:', error);
+      throw error;
+    }
+  }
+
   async createStack(workout: Workout, exerciseLogs?: ExerciseLog[]): Promise<Workout> {
     if (!this.currentUser?.id) {
       throw new Error('No user is signed in.');
@@ -125,7 +186,7 @@ class UserService {
         const logsRef = collection(doc.ref, 'logs');
         const logsSnapshot = await getDocs(logsRef);
         const logs = logsSnapshot.docs.map(logDoc => 
-          ExerciseLog.fromFirebase({ id: logDoc.id, ...logDoc.data() })
+          new ExerciseLog({ id: logDoc.id, ...logDoc.data() })
         );
   
         return new Workout({

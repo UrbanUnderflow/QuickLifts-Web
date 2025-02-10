@@ -24,20 +24,7 @@ export function createBodyWeight(data: Partial<BodyWeight>): BodyWeight {
   };
 }
 
-export function fromFirebase(data: any): BodyWeight {
-  return {
-    id: data.id || crypto.randomUUID(),
-    oldWeight: data.oldWeight || 0,
-    newWeight: data.newWeight || 0,
-    frontUrl: data.frontUrl || "",
-    backUrl: data.backUrl || "",
-    sideUrl: data.sideUrl || "",
-    createdAt: data.createdAt || 0,
-    updatedAt: data.updatedAt || 0
-  };
-}
-
-export function toFirestore(bodyWeight: BodyWeight): Record<string, any> {
+export function toDictionary(bodyWeight: BodyWeight): Record<string, any> {
   return {
     oldWeight: bodyWeight.oldWeight,
     newWeight: bodyWeight.newWeight,

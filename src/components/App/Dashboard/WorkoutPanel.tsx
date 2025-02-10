@@ -137,26 +137,7 @@ const WorkoutPanel: React.FC<WorkoutPanelProps> = ({
       console.log('Here are the summaries:', summaries);
   
       return summaries.slice(0, 3).map(summary =>
-        WorkoutSummary.fromFirebase({
-          id: summary.id,
-          workoutId: summary.workoutId || '',
-          exercises: summary.exercises || [],
-          bodyParts: summary.bodyParts || [],
-          secondaryBodyParts: summary.secondaryBodyParts || [],
-          workoutTitle: summary.workoutTitle || 'Untitled Workout',
-          caloriesBurned: summary.caloriesBurned || 0,
-          workoutRating: summary.workoutRating,
-          exercisesCompleted: summary.exercisesCompleted || [],
-          aiInsight: summary.aiInsight || '',
-          recommendations: summary.recommendations || [],
-          gifURLs: summary.gifURLs || [],
-          recommendedWork: summary.recommendedWork,
-          isCompleted: summary.isCompleted || false,
-          createdAt: summary.createdAt,
-          updatedAt: summary.updatedAt,
-          completedAt: summary.completedAt,
-          duration: summary.duration || '',
-        })
+        new WorkoutSummary(summary)
       );
     } catch (error) {
       console.error('Error fetching recent workouts:', error);

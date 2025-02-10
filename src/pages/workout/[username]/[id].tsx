@@ -10,6 +10,7 @@ import { userService } from '../../../api/firebase/user/service';
 import { RootState } from '../../../redux/store';
 import { useDispatch } from 'react-redux';
 import { setCurrentWorkout, setCurrentExerciseLogs } from '../../../redux/workoutSlice';
+import Spacer from '../../../components/Spacer';
 
 const WorkoutPreviewer: React.FC = () => {
   const router = useRouter();
@@ -181,6 +182,7 @@ const WorkoutPreviewer: React.FC = () => {
                 />
               ))}
             </div>
+            <Spacer size={100}></Spacer>
           </div>
         </div>
       </div>

@@ -6,6 +6,9 @@ import VideoCard from './VideoCard';
 interface ExerciseGridProps {
   userVideos: Exercise[];
   onSelectVideo: (exercise: Exercise) => void;
+  multiSelection?: boolean;
+  selectedExercises: Exercise[];
+  onToggleSelection?: (exercise: Exercise) => void;
 }
 
 const ExerciseGrid: React.FC<ExerciseGridProps> = ({ userVideos, onSelectVideo }) => {

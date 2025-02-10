@@ -208,7 +208,7 @@ useEffect(() => {
         const data = await response.json();
         if (data.success) {
           const summaries = data.summaries.map((summary: any) =>
-            WorkoutSummary.fromFirebase(summary)
+            new WorkoutSummary(summary)
           );
           setWorkoutSummaries(summaries);
           
