@@ -17,7 +17,6 @@ import { auth } from "../api/firebase/config";
 import { useRouter } from 'next/router';
 import { firebaseStorageService, UploadImageType } from '../api/firebase/storage/service';
 
-// type SignUpStep = 'initial' | 'password' | 'profile';
 interface SignInModalProps {
   isVisible: boolean;
   closable?: boolean;
@@ -124,13 +123,13 @@ const SignInModal: React.FC<SignInModalProps> = ({
       setIsLoading(true);
       setError(null);
       setActiveProvider(provider);
-
+   
       if (provider === "apple") {
         // Initialize Apple OAuth provider
         const appleProvider = new OAuthProvider("apple.com");
         appleProvider.addScope("email");
         appleProvider.addScope("name");
-
+   
         try {
           // Sign in with popup
           const result: UserCredential = await signInWithPopup(auth, appleProvider);
@@ -146,8 +145,14 @@ const SignInModal: React.FC<SignInModalProps> = ({
             await userService.updateUser(user.uid, firestoreUser);
           }
           userService.currentUser = firestoreUser;
-          // Instead of calling onSignInSuccess or onSignUpSuccess directly,
-          // check subscription first.
+   
+          // Check subscription status first
+          if (firestoreUser.subscriptionType === 'Unsubscribed') {
+            setSignUpStep('subscription');
+            return;
+          }
+          
+          // Otherwise proceed with normal flow
           await checkSubscriptionAndProceed(user);
         } catch (error: unknown) {
           console.error("Apple sign-in error:", error);
@@ -171,96 +176,106 @@ const SignInModal: React.FC<SignInModalProps> = ({
       } else if (provider === 'google') {
         const result = await authService.signInWithGoogle();
         const user = result.user;
-        const isNewUser = result.user.metadata.creationTime === result.user.metadata.lastSignInTime;
-      
-        // Attempt to fetch existing user data
+        console.log('Google Sign In - Initial User:', user);
+        console.log('Google Sign In - Firebase User:', {
+          uid: user.uid,
+          email: user.email,
+          displayName: user.displayName,
+          metadata: user.metadata,
+          providerData: user.providerData
+        });
+        
         let firestoreUser = await userService.fetchUserFromFirestore(user.uid);
-      
+        console.log('Google Sign In - Firestore User:', firestoreUser);
+        
         if (!firestoreUser) {
-          // Create new user if they don't exist in Firestore
           firestoreUser = new User({});
           firestoreUser.id = user.uid;
           firestoreUser.email = user.email || "";
           firestoreUser.displayName = user.displayName || "";
-      
-          // Create the base user in Firestore
           await userService.updateUser(user.uid, firestoreUser);
+          console.log('Google Sign In - Created New User:', firestoreUser);
         }
-        console.log("The User is: ", firestoreUser);
-        // Set the current user in the service
+        
         userService.currentUser = firestoreUser;
+        console.log('Google Sign In - Current User Set:', userService.currentUser);
       
         // Check if username is empty or not set
         console.log("Username is empty?: ", firestoreUser.username == '');
-
+   
         if (firestoreUser.username == '') {
-          console.log("Starting registraiton");
-
+          console.log("Starting registration");
           // Set isSignUp to true and move to profile step
           setIsSignUp(true);
           setSignUpStep("profile");
-          return; // Don't proceed with subscription check yet
-        } else {
-          console.log("Checking Subs");
-          // If we have a username, proceed with normal flow
-          await checkSubscriptionAndProceed(user);
+          return;
+        }
+   
+        // Check subscription status
+        if (firestoreUser.subscriptionType === 'Unsubscribed') {
+          console.log("User is unsubscribed, showing subscription step");
+          setSignUpStep('subscription');
+          return;
         }
         
+        console.log("Checking Subs");
+        // If we have a username and subscription, proceed with normal flow
+        await checkSubscriptionAndProceed(user);
       }
-  } catch (error: unknown) {
-    // Keep your existing error handling
-    console.error(`${provider} sign-in error:`, error);
-    let errorMessage = "An unexpected error occurred";
-    
-    if (error instanceof Error) {
-      // Handle specific Firebase Auth error codes
-      switch ((error as any).code) {
-        case 'auth/popup-blocked':
-          errorMessage = "Please enable popups for this site and try again";
-          break;
-        case 'auth/popup-closed-by-user':
-          errorMessage = "Sign-in cancelled. Please try again";
-          break;
-        case 'auth/cancelled-popup-request':
-          errorMessage = "Another sign-in attempt is already in progress";
-          break;
-        case 'auth/account-exists-with-different-credential':
-          errorMessage = "An account already exists with the same email address but different sign-in credentials. Please sign in using the original account method.";
-          break;
-        case 'auth/network-request-failed':
-          errorMessage = "Network error. Please check your internet connection and try again";
-          break;
-        case 'auth/user-disabled':
-          errorMessage = "This account has been disabled. Please contact support";
-          break;
-        case 'auth/operation-not-allowed':
-          errorMessage = "This sign-in method is not enabled. Please contact support";
-          break;
-        default:
-          errorMessage = error.message;
-      }
+    } catch (error: unknown) {
+      // Keep your existing error handling
+      console.error(`${provider} sign-in error:`, error);
+      let errorMessage = "An unexpected error occurred";
       
-      setError(errorMessage);
-      
-      if (isSignUp) {
-        onSignUpError?.(error);
+      if (error instanceof Error) {
+        // Handle specific Firebase Auth error codes
+        switch ((error as any).code) {
+          case 'auth/popup-blocked':
+            errorMessage = "Please enable popups for this site and try again";
+            break;
+          case 'auth/popup-closed-by-user':
+            errorMessage = "Sign-in cancelled. Please try again";
+            break;
+          case 'auth/cancelled-popup-request':
+            errorMessage = "Another sign-in attempt is already in progress";
+            break;
+          case 'auth/account-exists-with-different-credential':
+            errorMessage = "An account already exists with the same email address but different sign-in credentials. Please sign in using the original account method.";
+            break;
+          case 'auth/network-request-failed':
+            errorMessage = "Network error. Please check your internet connection and try again";
+            break;
+          case 'auth/user-disabled':
+            errorMessage = "This account has been disabled. Please contact support";
+            break;
+          case 'auth/operation-not-allowed':
+            errorMessage = "This sign-in method is not enabled. Please contact support";
+            break;
+          default:
+            errorMessage = error.message;
+        }
+        
+        setError(errorMessage);
+        
+        if (isSignUp) {
+          onSignUpError?.(error);
+        } else {
+          onSignInError?.(error);
+        }
       } else {
-        onSignInError?.(error);
+        setError(errorMessage);
+        const genericError = new Error(errorMessage);
+        if (isSignUp) {
+          onSignUpError?.(genericError);
+        } else {
+          onSignInError?.(genericError);
+        }
       }
-    } else {
-      setError(errorMessage);
-      const genericError = new Error(errorMessage);
-      if (isSignUp) {
-        onSignUpError?.(genericError);
-      } else {
-        onSignInError?.(genericError);
-      }
+    } finally {
+      setIsLoading(false);
+      setActiveProvider(null);
     }
-  } finally {
-    setIsLoading(false);
-    setActiveProvider(null);
-  }
-  };
+   };
 
   const addLog = (log: string) => {
     const currentLogs = JSON.parse(localStorage.getItem("authFlowLogs") || "[]");
@@ -269,7 +284,6 @@ const SignInModal: React.FC<SignInModalProps> = ({
   };
 
   useEffect(() => {
-    // Fetch and display existing logs
     const logs = localStorage.getItem("authFlowLogs");
     if (logs) {
       console.log("Auth Flow Logs:");
@@ -278,34 +292,33 @@ const SignInModal: React.FC<SignInModalProps> = ({
       console.log("------------------------");
       localStorage.removeItem("authFlowLogs");
     }
-
+   
     let isMounted = true;
-
+   
     const handleRedirect = async () => {
       addLog("Starting redirect handler");
-
+   
       if (!isVisible) {
         addLog("Modal not visible, skipping redirect handling");
         return;
       }
-
-      // Check if we are returning from a redirect
+   
       const urlParams = new URLSearchParams(window.location.search);
       const isRedirecting = urlParams.has("state") || window.location.href.includes("__/auth/handler");
       addLog(`Redirect detected: ${isRedirecting}`);
       addLog(`Current URL: ${window.location.href}`);
-
+   
       if (!isRedirecting) {
         addLog("No redirect parameters detected, exiting redirect handler");
         return;
       }
-
+   
       try {
         setIsLoading(true);
         addLog("Calling getRedirectResult...");
         const result = await getRedirectResult(auth);
         addLog(`getRedirectResult result: ${JSON.stringify(result)}`);
-
+   
         if (!result) {
           addLog("No result returned by getRedirectResult, checking pending redirect...");
           const pendingResult = await getRedirectResult(auth).catch((e) => {
@@ -313,31 +326,29 @@ const SignInModal: React.FC<SignInModalProps> = ({
             return null;
           });
           addLog(`Pending redirect result: ${JSON.stringify(pendingResult)}`);
-
+   
           if (!pendingResult) {
             addLog("No pending redirect result, exiting handler");
             return;
           }
         }
-
+   
         if (!isMounted) {
           addLog("Component unmounted during redirect, exiting handler");
           return;
         }
-
-        // Process user credential
+   
         const credential = result as UserCredential;
         if (!credential || !credential.user) {
           throw new Error("No user credential found in redirect result");
         }
-
+   
         const { user } = credential;
         addLog(`User info: providerId=${credential.providerId}, email=${user.email}, isNewUser=${user.metadata.creationTime === user.metadata.lastSignInTime}`);
-
-        // Check if it's a new Apple user
+   
         const isAppleSignIn = credential.providerId === "apple.com" || user.providerData.some((provider) => provider.providerId === "apple.com");
         let firestoreUser = await userService.fetchUserFromFirestore(user.uid);
-
+   
         if (!firestoreUser && user.metadata.creationTime === user.metadata.lastSignInTime) {
           addLog("New user detected, creating Firestore document");
           firestoreUser = new User({
@@ -347,21 +358,26 @@ const SignInModal: React.FC<SignInModalProps> = ({
           });
           await userService.updateUser(user.uid, firestoreUser);
         }
-
+   
         if (isMounted) {
           userService.currentUser = firestoreUser;
-          if (user.metadata.creationTime === user.metadata.lastSignInTime) {
+          
+          // Check subscription status
+          if (firestoreUser?.subscriptionType === 'Unsubscribed') {
+            setSignUpStep('subscription');
+            addLog("User unsubscribed, showing subscription step");
+          } else if (user.metadata.creationTime === user.metadata.lastSignInTime) {
             onSignUpSuccess?.(user);
+            addLog("New user signup successful");
           } else {
             onSignInSuccess?.(user);
+            addLog("Existing user signin successful");
           }
-          onClose?.();
-          addLog("User processed successfully");
         }
       } catch (error) {
         addLog(`Redirect handler error: ${error instanceof Error ? error.message : error}`);
         if (!isMounted) return;
-
+   
         setError(error instanceof Error ? error.message : "Authentication failed");
         isSignUp ? onSignUpError?.(error as Error) : onSignInError?.(error as Error);
       } finally {
@@ -371,17 +387,17 @@ const SignInModal: React.FC<SignInModalProps> = ({
         }
       }
     };
-
+   
     handleRedirect();
-
+   
     return () => {
       isMounted = false;
     };
-  }, [isVisible, onSignInSuccess, onSignUpSuccess, onSignInError, onSignUpError, onClose]);
+   }, [isVisible, onSignInSuccess, onSignUpSuccess, onSignInError, onSignUpError, onClose]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
+  
     if (isSignUp) {
       switch (signUpStep) {
         case "initial":
@@ -402,11 +418,16 @@ const SignInModal: React.FC<SignInModalProps> = ({
               setIsLoading(true);
               setError(null);
         
-              // Update the user with the new username
               if (userService.currentUser) {
                 userService.currentUser.username = username;
                 await userService.updateUser(userService.currentUser.id, userService.currentUser);
-                onRegistrationComplete?.(); // This will close the modal
+                
+                if (userService.currentUser.subscriptionType === 'Unsubscribed') {
+                  setSignUpStep('subscription');
+                  return;
+                }
+                
+                onRegistrationComplete?.();
               }
         
               setSignUpStep("quiz-prompt");
@@ -421,20 +442,19 @@ const SignInModal: React.FC<SignInModalProps> = ({
           break;
       }
     } else {
-      // Handle sign in
       try {
         setIsLoading(true);
         setError(null);
-
+  
         const result = await authService.signInWithEmail(email, password);
-
-        console.log("Sign-in successful:", result.user);
-
-        // Fetch user data and save globally
         const userDoc = await userService.fetchUserFromFirestore(result.user.uid);
         userService.currentUser = userDoc;
-
-        // Instead of calling onSignInSuccess directly, check subscription status
+  
+        if (userDoc?.subscriptionType === 'Unsubscribed') {
+          setSignUpStep('subscription');
+          return;
+        }
+  
         await checkSubscriptionAndProceed(result.user);
         onClose?.();
       } catch (err) {
@@ -473,6 +493,77 @@ const SignInModal: React.FC<SignInModalProps> = ({
       setIsLoading(false);
     }
   };
+
+  const renderSubscriptionStep = () => (
+    <>
+      <div className="text-center mb-8">
+        <h2 className="text-2xl font-bold text-white font-['Thunder'] mb-2">
+          Join The Fitness Collective
+        </h2>
+        <p className="text-zinc-400 text-sm mb-6">
+          Subscribe to unlock all premium features and join our fitness community.
+        </p>
+      </div>
+  
+      <div className="space-y-6 mb-8">
+        <div className="flex items-center gap-3">
+          <div className="w-5 h-5 flex-shrink-0 bg-[#E0FE10] rounded-full flex items-center justify-center">
+            <span className="text-black text-sm">✓</span>
+          </div>
+          <span className="text-zinc-400">Access to Rounds - Train and compete with the community</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="w-5 h-5 flex-shrink-0 bg-[#E0FE10] rounded-full flex items-center justify-center">
+            <span className="text-black text-sm">✓</span>
+          </div>
+          <span className="text-zinc-400">AI-powered workout recommendations</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="w-5 h-5 flex-shrink-0 bg-[#E0FE10] rounded-full flex items-center justify-center">
+            <span className="text-black text-sm">✓</span>
+          </div>
+          <span className="text-zinc-400">Unlimited workout history and progress tracking</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="w-5 h-5 flex-shrink-0 bg-[#E0FE10] rounded-full flex items-center justify-center">
+            <span className="text-black text-sm">✓</span>
+          </div>
+          <span className="text-zinc-400">Access to trainer-created content and exercises</span>
+        </div>
+      </div>
+  
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+        <div className="bg-zinc-800 p-6 rounded-xl">
+          <div className="text-white text-2xl font-bold mb-1">$4.99/mo</div>
+          <p className="text-zinc-400 text-sm mb-4">Flexible monthly plan</p>
+          <button 
+            onClick={() => window.open('https://buy.stripe.com/9AQaFieX9bv26fSfYY', '_blank')}
+            className="w-full bg-[#E0FE10] text-black py-2 rounded-lg font-semibold hover:bg-[#E0FE10]/90"
+          >
+            Subscribe Monthly
+          </button>
+        </div>
+  
+        <div className="bg-zinc-800 p-6 rounded-xl relative overflow-hidden">
+          <div className="absolute -right-8 -top-8 bg-[#E0FE10] text-black text-xs font-bold py-1 px-8 rotate-45">
+            BEST VALUE
+          </div>
+          <div className="text-white text-2xl font-bold mb-1">$39.99/yr</div>
+          <p className="text-zinc-400 text-sm mb-4">Annual plan with 30-day free trial</p>
+          <button 
+            onClick={() => window.open('https://buy.stripe.com/28obJm2an8iQdIk289', '_blank')}
+            className="w-full bg-[#E0FE10] text-black py-2 rounded-lg font-semibold hover:bg-[#E0FE10]/90"
+          >
+            Start Free Trial
+          </button>
+        </div>
+      </div>
+  
+      <p className="text-zinc-500 text-xs text-center">
+        Cancel anytime. All subscriptions include unlimited access to all features.
+      </p>
+    </>
+  );
 
   const renderQuizPrompt = () => (
     <>
@@ -1280,10 +1371,17 @@ const SignInModal: React.FC<SignInModalProps> = ({
           return renderQuizPrompt();
         case "quiz":
           return renderQuizQuestion();
+        case "subscription":
+          return renderSubscriptionStep();
         default:
           return renderInitialStep();
       }
     }
+    
+    if (signUpStep === "subscription") {
+      return renderSubscriptionStep();
+    }
+    
     return renderInitialStep();
   };
 
@@ -1319,7 +1417,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
           )}
           {renderCurrentStep()}
 
-          {signUpStep !== "quiz-prompt" && signUpStep !== "quiz" && (
+          {signUpStep !== "quiz-prompt" && signUpStep !== "quiz" && signUpStep !== "subscription" && (
             <div className="flex flex-col gap-4 mt-8">
               <button
                 type="submit"
