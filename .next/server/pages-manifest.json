@@ -3,5 +3,6 @@
   "/_error": "pages/_error.js",
   "/_document": "pages/_document.js",
   "/workout/[username]/[id]": "pages/workout/[username]/[id].js",
-  "/createStack": "pages/createStack.js"
+  "/": "pages/index.js",
+  "/subscribe": "pages/subscribe.js"
 }
