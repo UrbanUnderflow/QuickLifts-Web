@@ -278,7 +278,7 @@ export const StackCard: React.FC<{
                 <div className="flex items-center gap-2">
                   <Clock className="w-4 h-4 text-[#E0FE10]" />
                   <span className="text-zinc-400">
-                    {Workout.estimatedDuration(workout.exercises) < 1 ? "< 1" : Workout.estimatedDuration(workout.exercises)} min
+                    {Workout.estimatedDuration(workout.logs || []) < 1 ? "< 1" : Workout.estimatedDuration(workout.logs || [])} min
                   </span>
                 </div>
               </div>

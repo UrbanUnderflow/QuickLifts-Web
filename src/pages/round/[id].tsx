@@ -363,7 +363,7 @@ const ChallengeDetailView = () => {
   if (shouldShowWaitingRoom) {
     // Create a minimal waiting room view model:
     const waitingRoomVM: ChallengeWaitingRoomViewModel = {
-      challenge: collection!.challenge, // safe to assert because waiting room shows only when collection exists
+      challenge: collection?.challenge || null, // safe to assert because waiting room shows only when collection exists
       challengeDetailViewModel: { collection: collection! },
       fetchChatMessages: () => {
         ChatService.getInstance()

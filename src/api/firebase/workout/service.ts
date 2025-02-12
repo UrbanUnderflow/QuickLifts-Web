@@ -102,7 +102,7 @@ class WorkoutService {
         username: workoutAuthor || 'PulseAI'
       },
       description: detail.exercise.description || '',
-      category: detail.exercise.category || { type: 'weightTraining', details: null },
+      category: detail.exercise.category || { type: 'weight-training', details: null },
       primaryBodyParts: detail.exercise.primaryBodyParts || [],
       secondaryBodyParts: detail.exercise.secondaryBodyParts || [],
       tags: detail.exercise.tags || [],
@@ -119,8 +119,8 @@ class WorkoutService {
     exerciseReferences.push(exerciseRef);
 
     // Set default values for exercise parameters
-    const category = detail.category?.type === 'weightTraining' ? detail.category : {
-      type: 'weightTraining',
+    const category = detail.category?.type === 'weight-training' ? detail.category : {
+      type: 'weight-training',
       details: { sets: 3, reps: ['12'], weight: 0, screenTime: 0 }
     };
 
@@ -171,7 +171,7 @@ class WorkoutService {
     logs: exerciseLogs,
     title: '',
     description: '',
-    duration: Workout.estimatedDuration(exerciseReferences) || 0,
+    duration: 0,
     workoutRating: 'none' as WorkoutRating,
     useAuthorContent: false,
     isCompleted: false,
@@ -502,36 +502,20 @@ async fetchCollectionWithSweatLists(collectionId: string): Promise<{ collection:
 
 async fetchSavedWorkout(userId: string, workoutId: string): Promise<[Workout | null, ExerciseLog[] | null]> {
   try {
-    console.log('Starting fetchSavedWorkout with:', { userId, workoutId });
-
-    // Fetch the workout document
+    // Fetch workout document
     const workoutRef = doc(db, 'users', userId, 'MyCreatedWorkouts', workoutId);
-    console.log('Fetching workout document from:', workoutRef.path);
-    
     const workoutSnap = await getDoc(workoutRef);
-    console.log('Workout document exists:', workoutSnap.exists());
-
+    
     if (!workoutSnap.exists()) {
-      console.log('No workout document found');
       return [null, null];
     }
 
     const workoutData = workoutSnap.data();
-    console.log('Raw workout data:', workoutData);
-
-    // Get exercises with videos mapped
-    console.log('Fetching exercises with videos...');
     const exercisesWithVideos = await this.fetchAndMapExercisesWithVideos();
-    console.log('Fetched exercises with videos:', exercisesWithVideos);
 
     // Map the exercises
-    console.log('Mapping exercises in workout:', workoutData.exercises);
     const mappedExercises = (workoutData.exercises || []).map((exerciseRef: any) => {
       const fullExercise = exercisesWithVideos.find(ex => ex.name === exerciseRef.exercise.name);
-      console.log('Mapping exercise:', {
-        name: exerciseRef.exercise.name,
-        foundMatch: !!fullExercise
-      });
       return {
         ...exerciseRef,
         exercise: fullExercise || exerciseRef.exercise
@@ -539,39 +523,38 @@ async fetchSavedWorkout(userId: string, workoutId: string): Promise<[Workout | n
     });
 
     workoutData.exercises = mappedExercises;
-
-    // Create workout instance
-    console.log('Creating Workout instance with data:', {
-      id: workoutData.id,
-      title: workoutData.title,
-      exerciseCount: mappedExercises.length
-    });
-
     const workout = new Workout({
-      id: workoutId, // Use the workoutId passed to the function instead of from data
+      id: workoutId,
       ...workoutData
     });
 
-    // Fetch logs
-    console.log('Fetching workout logs...');
+    // Fetch and map logs
     const logsRef = collection(workoutRef, 'logs');
     const logsSnapshot = await getDocs(logsRef);
     console.log('Found logs count:', logsSnapshot.size);
 
     const logs: ExerciseLog[] = logsSnapshot.docs.map(logDoc => {
       const logData = logDoc.data();
-      const fullExercise = exercisesWithVideos.find(ex => ex.name === logData.exercise.name);
-      console.log('Processing log:', {
-        logId: logDoc.id,
+      console.log('Raw log data from Firebase:', {
         exerciseName: logData.exercise.name,
-        foundExerciseMatch: !!fullExercise
+        exerciseCategory: logData.exercise.category
       });
+      
+      const fullExercise = exercisesWithVideos.find(ex => ex.name === logData.exercise.name);
+      console.log('Exercise Category Details:', fullExercise?.category?.details);
+
+      const updatedExercise = fullExercise
+    ? {
+        ...fullExercise,
+        category: logData.exercise.category,
+      }
+    : logData.exercise;
       
       return new ExerciseLog({
         id: logDoc.id,
         workoutId: workoutId,
         userId: userId,
-        exercise: fullExercise || logData.exercise,
+        exercise: updatedExercise || logData.exercise,
         logs: logData.log || [],
         feedback: logData.feedback || '',
         note: logData.note || '',
@@ -588,11 +571,6 @@ async fetchSavedWorkout(userId: string, workoutId: string): Promise<[Workout | n
     });
 
     workout.logs = logs;
-    console.log('Returning workout and logs:', {
-      workoutId: workout.id,
-      logsCount: logs.length
-    });
-
     return [workout, logs];
   } catch (error) {
     console.error('Error fetching saved workout:', error);
@@ -1193,6 +1171,7 @@ async deleteWorkoutSession(workoutId: string | null): Promise<void> {
   ): Promise<{ workout: Workout; logs: ExerciseLog[] }> {
     const data = workoutDoc.data();
   
+
     // Map exercises with their full data and videos
     const mappedExercises = (data.exercises || []).map((exerciseRef: any) => {
       // Find the full exercise with videos
@@ -1254,13 +1233,20 @@ async deleteWorkoutSession(workoutId: string | null): Promise<void> {
       const fullExercise = exercisesWithVideos.find(
         ex => ex.name.toLowerCase().trim() === exerciseNameLower
       );
+
+      const updatedExercise = fullExercise
+      ? {
+          ...fullExercise,
+          category: logData.exercise.category,
+        }
+      : logData.exercise;
   
       // Prepare log data with full exercise
       const preparedLogData = {
         ...logData,
         id: logDoc.id,
         workoutId: workout.id,
-        exercise: fullExercise || logData.exercise,
+        exercise: updatedExercise,
         createdAt: convertFirestoreTimestamp(logData.createdAt),
         updatedAt: convertFirestoreTimestamp(logData.updatedAt)
       };

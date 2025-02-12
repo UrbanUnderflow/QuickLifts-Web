@@ -2,20 +2,15 @@ import React, { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import { ExerciseLog, Exercise } from '../../../api/firebase/exercise/types';
 import Modal from '../../../components/Modal';
-import { workoutService } from '../../../api/firebase/workout';
 
 interface InProgressExerciseProps {
   exercises: ExerciseLog[];
   currentExerciseLogs: ExerciseLog[];
   currentExerciseIndex: number;
-  onComplete: () => void; // callback from parent to go to next exercise
-  onClose: () => void;    // callback to close the workout
-  onExerciseSelect: (index: number) => void; // Add this
+  onComplete: () => void;
+  onClose: () => void;
+  onExerciseSelect: (index: number) => void;
 }
-
-const getScreenTime = (exercise: Exercise | undefined): number => {
-  return exercise?.category?.details?.screenTime ?? 60; // Default to 60 seconds if undefined
-};
 
 const InProgressExercise: React.FC<InProgressExerciseProps> = ({
   exercises,
@@ -25,16 +20,12 @@ const InProgressExercise: React.FC<InProgressExerciseProps> = ({
   onClose,
   onExerciseSelect,
 }) => {
-  // Comprehensive initial validation
+  // Initial validation
   if (!exercises || exercises.length === 0) {
-    console.error('No exercises provided');
     return (
       <div className="fixed inset-0 bg-zinc-900 flex items-center justify-center">
         <p className="text-white">No exercises available</p>
-        <button 
-          onClick={onClose} 
-          className="mt-4 bg-[#E0FE10] text-black px-4 py-2 rounded"
-        >
+        <button onClick={onClose} className="mt-4 bg-[#E0FE10] text-black px-4 py-2 rounded">
           Close Workout
         </button>
       </div>
@@ -42,104 +33,87 @@ const InProgressExercise: React.FC<InProgressExerciseProps> = ({
   }
 
   if (currentExerciseIndex < 0 || currentExerciseIndex >= exercises.length) {
-    console.error('Invalid exercise index', { 
-      currentExerciseIndex, 
-      exercisesLength: exercises.length 
-    });
     return (
       <div className="fixed inset-0 bg-zinc-900 flex items-center justify-center">
         <p className="text-white">Invalid exercise selection</p>
-        <button 
-          onClick={onClose} 
-          className="mt-4 bg-[#E0FE10] text-black px-4 py-2 rounded"
-        >
+        <button onClick={onClose} className="mt-4 bg-[#E0FE10] text-black px-4 py-2 rounded">
           Close Workout
         </button>
       </div>
     );
   }
 
-  // Current exercise log and exercise
+  // Current exercise data
   const currentExerciseLog = currentExerciseLogs[currentExerciseIndex];
   const currentExercise = currentExerciseLog?.exercise;
 
-  // Validate current exercise
   if (!currentExercise) {
-    console.error('No exercise found at current index', { 
-      currentExerciseIndex,
-      exerciseLog: currentExerciseLog 
-    });
     return (
       <div className="fixed inset-0 bg-zinc-900 flex items-center justify-center">
         <p className="text-white">Exercise data is missing</p>
-        <button 
-          onClick={onClose} 
-          className="mt-4 bg-[#E0FE10] text-black px-4 py-2 rounded"
-        >
+        <button onClick={onClose} className="mt-4 bg-[#E0FE10] text-black px-4 py-2 rounded">
           Close Workout
         </button>
       </div>
     );
   }
 
-  // Timer state management
-  const screenTime = getScreenTime(currentExercise);
-  const [timeRemaining, setTimeRemaining] = useState(screenTime);
+  // Timer state management with useState callbacks to ensure proper initialization
   const [isPaused, setIsPaused] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [currentScreenTime, setCurrentScreenTime] = useState(() => {
+    return currentExercise?.category?.details?.screenTime ?? 60;
+  });
+  const [timeRemaining, setTimeRemaining] = useState(() => {
+    return currentExercise?.category?.details?.screenTime ?? 60;
+  });
 
   // Reset timer when exercise changes
   useEffect(() => {
-    setTimeRemaining(getScreenTime(currentExercise));
+    const newScreenTime = currentExercise?.category?.details?.screenTime ?? 60;
+    console.log("Exercise changed, resetting timer:", {
+      exercise: currentExercise.name,
+      newScreenTime
+    });
+    setCurrentScreenTime(newScreenTime);
+    setTimeRemaining(newScreenTime);
+    setIsPaused(false);
   }, [currentExercise]);
 
-  // Countdown logic
+  // Timer effect
   useEffect(() => {
-    // Only run timer if there's actually a screen time set
-    if (screenTime <= 0) return;
-  
-    // If time is up, move to next exercise
+    console.log("Timer state:", {
+      timeRemaining,
+      isPaused,
+      screenTime: currentScreenTime,
+      exercise: currentExercise.name
+    });
+
+    if (!currentScreenTime || currentScreenTime <= 0) return;
+    if (isPaused) return;
+    
     if (timeRemaining <= 0) {
       onComplete();
       return;
     }
-  
-    // Pause check
-    if (isPaused) return;
-  
-    // Countdown timer
-    const timer = setInterval(() => {
-      setTimeRemaining((prev) => prev - 1);
+
+    const timerId = setInterval(() => {
+      setTimeRemaining(prev => (prev > 0 ? prev - 1 : 0));
     }, 1000);
-  
-    // Cleanup
-    return () => clearInterval(timer);
-  }, [timeRemaining, isPaused, onComplete, screenTime]);
 
-  // Video URL retrieval with comprehensive error handling
+    return () => clearInterval(timerId);
+  }, [timeRemaining, isPaused, currentScreenTime, onComplete]);
+
+  // Video URL handling
   const getCurrentVideoUrl = (): string => {
-
-    // Comprehensive video retrieval
     const videos = currentExercise?.videos || [];
+    if (videos.length === 0) return '';
     
-    if (videos.length === 0) {
-      console.warn(`No videos found for exercise: ${currentExercise?.name}`);
-      return '';
-    }
-
-    // Safe video position selection
     const videoPosition = Math.min(
       currentExercise?.currentVideoPosition ?? 0, 
       videos.length - 1
     );
-
-    const videoUrl = videos[videoPosition]?.videoURL || '';
-    
-    if (!videoUrl) {
-      console.warn(`No video URL for exercise ${currentExercise?.name}`);
-    }
-
-    return videoUrl;
+    return videos[videoPosition]?.videoURL || '';
   };
 
   return (
@@ -158,76 +132,87 @@ const InProgressExercise: React.FC<InProgressExerciseProps> = ({
                 onError={(e) => console.error('Video error:', e)}
               />
    
-              {/* Desktop Controls */}
-              <div className="hidden lg:block absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent">
-                <div className="p-8">
-                  <h2 className="text-white text-3xl font-bold mb-4">
-                    {currentExercise?.name || 'Exercise'}
-                  </h2>
-   
-                  <div className="flex items-center justify-between">
-                    <div className="text-center">
-                      <span className="text-[#E0FE10] text-lg font-bold">
-                        {Math.floor((screenTime - timeRemaining) / 60)}m
-                      </span>
-                      <p className="text-zinc-400 text-sm">elapsed</p>
+                {/* Desktop Controls */}
+                <div className="hidden lg:block absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent">
+                  <div className="p-8">
+                    <h2 className="text-white text-3xl font-bold mb-4">
+                      {currentExercise?.name || 'Exercise'}
+                    </h2>
+
+                    <div className="flex items-center justify-between">
+                      {/* Simple countdown timer */}
+                      <div className="text-center">
+                        <span className="text-[#E0FE10] text-3xl font-bold">
+                          {timeRemaining}
+                        </span>
+                        <p className="text-zinc-400 text-sm">seconds</p>
+                      </div>
+
+                      {currentScreenTime > 0 && (
+                        <button 
+                          onClick={() => setIsPaused(!isPaused)}
+                          className="bg-black/30 hover:bg-black/50 p-4 rounded-xl border border-[#E0FE10]/20 backdrop-blur-sm transition-all duration-200 group"
+                        >
+                          {isPaused ? (
+                            <svg className="w-6 h-6 text-[#E0FE10] group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                          ) : (
+                            <svg className="w-6 h-6 text-[#E0FE10] group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                          )}
+                        </button>
+                      )}
+
+                      <div className="text-center">
+                        <span className="text-[#E0FE10] text-lg font-bold">
+                          {currentExerciseIndex + 1}/{currentExerciseLogs.length}
+                        </span>
+                        <p className="text-zinc-400 text-sm">exercises</p>
+                      </div>
                     </div>
-   
-                    {screenTime > 0 && (
+                  </div>
+                </div>
+
+                {/* Mobile Controls */}
+                <div className="lg:hidden absolute top-0 left-0 right-0 bg-gradient-to-b from-black/90 to-transparent">
+                  <div className="p-4 flex items-center justify-between">
+                    {/* Simple countdown timer */}
+                    <div className="text-center">
+                      <span className="text-[#E0FE10] text-2xl font-bold">
+                        {timeRemaining}
+                      </span>
+                      <p className="text-zinc-400 text-xs">seconds</p>
+                    </div>
+
+                    {currentScreenTime > 0 && (
                       <button 
                         onClick={() => setIsPaused(!isPaused)}
-                        className="bg-black/30 hover:bg-black/50 p-4 rounded-xl border border-[#E0FE10]/20 backdrop-blur-sm transition-all duration-200 group"
+                        className="bg-black/30 hover:bg-black/50 p-3 rounded-xl border border-[#E0FE10]/20 backdrop-blur-sm"
                       >
                         {isPaused ? (
-                          <svg className="w-6 h-6 text-[#E0FE10] group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <svg className="w-6 h-6 text-[#E0FE10]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </svg>
                         ) : (
-                          <svg className="w-6 h-6 text-[#E0FE10] group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <svg className="w-6 h-6 text-[#E0FE10]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </svg>
                         )}
                       </button>
                     )}
-   
+
                     <div className="text-center">
                       <span className="text-[#E0FE10] text-lg font-bold">
                         {currentExerciseIndex + 1}/{currentExerciseLogs.length}
                       </span>
-                      <p className="text-zinc-400 text-sm">exercises</p>
+                      <p className="text-zinc-400 text-xs">exercises</p>
                     </div>
                   </div>
                 </div>
-              </div>
-   
-              {/* Mobile Controls */}
-              <div className="lg:hidden absolute top-0 left-0 right-0 bg-gradient-to-b from-black/90 to-transparent">
-                <div className="p-4 flex items-center justify-between">
-                  <div className="text-center">
-                    <span className="text-[#E0FE10] text-lg font-bold">
-                      {Math.floor((screenTime - timeRemaining) / 60)}m
-                    </span>
-                    <p className="text-zinc-400 text-xs">elapsed</p>
-                  </div>
-   
-                  {screenTime > 0 && (
-                    <button 
-                      onClick={() => setIsPaused(!isPaused)}
-                      className="bg-black/30 hover:bg-black/50 p-3 rounded-xl border border-[#E0FE10]/20 backdrop-blur-sm"
-                    >
-                      {/* Same SVGs as desktop */}
-                    </button>
-                  )}
-   
-                  <div className="text-center">
-                    <span className="text-[#E0FE10] text-lg font-bold">
-                      {currentExerciseIndex + 1}/{currentExerciseLogs.length}
-                    </span>
-                    <p className="text-zinc-400 text-xs">exercises</p>
-                  </div>
-                </div>
-              </div>
             </div>
           </div>
    

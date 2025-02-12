@@ -1,38 +1,43 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Clock, Dumbbell, ChevronRight, XIcon } from 'lucide-react';
 import { Workout } from '../api/firebase/workout/types';
 import { workoutService } from '../api/firebase/workout/service';
 import { useRouter } from 'next/router';
-import { doc, deleteDoc, collection, writeBatch, getDocs } from 'firebase/firestore';
-import { db } from '../api/firebase/config';
 import { RootState } from '../redux/store';
+import { ExerciseLog } from '../api/firebase/exercise';
 import { useDispatch, useSelector } from 'react-redux';
-
 import { setCurrentWorkout, setCurrentExerciseLogs } from '../redux/workoutSlice';
 
 interface WorkoutReadyViewProps {
   workout: Workout;
+  exerciseLogs: ExerciseLog[];
   onClose: () => void;
-  onStartWorkout?: () => void; // Make it optional
+  onStartWorkout?: () => void;
 }
 
 const WorkoutReadyView: React.FC<WorkoutReadyViewProps> = ({
   workout,
+  exerciseLogs,
   onClose,
-  onStartWorkout
+  onStartWorkout,
 }) => {
   const [showExercises, setShowExercises] = useState(false);
   const router = useRouter();
   const dispatch = useDispatch();
   const userId = useSelector((state: RootState) => state.user.currentUser?.id);
-
   const currentWorkoutSession = useSelector((state: RootState) => state.workout.currentWorkout);
+
+  useEffect(() => {
+    console.log('WorkoutReadyView - workout:', workout);
+    console.log('WorkoutReadyView - exerciseLogs:', exerciseLogs);
+
+  }, [workout, exerciseLogs]);
 
   const handleStartWorkout = async () => {
     if (onStartWorkout) {
       onStartWorkout();
     }
-  };
+  };  
 
   const cancelWorkout = async () => {
     if (!userId || !currentWorkoutSession) {
@@ -42,20 +47,23 @@ const WorkoutReadyView: React.FC<WorkoutReadyViewProps> = ({
 
     try {
       await workoutService.cancelWorkout(currentWorkoutSession, workoutService.currentWorkoutSummary);
-
-      // 3. Clear the current workout session and logs from the Redux store
       dispatch(setCurrentWorkout(null));
       dispatch(setCurrentExerciseLogs([]));
-
-      // 4. Show a success message or navigate to the home page
       console.log('Workout session canceled successfully');
     } catch (error) {
       console.error('Error canceling workout session:', error);
-      // Display an error message to the user
     }
   };
 
-  const InfoCard = ({ icon, title, value }: { icon: React.ElementType, title: string, value: string }) => {
+  const InfoCard = ({
+    icon,
+    title,
+    value,
+  }: {
+    icon: React.ElementType;
+    title: string;
+    value: string;
+  }) => {
     const Icon = icon;
     return (
       <div className="flex items-center bg-zinc-800 rounded-xl p-4">
@@ -87,7 +95,11 @@ const WorkoutReadyView: React.FC<WorkoutReadyViewProps> = ({
         </div>
 
         <div className="space-y-4">
-          <InfoCard icon={Clock} title="Estimated Duration" value={`${Workout.estimatedDuration(workout.exercises)} min`} />
+          <InfoCard
+            icon={Clock}
+            title="Estimated Duration"
+            value={`${Workout.estimatedDuration(exerciseLogs)} min`}
+          />
 
           {/* Exercises Collapsible */}
           <div className="bg-zinc-800 rounded-xl">
@@ -109,21 +121,37 @@ const WorkoutReadyView: React.FC<WorkoutReadyViewProps> = ({
 
             {showExercises && (
               <div className="border-t border-zinc-700 p-4">
-                {workout.exercises.map((exercise, index) => (
-                  <div key={exercise.exercise.id} className="flex items-center mb-3 last:mb-0">
-                    <div className="bg-zinc-700 rounded-full w-6 h-6 flex items-center justify-center mr-4">
-                      <span className="text-zinc-400 text-xs">{index + 1}</span>
+                {exerciseLogs.map((log, index) => {
+                  const exercise = log.exercise;
+                  // Default displayInfo
+                  let displayInfo = "";
+                  
+                  console.log("Screentime is ", exercise.category.details?.screenTime);
+
+                  // Check if category has screenTime
+                  if (
+                    exercise.category.details?.screenTime != 0
+                  ) {
+                      displayInfo = `${exercise.category.details?.screenTime} sec`;
+                  } else {
+                      displayInfo = `${exercise.sets} sets • ${exercise.reps} reps`;
+                  }
+                                    
+                  return (
+                    <div key={log.id} className="flex items-center mb-3 last:mb-0">
+                      <div className="bg-zinc-700 rounded-full w-6 h-6 flex items-center justify-center mr-4">
+                        <span className="text-zinc-400 text-xs">{index + 1}</span>
+                      </div>
+                      <div>
+                        <p className="text-white">{exercise.name}</p>
+                        <p className="text-zinc-400 text-sm">{displayInfo}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-white">{exercise.exercise.name}</p>
-                      <p className="text-zinc-400 text-sm">
-                        {exercise.exercise.sets} sets • {exercise.exercise.reps} reps
-                      </p>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
+
           </div>
 
           <InfoCard icon={Dumbbell} title="Workout Type" value={workout.zone} />
@@ -134,10 +162,7 @@ const WorkoutReadyView: React.FC<WorkoutReadyViewProps> = ({
           <button onClick={cancelWorkout} className="w-full text-white py-3 rounded-full font-bold text-lg mb-4">
             Cancel
           </button>
-          <button
-            onClick={handleStartWorkout}
-            className="w-full bg-[#E0FE10] text-black py-3 rounded-full font-bold text-lg"
-          >
+          <button onClick={handleStartWorkout} className="w-full bg-[#E0FE10] text-black py-3 rounded-full font-bold text-lg">
             Start Workout
           </button>
         </div>

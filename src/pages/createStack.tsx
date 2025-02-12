@@ -55,17 +55,17 @@ const CreateWorkoutExerciseCardView: React.FC<CreateWorkoutExerciseCardViewProps
   
   // For weight training fields
   const [reps, setReps] = useState(
-    initialExerciseDescription?.category?.type === 'weightTraining'
+    initialExerciseDescription?.category?.type === 'weight-training'
       ? initialExerciseDescription.category.details?.reps.join(',') || ''
       : ''
   );
   const [sets, setSets] = useState(
-    initialExerciseDescription?.category?.type === 'weightTraining'
+    initialExerciseDescription?.category?.type === 'weight-training'
       ? `${initialExerciseDescription.category.details?.sets}` || ''
       : ''
   );
   const [weight, setWeight] = useState(
-    initialExerciseDescription?.category?.type === 'weightTraining'
+    initialExerciseDescription?.category?.type === 'weight-training'
       ? `${initialExerciseDescription.category.details?.weight}` || ''
       : ''
   );
@@ -97,7 +97,7 @@ const CreateWorkoutExerciseCardView: React.FC<CreateWorkoutExerciseCardViewProps
       category: {
         ...exerciseDetail.category,
         // Force the type to weightTraining in this update function
-        type: 'weightTraining',
+        type: 'weight-training',
         details: updatedDetails,
       },
     };
@@ -123,7 +123,7 @@ const CreateWorkoutExerciseCardView: React.FC<CreateWorkoutExerciseCardViewProps
   const handleSetsChange = (val: string) => {
     setSets(val);
     if (!exerciseDetail) return;
-    if (exerciseDetail.category?.type === 'weightTraining') {
+    if (exerciseDetail.category?.type === 'weight-training') {
       const details =
         (exerciseDetail.category.details as WeightTrainingExercise) || {
           reps: [],
@@ -145,7 +145,7 @@ const CreateWorkoutExerciseCardView: React.FC<CreateWorkoutExerciseCardViewProps
   const handleRepsChange = (val: string) => {
     setReps(val);
     if (!exerciseDetail) return;
-    if (exerciseDetail.category?.type === 'weightTraining') {
+    if (exerciseDetail.category?.type === 'weight-training') {
       const details =
         (exerciseDetail.category.details as WeightTrainingExercise) || {
           reps: [],
@@ -167,7 +167,7 @@ const CreateWorkoutExerciseCardView: React.FC<CreateWorkoutExerciseCardViewProps
   const handleWeightChange = (val: string) => {
     setWeight(val);
     if (!exerciseDetail) return;
-    if (exerciseDetail.category?.type === 'weightTraining') {
+    if (exerciseDetail.category?.type === 'weight-training') {
       const details =
         (exerciseDetail.category.details as WeightTrainingExercise) || {
           reps: [],
@@ -205,7 +205,7 @@ const CreateWorkoutExerciseCardView: React.FC<CreateWorkoutExerciseCardViewProps
         screenTime: !isNaN(newTime) ? newTime : 0,
       };
       updateCardioDetail(updatedDetails);
-    } else if (exerciseDetail.category?.type === 'weightTraining') {
+    } else if (exerciseDetail.category?.type === 'weight-training') {
       const details =
         (exerciseDetail.category.details as WeightTrainingExercise) || {
           reps: [],

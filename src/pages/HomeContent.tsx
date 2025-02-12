@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import BottomNav from '../components/App/BottomNav';
 import Discover from '../../src/components/App/RootScreens/Discover';
@@ -40,6 +40,9 @@ import { setCurrentWorkout, setCurrentExerciseLogs, setWorkoutSummary } from '..
           const queuedUpSessions = sessions.filter(session =>
             session.workout?.workoutStatus === WorkoutStatus.QueuedUp
           );
+
+          console.log("QueuedUp Sessions", queuedUpSessions);
+          
           const inProgressSessions = sessions.filter(session =>
             session.workout?.workoutStatus === WorkoutStatus.InProgress
           );
@@ -95,58 +98,50 @@ import { setCurrentWorkout, setCurrentExerciseLogs, setWorkoutSummary } from '..
         return;
       }
     
-      // Get current exercise
-      const currentExercise = currentExerciseLogs[currentExerciseIndex]?.exercise;
-      const isBodyWeight = currentExerciseLogs[currentExerciseIndex]?.isBodyWeight;
-    
-      // Mark the current exercise as submitted
-      const updatedLogs = [...currentExerciseLogs];
-      updatedLogs[currentExerciseIndex] = new ExerciseLog({
-        ...updatedLogs[currentExerciseIndex],
-        logSubmitted: true,
-        completedAt: new Date(),
-        updatedAt: new Date()
-      });
-        
       try {
-        // Update logs in the current workout
+        // Get current exercise
+        const currentExercise = currentExerciseLogs[currentExerciseIndex]?.exercise;
+        const isBodyWeight = currentExerciseLogs[currentExerciseIndex]?.isBodyWeight;
+    
+        // Create updated logs array
+        const updatedLogs = [...currentExerciseLogs];
+        updatedLogs[currentExerciseIndex] = new ExerciseLog({
+          ...updatedLogs[currentExerciseIndex],
+          logSubmitted: true,
+          completedAt: new Date(),
+          updatedAt: new Date()
+        });
+    
+        // Update workout logs in Firebase
         if (currentWorkoutSession && userId) {
-          // Update workout logs
           await workoutService.updateWorkoutLogs({
             userId,
             workoutId: currentWorkoutSession.id,
             logs: updatedLogs
           });
     
-          // Update workoutSummary creation
+          // Update workout summary
           const updatedSummary = new WorkoutSummary({
-              id: currentWorkoutSession.id,
-              workoutId: currentWorkoutSession.id,
-              userId,
-              exercises: updatedLogs.map(log => log.toDictionary()),
-              bodyParts: currentWorkoutSession.fetchPrimaryBodyParts(),
-              secondaryBodyParts: currentWorkoutSession.fetchSecondaryBodyParts(),
-              workoutTitle: currentWorkoutSession.title,
-              exercisesCompleted: updatedLogs
-                .filter(log => log.logSubmitted)
-                .map(log => log.toDictionary()),
-              isCompleted: false,
-              startTime: currentWorkoutSession.startTime || new Date(),
-              createdAt: currentWorkoutSession.createdAt || new Date(),
-              updatedAt: new Date()
+            id: currentWorkoutSession.id,
+            workoutId: currentWorkoutSession.id,
+            userId,
+            exercises: updatedLogs.map(log => log.toDictionary()),
+            bodyParts: currentWorkoutSession.fetchPrimaryBodyParts(),
+            secondaryBodyParts: currentWorkoutSession.fetchSecondaryBodyParts(),
+            workoutTitle: currentWorkoutSession.title,
+            exercisesCompleted: updatedLogs
+              .filter(log => log.logSubmitted)
+              .map(log => log.toDictionary()),
+            isCompleted: false,
+            startTime: currentWorkoutSession.startTime || new Date(),
+            createdAt: currentWorkoutSession.createdAt || new Date(),
+            updatedAt: new Date()
           });
-        
-        dispatch(setWorkoutSummary(updatedSummary));
-
-        await workoutService.updateWorkoutLogs({
-          userId,
-          workoutId: currentWorkoutSession.id,
-          logs: updatedLogs
-        });
-
+    
+          dispatch(setWorkoutSummary(updatedSummary));
         }
     
-        // Handle bodyweight exercises
+        // Handle bodyweight vs regular exercise submission
         if (isBodyWeight) {
           await performBodyWeightSubmission(updatedLogs);
         } else {
@@ -155,15 +150,19 @@ import { setCurrentWorkout, setCurrentExerciseLogs, setWorkoutSummary } from '..
     
         // Update Redux state
         dispatch(setCurrentExerciseLogs(updatedLogs));
-
-        // Move to the next exercise
+    
+        // Find next incomplete exercise
         const nextIndex = updatedLogs.findIndex(log => !log.logSubmitted);
-        if (nextIndex !== -1) {
-          setCurrentExerciseIndex(nextIndex);
-        } else {
-          // If no incomplete exercise is found, complete the entire workout.
-          await completeWorkout();
-        }
+        
+        // Important: Add a small delay before moving to next exercise
+        setTimeout(() => {
+          if (nextIndex !== -1) {
+            setCurrentExerciseIndex(nextIndex);
+          } else {
+            completeWorkout();
+          }
+        }, 100); // Small delay to ensure state updates are processed
+    
       } catch (error) {
         console.error('Error submitting exercise:', error);
       }
@@ -266,12 +265,13 @@ import { setCurrentWorkout, setCurrentExerciseLogs, setWorkoutSummary } from '..
   // Render workout views based on status
   const renderWorkoutView = () => {
     if (!currentWorkoutSession) return null;
-  
+
     switch (currentWorkoutSession.workoutStatus) {
       case WorkoutStatus.QueuedUp:
         return (
           <WorkoutReadyView 
             workout={currentWorkoutSession}
+            exerciseLogs={currentExerciseLogs}
             onClose={handleCancelWorkout}
             onStartWorkout={beginWorkout}
           />
@@ -279,7 +279,7 @@ import { setCurrentWorkout, setCurrentExerciseLogs, setWorkoutSummary } from '..
       case WorkoutStatus.InProgress:
         return (
           <InProgressExercise
-            exercises={currentWorkoutSession.logs || []}
+            exercises={currentExerciseLogs || []}
             currentExerciseLogs={currentExerciseLogs}
             currentExerciseIndex={currentExerciseIndex}
             onComplete={completeExercise}

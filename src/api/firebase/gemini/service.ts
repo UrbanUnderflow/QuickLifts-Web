@@ -8,7 +8,7 @@ interface GeneratedExercise {
   sets: number;
   reps: string[];
   category: {
-    type: 'weightTraining';
+    type: 'weight-training';
     details: {
       sets: number;
       reps: string[];
@@ -117,7 +117,7 @@ RESPONSE FORMAT:
         {
           "name": "Exercise Name",
           "category": {
-            "type": "weightTraining",
+            "type": "weight-training",
             "details": {
               "sets": 3,
               "reps": ["8","10"],
