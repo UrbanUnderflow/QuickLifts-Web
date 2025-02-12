@@ -40,6 +40,7 @@ const WorkoutPreviewer: React.FC = () => {
         // Now fetch the workout using the user's ID
         const [fetchedWorkout, fetchedLogs] = await workoutService.fetchSavedWorkout(user.id, id as string);
 
+        console.log("fetched Workout:", fetchedWorkout);
         if (fetchedWorkout) {
           setWorkout(fetchedWorkout);
           setLogs(fetchedLogs || []);
@@ -56,23 +57,6 @@ const WorkoutPreviewer: React.FC = () => {
     fetchWorkoutByUsernameAndId();
   }, [router.isReady, username, id]);
 
-  function estimatedDuration(exercises: ExerciseReference[]): number {
-    const averageExerciseTime = 8; // Average time per exercise in minutes
-    const averageRestTime = 1; // Average rest time between exercises in minutes
-    const warmupTime = 5; // Warm-up time in minutes
-    const cooldownTime = 5; // Cool-down time in minutes
-  
-    const totalExerciseTime = exercises.length * averageExerciseTime;
-    const totalRestTime = Math.max(0, exercises.length - 1) * averageRestTime; // No rest after last exercise
-  
-    const estimatedTotalTime = warmupTime + totalExerciseTime + totalRestTime + cooldownTime;
-  
-    // Round to the nearest multiple of 5
-    const roundedTime = Math.round(estimatedTotalTime / 5) * 5;
-  
-    return roundedTime;
-  }
-  
   // Inside the component
   const dispatch = useDispatch();
   
@@ -142,7 +126,8 @@ const WorkoutPreviewer: React.FC = () => {
 
   console.log("Filtered video URLs:", videoURLs);
   
-  const duration = estimatedDuration(workout.exercises);
+  console.log("The current Logs before duration is:", logs);
+  const duration = Workout.estimatedDuration(logs);
 
   return (
     <div className="relative h-screen bg-black">

@@ -504,7 +504,7 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
     if (!baseExercise) return null;
   
     const category: ExerciseCategory = {
-      type: 'weightTraining',
+      type: 'weight-training',
       details: {
         ...exerciseData.category.details,
         selectedVideo: baseExercise.videos?.[0] || null

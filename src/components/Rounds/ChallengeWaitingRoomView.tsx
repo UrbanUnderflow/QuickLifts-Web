@@ -298,7 +298,7 @@ export const ChallengeWaitingRoomView: React.FC<ChallengeWaitingRoomViewProps> =
 // ViewModel Interface
 // -------------------------
 export interface ChallengeWaitingRoomViewModel {
-  challenge?: Challenge;
+  challenge?: Challenge | null;
   challengeDetailViewModel: { collection: SweatlistCollection };
   fetchChatMessages: () => void;
   joinChallenge: (

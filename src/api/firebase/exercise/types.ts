@@ -149,13 +149,13 @@ export interface CardioExercise {
 }
 
 export type ExerciseCategory = 
-  | { type: 'weightTraining', details?: WeightTrainingExercise }
+  | { type: 'weight-training', details?: WeightTrainingExercise }
   | { type: 'cardio', details?: CardioExercise };
 
 // Helper functions to mimic Swift enum behavior
 export const ExerciseCategory = {
   weightTraining: (details?: WeightTrainingExercise): ExerciseCategory => ({
-    type: 'weightTraining',
+    type: 'weight-training',
     details
   }),
   cardio: (details?: CardioExercise): ExerciseCategory => ({
@@ -188,7 +188,7 @@ export const ExerciseCategory = {
 
   identifier: (category: ExerciseCategory): string => {
     switch (category.type) {
-      case 'weightTraining':
+      case 'weight-training':
         return 'weight-training';
       case 'cardio':
         return 'cardio';
@@ -267,10 +267,11 @@ export class Exercise {
 
       default:
         this.category = ExerciseCategory.weightTraining({
-          reps: ['12'],
-          sets: 3,
-          weight: 0,
-          screenTime: 0
+          reps: categoryData.reps || '12',
+          sets: categoryData.sets || 3,
+          weight: categoryData.weight || 0,
+          screenTime: categoryData.screenTime || 0,
+          selectedVideo: categoryData.selectedVideo ? new ExerciseVideo(categoryData.selectedVideo) : null
         });
     }
   }

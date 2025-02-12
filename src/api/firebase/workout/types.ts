@@ -172,7 +172,7 @@ export class Workout {
   get isTimedWorkout(): boolean {
     if (!this.logs) return false;
     return this.logs.some(log => {
-      if (log.exercise.category.type === 'weightTraining') {
+      if (log.exercise.category.type === 'weight-training') {
         return log.exercise.category.details?.screenTime !== 0;
       } else if (log.exercise.category.type === 'cardio') {
         return log.exercise.category.details?.screenTime !== 0;
@@ -189,56 +189,60 @@ export class Workout {
     return this.exercises.flatMap(exerciseRef => exerciseRef.exercise.secondaryBodyParts);
   }
 
-  static estimatedDuration(exercises: ExerciseReference[]): number {
-    const warmupTime = 5;
-    const cooldownTime = 5;
-    let totalExerciseTime = 0;
-    let restTime = 0;
+  static estimatedDuration(exercises: ExerciseLog[]): number {
+    const warmupTimeSeconds = 5 * 60;  // 5 minutes in seconds
+    const cooldownTimeSeconds = 5 * 60; // 5 minutes in seconds
+    let totalTimeSeconds = 0;
+    let restTimeSeconds = 0;
     let hasScreenTimeExercises = false;
+
     
-    for (const exerciseRef of exercises) {
-      const exercise = exerciseRef.exercise;
-      console.groupCollapsed(`Exercise: ${exercise}`);
-      
-      if (exercise.category.type === 'cardio') {
+    for (const exerciseLog of exercises) {   
+      var exercise = exerciseLog.exercise
+      if (exercise?.category?.type === 'cardio') {
         const duration = exercise.category.details?.duration || 0;
         console.log('Cardio duration (minutes):', duration);
-        totalExerciseTime += duration;
-      } else if (exercise.category.type === 'weightTraining') {
-        const screenTime = exercise.category.details?.screenTime || 0;
-        
+        totalTimeSeconds += duration * 60; // Convert minutes to seconds
+      } else {
+        const screenTime = exercise?.category?.details?.screenTime || 0;
+        console.log("The screentime is: ", screenTime);
         if (screenTime > 0) {
           console.log('Screen time (seconds):', screenTime);
-          console.log('Converted to minutes:', Math.floor(screenTime / 60));
-          totalExerciseTime += Math.floor(screenTime / 60);
+          totalTimeSeconds += screenTime; // Already in seconds
           hasScreenTimeExercises = true;
         } else {
           console.log('Using default timing (8m exercise + 1m rest)');
-          totalExerciseTime += 8;
-          restTime += 1;
+          totalTimeSeconds += 8 * 60; // 8 minutes in seconds
+          restTimeSeconds += 60;      // 1 minute in seconds
         }
       }
   
-      console.log('Current totals:', {
-        totalExerciseTime,
-        restTime,
+      console.log('Current totals (in seconds):', {
+        totalTimeSeconds,
+        restTimeSeconds,
         hasScreenTimeExercises
       });
       console.groupEnd();
     }
   
     if (!hasScreenTimeExercises) {
-      console.log('Adding warmup/cool-down:', warmupTime + cooldownTime, 'minutes');
-      totalExerciseTime += warmupTime + cooldownTime;
+      console.log('Adding warmup/cool-down:', 
+        (warmupTimeSeconds + cooldownTimeSeconds) / 60, 'minutes');
+      totalTimeSeconds += warmupTimeSeconds + cooldownTimeSeconds;
     }
   
-    const estimatedTotalTime = totalExerciseTime + restTime;
-    console.log('Pre-rounded total:', estimatedTotalTime);
+    const totalSeconds = totalTimeSeconds + restTimeSeconds;
+    console.log('Pre-rounded total (seconds):', totalSeconds);
   
-    let finalEstimate = estimatedTotalTime;
+    let finalEstimate: number;
     if (!hasScreenTimeExercises) {
-      finalEstimate = Math.round(estimatedTotalTime / 5) * 5;
+      // Convert to minutes and round to nearest 5
+      const totalMinutes = totalSeconds / 60;
+      finalEstimate = Math.round(totalMinutes / 5) * 5;
       console.log('Rounded to nearest 5 minutes:', finalEstimate);
+    } else {
+      // Convert to minutes, rounding up to nearest minute
+      finalEstimate = Math.ceil(totalSeconds / 60);
     }
   
     console.log('Final estimated duration:', finalEstimate, 'minutes');
