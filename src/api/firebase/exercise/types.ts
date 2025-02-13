@@ -85,7 +85,7 @@ export class ExerciseLog {
       this.id = data.id || '';
       this.workoutId = data.workoutId || '';
       this.userId = data.userId || '';
-      this.exercise = new Exercise(data.exercise);
+      this.exercise = data.exercise instanceof Exercise ? data.exercise : new Exercise(data.exercise);
       this.logs = (data.logs || []).map((log: any) => new RepsAndWeightLog(log));
       this.feedback = data.feedback || '';
       this.note = data.note || '';
@@ -409,31 +409,32 @@ export class Exercise {
     this.createdAt = convertFirestoreTimestamp(data.createdAt);
     this.updatedAt = convertFirestoreTimestamp(data.updatedAt);
 
-    // Preserve the exact category structure
     if (data.category) {
-      this.category = data.category.type === 'weight-training' 
-        ? {
-            type: 'weight-training',
-            details: {
-              sets: data.category.details?.sets ?? 3,
-              reps: Array.isArray(data.category.details?.reps) 
-                ? data.category.details.reps 
-                : [data.category.details?.reps || '12'],
-              weight: data.category.details?.weight ?? 0,
-              screenTime: data.category.details?.screenTime ?? 0,
-              selectedVideo: data.category.details?.selectedVideo ?? null
-            }
-          }
-        : {
-            type: 'cardio',
-            details: {
-              duration: data.category.details?.duration ?? 60,
-              bpm: data.category.details?.bpm ?? 140,
-              calories: data.category.details?.calories ?? 0,
-              screenTime: data.category.details?.screenTime ?? 0,
-              selectedVideo: data.category.details?.selectedVideo ?? null
-            }
-          };
+        this.category = (data.category.id === 'weight-training' || data.category.type === 'weight-training')
+            ? {
+                type: 'weight-training',
+                details: {
+                  sets: data.category.sets ?? 3,
+                  reps: Array.isArray(data.category.reps) 
+                    ? data.category.reps 
+                    : [data.category.reps || '12'],
+                  weight: data.category.weight ?? 0,
+                  screenTime: data.category.screenTime || 0,
+                  selectedVideo: data.category.selectedVideo ?? null
+                }
+              }
+            : {
+                type: 'weight-training',  // Default to weight-training instead of cardio
+                details: {
+                  sets: data.category.sets ?? 3,
+                  reps: Array.isArray(data.category.reps) 
+                    ? data.category.reps 
+                    : [data.category.reps || '12'],
+                  weight: data.category.weight ?? 0,
+                  screenTime: data.category.screenTime || 0,
+                  selectedVideo: data.category.selectedVideo ?? null
+                }
+              };
     } else {
       this.category = {
         type: 'weight-training',

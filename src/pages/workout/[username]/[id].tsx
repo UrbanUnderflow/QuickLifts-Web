@@ -38,13 +38,8 @@ const WorkoutPreviewer: React.FC = () => {
 
         const [fetchedWorkout, fetchedLogs] = await workoutService.fetchSavedWorkout(user.id, id as string);
 
-        console.log("Fetched Workout:", fetchedWorkout);
-        console.log("Fetched Logs:", fetchedLogs);
-        console.log("Exercise Categories:", fetchedLogs?.map(log => ({
-          name: log.exercise.name,
-          category: log.exercise.category,
-          screenTime: log.exercise.category?.details?.screenTime
-        })));
+        console.log("Fetched workout:", fetchedWorkout);
+        console.log("fetched logs:", fetchedLogs);
 
         if (fetchedWorkout) {
           setWorkout(fetchedWorkout);
@@ -91,7 +86,7 @@ const WorkoutPreviewer: React.FC = () => {
           console.log("Queued workout:", savedWorkout);
           console.log("✅ Queued Workout ID:", savedWorkout.id); // 🔥 Logs workout ID
   
-          // ✅ Dispatch Redux actions to store workout data
+          // // ✅ Dispatch Redux actions to store workout data
           dispatch(setCurrentWorkout(savedWorkout));
           dispatch(setCurrentExerciseLogs(logs));
   
@@ -129,22 +124,12 @@ const WorkoutPreviewer: React.FC = () => {
 
   const videoURLs = workout.exercises
   .filter(exerciseRef => {
-    console.log("Exercise videos:", exerciseRef.exercise.videos);
     return exerciseRef.exercise.videos?.length > 0;
   })
   .flatMap(exerciseRef => exerciseRef.exercise.videos.map(video => video.videoURL))
   .filter(url => url);
 
-  console.log("Filtered video URLs:", videoURLs);
-  
-  console.log("The current Logs before duration calculation:", logs);
-  console.log("Exercise details before duration calculation:", logs.map(log => ({
-    name: log.exercise.name,
-    category: log.exercise.category,
-    screenTime: log.exercise.category?.details?.screenTime
-  })));
   const duration = Workout.estimatedDuration(logs);
-  console.log("Calculated duration:", duration);
 
   return (
     <div className="relative h-screen bg-black">

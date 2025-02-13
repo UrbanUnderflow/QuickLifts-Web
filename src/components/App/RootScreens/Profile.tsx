@@ -239,6 +239,7 @@ const handleDelete = async () => {
       try {
         const stacks = await userService.fetchUserStacks();
         setUserStacks(stacks);
+        console.log("stacks: ", stacks);
       } catch (error) {
         console.error('Error fetching stacks:', error);
       }
@@ -425,7 +426,7 @@ const handleDelete = async () => {
                     isSelecting={isSelecting}
                     selectedStacks={selectedStacks}
                     onToggleSelection={(stack) => {
-                      setSelectedStacks((prev) => {
+                      setSelectedStacks((prev) => {                        
                         const next = new Set(prev);
                         if (next.has(stack.id)) {
                           next.delete(stack.id);

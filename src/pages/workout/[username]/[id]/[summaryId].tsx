@@ -165,7 +165,9 @@ const WorkoutSummaryView: React.FC<WorkoutSummaryViewProps> = ({ initialSummaryD
         {/* Done Button */}
         <div className="fixed bottom-0 left-0 right-0 p-4 bg-zinc-900">
           <button
-            onClick={() => {/* TODO: Implement close functionality */}}
+            onClick={() => {
+                router.push(`/`);
+            }}
             className="w-full bg-[#E0FE10] text-black py-4 rounded-full font-medium"
           >
             Done

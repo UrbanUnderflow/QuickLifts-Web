@@ -25,6 +25,7 @@ class ExerciseService {
       try {
         // Fetch all exercises
         const exerciseSnapshot = await getDocs(collection(db, 'exercises'));
+
         const exercises: Exercise[] = exerciseSnapshot.docs.map((doc) => new Exercise({
           id: doc.id,
           ...doc.data(),
@@ -45,6 +46,7 @@ class ExerciseService {
             .filter((video) => video.exercise.toLowerCase() === exercise.name.toLowerCase())
             .map((video) => new ExerciseVideo(video)); // Ensure proper ExerciseVideo instances
         
+            
           return new Exercise({
             ...exercise, // Keep existing properties
             videos: videosForExercise, // Ensure videos are instances of ExerciseVideo
@@ -95,11 +97,12 @@ class ExerciseService {
             .filter((video) => video.exercise.toLowerCase() === exerciseData.name.toLowerCase())
             .map((video) => new ExerciseVideo(video))) as ExerciseVideo[];
         
+
           return new Exercise({
             id: exerciseData.id,
             name: exerciseData.name,
             description: exerciseData.description,
-            category: exerciseData.category || {}, // Ensure proper category handling
+            category: exerciseData.category,
             primaryBodyParts: exerciseData.primaryBodyParts || [],
             secondaryBodyParts: exerciseData.secondaryBodyParts || [],
             tags: exerciseData.tags || [],

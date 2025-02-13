@@ -205,23 +205,14 @@ export class Workout {
     for (const exerciseLog of exercises) {   
       const exercise = exerciseLog.exercise;
       const screenTime = exercise?.category?.details?.screenTime;
-      
-      console.log('Duration calculation:', {
-        exerciseName: exercise.name,
-        screenTime,
-        type: exercise.category?.type
-      });
 
       if (screenTime && screenTime > 0) {
-        console.log('Using screen time:', screenTime, 'seconds');
         totalTimeSeconds += screenTime;
         hasScreenTimeExercises = true;
       } else if (exercise?.category?.type === 'cardio') {
         const duration = exercise.category.details?.duration || 0;
-        console.log('Using cardio duration:', duration, 'minutes');
         totalTimeSeconds += duration * 60;
       } else {
-        console.log('Using default timing');
         totalTimeSeconds += 8 * 60; // 8 minutes
         restTimeSeconds += 60;      // 1 minute rest
       }

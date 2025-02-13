@@ -123,7 +123,9 @@ class WorkoutService {
 
     // Create the category first
     const category = {
-      type: detail.category?.type || 'weight-training',
+      type: detail.category?.type === 'weight-training' 
+        ? 'weight-training'
+        : 'cardio',
       details: detail.category?.type === 'weight-training' 
         ? {
             sets: detail.category?.details?.sets ?? 3,
@@ -544,11 +546,8 @@ async fetchCollectionWithSweatLists(collectionId: string): Promise<{ collection:
   }
 }
 
-
-
 async fetchSavedWorkout(userId: string, workoutId: string): Promise<[Workout | null, ExerciseLog[] | null]> {
   try {
-    // Fetch workout document
     const workoutRef = doc(db, 'users', userId, 'MyCreatedWorkouts', workoutId);
     const workoutSnap = await getDoc(workoutRef);
     
@@ -557,14 +556,32 @@ async fetchSavedWorkout(userId: string, workoutId: string): Promise<[Workout | n
     }
 
     const workoutData = workoutSnap.data();
+    console.log("1. Raw workout data from DB:", JSON.stringify({
+      exercises: workoutData.exercises?.map((ex: any) => ({
+        name: ex.exercise.name,
+        category: ex.exercise.category
+      }))
+    }, null, 2));
+
     const exercisesWithVideos = await this.fetchAndMapExercisesWithVideos();
 
-    // Map the exercises
+    // Map the exercises while preserving original data
     const mappedExercises = (workoutData.exercises || []).map((exerciseRef: any) => {
-      const fullExercise = exercisesWithVideos.find(ex => ex.name === exerciseRef.exercise.name);
+      // Find matching exercise just for its videos
+      const exerciseNameLower = exerciseRef.exercise?.name?.toLowerCase().trim();
+      const matchingExercise = exercisesWithVideos.find(
+        ex => ex.name.toLowerCase().trim() === exerciseNameLower
+      );
+
+      // Create new Exercise using original data but add videos from matching exercise
       return {
         ...exerciseRef,
-        exercise: fullExercise || exerciseRef.exercise
+        exercise: new Exercise({
+          ...exerciseRef.exercise,
+          videos: matchingExercise?.videos || [],
+          // Explicitly preserve the original category
+          category: exerciseRef.exercise.category
+        })
       };
     });
 
@@ -574,58 +591,29 @@ async fetchSavedWorkout(userId: string, workoutId: string): Promise<[Workout | n
       ...workoutData
     });
 
-    // Fetch and map logs
+   
+    // Similarly for logs, preserve original exercise data
     const logsRef = collection(workoutRef, 'logs');
     const logsSnapshot = await getDocs(logsRef);
-    console.log('Found logs count:', logsSnapshot.size);
 
+   
     const logs: ExerciseLog[] = logsSnapshot.docs.map(logDoc => {
       const logData = logDoc.data();
-      console.log('Raw log data from Firebase:', {
-        exerciseName: logData.exercise.name,
-        category: logData.exercise.category
-      });
+      const matchingExercise = exercisesWithVideos.find(ex => ex.name === logData.exercise.name);
       
-      const fullExercise = exercisesWithVideos.find(ex => ex.name === logData.exercise.name);
-      
-      // Create the category with the correct structure
-      const exerciseCategory = {
-        type: 'weight-training',
-        details: {
-          sets: logData.exercise.category?.sets || 3,
-          reps: Array.isArray(logData.exercise.category?.reps) 
-            ? logData.exercise.category.reps 
-            : [logData.exercise.category?.reps || '12'],
-          weight: logData.exercise.category?.weight || 0,
-          screenTime: logData.exercise.category?.screenTime || 0,
-          selectedVideo: logData.exercise.category?.selectedVideo || null
-        }
-      };
+      console.log("Raw logData:", logData, null, 2);
+      var exerciseWithVideo = new Exercise({
+        ...logData.exercise,
+        videos: matchingExercise?.videos || []
+      })
 
-      console.log('Constructed category:', exerciseCategory);
+      console.log("Exercise with video:", exerciseWithVideo, null, 2);
 
-      // Merge with template exercise but preserve our category
-      const updatedExercise = fullExercise
-        ? {
-            ...fullExercise,
-            category: exerciseCategory
-          }
-        : {
-            ...logData.exercise,
-            category: exerciseCategory
-          };
-
-      console.log('Final exercise category:', {
-        name: updatedExercise.name,
-        category: updatedExercise.category,
-        screenTime: updatedExercise.category?.details?.screenTime
-      });
-      
-      return new ExerciseLog({
+      var exLog = new ExerciseLog({
         id: logDoc.id,
         workoutId: workoutId,
         userId: userId,
-        exercise: updatedExercise,
+        exercise: exerciseWithVideo,
         logs: logData.logs || [],
         feedback: logData.feedback || '',
         note: logData.note || '',
@@ -640,7 +628,12 @@ async fetchSavedWorkout(userId: string, workoutId: string): Promise<[Workout | n
         createdAt: convertFirestoreTimestamp(logData.createdAt),
         updatedAt: convertFirestoreTimestamp(logData.updatedAt)
       });
+
+      console.log("Exercise log:", exLog, null, 2);
+      
+      return exLog
     });
+
 
     workout.logs = logs;
     return [workout, logs];
@@ -1280,23 +1273,28 @@ async deleteWorkoutSession(workoutId: string | null): Promise<void> {
     exercisesWithVideos: Exercise[]
   ): Promise<{ workout: Workout; logs: ExerciseLog[] }> {
     const data = workoutDoc.data();
-  
 
     // Map exercises with their full data and videos
     const mappedExercises = (data.exercises || []).map((exerciseRef: any) => {
-      // Find the full exercise with videos
+      // Find matching exercise just for its videos
       const exerciseNameLower = exerciseRef.exercise?.name?.toLowerCase().trim();
-      const fullExercise = exercisesWithVideos.find(
+      const matchingExercise = exercisesWithVideos.find(
         ex => ex.name.toLowerCase().trim() === exerciseNameLower
       );
-  
-      // If full exercise found, return it, otherwise use the original
+
+      // Create new Exercise using original data but add videos from matching exercise
       return {
         ...exerciseRef,
-        exercise: fullExercise || exerciseRef.exercise
+        exercise: new Exercise({
+          ...exerciseRef.exercise,
+          videos: matchingExercise?.videos || [],
+          // Explicitly preserve the original category
+          category: exerciseRef.exercise.category
+        })
       };
     });
   
+
     // Create the workout with mapped exercises
     const workout = new Workout({
       id: workoutDoc.id,
@@ -1338,30 +1336,21 @@ async deleteWorkoutSession(workoutId: string | null): Promise<void> {
     const logs: ExerciseLog[] = logsSnapshot.docs.map(logDoc => {
       const logData = logDoc.data();
       
-      // Find the full exercise with videos
-      const exerciseNameLower = logData.exercise?.name?.toLowerCase().trim();
-      const fullExercise = exercisesWithVideos.find(
-        ex => ex.name.toLowerCase().trim() === exerciseNameLower
+      // Find the corresponding mapped exercise that we already processed
+      const matchingMappedExercise = mappedExercises.find(
+        (ex: ExerciseReference) => ex.exercise.name.toLowerCase().trim() === logData.exercise?.name?.toLowerCase().trim()
       );
 
-      const updatedExercise = fullExercise
-      ? {
-          ...fullExercise,
-          category: logData.exercise.category,
-        }
-      : logData.exercise;
-  
-      // Prepare log data with full exercise
       const preparedLogData = {
         ...logData,
         id: logDoc.id,
         workoutId: workout.id,
-        exercise: updatedExercise,
+        // Use the exercise from our mapped exercises which already has the correct category and videos
+        exercise: matchingMappedExercise?.exercise || logData.exercise,
         createdAt: convertFirestoreTimestamp(logData.createdAt),
         updatedAt: convertFirestoreTimestamp(logData.updatedAt)
       };
-  
-      // Use the ExerciseLog constructor to ensure proper mapping
+
       return new ExerciseLog(preparedLogData);
     });
   

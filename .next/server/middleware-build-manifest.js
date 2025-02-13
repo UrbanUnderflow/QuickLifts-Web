@@ -24,6 +24,11 @@ self.__BUILD_MANIFEST = {
       "static/chunks/main.js",
       "static/chunks/pages/_error.js"
     ],
+    "/workout/[username]/[id]": [
+      "static/chunks/webpack.js",
+      "static/chunks/main.js",
+      "static/chunks/pages/workout/[username]/[id].js"
+    ],
     "/workout/[username]/[id]/[summaryId]": [
       "static/chunks/webpack.js",
       "static/chunks/main.js",
