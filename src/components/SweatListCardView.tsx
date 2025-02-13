@@ -13,25 +13,39 @@ const SweatListCardView: React.FC<SweatListCardViewProps> = ({ log, gifUrls = []
     ? log.exercise.videos[log.exercise.currentVideoPosition || 0]?.videoURL
     : undefined;
 
+  // Add detailed logging of the incoming log object
+  console.log("Incoming Exercise Log:", JSON.stringify({
+    name: log.exercise?.name,
+    category: log.exercise?.category,
+    details: log.exercise?.category?.details,
+    type: log.exercise?.category?.type,
+    fullCategory: log.exercise?.category
+  }, null, 2));
+
   const calculateScreenTime = (log: ExerciseLog) => {
-    console.log("Full log data:", log);
-    console.log("Exercise category:", log.exercise.category);
-    
-    const screenTime = log.exercise.category?.details?.screenTime;
-    console.log("Raw screenTime value:", screenTime);
+    const screenTime = log.exercise?.category?.details?.screenTime;
+    console.log("Raw screenTime calculation:", JSON.stringify({
+      exerciseName: log.exercise?.name,
+      screenTime,
+      categoryType: log.exercise?.category?.type,
+      fullDetails: log.exercise?.category?.details
+    }, null, 2));
     
     if (screenTime && screenTime > 0) {
-      // Convert seconds to minutes if needed
       const minutes = Math.floor(screenTime / 60);
       const seconds = screenTime % 60;
-      return seconds > 0 ? `${minutes}:${seconds.toString().padStart(2, '0')}` : `${minutes}:00`;
+      const formattedTime = seconds > 0 ? 
+        `${minutes}:${seconds.toString().padStart(2, '0')}` : 
+        `${minutes}:00`;
+      
+      console.log("Formatted screen time:", formattedTime);
+      return formattedTime;
     }
     
-    // Default duration based on exercise type
-    if (log.exercise.category?.type === 'cardio') {
+    if (log.exercise?.category?.type === 'cardio') {
       return `${log.exercise.category.details?.duration || 60}:00`;
     }
-    return '8:00'; // Default for weight training
+    return '8:00';
   };
 
   const screenTime = calculateScreenTime(log);

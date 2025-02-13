@@ -27,24 +27,6 @@ const WorkoutReadyView: React.FC<WorkoutReadyViewProps> = ({
   const userId = useSelector((state: RootState) => state.user.currentUser?.id);
   const currentWorkoutSession = useSelector((state: RootState) => state.workout.currentWorkout);
 
-  useEffect(() => {
-    console.log('WorkoutReadyView - workout:', workout);
-    console.log('WorkoutReadyView - exerciseLogs:', exerciseLogs);
-
-    console.log('WorkoutReadyView - Duration:', Workout.estimatedDuration(exerciseLogs));
-    
-    exerciseLogs.forEach((log, index) => {
-      console.log(`Exercise ${index + 1}:`, {
-        name: log.exercise.name,
-        category: log.exercise.category,
-        details: log.exercise.category?.details,
-        screenTime: log.exercise.category?.details?.screenTime,
-        sets: log.exercise.sets,
-        reps: log.exercise.reps
-      });
-    });
-  }, [workout, exerciseLogs]);
-
   const handleStartWorkout = async () => {
     if (onStartWorkout) {
       onStartWorkout();

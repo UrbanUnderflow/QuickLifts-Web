@@ -168,14 +168,7 @@ export const StackCard: React.FC<{
 
   // Refresh completion status
   useEffect(() => {
-    console.log('\n🔍 Checking workout completion status');
-    console.log('📊 Initial Data:', {
-      workoutId: workout.id,
-      workoutDate,
-      challengeStartDate,
-      isChallengeEnabled,
-      initialIsComplete
-    });
+    console.log("stack in grid: ", workout);
   
     if (!challengeStartDate || !isChallengeEnabled) {
       console.log('❌ No challenge date or challenge not enabled');
@@ -278,7 +271,9 @@ export const StackCard: React.FC<{
                 <div className="flex items-center gap-2">
                   <Clock className="w-4 h-4 text-[#E0FE10]" />
                   <span className="text-zinc-400">
-                    {Workout.estimatedDuration(workout.logs || []) < 1 ? "< 1" : Workout.estimatedDuration(workout.logs || [])} min
+                    {`${Workout.estimatedDuration(workout.logs || [])} ${
+                      Workout.estimatedDuration(workout.logs || []) === 1 ? 'min' : 'mins'
+                    }`}
                   </span>
                 </div>
               </div>
