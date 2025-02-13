@@ -71,7 +71,12 @@ This command:
 	•	Simulates your serverless functions.
 	•	Proxies API requests (if configured in netlify.toml).
 
-Additional Setup(Only take these steps if yarn has errors when running)
+
+
+
+TROUBLE SHOOTING STEPS:
+
+Additional Setup
 	1.	Yarn Global Path
 Ensure the global Yarn binaries are added to your PATH:
 	•	Add this to your shell configuration file (~/.zshrc or ~/.bashrc):
