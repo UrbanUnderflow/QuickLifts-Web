@@ -1,9 +1,0 @@
-{
-  "/_app": "pages/_app.js",
-  "/_error": "pages/_error.js",
-  "/_document": "pages/_document.js",
-  "/": "pages/index.js",
-  "/workout/[username]/[id]": "pages/workout/[username]/[id].js",
-  "/workout/[username]/[id]/[summaryId]": "pages/workout/[username]/[id]/[summaryId].js",
-  "/createStack": "pages/createStack.js"
-}
