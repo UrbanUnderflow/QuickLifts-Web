@@ -15,12 +15,14 @@ import { ExerciseLog } from '../api/firebase/exercise/types';
 import { Workout, WorkoutStatus, WorkoutSummary, RepsAndWeightLog } from '../api/firebase/workout/types';
 import { workoutService } from '../api/firebase/workout/service';
 import UserMenu from '../components/UserMenu'; 
+import { workoutSessionService } from '../api/firebase/workoutSession/service';
+import { useRouter } from 'next/router';
 
 import { setCurrentWorkout, setCurrentExerciseLogs, setWorkoutSummary } from '../redux/workoutSlice';
 
-
-  const HomeContent = () => {
-    const [selectedTab, setSelectedTab] = useState<SelectedRootTabs>(SelectedRootTabs.Discover);
+const HomeContent = () => {
+  const router = useRouter();
+  const [selectedTab, setSelectedTab] = useState<SelectedRootTabs>(SelectedRootTabs.Discover);
   const [isWorkoutPanelOpen, setIsWorkoutPanelOpen] = useState(false);
   const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0);
 
@@ -183,35 +185,6 @@ import { setCurrentWorkout, setCurrentExerciseLogs, setWorkoutSummary } from '..
       return performExerciseSubmission(updatedLogsWithBodyWeight);
     };
   
-    const performExerciseSubmission = async (updatedLogs: ExerciseLog[]) => {
-      try {
-        // Update logs in the current workout
-        if (currentWorkoutSession) {
-          if (userId) {
-            await workoutService.updateWorkoutLogs({
-              userId: userId,
-              workoutId: currentWorkoutSession.id,
-              logs: updatedLogs
-            });
-          }
-        }
-  
-        // Update Redux state
-        dispatch(setCurrentExerciseLogs(updatedLogs));
-  
-        // Move to next exercise or complete workout
-        if (currentExerciseIndex < updatedLogs.length - 1) {
-          setCurrentExerciseIndex(prev => prev + 1);
-        } else {
-          // Complete the entire workout
-          await completeWorkout();
-        }
-      } catch (error) {
-        console.error('Error submitting exercise:', error);
-        // Handle error (show toast, etc.)
-      }
-    };
-  
   const showZeroWeightConfirmationModal = (
     onConfirm: () => void, 
     onCancel: () => void
@@ -236,19 +209,94 @@ import { setCurrentWorkout, setCurrentExerciseLogs, setWorkoutSummary } from '..
     // dispatch(showModal(modalProps));
   };
   
-  const completeWorkout = async () => {
-    try {
-      // Update workout status to completed
-      if (currentWorkoutSession) {
-        // await workoutService.completeWorkout(currentWorkoutSession.id);
-      }
-  
-      // Reset workout state
-      // resetWorkout();
-    } catch (error) {
-      console.error('Error completing workout:', error);
+
+// In HomeContent component:
+const completeWorkout = async () => {
+  try {
+    if (!currentWorkoutSession || !currentUser) {
+      console.error('Missing required data for workout completion');
+      return;
     }
-  };
+
+    const startTime = currentWorkoutSession.startTime || new Date();
+    const endTime = new Date();
+
+    let userChallenge = null;
+    
+    if (currentWorkoutSession.collectionId) {
+      try {
+        // Get all collections this workout belongs to
+        const collections = await workoutService.getCollectionsByIds(currentWorkoutSession.collectionId);
+        
+        // Find the first collection where this workout is in the sweatlist and has a challenge
+        for (const collection of collections) {
+          const isWorkoutInSweatlist = collection.sweatlistIds.some(
+            sweatlist => sweatlist.id === currentWorkoutSession.id
+          );
+
+          if (isWorkoutInSweatlist && collection.challenge?.id) {
+            const userChallenges = await workoutService.fetchUserChallengesByChallengeId(collection.challenge.id);
+            if (userChallenges.length > 0) {
+              userChallenge = userChallenges[0];
+              break; // Found a valid challenge, can stop searching
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching collections or user challenges:', error);
+      }
+    }
+
+    const result = await workoutSessionService.endWorkout(
+      currentUser,
+      currentWorkoutSession,
+      userChallenge || null,
+      startTime,
+      endTime
+    );
+
+    if (result.status === WorkoutStatus.Complete && result.workoutSummary) {
+      dispatch(setWorkoutSummary(result.workoutSummary));
+      dispatch(setCurrentWorkout(null));
+      dispatch(setCurrentExerciseLogs([]));
+      setCurrentExerciseIndex(0);
+
+      router.push(`/workout/${currentUser?.username}/${currentWorkoutSession.id}/${result.workoutSummary.id}`);
+
+    }
+
+  } catch (error) {
+    console.error('Error completing workout:', error);
+  }
+};
+
+// Update performExerciseSubmission to track completed exercises
+const performExerciseSubmission = async (updatedLogs: ExerciseLog[]) => {
+  try {
+    if (currentWorkoutSession && userId) {
+      await workoutService.updateWorkoutLogs({
+        userId,
+        workoutId: currentWorkoutSession.id,
+        logs: updatedLogs
+      });
+
+      // Update WorkoutSessionService's completed exercises
+      workoutSessionService.completedExercises = updatedLogs;
+
+      // Update Redux state
+      dispatch(setCurrentExerciseLogs(updatedLogs));
+
+      // Move to next exercise or complete workout
+      if (currentExerciseIndex < updatedLogs.length - 1) {
+        setCurrentExerciseIndex(prev => prev + 1);
+      } else {
+        await completeWorkout();
+      }
+    }
+  } catch (error) {
+    console.error('Error submitting exercise:', error);
+  }
+};
 
   // Function to reset workout
   const handleCancelWorkout = async () => {

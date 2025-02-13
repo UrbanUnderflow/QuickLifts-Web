@@ -439,15 +439,32 @@ class UserService {
   // In userService
   async getUserByUsername(username: string): Promise<User | null> {
     try {
+      console.log('getUserByUsername - Searching for username:', username);
+      
       const usersRef = collection(db, 'users');
       const q = query(usersRef, where('username', '==', username));
+      
+      console.log('getUserByUsername - Executing query...');
       const querySnapshot = await getDocs(q);
       
+      console.log('getUserByUsername - Query results:', {
+        empty: querySnapshot.empty,
+        size: querySnapshot.size,
+        docs: querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          username: doc.data().username,
+          data: doc.data()
+        }))
+      });
+      
       if (querySnapshot.empty) {
+        console.log('getUserByUsername - No user found');
         return null;
       }
 
       const userData = querySnapshot.docs[0].data();
+      console.log('getUserByUsername - Found user data:', userData);
+      
       return new User({ id: querySnapshot.docs[0].id, ...userData });
     } catch (error) {
       console.error('Error fetching user by username:', error);

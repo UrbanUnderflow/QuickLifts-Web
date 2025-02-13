@@ -31,6 +31,18 @@ const WorkoutReadyView: React.FC<WorkoutReadyViewProps> = ({
     console.log('WorkoutReadyView - workout:', workout);
     console.log('WorkoutReadyView - exerciseLogs:', exerciseLogs);
 
+    console.log('WorkoutReadyView - Duration:', Workout.estimatedDuration(exerciseLogs));
+    
+    exerciseLogs.forEach((log, index) => {
+      console.log(`Exercise ${index + 1}:`, {
+        name: log.exercise.name,
+        category: log.exercise.category,
+        details: log.exercise.category?.details,
+        screenTime: log.exercise.category?.details?.screenTime,
+        sets: log.exercise.sets,
+        reps: log.exercise.reps
+      });
+    });
   }, [workout, exerciseLogs]);
 
   const handleStartWorkout = async () => {
@@ -123,18 +135,22 @@ const WorkoutReadyView: React.FC<WorkoutReadyViewProps> = ({
               <div className="border-t border-zinc-700 p-4">
                 {exerciseLogs.map((log, index) => {
                   const exercise = log.exercise;
-                  // Default displayInfo
                   let displayInfo = "";
                   
-                  console.log("Screentime is ", exercise.category.details?.screenTime);
-
-                  // Check if category has screenTime
-                  if (
-                    exercise.category.details?.screenTime != 0
-                  ) {
-                      displayInfo = `${exercise.category.details?.screenTime} sec`;
+                  console.log(`Rendering exercise ${index + 1}:`, {
+                    name: exercise.name,
+                    category: exercise.category,
+                    details: exercise.category?.details,
+                    screenTime: exercise.category?.details?.screenTime
+                  });
+                  
+                  if (exercise?.category?.details?.screenTime) {
+                    const screenTime = exercise.category.details.screenTime;
+                    console.log(`Screen time found for ${exercise.name}:`, screenTime);
+                    displayInfo = `${screenTime} sec`;
                   } else {
-                      displayInfo = `${exercise.sets} sets • ${exercise.reps} reps`;
+                    console.log(`No screen time for ${exercise.name}, using sets/reps`);
+                    displayInfo = `${exercise.sets} sets • ${exercise.reps} reps`;
                   }
                                     
                   return (

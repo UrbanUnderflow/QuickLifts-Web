@@ -1,4 +1,4 @@
-import React, { useState, useEffect,  } from 'react';
+import React, { useState, useEffect, } from 'react';
 import { useRouter } from 'next/router';
 
 import { CheckCircle, Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
@@ -52,27 +52,27 @@ const CreateWorkoutExerciseCardView: React.FC<CreateWorkoutExerciseCardViewProps
   );
   const [exerciseVideos] = useState<ExerciseVideo[]>(initialVideos);
   const [isDumbell, setIsDumbell] = useState(initialExerciseDescription?.isSplit || false);
-  
+
   // For weight training fields
   const [reps, setReps] = useState(
     initialExerciseDescription?.category?.type === 'weight-training'
-      ? initialExerciseDescription.category.details?.reps.join(',') || ''
+      ? initialExerciseDescription.category?.details?.reps.join(',') || ''
       : ''
   );
   const [sets, setSets] = useState(
     initialExerciseDescription?.category?.type === 'weight-training'
-      ? `${initialExerciseDescription.category.details?.sets}` || ''
+      ? `${initialExerciseDescription.category?.details?.sets}` || ''
       : ''
   );
   const [weight, setWeight] = useState(
     initialExerciseDescription?.category?.type === 'weight-training'
-      ? `${initialExerciseDescription.category.details?.weight}` || ''
+      ? `${initialExerciseDescription.category?.details?.weight}` || ''
       : ''
   );
   // For screenTime, use a string so the field can be cleared.
   const [screenTime, setScreenTime] = useState<string>(
     initialExerciseDescription?.category?.details?.screenTime !== undefined
-      ? initialExerciseDescription.category.details.screenTime.toString()
+      ? initialExerciseDescription.category?.details.screenTime.toString()
       : ''
   );
   const [selectedVideo, setSelectedVideo] = useState<ExerciseVideo | null>(null);
@@ -81,7 +81,7 @@ const CreateWorkoutExerciseCardView: React.FC<CreateWorkoutExerciseCardViewProps
   const [exerciseDetail, setExerciseDetail] = useState<ExerciseDetail | undefined>(
     initialExerciseDescription
   );
-  
+
   // Our exerciseMode state: 'tracking' for weight training details,
   // 'screentime' for cardio details.
   const [exerciseMode, setExerciseMode] = useState<'tracking' | 'screentime'>(
@@ -91,23 +91,22 @@ const CreateWorkoutExerciseCardView: React.FC<CreateWorkoutExerciseCardViewProps
   // Separate update functions:
   const updateWeightTrainingDetail = (updatedDetails: WeightTrainingExercise) => {
     if (!exerciseDetail) return;
-    const newDetail: ExerciseDetail = {
+    const newDetailData = {
       ...exerciseDetail,
-      // Preserve existing category properties
       category: {
         ...exerciseDetail.category,
-        // Force the type to weightTraining in this update function
         type: 'weight-training',
         details: updatedDetails,
       },
     };
+    const newDetail = new ExerciseDetail(newDetailData);
     setExerciseDetail(newDetail);
     returnExerciseDescription(newDetail);
   };
 
   const updateCardioDetail = (updatedDetails: CardioExercise) => {
     if (!exerciseDetail) return;
-    const newDetail: ExerciseDetail = {
+    const newDetailData = {
       ...exerciseDetail,
       category: {
         ...exerciseDetail.category,
@@ -115,6 +114,7 @@ const CreateWorkoutExerciseCardView: React.FC<CreateWorkoutExerciseCardViewProps
         details: updatedDetails,
       },
     };
+    const newDetail = new ExerciseDetail(newDetailData);
     setExerciseDetail(newDetail);
     returnExerciseDescription(newDetail);
   };
@@ -125,7 +125,7 @@ const CreateWorkoutExerciseCardView: React.FC<CreateWorkoutExerciseCardViewProps
     if (!exerciseDetail) return;
     if (exerciseDetail.category?.type === 'weight-training') {
       const details =
-        (exerciseDetail.category.details as WeightTrainingExercise) || {
+        (exerciseDetail.category?.details as WeightTrainingExercise) || {
           reps: [],
           sets: 3,
           weight: 0,
@@ -147,7 +147,7 @@ const CreateWorkoutExerciseCardView: React.FC<CreateWorkoutExerciseCardViewProps
     if (!exerciseDetail) return;
     if (exerciseDetail.category?.type === 'weight-training') {
       const details =
-        (exerciseDetail.category.details as WeightTrainingExercise) || {
+        (exerciseDetail.category?.details as WeightTrainingExercise) || {
           reps: [],
           sets: 3,
           weight: 0,
@@ -169,7 +169,7 @@ const CreateWorkoutExerciseCardView: React.FC<CreateWorkoutExerciseCardViewProps
     if (!exerciseDetail) return;
     if (exerciseDetail.category?.type === 'weight-training') {
       const details =
-        (exerciseDetail.category.details as WeightTrainingExercise) || {
+        (exerciseDetail.category?.details as WeightTrainingExercise) || {
           reps: [],
           sets: 3,
           weight: 0,
@@ -192,48 +192,43 @@ const CreateWorkoutExerciseCardView: React.FC<CreateWorkoutExerciseCardViewProps
     if (!exerciseDetail) return;
     const newTime = parseFloat(val);
     if (exerciseDetail.category?.type === 'cardio') {
-      const details =
-        (exerciseDetail.category.details as CardioExercise) || {
+      const details = {
+        ...(exerciseDetail.category?.details as CardioExercise || {
           duration: 60,
           bpm: 140,
           calories: 0,
           screenTime: 0,
           selectedVideo: null,
-        };
-      const updatedDetails: CardioExercise = {
-        ...details,
+        }),
         screenTime: !isNaN(newTime) ? newTime : 0,
       };
-      updateCardioDetail(updatedDetails);
+      updateCardioDetail(details);
     } else if (exerciseDetail.category?.type === 'weight-training') {
-      const details =
-        (exerciseDetail.category.details as WeightTrainingExercise) || {
-          reps: [],
+      const details = {
+        ...(exerciseDetail.category?.details as WeightTrainingExercise || {
+          reps: ['12'],
           sets: 3,
           weight: 0,
           screenTime: 0,
           selectedVideo: null,
-        };
-      const updatedDetails: WeightTrainingExercise = {
-        ...details,
+        }),
         screenTime: !isNaN(newTime) ? newTime : 0,
       };
-      updateWeightTrainingDetail(updatedDetails);
-    } else {
-      console.error("Unknown category type. Cannot update screenTime.");
+      updateWeightTrainingDetail(details);
     }
   };
 
   const handleNotesChange = (val: string) => {
     setNotes(val);
     if (!exerciseDetail) return;
-    const newDetail: ExerciseDetail = {
+    const updatedDetail = new ExerciseDetail({
       ...exerciseDetail,
       notes: val,
-    };
-    setExerciseDetail(newDetail);
-    returnExerciseDescription(newDetail);
+    });
+    setExerciseDetail(updatedDetail);
+    returnExerciseDescription(updatedDetail);
   };
+
 
   return (
     <div className="p-4 bg-zinc-900 rounded-lg border border-zinc-800 my-2">
@@ -263,22 +258,20 @@ const CreateWorkoutExerciseCardView: React.FC<CreateWorkoutExerciseCardViewProps
             <button
               type="button"
               onClick={() => setExerciseMode('tracking')}
-              className={`px-4 py-2 rounded ${
-                exerciseMode === 'tracking'
+              className={`px-4 py-2 rounded ${exerciseMode === 'tracking'
                   ? 'bg-[#E0FE10] text-black'
                   : 'bg-zinc-800 text-white'
-              }`}
+                }`}
             >
               Tracking
             </button>
             <button
               type="button"
               onClick={() => setExerciseMode('screentime')}
-              className={`px-4 py-2 rounded ${
-                exerciseMode === 'screentime'
+              className={`px-4 py-2 rounded ${exerciseMode === 'screentime'
                   ? 'bg-[#E0FE10] text-black'
                   : 'bg-zinc-800 text-white'
-              }`}
+                }`}
             >
               Screentime
             </button>
@@ -365,7 +358,7 @@ const CreateWorkoutExerciseCardView: React.FC<CreateWorkoutExerciseCardViewProps
                         } else if (exerciseMode === 'screentime') {
                           if (exerciseDetail.category?.type === 'cardio') {
                             let details: CardioExercise =
-                              (exerciseDetail.category.details as CardioExercise) ?? {
+                              (exerciseDetail.category?.details as CardioExercise) ?? {
                                 duration: 20,
                                 bpm: 125,
                                 calories: 0,
@@ -375,7 +368,7 @@ const CreateWorkoutExerciseCardView: React.FC<CreateWorkoutExerciseCardViewProps
                             updateCardioDetail(details);
                           } else {
                             let details: WeightTrainingExercise =
-                              (exerciseDetail.category.details as WeightTrainingExercise) ?? {
+                              (exerciseDetail.category?.details as WeightTrainingExercise) ?? {
                                 reps: ['12'],
                                 sets: 3,
                                 weight: 0,
@@ -387,9 +380,8 @@ const CreateWorkoutExerciseCardView: React.FC<CreateWorkoutExerciseCardViewProps
                         }
                       }
                     }}
-                    className={`flex-shrink-0 relative rounded-lg overflow-hidden ${
-                      selectedVideo?.id === video.id ? 'ring-2 ring-[#E0FE10]' : ''
-                    }`}
+                    className={`flex-shrink-0 relative rounded-lg overflow-hidden ${selectedVideo?.id === video.id ? 'ring-2 ring-[#E0FE10]' : ''
+                      }`}
                   >
                     <img
                       src={video.gifURL || '/placeholder.gif'}
@@ -407,24 +399,64 @@ const CreateWorkoutExerciseCardView: React.FC<CreateWorkoutExerciseCardViewProps
               type="checkbox"
               checked={isDumbell}
               onChange={(e) => {
-                setIsDumbell(e.target.checked);
-                // Here we still use the generic updateDetail since it's not about details
-                setExerciseDetail({ ...exerciseDetail!, isSplit: e.target.checked });
-                returnExerciseDescription({ ...exerciseDetail!, isSplit: e.target.checked });
+                const isChecked = e.target.checked;
+                setIsDumbell(isChecked);
+                if (exerciseDetail) {
+                  const updatedDetail = { ...exerciseDetail, isSplit: isChecked };
+                  setExerciseDetail(new ExerciseDetail(updatedDetail));
+                  returnExerciseDescription(new ExerciseDetail(updatedDetail));
+                }
               }}
               className="w-5 h-5 accent-[#E0FE10]"
             />
+
           </div>
           <button
             type="button"
             onClick={() => {
+              if (!exerciseDetail) return;
+
+              const screenTimeValue = parseFloat(screenTime) || 0;
+              
+              // Create the category details based on the current exercise type
+              const categoryDetails = exerciseDetail.category?.type === 'cardio' 
+                ? {
+                    duration: (exerciseDetail.category?.details as CardioExercise)?.duration || 60,
+                    bpm: (exerciseDetail.category?.details as CardioExercise)?.bpm || 140,
+                    calories: (exerciseDetail.category?.details as CardioExercise)?.calories || 0,
+                    screenTime: screenTimeValue,
+                    selectedVideo: selectedVideo
+                  }
+                : {
+                    reps: reps.split(',').filter(r => r.trim()).length ? reps.split(',').filter(r => r.trim()) : ['12'],
+                    sets: parseInt(sets) || 3,
+                    weight: parseFloat(weight) || 0,
+                    screenTime: screenTimeValue,
+                    selectedVideo: selectedVideo
+                  };
+
+              // Create the final exercise detail with explicit category structure
+              const finalExerciseDetail = new ExerciseDetail({
+                ...exerciseDetail,
+                category: {
+                  type: exerciseDetail.category?.type || 'weight-training',
+                  details: categoryDetails
+                },
+                notes: notes,
+                isSplit: isDumbell,
+                exercise: exerciseDetail.exercise,
+                exerciseName: exerciseDetail.exerciseName
+              });
+
+              console.log('Saving exercise detail with screenTime:', screenTimeValue, finalExerciseDetail);
               setExpanded(false);
-              returnExerciseDescription(exerciseDetail!);
+              returnExerciseDescription(finalExerciseDetail);
             }}
             className="w-full py-3 bg-[#E0FE10] text-black rounded-lg font-semibold hover:opacity-90 transition-opacity"
           >
             Save Details
           </button>
+
         </form>
       )}
     </div>
@@ -438,7 +470,7 @@ interface MobileStackViewProps {
   description: string;
   setDescription: (desc: string) => void;
   exerciseDetails: any[];
-  setExerciseDetails: (exercises: any[]) => void;
+  setExerciseDetails: (exercises: ExerciseDetail[]) => void;
   useAuthorContent: boolean;
   setUseAuthorContent: (value: boolean) => void;
   onCreateStack: () => void;
@@ -447,102 +479,103 @@ interface MobileStackViewProps {
 
 const MobileStackView: React.FC<MobileStackViewProps> = ({
   stackName,
-setStackName,
-description,
-setDescription,
-exerciseDetails,
-setExerciseDetails,
-useAuthorContent,
-setUseAuthorContent,
-onCreateStack,
-hideAddMoveButton = false,
+  setStackName,
+  description,
+  setDescription,
+  exerciseDetails,
+  setExerciseDetails,
+  useAuthorContent,
+  setUseAuthorContent,
+  onCreateStack,
+  hideAddMoveButton = false,
 }) => {
-return (
-<div className="min-h-screen bg-zinc-900">
-{/* Header */}
-<div className="relative h-40 bg-zinc-800">
-<div className="absolute inset-0 bg-gradient-to-b from-transparent to-zinc-900"></div>
-<div className="absolute bottom-6 left-6">
-<h1 className="text-3xl font-bold text-white">Create Stack</h1>
-</div>
-</div>
+  return (
+    <div className="min-h-screen bg-zinc-900">
+      {/* Header */}
+      <div className="relative h-40 bg-zinc-800">
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent to-zinc-900"></div>
+        <div className="absolute bottom-6 left-6">
+          <h1 className="text-3xl font-bold text-white">Create Stack</h1>
+        </div>
+      </div>
 
-{/* Main Content */}
-<div className="p-6 space-y-6">
-<div className="space-y-4">
-<input
-  type="text"
-  value={stackName}
-  onChange={(e) => setStackName(e.target.value)}
-  placeholder="Stack Name"
-  className="w-full p-4 bg-zinc-800 text-white rounded-lg border border-zinc-700 focus:border-[#E0FE10] transition-colors"
-/>
+      {/* Main Content */}
+      <div className="p-6 space-y-6">
+        <div className="space-y-4">
+          <input
+            type="text"
+            value={stackName}
+            onChange={(e) => setStackName(e.target.value)}
+            placeholder="Stack Name"
+            className="w-full p-4 bg-zinc-800 text-white rounded-lg border border-zinc-700 focus:border-[#E0FE10] transition-colors"
+          />
 
-<textarea
-  value={description}
-  onChange={(e) => setDescription(e.target.value)}
-  placeholder="Stack Description"
-  className="w-full p-4 bg-zinc-800 text-white rounded-lg border border-zinc-700 focus:border-[#E0FE10] transition-colors h-32 resize-none"
-/>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Stack Description"
+            className="w-full p-4 bg-zinc-800 text-white rounded-lg border border-zinc-700 focus:border-[#E0FE10] transition-colors h-32 resize-none"
+          />
 
-<div className="flex items-center space-x-3 bg-zinc-800 p-4 rounded-lg">
-  <input
-    type="checkbox"
-    checked={useAuthorContent}
-    onChange={() => setUseAuthorContent(!useAuthorContent)}
-    className="w-5 h-5 accent-[#E0FE10]"
-  />
-  <span className="text-zinc-300">Use my fitness content exclusively</span>
-</div>
-</div>
+          <div className="flex items-center space-x-3 bg-zinc-800 p-4 rounded-lg">
+            <input
+              type="checkbox"
+              checked={useAuthorContent}
+              onChange={() => setUseAuthorContent(!useAuthorContent)}
+              className="w-5 h-5 accent-[#E0FE10]"
+            />
+            <span className="text-zinc-300">Use my fitness content exclusively</span>
+          </div>
+        </div>
 
-{/* Exercise List */}
-<div className="space-y-4">
-{exerciseDetails.map((ex, index) => (
-  <div key={ex.exercise.id} className="bg-zinc-800 rounded-lg p-4">
-    <CreateWorkoutExerciseCardView
-      appCoordinator={null}
-      exerciseDescription={ex}
-      workoutCaregory={ex.category}
-      returnExerciseDescription={(newDetail) => {
-        const updated = [...exerciseDetails];
-        updated[index] = newDetail;
-        setExerciseDetails(updated);
-      }}
-    />
-   <button
-  onClick={() => {
-    const updated = exerciseDetails.filter(detail => detail.exercise.id !== ex.exercise.id);
-    setExerciseDetails(updated);
-  }}
-  className="mt-2 flex items-center gap-2 text-red-400 hover:text-red-300 transition-colors"
->
-  <Trash2 size={16} />
-  <span>Remove</span>
-</button>
-  </div>
-))}
-</div>
+        {/* Exercise List */}
+        <div className="space-y-4">
+          {exerciseDetails.map((ex, index) => (
+            <div key={ex.exercise.id} className="bg-zinc-800 rounded-lg p-4">
+              <CreateWorkoutExerciseCardView
+                appCoordinator={null}
+                exerciseDescription={ex}
+                workoutCaregory={ex.category}
+                returnExerciseDescription={(newDetail) => {
+                  const updated = [...exerciseDetails];
+                  updated[index] = newDetail;
+                  setExerciseDetails(updated);
+                }}
+              />
+              <button
+                onClick={() => {
+                  const updated = exerciseDetails.filter(detail => detail.exercise.id !== ex.exercise.id);
+                  setExerciseDetails(updated);
+                }}
+                className="mt-2 flex items-center gap-2 text-red-400 hover:text-red-300 transition-colors"
+              >
+                <Trash2 size={16} />
+                <span>Remove</span>
+              </button>
+            </div>
+            
+          ))}
+        </div>
 
-{!hideAddMoveButton && (
-<button
-  className="flex items-center justify-center gap-2 w-full py-4 bg-zinc-800 text-white rounded-lg hover:bg-zinc-700 transition-colors"
->
-  <Plus size={20} />
-  <span>Add Move</span>
-</button>
-)}
+        {!hideAddMoveButton && (
+          <button
+            className="flex items-center justify-center gap-2 w-full py-4 bg-zinc-800 text-white rounded-lg hover:bg-zinc-700 transition-colors"
+          >
+            <Plus size={20} />
+            <span>Add Move</span>
+          </button>
+        )}
 
-  {/* Create Stack Button */}
-  <button
-    onClick={onCreateStack}
-    className="w-full py-4 bg-[#E0FE10] text-black rounded-lg font-semibold hover:opacity-90 transition-opacity"
-    >
-    Create Stack
-  </button>
-  </div>
-</div>
-);
+        {/* Create Stack Button */}
+        <button
+          onClick={onCreateStack}
+          className="w-full py-4 bg-[#E0FE10] text-black rounded-lg font-semibold hover:opacity-90 transition-opacity"
+        >
+          Create Stack
+        </button>
+      </div>
+    </div>
+  );
 };
 
 // DesktopStackView Component
@@ -582,7 +615,7 @@ const DesktopStackView: React.FC<DesktopStackViewProps> = (props) => {
   }, [props.exerciseDetails]);
 
   const filteredExercises = allExercises
-    .filter(exercise => 
+    .filter(exercise =>
       selectedUserId ? exercise.author.userId === selectedUserId : true
     )
     .filter(exercise =>
@@ -592,7 +625,7 @@ const DesktopStackView: React.FC<DesktopStackViewProps> = (props) => {
   const handleToggleSelection = (exercise: Exercise) => {
     setSelectedExercises((prevSelected) => {
       const alreadySelected = prevSelected.some((ex) => ex.id === exercise.id);
-      
+
       if (alreadySelected) {
         const updatedSelected = prevSelected.filter((ex) => ex.id !== exercise.id);
         const updatedExerciseDetails = props.exerciseDetails.filter(
@@ -645,16 +678,12 @@ const DesktopStackView: React.FC<DesktopStackViewProps> = (props) => {
 
 // CreateStackPage Component
 const CreateStackPage: React.FC = () => {
-const [stackName, setStackName] = useState('');
-const [description, setDescription] = useState('');
-const [exerciseDetails, setExerciseDetails] = useState<any[]>([]);
-const [useAuthorContent, setUseAuthorContent] = useState(false);
-const [isLoading, setIsLoading] = useState(false);
-const router = useRouter();
-
-
-
-
+  const [stackName, setStackName] = useState('');
+  const [description, setDescription] = useState('');
+  const [exerciseDetails, setExerciseDetails] = useState<ExerciseDetail[]>([]);
+  const [useAuthorContent, setUseAuthorContent] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const router = useRouter();
 
   const onCreateStack = async () => {
     if (!userService.currentUser?.id) {
@@ -674,6 +703,7 @@ const router = useRouter();
 
     setIsLoading(true);
 
+    console.log("Exercise details before creating workout:", exerciseDetails);
     try {
       const { workout, exerciseLogs } = await workoutService.formatWorkoutAndInitializeLogs(
         exerciseDetails,
@@ -684,6 +714,8 @@ const router = useRouter();
       workout.title = stackName.trim();
       workout.description = description.trim();
       workout.useAuthorContent = useAuthorContent;
+
+      console.log("Here are the final logs:", exerciseLogs);
 
       await userService.createStack(workout, exerciseLogs);
       router.push(`/workout/${userService.currentUser.username}/${workout.id}`);

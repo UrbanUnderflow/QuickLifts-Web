@@ -2,6 +2,7 @@ import { ExerciseReference, ExerciseLog, ExerciseAuthor } from '../exercise/type
 import { BodyPart, ExerciseCategory } from '../exercise/types';
 import { convertFirestoreTimestamp, dateToUnixTimestamp } from '../../../utils/formatDate';
 import { workoutService } from '../workout/service';
+import { ShortUser, User } from '../user';
 
 export class CheckIn {
   id: string;
@@ -43,6 +44,13 @@ export enum WorkoutStatus {
   InProgress = 'inProgress',
   Complete = 'complete',
   Archived = 'archived'
+}
+
+export enum WorkoutType {
+  UpperBody = 'Upper Body',
+  LowerBody = 'Lower Body',
+  Core = 'Core',
+  FullBody = 'Full Body'
 }
 
 // src/types/WorkoutTypes.ts
@@ -190,63 +198,52 @@ export class Workout {
   }
 
   static estimatedDuration(exercises: ExerciseLog[]): number {
-    const warmupTimeSeconds = 5 * 60;  // 5 minutes in seconds
-    const cooldownTimeSeconds = 5 * 60; // 5 minutes in seconds
     let totalTimeSeconds = 0;
     let restTimeSeconds = 0;
     let hasScreenTimeExercises = false;
 
-    
     for (const exerciseLog of exercises) {   
-      var exercise = exerciseLog.exercise
-      if (exercise?.category?.type === 'cardio') {
-        const duration = exercise.category.details?.duration || 0;
-        console.log('Cardio duration (minutes):', duration);
-        totalTimeSeconds += duration * 60; // Convert minutes to seconds
-      } else {
-        const screenTime = exercise?.category?.details?.screenTime || 0;
-        console.log("The screentime is: ", screenTime);
-        if (screenTime > 0) {
-          console.log('Screen time (seconds):', screenTime);
-          totalTimeSeconds += screenTime; // Already in seconds
-          hasScreenTimeExercises = true;
-        } else {
-          console.log('Using default timing (8m exercise + 1m rest)');
-          totalTimeSeconds += 8 * 60; // 8 minutes in seconds
-          restTimeSeconds += 60;      // 1 minute in seconds
-        }
-      }
-  
-      console.log('Current totals (in seconds):', {
-        totalTimeSeconds,
-        restTimeSeconds,
-        hasScreenTimeExercises
+      const exercise = exerciseLog.exercise;
+      const screenTime = exercise?.category?.details?.screenTime;
+      
+      console.log('Duration calculation:', {
+        exerciseName: exercise.name,
+        screenTime,
+        type: exercise.category?.type
       });
-      console.groupEnd();
+
+      if (screenTime && screenTime > 0) {
+        console.log('Using screen time:', screenTime, 'seconds');
+        totalTimeSeconds += screenTime;
+        hasScreenTimeExercises = true;
+      } else if (exercise?.category?.type === 'cardio') {
+        const duration = exercise.category.details?.duration || 0;
+        console.log('Using cardio duration:', duration, 'minutes');
+        totalTimeSeconds += duration * 60;
+      } else {
+        console.log('Using default timing');
+        totalTimeSeconds += 8 * 60; // 8 minutes
+        restTimeSeconds += 60;      // 1 minute rest
+      }
     }
-  
+
+    // Only add warmup/cooldown for non-screenTime exercises
     if (!hasScreenTimeExercises) {
-      console.log('Adding warmup/cool-down:', 
-        (warmupTimeSeconds + cooldownTimeSeconds) / 60, 'minutes');
-      totalTimeSeconds += warmupTimeSeconds + cooldownTimeSeconds;
+      totalTimeSeconds += 10 * 60; // 10 minutes warmup/cooldown
     }
-  
+
     const totalSeconds = totalTimeSeconds + restTimeSeconds;
-    console.log('Pre-rounded total (seconds):', totalSeconds);
-  
-    let finalEstimate: number;
-    if (!hasScreenTimeExercises) {
-      // Convert to minutes and round to nearest 5
-      const totalMinutes = totalSeconds / 60;
-      finalEstimate = Math.round(totalMinutes / 5) * 5;
-      console.log('Rounded to nearest 5 minutes:', finalEstimate);
-    } else {
-      // Convert to minutes, rounding up to nearest minute
-      finalEstimate = Math.ceil(totalSeconds / 60);
+    
+    // For screenTime exercises, convert to minutes with one decimal place
+    if (hasScreenTimeExercises) {
+      const minutes = totalSeconds / 60;
+      console.log('Final duration in minutes:', minutes);
+      return Math.ceil(minutes * 10) / 10; // Round to 1 decimal place
     }
-  
-    console.log('Final estimated duration:', finalEstimate, 'minutes');
-    return finalEstimate;
+    
+    // For non-screenTime exercises, round to nearest 5
+    const totalMinutes = Math.round(totalSeconds / 60);
+    return Math.round(totalMinutes / 5) * 5;
   }
 
   static determineWorkoutZone(exercises: ExerciseReference[]): BodyZone {
@@ -381,45 +378,200 @@ export class Workout {
 
 
 export class WorkoutSummary {
-    id: string;
-    workoutId: string;
-    exercises: ExerciseLog[];
-    bodyParts: BodyPart[];
-    secondaryBodyParts: BodyPart[];
-    workoutTitle: string;
-    caloriesBurned: number;
-    workoutRating?: WorkoutRating;
-    exercisesCompleted: ExerciseLog[];
-    aiInsight: string;
-    recommendations: string[];
-    gifURLs?: string[];
-    recommendedWork?: number;
-    isCompleted: boolean;
-    createdAt: Date;
-    updatedAt: Date;
-    completedAt?: Date | null;
-    duration: string;
-  
-    constructor(data: any) {
-      this.id = data.id;
-      this.workoutId = data.workoutId;
-      this.exercises = data.exercises.map((ex: any) => new ExerciseLog(ex));
-      this.bodyParts = data.bodyParts;
-      this.secondaryBodyParts = data.secondaryBodyParts;
-      this.workoutTitle = data.workoutTitle;
-      this.caloriesBurned = data.caloriesBurned;
+  id: string;
+  workoutId: string;
+  userId: string;
+  roundWorkoutId: string;
+  exercises: ExerciseLog[];
+  bodyParts: BodyPart[];
+  secondaryBodyParts: BodyPart[];
+  workoutTitle: string;
+  caloriesBurned: number;
+  workoutRating?: WorkoutRating | null;
+  exercisesCompleted: ExerciseLog[];
+  aiInsight: string;
+  recommendations: string[];
+  gifURLs?: string[];
+  recommendedWork?: number;
+  pulsePoints: PulsePoints;
+  isCompleted: boolean;
+  startTime: Date;
+  createdAt: Date;
+  updatedAt: Date;
+  completedAt?: Date | null;
+  duration: number = 0;  // Changed to number to match iOS
+
+  constructor(data: any) {
+      this.id = data.id || '';
+      this.workoutId = data.workoutId || '';
+      this.userId = data.userId || '';
+      this.roundWorkoutId = data.roundWorkoutId || '';
+      this.exercises = Array.isArray(data.exercises) 
+          ? data.exercises.map((ex: any) => new ExerciseLog(ex))
+          : [];
+      this.bodyParts = Array.isArray(data.bodyParts)
+          ? data.bodyParts
+          : [];
+      this.secondaryBodyParts = Array.isArray(data.secondaryBodyParts)
+          ? data.secondaryBodyParts
+          : [];
+      this.workoutTitle = data.workoutTitle || '';
+      this.caloriesBurned = data.caloriesBurned || 0;
       this.workoutRating = data.workoutRating;
-      this.exercisesCompleted = data.exercisesCompleted.map((ex: any) => new ExerciseLog(ex));
-      this.aiInsight = data.aiInsight;
-      this.recommendations = data.recommendations;
+      this.exercisesCompleted = Array.isArray(data.exercisesCompleted)
+          ? data.exercisesCompleted.map((ex: any) => new ExerciseLog(ex))
+          : [];
+      this.aiInsight = data.aiInsight || '';
+      this.recommendations = Array.isArray(data.recommendations)
+          ? data.recommendations
+          : [];
       this.gifURLs = data.gifURLs;
       this.recommendedWork = data.recommendedWork;
-      this.isCompleted = data.isCompleted;
-      this.createdAt = data.createdAt ? convertFirestoreTimestamp(data.createdAt) : new Date();
-      this.updatedAt = data.updatedAt ? convertFirestoreTimestamp(data.updatedAt) : new Date();
-      this.completedAt = data.completedAt ? convertFirestoreTimestamp(data.completedAt) : null;
-      this.duration = data.duration;
+      this.pulsePoints = data.pulsePoints ? new PulsePoints(data.pulsePoints) : new PulsePoints({});
+      this.isCompleted = data.isCompleted || false;
+      this.startTime = convertFirestoreTimestamp(data.startTime);
+      this.createdAt = convertFirestoreTimestamp(data.createdAt);
+      this.updatedAt = convertFirestoreTimestamp(data.updatedAt);
+      
+      // Handle completedAt similar to iOS
+      if (data.completedAt) {
+          const completedAtTimestamp = data.completedAt;
+          if (completedAtTimestamp === 0) {
+              // Set to 72 minutes from createdAt like in iOS
+              const completedDate = new Date(this.createdAt);
+              completedDate.setMinutes(completedDate.getMinutes() + 72);
+              this.completedAt = completedDate;
+          } else {
+              this.completedAt = convertFirestoreTimestamp(data.completedAt);
+          }
+      } else {
+          this.completedAt = null;
+      }
+
+      this.duration = this.calculateDuration();
+  }
+
+  private calculateDuration(): number {
+      if (!this.completedAt) return 0;
+      const durationInSeconds = (this.completedAt.getTime() - this.createdAt.getTime()) / 1000;
+      // Round to the nearest minute like in iOS
+      return Math.round((durationInSeconds + 30) / 60);
+  }
+
+  determineWorkoutType(): string {
+      // Create sets of body parts for each category
+      const upperBodyParts = new Set([
+          BodyPart.Chest,
+          BodyPart.Shoulders,
+          BodyPart.Biceps,
+          BodyPart.Triceps,
+          BodyPart.Traps,
+          BodyPart.Lats,
+          BodyPart.Forearms
+      ]);
+      const lowerBodyParts = new Set([
+          BodyPart.Hamstrings,
+          BodyPart.Glutes,
+          BodyPart.Quadriceps,
+          BodyPart.Calves
+      ]);
+      const coreParts = new Set([
+          BodyPart.Abs,
+          BodyPart.Lowerback
+      ]);
+
+      // Get all body parts involved in the workout
+      const bodyPartsInvolved = new Set<BodyPart>();
+      this.exercises.forEach(log => {
+          log.exercise.primaryBodyParts.forEach(part => bodyPartsInvolved.add(part));
+      });
+
+      // Check which areas are targeted
+      const hasUpperBody = Array.from(bodyPartsInvolved).some(part => upperBodyParts.has(part));
+      const hasLowerBody = Array.from(bodyPartsInvolved).some(part => lowerBodyParts.has(part));
+      const hasCore = Array.from(bodyPartsInvolved).some(part => coreParts.has(part));
+
+      // Determine workout type using the same logic as iOS
+      if ((hasUpperBody && hasLowerBody && hasCore) || (hasUpperBody && hasLowerBody)) {
+          return WorkoutType.FullBody;
+      } else if (hasUpperBody && hasCore || hasUpperBody) {
+          return WorkoutType.UpperBody;
+      } else if (hasLowerBody && hasCore || hasLowerBody) {
+          return WorkoutType.LowerBody;
+      } else if (hasCore) {
+          return WorkoutType.Core;
+      }
+      return WorkoutType.FullBody;  // Default return like iOS
+  }
+
+  fetchTotalWeightLifted(user: User): number {
+      return this.exercisesCompleted.reduce((total, exercise) => {
+          return total + exercise.fetchTotalWeightLifted(user);
+      }, 0);
+  }
+
+  fetchTotalWorkScore(user: User, workoutId: string | null, workoutSummaries: WorkoutSummary[]): number {
+      return this.exercisesCompleted.reduce((total, exercise) => {
+          if (exercise.logSubmitted) {
+              return total + exercise.calculateWorkScore(user, workoutId, workoutSummaries);
+          }
+          return total;
+      }, 0);
+  }
+
+  fetchPreviousWorkScore(user: User, workoutId: string | null, summaries: WorkoutSummary[]): number {
+    const currentWorkoutType = this.determineWorkoutType();
+    
+    // Find the most recent matching summary
+    const matchingSummary = summaries
+        .filter(s => s.determineWorkoutType() === currentWorkoutType)
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+        .find(s => s.workoutId !== this.workoutId);
+
+    if (matchingSummary) {
+        // Fix: Pass summaries as the third argument and use proper addition
+        return matchingSummary.exercisesCompleted.reduce((total, exercise) => 
+            total + exercise.calculateWorkScore(user, workoutId, summaries), 0); // Start with 0 as initial value
     }
+
+    return 0;
+}
+
+  createTotalWorkString(user: User, workoutId: string, workoutSummaries: WorkoutSummary[]): string {
+      const totalWork = this.fetchTotalWorkScore(user, workoutId, workoutSummaries);
+      return totalWork.toString();
+  }
+
+  toDictionary(): { [key: string]: any } {
+      const dict: { [key: string]: any } = {
+          id: this.id,
+          workoutId: this.workoutId,
+          userId: this.userId,
+          roundWorkoutId: this.roundWorkoutId,
+          exercises: this.exercises.map(ex => ex.toDictionary()),
+          bodyParts: this.bodyParts,
+          secondaryBodyParts: this.secondaryBodyParts,
+          workoutTitle: this.workoutTitle,
+          caloriesBurned: this.caloriesBurned,
+          workoutRating: this.workoutRating?.toString() || '',
+          exercisesCompleted: this.exercisesCompleted.map(ex => ex.toDictionary()),
+          aiInsight: this.aiInsight,
+          recommendations: this.recommendations,
+          recommendedWork: this.recommendedWork || '',
+          pulsePoints: this.pulsePoints.toDictionary(),
+          isCompleted: this.isCompleted,
+          startTime: dateToUnixTimestamp(this.startTime),
+          createdAt: dateToUnixTimestamp(this.createdAt),
+          updatedAt: dateToUnixTimestamp(this.updatedAt),
+          completedAt: this.completedAt ? dateToUnixTimestamp(this.completedAt) : 0
+      };
+
+      if (this.gifURLs) {
+          dict.gifURLs = this.gifURLs;
+      }
+
+      return dict;
+  }
 }
 
 export interface WorkoutService {
@@ -586,7 +738,7 @@ class UserLocation {
   }
 }
 
-class PulsePoints {
+export class PulsePoints {
   baseCompletion: number;      // e.g. 100 points
   firstCompletion: number;     // e.g. 50 points
   streakBonus: number;         // e.g. 25 points per day
@@ -655,12 +807,50 @@ class PulsePoints {
       totalPoints: this.totalPoints,
     };
   }
-
-  static fromFirestore(data: any): PulsePoints {
-    return new PulsePoints(data);
-  }
 }
 
+export class Encouragement {
+  fromUser: ShortUser;
+  toUser: ShortUser;
+  createdAt: Date;
+ 
+  constructor(data: any) {
+    // If data is passed as already constructed ShortUser objects
+    if (data.fromUser instanceof ShortUser && data.toUser instanceof ShortUser) {
+      this.fromUser = data.fromUser;
+      this.toUser = data.toUser;
+      this.createdAt = data.createdAt instanceof Date ? data.createdAt : new Date();
+    } 
+    // If data is coming from Firestore/dictionary
+    else {
+      const fromUserData = data.fromUser || {};
+      this.fromUser = new ShortUser(fromUserData);
+      
+      const toUserData = data.toUser || {};
+      this.toUser = new ShortUser(toUserData);
+      
+      this.createdAt = convertFirestoreTimestamp(data.createdAt);
+    }
+  }
+ 
+  // Static method to create from separate parameters
+  static create(fromUser: ShortUser, toUser: ShortUser, createdAt: Date): Encouragement {
+    return new Encouragement({
+      fromUser,
+      toUser, 
+      createdAt
+    });
+  }
+ 
+  // Convert to dictionary for Firestore
+  toDictionary(): { [key: string]: any } {
+    return {
+      fromUser: this.fromUser.toDictionary(),
+      toUser: this.toUser.toDictionary(),
+      createdAt: dateToUnixTimestamp(this.createdAt)
+    };
+  }
+ }
 
 // Types for user in challenge
 class UserChallenge {
@@ -668,23 +858,27 @@ class UserChallenge {
   challenge?: Challenge;
   challengeId: string;
   userId: string;
+  fcmToken: string;          // Added
   username: string;
   profileImage?: ProfileImage;
   progress: number;
-  referralChains: ReferralChain;
-  completedWorkouts: { id: string; workoutId: string; completedAt: number }[];
+  referralChain: ReferralChain;  // Changed from referralChains to match iOS
+  completedWorkouts: { id: string; workoutId: string; completedAt: Date }[];
   isCompleted: boolean;
+  uid: string;               // Added
   location?: UserLocation;
   city: string;
   country?: string;
   timezone?: string;
   joinDate: Date;
+  isCurrentlyActive: boolean;  // Added
   createdAt: Date;
   updatedAt: Date;
   pulsePoints: PulsePoints;
   currentStreak: number;
-  encouragedUsers: string[];
-  encouragedByUsers: string[];
+  longestStreak: number;      // Added
+  encouragedUsers: Encouragement[];  // Changed from string[] to Encouragement[]
+  encouragedByUsers: Encouragement[];  // Changed from string[] to Encouragement[]
   checkIns: CheckIn[];
 
   constructor(data: any) {
@@ -692,64 +886,110 @@ class UserChallenge {
     this.challenge = data.challenge ? new Challenge(data.challenge) : undefined;
     this.challengeId = data.challengeId || '';
     this.userId = data.userId || '';
+    this.fcmToken = data.fcmToken || '';  // Added
     this.username = data.username || '';
     this.profileImage = data.profileImage ? new ProfileImage(data.profileImage) : undefined;
     this.progress = data.progress ?? 0;
-    this.referralChains = data.referralChains ? new ReferralChain(data.referralChains) : new ReferralChain({ originalHostId: '', sharedBy: '' });
+    this.referralChain = data.referralChain ? new ReferralChain(data.referralChain) : new ReferralChain({ originalHostId: '', sharedBy: '' });
     this.completedWorkouts = Array.isArray(data.completedWorkouts)
-    ? data.completedWorkouts.map((cw: any) => ({
-        id: cw.id || '',
-        workoutId: cw.workoutId || '',
-        completedAt: convertFirestoreTimestamp(cw.completedAt),  // Use convertFirestoreTimestamp here
-      }))
-    : [];
+      ? data.completedWorkouts.map((cw: any) => ({
+          id: cw.id || '',
+          workoutId: cw.workoutId || '',
+          completedAt: convertFirestoreTimestamp(cw.completedAt),
+        }))
+      : [];
     this.isCompleted = data.isCompleted ?? false;
+    this.uid = data.uid || '';  // Added
     this.location = data.location ? new UserLocation(data.location) : undefined;
     this.city = data.city || '';
     this.country = data.country || '';
     this.timezone = data.timezone || '';
     this.joinDate = convertFirestoreTimestamp(data.joinDate);
+    this.isCurrentlyActive = data.isCurrentlyActive ?? false;  // Added
     this.createdAt = convertFirestoreTimestamp(data.createdAt);
     this.updatedAt = convertFirestoreTimestamp(data.updatedAt);
     this.pulsePoints = data.pulsePoints ? new PulsePoints(data.pulsePoints) : new PulsePoints({});
     this.currentStreak = data.currentStreak ?? 0;
-    this.encouragedUsers = Array.isArray(data.encouragedUsers) ? data.encouragedUsers : [];
-    this.encouragedByUsers = Array.isArray(data.encouragedByUsers) ? data.encouragedByUsers : [];
+    this.longestStreak = this.calculateLongestStreak();  // Added
+    this.encouragedUsers = Array.isArray(data.encouragedUsers)
+      ? data.encouragedUsers.map((d: any) => new Encouragement(d))
+      : [];
+    this.encouragedByUsers = Array.isArray(data.encouragedByUsers)
+      ? data.encouragedByUsers.map((d: any) => new Encouragement(d))
+      : [];
     this.checkIns = Array.isArray(data.checkIns)
-    ? data.checkIns.map((d: any) => new CheckIn(d))
-    : [];  }
-
-  // Optionally, you can add a static method to create an instance from Firestore data
-  static fromFirestore(id: string, data: any): UserChallenge {
-    return new UserChallenge(data);
+      ? data.checkIns.map((d: any) => new CheckIn(d))
+      : [];
   }
 
-  // Optionally, add a method to convert to a plain dictionary (for saving to Firestore)
+  // Add calculateLongestStreak method
+  private calculateLongestStreak(): number {
+    if (!this.completedWorkouts.length) return 0;
+
+    let currentStreak = 1;
+    let maxStreak = 1;
+    const sortedWorkouts = [...this.completedWorkouts].sort(
+      (a, b) => a.completedAt.getTime() - b.completedAt.getTime()
+    );
+
+    for (let i = 1; i < sortedWorkouts.length; i++) {
+      const prevDate = new Date(sortedWorkouts[i - 1].completedAt);
+      const currDate = new Date(sortedWorkouts[i].completedAt);
+      
+      if (this.isNextDay(prevDate, currDate)) {
+        currentStreak++;
+        maxStreak = Math.max(maxStreak, currentStreak);
+      } else if (!this.isSameDay(prevDate, currDate)) {
+        currentStreak = 1;
+      }
+    }
+
+    return maxStreak;
+  }
+
+  private isNextDay(date1: Date, date2: Date): boolean {
+    const nextDay = new Date(date1);
+    nextDay.setDate(nextDay.getDate() + 1);
+    return this.isSameDay(nextDay, date2);
+  }
+
+  private isSameDay(date1: Date, date2: Date): boolean {
+    return (
+      date1.getFullYear() === date2.getFullYear() &&
+      date1.getMonth() === date2.getMonth() &&
+      date1.getDate() === date2.getDate()
+    );
+  }
+
   toDictionary(): any {
     return {
       challenge: this.challenge ? this.challenge.toDictionary() : null,
       challengeId: this.challengeId,
       userId: this.userId,
+      fcmToken: this.fcmToken,  // Added
       username: this.username,
       profileImage: this.profileImage ? this.profileImage.toDictionary() : null,
       progress: this.progress,
-      referralChains: this.referralChains ? this.referralChains.toDictionary() : {},
+      referralChain: this.referralChain.toDictionary(),  // Changed from referralChains
       completedWorkouts: this.completedWorkouts.map(workout => ({
         ...workout,
-        completedAt: Math.floor(new Date(workout.completedAt).getTime() / 1000)
+        completedAt: dateToUnixTimestamp(workout.completedAt)
       })),
       isCompleted: this.isCompleted,
+      uid: this.uid,  // Added
       location: this.location ? this.location.toDictionary() : null,
       city: this.city,
       country: this.country,
       timezone: this.timezone,
       joinDate: dateToUnixTimestamp(this.joinDate),
+      isCurrentlyActive: this.isCurrentlyActive,  // Added
       createdAt: dateToUnixTimestamp(this.createdAt),
       updatedAt: dateToUnixTimestamp(this.updatedAt),
-      pulsePoints: this.pulsePoints ? this.pulsePoints.toDictionary() : {},
+      pulsePoints: this.pulsePoints.toDictionary(),
       currentStreak: this.currentStreak,
-      encouragedUsers: this.encouragedUsers,
-      encouragedByUsers: this.encouragedByUsers,
+      longestStreak: this.longestStreak,  // Added
+      encouragedUsers: this.encouragedUsers.map(user => user.toDictionary()),
+      encouragedByUsers: this.encouragedByUsers.map(user => user.toDictionary()),
       checkIns: this.checkIns.map(checkIn => checkIn.toDictionary()),
     };
   }
@@ -952,7 +1192,6 @@ interface ChallengeInvitationProps {
 export type {
   ProfileImage,
   UserLocation,
-  PulsePoints,
   ChallengeInvitationProps
 };
 

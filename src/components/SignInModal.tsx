@@ -17,6 +17,11 @@ import { auth } from "../api/firebase/config";
 import { useRouter } from 'next/router';
 import { firebaseStorageService, UploadImageType } from '../api/firebase/storage/service';
 
+import { useDispatch, useSelector } from 'react-redux';
+import { RootState } from '../redux/store';
+import { toggleDevMode } from '../redux/devModeSlice';
+import { initializeFirebase } from '../api/firebase/config';
+
 interface SignInModalProps {
   isVisible: boolean;
   closable?: boolean;
@@ -29,6 +34,41 @@ interface SignInModalProps {
   onQuizSkipped?: () => void;
   onRegistrationComplete?: () => void;
 }
+
+const DevModeToggle: React.FC = () => {
+  const dispatch = useDispatch();
+  const isDevelopment = useSelector((state: RootState) => state.devMode.isDevelopment);
+
+  // On component mount, check if we should be in dev mode
+  useEffect(() => {
+    const savedMode = window.localStorage.getItem('devMode') === 'true';
+    if (savedMode !== isDevelopment) {
+      dispatch(toggleDevMode());
+      initializeFirebase(savedMode);
+    }
+  }, []);
+
+  const handleToggle = () => {
+    const newMode = !isDevelopment;
+    window.localStorage.setItem('devMode', String(newMode));
+    dispatch(toggleDevMode());
+    initializeFirebase(newMode);
+    window.location.reload();
+  };
+
+  return (
+    <button
+      onClick={handleToggle}
+      className="absolute top-4 left-4 px-2 py-1 rounded text-xs font-medium transition-colors flex items-center gap-2"
+      style={{
+        background: isDevelopment ? '#E0FE10' : '#3f3f46',
+        color: isDevelopment ? 'black' : 'white'
+      }}
+    >
+      {isDevelopment ? '🔧 Dev' : '🚀 Prod'}
+    </button>
+  );
+};
 
 const SignInModal: React.FC<SignInModalProps> = ({
   isVisible,
@@ -117,6 +157,20 @@ const SignInModal: React.FC<SignInModalProps> = ({
   };
 
   const router = useRouter();
+
+  // Add this custom hook
+  const useDevMode = () => {
+    const dispatch = useDispatch();
+    const isDevelopment = useSelector((state: RootState) => state.devMode.isDevelopment);
+
+    const handleToggle = () => {
+      dispatch(toggleDevMode());
+      initializeFirebase();
+      window.location.reload();
+    };
+
+    return { isDevelopment, handleToggle };
+  };
 
   const handleSocialAuth = async (provider: "google" | "apple") => {
     try {
@@ -1399,6 +1453,8 @@ const SignInModal: React.FC<SignInModalProps> = ({
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-black z-50 sm:p-6">
       <div className="bg-zinc-900 w-full h-full sm:h-auto sm:w-[480px] sm:rounded-xl p-6 sm:p-8 border-none sm:border sm:border-zinc-700 shadow-xl overflow-y-auto">
+        {window.location.hostname === 'localhost' && <DevModeToggle />}
+        
         {closable && onClose && (
           <button
             onClick={onClose}

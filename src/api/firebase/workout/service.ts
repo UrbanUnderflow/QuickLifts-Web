@@ -79,6 +79,33 @@ class WorkoutService {
     return doc(collection(db, 'workouts')).id;
   }
 
+  async fetchWorkoutSummary(
+    userId: string,
+    workoutId: string,
+    summaryId: string
+  ): Promise<WorkoutSummary | null> {
+    try {
+      console.log('Fetching workout summary:', { userId, workoutId, summaryId });
+      
+      // Assuming summaries are stored in a 'workoutSummaries' collection
+      const summaryRef = doc(db, 'users', userId, 'workoutSummary', summaryId);
+      const summaryDoc = await getDoc(summaryRef);
+  
+      if (!summaryDoc.exists()) {
+        console.log('Summary document not found');
+        return null;
+      }
+  
+      const summaryData = summaryDoc.data();
+      console.log('Found summary data:', summaryData);
+  
+      return new WorkoutSummary(summaryData);
+    } catch (error) {
+      console.error('Error fetching workout summary:', error);
+      return null;
+    }
+  }
+
     // Update the formatWorkoutAndInitializeLogs function
   async formatWorkoutAndInitializeLogs(
       exerciseDetails: ExerciseDetail[],
@@ -92,17 +119,41 @@ class WorkoutService {
   const validExerciseDetails = exerciseDetails.filter(detail => detail?.exercise && detail.exercise.id);
 
   validExerciseDetails.forEach((detail, index) => {
-    // Ensure exercise instance has all required fields
+    if (detail.exercise.id == null) { return }
+
+    // Create the category first
+    const category = {
+      type: detail.category?.type || 'weight-training',
+      details: detail.category?.type === 'weight-training' 
+        ? {
+            sets: detail.category?.details?.sets ?? 3,
+            reps: detail.category?.details?.reps ?? ['12'],
+            weight: detail.category?.details?.weight ?? 0,
+            screenTime: detail.category?.details?.screenTime ?? 0,
+            selectedVideo: detail.category?.details?.selectedVideo ?? null
+          }
+        : {
+            duration: detail.category?.details?.duration ?? 60,
+            bpm: detail.category?.details?.bpm ?? 140,
+            calories: detail.category?.details?.calories ?? 0,
+            screenTime: detail.category?.details?.screenTime ?? 0,
+            selectedVideo: detail.category?.details?.selectedVideo ?? null
+          }
+    };
+
+    console.log("Category being used:", category); // Debug log
+
+    // Create exercise instance with our new category
     const exerciseInstance = new Exercise({
       ...detail.exercise,
       id: detail.exercise.id || workoutService.generateId(),
       name: detail.exercise.name || '',
       author: detail.exercise.author || {
-        userId: workoutAuthor || 'PulseAI',
-        username: workoutAuthor || 'PulseAI'
+        userId: workoutAuthor || userService.currentUser?.id,
+        username: workoutAuthor || userService.currentUser?.username
       },
       description: detail.exercise.description || '',
-      category: detail.exercise.category || { type: 'weight-training', details: null },
+      category: category,  // Use our new category object
       primaryBodyParts: detail.exercise.primaryBodyParts || [],
       secondaryBodyParts: detail.exercise.secondaryBodyParts || [],
       tags: detail.exercise.tags || [],
@@ -111,19 +162,14 @@ class WorkoutService {
       updatedAt: detail.exercise.updatedAt || new Date()
     });
 
-    // Create exercise reference with required fields
+    // Create exercise reference
     const exerciseRef: ExerciseReference = {
       exercise: exerciseInstance,
       groupId: detail.groupId || 0
     };
     exerciseReferences.push(exerciseRef);
 
-    // Set default values for exercise parameters
-    const category = detail.category?.type === 'weight-training' ? detail.category : {
-      type: 'weight-training',
-      details: { sets: 3, reps: ['12'], weight: 0, screenTime: 0 }
-    };
-
+    // Create logs using the same category details
     const sets = category.details?.sets ?? 3;
     const reps = category.details?.reps ?? ['12'];
     const weight = category.details?.weight ?? 0;
@@ -537,25 +583,50 @@ async fetchSavedWorkout(userId: string, workoutId: string): Promise<[Workout | n
       const logData = logDoc.data();
       console.log('Raw log data from Firebase:', {
         exerciseName: logData.exercise.name,
-        exerciseCategory: logData.exercise.category
+        category: logData.exercise.category
       });
       
       const fullExercise = exercisesWithVideos.find(ex => ex.name === logData.exercise.name);
-      console.log('Exercise Category Details:', fullExercise?.category?.details);
+      
+      // Create the category with the correct structure
+      const exerciseCategory = {
+        type: 'weight-training',
+        details: {
+          sets: logData.exercise.category?.sets || 3,
+          reps: Array.isArray(logData.exercise.category?.reps) 
+            ? logData.exercise.category.reps 
+            : [logData.exercise.category?.reps || '12'],
+          weight: logData.exercise.category?.weight || 0,
+          screenTime: logData.exercise.category?.screenTime || 0,
+          selectedVideo: logData.exercise.category?.selectedVideo || null
+        }
+      };
 
+      console.log('Constructed category:', exerciseCategory);
+
+      // Merge with template exercise but preserve our category
       const updatedExercise = fullExercise
-    ? {
-        ...fullExercise,
-        category: logData.exercise.category,
-      }
-    : logData.exercise;
+        ? {
+            ...fullExercise,
+            category: exerciseCategory
+          }
+        : {
+            ...logData.exercise,
+            category: exerciseCategory
+          };
+
+      console.log('Final exercise category:', {
+        name: updatedExercise.name,
+        category: updatedExercise.category,
+        screenTime: updatedExercise.category?.details?.screenTime
+      });
       
       return new ExerciseLog({
         id: logDoc.id,
         workoutId: workoutId,
         userId: userId,
-        exercise: updatedExercise || logData.exercise,
-        logs: logData.log || [],
+        exercise: updatedExercise,
+        logs: logData.logs || [],
         feedback: logData.feedback || '',
         note: logData.note || '',
         recommendedWeight: logData.recommendedWeight || 'calculating...',
@@ -564,6 +635,7 @@ async fetchSavedWorkout(userId: string, workoutId: string): Promise<[Workout | n
         logSubmitted: logData.logSubmitted || false,
         logIsEditing: logData.logIsEditing || false,
         isCompleted: logData.isCompleted || false,
+        order: logData.order || null,
         completedAt: convertFirestoreTimestamp(logData.completedAt),
         createdAt: convertFirestoreTimestamp(logData.createdAt),
         updatedAt: convertFirestoreTimestamp(logData.updatedAt)
@@ -574,7 +646,7 @@ async fetchSavedWorkout(userId: string, workoutId: string): Promise<[Workout | n
     return [workout, logs];
   } catch (error) {
     console.error('Error fetching saved workout:', error);
-    throw error; // Throw the error to see the full stack trace
+    throw error;
   }
 }
 
@@ -651,6 +723,37 @@ async getCollectionById(id: string): Promise<SweatlistCollection> {
     }
   } catch (error) {
     console.error("Error getting collection by ID:", error);
+    throw error;
+  }
+}
+
+// In WorkoutService class
+async getCollectionsByIds(collectionIds: string[]): Promise<SweatlistCollection[]> {
+  try {
+    // Use Promise.all to fetch all collections in parallel
+    const collections = await Promise.all(
+      collectionIds.map(async (id) => {
+        try {
+          const docRef = doc(db, "sweatlist-collection", id);
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            return new SweatlistCollection({
+              id: docSnap.id,
+              ...docSnap.data()
+            });
+          }
+          return null;
+        } catch (error) {
+          console.error(`Error fetching collection ${id}:`, error);
+          return null;
+        }
+      })
+    );
+
+    // Filter out any null values from failed fetches
+    return collections.filter((collection): collection is SweatlistCollection => collection !== null);
+  } catch (error) {
+    console.error("Error fetching collections:", error);
     throw error;
   }
 }
@@ -828,34 +931,20 @@ async fetchCollections(userId: string): Promise<SweatlistCollection[]> {
     }
   
     try {
-      // Create a reference to the collection
       const summaryRef = doc(db, 'users', userId, 'workoutSummary', summary.id);
-  
-      // Convert summary to a plain object for Firestore
-      const summaryData = {
-        id: summary.id,
-        workoutId: summary.workoutId,
-        exercises: summary.exercises,
-        bodyParts: summary.bodyParts,
-        secondaryBodyParts: summary.secondaryBodyParts,
-        workoutTitle: summary.workoutTitle,
-        caloriesBurned: summary.caloriesBurned,
-        workoutRating: summary.workoutRating,
-        exercisesCompleted: summary.exercisesCompleted,
-        aiInsight: summary.aiInsight,
-        recommendations: summary.recommendations,
-        gifURLs: summary.gifURLs,
-        recommendedWork: summary.recommendedWork,
-        isCompleted: summary.isCompleted,
-        createdAt: summary.createdAt,
-        updatedAt: new Date(),
-        completedAt: summary.completedAt,
-        duration: summary.duration
-      };
-  
-      // Set data with merge enabled (equivalent to Swift's setData with merge: true)
+
+      // Update the updatedAt timestamp
+      summary.updatedAt = new Date();
+
+      // Use the toDictionary method to convert to Firestore format
+      const summaryData = summary.toDictionary();
+
+      console.log('Updating workout summary:', {
+        path: `users/${userId}/workoutSummary/${summary.id}`,
+        data: summaryData
+      });
+
       await setDoc(summaryRef, summaryData, { merge: true });
-  
       console.log('Workout summary document updated successfully');
     } catch (error) {
       console.error('Error updating workout summary:', error);
@@ -1137,6 +1226,27 @@ async deleteWorkoutSession(workoutId: string | null): Promise<void> {
     }
    }
 
+   // Add the updateUserChallenge method
+  async updateUserChallenge(challenge: UserChallenge): Promise<void> {
+    if (!userService.currentUser?.id) {
+        throw new Error('No user is signed in');
+    }
+
+    try {
+        const challengeRef = doc(db, 'user-challenge', challenge.id);
+        const challengeData = {
+            ...challenge,
+            updatedAt: new Date()
+        };
+
+        await setDoc(challengeRef, challengeData, { merge: true });
+        console.log('User challenge updated successfully');
+    } catch (error) {
+        console.error('Error updating user challenge:', error);
+        throw error;
+    }
+  }
+
   async updateCollection(collection: SweatlistCollection): Promise<SweatlistCollection> {
     try {
       const collRef = fsCollection(db, "sweatlist-collection");
@@ -1262,14 +1372,20 @@ async deleteWorkoutSession(workoutId: string | null): Promise<void> {
     userId,
     workout,
     logs
-   }: {
+  }: {
     userId: string,
     workout: Workout,
     logs: ExerciseLog[]
-   }): Promise<Workout | null> {
+  }): Promise<Workout | null> {
     if (!userId) throw new Error('No user ID provided');
-   
+
     try {
+      console.log('Incoming logs:', logs.map(log => ({
+        name: log.exercise.name,
+        category: log.exercise.category,
+        originalType: log.exercise.category?.type
+      })));
+
       const currentDate = new Date();
       
       const cleanWorkout = new Workout({
@@ -1280,20 +1396,55 @@ async deleteWorkoutSession(workoutId: string | null): Promise<void> {
         updatedAt: currentDate,
         startTime: currentDate,
         logs: []
-       });
-   
+      });
+
       const workoutSessionRef = doc(collection(db, 'users', userId, 'workoutSessions'));
       await setDoc(workoutSessionRef, cleanWorkout.toDictionary());
-   
+
       const logsRef = collection(workoutSessionRef, 'logs');
       const logBatch = writeBatch(db);
-   
+
       logs.forEach((log, index) => {
         const logDocRef = doc(logsRef, `${log.id}-${currentDate.getTime()}`);
+        
+        console.log(`Processing log ${index}:`, {
+          name: log.exercise.name,
+          originalCategory: log.exercise.category,
+          originalType: log.exercise.category?.type
+        });
+
+        // Preserve the category structure
+        const exerciseWithCategory = {
+          ...log.exercise.toDictionary(),
+          category: log.exercise.category?.type === 'weight-training' 
+            ? {
+                type: 'weight-training',
+                details: {
+                  sets: log.exercise.category.details?.sets || 3,
+                  reps: log.exercise.category.details?.reps || ['12'],
+                  weight: log.exercise.category.details?.weight || 0,
+                  screenTime: log.exercise.category.details?.screenTime || 0,
+                  selectedVideo: log.exercise.category.details?.selectedVideo || null
+                }
+              }
+            : {
+                type: 'cardio',
+                details: {
+                  duration: log.exercise.category?.details?.duration || 60,
+                  bpm: log.exercise.category?.details?.bpm || 140,
+                  calories: log.exercise.category?.details?.calories || 0,
+                  screenTime: log.exercise.category?.details?.screenTime || 0,
+                  selectedVideo: log.exercise.category?.details?.selectedVideo || null
+                }
+              }
+        };
+
+        console.log(`Saving exercise with category:`, exerciseWithCategory.category);
+
         logBatch.set(logDocRef, {
           id: logDocRef.id,
           workoutId: workoutSessionRef.id,
-          exercise: log.exercise.toDictionary(), // convert the custom Exercise object
+          exercise: exerciseWithCategory,
           order: index,
           createdAt: currentDate.getTime(),
           updatedAt: currentDate.getTime(),
@@ -1301,7 +1452,7 @@ async deleteWorkoutSession(workoutId: string | null): Promise<void> {
           isCompleted: false
         });
       }); 
-   
+
       await logBatch.commit();
       
       return cleanWorkout;
@@ -1309,7 +1460,7 @@ async deleteWorkoutSession(workoutId: string | null): Promise<void> {
       console.error('Error saving workout session:', error);
       throw error;
     }
-   }
+  }
 
   /**
    * Example "join challenge" method using the client SDK (no admin privileges).
