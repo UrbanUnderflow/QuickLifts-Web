@@ -13,18 +13,29 @@ const SweatListCardView: React.FC<SweatListCardViewProps> = ({ log, gifUrls = []
     ? log.exercise.videos[log.exercise.currentVideoPosition || 0]?.videoURL
     : undefined;
 
-    // Get screen time based on category
-    const getScreenTime = (): number | undefined => {
-      if (log.exercise?.category?.type === 'weight-training') {
-        return log.exercise.category.details?.screenTime;
-      } else if (log.exercise?.category?.type === 'cardio') {
-        return log.exercise.category.details?.screenTime;
-      }
-      return undefined;
-    };
-  
-    const screenTime = getScreenTime();
-    console.log('Calculated Screen Time:', screenTime);
+  const calculateScreenTime = (log: ExerciseLog) => {
+    console.log("Full log data:", log);
+    console.log("Exercise category:", log.exercise.category);
+    
+    const screenTime = log.exercise.category?.details?.screenTime;
+    console.log("Raw screenTime value:", screenTime);
+    
+    if (screenTime && screenTime > 0) {
+      // Convert seconds to minutes if needed
+      const minutes = Math.floor(screenTime / 60);
+      const seconds = screenTime % 60;
+      return seconds > 0 ? `${minutes}:${seconds.toString().padStart(2, '0')}` : `${minutes}:00`;
+    }
+    
+    // Default duration based on exercise type
+    if (log.exercise.category?.type === 'cardio') {
+      return `${log.exercise.category.details?.duration || 60}:00`;
+    }
+    return '8:00'; // Default for weight training
+  };
+
+  const screenTime = calculateScreenTime(log);
+  console.log('Calculated Screen Time:', screenTime);
 
   return (
     <div className="flex bg-black-800 bg-opacity-50 rounded-lg h-24 mb-4 overflow-hidden">
@@ -50,18 +61,18 @@ const SweatListCardView: React.FC<SweatListCardViewProps> = ({ log, gifUrls = []
           <h3 className="text-lg font-bold text-white">
             {log.exercise?.name || 'Unknown Exercise'}
           </h3>
-          {screenTime && screenTime > 0 && (
+          {screenTime && screenTime !== '8:00' && (
             <Clock className="w-4 h-4 text-white" />
           )} 
         </div>
         
         <div className="flex items-center gap-4 mt-1">
-          {screenTime && screenTime > 0 ? (
+          {screenTime && screenTime !== '8:00' ? (
             // Show screen time if it exists
             <div className="flex items-center gap-2">
               <Clock className="w-4 h-4 text-[#E0FE10]" />
               <span className="text-sm text-[#E0FE10]">
-                {screenTime} seconds
+                {screenTime}
               </span>
             </div>
           ) : (

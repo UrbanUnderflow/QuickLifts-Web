@@ -29,7 +29,6 @@ const WorkoutPreviewer: React.FC = () => {
 
     const fetchWorkoutByUsernameAndId = async () => {
       try {
-        // First get the user ID from the username
         const user = await userService.getUserByUsername(username as string);
         
         if (!user) {
@@ -37,10 +36,16 @@ const WorkoutPreviewer: React.FC = () => {
           return;
         }
 
-        // Now fetch the workout using the user's ID
         const [fetchedWorkout, fetchedLogs] = await workoutService.fetchSavedWorkout(user.id, id as string);
 
-        console.log("fetched Workout:", fetchedWorkout);
+        console.log("Fetched Workout:", fetchedWorkout);
+        console.log("Fetched Logs:", fetchedLogs);
+        console.log("Exercise Categories:", fetchedLogs?.map(log => ({
+          name: log.exercise.name,
+          category: log.exercise.category,
+          screenTime: log.exercise.category?.details?.screenTime
+        })));
+
         if (fetchedWorkout) {
           setWorkout(fetchedWorkout);
           setLogs(fetchedLogs || []);
@@ -68,6 +73,13 @@ const WorkoutPreviewer: React.FC = () => {
   
     try {
       if (userId) {
+        console.log("Starting workout with logs:", logs.map(log => ({
+          name: log.exercise.name,
+          category: log.exercise.category,
+          type: log.exercise.category?.type,
+          details: log.exercise.category?.details
+        })));
+  
         // Save workout session in Firestore
         const savedWorkout = await workoutService.saveWorkoutSession({
           userId,
@@ -78,7 +90,6 @@ const WorkoutPreviewer: React.FC = () => {
         if (savedWorkout) {
           console.log("Queued workout:", savedWorkout);
           console.log("✅ Queued Workout ID:", savedWorkout.id); // 🔥 Logs workout ID
-
   
           // ✅ Dispatch Redux actions to store workout data
           dispatch(setCurrentWorkout(savedWorkout));
@@ -126,8 +137,14 @@ const WorkoutPreviewer: React.FC = () => {
 
   console.log("Filtered video URLs:", videoURLs);
   
-  console.log("The current Logs before duration is:", logs);
+  console.log("The current Logs before duration calculation:", logs);
+  console.log("Exercise details before duration calculation:", logs.map(log => ({
+    name: log.exercise.name,
+    category: log.exercise.category,
+    screenTime: log.exercise.category?.details?.screenTime
+  })));
   const duration = Workout.estimatedDuration(logs);
+  console.log("Calculated duration:", duration);
 
   return (
     <div className="relative h-screen bg-black">

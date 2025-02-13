@@ -24,10 +24,10 @@ self.__BUILD_MANIFEST = {
       "static/chunks/main.js",
       "static/chunks/pages/_error.js"
     ],
-    "/workout/[username]/[id]": [
+    "/workout/[username]/[id]/[summaryId]": [
       "static/chunks/webpack.js",
       "static/chunks/main.js",
-      "static/chunks/pages/workout/[username]/[id].js"
+      "static/chunks/pages/workout/[username]/[id]/[summaryId].js"
     ]
   },
   "ampFirstPages": []

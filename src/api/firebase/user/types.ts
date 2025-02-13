@@ -153,7 +153,7 @@ export class User {
   }
 
   toShortUser(): ShortUser {
-    return {
+    return new ShortUser({
       id: this.id,
       displayName: this.displayName,
       email: this.email, 
@@ -162,7 +162,7 @@ export class User {
       level: this.level,
       videoCount: this.videoCount,
       profileImage: this.profileImage
-    }
+    })
    }
 }
  
@@ -200,16 +200,60 @@ export class User {
    inches: number;
  }
  
- export interface ShortUser {
-   id: string;
-   displayName: string;
-   email: string;
-   fcmToken?: string | null;
-   username: string;
-   level: UserLevel;
-   videoCount: number;
-   profileImage: ProfileImage;
- }
+ export class ShortUser {
+  id: string;
+  displayName: string;
+  email: string;
+  fcmToken?: string | null;
+  username: string;
+  level: UserLevel;
+  videoCount: number;
+  profileImage: ProfileImage;
+
+  constructor(data: any) {
+    this.id = data.id || '';
+    this.displayName = data.displayName || '';
+    this.email = data.email || '';
+    this.fcmToken = data.fcmToken || null;
+    this.username = data.username || '';
+    this.level = data.level || UserLevel.Novice;
+    this.videoCount = data.videoCount || 0;
+    this.profileImage = data.profileImage ? new ProfileImage(data.profileImage) : new ProfileImage({});
+  }
+
+  // Static factory method to create from Firestore data
+  static fromFirestore(data: any): ShortUser {
+    return new ShortUser(data);
+  }
+
+  // Convert to dictionary for Firestore
+  toDictionary(): { [key: string]: any } {
+    return {
+      id: this.id,
+      displayName: this.displayName,
+      email: this.email,
+      fcmToken: this.fcmToken,
+      username: this.username,
+      level: this.level,
+      videoCount: this.videoCount,
+      profileImage: this.profileImage.toDictionary()
+    };
+  }
+
+  // Helper method to create from User object
+  static fromUser(user: User): ShortUser {
+    return new ShortUser({
+      id: user.id,
+      displayName: user.displayName,
+      email: user.email,
+      fcmToken: user.fcmToken,
+      username: user.username,
+      level: user.level,
+      videoCount: user.videoCount,
+      profileImage: user.profileImage
+    });
+  }
+}
  
  export enum Gender {
    Woman = "woman",
