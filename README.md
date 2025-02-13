@@ -57,12 +57,6 @@ Run the following command to install all necessary dependencies:
 yarn install
 
 
-	3.	Add Environment Variables
-Create a .env file in the root of the project directory and configure the required environment variables. An example .env file is provided:
-
-cp .env.example .env
-
-Update the .env file with your specific keys and values.
 
 Running the Development Server
 
@@ -77,7 +71,7 @@ This command:
 	•	Simulates your serverless functions.
 	•	Proxies API requests (if configured in netlify.toml).
 
-Additional Setup
+Additional Setup(Only take these steps if yarn has errors when running)
 	1.	Yarn Global Path
 Ensure the global Yarn binaries are added to your PATH:
 	•	Add this to your shell configuration file (~/.zshrc or ~/.bashrc):
