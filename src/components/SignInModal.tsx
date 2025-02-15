@@ -458,25 +458,13 @@ const SignInModal: React.FC<SignInModalProps> = ({
       switch (signUpStep) {
         case "initial":
           if (validateEmail()) {
-            console.log("Moving to password step with:", {
-              email,
-              isSignUp,
-              signUpStep,
-              errors,
-              isLoading
-            });
+            
             setSignUpStep("password");
             setShowError(false);
           }
           break;
         case "password":
           if (validatePassword()) {
-            console.log("Starting user creation with:", {
-              email,
-              password,
-              isSignUp,
-              signUpStep
-            });
 
             const { user } = await createUserWithEmailAndPassword(auth, email, password);
 
@@ -503,11 +491,6 @@ const SignInModal: React.FC<SignInModalProps> = ({
             try {
               setIsLoading(true);
               setError(null);
-
-              console.log("Firebase user created:", {
-                uid: userService?.currentUser?.username,
-                email: userService?.currentUser?.email
-              });
         
               if (userService.currentUser) {
                 userService.currentUser.username = username;
