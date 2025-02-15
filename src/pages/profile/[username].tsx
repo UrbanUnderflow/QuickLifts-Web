@@ -403,6 +403,7 @@ useEffect(() => {
                   </h2>
                   <ExerciseGrid
                     userVideos={userVideos}
+                    selectedExercises={[]}
                     onSelectVideo={(exercise) => {
                       console.log(exercise);
                       setSelectedExercise(exercise);
