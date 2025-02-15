@@ -115,12 +115,15 @@ class WorkoutService {
       const exerciseReferences: ExerciseReference[] = [];
       const exerciseLogs: ExerciseLog[] = [];
 
+      console.log("Exercise details passed in:", exerciseDetails);
+
   // Ensure exercise details are valid before processing
   const validExerciseDetails = exerciseDetails.filter(detail => detail?.exercise && detail.exercise.id);
 
   validExerciseDetails.forEach((detail, index) => {
     if (detail.exercise.id == null) { return }
 
+    console.log("Detail being used:", detail);
     // Create the category first
     const category = {
       type: detail.category?.type === 'weight-training' 
@@ -146,27 +149,37 @@ class WorkoutService {
     console.log("Category being used:", category); // Debug log
 
     // Create exercise instance with our new category
-    const exerciseInstance = new Exercise({
+    const exerciseInstance = {
       ...detail.exercise,
-      id: detail.exercise.id || workoutService.generateId(),
-      name: detail.exercise.name || '',
-      author: detail.exercise.author || {
-        userId: workoutAuthor || userService.currentUser?.id,
-        username: workoutAuthor || userService.currentUser?.username
-      },
-      description: detail.exercise.description || '',
-      category: category,  // Use our new category object
-      primaryBodyParts: detail.exercise.primaryBodyParts || [],
-      secondaryBodyParts: detail.exercise.secondaryBodyParts || [],
-      tags: detail.exercise.tags || [],
-      videos: detail.exercise.videos || [],
-      createdAt: detail.exercise.createdAt || new Date(),
-      updatedAt: detail.exercise.updatedAt || new Date()
-    });
+      category: {
+        type: category.type,
+        details: category.type === 'weight-training' 
+          ? {
+              sets: category.details?.sets ?? 3,
+              reps: category.details?.reps ?? ['12'],
+              weight: category.details?.weight ?? 0,
+              screenTime: category.details?.screenTime ?? 0,
+              selectedVideo: category.details?.selectedVideo ?? null
+            }
+          : {
+              duration: category.details?.duration ?? 60,
+              bpm: category.details?.bpm ?? 140,
+              calories: category.details?.calories ?? 0,
+              screenTime: category.details?.screenTime ?? 0,
+              selectedVideo: category.details?.selectedVideo ?? null
+            }
+      }
+    };
+
+    console.log("Exercise instance being used:", exerciseInstance);
+
+    var exerciseInstanceClass = new Exercise(exerciseInstance);
+
+    console.log("Exercise instance Object being used:", exerciseInstanceClass);
 
     // Create exercise reference
     const exerciseRef: ExerciseReference = {
-      exercise: exerciseInstance,
+      exercise: exerciseInstanceClass,
       groupId: detail.groupId || 0
     };
     exerciseReferences.push(exerciseRef);

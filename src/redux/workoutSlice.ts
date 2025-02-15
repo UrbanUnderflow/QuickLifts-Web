@@ -18,6 +18,9 @@ const workoutSlice = createSlice({
   name: 'workout',
   initialState,
   reducers: {
+    clearWorkoutState: (state) => {
+      return initialState;
+    },
     setCurrentWorkout: (state, action: PayloadAction<Workout | null>) => {
       state.currentWorkout = action.payload;
     },
