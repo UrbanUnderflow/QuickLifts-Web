@@ -4,6 +4,10 @@ import { ExerciseLog } from '../../firebase/exercise';
 import { User } from '../../firebase/user';
 import { workoutService } from '../../firebase/workout/service';
 import { userService } from '../../firebase/user/service';
+import { store } from '../../../redux/store';
+import { resetWorkoutState } from '../../../redux/workoutSlice';
+import { db } from '../../../api/firebase/config';
+import { doc, setDoc, writeBatch } from 'firebase/firestore';
 
 export class WorkoutSessionService {
   private static instance: WorkoutSessionService;
@@ -37,14 +41,11 @@ export class WorkoutSessionService {
   private cleanUpWorkoutInProgress() {
     this.isInProgress = false;
     this.startTime = undefined;
-    // Clear local storage
-    localStorage.removeItem('exerciseLogs');
-    localStorage.removeItem('isWorkoutInProgress');
-    localStorage.removeItem('currentWorkout');
-    localStorage.removeItem('currentWorkoutSummary');
     // Reset current workout
     this.currentWorkout = undefined;
     this.currentWorkoutSummary = undefined;
+    store.dispatch(resetWorkoutState());
+
   }
 
   private async updateWorkoutServices(workoutSummary: WorkoutSummary): Promise<void> {
@@ -71,6 +72,49 @@ export class WorkoutSessionService {
     return allEmpty ? 'allEmpty' : 'valid';
   }
 
+  private async updateWorkoutSession(
+    workout: Workout,
+    exerciseLogs: ExerciseLog[],
+    workoutId: string
+  ): Promise<void> {
+    try {
+      const userId = userService.currentUser?.id;
+      if (!userId) {
+        throw new Error('No authenticated user');
+      }
+
+      const workoutRef = doc(db, 'users', userId, 'workoutSessions', workoutId);
+
+      // Update workout with timestamps from logs
+      const newWorkout = new Workout({
+        ...workout,
+        createdAt: exerciseLogs[0]?.createdAt ?? new Date(),
+        updatedAt: exerciseLogs[0]?.updatedAt ?? new Date()
+      });
+
+      this.currentWorkout = newWorkout;
+
+      // Update the workout session document
+      await setDoc(workoutRef, newWorkout.toDictionary());
+      console.log(`Workout session updated successfully at user - ${userId} -> workoutsession: ${newWorkout.id}`);
+
+      // Update all logs within the workout session
+      const batch = writeBatch(db);
+      
+      exerciseLogs.forEach(log => {
+        const logRef = doc(workoutRef, 'logs', log.id);
+        batch.set(logRef, log.toDictionary());
+      });
+
+      await batch.commit();
+      console.log('Exercise logs updated successfully');
+
+    } catch (error) {
+      console.error('Error updating workout session:', error);
+      throw new Error('Failed to update workout session');
+    }
+  }
+  
   // Main functions
   async endWorkout(
     user: User, 
@@ -83,16 +127,38 @@ export class WorkoutSessionService {
     const workoutState = this.validateWorkoutState();
   
     try {
+      let result;
       switch (workoutState) {
         case 'allEmpty':
           if (this.completedExercises.some(log => log.logSubmitted)) {
-            return await this.processWorkoutCompletion(user, userChallenge, startTime, endTime);
+            result = await this.processWorkoutCompletion(user, userChallenge, startTime, endTime);
           } else {
             throw new Error("No logs submitted");
           }
+          break;
         case 'valid':
-          return await this.processWorkoutCompletion(user, userChallenge, startTime, endTime);
+          result = await this.processWorkoutCompletion(user, userChallenge, startTime, endTime);
+          break;
       }
+
+      // Update the workout session with completed status
+      const updatedWorkout = new Workout({
+        ...workout,
+        workoutStatus: WorkoutStatus.Complete,
+        isCompleted: true,
+        completedAt: endTime
+      });
+
+      await this.updateWorkoutSession(
+        updatedWorkout,
+        this.completedExercises,
+        workout.id
+      );
+
+      // Clear the workout session state
+      this.cleanUpWorkoutInProgress();
+
+      return result;
     } catch (error) {
       throw error;
     }

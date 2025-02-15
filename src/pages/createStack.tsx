@@ -418,8 +418,9 @@ const CreateWorkoutExerciseCardView: React.FC<CreateWorkoutExerciseCardViewProps
 
               const screenTimeValue = parseFloat(screenTime) || 0;
               
+              console.log("Exercise detail type:", exerciseDetail);
               // Create the category details based on the current exercise type
-              const categoryDetails = exerciseDetail.category?.type === 'cardio' 
+              const categoryDetails = exerciseDetail.exercise.category?.type === 'cardio' 
                 ? {
                     duration: (exerciseDetail.category?.details as CardioExercise)?.duration || 60,
                     bpm: (exerciseDetail.category?.details as CardioExercise)?.bpm || 140,
@@ -435,6 +436,7 @@ const CreateWorkoutExerciseCardView: React.FC<CreateWorkoutExerciseCardViewProps
                     selectedVideo: selectedVideo
                   };
 
+              console.log("Category details:", categoryDetails);
               // Create the final exercise detail with explicit category structure
               const finalExerciseDetail = new ExerciseDetail({
                 ...exerciseDetail,
@@ -717,8 +719,8 @@ const CreateStackPage: React.FC = () => {
 
       console.log("Here are the final logs:", exerciseLogs);
 
-      await userService.createStack(workout, exerciseLogs);
-      router.push(`/workout/${userService.currentUser.username}/${workout.id}`);
+      // await userService.createStack(workout, exerciseLogs);
+      // router.push(`/workout/${userService.currentUser.username}/${workout.id}`);
     } catch (error) {
       console.error('Error creating stack:', error);
     } finally {
