@@ -5,13 +5,14 @@ import {
   signInWithPopup,
   OAuthProvider,
   UserCredential,
-  AuthError
+  AuthError,
+  createUserWithEmailAndPassword
 } from "firebase/auth";
 import { Camera, X } from "lucide-react";
 import { FitnessGoal, QuizData, SignUpStep } from "../types/AuthTypes";
 import { Gender, WorkoutGoal, } from "../api/firebase/user";
 import { SubscriptionType } from "../api/firebase/user";
-import authService from "../api/firebase/auth";
+import authService, { SignUpData } from "../api/firebase/auth";
 import { userService, User, UserLevel, BodyWeight } from "../api/firebase/user";
 import { auth } from "../api/firebase/config";
 import { useRouter } from 'next/router';
@@ -21,6 +22,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '../redux/store';
 import { toggleDevMode } from '../redux/devModeSlice';
 import { initializeFirebase } from '../api/firebase/config';
+import { setUser } from "../redux/userSlice";
 
 interface SignInModalProps {
   isVisible: boolean;
@@ -456,21 +458,56 @@ const SignInModal: React.FC<SignInModalProps> = ({
       switch (signUpStep) {
         case "initial":
           if (validateEmail()) {
+            console.log("Moving to password step with:", {
+              email,
+              isSignUp,
+              signUpStep,
+              errors,
+              isLoading
+            });
             setSignUpStep("password");
             setShowError(false);
           }
           break;
         case "password":
           if (validatePassword()) {
+            console.log("Starting user creation with:", {
+              email,
+              password,
+              isSignUp,
+              signUpStep
+            });
+
+            const { user } = await createUserWithEmailAndPassword(auth, email, password);
+
+            if (user) {
+              // Get the dispatch function
+              const dispatch = useDispatch();
+              
+              // Create a new User object with proper SubscriptionType
+              const newUser = new User({
+                id: user.uid,
+                email: user.email || '',
+                subscriptionType: SubscriptionType.unsubscribed
+              });
+              
+              dispatch(setUser(newUser));
+
             setSignUpStep("profile");
             setShowError(false);
           }
+        }
           break;
         case "profile":
           if (validateUsername()) {
             try {
               setIsLoading(true);
               setError(null);
+
+              console.log("Firebase user created:", {
+                uid: userService?.currentUser?.username,
+                email: userService?.currentUser?.email
+              });
         
               if (userService.currentUser) {
                 userService.currentUser.username = username;
@@ -1615,3 +1652,4 @@ const SignInModal: React.FC<SignInModalProps> = ({
 };
 
 export default SignInModal;
+
