@@ -17,6 +17,7 @@ import { workoutService } from '../api/firebase/workout/service';
 import UserMenu from '../components/UserMenu'; 
 import { workoutSessionService } from '../api/firebase/workoutSession/service';
 import { useRouter } from 'next/router';
+import { User } from '../api/firebase/user/types';
 
 import { setCurrentWorkout, setCurrentExerciseLogs, setWorkoutSummary } from '../redux/workoutSlice';
 
@@ -247,8 +248,14 @@ const completeWorkout = async () => {
       }
     }
 
+    const userObj = currentUser ? new User(currentUser.id, currentUser) : null;
+    if (!userObj) {
+      console.error('No user found for workout completion');
+      return;
+    }
+
     const result = await workoutSessionService.endWorkout(
-      currentUser,
+      userObj,
       currentWorkoutSession,
       userChallenge || null,
       startTime,

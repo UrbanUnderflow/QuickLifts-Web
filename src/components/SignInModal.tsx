@@ -23,6 +23,7 @@ import { RootState } from '../redux/store';
 import { toggleDevMode } from '../redux/devModeSlice';
 import { initializeFirebase } from '../api/firebase/config';
 import { setUser } from "../redux/userSlice";
+import { useUser } from '../hooks/useUser';
 
 interface SignInModalProps {
   isVisible: boolean;
@@ -102,6 +103,20 @@ const SignInModal: React.FC<SignInModalProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [activeProvider, setActiveProvider] = useState<string | null>(null);
   const [isImageUploading, setIsImageUploading] = useState(false);
+  const currentUser = useUser();
+
+  // Add effect to check if we need to show registration
+  useEffect(() => {
+    if (currentUser && !currentUser.username) {
+      console.log('[SignInModal] User needs to complete registration:', {
+        userId: currentUser.id,
+        hasUsername: !!currentUser.username,
+        timestamp: new Date().toISOString()
+      });
+      setIsSignUp(true);
+      setSignUpStep('profile');
+    }
+  }, [currentUser]);
 
   // Password validation states
   const hasUppercase = /[A-Z]/.test(password);
@@ -125,36 +140,40 @@ const SignInModal: React.FC<SignInModalProps> = ({
   // and update the user document. If the user is unsubscribed, redirect to /subscribe.
   const checkSubscriptionAndProceed = async (user: any) => {
     try {
-      const endpoint =
-        process.env.NODE_ENV === "development"
-          ? "http://localhost:8888"
-          : "https://fitwithpulse.ai";
-      const res = await fetch(`${endpoint}/api/stripe-sync`, {
-        method: "GET",
-        headers: { "Content-Type": "application/json" },
+      console.log('[SignInModal] Checking subscription:', {
+        email: user.email,
+        timestamp: new Date().toISOString()
       });
-      if (res.ok) {
-        const { subscriptionType } = await res.json();
-        // Update the user object with the latest subscription type.
-        user.subscription = subscriptionType;
-        await userService.updateUser(user.uid, user);
+
+      const firestoreUser = await userService.fetchUserFromFirestore(user.uid);
+      
+      if (firestoreUser) {
+        const betaUserHasAccess = await userService.getBetaUserAccess(firestoreUser.email, firestoreUser);
+        
+        console.log('[SignInModal] Access check results:', {
+          betaAccess: betaUserHasAccess,
+          subscriptionType: firestoreUser.subscriptionType,
+          timestamp: new Date().toISOString()
+        });
+
+        // If user has beta access or valid subscription
+        if (betaUserHasAccess || firestoreUser.subscriptionType !== SubscriptionType.unsubscribed) {
+          console.log('[SignInModal] User has access, closing modal');
+          onSignInSuccess?.(user);
+          onClose?.();
+          return;
+        }
+
+        // If user is unsubscribed and not beta
+        if (firestoreUser.subscriptionType === SubscriptionType.unsubscribed) {
+          console.log('[SignInModal] Unsubscribed user, closing modal and redirecting');
+          onClose?.();
+          router.push('/subscribe');
+          return;
+        }
       }
     } catch (err) {
-      console.error("Error syncing subscription:", err);
-    }
-    
-    // Only close if we have a username
-    const firestoreUser = await userService.fetchUserFromFirestore(user.uid);
-    if (firestoreUser?.username) {
-      if (
-        user.subscription === "Unsubscribed" ||
-        user.subscription === (SubscriptionType && SubscriptionType.unsubscribed)
-      ) {
-        router.push("/subscribe");
-      } else {
-        onSignInSuccess?.(user);
-        onClose?.();
-      }
+      console.error("[SignInModal] Error in subscription check:", err);
     }
   };
 
@@ -176,6 +195,10 @@ const SignInModal: React.FC<SignInModalProps> = ({
 
   const handleSocialAuth = async (provider: "google" | "apple") => {
     try {
+      console.log(`[SignInModal] Starting ${provider} auth:`, {
+        timestamp: new Date().toISOString()
+      });
+      
       setIsLoading(true);
       setError(null);
       setActiveProvider(provider);
@@ -193,17 +216,18 @@ const SignInModal: React.FC<SignInModalProps> = ({
           // Fetch or create user in Firestore
           let firestoreUser = await userService.fetchUserFromFirestore(user.uid);
           if (!firestoreUser) {
-            firestoreUser = new User({
+            firestoreUser = new User(user.uid, {
               id: user.uid,
               email: user.email || "",
               displayName: user.displayName || "",
             });
             await userService.updateUser(user.uid, firestoreUser);
           }
+          
           userService.currentUser = firestoreUser;
    
           // Check subscription status first
-          if (firestoreUser.subscriptionType === 'Unsubscribed') {
+          if (firestoreUser.subscriptionType === SubscriptionType.unsubscribed) {
             setSignUpStep('subscription');
             return;
           }
@@ -245,7 +269,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
         console.log('Google Sign In - Firestore User:', firestoreUser);
         
         if (!firestoreUser) {
-          firestoreUser = new User({});
+          firestoreUser = new User(user.uid, {});
           firestoreUser.id = user.uid;
           firestoreUser.email = user.email || "";
           firestoreUser.displayName = user.displayName || "";
@@ -268,7 +292,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
         }
    
         // Check subscription status
-        if (firestoreUser.subscriptionType === 'Unsubscribed') {
+        if (firestoreUser.subscriptionType === SubscriptionType.unsubscribed) {
           console.log("User is unsubscribed, showing subscription step");
           setSignUpStep('subscription');
           return;
@@ -280,7 +304,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
       }
     } catch (error: unknown) {
       // Keep your existing error handling
-      console.error(`${provider} sign-in error:`, error);
+      console.error(`[SignInModal] ${provider} auth error:`, error);
       let errorMessage = "An unexpected error occurred";
       
       if (error instanceof Error) {
@@ -407,7 +431,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
    
         if (!firestoreUser && user.metadata.creationTime === user.metadata.lastSignInTime) {
           addLog("New user detected, creating Firestore document");
-          firestoreUser = new User({
+          firestoreUser = new User(user.uid, {
             id: user.uid,
             email: user.email || "",
             displayName: user.displayName || "",
@@ -419,7 +443,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
           userService.currentUser = firestoreUser;
           
           // Check subscription status
-          if (firestoreUser?.subscriptionType === 'Unsubscribed') {
+          if (firestoreUser?.subscriptionType === SubscriptionType.unsubscribed) {
             setSignUpStep('subscription');
             addLog("User unsubscribed, showing subscription step");
           } else if (user.metadata.creationTime === user.metadata.lastSignInTime) {
@@ -453,89 +477,92 @@ const SignInModal: React.FC<SignInModalProps> = ({
 
    const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('[SignInModal] Form submission started:', {
+      isSignUp,
+      signUpStep,
+      timestamp: new Date().toISOString()
+    });
   
-    if (isSignUp) {
-      switch (signUpStep) {
-        case "initial":
-          if (validateEmail()) {
-            
-            setSignUpStep("password");
-            setShowError(false);
+    if (!isSignUp) {
+      try {
+        setIsLoading(true);
+        setError(null);
+        
+        const result = await authService.signInWithEmail(email, password);
+        const userDoc = await userService.fetchUserFromFirestore(result.user.uid);
+        userService.currentUser = userDoc;
+
+        console.log('[SignInModal] User document:', {
+          hasUsername: !!userDoc?.username,
+          subscriptionType: userDoc?.subscriptionType,
+          timestamp: new Date().toISOString()
+        });
+
+        if (userDoc) {
+          // Check if username is missing
+          if (!userDoc.username) {
+            console.log('[SignInModal] User missing username, starting registration');
+            setIsSignUp(true);
+            setSignUpStep('profile');
+            setIsLoading(false);
+            return;
           }
-          break;
-        case "password":
-          if (validatePassword()) {
 
-            const { user } = await createUserWithEmailAndPassword(auth, email, password);
+          const betaUserHasAccess = await userService.getBetaUserAccess(userDoc.email, userDoc);
+          console.log('[SignInModal] Beta access check:', {
+            hasAccess: betaUserHasAccess,
+            timestamp: new Date().toISOString()
+          });
 
-            if (user) {
-              // Get the dispatch function
-              const dispatch = useDispatch();
-              
-              // Create a new User object with proper SubscriptionType
-              const newUser = new User({
-                id: user.uid,
-                email: user.email || '',
-                subscriptionType: SubscriptionType.unsubscribed
-              });
-              
-              dispatch(setUser(newUser));
+          if (betaUserHasAccess || userDoc.subscriptionType !== SubscriptionType.unsubscribed) {
+            console.log('[SignInModal] User has access, attempting to close modal');
+            onSignInSuccess?.(result.user);
+            onClose?.();
+            return;
+          }
 
-            setSignUpStep("profile");
-            setShowError(false);
+          if (userDoc.subscriptionType === SubscriptionType.unsubscribed) {
+            console.log('[SignInModal] Unsubscribed user, redirecting');
+            onClose?.();
+            router.push('/subscribe');
+            return;
           }
         }
-          break;
-        case "profile":
-          if (validateUsername()) {
-            try {
-              setIsLoading(true);
-              setError(null);
-        
-              if (userService.currentUser) {
-                userService.currentUser.username = username;
-                await userService.updateUser(userService.currentUser.id, userService.currentUser);
-                
-                if (userService.currentUser.subscriptionType === 'Unsubscribed') {
-                  setSignUpStep('subscription');
-                  return;
-                }
-                
-                onRegistrationComplete?.();
-              }
-        
-              setSignUpStep("quiz-prompt");
-            } catch (err) {
-              const error = err as Error;
-              console.error("Error during profile update:", error);
-              setError(error.message);
-            } finally {
-              setIsLoading(false);
-            }
-          }
-          break;
+      } catch (err) {
+        console.error("[SignInModal] Error during sign-in:", err);
+        setError(err instanceof Error ? err.message : 'An error occurred');
+        onSignInError?.(err instanceof Error ? err : new Error('An error occurred'));
+      } finally {
+        setIsLoading(false);
       }
     } else {
       try {
         setIsLoading(true);
         setError(null);
-  
-        const result = await authService.signInWithEmail(email, password);
-        const userDoc = await userService.fetchUserFromFirestore(result.user.uid);
-        userService.currentUser = userDoc;
-  
-        if (userDoc?.subscriptionType === 'Unsubscribed') {
-          setSignUpStep('subscription');
-          return;
+        
+        const { user } = await createUserWithEmailAndPassword(auth, email, password);
+
+        if (user) {
+          // Get the dispatch function
+          const dispatch = useDispatch();
+          
+          // Create a new User object with proper SubscriptionType
+          const newUser = new User(user.uid, {
+            id: user.uid,
+            email: user.email || '',
+            subscriptionType: SubscriptionType.unsubscribed
+          });
+          
+          dispatch(setUser(newUser));
+
+          setSignUpStep("profile");
+          setShowError(false);
         }
-  
-        await checkSubscriptionAndProceed(result.user);
-        onClose?.();
       } catch (err) {
         const error = err as Error;
-        console.error("Error during sign-in:", error);
+        console.error("Error during sign-up:", error);
         setError(error.message);
-        onSignInError?.(error);
+        onSignUpError?.(error);
       } finally {
         setIsLoading(false);
       }
@@ -555,7 +582,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
       }
 
       // Construct the user object with default or empty values
-      var user = userService.currentUser;
+      const currentUser = useUser();
 
       onQuizComplete?.(); // Notify that the quiz is complete
       router.push('/'); // Add this line to route to root
@@ -745,7 +772,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
               setQuizData({ ...quizData, height: newHeight });
               
               if (auth.currentUser?.uid && userService.currentUser) {
-                const updatedUser = new User({
+                const updatedUser = new User(userService.currentUser.id, {
                   ...userService.currentUser.toDictionary(),
                   height: newHeight,
                   updatedAt: new Date()
@@ -772,7 +799,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
               setQuizData({ ...quizData, height: newHeight });
               
               if (auth.currentUser?.uid && userService.currentUser) {
-                const updatedUser = new User({
+                const updatedUser = new User(userService.currentUser.id, {
                   ...userService.currentUser.toDictionary(),
                   height: newHeight,
                   updatedAt: new Date()
@@ -819,7 +846,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
                 newWeight: newWeight
               });
               
-              const updatedUser = new User({
+              const updatedUser = new User(userService.currentUser.id, {
                 ...userService.currentUser.toDictionary(),
                 bodyWeight: [...userService.currentUser.bodyWeight, newBodyWeight],
                 updatedAt: new Date()
@@ -857,7 +884,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
               setQuizData({ ...quizData, gymExperience: level as any });
               
               if (auth.currentUser?.uid && userService.currentUser) {
-                const updatedUser = new User({
+                const updatedUser = new User(userService.currentUser.id, {
                   ...userService.currentUser.toDictionary(),
                   level: levelMap[level as keyof typeof levelMap],
                   updatedAt: new Date()
@@ -914,7 +941,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
               }));
               
               if (auth.currentUser?.uid && userService.currentUser) {
-                const updatedUser = new User({
+                const updatedUser = new User(userService.currentUser.id, {
                   ...userService.currentUser.toDictionary(),
                   goal: updatedGoals.map(g => goalsMap[g]),
                   updatedAt: new Date()
@@ -970,7 +997,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
             setQuizData({ ...quizData, birthdate: date });
             
             if (auth.currentUser?.uid && userService.currentUser) {
-              const updatedUser = new User({
+              const updatedUser = new User(userService.currentUser.id, {
                 ...userService.currentUser.toDictionary(),
                 birthdate: date,
                 updatedAt: new Date()
@@ -1469,6 +1496,22 @@ const SignInModal: React.FC<SignInModalProps> = ({
     setUsername("");
     setProfileImage(null);
   };
+
+  // Add debug logging for props
+  useEffect(() => {
+    console.log('[SignInModal] Props state:', {
+      isVisible,
+      closable,
+      hasOnClose: !!onClose,
+      timestamp: new Date().toISOString()
+    });
+  }, [isVisible, closable, onClose]);
+
+  // Make sure the modal is actually visible
+  if (!isVisible) {
+    console.log('[SignInModal] Modal not visible, not rendering');
+    return null;
+  }
 
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-black z-50 sm:p-6">

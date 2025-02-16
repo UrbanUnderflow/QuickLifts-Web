@@ -5,18 +5,24 @@ import { getFirestore, Firestore } from 'firebase/firestore';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
 import { firebaseConfigs } from './firebase-config';
 
-let firebaseApp: FirebaseApp | undefined;
-let firebaseAuth: Auth | undefined;
-let firebaseDb: Firestore | undefined;
-let firebaseStorage: FirebaseStorage | undefined;
+let firebaseApp: FirebaseApp;
+let firebaseAuth: Auth;
+let firebaseDb: Firestore;
+let firebaseStorage: FirebaseStorage;
 
 export const initializeFirebase = (isDev = false) => {
+  console.log('[Firebase] Starting initialization:', {
+    environment: isDev ? 'development' : 'production',
+    timestamp: new Date().toISOString()
+  });
+
   // Only delete app if it exists
   if (firebaseApp) {
     try {
       deleteApp(firebaseApp);
+      console.log('[Firebase] Existing app deleted successfully');
     } catch (error) {
-      console.error('Error deleting Firebase app:', error);
+      console.error('[Firebase] Error deleting Firebase app:', error);
     }
   }
 
@@ -28,11 +34,22 @@ export const initializeFirebase = (isDev = false) => {
     firebaseDb = getFirestore(firebaseApp);
     firebaseStorage = getStorage(firebaseApp);
 
+    // Set persistence immediately after auth initialization
     if (typeof window !== 'undefined') {
       setPersistence(firebaseAuth, browserLocalPersistence)
-        .then(() => console.log('Firebase persistence set to LOCAL'))
-        .catch((error) => console.error('Error setting persistence:', error));
+        .then(() => console.log('[Firebase] Persistence set successfully to browserLocalPersistence'))
+        .catch((error) => console.error('[Firebase] Error setting persistence:', error));
+    } else {
+      console.log('[Firebase] Skipping persistence setup (non-browser environment)');
     }
+
+    console.log('[Firebase] Initialization complete:', {
+      hasApp: !!firebaseApp,
+      hasAuth: !!firebaseAuth,
+      hasDb: !!firebaseDb,
+      hasStorage: !!firebaseStorage,
+      timestamp: new Date().toISOString()
+    });
 
     return {
       app: firebaseApp,
@@ -41,7 +58,7 @@ export const initializeFirebase = (isDev = false) => {
       storage: firebaseStorage
     };
   } catch (error) {
-    console.error('Error initializing Firebase:', error);
+    console.error('[Firebase] Error during initialization:', error);
     throw error;
   }
 };
@@ -49,12 +66,22 @@ export const initializeFirebase = (isDev = false) => {
 // Get initial mode from localStorage if available
 const getInitialMode = () => {
   if (typeof window !== 'undefined') {
-    return window.localStorage.getItem('devMode') === 'true';
+    const mode = window.localStorage.getItem('devMode') === 'true';
+    console.log('[Firebase] Initial mode:', {
+      isDev: mode,
+      timestamp: new Date().toISOString()
+    });
+    return mode;
   }
   return false;
 };
 
 // Initialize with appropriate config
 const { app, auth, db, storage } = initializeFirebase(getInitialMode());
+
+// Ensure auth is available before exporting
+if (!auth) {
+  throw new Error('[Firebase] Auth was not properly initialized');
+}
 
 export { app, auth, db, storage };

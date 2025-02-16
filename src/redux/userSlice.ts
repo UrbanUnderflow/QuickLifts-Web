@@ -2,7 +2,7 @@ import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { User } from '../api/firebase/user';
 
 interface UserState {
-  currentUser: User | null;
+  currentUser: Record<string, any> | null; // Dictionary representation
   loading: boolean;
 }
 
@@ -15,9 +15,8 @@ const userSlice = createSlice({
   name: 'user',
   initialState,
   reducers: {
-    setUser: (state, action: PayloadAction<User | null>) => {
+    setUser: (state, action: PayloadAction<Record<string, any> | null>) => {
       state.currentUser = action.payload;
-      state.loading = false;
     },
     setLoading: (state, action: PayloadAction<boolean>) => {
       state.loading = action.payload;
