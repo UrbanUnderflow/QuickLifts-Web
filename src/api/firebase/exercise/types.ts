@@ -409,11 +409,6 @@ export class Exercise {
     this.createdAt = convertFirestoreTimestamp(data.createdAt);
     this.updatedAt = convertFirestoreTimestamp(data.updatedAt);
 
-    console.log("data model", data);
-    console.log("id is ", data.category.id);
-
-    console.log("type is ", data.category.type);
-
     if (data.category) {
         this.category = (data.category.id === 'weight-training' || data.category.type === 'weight-training')
             ? {
@@ -441,7 +436,6 @@ export class Exercise {
                 }
               };
     } else {
-      console.log("in side here");
       this.category = {
         type: 'weight-training',
         details: {

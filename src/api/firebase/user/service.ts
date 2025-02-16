@@ -1,7 +1,7 @@
 import { User, FollowRequest } from './types';
 import { Workout } from '../workout';
 import { Exercise, ExerciseVideo, ExerciseAuthor, ExerciseLog } from '../exercise/types';
-import { ProfileImage } from '../user';
+import { ProfileImage, SubscriptionType } from '../user';
 
 import { doc, getDoc, setDoc, documentId, collection, query, where, getDocs, limit, writeBatch, deleteDoc } from 'firebase/firestore';
 import { ref, deleteObject, getStorage } from 'firebase/storage';
@@ -12,11 +12,12 @@ import { setUser } from '../../../redux/userSlice';
 
 class UserService {
   get currentUser(): User | null {
-    return store.getState().user.currentUser;
+    const userDict = store.getState().user.currentUser;
+    return User.fromDictionary(userDict);
   }
 
   set currentUser(user: User | null) {
-    store.dispatch(setUser(user));
+    store.dispatch(setUser(user ? user.toDictionary() : null));
   }
 
   async fetchUserFromFirestore(userId: string): Promise<User | null> {
@@ -27,7 +28,7 @@ class UserService {
       return null;
     }
 
-    return new User(userDoc.data());
+    return new User(userId,userDoc.data());
 }
 
   async updateUser(userId: string, user: User): Promise<void> {
@@ -45,7 +46,7 @@ class UserService {
       const q = query(usersRef, where(documentId(), 'in', chunk));
       const querySnapshot = await getDocs(q);
       querySnapshot.docs.forEach(doc => {
-        users.push(new User({ id: doc.id, ...doc.data() }));
+        users.push(new User(doc.id, { id: doc.id, ...doc.data() }));
       });
     }
     return users;
@@ -58,7 +59,7 @@ class UserService {
         throw new Error('User not found');
       }
    
-      return new User({
+      return new User(userDoc.id, {
         id: userDoc.id,
         ...userDoc.data()
       });
@@ -126,6 +127,101 @@ class UserService {
     } catch (error) {
       console.error('Error deleting stack:', error);
       throw error;
+    }
+  }
+
+  async getBetaUserAccess(email: string, user: User): Promise<boolean> {
+    try {
+      console.log('Starting getBetaUser check:', { 
+        email,
+        currentUserId: user.id,
+        environment: process.env.NODE_ENV,
+        currentSubscription: user.subscriptionType,
+        timestamp: new Date().toISOString()
+      });
+
+      const betaRef = collection(db, 'beta');
+      const betaQuery = query(betaRef, where('email', '==', email.toLowerCase()));
+      const querySnapshot = await getDocs(betaQuery);
+
+      console.log('Beta query results:', {
+        found: !querySnapshot.empty,
+        email: email.toLowerCase(),
+        documentsCount: querySnapshot.size,
+        timestamp: new Date().toISOString()
+      });
+
+      if (querySnapshot.empty) {
+        return false;
+      }
+
+      const document = querySnapshot.docs[0];
+      const isApproved = document.data()?.isApproved as boolean;
+
+      console.log('Beta document data:', {
+        isApproved,
+        documentId: document.id,
+        fullData: document.data()
+      });
+
+      if (!this.currentUser) {
+        console.log('No current user found');
+        return false;
+      }
+
+      if (isApproved) {
+        if (this.currentUser.subscriptionType != SubscriptionType.unsubscribed) {
+          console.log('User already subscribed:', {
+            currentType: user.subscriptionType,
+            action: 'no change needed'
+          });
+          return true;
+        }
+        
+        console.log('Upgrading user to beta:', {
+          user: user,
+          fromType: this.currentUser.subscriptionType,
+          toType: SubscriptionType.beta
+        });
+
+        const updatedUser = new User(user.id, {
+          ...user,
+          subscriptionType: SubscriptionType.beta
+        });
+        
+        await this.updateUser(user.id, updatedUser);
+        console.log('Successfully upgraded user to beta');
+      } else {
+        if (user.subscriptionType == SubscriptionType.beta) {
+          console.log('Downgrading beta user:', {
+            fromType: user.subscriptionType,
+            toType: SubscriptionType.unsubscribed
+          });
+          
+          const updatedUser = new User(user.id, {
+            ...user,
+            subscriptionType: SubscriptionType.unsubscribed
+          });
+          
+          await this.updateUser(user.id, updatedUser);
+          console.log('Successfully downgraded user from beta');
+        } else {
+          console.log('No subscription change needed:', {
+            currentType: user.subscriptionType,
+            betaStatus: 'not approved'
+          });
+        }
+      }
+
+      return isApproved || false;
+    } catch (error) {
+      console.error('Error in getBetaUser:', {
+        error,
+        email,
+        userId: user.id,
+        timestamp: new Date().toISOString()
+      });
+      return false;
     }
   }
 
@@ -427,7 +523,7 @@ class UserService {
       const querySnapshot = await getDocs(usersRef);
       
       return querySnapshot.docs
-        .map(doc => new User({ id: doc.id, ...doc.data() }))
+        .map(doc => new User(doc.id, { id: doc.id, ...doc.data() }))
         .filter(user => user.profileImage?.profileImageURL); // Only return users with profile images
         
     } catch (error) {
@@ -450,7 +546,7 @@ class UserService {
 
       const userData = querySnapshot.docs[0].data();
       
-      return new User({ id: querySnapshot.docs[0].id, ...userData });
+      return new User(querySnapshot.docs[0].id, { id: querySnapshot.docs[0].id, ...userData });
     } catch (error) {
       throw error;
     }
@@ -471,7 +567,7 @@ class UserService {
       const users = querySnapshot.docs
       .map(doc => {
             const data = doc.data();
-            return new User({ id: doc.id, ...data });
+            return new User(doc.id, { id: doc.id, ...data });
         })
         // Filter out users without profile images
         .filter(user => user.profileImage?.profileImageURL)
