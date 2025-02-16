@@ -78,8 +78,8 @@ export class User {
   createdAt: Date;
   updatedAt: Date;
 
-  constructor(data: any) {
-    this.id = data.id || '';
+  constructor(id: string, data: any) {
+    this.id = id;
     this.displayName = data.displayName || '';
     this.email = data.email || '';
     this.username = data.username || '';
@@ -112,6 +112,25 @@ export class User {
     this.videoCount = data.videoCount || 0;
     this.createdAt = convertFirestoreTimestamp(data.createdAt) || null;
     this.updatedAt = convertFirestoreTimestamp(data.updatedAt) || null;
+  }
+
+  static fromDictionary(dict: Record<string, any> | null): User | null {
+    if (!dict) return null;
+    
+    // Convert timestamps back to Date objects
+    const processedData = {
+      ...dict,
+      birthdate: dict.birthdate ? new Date(dict.birthdate * 1000) : null,
+      createdAt: dict.createdAt ? new Date(dict.createdAt * 1000) : null,
+      updatedAt: dict.updatedAt ? new Date(dict.updatedAt * 1000) : null,
+      // Convert any nested objects that need special handling
+      profileImage: dict.profileImage ? new ProfileImage(dict.profileImage) : null,
+      bodyWeight: Array.isArray(dict.bodyWeight) 
+        ? dict.bodyWeight.map((weight: any) => new BodyWeight(weight))
+        : [],
+    };
+
+    return new User(dict.id, processedData);
   }
 
   toDictionary(): Record<string, any> {
