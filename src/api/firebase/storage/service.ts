@@ -118,11 +118,11 @@ export class FirebaseStorageService {
     }
 
     // Create a new User object with updated profile image
-    const updatedUser = new User({
+    const updatedUser = new User(userService.currentUser.id, {
       ...userService.currentUser.toDictionary(),
       profileImage: {
         profileImageURL: imageURL,
-        imageOffsetWidth: 0,  // You might want to make these configurable
+        imageOffsetWidth: 0,
         imageOffsetHeight: 0
       },
       updatedAt: new Date()

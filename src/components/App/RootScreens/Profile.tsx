@@ -121,7 +121,7 @@ const handleProfileImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) 
 
       // Update user's profile image in Firestore
       if (currentUser) {
-        const updatedUser = new User({
+        const updatedUser = new User(currentUser.id, {
           ...currentUser.toDictionary(),
           profileImage: {
             profileImageURL: uploadResult.downloadURL,
