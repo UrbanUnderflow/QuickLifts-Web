@@ -160,9 +160,9 @@ const WorkoutPanel: React.FC<WorkoutPanelProps> = ({
     if (!currentWorkout) return;
     try {
       if (onStartWorkout) {
-        await onStartWorkout(currentWorkout);
+        await onStartWorkout(new Workout(currentWorkout));
       }
-      onClose(); // Close the panel
+      onClose();
     } catch (error) {
       console.error('Error starting workout:', error);
     }

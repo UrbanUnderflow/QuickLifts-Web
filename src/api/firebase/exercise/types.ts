@@ -23,9 +23,17 @@ export interface ExerciseComment {
 }
 
 // Interfaces
-export interface ExerciseReference {
+export class ExerciseReference {
+  exercise: Exercise;
+  groupId: number;
+
+  constructor(data: {
     exercise: Exercise;
-    groupId: number;
+    groupId?: number;
+  }) {
+    this.exercise = data.exercise;
+    this.groupId = data.groupId || 0;
+  }
 }
 
 export enum BodyPart {
@@ -56,12 +64,6 @@ export function isAdvancedBodyPart(bodyPart: BodyPart): boolean {
 
 type ExerciseVisibility = 'limited' | 'secret' | 'live';
 
-
-export interface ExerciseReference {
-  exercise: Exercise;
-  groupId: number;
-}
-
 export class ExerciseLog {
   id: string;
   workoutId: string;
@@ -85,8 +87,23 @@ export class ExerciseLog {
       this.id = data.id || '';
       this.workoutId = data.workoutId || '';
       this.userId = data.userId || '';
-      this.exercise = data.exercise instanceof Exercise ? data.exercise : new Exercise(data.exercise);
-      this.logs = (data.logs || []).map((log: any) => new RepsAndWeightLog(log));
+      
+      // Ensure exercise is always constructed properly
+      if (!data.exercise) {
+        throw new Error('Exercise is required for ExerciseLog');
+      }
+      
+      this.exercise = new Exercise(
+        data.exercise instanceof Exercise 
+          ? data.exercise.toDictionary() 
+          : data.exercise
+      );
+
+      // Ensure logs are always constructed properly
+      this.logs = Array.isArray(data.logs) 
+        ? data.logs.map((log: any) => new RepsAndWeightLog(log))
+        : [];
+
       this.feedback = data.feedback || '';
       this.note = data.note || '';
       this.recommendedWeight = data.recommendedWeight || 'calculating...';
@@ -410,43 +427,39 @@ export class Exercise {
     this.updatedAt = convertFirestoreTimestamp(data.updatedAt);
 
     if (data.category) {
-        this.category = (data.category.id === 'weight-training' || data.category.type === 'weight-training')
-            ? {
-                type: 'weight-training',
-                details: {
-                  sets: data.category.sets ?? 3,
-                  reps: Array.isArray(data.category.reps) 
-                    ? data.category.reps 
-                    : [data.category.reps || '12'],
-                  weight: data.category.weight ?? 0,
-                  screenTime: data.category.screenTime || 0,
-                  selectedVideo: data.category.selectedVideo ?? null
-                }
-              }
-            : {
-                type: 'weight-training',  // Default to weight-training instead of cardio
-                details: {
-                  sets: data.category.sets ?? 3,
-                  reps: Array.isArray(data.category.reps) 
-                    ? data.category.reps 
-                    : [data.category.reps || '12'],
-                  weight: data.category.weight ?? 0,
-                  screenTime: data.category.screenTime || 0,
-                  selectedVideo: data.category.selectedVideo ?? null
-                }
-              };
+        const categoryType = data.category.type || data.category.id;
+        
+        this.category = {
+            type: categoryType,
+            details: {
+                ...(data.category.details || {}),
+                // Convert selectedVideo to ExerciseVideo instance if it exists
+                ...(data.category.details?.selectedVideo ? {
+                    selectedVideo: new ExerciseVideo(data.category.details.selectedVideo)
+                } : {}),
+                // If it's raw data format, merge the remaining properties
+                ...((!data.category.details && data.category.sets) ? {
+                    sets: data.category.sets,
+                    reps: data.category.reps || ['12'],
+                    weight: data.category.weight || 0,
+                    screenTime: data.category.screenTime || 0,
+                    selectedVideo: data.category.selectedVideo ? new ExerciseVideo(data.category.selectedVideo) : null
+                } : {})
+            }
+        };
     } else {
-      this.category = {
-        type: 'weight-training',
-        details: {
-          sets: 3,
-          reps: ['12'],
-          weight: 0,
-          screenTime: 0,
-          selectedVideo: null
-        }
-      };
+        this.category = {
+            type: 'weight-training',
+            details: {
+                sets: 3,
+                reps: ['12'],
+                weight: 0,
+                screenTime: 0,
+                selectedVideo: null
+            }
+        };
     }
+
   }
 
   toDictionary(): { [key: string]: any } {
@@ -454,10 +467,10 @@ export class Exercise {
     const categoryData = {
       id: this.category.type,
       ...this.category.details,
-      // Only include selectedVideo if it is defined.
-      ...(this.category.details?.selectedVideo
-        ? { selectedVideo: this.category.details.selectedVideo.toDictionary() }
-        : {})
+      // Only include selectedVideo if it exists and is an ExerciseVideo instance
+      ...(this.category.details?.selectedVideo && this.category.details.selectedVideo instanceof ExerciseVideo
+          ? { selectedVideo: this.category.details.selectedVideo.toDictionary() }
+          : { selectedVideo: null })
     };
 
     const data: { [key: string]: any } = {

@@ -7,6 +7,7 @@ import { RootState } from '../redux/store';
 import { ExerciseLog } from '../api/firebase/exercise';
 import { useDispatch, useSelector } from 'react-redux';
 import { setCurrentWorkout, setCurrentExerciseLogs } from '../redux/workoutSlice';
+import { WorkoutSummary } from '../api/firebase/workout/types';
 
 interface WorkoutReadyViewProps {
   workout: Workout;
@@ -40,7 +41,10 @@ const WorkoutReadyView: React.FC<WorkoutReadyViewProps> = ({
     }
 
     try {
-      await workoutService.cancelWorkout(currentWorkoutSession, workoutService.currentWorkoutSummary);
+      await workoutService.cancelWorkout(
+        new Workout(currentWorkoutSession), 
+        workoutService.currentWorkoutSummary ? new WorkoutSummary(workoutService.currentWorkoutSummary) : null
+      );
       dispatch(setCurrentWorkout(null));
       dispatch(setCurrentExerciseLogs([]));
       console.log('Workout session canceled successfully');

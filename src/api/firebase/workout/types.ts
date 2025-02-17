@@ -1,5 +1,4 @@
-import { ExerciseReference, ExerciseLog, ExerciseAuthor } from '../exercise/types';
-import { BodyPart, ExerciseCategory } from '../exercise/types';
+import { Exercise, ExerciseReference, ExerciseLog, ExerciseAuthor, BodyPart } from '../exercise/types';
 import { convertFirestoreTimestamp, dateToUnixTimestamp } from '../../../utils/formatDate';
 import { workoutService } from '../workout/service';
 import { ShortUser, User } from '../user';
@@ -114,7 +113,6 @@ export class Workout {
   collectionId?: string[] | null;
   roundWorkoutId: string;
   exercises: ExerciseReference[];
-  challenge?: Challenge | null;
   logs?: ExerciseLog[] | null;
   title: string;
   description: string;
@@ -137,43 +135,50 @@ export class Workout {
     this.roundWorkoutId = data.roundWorkoutId !== undefined ? data.roundWorkoutId : '';
     this.title = data.title !== undefined ? data.title : '';
     this.description = data.description !== undefined ? data.description : '';
-    
-    // For numeric fields, default to 0.
     this.duration = data.duration !== undefined ? data.duration : 0;
-    
-    // For boolean fields, default to false.
     this.useAuthorContent = data.useAuthorContent !== undefined ? data.useAuthorContent : false;
     this.isCompleted = data.isCompleted !== undefined ? data.isCompleted : false;
-    
-    // For enum fields (workoutStatus, workoutRating), you can either default to a specific value or null.
     this.workoutStatus = data.workoutStatus !== undefined ? data.workoutStatus : WorkoutStatus.Archived;
     this.workoutRating = data.workoutRating !== undefined ? data.workoutRating : null;
     
-    // For arrays, default to an empty array.
-    this.exercises = data.exercises !== undefined ? data.exercises : [];
+    console.log("Exercises:", data?.exercises);
+    // Use constructors for nested objects
+    this.exercises = Array.isArray(data?.exercises) 
+      ? data.exercises.map((exercise: any) => {
+          if (!exercise?.exercise) return null;
+          return new ExerciseReference({
+            exercise: new Exercise(exercise.exercise),
+            groupId: exercise.groupId
+          });
+        }).filter(Boolean)
+      : [];
+        
+    this.logs = Array.isArray(data?.logs)
+      ? data.logs.map((log: any) => {
+          if (!log?.exercise || !Array.isArray(log?.sets)) return null;
+          return new ExerciseLog({
+            exercise: new Exercise(log.exercise),
+            sets: log.sets.map((set: any) => new RepsAndWeightLog(set))
+          });
+        }).filter(Boolean)
+      : [];
     
-    // For optional objects, default to null if missing.
-    this.challenge = data.challenge !== undefined ? data.challenge : null;
-    this.logs = data.logs !== undefined ? data.logs : null;
-    this.collectionId = data.collectionId !== undefined ? data.collectionId : null;
-    
-    // For dates, if the field exists and is a Date, use it; otherwise default to null (or new Date() for createdAt/updatedAt)
+    // Date handling
     this.startTime = data.startTime ? convertFirestoreTimestamp(data.startTime) : null;
     this.assignedDate = data.assignedDate ? convertFirestoreTimestamp(data.assignedDate) : null;
     this.createdAt = data.createdAt ? convertFirestoreTimestamp(data.createdAt) : new Date();
     this.updatedAt = data.updatedAt ? convertFirestoreTimestamp(data.updatedAt) : new Date();
     
-    // For order, default to null if not provided.
     this.order = data.order !== undefined ? data.order : null;
 
-    // In Workout constructor:
+    // Author handling
     if (data.author?.username) {
       this.author = data.author.userId;
       workoutService.revertAuthorFormat(this.id, this.author);
     } else {
-      this.author = data.author
+      this.author = data.author;
     }
-    // For zone, default to FullBody (or any other default you prefer)
+    
     this.zone = data.zone !== undefined ? data.zone : BodyZone.FullBody;
   }
 
@@ -355,7 +360,6 @@ export class Workout {
       startTime: this.startTime ? dateToUnixTimestamp(this.startTime) : null,
       order: this.order || null,
       collectionId: this.collectionId || null,
-      challenge: this.challenge || null
     };
 
     // Validate data before returning

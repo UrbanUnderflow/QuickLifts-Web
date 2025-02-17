@@ -18,6 +18,7 @@ import UserMenu from '../components/UserMenu';
 import { workoutSessionService } from '../api/firebase/workoutSession/service';
 import { useRouter } from 'next/router';
 import { User } from '../api/firebase/user/types';
+import { useCurrentWorkout, useCurrentExerciseLogs } from '../hooks/useWorkout';
 
 import { setCurrentWorkout, setCurrentExerciseLogs, setWorkoutSummary } from '../redux/workoutSlice';
 
@@ -29,8 +30,8 @@ const HomeContent = () => {
 
   const { currentUser } = useSelector((state: RootState) => state.user);
   const userId = currentUser?.id;
-  const currentWorkoutSession = useSelector((state: RootState) => state.workout.currentWorkout);
-  const currentExerciseLogs = useSelector((state: RootState) => state.workout.currentExerciseLogs);
+  const currentWorkoutSession = useCurrentWorkout();
+  const currentExerciseLogs = useCurrentExerciseLogs();
   const workoutSummary = useSelector((state: RootState) => state.workout.workoutSummary); // Add this
 
   const dispatch = useDispatch();
@@ -53,17 +54,23 @@ const HomeContent = () => {
 
           if (inProgressSessions.length > 0) {
             const currentSession = inProgressSessions[0];
-          
-            const nextExerciseIndex = currentSession.logs?.findIndex(log => !log.logSubmitted) ?? 0;
+            if (currentSession.workout) {
+              const nextExerciseIndex = currentSession.logs?.findIndex(log => !log.logSubmitted) ?? 0;
 
-            dispatch(setCurrentWorkout(currentSession.workout));
-            dispatch(setCurrentExerciseLogs(currentSession.logs || []));
-            setCurrentExerciseIndex(nextExerciseIndex >= 0 ? nextExerciseIndex : 0);
-
+              dispatch(setCurrentWorkout(currentSession.workout.toDictionary()));
+              dispatch(setCurrentExerciseLogs(
+                (currentSession.logs || []).map(log => log.toDictionary())
+              ));
+              setCurrentExerciseIndex(nextExerciseIndex >= 0 ? nextExerciseIndex : 0);
+            }
           } else if (queuedUpSessions.length > 0) {
             const currentSession = queuedUpSessions[0];
-            dispatch(setCurrentWorkout(currentSession.workout));
-            dispatch(setCurrentExerciseLogs(currentSession.logs || []));
+            if (currentSession.workout) {
+              dispatch(setCurrentWorkout(currentSession.workout.toDictionary()));
+              dispatch(setCurrentExerciseLogs(
+                (currentSession.logs || []).map(log => log.toDictionary())
+              ));
+            }
           } else {
             dispatch(setCurrentWorkout(null));
             dispatch(setCurrentExerciseLogs([]));
@@ -79,8 +86,8 @@ const HomeContent = () => {
   
     // Function to start a workout
     const startWorkout = (workout: Workout, logs: ExerciseLog[]) => {
-      dispatch(setCurrentWorkout(workout));
-      dispatch(setCurrentExerciseLogs(logs));
+      dispatch(setCurrentWorkout(workout.toDictionary()));
+      dispatch(setCurrentExerciseLogs(logs.map(log => log.toDictionary())));
     };
   
     // Function to begin the workout (move from ready to in-progress)
@@ -90,19 +97,17 @@ const HomeContent = () => {
           ...currentWorkoutSession,
           workoutStatus: WorkoutStatus.InProgress
         });
-        dispatch(setCurrentWorkout(updatedWorkout));
+        dispatch(setCurrentWorkout(updatedWorkout.toDictionary()));
       }
     };
   
     const completeExercise = async () => {
-      // Validate inputs
       if (!currentWorkoutSession || !currentExerciseLogs.length) {
         console.error('No active workout or logs');
         return;
       }
     
       try {
-        // Get current exercise
         const currentExercise = currentExerciseLogs[currentExerciseIndex]?.exercise;
         const isBodyWeight = currentExerciseLogs[currentExerciseIndex]?.isBodyWeight;
     
@@ -141,7 +146,7 @@ const HomeContent = () => {
             updatedAt: new Date()
           });
     
-          dispatch(setWorkoutSummary(updatedSummary));
+          dispatch(setWorkoutSummary(updatedSummary.toDictionary()));
         }
     
         // Handle bodyweight vs regular exercise submission
@@ -151,20 +156,19 @@ const HomeContent = () => {
           await performExerciseSubmission(updatedLogs);
         }
     
-        // Update Redux state
-        dispatch(setCurrentExerciseLogs(updatedLogs));
+        // Update Redux state with serialized logs
+        dispatch(setCurrentExerciseLogs(updatedLogs.map(log => log.toDictionary())));
     
         // Find next incomplete exercise
         const nextIndex = updatedLogs.findIndex(log => !log.logSubmitted);
         
-        // Important: Add a small delay before moving to next exercise
         setTimeout(() => {
           if (nextIndex !== -1) {
             setCurrentExerciseIndex(nextIndex);
           } else {
             completeWorkout();
           }
-        }, 100); // Small delay to ensure state updates are processed
+        }, 100);
     
       } catch (error) {
         console.error('Error submitting exercise:', error);
@@ -172,7 +176,6 @@ const HomeContent = () => {
     };
   
     const performBodyWeightSubmission = (updatedLogs: ExerciseLog[]) => {
-      // Similar to Swift version, but simplified for React
       const updatedLogsWithBodyWeight = updatedLogs.map(log => new ExerciseLog({
         ...log,
         logs: log.logs.map(logItem => new RepsAndWeightLog({
@@ -290,10 +293,9 @@ const performExerciseSubmission = async (updatedLogs: ExerciseLog[]) => {
       // Update WorkoutSessionService's completed exercises
       workoutSessionService.completedExercises = updatedLogs;
 
-      // Update Redux state
-      dispatch(setCurrentExerciseLogs(updatedLogs));
+      // Update Redux state with serialized logs
+      dispatch(setCurrentExerciseLogs(updatedLogs.map(log => log.toDictionary())));
 
-      // Move to next exercise or complete workout
       if (currentExerciseIndex < updatedLogs.length - 1) {
         setCurrentExerciseIndex(prev => prev + 1);
       } else {
@@ -309,7 +311,8 @@ const performExerciseSubmission = async (updatedLogs: ExerciseLog[]) => {
   const handleCancelWorkout = async () => {
     if (currentWorkoutSession && userId) {
       try {
-        await workoutService.cancelWorkout(currentWorkoutSession, workoutSummary);
+        const summary = workoutSummary ? new WorkoutSummary(workoutSummary) : null;
+        await workoutService.cancelWorkout(currentWorkoutSession, summary);
         setCurrentExerciseIndex(0);
       } catch (error) {
         console.error('Error canceling workout:', error);

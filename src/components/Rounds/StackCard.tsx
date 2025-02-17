@@ -168,7 +168,9 @@ export const StackCard: React.FC<{
 
   // Refresh completion status
   useEffect(() => {
-    console.log("stack in grid: ", workout);
+    if (workout.title === "Testing Screen") {
+      console.log("stack in grid: ", workout);
+    }
   
     if (!challengeStartDate || !isChallengeEnabled) {
       console.log('❌ No challenge date or challenge not enabled');
@@ -198,7 +200,7 @@ export const StackCard: React.FC<{
       isMarkedComplete,
       completedWorkouts: userChallenge?.completedWorkouts
     });
-  
+          
     // Check logs
     const completedViaLogs = workoutDate ? 
       didUserCompleteWorkoutFromLogs(workout, workoutDate, allWorkoutSummaries) : 
