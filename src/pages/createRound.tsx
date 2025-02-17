@@ -13,12 +13,11 @@ import {
 import { userService } from '../api/firebase/user';
 import { workoutService } from '../api/firebase/workout/service';
 import { exerciseService } from '../api/firebase/exercise/service';
-import { Exercise, ExerciseDetail, ExerciseCategory } from '../api/firebase/exercise/types';
+import { Exercise, ExerciseDetail, ExerciseCategory, ExerciseVideo, ExerciseReference, WeightTrainingExercise, CardioExercise } from '../api/firebase/exercise/types';
 import { Workout, SweatlistCollection, Challenge, ChallengeStatus, WorkoutStatus } from '../api/firebase/workout/types';
 import { StackCard } from '../components/Rounds/StackCard'
 import { ExerciseGrid } from '../components/App/ExerciseGrid/ExerciseGrid';
 import { MultiUserSelector } from '../components/App/MultiSelectUser/MultiSelectUser';
-import { GeminiService } from '../api/firebase/gemini/service';
 import { generateId } from '../utils/generateId';
 
 // Type definitions
@@ -72,16 +71,10 @@ interface ChallengeData {
 }
 
 interface MobileChallengeSetupProps {
-  setChallengeData: (
-    start: Date,
-    end: Date,
-    name: string,
-    desc: string,
-    type: SweatlistType,
-    pin: string
-  ) => void;
+  setChallengeData: (startDate: Date, endDate: Date, name: string, desc: string, type: SweatlistType, pinCode: string) => void;
   currentChallengeData: ChallengeData;
   selectedStacks: Workout[];
+  setSelectedStacks: (stacks: Workout[] | ((prev: Workout[]) => Workout[])) => void;
   onRemoveStack: (stackId: string) => void;
   viewModel: ViewModel;
 }
@@ -90,6 +83,7 @@ const MobileChallengeSetupView: React.FC<MobileChallengeSetupProps> = ({
     setChallengeData,
     currentChallengeData,
     selectedStacks,
+    setSelectedStacks,
     onRemoveStack,
     viewModel,
   }) => {
@@ -124,6 +118,128 @@ const MobileChallengeSetupView: React.FC<MobileChallengeSetupProps> = ({
       }
     }, [roundType]);
   
+    const handleStackSelection = (stack: Workout) => {
+      // Ensure proper mapping of exercise details when selecting stacks
+      const mappedExercises = stack.exercises?.map(exercise => {
+        const categoryType = exercise.exercise.category?.type || 'weight-training';
+        const categoryDetails = exercise.exercise.category?.details;
+        const isWeightTraining = categoryType === 'weight-training';
+
+        return new ExerciseDetail({
+          exercise: exercise.exercise,
+          category: {
+            type: categoryType,
+            details: isWeightTraining 
+              ? {
+                  sets: (categoryDetails as WeightTrainingExercise)?.sets || 3,
+                  reps: (categoryDetails as WeightTrainingExercise)?.reps || ['12'],
+                  weight: (categoryDetails as WeightTrainingExercise)?.weight || 0,
+                  screenTime: categoryDetails?.screenTime || 0,
+                  selectedVideo: categoryDetails?.selectedVideo 
+                    ? new ExerciseVideo(categoryDetails.selectedVideo)
+                    : null
+                }
+              : {
+                  duration: (categoryDetails as CardioExercise)?.duration || 60,
+                  bpm: (categoryDetails as CardioExercise)?.bpm || 140,
+                  calories: (categoryDetails as CardioExercise)?.calories || 0,
+                  screenTime: categoryDetails?.screenTime || 0,
+                  selectedVideo: categoryDetails?.selectedVideo 
+                    ? new ExerciseVideo(categoryDetails.selectedVideo)
+                    : null
+                }
+          }
+        });
+      }) || [];
+
+      const updatedStack = new Workout({
+        ...stack,
+        exercises: mappedExercises
+      });
+
+      setChallengeData(
+        startDate,
+        endDate,
+        challengeName,
+        challengeDesc,
+        roundType,
+        pinCode
+      );
+
+      setSelectedStacks(prev => [...prev, updatedStack]);
+    };
+
+    const handleRemoveStack = (stackId: string) => {
+      onRemoveStack(stackId);
+    };
+
+    // When saving/updating the challenge
+    const handleSaveChallenge = async () => {
+      if (!currentChallengeData) return;
+
+      try {
+        // Ensure all stacks have properly mapped exercise details
+        const mappedStacks = selectedStacks.map(stack => {
+          const mappedExercises = stack.exercises?.map(exercise => {
+            const categoryType = exercise.exercise.category?.type || 'weight-training';
+            const categoryDetails = exercise.exercise.category?.details;
+            const isWeightTraining = categoryType === 'weight-training';
+
+            return new ExerciseDetail({
+              exercise: exercise.exercise,
+              category: {
+                type: categoryType,
+                details: isWeightTraining 
+                  ? {
+                      sets: (categoryDetails as WeightTrainingExercise)?.sets || 3,
+                      reps: (categoryDetails as WeightTrainingExercise)?.reps || ['12'],
+                      weight: (categoryDetails as WeightTrainingExercise)?.weight || 0,
+                      screenTime: categoryDetails?.screenTime || 0,
+                      selectedVideo: categoryDetails?.selectedVideo 
+                        ? new ExerciseVideo(categoryDetails.selectedVideo)
+                        : null
+                    }
+                  : {
+                      duration: (categoryDetails as CardioExercise)?.duration || 60,
+                      bpm: (categoryDetails as CardioExercise)?.bpm || 140,
+                      calories: (categoryDetails as CardioExercise)?.calories || 0,
+                      screenTime: categoryDetails?.screenTime || 0,
+                      selectedVideo: categoryDetails?.selectedVideo 
+                        ? new ExerciseVideo(categoryDetails.selectedVideo)
+                        : null
+                    }
+              }
+            });
+          }) || [];
+
+          return new Workout({
+            ...stack,
+            exercises: mappedExercises
+          });
+        });
+
+        // Update challenge data with properly mapped stacks
+        setChallengeData(
+          currentChallengeData.startDate,
+          currentChallengeData.endDate,
+          currentChallengeData.challengeName,
+          currentChallengeData.challengeDesc,
+          currentChallengeData.roundType,
+          currentChallengeData.pinCode
+        );
+
+        // Save to Firebase with properly mapped data
+        await workoutService.saveWorkoutSession({
+          userId: userService.currentUser?.id || '',
+          workout: mappedStacks[0], // Assuming first stack is the main one
+          logs: mappedStacks[0].logs || []
+        });
+
+      } catch (error) {
+        console.error('Error saving challenge:', error);
+      }
+    };
+
     return (
       <div>
         <h1 className="text-2xl font-semibold text-white text-center mb-2">Create a Round</h1>
@@ -190,7 +306,7 @@ const MobileChallengeSetupView: React.FC<MobileChallengeSetupProps> = ({
                     workout={stack}
                     gifUrls={stack.exercises?.map(ex => ex.exercise?.videos?.[0]?.gifURL || '') || []}
                     isChallengeEnabled={false}
-                    onPrimaryAction={() => onRemoveStack(stack.roundWorkoutId || stack.id)}
+                    onPrimaryAction={() => handleStackSelection(stack)}
                     />
                 </div>
               ))}
@@ -340,7 +456,7 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
 
     const [isGenerating, setIsGenerating] = useState(false);
     const [error, setError] = useState<string | null>(null);
-
+    const [generationProgress, setGenerationProgress] = useState('');
 
     const router = useRouter();
     
@@ -527,157 +643,38 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
   const handleGenerateAIRound = async () => {
     try {
       setIsGenerating(true);
-  
-      const geminiService = GeminiService.getInstance();
-      
-      // Get all exercises from selected creators
-      const creatorExercises = await Promise.all(
-        selectedCreators.map(async (creatorId) => {
-          const exercises = await exerciseService.getExercisesByAuthor(creatorId);
-          return exercises;
-        })
-      );
-      
-      // Flatten the array of creator exercises
-      const allCreatorExercises = creatorExercises.flat();
-  
-      // Get the selected exercises from the "Must-Include Moves" tab
-      const mustIncludeExercises = selectedMoves.map(move => move.name);
-  
-      // Get the preferences from the "AI Preferences" tab
-      const preferences = [
-        "Include rest days",
-        "Creator videos only"
-      ].filter(pref => selectedPreferences.includes(pref));
-  
-      // Generate the round structure using Gemini
-      const generatedRound = await geminiService.generateRound(
-        mustIncludeExercises,
-        aiPromptText,
-        preferences,
-        allCreatorExercises,
-        allExercises,
-        challengeData.startDate,
-        challengeData.endDate
-      );
-  
-      console.log('Generated round data:', generatedRound);
-      var createdStacks = [];
-  
-      // Create stacks one at a time and collect them
-      for (const stackData of generatedRound.stacks) {
-        try {
-          const useOnlyCreatorExercises = selectedPreferences.includes("Creator videos only");
+      setError(null);
 
-          // Enrich exercise data and filter out any that couldn't be found
-          const enrichedExercises = stackData.exercises
-            .map((ex) => {
-              try {
-                return enrichExerciseData(ex, allExercises, allCreatorExercises, useOnlyCreatorExercises);
-              } catch (error) {
-                console.warn(`Skipping exercise ${ex.name}: ${error}`);
-                return null;
-              }
-            })
-            .filter((exercise): exercise is ExerciseDetail => exercise !== null);
-
-          // Only create stack if we have at least one valid exercise
-          if (enrichedExercises.length > 0) {
-            // Create the workout and logs
-            const { workout, exerciseLogs } = await workoutService.formatWorkoutAndInitializeLogs(
-              enrichedExercises,
-              userService.currentUser?.id
-            );
-
-            // Update workout with stack data
-            workout.title = stackData.title;
-            workout.description = `${stackData.description} (${enrichedExercises.length} exercises)`;
-            workout.workoutStatus = WorkoutStatus.Archived;
-
-            // Create the stack and store the result
-            const createdStack = await userService.createStack(workout, exerciseLogs);
-            console.log('Created individual stack:', createdStack);
-            
-            if (createdStack) {
-              createdStacks.push(createdStack);
-            }
-          } else {
-            console.warn(`Skipping stack "${stackData.title}" as no valid exercises were found`);
-          }
-        } catch (error) {
-          console.error('Error creating stack:', stackData.title, error);
-          // Continue with next stack instead of throwing
-          continue;
-        }
-      }
-  
-      console.log('All created stacks:', createdStacks);
-  
-      if (createdStacks.length === 0) {
-        throw new Error('No stacks were successfully created');
-      }
-  
-      // Now create the round with the collected stacks
-      const createdAt = new Date();
-      const currentUser = userService.currentUser;
-  
-      if (!currentUser?.id) {
-        throw new Error("No user logged in");
-      }
-  
-      // Create challenge object with form data
-      const challenge = new Challenge({
-        id: "",
-        title: challengeData.challengeName,  // Use form input
-        subtitle: challengeData.challengeDesc,  // Use form input
-        participants: [],
-        status: ChallengeStatus.Draft,
-        startDate: challengeData.startDate,  // Use form input
-        endDate: challengeData.endDate,  // Use form input
-        createdAt,
-        updatedAt: createdAt
+      const response = await fetch('/.netlify/functions/generate-workout-round', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          mustIncludeExercises: selectedMoves.map(move => move.name),
+          userPrompt: aiPromptText,
+          preferences: selectedPreferences,
+          creatorExercises: selectedCreators.map(async (creatorId) => {
+            const exercises = await exerciseService.getExercisesByAuthor(creatorId);
+            return exercises;
+          }),
+          allAvailableExercises: allExercises,
+          startDate: challengeData.startDate,
+          endDate: challengeData.endDate,
+        }),
       });
-  
-      // Create the collection with form data
-      const collection = new SweatlistCollection({
-        id: "",
-        title: challengeData.challengeName,  // Use form input
-        subtitle: challengeData.challengeDesc,  // Use form input
-        pin: challengeData.pinCode,  // Use form input
-        challenge,
-        sweatlistIds: createdStacks.map((stack, index) => ({
-          id: stack.id,
-          sweatlistAuthorId: currentUser.id,
-          sweatlistName: stack.title,
-          order: index + 1
-        })),
-        ownerId: [currentUser.id],
-        participants: [],
-        privacy: challengeData.roundType,  // Use form input
-        createdAt,
-        updatedAt: createdAt
-      });
-  
-      console.log('Collection metadata:', {
-        title: collection.title,
-        subtitle: collection.subtitle,
-        startDate: collection.challenge?.startDate,
-        endDate: collection.challenge?.endDate,
-        type: collection.privacy,
-        pin: collection.pin
-      });
-  
-      const updatedCollection = await workoutService.updateCollection(collection);
-      console.log("Created collection:", updatedCollection);
-      
-      if (updatedCollection) {
-        router.push(`/round/${updatedCollection.id}`);
+
+      if (!response.ok) {
+        throw new Error('Failed to generate workout round');
       }
+
+      const generatedRound = await response.json();
+      console.log('Generated Round Response:', generatedRound);
+
+      // Handle the generated round data as needed
     } catch (error) {
       console.error('Error in handleGenerateAIRound:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Failed to generate workout round. Please try again.';
-      setError(errorMessage);
-
+      setError(error instanceof Error ? error.message : 'Failed to generate workout round. Please try again.');
     } finally {
       setIsGenerating(false);
     }
@@ -700,12 +697,11 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
         title: challengeData.challengeName,
         subtitle: challengeData.challengeDesc,
         participants: [],
-        status: ChallengeStatus.Draft, // Add the required status
+        status: ChallengeStatus.Draft,
         startDate: challengeData.startDate,
         endDate: challengeData.endDate,
         createdAt,
         updatedAt: createdAt
-        // Remove ownerId as it's not part of the Challenge type
       });
   
       // Create SweatlistCollection with proper structure
@@ -1020,6 +1016,7 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
                 setChallengeData={setChallengeData}
                 currentChallengeData={challengeData}
                 selectedStacks={selectedStacks}
+                setSelectedStacks={setSelectedStacks}
                 onRemoveStack={handleRemoveStack}
                 viewModel={viewModel}
             />
@@ -1263,6 +1260,10 @@ const CreateRoundPage: React.FC = () => {
     setChallenge: () => {},
   };
 
+  const handleRemoveStack = (stackId: string) => {
+    setSelectedStacks(prev => prev.filter(stack => stack.id !== stackId));
+  };
+
   return (
     <>
       {/* Mobile view */}
@@ -1274,9 +1275,8 @@ const CreateRoundPage: React.FC = () => {
               setChallengeData={updateChallengeData}
               currentChallengeData={challengeData}
               selectedStacks={selectedStacks}
-              onRemoveStack={(stackId: string) => {
-                setSelectedStacks(selectedStacks.filter(stack => stack.id !== stackId));
-              }}
+              setSelectedStacks={setSelectedStacks}
+              onRemoveStack={handleRemoveStack}
               viewModel={mockViewModel}
             />
           </div>

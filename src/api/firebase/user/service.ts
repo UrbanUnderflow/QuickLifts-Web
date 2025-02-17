@@ -238,22 +238,21 @@ class UserService {
 
     try {
       // Save the workout document
-      console.log("Right before we save: " + JSON.stringify(workout.toDictionary()));
-      // await setDoc(userWorkoutRef, workout.toDictionary());
-      // console.log('Stack created successfully');
+      await setDoc(userWorkoutRef, workout.toDictionary());
+      console.log('Stack created successfully');
 
       // // If there are exercise logs, save them in a batch to the "logs" subcollection
-      // if (exerciseLogs && exerciseLogs.length > 0) {
-      //   const batch = writeBatch(db);
-      //   exerciseLogs.forEach((log, index) => {
-      //     // Set the order (index + 1)
-      //     log.order = index + 1;
-      //     const logRef = doc(collection(userWorkoutRef, 'logs'), log.id);
-      //     batch.set(logRef, log.toDictionary());
-      //   });
-      //   await batch.commit();
-      //   console.log('Exercise logs saved successfully');
-      // }
+      if (exerciseLogs && exerciseLogs.length > 0) {
+        const batch = writeBatch(db);
+        exerciseLogs.forEach((log, index) => {
+          // Set the order (index + 1)
+          log.order = index + 1;
+          const logRef = doc(collection(userWorkoutRef, 'logs'), log.id);
+          batch.set(logRef, log.toDictionary());
+        });
+        await batch.commit();
+        console.log('Exercise logs saved successfully');
+      }
 
       // After successful save, return the workout
       return workout;
@@ -281,10 +280,14 @@ class UserService {
         // Fetch logs for this stack
         const logsRef = collection(doc.ref, 'logs');
         const logsSnapshot = await getDocs(logsRef);
+        console.log("log data:", logsSnapshot.docs.map(logDoc => logDoc.data()));
+
         const logs = logsSnapshot.docs.map(logDoc => 
           new ExerciseLog({ id: logDoc.id, ...logDoc.data() })
         );
   
+        console.log("logs after construction:", logs);
+
         return new Workout({
           ...stackData,
           id: doc.id,

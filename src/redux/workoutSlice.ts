@@ -3,9 +3,9 @@ import { Workout, WorkoutSummary } from '../api/firebase/workout/types';
 import { ExerciseLog } from '../api/firebase/exercise/types';
 
 interface WorkoutState {
-  currentWorkout: Workout | null;
-  currentExerciseLogs: ExerciseLog[];
-  workoutSummary: WorkoutSummary | null;
+  currentWorkout: Record<string, any> | null;
+  currentExerciseLogs: Record<string, any>[];
+  workoutSummary: Record<string, any> | null;
 }
 
 const initialState: WorkoutState = {
@@ -21,13 +21,13 @@ const workoutSlice = createSlice({
     clearWorkoutState: (state) => {
       return initialState;
     },
-    setCurrentWorkout: (state, action: PayloadAction<Workout | null>) => {
+    setCurrentWorkout: (state, action: PayloadAction<Record<string, any> | null>) => {
       state.currentWorkout = action.payload;
     },
-    setCurrentExerciseLogs: (state, action: PayloadAction<ExerciseLog[]>) => {
+    setCurrentExerciseLogs: (state, action: PayloadAction<Record<string, any>[]>) => {
       state.currentExerciseLogs = action.payload;
     },
-    setWorkoutSummary: (state, action: PayloadAction<WorkoutSummary | null>) => {
+    setWorkoutSummary: (state, action: PayloadAction<Record<string, any> | null>) => {
       state.workoutSummary = action.payload;
     },
     resetWorkoutState: (state) => {

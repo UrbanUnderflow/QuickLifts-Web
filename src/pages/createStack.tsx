@@ -1,4 +1,4 @@
-import React, { useState, useEffect, } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/router';
 
 import { CheckCircle, Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
@@ -593,13 +593,14 @@ interface DesktopStackViewProps {
   onCreateStack: () => void;
 }
 
-// Update DesktopStackView
 const DesktopStackView: React.FC<DesktopStackViewProps> = (props) => {
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [allExercises, setAllExercises] = useState<Exercise[]>([]);
   const [selectedExercises, setSelectedExercises] = useState<Exercise[]>([]);
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [filteredExercises, setFilteredExercises] = useState<Exercise[]>([]);
 
+  // Fetch all exercises
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -612,19 +613,24 @@ const DesktopStackView: React.FC<DesktopStackViewProps> = (props) => {
     fetchData();
   }, []);
 
+  // Update selected exercises when exercise details change
   useEffect(() => {
     setSelectedExercises(props.exerciseDetails.map(detail => detail.exercise));
   }, [props.exerciseDetails]);
 
-  const filteredExercises = allExercises
-    .filter(exercise =>
-      selectedUserId ? exercise.author.userId === selectedUserId : true
-    )
-    .filter(exercise =>
-      exercise.name.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+  // Filter exercises based on search and selected user
+  useEffect(() => {
+    const filtered = allExercises
+      .filter(exercise =>
+        selectedUserId ? exercise.author.userId === selectedUserId : true
+      )
+      .filter(exercise =>
+        exercise.name.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    setFilteredExercises(filtered);
+  }, [allExercises, selectedUserId, searchTerm]);
 
-  const handleToggleSelection = (exercise: Exercise) => {
+  const handleToggleSelection = useCallback((exercise: Exercise) => {
     setSelectedExercises((prevSelected) => {
       const alreadySelected = prevSelected.some((ex) => ex.id === exercise.id);
 
@@ -645,7 +651,7 @@ const DesktopStackView: React.FC<DesktopStackViewProps> = (props) => {
         return updatedSelected;
       }
     });
-  };
+  }, [props.exerciseDetails, props.setExerciseDetails]);
 
   return (
     <div className="min-h-screen flex">
@@ -719,8 +725,8 @@ const CreateStackPage: React.FC = () => {
 
       console.log("Here are the final logs:", exerciseLogs);
 
-      // await userService.createStack(workout, exerciseLogs);
-      // router.push(`/workout/${userService.currentUser.username}/${workout.id}`);
+      await userService.createStack(workout, exerciseLogs);
+      router.push(`/workout/${userService.currentUser.username}/${workout.id}`);
     } catch (error) {
       console.error('Error creating stack:', error);
     } finally {
