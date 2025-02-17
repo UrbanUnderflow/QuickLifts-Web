@@ -129,6 +129,7 @@ const WorkoutPreviewer: React.FC = () => {
   .flatMap(exerciseRef => exerciseRef.exercise.videos.map(video => video.videoURL))
   .filter(url => url);
 
+  console.log("preview logs:", logs);
   const duration = Workout.estimatedDuration(logs);
 
   return (

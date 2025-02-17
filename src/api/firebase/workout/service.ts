@@ -52,7 +52,8 @@ class WorkoutService {
 
 // Replace getters/setters to use Redux
   get currentWorkout(): Workout | null {
-    return store.getState().workout.currentWorkout;
+    const workoutData = store.getState().workout.currentWorkout;
+    return workoutData ? new Workout(workoutData) : null;
   }
 
   set currentWorkout(workout: Workout | null) {
@@ -60,7 +61,8 @@ class WorkoutService {
   }
 
   get currentWorkoutLogs(): ExerciseLog[] {
-    return store.getState().workout.currentExerciseLogs;
+    const logsData = store.getState().workout.currentExerciseLogs;
+    return logsData.map(log => new ExerciseLog(log));
   }
 
   set currentWorkoutLogs(logs: ExerciseLog[]) {
@@ -68,7 +70,8 @@ class WorkoutService {
   }
 
   get currentWorkoutSummary(): WorkoutSummary | null {
-    return store.getState().workout.workoutSummary;
+    const summaryData = store.getState().workout.workoutSummary;
+    return summaryData ? new WorkoutSummary(summaryData) : null;
   }
 
   set currentWorkoutSummary(workoutSummary: WorkoutSummary) {
@@ -151,24 +154,21 @@ class WorkoutService {
     // Create exercise instance with our new category
     const exerciseInstance = {
       ...detail.exercise,
-      category: {
-        type: category.type,
-        details: category.type === 'weight-training' 
-          ? {
+      category: category.type === 'weight-training' 
+          ? ExerciseCategory.weightTraining({
               sets: category.details?.sets ?? 3,
               reps: category.details?.reps ?? ['12'],
               weight: category.details?.weight ?? 0,
               screenTime: category.details?.screenTime ?? 0,
               selectedVideo: category.details?.selectedVideo ?? null
-            }
-          : {
+            })
+          : ExerciseCategory.cardio({
               duration: category.details?.duration ?? 60,
               bpm: category.details?.bpm ?? 140,
               calories: category.details?.calories ?? 0,
               screenTime: category.details?.screenTime ?? 0,
               selectedVideo: category.details?.selectedVideo ?? null
-            }
-      }
+            })
     };
 
     console.log("Exercise instance being used:", exerciseInstance);
@@ -994,13 +994,13 @@ async cancelWorkout(workout: Workout | null, workoutSummary: WorkoutSummary | nu
   }
 
   try {    
-      await this.deleteWorkoutSession(workout.id);
-      if (workoutSummary) {
-        await this.deleteWorkoutSummary(workoutSummary.id);
-      }
-      
-      this.cleanUpWorkoutInProgress();
-      console.log("Workout canceled and cleaned up successfully.");
+    await this.deleteWorkoutSession(workout.id);
+    if (workoutSummary) {
+      await this.deleteWorkoutSummary(workoutSummary.id);
+    }
+    
+    this.cleanUpWorkoutInProgress();
+    console.log("Workout canceled and cleaned up successfully.");
   } catch (error) {
     console.error("Error canceling workout:", error);
     throw error;
