@@ -254,7 +254,7 @@ class WorkoutService {
         throw new Error('User not found');
       }
   
-      return new User({
+      return new User(userDoc.id, {
         id: userDoc.id,
         ...userDoc.data() 
       });

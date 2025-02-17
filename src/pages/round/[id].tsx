@@ -514,7 +514,7 @@ const ChallengeDetailView = () => {
                     participants={collection.challenge?.participants || []}
                     messages={messages}
                     onSendMessage={handleSendMessage}
-                    currentUser={currentUser}
+                    currentUser={currentUser ? new User(currentUser.id, currentUser) : null}
                     onCollapse={toggleChatExpansion}
                   />
                 ) : (
