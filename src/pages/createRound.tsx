@@ -14,7 +14,7 @@ import { userService } from '../api/firebase/user';
 import { workoutService } from '../api/firebase/workout/service';
 import { exerciseService } from '../api/firebase/exercise/service';
 import { Exercise, ExerciseDetail, ExerciseCategory, ExerciseVideo, ExerciseReference, WeightTrainingExercise, CardioExercise } from '../api/firebase/exercise/types';
-import { Workout, SweatlistCollection, Challenge, ChallengeStatus, WorkoutStatus } from '../api/firebase/workout/types';
+import { Workout, SweatlistCollection, Challenge, ChallengeStatus, SweatlistIdentifiers, WorkoutStatus } from '../api/firebase/workout/types';
 import { StackCard } from '../components/Rounds/StackCard'
 import { ExerciseGrid } from '../components/App/ExerciseGrid/ExerciseGrid';
 import { MultiUserSelector } from '../components/App/MultiSelectUser/MultiSelectUser';
@@ -610,7 +610,6 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
     creatorExercises: Exercise[],
     useOnlyCreatorExercises: boolean
   ): ExerciseDetail | null => {
-    // For exclusive creator mode, only look in creator exercises
     const exercisePool = useOnlyCreatorExercises ? creatorExercises : allExercises;
     
     const baseExercise = exercisePool.find(ex => 
@@ -619,13 +618,21 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
   
     if (!baseExercise) return null;
   
-    const category: ExerciseCategory = {
-      type: 'weight-training',
-      details: {
-        ...exerciseData.category.details,
-        selectedVideo: baseExercise.videos?.[0] || null
-      }
-    };
+    const category = exerciseData.category.type === 'weight-training' 
+      ? ExerciseCategory.weightTraining({
+          reps: exerciseData.category.details.reps || ['10'],
+          sets: exerciseData.category.details.sets || 3,
+          weight: exerciseData.category.details.weight || 0,
+          screenTime: exerciseData.category.details.screenTime || 60,
+          selectedVideo: baseExercise.videos?.[0] || null
+        })
+      : ExerciseCategory.cardio({
+          duration: exerciseData.category.details.duration || 60,
+          bpm: exerciseData.category.details.bpm || 0,
+          calories: exerciseData.category.details.calories || 0,
+          screenTime: exerciseData.category.details.screenTime || 60,
+          selectedVideo: baseExercise.videos?.[0] || null
+        });
   
     return new ExerciseDetail({
       id: generateId(),
@@ -644,8 +651,19 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
     try {
       setIsGenerating(true);
       setError(null);
-
-      const response = await fetch('/.netlify/functions/generate-workout-round', {
+  
+      // Get all exercises from selected creators
+      const creatorExercises = await Promise.all(
+        selectedCreators.map(async (creatorId) => {
+          const exercises = await exerciseService.getExercisesByAuthor(creatorId);
+          return exercises;
+        })
+      );
+      
+      // Flatten the array of creator exercises
+      const allCreatorExercises = creatorExercises.flat();
+  
+      const response = await fetch('/api/generateRound', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -654,27 +672,149 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
           mustIncludeExercises: selectedMoves.map(move => move.name),
           userPrompt: aiPromptText,
           preferences: selectedPreferences,
-          creatorExercises: selectedCreators.map(async (creatorId) => {
-            const exercises = await exerciseService.getExercisesByAuthor(creatorId);
-            return exercises;
-          }),
+          creatorExercises: allCreatorExercises,
           allAvailableExercises: allExercises,
           startDate: challengeData.startDate,
           endDate: challengeData.endDate,
         }),
       });
-
+  
       if (!response.ok) {
         throw new Error('Failed to generate workout round');
       }
+  
+      const generatedResponse = await response.json();
+      const generatedRound = generatedResponse.choices[0].message.content;
 
-      const generatedRound = await response.json();
-      console.log('Generated Round Response:', generatedRound);
+      // Clean up the response string as a safety measure
+      let cleanedResponse = generatedRound
+        .replace(/^```json\n/, '')
+        .replace(/\n```$/, '')
+        .trim();
 
-      // Handle the generated round data as needed
+      let parsedRound;
+      try {
+        parsedRound = JSON.parse(cleanedResponse);
+      } catch (error) {
+        console.error('Error parsing AI response:', error);
+        console.log('Raw response:', generatedRound);
+        console.log('Cleaned response:', cleanedResponse);
+        throw new Error('Failed to parse AI response');
+      }
+  
+      console.log('Generated round data:', parsedRound);
+      const createdStacks = [];
+      const sweatlistIds = [];
+      let currentOrder = 0;
+
+      for (const stackData of parsedRound.stacks) {
+        currentOrder++;
+        
+        if (stackData.title.toLowerCase() === "rest") {
+          // Just create the SweatlistIdentifier for rest days
+          sweatlistIds.push(new SweatlistIdentifiers({
+            id: "rest-" + generateId(),
+            sweatlistAuthorId: userService.currentUser?.id || '',
+            sweatlistName: "Rest",
+            order: currentOrder,
+            isRest: true
+          }));
+          continue;
+        }
+
+        // Regular workout processing
+        try {
+          const useOnlyCreatorExercises = selectedPreferences.includes("Creator videos only");
+          
+          const enrichedExercises = stackData.exercises
+            .map((ex: ExerciseReference) => {
+              try {
+                return enrichExerciseData(ex, allExercises, allCreatorExercises, useOnlyCreatorExercises);
+              } catch (error) {
+                console.warn(`Skipping exercise ${ex.exercise.name}: ${error}`);
+                return null;
+              }
+            })
+            .filter((exercise: ExerciseDetail | null): exercise is ExerciseDetail => exercise !== null);
+
+          if (enrichedExercises.length > 0) {
+            const { workout, exerciseLogs } = await workoutService.formatWorkoutAndInitializeLogs(
+              enrichedExercises,
+              userService.currentUser?.id
+            );
+
+            workout.title = stackData.title;
+            workout.description = `${stackData.description} (${enrichedExercises.length} exercises)`;
+            workout.workoutStatus = WorkoutStatus.Archived;
+
+            const createdStack = await userService.createStack(workout, exerciseLogs);
+            
+            if (createdStack) {
+              createdStacks.push(createdStack);
+              sweatlistIds.push(new SweatlistIdentifiers({
+                id: createdStack.id,
+                sweatlistAuthorId: userService.currentUser?.id || '',
+                sweatlistName: createdStack.title,
+                order: currentOrder,
+                isRest: false
+              }));
+            }
+          }
+        } catch (error) {
+          console.error('Error creating stack:', stackData.title, error);
+          continue;
+        }
+      }
+
+      if (createdStacks.length === 0) {
+        throw new Error('No stacks were successfully created');
+      }
+  
+      // Create the round with the collected stacks
+      const createdAt = new Date();
+      const currentUser = userService.currentUser;
+  
+      if (!currentUser?.id) {
+        throw new Error("No user logged in");
+      }
+  
+      // Create challenge object
+      const challenge = new Challenge({
+        id: "",
+        title: challengeData.challengeName,
+        subtitle: challengeData.challengeDesc,
+        participants: [],
+        status: ChallengeStatus.Draft,
+        startDate: challengeData.startDate,
+        endDate: challengeData.endDate,
+        createdAt,
+        updatedAt: createdAt
+      });
+  
+      // Create the collection with all sweatlistIds
+      const collection = new SweatlistCollection({
+        id: "",
+        title: challengeData.challengeName,
+        subtitle: challengeData.challengeDesc,
+        pin: challengeData.pinCode,
+        challenge,
+        sweatlistIds: sweatlistIds,
+        ownerId: [currentUser.id],
+        participants: [],
+        privacy: challengeData.roundType,
+        createdAt,
+        updatedAt: createdAt
+      });
+  
+      const updatedCollection = await workoutService.updateCollection(collection);
+      if (updatedCollection) {
+        router.push(`/round/${updatedCollection.id}`);
+      }
+  
     } catch (error) {
       console.error('Error in handleGenerateAIRound:', error);
-      setError(error instanceof Error ? error.message : 'Failed to generate workout round. Please try again.');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to generate workout round';
+      setError(errorMessage);
     } finally {
       setIsGenerating(false);
     }
@@ -740,6 +880,60 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
     }
   };
 
+  const [currentStage, setCurrentStage] = useState(0);
+  const [currentExercise, setCurrentExercise] = useState('');
+  const [fadeState, setFadeState] = useState('fade-in');
+
+  const stages = [
+    "Analyzing moves...",
+    "Optimizing workout flow...",
+    "Structuring your program...",
+    "Almost there..."
+  ];
+
+  useEffect(() => {
+    if (!isGenerating) return;
+
+    let stageTimeout: NodeJS.Timeout;
+    
+    // Function to handle stage progression
+    const progressStage = () => {
+      setFadeState('fade-out');
+      setTimeout(() => {
+        setCurrentStage(prev => {
+          const nextStage = prev + 1;
+          // If we're moving to the last stage, don't set up next timeout
+          if (nextStage === stages.length - 1) {
+            return nextStage;
+          }
+          // Set up next stage transition
+          stageTimeout = setTimeout(progressStage, 10000); // 10 seconds per stage
+          return nextStage;
+        });
+        setFadeState('fade-in');
+      }, 500);
+    };
+
+    // Start with first stage
+    stageTimeout = setTimeout(progressStage, 10000); // First stage lasts 10 seconds
+
+    // Continuously rotate through exercises throughout the entire loading process
+    const exerciseInterval = setInterval(() => {
+      if (allExercises.length > 0) {
+        setFadeState('fade-out');
+        setTimeout(() => {
+          setCurrentExercise(allExercises[Math.floor(Math.random() * allExercises.length)].name);
+          setFadeState('fade-in');
+        }, 500);
+      }
+    }, 2000); // Change exercise every 2 seconds
+
+    return () => {
+      clearTimeout(stageTimeout);
+      clearInterval(exerciseInterval);
+    };
+  }, [isGenerating, allExercises]);
+
   return (
     
     <div className="h-screen flex justify-center gap-6 bg-zinc-900 p-6">
@@ -785,6 +979,14 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
               <p className="text-zinc-400 text-center">
                 Creating your personalized training program using AI. This may take a moment...
               </p>
+              <div className={`text-[#E0FE10] text-lg loading-text-ready ${fadeState === 'fade-in' ? 'loading-text-visible' : 'loading-text-hidden'}`}>
+                {stages[currentStage]}
+              </div>
+              {currentExercise && (
+                <div className={`text-zinc-400 text-sm italic loading-text-ready ${fadeState === 'fade-in' ? 'loading-text-visible' : 'loading-text-hidden'}`}>
+                  {currentExercise}
+                </div>
+              )}
             </div>
           </div>
         </div>

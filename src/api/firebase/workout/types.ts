@@ -141,7 +141,6 @@ export class Workout {
     this.workoutStatus = data.workoutStatus !== undefined ? data.workoutStatus : WorkoutStatus.Archived;
     this.workoutRating = data.workoutRating !== undefined ? data.workoutRating : null;
     
-    console.log("Exercises:", data?.exercises);
     // Use constructors for nested objects
     this.exercises = Array.isArray(data?.exercises) 
       ? data.exercises.map((exercise: any) => {
@@ -589,11 +588,30 @@ export interface WorkoutService {
 }
 
 // SweatlistIdentifiers type
-export interface SweatlistIdentifiers {
+export class SweatlistIdentifiers {
   id: string;
   sweatlistAuthorId: string;
   sweatlistName: string;
   order: number;
+  isRest?: boolean;
+
+  constructor(data: any) {
+    this.id = data.id || '';
+    this.sweatlistAuthorId = data.sweatlistAuthorId || '';
+    this.sweatlistName = data.sweatlistName || '';
+    this.order = data.order || 0;
+    this.isRest = data.isRest || false;
+  }
+
+  toDictionary(): { [key: string]: any } {
+    return {
+      id: this.id,
+      sweatlistAuthorId: this.sweatlistAuthorId,
+      sweatlistName: this.sweatlistName,
+      order: this.order,
+      isRest: this.isRest
+    };
+  }
 }
 
 // Enum for sweatlist type matching Swift implementation
@@ -646,12 +664,9 @@ export class SweatlistCollection {
     this.subtitle = data.subtitle || '';
     this.pin = data.pin || null;
     this.challenge = data.challenge ? new Challenge(data.challenge) : null;
-    this.sweatlistIds = (data.sweatlistIds || []).map((item: any) => ({
-      id: item.id || '',
-      sweatlistAuthorId: item.sweatlistAuthorId || '',
-      sweatlistName: item.sweatlistName || '',
-      order: item.order || 0,
-    }));
+    this.sweatlistIds = (data.sweatlistIds || []).map((item: any) => 
+      new SweatlistIdentifiers(item)
+    );
     // If ownerId is not an array, wrap it in an array.
     if (Array.isArray(data.ownerId)) {
       this.ownerId = data.ownerId;
@@ -673,11 +688,7 @@ export class SweatlistCollection {
       subtitle: this.subtitle,
       pin: this.pin,
       challenge: this.challenge ? this.challenge.toDictionary() : null,
-      sweatlistIds: this.sweatlistIds.map(item => ({
-        id: item.id,
-        sweatlistAuthorId: item.sweatlistAuthorId,
-        order: item.order
-      })),
+      sweatlistIds: this.sweatlistIds.map(item => item.toDictionary()), 
       ownerId: this.ownerId, // Updated to be an array
       privacy: this.privacy,
       createdAt: dateToUnixTimestamp(this.createdAt),

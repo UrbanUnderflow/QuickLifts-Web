@@ -11,10 +11,31 @@
   transform: translateY(0);
 }
 
+.fade-out {
+  opacity: 0;
+}
+
+/* Add our new loading text animations */
+.loading-text-ready {
+  opacity: 0;
+  transition: opacity 0.5s ease-out;
+  will-change: opacity;
+}
+
+.loading-text-visible {
+  opacity: 1;
+}
+
+.loading-text-hidden {
+  opacity: 0;
+}
+
 /* Optional: Add prefers-reduced-motion support */
 @media (prefers-reduced-motion) {
-  .fade-ready {
+  .fade-ready,
+  .loading-text-ready {
     transition: none;
     transform: none;
   }
 }
+

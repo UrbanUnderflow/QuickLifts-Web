@@ -154,14 +154,16 @@ const ChallengeDetailView = () => {
     let sweatlistIds = collection.sweatlistIds;
    
     // Handle rest workouts
-    sweatlistIds = sweatlistIds.map((sweatlistId: SweatlistIdentifiers) => {
+    sweatlistIds = sweatlistIds.map((sweatlistId) => {
       if (sweatlistId.id === "rest" && !sweatlistId.sweatlistAuthorId) {
-        return {
+        return new SweatlistIdentifiers({
           ...sweatlistId,
-          sweatlistAuthorId: userService.currentUser?.id || "default_author"
-        };
+          sweatlistAuthorId: currentUser?.id || ''
+        });
       }
-      return sweatlistId;
+      return sweatlistId instanceof SweatlistIdentifiers 
+        ? sweatlistId 
+        : new SweatlistIdentifiers(sweatlistId);
     });
    
     // Group by author 
@@ -531,89 +533,94 @@ const ChallengeDetailView = () => {
             {/* Stacks Section */}
             <div className="mt-8">
               <div className="flex justify-between items-center mb-4">
-                <h2 className="text-lg font-semibold">Stacks in this Round</h2>
-                {/* <button 
-                  onClick={() => setEditMode(!editMode)}
-                  className="px-3 py-1 text-sm bg-zinc-800 rounded-full hover:bg-zinc-700 transition-colors"
-                >
-                  {editMode ? 'Done' : 'Edit'}
-                </button> */}
+                <h2 className="text-lg font-semibold">Stacks in this Round ({collection?.sweatlistIds.length})</h2>
               </div>
 
               <div className="space-y-4">
-              {workouts.map((workout, index) => {
-                // Calculate workout date based on challenge start date and index
-                const workoutDate = collection?.challenge?.startDate 
-                  ? new Date(new Date(collection.challenge.startDate).getTime() + (index * 24 * 60 * 60 * 1000))
-                  : new Date();
+                {collection?.sweatlistIds.map((sweatlistId, index) => {
+                  // Calculate workout date based on challenge start date and index
+                  const workoutDate = collection?.challenge?.startDate 
+                    ? new Date(new Date(collection.challenge.startDate).getTime() + (index * 24 * 60 * 60 * 1000))
+                    : new Date();
 
-                // Get current day index based on challenge start date
-                const currentDayIndex = collection?.challenge?.startDate ? (() => {
-                  const startDate = new Date(collection.challenge.startDate);
-                  startDate.setHours(0, 0, 0, 0);
-                  const today = new Date();
-                  today.setHours(0, 0, 0, 0);
-                  const diffTime = Math.abs(today.getTime() - startDate.getTime());
-                  return Math.floor(diffTime / (1000 * 60 * 60 * 24));
-                })() : 0;
+                  // Get current day index based on challenge start date
+                  const currentDayIndex = collection?.challenge?.startDate ? (() => {
+                    const startDate = new Date(collection.challenge.startDate);
+                    startDate.setHours(0, 0, 0, 0);
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    const diffTime = Math.abs(today.getTime() - startDate.getTime());
+                    return Math.floor(diffTime / (1000 * 60 * 60 * 24));
+                  })() : 0;
 
-                return workout.id === "rest" ? (
-                  <RestDayCard
-                    key={`rest-${index}`}
-                    selectedOrder={index}
-                    maxOrder={workouts.length}
-                    showArrows={editMode}
-                    showCalendar={true}
-                    workoutDate={workoutDate}
-                    isComplete={false}
-                    challengeStartDate={collection?.challenge?.startDate}
-                    challengeHasStarted={
-                      collection?.challenge?.status === ChallengeStatus.Published && 
-                      new Date() >= new Date(collection?.challenge?.startDate || 0)
-                    }
-                    currentDayIndex={currentDayIndex}
-                    index={index}
-                    onPrimaryAction={() => console.log('Rest day clicked')}
-                    onCalendarTap={(date) => console.log('Rest day calendar tapped:', date)}
-                    onUpdateOrder={(newOrder) => handleSwapOrder(workout, newOrder)}
-                  />
-                ) : (
-                  <StackCard
-                    key={workout.id}
-                    workout={workout}
-                    gifUrls={workout.exercises?.map(ex => {
-                      return ex.exercise?.videos?.[0]?.gifURL || '';
-                    }) || []}
-                    selectedOrder={index}
-                    maxOrder={workouts.length}
-                    showArrows={editMode}
-                    showCalendar={true}
-                    workoutDate={workoutDate}
-                    isComplete={false}
-                    isChallengeEnabled={true}
-                    challengeStartDate={collection?.challenge?.startDate}
-                    challengeHasStarted={
-                      collection?.challenge?.status === ChallengeStatus.Published && 
-                      new Date() >= new Date(collection?.challenge?.startDate || 0)
-                    }
-                    currentDayIndex={currentDayIndex}
-                    userChallenge={userChallenges?.find(uc => uc.userId === currentUser?.id)}
-                    allWorkoutSummaries={[]} // Replace with actual workout summaries
-                    index={index}
-                    onPrimaryAction={async () => {
-                      try {
-                        const user = await userService.getUserById(workout.author);
-                        router.push(`/workout/${user.username}/${workout.id}`);
-                      } catch (error) {
-                        console.error('Error getting user:', error);
-                        // Handle error appropriately
+                  const isComplete = workoutDate < new Date();
+
+                  // Check if this is a rest day
+                  if (sweatlistId.sweatlistName === "Rest") {
+                    return (
+                      <RestDayCard
+                        key={`rest-${index}`}
+                        selectedOrder={index}
+                        maxOrder={collection.sweatlistIds.length}
+                        showArrows={editMode}
+                        showCalendar={true}
+                        workoutDate={workoutDate}
+                        isComplete={isComplete}
+                        challengeStartDate={collection?.challenge?.startDate}
+                        challengeHasStarted={
+                          collection?.challenge?.status === ChallengeStatus.Published && 
+                          new Date() >= new Date(collection?.challenge?.startDate || 0)
+                        }
+                        currentDayIndex={currentDayIndex}
+                        index={index}
+                        onPrimaryAction={() => console.log('Rest day clicked')}
+                        onCalendarTap={(date) => console.log('Rest day calendar tapped:', date)}
+                        onUpdateOrder={(newOrder) => handleSwapOrder(
+                          new Workout({ id: sweatlistId.id, title: "Rest" }), 
+                          newOrder
+                        )}
+                      />
+                    );
+                  }
+
+                  // Find the corresponding workout for non-rest days
+                  const workout = workouts.find(w => w.id === sweatlistId.id);
+                  if (!workout) return null;
+
+                  return (
+                    <StackCard
+                      key={workout.id}
+                      workout={workout}
+                      gifUrls={workout.exercises?.map(ex => ex.exercise?.videos?.[0]?.gifURL || '') || []}
+                      selectedOrder={index}
+                      maxOrder={collection.sweatlistIds.length}
+                      showArrows={editMode}
+                      showCalendar={true}
+                      workoutDate={workoutDate}
+                      isComplete={isComplete}
+                      isChallengeEnabled={true}
+                      challengeStartDate={collection?.challenge?.startDate}
+                      challengeHasStarted={
+                        collection?.challenge?.status === ChallengeStatus.Published && 
+                        new Date() >= new Date(collection?.challenge?.startDate || 0)
                       }
-                     }}
-                    onCalendarTap={(date) => handleCalendarTap(workout, date)}
-                    onUpdateOrder={(newOrder) => handleSwapOrder(workout, newOrder)}
-                  />
-                );
-              })}
+                      currentDayIndex={currentDayIndex}
+                      userChallenge={userChallenges?.find(uc => uc.userId === currentUser?.id)}
+                      allWorkoutSummaries={[]}
+                      index={index}
+                      onPrimaryAction={async () => {
+                        try {
+                          const user = await userService.getUserById(workout.author);
+                          router.push(`/workout/${user.username}/${workout.id}`);
+                        } catch (error) {
+                          console.error('Error getting user:', error);
+                        }
+                      }}
+                      onCalendarTap={(date) => handleCalendarTap(workout, date)}
+                      onUpdateOrder={(newOrder) => handleSwapOrder(workout, newOrder)}
+                    />
+                  );
+                })}
               </div>
             </div>
           </div>

@@ -480,9 +480,50 @@ const SignInModal: React.FC<SignInModalProps> = ({
     console.log('[SignInModal] Form submission started:', {
       isSignUp,
       signUpStep,
+      currentEmail: email,
+      currentUser: auth.currentUser?.email,
       timestamp: new Date().toISOString()
     });
   
+    if (signUpStep === "profile") {
+      try {
+        setIsLoading(true);
+        setError(null);
+        
+        // Check if we have a current user
+        if (!auth.currentUser) {
+          throw new Error("No authenticated user found");
+        }
+
+        console.log('[SignInModal] Updating username for user:', {
+          uid: auth.currentUser.uid,
+          email: auth.currentUser.email,
+          newUsername: username
+        });
+
+        // Update only the username in Firestore
+        const updatedUser = new User(auth.currentUser.uid, {
+          ...userService.currentUser?.toDictionary(),
+          username: username,
+          updatedAt: new Date()
+        });
+        
+        await userService.updateUser(auth.currentUser.uid, updatedUser);
+        console.log('[SignInModal] Username updated successfully');
+        
+        // Move to next step or complete registration
+        setSignUpStep("quiz-prompt");
+        onRegistrationComplete?.();
+        
+      } catch (err) {
+        console.error("[SignInModal] Error updating username:", err);
+        setError(err instanceof Error ? err.message : 'An error occurred');
+      } finally {
+        setIsLoading(false);
+      }
+      return;
+    }
+
     if (!isSignUp) {
       try {
         setIsLoading(true);

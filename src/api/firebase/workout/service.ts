@@ -333,7 +333,6 @@ async updateWorkout(workout: Workout): Promise<void> {
         // Map the exercises in the workout to the full exercise objects with videos
         const mappedExercises = (workoutData.exercises || []).map((exerciseRef: any) => {
           const fullExercise = exercisesWithVideos.find(ex => ex.name === exerciseRef.exercise.name);
-          console.log("This is the mapped exercise: " + fullExercise);
 
           return {
             ...exerciseRef,
