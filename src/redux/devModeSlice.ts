@@ -6,11 +6,13 @@ const getInitialState = () => {
   if (typeof window !== 'undefined') {
     const savedMode = window.localStorage.getItem('devMode');
     return {
-      isDevelopment: savedMode ? JSON.parse(savedMode) : false
+      isDevelopment: savedMode ? JSON.parse(savedMode) : false,
+      dopplerConfig: savedMode ? 'dev_backend' : 'prd_backend'
     };
   }
   return {
-    isDevelopment: false
+    isDevelopment: false,
+    dopplerConfig: 'prd_backend'
   };
 };
 
@@ -20,9 +22,15 @@ const devModeSlice = createSlice({
   reducers: {
     toggleDevMode: (state) => {
       state.isDevelopment = !state.isDevelopment;
+      state.dopplerConfig = state.isDevelopment ? 'dev_backend' : 'prd_backend';
+      
       // Save to localStorage when toggled, only on client side
       if (typeof window !== 'undefined') {
         window.localStorage.setItem('devMode', JSON.stringify(state.isDevelopment));
+        window.localStorage.setItem('dopplerConfig', state.dopplerConfig);
+        
+        // Reload to apply new environment
+        window.location.reload();
       }
     }
   }
