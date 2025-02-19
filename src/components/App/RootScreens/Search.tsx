@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { userService, User, ContentCreatorType } from '../../../api/firebase/user';
 import { Search as SearchIcon, Users, Dumbbell, UserCircle } from 'lucide-react';
-import { exerciseService } from '../../../api/firebase/exercise';
+import { exerciseService, Exercise } from '../../../api/firebase/exercise';
 import { useRouter } from 'next/router';
-import { Exercise } from '../../../api/firebase/exercise';
 
 // Types
 interface SearchCardProps {
@@ -103,8 +102,8 @@ const Search: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [users, setUsers] = useState<User[]>([]);
-  const [featuredUsers, setFeaturedUsers] = useState<User[]>([]);
-  const [featuredExercises, setFeaturedExercises] = useState<Exercise[]>([]);
+  const [filteredExercises, setFilteredExercises] = useState<Exercise[]>([]);
+  const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
 
   const router = useRouter();
 
@@ -142,10 +141,14 @@ const Search: React.FC = () => {
 
   useEffect(() => {
     const loadInitialData = async () => {
-      setIsLoading(true);
       try {
-        const users = await userService.fetchUsersWithVideosUploaded();
-        setFeaturedUsers(users);
+        setIsLoading(true);
+        await exerciseService.fetchExercises();
+        const featuredExercises = await exerciseService.fetchFeaturedExercisesWithVideos();
+        const featuredUsers = await userService.fetchFeaturedUsers();
+        
+        setUsers(featuredUsers);
+        setExercises(featuredExercises);
       } catch (error) {
         console.error('Error loading initial data:', error);
       } finally {
@@ -157,24 +160,30 @@ const Search: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    const loadInitialData = async () => {
-      setIsLoading(true);
-      try {
-        const [users, exercises] = await Promise.all([
-          userService.fetchUsersWithVideosUploaded(),
-          exerciseService.fetchFeaturedExercisesWithVideos(24)
-        ]);
-        setFeaturedUsers(users);
-        setFeaturedExercises(exercises);
-      } catch (error) {
-        console.error('Error loading initial data:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-  
-    loadInitialData();
-  }, []);
+    if (searchQuery.trim() === '') {
+      setFilteredExercises([]);
+      setFilteredUsers([]);
+      return;
+    }
+
+    const lowercasedQuery = searchQuery.toLowerCase();
+
+    if (selectedTab === 'all' || selectedTab === 'exercises') {
+      setFilteredExercises(
+        exercises.filter(exercise =>
+          exercise.name.toLowerCase().includes(lowercasedQuery)
+        )
+      );
+    }
+
+    if (selectedTab === 'all' || selectedTab === 'people') {
+      setFilteredUsers(
+        users.filter(user =>
+          user.username.toLowerCase().includes(lowercasedQuery)
+        )
+      );
+    }
+  }, [searchQuery, selectedTab, exercises, users]);
 
   if (isLoading) {
     return (
@@ -224,99 +233,107 @@ const Search: React.FC = () => {
       {/* Content Area */}
       <div className="pt-4 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         {searchQuery === '' ? (
-        <div className="py-4 ">
-          <h2 className="text-lg font-semibold text-white px-4 mb-4">
-            People
-          </h2>
-          <div className="overflow-x-auto scrollbar-hide">
-          {/* Inner container ensures all items stay on one row */}
-          <div className="flex flex-nowrap space-x-4 px-4 pb-4 min-w-max">
-            {featuredUsers.map((user) => (
-              <div 
-                key={user.id}
-                className="flex-shrink-0 cursor-pointer"
-                onClick={() => handleUserSelect(user)}
-              >
-                <div className="relative w-[150px]">
-                  <div className="aspect-square rounded-2xl overflow-hidden bg-zinc-800">
-                    {user.profileImage?.profileImageURL ? (
-                      <img
-                        src={user.profileImage.profileImageURL}
-                        alt={user.username}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <UserCircle className="w-12 h-12 text-zinc-600" />
-                      </div>
-                    )}
-                    {user.creator?.type?.includes(ContentCreatorType.PersonalTrainer) && (
-                        <div className="absolute bottom-2 right-2">
-                        <div className="bg-[#E0FE10] px-3 py-1 rounded-xl">
-                          <span className="text-xs font-bold text-black tracking-wider">
-                            T R A I N E R
-                          </span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                  <p className="mt-2 text-sm text-white text-center">
-                    @{user.username}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-          </div>
-
+          // Show featured users and exercises when no search query
           <div className="py-4">
             <h2 className="text-lg font-semibold text-white px-4 mb-4">
-              Explore New Moves
+              People
             </h2>
-            <div className="grid grid-cols-3 gap-0">
-              {featuredExercises.map((exercise) => (
-                <div 
-                  key={exercise.id} 
-                  className="cursor-pointer aspect-[2/3]"
-                  onClick={() => handleExerciseSelect(exercise)}
-                >
-                  <div className="relative w-full h-full">
-                    {exercise.videos[0]?.gifURL ? (
-                      <img
-                        src={exercise.videos[0].gifURL}
-                        alt={exercise.name}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-zinc-800">
-                        <Dumbbell className="w-8 h-8 text-zinc-600" />
+            <div className="overflow-x-auto scrollbar-hide">
+              <div className="flex flex-nowrap space-x-4 px-4 pb-4 min-w-max">
+                {users.map((user) => (
+                  <div 
+                    key={user.id}
+                    className="flex-shrink-0 cursor-pointer"
+                    onClick={() => handleUserSelect(user)}
+                  >
+                    <div className="relative w-[150px]">
+                      <div className="aspect-square rounded-2xl overflow-hidden bg-zinc-800">
+                        {user.profileImage?.profileImageURL ? (
+                          <img
+                            src={user.profileImage.profileImageURL}
+                            alt={user.username}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <UserCircle className="w-12 h-12 text-zinc-600" />
+                          </div>
+                        )}
+                        {user.creator?.type?.includes(ContentCreatorType.PersonalTrainer) && (
+                            <div className="absolute bottom-2 right-2">
+                            <div className="bg-[#E0FE10] px-3 py-1 rounded-xl">
+                              <span className="text-xs font-bold text-black tracking-wider">
+                                T R A I N E R
+                              </span>
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    )}
+                      <p className="mt-2 text-sm text-white text-center">
+                        @{user.username}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
+            </div>
+
+            <div className="py-4">
+              <h2 className="text-lg font-semibold text-white px-4 mb-4">
+                Explore New Moves
+              </h2>
+              <div className="grid grid-cols-3 gap-0">
+                {exercises.map((exercise) => (
+                  <div 
+                    key={exercise.id} 
+                    className="cursor-pointer aspect-[2/3]"
+                    onClick={() => handleExerciseSelect(exercise)}
+                  >
+                    <div className="relative w-full h-full">
+                      {exercise.videos[0]?.gifURL ? (
+                        <img
+                          src={exercise.videos[0].gifURL}
+                          alt={exercise.name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center bg-zinc-800">
+                          <Dumbbell className="w-8 h-8 text-zinc-600" />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
-        </div>
         ) : (
           // Search Results
           <div className="divide-y divide-zinc-800">
             {selectedTab === 'all' && (
               <>
                 <div className="px-4 py-2 text-sm font-medium text-zinc-400">People</div>
-                {/* User results would go here */}
+                {filteredUsers.map(user => (
+                  <UserCard key={user.id} user={user} onSelect={handleUserSelect} />
+                ))}
                 <div className="px-4 py-2 text-sm font-medium text-zinc-400">Exercises</div>
-                {/* Exercise results would go here */}
+                {filteredExercises.map(exercise => (
+                  <ExerciseCard key={exercise.id} exercise={exercise} onSelect={handleExerciseSelect} />
+                ))}
               </>
             )}
             {selectedTab === 'people' && (
               <div className="px-4">
-                {/* User results would go here */}
+                {filteredUsers.map(user => (
+                  <UserCard key={user.id} user={user} onSelect={handleUserSelect} />
+                ))}
               </div>
             )}
             {selectedTab === 'exercises' && (
               <div className="px-4">
-                {/* Exercise results would go here */}
+                {filteredExercises.map(exercise => (
+                  <ExerciseCard key={exercise.id} exercise={exercise} onSelect={handleExerciseSelect} />
+                ))}
               </div>
             )}
           </div>

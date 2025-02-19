@@ -555,7 +555,7 @@ class UserService {
     }
   }
 
-  async fetchUsersWithVideosUploaded(): Promise<User[]> {
+  async fetchFeaturedUsers(): Promise<User[]> {
     try {
       // Create a query against the users collection
       const usersRef = collection(db, 'users');

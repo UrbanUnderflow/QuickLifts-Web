@@ -1,5 +1,5 @@
 // src/services/FirebaseStorageService.ts
-import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { getStorage, ref, uploadBytes, getDownloadURL, uploadBytesResumable } from "firebase/storage";
 import { User } from "../../../api/firebase/user";
 import { userService } from "../../../api/firebase/user";
 import { auth } from "../../../api/firebase/config";
@@ -15,6 +15,7 @@ export enum UploadImageType {
 export interface UploadResult {
   gsURL: string;
   downloadURL: string;
+  exerciseId?: string;
 }
 
 export const enum VideoType {
@@ -28,7 +29,8 @@ export class FirebaseStorageService {
 
   async uploadVideo(
       file: File, 
-      videoType: VideoType = VideoType.Exercise
+      videoType: VideoType = VideoType.Exercise,
+      onProgress?: (progress: number) => void
     ): Promise<UploadResult> {
       // Ensure user is authenticated
       const user = auth.currentUser;
@@ -56,13 +58,20 @@ export class FirebaseStorageService {
       const storageRef = ref(getStorage(), storagePath);
   
       try {
-        // Upload the file
-        const snapshot = await uploadBytes(storageRef, file);
+        // Create upload task
+        const uploadTask = uploadBytesResumable(storageRef, file);
         
-        // Get download URL
+        // Add progress listener if callback provided
+        if (onProgress) {
+          uploadTask.on('state_changed', (snapshot) => {
+            const progress = (snapshot.bytesTransferred / snapshot.totalBytes);
+            onProgress(progress);
+          });
+        }
+        
+        // Wait for upload to complete
+        const snapshot = await uploadTask;
         const downloadURL = await getDownloadURL(snapshot.ref);
-        
-        // Construct GS URL (Google Storage URL)
         const gsURL = `gs://${snapshot.ref.bucket}/${snapshot.ref.fullPath}`;
   
         return { gsURL, downloadURL };

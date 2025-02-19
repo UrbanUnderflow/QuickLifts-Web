@@ -21,132 +21,77 @@ if (admin.apps.length === 0) {
 const db = admin.firestore();
 
 async function getExerciseByName(name) {
-    try {
-      const exercisesRef = db.collection('exercises');
-      
-     // First, replace hyphens with spaces
-    const nameWithSpaces = name.replace(/-/g, ' ');
+  if (!name) {
+    throw new Error('Exercise name is required');
+  }
+
+  try {
+    const exercisesRef = db.collection('exercises');
     
-    // Case-insensitive search (if your exercise names are stored with capitalized words)
-    const formattedName = nameWithSpaces
-      .split(' ')
+    // Convert hyphens to spaces and capitalize each word
+    const formattedName = name
+      .split('-')
       .map(word => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ');
 
     console.log('Searching for exercise:', formattedName); // Add logging
-   
-      const snapshot = await exercisesRef.where('name', '==', formattedName).get();
-   
-      if (snapshot.empty) {
-        // Try a case-insensitive search if exact match fails
-        const allExercises = await exercisesRef.get();
-        const matchingDoc = allExercises.docs.find(
-          doc => doc.data().name.toLowerCase() === name.toLowerCase()
-        );
-   
-        if (!matchingDoc) {
-          throw new Error('Exercise not found');
-        }
-   
-        const exerciseData = matchingDoc.data();
-        const exerciseId = matchingDoc.id;
-   
-        // Fetch associated videos
-        const videosRef = db.collection('exerciseVideos');
-        const videosSnapshot = await videosRef
-          .where('exerciseId', '==', exerciseId)
-          .get();
-   
-        const videos = videosSnapshot.docs.map(doc => ({
-          id: doc.id,
-          exerciseId: doc.data().exerciseId || '',
-          username: doc.data().username || '',
-          userId: doc.data().userId || '',
-          videoURL: doc.data().videoURL || '',
-          fileName: doc.data().fileName || '',
-          exercise: doc.data().exercise || '',
-          profileImage: doc.data().profileImage || {},
-          caption: doc.data().caption || '',
-          gifURL: doc.data().gifURL || '',
-          thumbnail: doc.data().thumbnail || '',
-          visibility: doc.data().visibility || 'private',
-          isApproved: doc.data().isApproved || false,
-          createdAt: doc.data().createdAt?.toDate(),
-          updatedAt: doc.data().updatedAt?.toDate()
-        }));
-   
-        return {
-          id: exerciseId,
-          name: exerciseData.name,
-          description: exerciseData.description || '',
-          category: exerciseData.category || {},
-          primaryBodyParts: exerciseData.primaryBodyParts || [],
-          secondaryBodyParts: exerciseData.secondaryBodyParts || [],
-          tags: exerciseData.tags || [],
-          videos: videos,
-          steps: exerciseData.steps || [],
-          visibility: exerciseData.visibility || 'private',
-          currentVideoPosition: exerciseData.currentVideoPosition || 0,
-          sets: exerciseData.sets || 0,
-          reps: exerciseData.reps || '',
-          weight: exerciseData.weight || 0,
-          author: exerciseData.author || {},
-          createdAt: exerciseData.createdAt?.toDate(),
-          updatedAt: exerciseData.updatedAt?.toDate()
-        };
-      }
-   
-      // If we found the exercise on first try
-      const exerciseData = snapshot.docs[0].data();
-      const exerciseId = snapshot.docs[0].id;
-   
-      // Fetch associated videos
-      const videosRef = db.collection('exerciseVideos');
-      const videosSnapshot = await videosRef
-        .where('exerciseId', '==', exerciseId)
-        .get();
-   
-      const videos = videosSnapshot.docs.map(doc => ({
-        id: doc.id,
-        exerciseId: doc.data().exerciseId || '',
-        username: doc.data().username || '',
-        userId: doc.data().userId || '',
-        videoURL: doc.data().videoURL || '',
-        fileName: doc.data().fileName || '',
-        exercise: doc.data().exercise || '',
-        profileImage: doc.data().profileImage || {},
-        caption: doc.data().caption || '',
-        gifURL: doc.data().gifURL || '',
-        thumbnail: doc.data().thumbnail || '',
-        visibility: doc.data().visibility || 'private',
-        isApproved: doc.data().isApproved || false,
-        createdAt: doc.data().createdAt?.toDate(),
-        updatedAt: doc.data().updatedAt?.toDate()
-      }));
-   
-      return {
-        id: exerciseId,
-        name: exerciseData.name,
-        description: exerciseData.description || '',
-        category: exerciseData.category || {},
-        primaryBodyParts: exerciseData.primaryBodyParts || [],
-        secondaryBodyParts: exerciseData.secondaryBodyParts || [],
-        tags: exerciseData.tags || [],
-        videos: videos,
-        steps: exerciseData.steps || [],
-        visibility: exerciseData.visibility || 'private',
-        currentVideoPosition: exerciseData.currentVideoPosition || 0,
-        sets: exerciseData.sets || 0,
-        reps: exerciseData.reps || '',
-        weight: exerciseData.weight || 0,
-        author: exerciseData.author || {},
-        createdAt: exerciseData.createdAt?.toDate(),
-        updatedAt: exerciseData.updatedAt?.toDate()
-      };
-    } catch (error) {
-      throw error;
+
+    const snapshot = await exercisesRef.where('name', '==', formattedName).get();
+
+    if (snapshot.empty) {
+      throw new Error('Exercise not found');
     }
-   }
+
+    const exerciseData = snapshot.docs[0].data();
+    const exerciseId = snapshot.docs[0].id;
+
+    // Fetch associated videos
+    const videosRef = db.collection('exerciseVideos');
+    const videosSnapshot = await videosRef
+      .where('exerciseId', '==', exerciseId)
+      .get();
+
+    const videos = videosSnapshot.docs.map(doc => ({
+      id: doc.id,
+      exerciseId: doc.data().exerciseId || '',
+      username: doc.data().username || '',
+      userId: doc.data().userId || '',
+      videoURL: doc.data().videoURL || '',
+      fileName: doc.data().fileName || '',
+      exercise: doc.data().exercise || '',
+      profileImage: doc.data().profileImage || {},
+      caption: doc.data().caption || '',
+      gifURL: doc.data().gifURL || '',
+      thumbnail: doc.data().thumbnail || '',
+      visibility: doc.data().visibility || 'private',
+      isApproved: doc.data().isApproved || false,
+      createdAt: doc.data().createdAt?.toDate(),
+      updatedAt: doc.data().updatedAt?.toDate()
+    }));
+
+    return {
+      id: exerciseId,
+      name: exerciseData.name,
+      description: exerciseData.description || '',
+      category: exerciseData.category || {},
+      primaryBodyParts: exerciseData.primaryBodyParts || [],
+      secondaryBodyParts: exerciseData.secondaryBodyParts || [],
+      tags: exerciseData.tags || [],
+      videos: videos,
+      steps: exerciseData.steps || [],
+      visibility: exerciseData.visibility || 'private',
+      currentVideoPosition: exerciseData.currentVideoPosition || 0,
+      sets: exerciseData.sets || 0,
+      reps: exerciseData.reps || '',
+      weight: exerciseData.weight || 0,
+      author: exerciseData.author || {},
+      createdAt: exerciseData.createdAt?.toDate(),
+      updatedAt: exerciseData.updatedAt?.toDate()
+    };
+  } catch (error) {
+    throw error;
+  }
+}
 
 exports.handler = async (event) => {
   const headers = {

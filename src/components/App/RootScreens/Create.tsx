@@ -1,22 +1,38 @@
 import React, { useState, useRef, DragEvent, ChangeEvent } from 'react';
+import { useRouter } from 'next/router';
 import { Camera } from 'lucide-react';
+import ProgressBar from '../../../components/App/ProgressBar';
 import { firebaseStorageService, VideoType } from '../../../api/firebase/storage/service';
 import { VideoTrimmer } from '../../../components/VideoTrimmer';
 import Spacer from '../../../components/Spacer';
+import { exerciseService } from '../../../api/firebase/exercise/service';
+
+import { Exercise } from '../../../api/firebase/exercise/types';
 
 const Create: React.FC = () => {
+  const router = useRouter();
+
+  // Drag and video state
   const [isDragOver, setIsDragOver] = useState(false);
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [videoPreview, setVideoPreview] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [showTrimmer, setShowTrimmer] = useState(false);
   
-  // New state for additional fields
+  // Exercise metadata state
   const [exerciseName, setExerciseName] = useState('');
   const [exerciseCategory, setExerciseCategory] = useState('Weight Training');
   const [tags, setTags] = useState<string[]>([]);
   const [caption, setCaption] = useState('');
   const [newTag, setNewTag] = useState('');
+
+  // Modal states
+  const [showSimilarExercises, setShowSimilarExercises] = useState(false);
+  const [isDuplicateExercise, setIsDuplicateExercise] = useState(false);
+  const [similarExercises, setSimilarExercises] = useState<Exercise[]>([]);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [uploadedExerciseId, setUploadedExerciseId] = useState<string>('');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -29,6 +45,7 @@ const Create: React.FC = () => {
     'Calisthenics'
   ];
 
+  // Drag and drop handlers
   const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setIsDragOver(true);
@@ -41,9 +58,10 @@ const Create: React.FC = () => {
   const handleDrop = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setIsDragOver(false);
-    
     const files = e.dataTransfer.files;
-    handleFileSelection(files[0]);
+    if (files.length > 0) {
+      handleFileSelection(files[0]);
+    }
   };
 
   const handleFileInputChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -54,20 +72,16 @@ const Create: React.FC = () => {
   };
 
   const handleFileSelection = (file: File) => {
-    // Validate file type
     const ALLOWED_TYPES = ['video/mp4', 'video/quicktime', 'video/x-msvideo'];
     if (!ALLOWED_TYPES.includes(file.type)) {
       alert('Please upload a valid video file (MP4, AVI, QuickTime)');
       return;
     }
-
-    // Show trimmer instead of directly setting preview
     setVideoFile(file);
     setShowTrimmer(true);
   };
 
   const handleTrimComplete = (trimmedFile: File) => {
-    // Create video preview of trimmed video
     const objectUrl = URL.createObjectURL(trimmedFile);
     setVideoPreview(objectUrl);
     setVideoFile(trimmedFile);
@@ -93,33 +107,90 @@ const Create: React.FC = () => {
     }
   };
 
-  const handleSubmit = async () => {
-    if (!videoFile) return;
+  // Check for similar exercises in Firestore
+  const checkSimilarExercises = async (): Promise<Exercise[]> => {
+    if (!exerciseName.trim()) return [];
+    
+    // Fetch all exercises using the service
+    await exerciseService.fetchExercises();
+    const allExercises = exerciseService.allExercises;
 
+    // Filter exercises by name
+    const similarExercises = allExercises.filter(exercise =>
+      exercise.name.toLowerCase() === exerciseName.trim().toLowerCase()
+    );
+
+    return similarExercises;
+  };
+
+  // Upload video function with progress callback
+  const uploadVideo = async () => {
+    if (!videoFile) return;
     try {
       setIsUploading(true);
+      setUploadProgress(0);
       const uploadResult = await firebaseStorageService.uploadVideo(
-        videoFile, 
-        VideoType.Exercise
+        videoFile,
+        VideoType.Exercise,
+        (progress) => setUploadProgress(progress)
       );
-
-      // Here you would typically:
-      // 1. Create an Exercise object
-      // 2. Create an ExerciseVideo object
-      // 3. Upload to Firestore
       console.log('Video uploaded successfully', uploadResult);
-      console.log('Exercise Details:', {
-        name: exerciseName,
-        category: exerciseCategory,
-        tags,
-        caption
-      });
+      setUploadedExerciseId(exerciseService.generateExerciseId());
+      setShowSuccessModal(true);
     } catch (error) {
       console.error('Upload failed', error);
       alert('Video upload failed');
     } finally {
       setIsUploading(false);
     }
+  };
+
+  // Handle submission: check for similar exercises first.
+  const handleSubmit = async () => {
+    if (!videoFile || !exerciseName.trim()) return;
+    
+    // Check for similar exercises by exact name match (lowercased)
+    const similar = await checkSimilarExercises();
+    if (similar.length > 0) {
+      setIsDuplicateExercise(true);
+      setSimilarExercises(similar);
+      setShowSimilarExercises(true);
+      return;
+    }
+    
+    // If no similar exercises found, upload immediately.
+    uploadVideo();
+  };
+
+  // Handlers for Similar Exercises Modal
+  const handleSelectSimilarExercise = (exercise: Exercise) => {
+    console.log('Selected similar exercise:', exercise);
+    // Link the video to the existing exercise as needed.
+    setShowSimilarExercises(false);
+    uploadVideo();
+  };
+
+  const handleSelectAsUnique = () => {
+    setShowSimilarExercises(false);
+    // Proceed with upload if the user confirms the exercise is unique.
+    uploadVideo();
+  };
+
+  // Handlers for Success Modal
+  const handleViewMove = () => {
+    router.push(`/exercise/${uploadedExerciseId}`);
+  };
+
+  const handleCloseSuccessModal = () => {
+    // Reset form to initial state.
+    clearVideo();
+    setExerciseName('');
+    setExerciseCategory('Weight Training');
+    setTags([]);
+    setCaption('');
+    setNewTag('');
+    setUploadProgress(0);
+    setShowSuccessModal(false);
   };
 
   return (
@@ -263,19 +334,153 @@ const Create: React.FC = () => {
             />
           </div>
 
+          {/* Progress Bar (upload progress) */}
+          {isUploading && (
+            <div className="mt-4">
+              <ProgressBar progress={uploadProgress} />
+            </div>
+          )}
+
           {/* Submit Button */}
           <button 
             onClick={handleSubmit}
-            disabled={!exerciseName || isUploading}
+            disabled={!exerciseName.trim() || isUploading}
             className="w-full bg-[#E0FE10] text-black font-semibold py-3 px-4 mb-20 rounded-lg hover:bg-[#c8e60e] transition-colors disabled:opacity-50"
           >
             {isUploading ? 'Uploading...' : 'Post Exercise'}
           </button>
-          <Spacer size={100}></Spacer>
+          <Spacer size={100} />
         </div>
+      )}
+
+      {/* Similar Exercises Modal */}
+      {showSimilarExercises && (
+        <SimilarExercisesModal 
+          similarExercises={similarExercises}
+          isDuplicateExercise={isDuplicateExercise}
+          onSelectExercise={handleSelectSimilarExercise}
+          onSelectAsUnique={handleSelectAsUnique}
+          onClose={() => setShowSimilarExercises(false)}
+        />
+      )}
+
+      {/* Success Modal */}
+      {showSuccessModal && (
+        <SuccessModal 
+          onViewMove={handleViewMove}
+          onClose={handleCloseSuccessModal}
+        />
       )}
     </div>
   );
 };
 
 export default Create;
+
+// Similar Exercises  Modal
+interface SimilarExercisesModalProps {
+  similarExercises: Exercise[];
+  onSelectExercise: (exercise: Exercise) => void;
+  onSelectAsUnique: () => void;
+  onClose: () => void;
+  isDuplicateExercise: boolean;
+}
+
+const SimilarExercisesModal: React.FC<SimilarExercisesModalProps> = ({
+  similarExercises,
+  onSelectExercise,
+  onSelectAsUnique,
+  onClose,
+  isDuplicateExercise
+}) => {
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50">
+      <div className="bg-zinc-900 rounded-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+        <div className="p-6">
+          {/* Header */}
+          <div className="text-center mb-6">
+            <button
+              onClick={onSelectAsUnique}
+              className="w-full bg-zinc-800 text-white py-2 px-4 rounded-lg mb-4"
+            >
+              {isDuplicateExercise 
+                ? "Cancel, I have a unique exercise"
+                : "No, this is a unique exercise"
+              }
+            </button>
+            
+            <h3 className="text-xl text-white font-semibold">
+              {isDuplicateExercise 
+                ? "There is an exercise in the vault with the same name. Tap the exercise to link them."
+                : "Similar exercises found in the vault"
+              }
+            </h3>
+          </div>
+
+          {/* Exercise Cards */}
+          <div className="space-y-4">
+            {similarExercises.map((exercise) => (
+              <button
+                key={exercise.id}
+                onClick={() => onSelectExercise(exercise)}
+                className="w-full bg-zinc-800 rounded-xl overflow-hidden hover:bg-zinc-700 transition-colors"
+              >
+                <div className="aspect-square w-full relative">
+                  {exercise.videos?.[0]?.gifURL ? (
+                    <img 
+                      src={exercise.videos[0].gifURL} 
+                      alt={exercise.name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-zinc-700 flex items-center justify-center">
+                      <span className="text-zinc-400">No preview</span>
+                    </div>
+                  )}
+                </div>
+                <div className="p-4 text-left">
+                  <h4 className="text-white font-medium">{exercise.name}</h4>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
+// Success Modal
+interface SuccessModalProps {
+  onViewMove: () => void;
+  onClose: () => void;
+}
+
+const SuccessModal: React.FC<SuccessModalProps> = ({ onViewMove, onClose }) => {
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50">
+      <div className="bg-zinc-900 rounded-xl max-w-md w-full p-6 text-center">
+        <div className="mb-4 text-[#E0FE10] text-5xl">✓</div>
+        <h3 className="text-xl text-white font-semibold mb-4">
+          Upload Complete!
+        </h3>
+        <div className="space-y-3">
+          <button
+            onClick={onViewMove}
+            className="w-full bg-[#E0FE10] text-black font-semibold py-3 rounded-lg"
+          >
+            View Move
+          </button>
+          <button
+            onClick={onClose}
+            className="w-full bg-zinc-800 text-white py-3 rounded-lg"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+

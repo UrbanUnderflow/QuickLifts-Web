@@ -21,6 +21,14 @@ class ExerciseService {
       return this._allExercises;
     }
   
+    generateExerciseId(): string {
+      return doc(collection(db, 'exercises')).id;
+    }
+  
+    generateExerciseVideoId(): string {
+      return doc(collection(db, 'exerciseVideos')).id;
+    }
+    
     async fetchExercises(): Promise<void> {
       try {
         // Fetch all exercises
