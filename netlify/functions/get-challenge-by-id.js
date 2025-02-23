@@ -1,5 +1,13 @@
 const admin = require('firebase-admin');
 
+// Add guard clauses to check for required environment variables
+if (!process.env.FIREBASE_SECRET_KEY) {
+  throw new Error('Missing FIREBASE_SECRET_KEY environment variable.');
+}
+if (!process.env.FIREBASE_PRIVATE_KEY) {
+  throw new Error('Missing FIREBASE_PRIVATE_KEY environment variable.');
+}
+
 const headers = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'Content-Type',

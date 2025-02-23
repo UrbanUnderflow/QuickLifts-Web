@@ -1,7 +1,6 @@
 // VideoTrimmer.tsx
 import React, { useEffect, useRef, useState } from 'react';
-import { FFmpeg } from '@ffmpeg/ffmpeg';
-import { fetchFile } from '@ffmpeg/util';
+import { createFFmpeg, fetchFile } from '@ffmpeg/ffmpeg';
 
 interface BrowserSupport {
   mediaRecorder: boolean;
@@ -100,26 +99,34 @@ export const VideoTrimmer: React.FC<VideoTrimmerProps> = ({ file, onTrimComplete
     try {
       setIsLoading(true);
 
-      // Create FFmpeg instance with no arguments.
-      const ffmpeg = new FFmpeg();
+      // Create FFmpeg instance
+      const ffmpeg = createFFmpeg({
+        log: true,
+        corePath: 'https://unpkg.com/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js'
+      });
+      
       await ffmpeg.load();
 
-      // Write the input file to FFmpeg's virtual filesystem.
-      await ffmpeg.writeFile('input.mp4', await fetchFile(file));
+      // Write the input file to FFmpeg's virtual filesystem
+      await ffmpeg.FS('writeFile', 'input.mp4', await fetchFile(file));
 
-      // Run FFmpeg to trim the video.
-      await ffmpeg.exec([
+      // Run FFmpeg to trim the video
+      await ffmpeg.run(
         '-ss', startTime.toString(),
         '-t', (endTime - startTime).toString(),
         '-i', 'input.mp4',
         '-c', 'copy',
         'output.mp4'
-      ]);
+      );
 
-      // Read the output file.
-      const data = await ffmpeg.readFile('output.mp4');
+      // Read the output file
+      const data = await ffmpeg.FS('readFile', 'output.mp4');
 
-      // Use the returned data directly. (data is a Uint8Array.)
+      // Clean up files
+      ffmpeg.FS('unlink', 'input.mp4');
+      ffmpeg.FS('unlink', 'output.mp4');
+
+      // Create a new File from the data
       const trimmedFile = new File([data], 'trimmed.mp4', { type: 'video/mp4' });
 
       onTrimComplete(trimmedFile);
