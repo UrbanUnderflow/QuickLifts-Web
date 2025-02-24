@@ -4,7 +4,7 @@
   targetPort = 3000
 
 [build]
-  command = "curl -Ls https://cli.doppler.com/install.sh | INSTALL_PATH=$PWD/.doppler bash -s && chmod +x .doppler/doppler && ./.doppler/doppler run -- next build"
+  command = "next build"
   publish = ".next"
   functions = "netlify/functions"
 

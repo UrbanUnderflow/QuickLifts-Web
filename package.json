@@ -46,11 +46,11 @@
     "web-vitals": "^2.1.4"
   },
   "scripts": {
-    "dev": "doppler run -- next dev",
-    "build": "doppler run -- next build",
-    "start": "doppler run -- next start",
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
     "lint": "eslint src/**/*.{ts,tsx} --max-warnings 0",
-    "netlify-dev": "doppler run -- netlify dev"
+    "netlify-dev": "netlify dev"
   },
   "eslintConfig": {
     "extends": [
