@@ -24,7 +24,7 @@ const ChallengeMeta: React.FC<ChallengeMetaProps> = ({ challenge, id }) => {
   const deepLinkUrl = `pulse://rounds?linkType=round&roundId=${id}`;
   
   // Use a dynamic preview image URL or fallback to a static one
-  const previewImageUrl = challenge.previewImageUrl || 'https://firebasestorage.googleapis.com/v0/b/quicklifts-dd3f1.appspot.com/o/RoundInvite.png?alt=media&token=a5dcfa8d-3dfa-439f-982e-86a63da8ce1b';
+  const previewImageUrl = 'https://firebasestorage.googleapis.com/v0/b/quicklifts-dd3f1.appspot.com/o/RoundInvite.png?alt=media&token=a5dcfa8d-3dfa-439f-982e-86a63da8ce1b';
 
   return (
     <Head>
