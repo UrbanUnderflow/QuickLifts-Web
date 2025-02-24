@@ -1,7 +1,7 @@
 import OpenAI from 'openai';
 
 const openai = new OpenAI({
-  apiKey: process.env.NEXT_PUBLIC_OPENAI_API_KEY, // Use server-side environment variable
+  apiKey: process.env.OPEN_AI_SECRET_KEY, // Updated to use new Netlify env var
 });
 
 async function generateWorkouts(totalNeeded, existingWorkouts = [], retryCount = 0, promptData) {
