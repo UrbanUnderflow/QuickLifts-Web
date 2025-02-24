@@ -208,8 +208,10 @@ const RoundInvitation: React.FC<ChallengeInvitationProps> = ({ challenge }) => {
         {/* Host Section */}
         {hostId && <HostSection userId={hostId} />}
 
-        {/* Video Preview */}
-        <VideoPreview introVideos={challenge.introVideos} />
+        {/* Only show VideoPreview if there are introVideos */}
+        {challenge.introVideos && challenge.introVideos.length > 0 && (
+          <VideoPreview introVideos={challenge.introVideos} />
+        )}
         
         {/* Challenge Details Grid */}
         <div className="grid grid-cols-2 gap-4 mb-12">
