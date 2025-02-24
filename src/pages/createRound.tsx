@@ -9,6 +9,7 @@ import {
     Sparkles,
     X,
   } from 'lucide-react';
+import { Switch } from '@headlessui/react';
 
 import { userService } from '../api/firebase/user';
 import { workoutService } from '../api/firebase/workout/service';
@@ -57,7 +58,12 @@ interface ViewModel {
     name: string,
     desc: string,
     type: SweatlistType,
-    pin: string
+    pin: string,
+    restDayPreferences?: {
+      includeRestDays: boolean;
+      restDays: string[];
+      preferences: string[];
+    }
   ) => void;
 }
 
@@ -68,15 +74,25 @@ interface ChallengeData {
   challengeDesc: string;
   roundType: SweatlistType;
   pinCode: string;
+  restDayPreferences?: {
+    includeRestDays: boolean;
+    restDays: string[];
+    preferences: string[];
+  };
 }
 
 interface MobileChallengeSetupProps {
-  setChallengeData: (startDate: Date, endDate: Date, name: string, desc: string, type: SweatlistType, pinCode: string) => void;
+  setChallengeData: (startDate: Date, endDate: Date, name: string, desc: string, type: SweatlistType, pin: string) => void;
   currentChallengeData: ChallengeData;
   selectedStacks: Workout[];
   setSelectedStacks: (stacks: Workout[] | ((prev: Workout[]) => Workout[])) => void;
   onRemoveStack: (stackId: string) => void;
   viewModel: ViewModel;
+}
+
+interface DayPreference {
+  day: string;
+  isSelected: boolean;
 }
 
 const MobileChallengeSetupView: React.FC<MobileChallengeSetupProps> = ({
@@ -240,8 +256,63 @@ const MobileChallengeSetupView: React.FC<MobileChallengeSetupProps> = ({
       }
     };
 
+    const [activeTab, setActiveTab] = useState('preferences');
+    const [includeRestDays, setIncludeRestDays] = useState(false);
+    const [selectedPreferences, setSelectedPreferences] = useState<string[]>([]);
+    const [restDayPreferences, setRestDayPreferences] = useState<DayPreference[]>([
+      { day: 'Monday', isSelected: false },
+      { day: 'Tuesday', isSelected: false },
+      { day: 'Wednesday', isSelected: false },
+      { day: 'Thursday', isSelected: false },
+      { day: 'Friday', isSelected: false },
+      { day: 'Saturday', isSelected: false },
+      { day: 'Sunday', isSelected: false },
+    ]);
+
+    const handleIncludeRestDaysChange = (checked: boolean) => {
+      setIncludeRestDays(checked);
+      if (!checked) {
+        // Clear rest day selections when toggled off
+        setRestDayPreferences(prev => prev.map(p => ({ ...p, isSelected: false })));
+        // Remove any rest day preferences from the selected preferences
+        setSelectedPreferences(prev => 
+          prev.filter(p => !p.includes('Schedule rest days'))
+        );
+      }
+    };
+
+    const handleRestDayPreferencesChange = (updatedDay: string) => {
+      setRestDayPreferences(prev => {
+        const newPreferences = prev.map(p =>
+          p.day === updatedDay ? { ...p, isSelected: !p.isSelected } : p
+        );
+        
+        // Get selected days
+        const selectedDays = newPreferences
+          .filter(p => p.isSelected)
+          .map(p => p.day)
+          .join(', ');
+
+        // Update preferences array with rest day instruction
+        if (selectedDays.length > 0 && includeRestDays) {
+          const restDayPrompt = `Schedule rest days on ${selectedDays} throughout the program duration. Ensure these days align with the program's start date ${startDate.toLocaleDateString()} and end date ${endDate.toLocaleDateString()}.`;
+          
+          setSelectedPreferences(prev => {
+            const prefsWithoutRest = prev.filter(p => !p.includes('Schedule rest days'));
+            return [...prefsWithoutRest, restDayPrompt];
+          });
+        } else {
+          setSelectedPreferences(prev => 
+            prev.filter(p => !p.includes('Schedule rest days'))
+          );
+        }
+
+        return newPreferences;
+      });
+    };
+
     return (
-      <div>
+      <div className="relative h-full">
         <h1 className="text-2xl font-semibold text-white text-center mb-2">Create a Round</h1>
         <p className="text-zinc-400 text-center text-sm mb-8">
           Rounds are structured training programs that guide you through a series of Stacks over time.
@@ -417,6 +488,117 @@ const MobileChallengeSetupView: React.FC<MobileChallengeSetupProps> = ({
             />
           </div>
         )}
+
+        {activeTab === 'preferences' && (
+          <div className="space-y-4">
+            <div className="bg-zinc-900/50 rounded-lg p-4 border border-zinc-700/50">
+              <h3 className="font-medium text-white mb-2">Workout Preferences</h3>
+              <p className="text-sm text-zinc-400 mb-4">
+                Select your preferences for this program
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                {selectedPreferences.map((preference: string) => (
+                  <button
+                    key={preference}
+                    onClick={() => {
+                      setSelectedPreferences(prev =>
+                        prev.includes(preference)
+                          ? prev.filter(p => p !== preference)
+                          : [...prev, preference]
+                      );
+                    }}
+                    className={`p-3 rounded-lg text-sm font-medium transition-colors ${
+                      selectedPreferences.includes(preference)
+                        ? 'bg-[#E0FE10] text-black'
+                        : 'bg-zinc-800 text-white hover:bg-zinc-700'
+                    }`}
+                  >
+                    {preference}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="bg-zinc-900/50 rounded-lg p-4 border border-zinc-700/50">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="font-medium text-white">Rest Days</h3>
+                  <p className="text-sm text-zinc-400">Include specific rest days in your program</p>
+                </div>
+                <Switch
+                  checked={includeRestDays}
+                  onChange={handleIncludeRestDaysChange}
+                  className={`${
+                    includeRestDays ? 'bg-[#E0FE10]' : 'bg-zinc-700'
+                  } relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none`}
+                >
+                  <span
+                    className={`${
+                      includeRestDays ? 'translate-x-6' : 'translate-x-1'
+                    } inline-block h-4 w-4 transform rounded-full bg-white transition-transform`}
+                  />
+                </Switch>
+              </div>
+
+              {includeRestDays && (
+                <div className="grid grid-cols-2 gap-2 mt-4">
+                  {restDayPreferences.map((pref) => (
+                    <button
+                      key={pref.day}
+                      onClick={() => handleRestDayPreferencesChange(pref.day)}
+                      className={`p-3 rounded-lg text-sm font-medium transition-colors ${
+                        pref.isSelected
+                          ? 'bg-[#E0FE10] text-black'
+                          : 'bg-zinc-800 text-white hover:bg-zinc-700'
+                      }`}
+                    >
+                      {pref.day}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        <div className="absolute bottom-0 left-0 right-0 p-6 bg-zinc-800 border-t border-zinc-700 rounded-b-xl">
+          <button
+            className="w-full py-4 bg-[#E0FE10] text-black rounded-lg font-semibold hover:opacity-90 transition-opacity"
+            onClick={() => {
+              const selectedRestDays = includeRestDays
+                ? restDayPreferences
+                    .filter(pref => pref.isSelected)
+                    .map(pref => pref.day)
+                : [];
+
+              if (viewModel.validateChallengeInput(
+                startDate,
+                endDate,
+                challengeName,
+                challengeDesc,
+                roundType,
+                pinCode
+              )) {
+                viewModel.setChallenge(
+                  startDate,
+                  endDate,
+                  challengeName,
+                  challengeDesc,
+                  roundType,
+                  pinCode,
+                  {
+                    includeRestDays,
+                    restDays: selectedRestDays,
+                    preferences: selectedPreferences
+                  }
+                );
+                viewModel.appCoordinator.closeModals();
+              }
+            }}
+          >
+            Create Round
+          </button>
+        </div>
       </div>
     );
   };
@@ -444,6 +626,10 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
     const [allStacks, setAllStacks] = useState<Workout[]>([]);
     const [selectedStacks, setSelectedStacks] = useState<Workout[]>([]);
     const [isAIMode, setIsAIMode] = useState(false);
+
+    const preferences = [
+      "Exclusive to selected creators"
+    ];
 
     // Add these states in DesktopChallengeSetupView
     const [aiPromptText, setAiPromptText] = useState('');
@@ -647,22 +833,40 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
     });
   };
 
+  const filterExercisesByCreators = (exercises: Exercise[], selectedCreatorIds: string[]) => {
+    return exercises.filter(exercise => 
+      exercise.videos?.some(video => selectedCreatorIds.includes(video.userId))
+    );
+  };
+
   const handleGenerateAIRound = async () => {
     try {
       setIsGenerating(true);
       setError(null);
   
-      // Get all exercises from selected creators
-      const creatorExercises = await Promise.all(
-        selectedCreators.map(async (creatorId) => {
-          const exercises = await exerciseService.getExercisesByAuthor(creatorId);
-          return exercises;
-        })
-      );
-      
-      // Flatten the array of creator exercises
-      const allCreatorExercises = creatorExercises.flat();
-  
+      // Get all exercises
+      let availableExercises = allExercises;
+
+      // If "Exclusive to selected creators" is selected, filter exercises
+      if (selectedPreferences.includes("Exclusive to selected creators")) {
+        availableExercises = filterExercisesByCreators(allExercises, selectedCreators);
+        
+        if (availableExercises.length === 0) {
+          throw new Error("No exercises found from selected creators. Please select different creators or disable exclusive creator content.");
+        }
+      }
+      console.log("selectedCreators are: ", selectedCreators);
+      console.log("Available exercises after creator filtering:", availableExercises.length);
+
+      console.log("the must indluded exercsies are: ", selectedMoves.map(move => move.name));
+      console.log("the must indluded exercsies are: ", selectedPreferences);
+      console.log("the must all creators: ", availableExercises);
+      console.log("the must all available exercises: ", allExercises);
+      console.log("the must start date: ", challengeData.startDate);
+      console.log("the must end date: ", challengeData.endDate);
+
+
+      // Use availableExercises instead of allExercises in your AI generation logic
       const response = await fetch('/api/generateRound', {
         method: 'POST',
         headers: {
@@ -672,8 +876,7 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
           mustIncludeExercises: selectedMoves.map(move => move.name),
           userPrompt: aiPromptText,
           preferences: selectedPreferences,
-          creatorExercises: allCreatorExercises,
-          allAvailableExercises: allExercises,
+          availableExercises,
           startDate: challengeData.startDate,
           endDate: challengeData.endDate,
         }),
@@ -729,7 +932,7 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
           const enrichedExercises = stackData.exercises
             .map((ex: ExerciseReference) => {
               try {
-                return enrichExerciseData(ex, allExercises, allCreatorExercises, useOnlyCreatorExercises);
+                return enrichExerciseData(ex, allExercises, availableExercises, useOnlyCreatorExercises);
               } catch (error) {
                 console.warn(`Skipping exercise ${ex.exercise.name}: ${error}`);
                 return null;
@@ -933,6 +1136,59 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
       clearInterval(exerciseInterval);
     };
   }, [isGenerating, allExercises]);
+
+  const [includeRestDays, setIncludeRestDays] = useState(false);
+  const [restDayPreferences, setRestDayPreferences] = useState<DayPreference[]>([
+    { day: 'Monday', isSelected: false },
+    { day: 'Tuesday', isSelected: false },
+    { day: 'Wednesday', isSelected: false },
+    { day: 'Thursday', isSelected: false },
+    { day: 'Friday', isSelected: false },
+    { day: 'Saturday', isSelected: false },
+    { day: 'Sunday', isSelected: false },
+  ]);
+
+  const handleRestDayPreferencesChange = (updatedDay: string) => {
+    setRestDayPreferences(prev => {
+      const newPreferences = prev.map(p =>
+        p.day === updatedDay ? { ...p, isSelected: !p.isSelected } : p
+      );
+      
+      // Get selected days
+      const selectedDays = newPreferences
+        .filter(p => p.isSelected)
+        .map(p => p.day)
+        .join(', ');
+
+      // Update preferences array with rest day instruction
+      if (selectedDays.length > 0 && includeRestDays) {
+        const restDayPrompt = `Schedule rest days on ${selectedDays} throughout the program duration. Ensure these days align with the program's start date ${challengeData.startDate.toLocaleDateString()} and end date ${challengeData.endDate.toLocaleDateString()}.`;
+        
+        setSelectedPreferences(prev => {
+          const prefsWithoutRest = prev.filter(p => !p.includes('Schedule rest days'));
+          return [...prefsWithoutRest, restDayPrompt];
+        });
+      } else {
+        setSelectedPreferences(prev => 
+          prev.filter(p => !p.includes('Schedule rest days'))
+        );
+      }
+
+      return newPreferences;
+    });
+  };
+
+  const handleIncludeRestDaysChange = (checked: boolean) => {
+    setIncludeRestDays(checked);
+    if (!checked) {
+      // Clear rest day selections when toggled off
+      setRestDayPreferences(prev => prev.map(p => ({ ...p, isSelected: false })));
+      // Remove any rest day preferences from the selected preferences
+      setSelectedPreferences(prev => 
+        prev.filter(p => !p.includes('Schedule rest days'))
+      );
+    }
+  };
 
   return (
     
@@ -1280,49 +1536,78 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
 
             {/* Tab Content */}
             <div className="flex-1 overflow-y-auto p-6 scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-transparent">
-                {activeTab === 'preferences' && (
-                <div className="space-y-4">
-                    <div className="bg-zinc-900/50 rounded-lg p-4 border border-zinc-700/50">
-                    <h3 className="font-medium text-white mb-2">AI Preferences</h3>
-                    <p className="text-sm text-zinc-400">
-                        Additional preferences to help generate your perfect round.
-                    </p>
-                    </div>
-                    
-                    {/* Preferences Options */}
-                    <div className="space-y-3">
-                      <label className="flex items-center bg-zinc-900/30 p-3 rounded-lg cursor-pointer hover:bg-zinc-900/50 transition-colors">
-                        <input 
-                          type="checkbox" 
-                          checked={selectedPreferences.includes("Include rest days")}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setSelectedPreferences(prev => [...prev, "Include rest days"]);
-                            } else {
-                              setSelectedPreferences(prev => prev.filter(p => p !== "Include rest days"));
-                            }
-                          }}
-                          className="form-checkbox text-[#E0FE10]" 
-                        />
-                        <span className="ml-2 text-sm text-zinc-300">Include rest days</span>
-                      </label>
+            {activeTab === 'preferences' && (
+              <div className="space-y-4">
+                <div className="bg-zinc-900/50 rounded-lg p-4 border border-zinc-700/50">
+                  <h3 className="font-medium text-white mb-2">AI Preferences</h3>
+                  <p className="text-sm text-zinc-400">
+                    Additional preferences to help generate your perfect round.
+                  </p>
+                </div>
 
-                      <label className="flex items-center bg-zinc-900/30 p-3 rounded-lg cursor-pointer hover:bg-zinc-900/50 transition-colors">
-                        <input 
-                          type="checkbox" 
-                          checked={selectedPreferences.includes("Exclusive to selected creators")}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setSelectedPreferences(prev => [...prev, "Exclusive to selected creators"]);
-                            } else {
-                              setSelectedPreferences(prev => prev.filter(p => p !== "Exclusive to selected creators"));
-                            }
-                          }}
-                          className="form-checkbox text-[#E0FE10]" 
-                        />
-                        <span className="ml-2 text-sm text-zinc-300">Exclusive to selected creators</span>
-                      </label>
+                <div className="bg-zinc-900/50 rounded-lg p-4 border border-zinc-700/50">
+                      <div className="flex items-center justify-between mb-4">
+                        <div>
+                          <h3 className="font-medium text-white">Rest Days</h3>
+                          <p className="text-sm text-zinc-400">Include specific rest days in your program</p>
+                        </div>
+                        <Switch
+                          checked={includeRestDays}
+                          onChange={handleIncludeRestDaysChange}
+                          className={`${
+                            includeRestDays ? 'bg-[#E0FE10]' : 'bg-zinc-700'
+                          } relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none`}
+                        >
+                          <span
+                            className={`${
+                              includeRestDays ? 'translate-x-6' : 'translate-x-1'
+                            } inline-block h-4 w-4 transform rounded-full bg-white transition-transform`}
+                          />
+                        </Switch>
+                      </div>
+
+                      {includeRestDays && (
+                        <div className="grid grid-cols-2 gap-2 mt-4">
+                          {restDayPreferences.map((pref) => (
+                            <button
+                              key={pref.day}
+                              onClick={() => handleRestDayPreferencesChange(pref.day)}
+                              className={`p-3 rounded-lg text-sm font-medium transition-colors ${
+                                pref.isSelected
+                                  ? 'bg-[#E0FE10] text-black'
+                                  : 'bg-zinc-800 text-white hover:bg-zinc-700'
+                              }`}
+                            >
+                              {pref.day}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
+                
+                {/* Preferences Options */}
+                <div className="space-y-3">
+                  {preferences.map((preference) => (
+                    <label 
+                      key={preference}
+                      className="flex items-center bg-zinc-900/30 p-3 rounded-lg cursor-pointer hover:bg-zinc-900/50 transition-colors"
+                    >
+                      <input 
+                        type="checkbox" 
+                        checked={selectedPreferences.includes(preference)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedPreferences(prev => [...prev, preference]);
+                          } else {
+                            setSelectedPreferences(prev => prev.filter(p => p !== preference));
+                          }
+                        }}
+                        className="form-checkbox text-[#E0FE10]" 
+                      />
+                      <span className="ml-2 text-sm text-zinc-300">{preference}</span>
+                    </label>
+                  ))}
+                </div>
                 </div>
                 )}
 

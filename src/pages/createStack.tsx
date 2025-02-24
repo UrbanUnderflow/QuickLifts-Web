@@ -56,7 +56,9 @@ const CreateWorkoutExerciseCardView: React.FC<CreateWorkoutExerciseCardViewProps
   // For weight training fields
   const [reps, setReps] = useState(
     initialExerciseDescription?.category?.type === 'weight-training'
-      ? initialExerciseDescription.category?.details?.reps.join(',') || ''
+      ? Array.isArray(initialExerciseDescription.category?.details?.reps)
+        ? initialExerciseDescription.category.details.reps.join(',')
+        : ''
       : ''
   );
   const [sets, setSets] = useState(

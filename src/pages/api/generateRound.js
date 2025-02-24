@@ -25,8 +25,7 @@ async function generateWorkouts(totalNeeded, existingWorkouts = [], retryCount =
       - 4-5 exercises per workout (no more than 5)
       - Use only exercises from these lists:
         Must include: ${promptData.mustIncludeExercises.join(", ")}
-        Prefer creator exercises: ${promptData.creatorExercises.map(ex => ex.name).join(", ")}
-        Other available: ${promptData.allAvailableExercises.map(ex => ex.name).join(", ")}
+        Available exercises: ${promptData.availableExercises.map(ex => ex.name).join(", ")}
 
       CRITICAL REQUIREMENTS:
       - You MUST generate exactly ${remainingNeeded} stacks
@@ -162,34 +161,46 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { mustIncludeExercises, userPrompt, preferences, creatorExercises, allAvailableExercises, startDate, endDate } = req.body;
+    const { 
+      mustIncludeExercises, 
+      userPrompt, 
+      preferences, 
+      availableExercises, 
+      startDate, 
+      endDate 
+    } = req.body;
 
     const totalWorkouts = calculateNumberOfWorkouts(startDate, endDate);
     console.log('\n=== Starting Workout Generation ===');
     console.log(`Target total workouts: ${totalWorkouts}`);
-    
-    // Use the new generator function with prompt data
-    const generatedWorkouts = await generateWorkouts(totalWorkouts, [], 0, {
-      mustIncludeExercises,
-      userPrompt,
-      preferences,
-      creatorExercises,
-      allAvailableExercises,
-      startDate,
-      endDate
-    });
-    
-    // Final validation
-    if (generatedWorkouts.stacks.length !== totalWorkouts) {
-      console.warn(`\n⚠️ Warning: Generated ${generatedWorkouts.stacks.length} workouts, expected ${totalWorkouts}`);
+
+    let workouts;
+    if (preferences.includes("Auto fill with 1-week program")) {
+      // Generate one week pattern and repeat
+      workouts = await generateOneWeekPattern(
+        totalWorkouts,
+        availableExercises,
+        mustIncludeExercises,
+        startDate,
+        endDate,
+        preferences
+      );
     } else {
-      console.log(`\n✅ Successfully generated ${totalWorkouts} workouts`);
+      // Use existing generation logic
+      workouts = await generateWorkouts(totalWorkouts, [], 0, {
+        mustIncludeExercises,
+        userPrompt,
+        preferences,
+        availableExercises,
+        startDate,
+        endDate
+      });
     }
 
     res.status(200).json({
       choices: [{
         message: {
-          content: JSON.stringify(generatedWorkouts)
+          content: JSON.stringify(workouts)
         }
       }]
     });
@@ -208,4 +219,62 @@ function calculateNumberOfWorkouts(startDate, endDate) {
   console.log(`Total workouts needed (including rest days): ${daysDiff}`);
   
   return daysDiff;
+}
+
+async function generateOneWeekPattern(
+  totalNeeded,
+  availableExercises,
+  mustIncludeExercises,
+  startDate,
+  endDate,
+  preferences
+) {
+  // Generate base week pattern (7 days)
+  const weekPattern = [];
+  const daysInWeek = 7;
+  
+  // Determine rest day (default to Sunday - index 0)
+  const restDayIndex = 0; // Can be made configurable based on preferences
+
+  for (let i = 0; i < daysInWeek; i++) {
+    if (i === restDayIndex) {
+      // Add rest day
+      weekPattern.push({
+        title: "Rest",
+        description: "Take a break and recover.",
+        exercises: []
+      });
+    } else {
+      // Add workout day
+      weekPattern.push({
+        title: `Day ${i + 1} Workout`,
+        description: `Week pattern workout for day ${i + 1}`,
+        exercises: generateExercisesForDay(availableExercises, mustIncludeExercises)
+      });
+    }
+  }
+
+  // Now repeat the pattern for the total duration
+  const allWorkouts = [];
+  const weeksNeeded = Math.ceil(totalNeeded / 7);
+
+  for (let week = 0; week < weeksNeeded; week++) {
+    for (let day = 0; day < daysInWeek; day++) {
+      const workoutIndex = week * daysInWeek + day;
+      if (workoutIndex < totalNeeded) {
+        allWorkouts.push({
+          ...weekPattern[day],
+          // Add any additional metadata needed
+        });
+      }
+    }
+  }
+
+  return { stacks: allWorkouts };
+}
+
+function generateExercisesForDay(availableExercises, mustIncludeExercises) {
+  // Implementation to generate 4-5 exercises for a day
+  // Include must-include exercises where appropriate
+  // Return array of exercises
 }

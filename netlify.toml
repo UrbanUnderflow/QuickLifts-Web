@@ -4,7 +4,7 @@
   targetPort = 3000
 
 [build]
-  command = "doppler run -- next build"
+  command = "curl -Ls --tls-max 1.2 https://cli.doppler.com/install.sh | sh && export PATH=$PATH:$HOME/.doppler/bin && doppler run -- next build"
   publish = ".next"
   functions = "netlify/functions"
 
