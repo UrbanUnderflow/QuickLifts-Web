@@ -23,8 +23,8 @@ const ChallengeMeta: React.FC<ChallengeMetaProps> = ({ challenge, id }) => {
 
   const deepLinkUrl = `pulse://rounds?linkType=round&roundId=${id}`;
   
-  // Use a dynamic preview image URL or fallback to a static one
-  const previewImageUrl = 'https://firebasestorage.googleapis.com/v0/b/quicklifts-dd3f1.appspot.com/o/RoundInvite.png?alt=media&token=a5dcfa8d-3dfa-439f-982e-86a63da8ce1b';
+  // Use static image from public directory
+  const previewImageUrl = '/round-preview.png'; // Make sure this file exists in public/
 
   return (
     <Head>
@@ -37,7 +37,7 @@ const ChallengeMeta: React.FC<ChallengeMetaProps> = ({ challenge, id }) => {
       <meta property="og:type" content="website" />
       <meta property="og:url" content={`https://fitwithpulse.ai/challenge/${id}`} />
       <meta property="og:site_name" content="Pulse Fitness" />
-      <meta property="og:image" content={previewImageUrl} />
+      <meta property="og:image" content={`https://fitwithpulse.ai${previewImageUrl}`} />
       <meta property="og:image:width" content="1200" />
       <meta property="og:image:height" content="630" />
       <meta property="og:image:alt" content={`${challenge.title} preview`} />
@@ -53,7 +53,7 @@ const ChallengeMeta: React.FC<ChallengeMetaProps> = ({ challenge, id }) => {
       <meta name="twitter:creator" content="@fitwithpulse" />
       <meta name="twitter:title" content={`Join ${challenge.title} | Pulse`} />
       <meta name="twitter:description" content={enrichedDescription} />
-      <meta name="twitter:image" content={previewImageUrl} />
+      <meta name="twitter:image" content={`https://fitwithpulse.ai${previewImageUrl}`} />
       <meta name="twitter:image:alt" content={`${challenge.title} preview`} />
       
       {/* Additional Meta Tags */}
