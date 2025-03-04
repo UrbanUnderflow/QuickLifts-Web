@@ -247,6 +247,158 @@ class WorkoutService {
 
 }
 
+// Add this function to your WorkoutService class
+
+/**
+ * Fetches random trending stack workouts with their videos.
+ * Adapts the iOS implementation for web.
+ * @returns {Promise<Workout[]>} Array of workout objects with videos
+ */
+async fetchRandomTrendingStacks(): Promise<Workout[]> {
+  try {
+    // First, let's get all available stacks from the 'stacks' collection
+    const stacksRef = collection(db, 'stacks');
+    const snapshot = await getDocs(stacksRef);
+
+    if (snapshot.empty) {
+      console.log('No stacks found.');
+      return [];
+    }
+
+    // Get all documents and shuffle them
+    const documents = snapshot.docs;
+    const shuffledDocs = [...documents].sort(() => 0.5 - Math.random());
+    
+    // Take up to 10 random stacks
+    const randomStacks = shuffledDocs.slice(0, 10).map(doc => {
+      return new Workout({
+        id: doc.id,
+        ...doc.data()
+      });
+    });
+
+    // Fetch videos for each workout
+    const workoutsWithVideos = await Promise.all(
+      randomStacks.map(async (workout) => {
+        try {
+          return await this.fetchVideosForWorkout(workout);
+        } catch (error) {
+          console.error(`Error fetching videos for workout ${workout.id}:`, error);
+          return workout; // Return the workout without videos if there's an error
+        }
+      })
+    );
+
+    return workoutsWithVideos;
+  } catch (error) {
+    console.error('Error fetching random trending stacks:', error);
+    throw error;
+  }
+}
+
+/**
+ * Fetches active rounds/challenges that are currently live.
+ * Adapts the iOS implementation for web.
+ * @returns {Promise<SweatlistCollection[]>} Array of live round collections
+ */
+async fetchLiveRounds(): Promise<SweatlistCollection[]> {
+  try {
+    const now = new Date();
+    
+    // Create a query for published challenges that are currently active
+    const collectionsRef = collection(db, 'sweatlist-collection');
+    const q = query(
+      collectionsRef,
+      where('challenge.status', '==', 'published'),
+      where('challenge.endDate', '>', now),
+      where('challenge.startDate', '<', now),
+      orderBy('challenge.startDate', 'desc')
+    );
+
+    const snapshot = await getDocs(q);
+    
+    // Filter and map the collections
+    const collections = snapshot.docs
+      .map(doc => {
+        return new SweatlistCollection({
+          id: doc.id,
+          ...doc.data()
+        });
+      })
+      .filter(collection => {
+        // Check if ownerId is not empty and cohortAuthor is not nil
+        const cohortAuthor = collection.challenge?.cohortAuthor;
+        return cohortAuthor && 
+               Array.isArray(collection.ownerId) && 
+               collection.ownerId.length > 0 && 
+               collection.ownerId.some(id => collection.challenge?.cohortAuthor.includes(id));
+      });
+    
+    // Limit to 10 collections
+    return collections.slice(0, 10);
+    
+  } catch (error) {
+    console.error('Error fetching live rounds:', error);
+    return [];
+  }
+}
+
+/**
+ * Fetches videos for a workout's exercises
+ * @param {Workout} workout - The workout to fetch videos for
+ * @returns {Promise<Workout>} - The workout with videos added to its exercises
+ */
+private async fetchVideosForWorkout(workout: Workout): Promise<Workout> {
+  // Get all exercises with videos
+  const exercisesWithVideos = await this.fetchAndMapExercisesWithVideos();
+  
+  // Map the exercises in the workout to include videos
+  const updatedExercises = workout.exercises.map(exerciseRef => {
+    const exerciseName = exerciseRef.exercise?.name?.toLowerCase().trim();
+    const matchingExercise = exercisesWithVideos.find(
+      ex => ex.name.toLowerCase().trim() === exerciseName
+    );
+    
+    if (matchingExercise) {
+      return {
+        ...exerciseRef,
+        exercise: new Exercise({
+          ...exerciseRef.exercise,
+          videos: matchingExercise.videos || []
+        })
+      };
+    }
+    
+    return exerciseRef;
+  });
+  
+  // Create a new workout with the updated exercises
+  return new Workout({
+    ...workout,
+    exercises: updatedExercises
+  });
+}
+
+// You may need to add a fallback method if 'stacks' collection doesn't exist:
+async fetchRandomTrendingStacksFallback(): Promise<Workout[]> {
+  try {
+    // If 'stacks' collection doesn't exist, we can fetch from user workouts as fallback
+    if (!userService.currentUser?.id) {
+      return [];
+    }
+    
+    const workouts = await this.getAllSweatlists(userService.currentUser.id);
+    
+    // Shuffle and take up to 10
+    const shuffledWorkouts = [...workouts].sort(() => 0.5 - Math.random()).slice(0, 10);
+    
+    return shuffledWorkouts;
+  } catch (error) {
+    console.error('Error in fetchRandomTrendingStacksFallback:', error);
+    return [];
+  }
+}
+
   async getUserById(userId: string): Promise<User> {
     try {
       const userDoc = await getDoc(doc(db, 'users', userId));
@@ -504,13 +656,8 @@ async fetchUserChallengesByUserId(userId: string): Promise<UserChallenge[]> {
               endDate: data.challenge.endDate ? new Date(data.challenge.endDate) : new Date(),
               createdAt: data.challenge.createdAt ? new Date(data.challenge.createdAt) : new Date(),
               updatedAt: data.challenge.updatedAt ? new Date(data.challenge.updatedAt) : new Date(),
-              introVideos: (data.challenge.introVideos || []).map((v: any) => 
-                new IntroVideo({
-                  id: v.id,
-                  userId: v.userId,
-                  videoUrl: v.videoUrl
-                })
-              )
+              introVideos: data.challenge.introVideos || [],
+              ownerId: data.challenge.ownerId || []
             })
           : undefined,
         createdAt: convertTimestamp(data.createdAt),
@@ -690,13 +837,8 @@ async fetchUserChallengesByChallengeId(challengeId: string): Promise<UserChallen
               endDate: data.challenge.endDate ? new Date(data.challenge.endDate) : new Date(),
               createdAt: data.challenge.createdAt ? new Date(data.challenge.createdAt) : new Date(),
               updatedAt: data.challenge.updatedAt ? new Date(data.challenge.updatedAt) : new Date(),
-              introVideos: (data.challenge.introVideos || []).map((v: any) => 
-                new IntroVideo({
-                  id: v.id,
-                  userId: v.userId,
-                  videoUrl: v.videoUrl
-                })
-              )
+              introVideos: data.challenge.introVideos || [],
+              ownerId: data.challenge.ownerId || []
             })
           : undefined,
         createdAt: convertTimestamp(data.createdAt),
@@ -848,13 +990,8 @@ async fetchCollections(userId: string): Promise<SweatlistCollection[]> {
                 endDate: convertFirestoreTimestamp(data.challenge.endDate),
                 createdAt: convertFirestoreTimestamp(data.challenge.createdAt),
                 updatedAt: convertFirestoreTimestamp(data.challenge.updatedAt),
-                introVideos: (data.challenge.introVideos || []).map((v: any) => 
-                  new IntroVideo({
-                    id: v.id,
-                    userId: v.userId,
-                    videoUrl: v.videoUrl
-                  })
-                )
+                introVideos: data.challenge.introVideos || [],
+                ownerId: data.challenge.ownerId || []
               })
             : undefined;
 

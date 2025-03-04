@@ -107,13 +107,13 @@ const ChallengePage: React.FC<ChallengePageProps> = ({ initialCollection, initia
             title: data.collection.challenge.title,
             subtitle: data.collection.challenge.subtitle,
             introVideos: data.collection.challenge.introVideos,
-            introVideoURL: data.collection.challenge.introVideoURL, // Add this line
             status: data.collection.challenge.status || 'draft',
             startDate: new Date(data.collection.challenge.startDate),
             endDate: new Date(data.collection.challenge.endDate),
             createdAt: new Date(data.collection.challenge.createdAt),
             updatedAt: new Date(data.collection.challenge.updatedAt),
             participants: data.collection.challenge.participants || [],
+            ownerId: data.collection.challenge.ownerId || []
           })
         };
   
@@ -232,16 +232,13 @@ export const getServerSideProps: GetServerSideProps<ChallengePageProps> = async 
         title: data.collection.challenge.title,
         subtitle: data.collection.challenge.subtitle,
         introVideos: data.collection.challenge.introVideos || [],
-        // Only include introVideoURL if it exists
-        ...(data.collection.challenge.introVideoURL && {
-          introVideoURL: data.collection.challenge.introVideoURL
-        }),
         status: data.collection.challenge.status || 'draft',
         startDate: new Date(data.collection.challenge.startDate).toISOString(),
         endDate: new Date(data.collection.challenge.endDate).toISOString(),
         createdAt: new Date(data.collection.challenge.createdAt).toISOString(),
         updatedAt: new Date(data.collection.challenge.updatedAt).toISOString(),
         participants: data.collection.challenge.participants || [],
+        ownerId: data.collection.challenge.ownerId || []
       }
     };
 

@@ -26,6 +26,7 @@ export interface ExerciseComment {
 export class ExerciseReference {
   exercise: Exercise;
   groupId: number;
+  isCompleted?: boolean;
 
   constructor(data: {
     exercise: Exercise;

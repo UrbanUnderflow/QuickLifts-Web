@@ -583,6 +583,28 @@ class UserService {
       return [];
     }
   }
+
+  async queryUsers(searchQuery: string): Promise<User[]> {
+    try {
+      const usersRef = collection(db, 'users');
+      const q = query(
+        usersRef,
+        where('username', '>=', searchQuery.toLowerCase()),
+        where('username', '<=', searchQuery.toLowerCase() + '\uf8ff'),
+        limit(10)
+      );
+
+      const querySnapshot = await getDocs(q);
+      
+      return querySnapshot.docs
+        .map(doc => new User(doc.id, { id: doc.id, ...doc.data() }))
+        .filter(user => user.profileImage?.profileImageURL); // Only return users with profile images
+        
+    } catch (error) {
+      console.error('Error querying users:', error);
+      return [];
+    }
+  }
 }
 
 export const userService = new UserService();

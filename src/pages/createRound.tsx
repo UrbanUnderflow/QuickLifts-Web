@@ -991,7 +991,8 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
         startDate: challengeData.startDate,
         endDate: challengeData.endDate,
         createdAt,
-        updatedAt: createdAt
+        updatedAt: createdAt,
+        ownerId: [userService.currentUser?.id || '']
       });
   
       // Create the collection with all sweatlistIds
@@ -1044,7 +1045,8 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
         startDate: challengeData.startDate,
         endDate: challengeData.endDate,
         createdAt,
-        updatedAt: createdAt
+        updatedAt: createdAt,
+        ownerId: [userService.currentUser?.id || '']
       });
   
       // Create SweatlistCollection with proper structure

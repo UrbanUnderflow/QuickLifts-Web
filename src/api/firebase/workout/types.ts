@@ -128,6 +128,7 @@ export class Workout {
   createdAt: Date;
   updatedAt: Date;
   zone: BodyZone;
+  estimatedDuration: number;
  
   constructor(data: any) {
     // For string fields, default to empty string if not provided.
@@ -179,6 +180,7 @@ export class Workout {
     }
     
     this.zone = data.zone !== undefined ? data.zone : BodyZone.FullBody;
+    this.estimatedDuration = data.estimatedDuration || 45; // Default to 45 minutes
   }
 
   get isTimedWorkout(): boolean {
@@ -617,7 +619,6 @@ export class SweatlistIdentifiers {
 // Enum for sweatlist type matching Swift implementation
 export enum SweatlistType {
   Together = 'together',
-  Solo = 'solo',
   Locked = 'locked'
 }
 
@@ -675,7 +676,7 @@ export class SweatlistCollection {
     } else {
       this.ownerId = [];
     }
-    this.privacy = this.challenge ? SweatlistType.Together : SweatlistType.Solo;
+    this.privacy = this.challenge ? SweatlistType.Together : SweatlistType.Locked;
     this.participants = (data.participants || []).map((participant: any) => participant || '');
     this.createdAt = convertFirestoreTimestamp(data.createdAt);
     this.updatedAt = convertFirestoreTimestamp(data.updatedAt);
@@ -1040,56 +1041,76 @@ class Challenge {
   title: string;
   subtitle: string;
   participants: UserChallenge[];
-  durationInDays: number;
   status: ChallengeStatus;
+  introVideos: IntroVideo[];
+  privacy: SweatlistType;
+  pin?: string;
   startDate: Date;
+  ownerId: string[];
   endDate: Date;
   createdAt: Date;
   updatedAt: Date;
-  introVideos: IntroVideo[];
+  
+  // Cohort-related properties
+  originalId: string;
+  joinWindowEnds: Date;
+  minParticipants: number;
+  maxParticipants: number;
+  allowLateJoins: boolean;
+  cohortAuthor: string[];
+  
+  // Computed property
+  durationInDays: number;
+  isChallengeEnded: boolean;
 
   constructor(data: {
     id: string;
     title: string;
     subtitle: string;
-    participants?: UserChallenge[]; // make optional in case it's missing
-    status: ChallengeStatus;
+    participants?: UserChallenge[];
+    status?: ChallengeStatus;
+    introVideos?: IntroVideo[];
+    privacy?: SweatlistType;
+    pin?: string;
     startDate: Date;
+    ownerId: string[];
     endDate: Date;
     createdAt: Date;
     updatedAt: Date;
-    introVideos?: IntroVideo[];
-    introVideoURL?: string; // Add this for backwards compatibility
+    originalId?: string;
+    joinWindowEnds?: Date;
+    minParticipants?: number;
+    maxParticipants?: number;
+    allowLateJoins?: boolean;
+    cohortAuthor?: string[];
   }) {
     this.id = data.id;
     this.title = data.title;
     this.subtitle = data.subtitle;
-    // Use an empty array if participants is missing.
-    this.participants = Array.isArray(data.participants) ? data.participants : [];
-    this.status = data.status;
-
-    console.log("Challenge start date", convertFirestoreTimestamp(data.startDate));
+    this.participants = Array.isArray(data.participants) ? data.participants : [];    
+    this.status = data.status || ChallengeStatus.Draft;
+    this.introVideos = data.introVideos || [];
+    this.privacy = data.privacy || SweatlistType.Together;
+    this.pin = data.pin;
     this.startDate = convertFirestoreTimestamp(data.startDate);
+    this.ownerId = data.ownerId;
     this.endDate = convertFirestoreTimestamp(data.endDate);
     this.createdAt = convertFirestoreTimestamp(data.createdAt);
     this.updatedAt = convertFirestoreTimestamp(data.updatedAt);
-
-    // Handle both old and new format for intro videos.
-    if (Array.isArray(data.introVideos)) {
-      this.introVideos = data.introVideos.map(video => new IntroVideo(video));
-    } else if (data.introVideoURL && Array.isArray(data.participants) && data.participants.length > 0) {
-      this.introVideos = [
-        new IntroVideo({
-          id: '1',
-          userId: data.participants[0].userId,
-          videoUrl: data.introVideoURL
-        })
-      ];
-    } else {
-      this.introVideos = [];
-    }
+    
+    this.originalId = data.originalId || data.id;
+    this.joinWindowEnds = data.joinWindowEnds || new Date(this.startDate.getTime() + (48 * 3600 * 1000));
+    this.minParticipants = data.minParticipants || 1;
+    this.maxParticipants = data.maxParticipants || 100;
+    this.allowLateJoins = data.allowLateJoins ?? true;
+    this.cohortAuthor = data.cohortAuthor || [];
 
     this.durationInDays = this.calculateDurationInDays();
+    this.isChallengeEnded = new Date() > this.endDate;
+    
+    if (this.isChallengeEnded) {
+      this.status = ChallengeStatus.Completed;
+    }
   }
 
   toDictionary(): any {
@@ -1120,6 +1141,7 @@ class Challenge {
         checkIns: participant.checkIns
       })),
       status: this.status,
+      pin: this.pin,
       startDate: dateToUnixTimestamp(this.startDate),
       endDate: dateToUnixTimestamp(this.endDate),
       createdAt: dateToUnixTimestamp(this.createdAt),
