@@ -1,0 +1,242 @@
+import { GetServerSideProps } from 'next';
+import { useRouter } from 'next/router';
+import { useState, useEffect } from 'react';
+import { loadStripe } from '@stripe/stripe-js';
+import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
+
+// Initialize Stripe - replace with your publishable key
+const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '');
+
+interface CheckoutFormProps {
+  challengeId: string;
+  amount: number;
+  currency: string;
+}
+
+// The checkout form component
+const CheckoutForm = ({ challengeId, amount, currency }: CheckoutFormProps) => {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [error, setError] = useState<string | null>(null);
+  const [processing, setProcessing] = useState(false);
+  const [succeeded, setSucceeded] = useState(false);
+  const router = useRouter();
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    
+    if (!stripe || !elements) {
+      // Stripe.js hasn't loaded yet
+      return;
+    }
+    
+    setProcessing(true);
+    
+    try {
+      // Create payment intent on server
+      const response = await fetch('/api/create-payment-intent', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          challengeId,
+          amount,
+          currency
+        }),
+      });
+      
+      const data = await response.json();
+      
+      if (data.error) {
+        setError(data.error);
+        setProcessing(false);
+        return;
+      }
+      
+      // Confirm the payment with the card element
+      const cardElement = elements.getElement(CardElement);
+      if (!cardElement) return;
+      
+      const result = await stripe.confirmCardPayment(data.clientSecret, {
+        payment_method: {
+          card: cardElement,
+        }
+      });
+      
+      if (result.error) {
+        setError(result.error.message ?? null);
+        setProcessing(false);
+      } else {
+        // Payment succeeded!
+        setSucceeded(true);
+        
+        // Call your API to record the payment and grant access
+        await fetch('/api/complete-round-payment', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ 
+            challengeId,
+            paymentId: result.paymentIntent.id
+          }),
+        });
+        
+        // Redirect to the app download page or round page
+        setTimeout(() => {
+          router.push(`/download?challengeId=${challengeId}`);
+        }, 1500);
+      }
+    } catch (err) {
+      console.error('Payment error:', err);
+      setError('An unexpected error occurred. Please try again.');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-6">
+      <div className="p-4 border border-zinc-800 rounded-lg">
+        <CardElement
+          options={{
+            style: {
+              base: {
+                fontSize: '16px',
+                color: '#ffffff',
+                '::placeholder': {
+                  color: '#aab7c4',
+                },
+              },
+              invalid: {
+                color: '#fa755a',
+                iconColor: '#fa755a',
+              },
+            },
+          }}
+        />
+      </div>
+      
+      {error && (
+        <div className="text-red-500 text-sm">{error}</div>
+      )}
+      
+      <button
+        type="submit"
+        disabled={processing || !stripe}
+        className={`
+          w-full py-4 rounded-xl font-semibold text-lg
+          ${processing || succeeded ? 'bg-[#E0FE10]/50' : 'bg-[#E0FE10]'} 
+          text-black transition-all
+        `}
+      >
+        {processing ? 'Processing...' : succeeded ? 'Payment Successful!' : `Pay ${(amount/100).toFixed(2)} ${currency.toUpperCase()}`}
+      </button>
+    </form>
+  );
+};
+
+interface PaymentPageProps {
+  challengeData: {
+    collection: {
+      challenge: {
+        id: string;
+        title: string;
+        pricingInfo?: {
+          isEnabled: boolean;
+          amount: number;
+          currency: string;
+        };
+      };
+    };
+  };
+}
+
+// Main payment page component
+const PaymentPage = ({ challengeData }: PaymentPageProps) => {
+  if (!challengeData) {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
+        <div className="text-white">Loading payment details...</div>
+      </div>
+    );
+  }
+
+  const { challenge } = challengeData.collection;
+  const pricingInfo = challenge.pricingInfo || { isEnabled: false, amount: 0, currency: 'USD' };
+  const amount = Math.round(pricingInfo.amount * 100); // Convert to cents for Stripe
+
+  return (
+    <div className="min-h-screen bg-zinc-950 text-white py-10">
+      <div className="max-w-md mx-auto px-6">
+        <h1 className="text-2xl font-bold mb-2">Complete Your Purchase</h1>
+        <h2 className="text-xl mb-6">{challenge.title}</h2>
+        
+        <div className="mb-8 p-4 bg-zinc-900 rounded-lg">
+          <div className="flex justify-between mb-4">
+            <span>Round Access</span>
+            <span>{(pricingInfo.amount).toFixed(2)} {pricingInfo.currency.toUpperCase()}</span>
+          </div>
+          <div className="border-t border-zinc-800 pt-4 flex justify-between font-semibold">
+            <span>Total</span>
+            <span>{(pricingInfo.amount).toFixed(2)} {pricingInfo.currency.toUpperCase()}</span>
+          </div>
+        </div>
+        
+        <Elements stripe={stripePromise}>
+          <CheckoutForm 
+            challengeId={challenge.id} 
+            amount={amount} 
+            currency={pricingInfo.currency.toLowerCase()} 
+          />
+        </Elements>
+        
+        <p className="mt-6 text-zinc-400 text-sm text-center">
+          Your payment is secure and processed by Stripe.
+        </p>
+      </div>
+    </div>
+  );
+};
+
+export const getServerSideProps: GetServerSideProps = async ({ params }) => {
+  const id = params?.id as string;
+  
+  try {
+    const response = await fetch(
+      `https://fitwithpulse.ai/.netlify/functions/get-challenge-by-id?id=${id}`
+    );
+    
+    if (!response.ok) {
+      throw new Error('Failed to fetch challenge');
+    }
+    
+    const data = await response.json();
+    
+    if (!data.success || !data.collection || !data.collection.challenge) {
+      return { notFound: true };
+    }
+    
+    // If challenge is not a paid challenge, redirect to the challenge page
+    if (!data.collection.challenge.pricingInfo?.isEnabled) {
+      return {
+        redirect: {
+          destination: `/challenge/${id}`,
+          permanent: false,
+        },
+      };
+    }
+    
+    return {
+      props: {
+        challengeData: data
+      }
+    };
+  } catch (error) {
+    console.error('Error fetching challenge for payment:', error);
+    return { notFound: true };
+  }
+};
+
+export default PaymentPage;

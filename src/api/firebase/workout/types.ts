@@ -1058,6 +1058,7 @@ class Challenge {
   maxParticipants: number;
   allowLateJoins: boolean;
   cohortAuthor: string[];
+  pricingInfo: PricingInfo;
   
   // Computed property
   durationInDays: number;
@@ -1083,6 +1084,7 @@ class Challenge {
     maxParticipants?: number;
     allowLateJoins?: boolean;
     cohortAuthor?: string[];
+    pricingInfo?: PricingInfo;
   }) {
     this.id = data.id;
     this.title = data.title;
@@ -1104,6 +1106,7 @@ class Challenge {
     this.maxParticipants = data.maxParticipants || 100;
     this.allowLateJoins = data.allowLateJoins ?? true;
     this.cohortAuthor = data.cohortAuthor || [];
+    this.pricingInfo = data.pricingInfo ? new PricingInfo(data.pricingInfo) : new PricingInfo();
 
     this.durationInDays = this.calculateDurationInDays();
     this.isChallengeEnded = new Date() > this.endDate;
@@ -1147,7 +1150,8 @@ class Challenge {
       createdAt: dateToUnixTimestamp(this.createdAt),
       updatedAt: dateToUnixTimestamp(this.updatedAt),
       durationInDays: this.durationInDays,
-      introVideos: this.introVideos.map(video => video.toDictionary())
+      introVideos: this.introVideos.map(video => video.toDictionary()),
+      pricingInfo: this.pricingInfo.toDictionary(),
     };
   }
 
@@ -1195,7 +1199,8 @@ class Challenge {
           id: video.id,
           userId: video.userId,
           videoUrl: video.videoUrl
-        }))
+        })),
+        pricingInfo: obj.pricingInfo.toDictionary(),
       };
     }
 
@@ -1224,3 +1229,27 @@ export type {
 };
 
 export { ChallengeStatus, Challenge, UserChallenge };
+
+export class PricingInfo {
+  isEnabled: boolean;
+  amount: number;
+  currency: string;
+
+  constructor(data: any = {}) {
+    this.isEnabled = data.isEnabled ?? false;
+    this.amount = data.amount ?? 0.0;
+    this.currency = data.currency ?? "USD";
+  }
+
+  toDictionary(): any {
+    return {
+      isEnabled: this.isEnabled,
+      amount: this.amount,
+      currency: this.currency
+    };
+  }
+
+  static fromDictionary(dict: any): PricingInfo {
+    return new PricingInfo(dict || {});
+  }
+}

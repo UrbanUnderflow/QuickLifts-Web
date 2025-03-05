@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Calendar, Clock, Flag, Users, Play } from 'lucide-react';
-import { ChallengeInvitationProps } from '../api/firebase/workout/types';
+import { ChallengeInvitationProps, PricingInfo } from '../api/firebase/workout/types';
 import ChallengeCTA from './ChallengeCTA';
 import {IntroVideo} from '../api/firebase/workout'
 import { useRouter } from 'next/router';
@@ -201,6 +201,11 @@ const RoundInvitation: React.FC<ChallengeInvitationProps> = ({ challenge }) => {
           <h2 className="text-lg font-semibold text-white/90">
             You're invited to participate in this Round 🎉
           </h2>
+          {challenge.pricingInfo?.isEnabled && (
+            <div className="flex justify-center">
+              <PricingBadge pricingInfo={challenge.pricingInfo} />
+            </div>
+          )}
           <h1 className="text-3xl font-bold">{challenge.title}</h1>
           <p className="text-white/70">{challenge.subtitle}</p>
         </div>
@@ -243,5 +248,24 @@ const RoundInvitation: React.FC<ChallengeInvitationProps> = ({ challenge }) => {
     </div>
   );
 };
+
+// Inside RoundInvitation.tsx, add this new component
+const PricingBadge = ({ pricingInfo }: { pricingInfo: PricingInfo }) => {
+  if (!pricingInfo || !pricingInfo.isEnabled) return null;
+  
+  const formatter = new Intl.NumberFormat(undefined, {
+    style: 'currency',
+    currency: pricingInfo.currency,
+    minimumFractionDigits: 2
+  });
+  
+  return (
+    <div className="bg-zinc-800 rounded-full px-4 py-1 inline-flex items-center mb-4">
+      <span className="text-[#E0FE10] mr-1">Premium Round</span>
+      <span className="text-white font-semibold">{formatter.format(pricingInfo.amount)}</span>
+    </div>
+  );
+};
+
 
 export default RoundInvitation;

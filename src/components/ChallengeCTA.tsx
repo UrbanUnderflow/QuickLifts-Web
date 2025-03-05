@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
+import { useRouter } from 'next/router';
 import { User as UserIcon, Download, Smartphone, ArrowRight } from 'lucide-react';
+import { Challenge } from '../api/firebase/workout/types';
 
 interface OnboardingStep {
   title: string;
@@ -7,8 +9,11 @@ interface OnboardingStep {
   icon: React.ReactNode;
 }
 
-const ChallengeCTA: React.FC<{ challenge: any }> = ({ challenge }) => {
+const ChallengeCTA: React.FC<{ challenge: Challenge }> = ({ challenge }) => {
+  const router = useRouter();
   const [showInstructions, setShowInstructions] = useState(false);
+  const [isJoining, setIsJoining] = useState(false);
+  const isPaid = challenge.pricingInfo?.isEnabled && challenge.pricingInfo?.amount > 0;
   
   const steps: OnboardingStep[] = [
     {
@@ -45,8 +50,22 @@ const ChallengeCTA: React.FC<{ challenge: any }> = ({ challenge }) => {
   // Assumes that challenge.ownerId is an array and uses its first element.
   const webAppUrl = `${endpoint}/round/${challenge.id}`
 
-  const handleJoinChallenge = () => {
-    setShowInstructions(true);
+  const handleJoinChallenge = async () => {
+    setIsJoining(true);
+    
+    try {
+      if (isPaid) {
+        router.push(`/payment/${challenge.id}`);
+        return;
+      }
+      
+      // Show instructions for free rounds
+      setShowInstructions(true);
+    } catch (error) {
+      console.error('Error joining round:', error);
+    } finally {
+      setIsJoining(false);
+    }
   };
 
   const handleOpenInApp = () => {
@@ -116,9 +135,14 @@ const ChallengeCTA: React.FC<{ challenge: any }> = ({ challenge }) => {
     <div className="fixed bottom-0 left-0 right-0 p-4 bg-zinc-950 border-t border-zinc-800">
       <button
         onClick={handleJoinChallenge}
-        className="w-full flex items-center justify-center px-8 py-4 text-lg font-medium rounded-xl text-black bg-[#E0FE10] hover:bg-[#E0FE10]/90"
+        disabled={isJoining}
+        className={`
+          w-full flex items-center justify-center px-8 py-4 text-lg font-medium 
+          rounded-xl text-black transition-all
+          ${isJoining ? 'bg-[#E0FE10]/50' : 'bg-[#E0FE10]'}
+        `}
       >
-        Join Round
+        {isJoining ? 'Processing...' : isPaid ? `Join Round ($${challenge.pricingInfo?.amount})` : 'Join Round'}
       </button>
     </div>
   );
