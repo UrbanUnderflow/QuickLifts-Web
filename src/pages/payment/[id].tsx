@@ -67,7 +67,10 @@ const PaymentPage = ({ challengeData }: PaymentPageProps) => {
 
   const { challenge } = challengeData.collection;
   const pricingInfo = challenge.pricingInfo || { isEnabled: false, amount: 0, currency: 'USD' };
-  const amount = Math.round(pricingInfo.amount * 100); // Convert to cents for Stripe
+  // Calculate base amount and fee
+  const baseAmount = Math.round(pricingInfo.amount * 100); // Convert to cents for Stripe
+  const processingFee = Math.round(baseAmount * 0.035); // 3.5% fee
+  const totalAmount = baseAmount + processingFee;
 
   // Options for the Stripe Elements
   const stripeElementsOptions = {
@@ -77,7 +80,7 @@ const PaymentPage = ({ challengeData }: PaymentPageProps) => {
       currency: pricingInfo.currency.toLowerCase(),
       total: {
         label: challenge.title || 'Round Access',
-        amount: amount,
+        amount: totalAmount,
       },
       requestPayerName: true,
       requestPayerEmail: true,
@@ -93,18 +96,22 @@ const PaymentPage = ({ challengeData }: PaymentPageProps) => {
         <div className="mb-8 p-4 bg-zinc-900 rounded-lg">
           <div className="flex justify-between mb-4">
             <span>Round Access</span>
-            <span>{(pricingInfo.amount).toFixed(2)} {pricingInfo.currency.toUpperCase()}</span>
+            <span>${(baseAmount / 100).toFixed(2)}</span>
+          </div>
+          <div className="flex justify-between mb-4 text-sm text-zinc-400">
+            <span>Tax & Service Fee</span>
+            <span>${(processingFee / 100).toFixed(2)}</span>
           </div>
           <div className="border-t border-zinc-800 pt-4 flex justify-between font-semibold">
             <span>Total</span>
-            <span>{(pricingInfo.amount).toFixed(2)} {pricingInfo.currency.toUpperCase()}</span>
+            <span>${(totalAmount / 100).toFixed(2)}</span>
           </div>
         </div>
         
         <Elements stripe={stripePromise} options={stripeElementsOptions}>
           <CheckoutForm 
             challengeId={challenge.id} 
-            amount={amount} 
+            amount={totalAmount} 
             currency={pricingInfo.currency.toLowerCase()} 
             isApplePayAvailable={isApplePayAvailable}
           />
