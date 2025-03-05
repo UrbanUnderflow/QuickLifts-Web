@@ -63,7 +63,9 @@ const handler = async (event) => {
   }
 
   try {
-    const userId = event.queryStringParameters.userId;
+    // Safely access userId to avoid null reference errors
+    const userId = event.queryStringParameters?.userId;
+    console.log('Received GET request for userId:', userId);
     
     if (!userId) {
       return {
@@ -79,7 +81,7 @@ const handler = async (event) => {
         statusCode: 200,
         body: JSON.stringify({
           success: true,
-          earnings: dummyEarningsData
+          data: dummyEarningsData
         })
       };
     }

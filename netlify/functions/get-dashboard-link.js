@@ -43,19 +43,42 @@ const db = admin.firestore();
 const stripe = process.env.STRIPE_SECRET_KEY ? Stripe(process.env.STRIPE_SECRET_KEY) : null;
 
 const handler = async (event) => {
-  // Only accept POST requests
-  if (event.httpMethod !== 'POST') {
-    return {
-      statusCode: 405,
-      body: JSON.stringify({ success: false, error: 'Method not allowed' })
-    };
-  }
+  console.log(`Received ${event.httpMethod} request:`, {
+    queryParams: event.queryStringParameters,
+    body: event.body ? '(has body data)' : '(no body data)'
+  });
 
+  // Accept both GET and POST requests for flexibility
   try {
-    // Parse request body
-    const body = JSON.parse(event.body || '{}');
-    const userId = body.userId;
+    let userId;
+    
+    // Check for userId in different locations
+    if (event.httpMethod === 'GET') {
+      userId = event.queryStringParameters?.userId;
+    } else if (event.httpMethod === 'POST') {
+      // First try to parse the body if it exists
+      if (event.body) {
+        try {
+          const body = JSON.parse(event.body);
+          userId = body.userId;
+        } catch (parseError) {
+          console.error('Error parsing request body:', parseError);
+        }
+      }
+      
+      // If userId not found in body, check query parameters as fallback
+      if (!userId && event.queryStringParameters) {
+        userId = event.queryStringParameters.userId;
+      }
+    } else {
+      return {
+        statusCode: 405,
+        body: JSON.stringify({ success: false, error: 'Method not allowed' })
+      };
+    }
 
+    console.log('Extracted userId:', userId);
+    
     if (!userId) {
       return {
         statusCode: 400,
