@@ -54,7 +54,7 @@ const TrainerDashboard = () => {
     
     try {
       await fetch(
-        `https://fitwithpulse.ai/.netlify/functions/complete-onboarding?userId=${currentUser.id}`
+        `/.netlify/functions/complete-stripe-onboarding?userId=${currentUser.id}`
       );
       // Refresh the page without the query parameter
       router.replace('/trainer/dashboard');
@@ -86,7 +86,7 @@ const TrainerDashboard = () => {
     if (!currentUser?.id) return;
     
     try {
-      const response = await fetch(`/api/trainer/get-earnings?userId=${currentUser.id}`);
+      const response = await fetch(`/.netlify/functions/get-earnings?userId=${currentUser.id}`);
       const data = await response.json();
       
       if (data.success) {
@@ -101,7 +101,7 @@ const TrainerDashboard = () => {
     if (!currentUser?.id) return;
     
     try {
-      const response = await fetch('/api/trainer/get-dashboard-link', {
+      const response = await fetch('/.netlify/functions/get-dashboard-link', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: currentUser.id }),

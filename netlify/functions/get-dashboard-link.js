@@ -1,0 +1,95 @@
+// Function to get a Stripe dashboard link for a creator account
+
+const Stripe = require('stripe');
+const admin = require('firebase-admin');
+
+if (admin.apps.length === 0) {
+  admin.initializeApp({
+    credential: admin.credential.cert({
+      "type": "service_account",
+      "project_id": "quicklifts-dd3f1",
+      "private_key_id": process.env.FIREBASE_PRIVATE_KEY,
+      "private_key": process.env.FIREBASE_SECRET_KEY.replace(/\\n/g, '\n'),
+      "client_email": "firebase-adminsdk-1qxb0@quicklifts-dd3f1.iam.gserviceaccount.com",
+      "client_id": "111494077667496751062",
+      "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+      "token_uri": "https://oauth2.googleapis.com/token",
+      "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+      "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-1qxb0%40quicklifts-dd3f1.iam.gserviceaccount.com",
+      "universe_domain": "googleapis.com"
+    })
+  });
+}
+
+const db = admin.firestore();
+const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
+
+const handler = async (event) => {
+  // Only accept POST requests
+  if (event.httpMethod !== 'POST') {
+    return {
+      statusCode: 405,
+      body: JSON.stringify({ success: false, error: 'Method not allowed' })
+    };
+  }
+
+  try {
+    // Parse request body
+    const body = JSON.parse(event.body || '{}');
+    const userId = body.userId;
+
+    if (!userId) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ success: false, error: 'Missing userId parameter' })
+      };
+    }
+
+    // Get user document from Firestore
+    const userDoc = await db.collection('users').doc(userId).get();
+    if (!userDoc.exists) {
+      return {
+        statusCode: 404,
+        body: JSON.stringify({ success: false, error: 'User not found' })
+      };
+    }
+
+    const userData = userDoc.data();
+    
+    // Check if user has a Stripe account
+    if (!userData.creator || !userData.creator.stripeAccountId) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ 
+          success: false, 
+          error: 'Stripe account not found for this user' 
+        })
+      };
+    }
+
+    // Create a login link for the Stripe Connect account
+    const loginLink = await stripe.accounts.createLoginLink(
+      userData.creator.stripeAccountId
+    );
+
+    // Return the dashboard URL
+    return {
+      statusCode: 200,
+      body: JSON.stringify({
+        success: true,
+        url: loginLink.url
+      })
+    };
+  } catch (error) {
+    console.error('Error getting dashboard link:', error);
+    return {
+      statusCode: 500,
+      body: JSON.stringify({
+        success: false,
+        error: error.message
+      })
+    };
+  }
+};
+
+module.exports = { handler }; 
