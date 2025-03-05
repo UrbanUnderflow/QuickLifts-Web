@@ -177,7 +177,13 @@ const HostSection: React.FC<HostSectionProps> = ({ userId }) => {
   );
 };
 
-const RoundInvitation: React.FC<ChallengeInvitationProps> = ({ challenge }) => {
+const RoundInvitation: React.FC<ChallengeInvitationProps> = ({ challenge, onClose, onJoinChallenge }) => {
+  console.log("RoundInvitation Render:", {
+    hasPricingInfo: !!challenge.pricingInfo,
+    pricingInfo: challenge.pricingInfo,
+    fullChallenge: challenge
+  });
+
   // Ensure we have valid Date objects
   const startDate = new Date(challenge.startDate);
   const endDate = new Date(challenge.endDate);

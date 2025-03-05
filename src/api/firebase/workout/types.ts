@@ -665,6 +665,7 @@ export class SweatlistCollection {
     this.subtitle = data.subtitle || '';
     this.pin = data.pin || null;
     this.challenge = data.challenge ? new Challenge(data.challenge) : null;
+    
     this.sweatlistIds = (data.sweatlistIds || []).map((item: any) => 
       new SweatlistIdentifiers(item)
     );

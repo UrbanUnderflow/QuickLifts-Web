@@ -138,7 +138,6 @@ async function getCollectionById(collectionId) {
         id: data.challenge.id || doc.id,
         title: data.challenge.title || '',
         subtitle: data.challenge.subtitle || '',
-        // Updated introVideos array
         introVideos: (data.challenge.introVideos || []).map((v) => ({
           id: v.id || '',
           userId: v.userId || '',
@@ -149,6 +148,7 @@ async function getCollectionById(collectionId) {
         endDate: convertTimestamp(data.challenge.endDate),
         createdAt: convertTimestamp(data.challenge.createdAt),
         updatedAt: convertTimestamp(data.challenge.updatedAt),
+        pricingInfo: data.challenge.pricingInfo || { isEnabled: false, amount: 0, currency: 'USD' },
         participants: participants
       } : null
     };

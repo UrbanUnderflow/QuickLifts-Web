@@ -32,13 +32,12 @@ interface ChallengePageProps {
 }
 
 const ChallengePage: React.FC<ChallengePageProps> = ({ initialCollection, initialError }) => {
-  console.log("Component rendering", { initialCollection, initialError }); // Add this
-  console.log("Challenge Page Render - Collection Data:", {
-    hasPin: initialCollection?.pin ? true : false,
-    pin: initialCollection?.pin,
-    fullCollection: initialCollection
+  console.log("Component rendering", { 
+    initialCollection, 
+    initialError,
+    pricingInfo: initialCollection?.challenge?.pricingInfo,
+    challenge: initialCollection?.challenge 
   });
-
 
   const router = useRouter();
   const { id } = router.query;
@@ -50,7 +49,12 @@ const ChallengePage: React.FC<ChallengePageProps> = ({ initialCollection, initia
 
 
   useEffect(() => {
-    console.log("useEffect triggered", { id, initialCollection }); // Add this
+    console.log("useEffect triggered", { 
+      id, 
+      initialCollection,
+      pricingInfo: initialCollection?.challenge?.pricingInfo,
+      challenge: initialCollection?.challenge 
+    });
 
     const fetchChallenge = async () => {
       if (!id || initialCollection) return;
@@ -80,7 +84,9 @@ const ChallengePage: React.FC<ChallengePageProps> = ({ initialCollection, initia
       const data = await response.json();
       console.log("SSR Response Data:", {
         pin: data.collection.pin,
-        fullData: data.collection
+        fullData: data.collection,
+        pricingInfo: data.collection.challenge.pricingInfo,
+        challenge: data.collection.challenge
       });
   
       console.log("Client - Raw API Response:", JSON.stringify(data, null, 2));
@@ -113,7 +119,8 @@ const ChallengePage: React.FC<ChallengePageProps> = ({ initialCollection, initia
             createdAt: new Date(data.collection.challenge.createdAt),
             updatedAt: new Date(data.collection.challenge.updatedAt),
             participants: data.collection.challenge.participants || [],
-            ownerId: data.collection.challenge.ownerId || []
+            ownerId: data.collection.challenge.ownerId || [],
+            pricingInfo: data.collection.challenge.pricingInfo || { isEnabled: false, amount: 0, currency: 'USD' }
           })
         };
   
@@ -206,12 +213,15 @@ export const getServerSideProps: GetServerSideProps<ChallengePageProps> = async 
 
     const data = await response.json();
     
-    console.log("SSR Raw Response:", {
-      introVideoURL: data.collection.introVideoURL,
-      ownerId: data.collection.ownerId,
-      rawData: JSON.stringify(data.collection, null, 2)
+    // Debug logs for API response
+    console.log("API Raw Response:", {
+      success: data.success,
+      hasCollection: !!data.collection,
+      hasChallenge: !!data.collection?.challenge,
+      pricingInfo: data.collection?.challenge?.pricingInfo,
+      fullResponse: data
     });
-    
+
     if (!data.success || !data.collection) {
       return {
         props: {
@@ -226,11 +236,12 @@ export const getServerSideProps: GetServerSideProps<ChallengePageProps> = async 
       ...data.collection,
       createdAt: new Date(data.collection.createdAt).toISOString(),
       updatedAt: new Date(data.collection.updatedAt).toISOString(),
-      pin: data.collection.pin ?? null,  // Changed this line
+      pin: data.collection.pin ?? null,
       challenge: {
         id: data.collection.challenge.id,
         title: data.collection.challenge.title,
         subtitle: data.collection.challenge.subtitle,
+        pricingInfo: data.collection.challenge.pricingInfo || { isEnabled: false, amount: 0, currency: 'USD' },
         introVideos: data.collection.challenge.introVideos || [],
         status: data.collection.challenge.status || 'draft',
         startDate: new Date(data.collection.challenge.startDate).toISOString(),
@@ -241,6 +252,13 @@ export const getServerSideProps: GetServerSideProps<ChallengePageProps> = async 
         ownerId: data.collection.challenge.ownerId || []
       }
     };
+
+    // Move debug log here after removing non-serializable data
+    console.log("Processed Collection:", {
+      hasPricingInfo: !!data.collection.challenge.pricingInfo,
+      pricingInfo: data.collection.challenge.pricingInfo,
+      processedPricingInfo: processedCollection.challenge.pricingInfo
+    });
 
     return {
       props: {
