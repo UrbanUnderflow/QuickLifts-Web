@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useSelector } from 'react-redux';
 import { RootState } from '../../redux/store';
+import { userService } from '../../api/firebase/user/service';
 
 interface EarningsData {
   totalEarned: number;
@@ -66,13 +67,9 @@ const TrainerDashboard = () => {
     if (!currentUser?.id) return;
     
     try {
-      // Get user data from Firestore to check onboarding status
-      const response = await fetch(`/api/get-user-data?userId=${currentUser.id}`);
-      const data = await response.json();
+      const userData = await userService.fetchUserFromFirestore(currentUser.id);
 
-      if (!data.user?.creator) {
-        setAccountStatus('not_started');
-      } else if (data.user.creator.onboardingStatus === 'complete') {
+      if (userData?.creator?.onboardingStatus === 'complete') {
         setAccountStatus('complete');
         // Generate Stripe Dashboard link
         generateDashboardLink();

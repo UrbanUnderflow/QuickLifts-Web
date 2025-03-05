@@ -1,10 +1,11 @@
 // FILE: pages/trainer/connect-account.tsx
-// Updated to use Redux instead of AuthContext
+// Updated to use userService directly instead of API calls
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useSelector } from 'react-redux';
 import { RootState } from '../../redux/store';
+import { userService } from '../../api/firebase/user';
 
 const ConnectAccountPage = () => {
   const [loading, setLoading] = useState(false);
@@ -12,7 +13,7 @@ const ConnectAccountPage = () => {
   const [onboardingLink, setOnboardingLink] = useState<string | null>(null);
   const router = useRouter();
   
-  // Get user from Redux store instead of AuthContext
+  // Get user from Redux store
   const currentUser = useSelector((state: RootState) => state.user.currentUser);
   const isLoading = useSelector((state: RootState) => state.user.loading);
 
@@ -37,17 +38,17 @@ const ConnectAccountPage = () => {
     if (!currentUser?.id) return;
     
     try {
-      // Fetch fresh user data to check if they're already onboarded
-      const response = await fetch(`/api/get-user-data?userId=${currentUser.id}`);
-      const data = await response.json();
-
-      if (data.user?.creator?.onboardingStatus === 'complete') {
+      // Fetch fresh user data directly from Firestore using userService
+      const refreshedUser = await userService.fetchUserFromFirestore(currentUser.id);
+      
+      if (refreshedUser?.creator?.onboardingStatus === 'complete') {
         // Redirect to dashboard if already onboarded
         router.push('/trainer/dashboard');
-      } else if (data.user?.creator?.onboardingLink && 
-                new Date(data.user.creator.onboardingExpirationDate) > new Date()) {
+      } else if (refreshedUser?.creator?.onboardingLink && 
+                refreshedUser.creator.onboardingExpirationDate && 
+                new Date(refreshedUser.creator.onboardingExpirationDate) > new Date()) {
         // Use existing onboarding link if not expired
-        setOnboardingLink(data.user.creator.onboardingLink);
+        setOnboardingLink(refreshedUser.creator.onboardingLink);
       }
     } catch (err) {
       console.error('Error checking account status:', err);
@@ -65,23 +66,38 @@ const ConnectAccountPage = () => {
     setError(null);
 
     try {
+      // Log the request for debugging
+      console.log("Calling Netlify function with userId:", currentUser.id);
+      
       // Call the existing Netlify function to create Connect account
       const response = await fetch(
-        `https://fitwithpulse.ai/.netlify/functions/create-stripe-connect-account?userId=${currentUser.id}`
+        `/.netlify/functions/create-stripe-connect-account?userId=${currentUser.id}`
       );
-
-      const data = await response.json();
+      
+      console.log("Response status:", response.status);
+      
+      // Get raw response text for debugging
+      const responseText = await response.text();
+      console.log("Raw response:", responseText);
+      
+      // Try to parse as JSON
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error("JSON parse error:", parseError);
+        throw new Error("Invalid response format from server");
+      }
 
       if (!data.success) {
         throw new Error(data.error || 'Failed to create account');
       }
 
-      // Fetch the onboarding link that was stored in Firestore
-      const userResponse = await fetch(`/api/get-user-data?userId=${currentUser.id}`);
-      const userData = await userResponse.json();
+      // Fetch the updated user directly from Firestore
+      const refreshedUser = await userService.fetchUserFromFirestore(currentUser.id);
       
-      if (userData.user?.creator?.onboardingLink) {
-        setOnboardingLink(userData.user.creator.onboardingLink);
+      if (refreshedUser?.creator?.onboardingLink) {
+        setOnboardingLink(refreshedUser.creator.onboardingLink);
       } else {
         throw new Error('Onboarding link not found');
       }
