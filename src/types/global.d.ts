@@ -1,5 +1,8 @@
-interface Window {
-  ApplePaySession: any;
+/// <reference types="@types/applepayjs" />
+declare global {
+  interface Window {
+    ApplePaySession: typeof ApplePaySession;
+  }
 }
 
-declare const ApplePaySession: any; 
+export {}; 
