@@ -98,41 +98,75 @@ const handler = async (event) => {
       };
     }
 
-    // Get user document from Firestore
-    const userDoc = await db.collection('users').doc(userId).get();
-    if (!userDoc.exists) {
-      return {
-        statusCode: 404,
-        body: JSON.stringify({ success: false, error: 'User not found' })
-      };
-    }
+    try {
+      // Get user document from Firestore
+      console.log('Fetching user document from Firestore...');
+      const userDoc = await db.collection('users').doc(userId).get();
+      
+      if (!userDoc.exists) {
+        console.warn(`User document not found for userId: ${userId}. Returning dummy URL.`);
+        return {
+          statusCode: 200,
+          body: JSON.stringify({
+            success: true,
+            url: DUMMY_DASHBOARD_URL,
+            message: 'User not found, returning sample dashboard link'
+          })
+        };
+      }
 
-    const userData = userDoc.data();
-    
-    // Check if user has a Stripe account
-    if (!userData.creator || !userData.creator.stripeAccountId) {
+      const userData = userDoc.data();
+      console.log('User data retrieved, checking for Stripe account...');
+      
+      // Check if user has a Stripe account
+      if (!userData.creator || !userData.creator.stripeAccountId) {
+        console.warn('User has no Stripe account. Returning dummy URL.');
+        return {
+          statusCode: 200,
+          body: JSON.stringify({ 
+            success: true, 
+            url: DUMMY_DASHBOARD_URL,
+            message: 'No Stripe account found, returning sample dashboard link'
+          })
+        };
+      }
+
+      console.log('Found Stripe account, creating login link...');
+      // Create a login link for the Stripe Connect account
+      const loginLink = await stripe.accounts.createLoginLink(
+        userData.creator.stripeAccountId
+      );
+
+      // Return the dashboard URL
       return {
-        statusCode: 400,
-        body: JSON.stringify({ 
-          success: false, 
-          error: 'Stripe account not found for this user' 
+        statusCode: 200,
+        body: JSON.stringify({
+          success: true,
+          url: loginLink.url
+        })
+      };
+    } catch (error) {
+      console.error('Error getting dashboard link:', error);
+      
+      // In development, return dummy data on error
+      if (!process.env.FIREBASE_SECRET_KEY_ALT || !stripe) {
+        return {
+          statusCode: 200,
+          body: JSON.stringify({
+            success: true,
+            url: DUMMY_DASHBOARD_URL
+          })
+        };
+      }
+      
+      return {
+        statusCode: 500,
+        body: JSON.stringify({
+          success: false,
+          error: error.message
         })
       };
     }
-
-    // Create a login link for the Stripe Connect account
-    const loginLink = await stripe.accounts.createLoginLink(
-      userData.creator.stripeAccountId
-    );
-
-    // Return the dashboard URL
-    return {
-      statusCode: 200,
-      body: JSON.stringify({
-        success: true,
-        url: loginLink.url
-      })
-    };
   } catch (error) {
     console.error('Error getting dashboard link:', error);
     

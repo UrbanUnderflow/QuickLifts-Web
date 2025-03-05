@@ -71,7 +71,7 @@ const ConnectAccountPage = () => {
       
       // Call the existing Netlify function to create Connect account
       const response = await fetch(
-        `/.netlify/functions/create-stripe-connect-account?userId=${currentUser.id}`
+        `/.netlify/functions/create-connected-account?userId=${currentUser.id}`
       );
       
       console.log("Response status:", response.status);
