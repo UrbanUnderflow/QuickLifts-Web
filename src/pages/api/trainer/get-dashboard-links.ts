@@ -1,6 +1,6 @@
 import Stripe from 'stripe';
 import { getFirestore } from 'firebase-admin/firestore';
-import admin from '../../lib/firebase-admin';
+import admin from '../../../lib/firebase-admin';
 import type { NextApiRequest, NextApiResponse } from 'next';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
