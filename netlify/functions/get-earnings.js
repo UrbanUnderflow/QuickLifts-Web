@@ -3,27 +3,6 @@
 const Stripe = require('stripe');
 const admin = require('firebase-admin');
 
-if (admin.apps.length === 0) {
-  admin.initializeApp({
-    credential: admin.credential.cert({
-      "type": "service_account",
-      "project_id": "quicklifts-dd3f1",
-      "private_key_id": process.env.FIREBASE_PRIVATE_KEY,
-      "private_key": process.env.FIREBASE_SECRET_KEY.replace(/\\n/g, '\n'),
-      "client_email": "firebase-adminsdk-1qxb0@quicklifts-dd3f1.iam.gserviceaccount.com",
-      "client_id": "111494077667496751062",
-      "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-      "token_uri": "https://oauth2.googleapis.com/token",
-      "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-      "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-1qxb0%40quicklifts-dd3f1.iam.gserviceaccount.com",
-      "universe_domain": "googleapis.com"
-    })
-  });
-}
-
-const db = admin.firestore();
-const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
-
 // Dummy data for development or when Stripe API access fails
 const dummyEarningsData = {
   totalEarned: 1250.00,
@@ -37,6 +16,42 @@ const dummyEarningsData = {
     { date: '2023-12-10', roundTitle: 'Full Body Workout', amount: 35.00 }
   ]
 };
+
+// Initialize Firebase Admin if not already initialized
+if (admin.apps.length === 0) {
+  try {
+    // Check if we have the required environment variables
+    if (!process.env.FIREBASE_SECRET_KEY_ALT) {
+      console.warn('FIREBASE_SECRET_KEY_ALT environment variable is missing. Using dummy mode.');
+      // In development, we'll just initialize with a placeholder
+      admin.initializeApp({
+        projectId: "quicklifts-dd3f1"
+      });
+    } else {
+      // Initialize with the actual credentials
+      admin.initializeApp({
+        credential: admin.credential.cert({
+          "type": "service_account",
+          "project_id": "quicklifts-dd3f1",
+          "private_key_id": process.env.FIREBASE_PRIVATE_KEY_ALT,
+          "private_key": process.env.FIREBASE_SECRET_KEY_ALT.replace(/\\n/g, '\n'),
+          "client_email": "firebase-adminsdk-1qxb0@quicklifts-dd3f1.iam.gserviceaccount.com",
+          "client_id": "111494077667496751062",
+          "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+          "token_uri": "https://oauth2.googleapis.com/token",
+          "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+          "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-1qxb0@quicklifts-dd3f1.iam.gserviceaccount.com"
+        })
+      });
+    }
+    console.log('Firebase Admin initialized successfully');
+  } catch (error) {
+    console.error('Error initializing Firebase Admin:', error);
+  }
+}
+
+const db = admin.firestore();
+const stripe = process.env.STRIPE_SECRET_KEY ? Stripe(process.env.STRIPE_SECRET_KEY) : null;
 
 const handler = async (event) => {
   // Only accept GET requests
@@ -54,6 +69,18 @@ const handler = async (event) => {
       return {
         statusCode: 400,
         body: JSON.stringify({ success: false, error: 'Missing userId parameter' })
+      };
+    }
+
+    // Check if we're in development mode without proper credentials
+    if (!process.env.FIREBASE_SECRET_KEY_ALT || !stripe) {
+      console.warn('Running in development mode without proper credentials. Returning dummy data.');
+      return {
+        statusCode: 200,
+        body: JSON.stringify({
+          success: true,
+          earnings: dummyEarningsData
+        })
       };
     }
 
@@ -133,7 +160,7 @@ const handler = async (event) => {
     console.error('Error getting earnings data:', error);
     
     // In development, return dummy data on error
-    if (process.env.NODE_ENV === 'development') {
+    if (!process.env.FIREBASE_SECRET_KEY_ALT || !stripe) {
       return {
         statusCode: 200,
         body: JSON.stringify({
