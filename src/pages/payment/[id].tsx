@@ -18,21 +18,6 @@ const appearance = {
   },
 };
 
-// For Apple Pay button styling
-const ApplePayButtonStyle = () => (
-  <style jsx global>{`
-    .apple-pay-button {
-      display: inline-block;
-      -webkit-appearance: -apple-pay-button;
-      -apple-pay-button-type: buy;
-      -apple-pay-button-style: black;
-      width: 100%;
-      height: 48px;
-      margin-bottom: 16px;
-    }
-  `}</style>
-);
-
 interface CheckoutFormProps {
   challengeId: string;
   amount: number;
@@ -132,12 +117,9 @@ const PaymentPage = ({ challengeData }: PaymentPageProps) => {
           
           <div className="flex items-center justify-center space-x-4">
             <img src="/visa.svg" alt="Visa" className="h-6" />
-            <img src="/mastercard.svg" alt="Mastercard" className="h-6" />
-            <img src="/amex.svg" alt="American Express" className="h-6" />
-            {isApplePayAvailable && (
-              <img src="/apple-pay.svg" alt="Apple Pay" className="h-6" />
-            )}
-            <img src="/google-pay.svg" alt="Google Pay" className="h-6" />
+            <img src="/master-card.svg" alt="Mastercard" className="h-6" />
+            <img src="/american-express.svg" alt="American Express" className="h-6" />
+            <img src="/discover-card.svg" alt="Discover Card" className="h-6" />
           </div>
         </div>
       </div>
@@ -427,73 +409,56 @@ const CheckoutForm = ({ challengeId, amount, currency, isApplePayAvailable }: Ch
 
   return (
     <div className="space-y-6">
-      {/* Payment Request Button (Apple Pay / Google Pay) */}
+      {/* Payment Request Button (Apple Pay / Google Pay / Link) */}
       {paymentRequest && (
         <div className="mb-6">
           <label className="block text-sm font-medium mb-2">Quick Payment</label>
-          
           <div className="payment-request-button-container">
             <PaymentRequestButtonElement
               options={{
                 paymentRequest,
                 style: {
                   paymentRequestButton: {
-                    type: 'default', // 'default', 'donate', 'buy'
-                    theme: 'dark', // 'dark', 'light', 'outline'
+                    type: 'default',
+                    theme: 'dark',
                     height: '48px',
                   },
                 },
               }}
             />
           </div>
-          
           <div className="mt-4 mb-2 text-center text-sm text-zinc-400">
             Or pay with card
           </div>
         </div>
-      )}
-      
-      {/* Fallback Apple Pay Button for Safari */}
-      {isApplePayAvailable && !paymentMethodsAvailable.applePay && !paymentRequest && (
-        <>
-          <ApplePayButtonStyle />
-          <button 
-            className="apple-pay-button"
-            onClick={handleApplePayDirect}
-          />
-          <div className="mt-4 mb-2 text-center text-sm text-zinc-400">
-            Or pay with card
-          </div>
-        </>
       )}
 
       {/* Card Element */}
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <div>
-          <label className="block text-sm font-medium mb-2">Card Details</label>
-          <div className="p-4 border border-zinc-800 rounded-lg">
-            <CardElement
-              options={{
-                style: {
-                  base: {
-                    fontSize: '16px',
-                    color: '#ffffff',
-                    '::placeholder': {
-                      color: '#aab7c4',
-                    },
-                    iconColor: '#ffffff',
+      <div>
+        <label className="block text-sm font-medium mb-2">Card Details</label>
+        <div className="p-4 border border-zinc-800 rounded-lg">
+          <CardElement
+            options={{
+              style: {
+                base: {
+                  fontSize: '16px',
+                  color: '#ffffff',
+                  '::placeholder': {
+                    color: '#aab7c4',
                   },
-                  invalid: {
-                    color: '#fa755a',
-                    iconColor: '#fa755a',
-                  },
+                  iconColor: '#ffffff',
                 },
-                hidePostalCode: true,
-              }}
-            />
-          </div>
+                invalid: {
+                  color: '#fa755a',
+                  iconColor: '#fa755a',
+                },
+              },
+              hidePostalCode: true,
+            }}
+          />
         </div>
-      
+      </div>
+
       {error && (
         <div className="text-red-500 text-sm mt-2">{error}</div>
       )}
@@ -509,21 +474,8 @@ const CheckoutForm = ({ challengeId, amount, currency, isApplePayAvailable }: Ch
       >
         {processing ? 'Processing...' : succeeded ? 'Payment Successful!' : `Pay ${(amount/100).toFixed(2)} ${currency.toUpperCase()}`}
       </button>
-    </form>
-    
-    {/* Debug Payment Methods */}
-    {process.env.NODE_ENV === 'development' && (
-      <div className="mt-6 p-4 bg-zinc-900 rounded-lg text-xs">
-        <h3 className="text-sm mb-2">Payment Methods Available (Debug):</h3>
-        <ul>
-          <li>Apple Pay: {paymentMethodsAvailable.applePay ? 'Yes' : 'No'}</li>
-          <li>Google Pay: {paymentMethodsAvailable.googlePay ? 'Yes' : 'No'}</li>
-          <li>Browser Payment API: {paymentMethodsAvailable.browserPaymentMethods ? 'Yes' : 'No'}</li>
-        </ul>
-      </div>
-    )}
-  </div>
-);
+    </div>
+  );
 };
 
 export const getServerSideProps: GetServerSideProps = async ({ params }) => {
@@ -564,5 +516,6 @@ export const getServerSideProps: GetServerSideProps = async ({ params }) => {
     return { notFound: true };
   }
 };
+
 
 export default PaymentPage;
