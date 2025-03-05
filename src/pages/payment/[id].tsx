@@ -62,6 +62,7 @@ const PaymentPage = ({ challengeData }: PaymentPageProps) => {
             challengeId={challenge.id} 
             amount={amount} 
             currency={pricingInfo.currency.toLowerCase()} 
+            setIsApplePayAvailable={setIsApplePayAvailable}
           />
         </Elements>
         
@@ -91,7 +92,14 @@ const PaymentPage = ({ challengeData }: PaymentPageProps) => {
 };
 
 // Inside component definition for CheckoutForm
-const CheckoutForm = ({ challengeId, amount, currency }: CheckoutFormProps) => {
+const CheckoutForm = ({ 
+  challengeId, 
+  amount, 
+  currency, 
+  setIsApplePayAvailable 
+}: CheckoutFormProps & { 
+  setIsApplePayAvailable: (available: boolean) => void 
+}) => {
   const stripe = useStripe();
   const elements = useElements();
   const [error, setError] = useState<string | null>(null);
@@ -104,7 +112,6 @@ const CheckoutForm = ({ challengeId, amount, currency }: CheckoutFormProps) => {
   useEffect(() => {
     if (!stripe) return;
 
-    // Create payment request object for Apple Pay/Google Pay
     const pr = stripe.paymentRequest({
       country: 'US',
       currency: currency.toLowerCase(),
@@ -115,19 +122,18 @@ const CheckoutForm = ({ challengeId, amount, currency }: CheckoutFormProps) => {
       requestPayerName: true,
       requestPayerEmail: true,
       requestShipping: false,
-      disableWallets: ['link'], // Only show Apple Pay/Google Pay
+      disableWallets: ['link'],
     });
 
-    // Check if browser/device supports Apple Pay or Google Pay
+    // Enhanced payment method detection
     pr.canMakePayment().then(result => {
+      console.log("Payment methods available:", result);
       if (result) {
-        console.log('Payment Request supported:', result);
         setPaymentRequest(pr);
-        setPaymentMethodAvailable(true);
-        
-        // You can check specifically for Apple Pay
+        // Explicitly log and handle Apple Pay
         if (result.applePay) {
-          console.log('Apple Pay is available');
+          console.log("Apple Pay is available!");
+          setIsApplePayAvailable(true);
         }
       }
     });
@@ -267,20 +273,29 @@ const CheckoutForm = ({ challengeId, amount, currency }: CheckoutFormProps) => {
   return (
     <div className="space-y-6">
       {paymentRequest && (
-        <div className="mb-8">
+        <div className="mb-8" style={{display: 'block', width: '100%'}}>
           <label className="block text-sm font-medium mb-2">Quick Payment</label>
           <PaymentRequestButtonElement
+            className="ApplePayButton"
             options={{
               paymentRequest,
               style: {
                 paymentRequestButton: {
-                  type: 'buy', // buy, donate, default
-                  theme: 'dark', // dark, light, outline
+                  type: 'buy', // Valid types: default, buy, donate, etc.
+                  theme: 'dark',
                   height: '48px',
                 },
               },
             }}
           />
+          <style jsx>{`
+            .ApplePayButton {
+              display: block !important;
+              width: 100% !important;
+              min-height: 48px !important;
+              visibility: visible !important;
+            }
+          `}</style>
           <div className="mt-4 text-center text-sm text-zinc-400">
             Or pay with card
           </div>
