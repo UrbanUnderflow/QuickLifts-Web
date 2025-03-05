@@ -69,7 +69,7 @@ export class User {
   macros: Record<string, MacroRecommendations>;
   profileImage: ProfileImage;
   registrationComplete: boolean;
-  creator?: Creator;
+  creator: Creator | null;
   subscriptionType: SubscriptionType;
   subscriptionPlatform: SubscriptionPlatform;
   referrer?: string;
@@ -104,7 +104,7 @@ export class User {
     this.macros = data.macros || {};
     this.profileImage = new ProfileImage(data.profileImage || {});
     this.registrationComplete = data.registrationComplete || false;
-    this.creator = data.creator || null;
+    this.creator = data.creator ? new Creator(data.creator) : null;
     this.subscriptionType = data.subscriptionType || SubscriptionType.unsubscribed;
     this.subscriptionPlatform = data.subscriptionPlatform || SubscriptionPlatform.Web;
     this.referrer = data.referrer || '';
@@ -300,35 +300,112 @@ export class User {
    Android = "android",
  }
  
- export interface Creator {
-   id: string;
-   instagramHandle?: string;
-   twitterHandle?: string;
-   youtubeUrl?: string;
-   type?: ContentCreatorType[];
-   why?: FitnessCreatorWhy[];
-   onboardingPayoutState?: OnboardingPayoutState;
-   onboardingStatus?: OnboardingStatus;
-   isTrainer?: boolean;
-   digitalSignatures?: string[];
-   additionalFeedback?: string;
-   acceptGeneralTerms?: boolean;
-   acceptSweatEquityPartnership?: boolean;
-   acceptCodeOfConduct?: boolean;
-   acceptExecutiveTerms?: boolean;
-   createdAt?: Date;
-   updatedAt?: Date;
+ export enum StripeOnboardingStatus {
+   Parseending = 'pending',
+   Complete = 'complete',
+   NotStarted = 'notStarted'
  }
  
  export enum ContentCreatorType {
-   PersonalTrainer = "personal_trainer",
-   FitnessEnthusiast = "fitness_enthusiast",
-
+   FitnessEnthusiast = 'fitness enthusiast',
+   PersonalTrainer = 'personal trainer',
+   FitnessInfluencer = 'fitness influencer',
+   InterestedInBecomingAThoughtLeader = 'interested in becoming a thought leader'
  }
  
  export enum FitnessCreatorWhy {
-   InspireOthers = "inspire_others",
-   BuildCommunity = "build_community",
+   ShareKnowledge = 'share knowledge',
+   BuildAFollowing = 'build a following',
+   BuildPersonalBrand = 'build personal brand',
+   EarnIncome = 'earn income'
+ }
+ 
+ export interface BiometricDocSignature {
+   id: string;
+   deviceIdentifier: string;
+   faceMapHash: string;
+   timestamp: Date;
+   docType: string;
+ }
+ 
+ export class Creator {
+   id: string;
+   instagramHandle: string;
+   twitterHandle: string;
+   youtubeUrl: string;
+   type: ContentCreatorType[];
+   why: FitnessCreatorWhy[];
+   onboardingPayoutState: string;
+   onboardingExpirationDate?: Date;
+   onboardingLink?: string;
+   onboardingStatus: StripeOnboardingStatus;
+   stripeAccountId?: string;
+   isTrainer: boolean;
+   digitalSignatures?: BiometricDocSignature[];
+   additionalFeedback: string;
+   acceptGeneralTerms: boolean;
+   acceptSweatEquityPartnership: boolean;
+   acceptCodeOfConduct: boolean;
+   acceptExecutiveTerms: boolean;
+   createdAt: Date;
+   updatedAt: Date;
+
+   constructor(data: any) {
+     this.id = data.id || '';
+     this.instagramHandle = data.instagramHandle || '';
+     this.twitterHandle = data.twitterHandle || '';
+     this.youtubeUrl = data.youtubeUrl || '';
+     this.type = Array.isArray(data.type) 
+       ? data.type.map((t: string) => ContentCreatorType[t as keyof typeof ContentCreatorType])
+       : [];
+     this.why = Array.isArray(data.why)
+       ? data.why.map((w: string) => FitnessCreatorWhy[w as keyof typeof FitnessCreatorWhy])
+       : [];
+     this.onboardingPayoutState = data.onboardingPayoutState || '';
+     this.onboardingExpirationDate = convertFirestoreTimestamp(data.onboardingExpirationDate);
+     this.onboardingLink = data.onboardingLink;
+     this.onboardingStatus = data.onboardingStatus || StripeOnboardingStatus.NotStarted;
+     this.stripeAccountId = data.stripeAccountId;
+     this.isTrainer = data.isTrainer || false;
+     this.digitalSignatures = data.digitalSignatures || [];
+     this.additionalFeedback = data.additionalFeedback || '';
+     this.acceptGeneralTerms = data.acceptGeneralTerms || false;
+     this.acceptSweatEquityPartnership = data.acceptSweatEquityPartnership || false;
+     this.acceptCodeOfConduct = data.acceptCodeOfConduct || false;
+     this.acceptExecutiveTerms = data.acceptExecutiveTerms || false;
+     this.createdAt = convertFirestoreTimestamp(data.createdAt) || new Date();
+     this.updatedAt = convertFirestoreTimestamp(data.updatedAt) || new Date();
+   }
+
+   toDictionary(): Record<string, any> {
+     return {
+       id: this.id,
+       instagramHandle: this.instagramHandle,
+       twitterHandle: this.twitterHandle,
+       youtubeUrl: this.youtubeUrl,
+       type: this.type,
+       why: this.why,
+       onboardingPayoutState: this.onboardingPayoutState,
+       onboardingExpirationDate: this.onboardingExpirationDate ? dateToUnixTimestamp(this.onboardingExpirationDate) : null,
+       onboardingLink: this.onboardingLink,
+       onboardingStatus: this.onboardingStatus,
+       stripeAccountId: this.stripeAccountId,
+       isTrainer: this.isTrainer,
+       digitalSignatures: this.digitalSignatures,
+       additionalFeedback: this.additionalFeedback,
+       acceptGeneralTerms: this.acceptGeneralTerms,
+       acceptSweatEquityPartnership: this.acceptSweatEquityPartnership,
+       acceptCodeOfConduct: this.acceptCodeOfConduct,
+       acceptExecutiveTerms: this.acceptExecutiveTerms,
+       createdAt: dateToUnixTimestamp(this.createdAt),
+       updatedAt: dateToUnixTimestamp(this.updatedAt)
+     };
+   }
+
+   static fromDictionary(dict: Record<string, any> | null): Creator | null {
+     if (!dict) return null;
+     return new Creator(dict);
+   }
  }
  
  export enum OnboardingPayoutState {
