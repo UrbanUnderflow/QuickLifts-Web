@@ -21,15 +21,41 @@ class UserService {
   }
 
   async fetchUserFromFirestore(userId: string): Promise<User | null> {
+    console.log('fetchUserFromFirestore called for userId:', userId);
     const userRef = doc(db, 'users', userId);
     const userDoc = await getDoc(userRef);
 
     if (!userDoc.exists()) {
+      console.log(`User document not found for userId: ${userId}`);
       return null;
     }
 
-    return new User(userId,userDoc.data());
-}
+    const userData = userDoc.data();
+    
+    // Log full user data for debugging
+    console.log('Raw user data structure:', userData);
+    
+    // Special handling for creator object 
+    if (userData.creator) {
+      // Log the raw creator object structure and key values
+      console.log('Raw creator object keys:', userData.creator);
+      
+      // Specifically check for the stripeAccountId
+      const rawStripeAccountId = userData.creator.stripeAccountId;
+      console.log(`Raw stripeAccountId in Firestore: ${rawStripeAccountId} (${typeof rawStripeAccountId})`);
+      
+      // Ensure we preserve the stripeAccountId exactly as it comes from Firestore
+      if (rawStripeAccountId) {
+        console.log('★ Found valid stripeAccountId in Firestore:', rawStripeAccountId);
+      } else {
+        console.log('✖ No stripeAccountId found in Firestore');
+      }
+    } else {
+      console.log('No creator object found in user data');
+    }
+
+    return new User(userId, userData);
+  }
 
   async updateUser(userId: string, user: User): Promise<void> {
     const userRef = doc(db, 'users', userId);

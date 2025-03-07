@@ -3,9 +3,6 @@
 const Stripe = require('stripe');
 const admin = require('firebase-admin');
 
-// Dummy dashboard URL for development
-const DUMMY_DASHBOARD_URL = 'https://dashboard.stripe.com/test/connect/overview';
-
 // Initialize Firebase Admin if not already initialized
 if (admin.apps.length === 0) {
   try {
@@ -40,7 +37,27 @@ if (admin.apps.length === 0) {
 }
 
 const db = admin.firestore();
-const stripe = process.env.STRIPE_SECRET_KEY ? Stripe(process.env.STRIPE_SECRET_KEY) : null;
+
+// Initialize Stripe with better error handling
+let stripe;
+try {
+  // Log environment variables for debugging (without exposing sensitive data)
+  console.log('Environment variables available:', {
+    STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY ? 'Set' : 'Not set',
+    FIREBASE_SECRET_KEY_ALT: process.env.FIREBASE_SECRET_KEY_ALT ? 'Set' : 'Not set',
+    FIREBASE_PRIVATE_KEY_ALT: process.env.FIREBASE_PRIVATE_KEY_ALT ? 'Set' : 'Not set',
+    NODE_ENV: process.env.NODE_ENV
+  });
+
+  if (process.env.STRIPE_SECRET_KEY) {
+    stripe = Stripe(process.env.STRIPE_SECRET_KEY);
+    console.log('Stripe initialized successfully with API key');
+  } else {
+    console.warn('STRIPE_SECRET_KEY environment variable is missing');
+  }
+} catch (error) {
+  console.error('Error initializing Stripe:', error);
+}
 
 const handler = async (event) => {
   console.log(`Received ${event.httpMethod} request:`, {
@@ -86,53 +103,51 @@ const handler = async (event) => {
       };
     }
 
-    // Check if we're in development mode without proper credentials
-    if (!process.env.FIREBASE_SECRET_KEY_ALT || !stripe) {
-      console.warn('Running in development mode without proper credentials. Returning dummy data.');
+    // Check if Stripe API is available
+    if (!stripe) {
+      console.error('Stripe API not available');
       return {
-        statusCode: 200,
+        statusCode: 500,
         body: JSON.stringify({
-          success: true,
-          url: DUMMY_DASHBOARD_URL
+          success: false,
+          error: 'Stripe API not available'
         })
       };
     }
 
+    // Get user document from Firestore
+    console.log('Fetching user document from Firestore...');
+    const userDoc = await db.collection('users').doc(userId).get();
+    
+    if (!userDoc.exists) {
+      console.warn(`User document not found for userId: ${userId}`);
+      return {
+        statusCode: 404,
+        body: JSON.stringify({
+          success: false,
+          error: 'User not found'
+        })
+      };
+    }
+
+    const userData = userDoc.data();
+    console.log('User data retrieved, checking for Stripe account...');
+    
+    // Check if user has a Stripe account
+    if (!userData.creator || !userData.creator.stripeAccountId) {
+      console.warn('User has no Stripe account');
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ 
+          success: false, 
+          error: 'No Stripe account found for this user'
+        })
+      };
+    }
+
+    console.log('Found Stripe account, creating login link...');
+    // Create a login link for the Stripe Connect account
     try {
-      // Get user document from Firestore
-      console.log('Fetching user document from Firestore...');
-      const userDoc = await db.collection('users').doc(userId).get();
-      
-      if (!userDoc.exists) {
-        console.warn(`User document not found for userId: ${userId}. Returning dummy URL.`);
-        return {
-          statusCode: 200,
-          body: JSON.stringify({
-            success: true,
-            url: DUMMY_DASHBOARD_URL,
-            message: 'User not found, returning sample dashboard link'
-          })
-        };
-      }
-
-      const userData = userDoc.data();
-      console.log('User data retrieved, checking for Stripe account...');
-      
-      // Check if user has a Stripe account
-      if (!userData.creator || !userData.creator.stripeAccountId) {
-        console.warn('User has no Stripe account. Returning dummy URL.');
-        return {
-          statusCode: 200,
-          body: JSON.stringify({ 
-            success: true, 
-            url: DUMMY_DASHBOARD_URL,
-            message: 'No Stripe account found, returning sample dashboard link'
-          })
-        };
-      }
-
-      console.log('Found Stripe account, creating login link...');
-      // Create a login link for the Stripe Connect account
       const loginLink = await stripe.accounts.createLoginLink(
         userData.creator.stripeAccountId
       );
@@ -145,47 +160,24 @@ const handler = async (event) => {
           url: loginLink.url
         })
       };
-    } catch (error) {
-      console.error('Error getting dashboard link:', error);
-      
-      // In development, return dummy data on error
-      if (!process.env.FIREBASE_SECRET_KEY_ALT || !stripe) {
-        return {
-          statusCode: 200,
-          body: JSON.stringify({
-            success: true,
-            url: DUMMY_DASHBOARD_URL
-          })
-        };
-      }
-      
+    } catch (stripeError) {
+      console.error('Error creating Stripe login link:', stripeError);
       return {
         statusCode: 500,
         body: JSON.stringify({
           success: false,
-          error: error.message
+          error: stripeError.message || 'Error creating Stripe login link'
         })
       };
     }
   } catch (error) {
     console.error('Error getting dashboard link:', error);
     
-    // In development, return dummy data on error
-    if (!process.env.FIREBASE_SECRET_KEY_ALT || !stripe) {
-      return {
-        statusCode: 200,
-        body: JSON.stringify({
-          success: true,
-          url: DUMMY_DASHBOARD_URL
-        })
-      };
-    }
-    
     return {
       statusCode: 500,
       body: JSON.stringify({
         success: false,
-        error: error.message
+        error: error.message || 'Internal server error'
       })
     };
   }

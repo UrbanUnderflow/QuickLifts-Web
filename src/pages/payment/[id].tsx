@@ -23,6 +23,20 @@ interface CheckoutFormProps {
   amount: number;
   currency: string;
   isApplePayAvailable: boolean;
+  challengeData: {
+    collection: {
+      challenge: {
+        id: string;
+        title: string;
+        ownerId?: string;
+        pricingInfo?: {
+          isEnabled: boolean;
+          amount: number;
+          currency: string;
+        };
+      };
+    };
+  };
 }
 
 interface PaymentPageProps {
@@ -36,6 +50,7 @@ interface PaymentPageProps {
           amount: number;
           currency: string;
         };
+        ownerId?: string;
       };
     };
   };
@@ -98,11 +113,11 @@ const PaymentPage = ({ challengeData }: PaymentPageProps) => {
             <span>Round Access</span>
             <span>${(baseAmount / 100).toFixed(2)}</span>
           </div>
-          <div className="flex justify-between mb-4 text-sm text-zinc-400">
-            <span>Tax & Service Fee</span>
-            <span>${(processingFee / 100).toFixed(2)}</span>
+          <div className="flex justify-between mb-4">
+            <span className="text-zinc-400">Processing Fee</span>
+            <span className="text-zinc-400">${(processingFee / 100).toFixed(2)}</span>
           </div>
-          <div className="border-t border-zinc-800 pt-4 flex justify-between font-semibold">
+          <div className="border-t border-zinc-700 pt-4 flex justify-between font-bold">
             <span>Total</span>
             <span>${(totalAmount / 100).toFixed(2)}</span>
           </div>
@@ -111,9 +126,10 @@ const PaymentPage = ({ challengeData }: PaymentPageProps) => {
         <Elements stripe={stripePromise} options={stripeElementsOptions}>
           <CheckoutForm 
             challengeId={challenge.id} 
-            amount={totalAmount} 
-            currency={pricingInfo.currency.toLowerCase()} 
+            amount={totalAmount}
+            currency={pricingInfo.currency}
             isApplePayAvailable={isApplePayAvailable}
+            challengeData={challengeData}
           />
         </Elements>
         
@@ -135,7 +151,7 @@ const PaymentPage = ({ challengeData }: PaymentPageProps) => {
 };
 
 // Checkout form component
-const CheckoutForm = ({ challengeId, amount, currency, isApplePayAvailable }: CheckoutFormProps) => {
+const CheckoutForm = ({ challengeId, amount, currency, isApplePayAvailable, challengeData }: CheckoutFormProps) => {
   const stripe = useStripe();
   const elements = useElements();
   const router = useRouter();
@@ -284,21 +300,25 @@ const CheckoutForm = ({ challengeId, amount, currency, isApplePayAvailable }: Ch
     setProcessing(true);
     
     try {
-      // Create payment intent on server
-      const response = await fetch('/api/create-payment-intent', {
+      // Get the challenge owner (trainer) ID
+      const trainerUserId = challengeData.collection.challenge.ownerId || '';
+      
+      // Create payment intent on Netlify function instead of Next.js API
+      const response = await fetch('/.netlify/functions/create-payment-intent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           challengeId, 
           amount, 
-          currency 
+          currency,
+          trainerId: trainerUserId
         }),
       });
       
       const data = await response.json();
       
-      if (data.error) {
-        setError(data.error);
+      if (!data.success || data.error) {
+        setError(data.error || 'Failed to create payment intent');
         setProcessing(false);
         return;
       }
@@ -323,13 +343,16 @@ const CheckoutForm = ({ challengeId, amount, currency, isApplePayAvailable }: Ch
       } else {
         setSucceeded(true);
         
-        // Record payment
-        await fetch('/api/complete-round-payment', {
+        // Record payment using Netlify function instead of Next.js API
+        await fetch('/.netlify/functions/complete-payment', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
             challengeId,
-            paymentId: result.paymentIntent.id
+            paymentId: result.paymentIntent.id,
+            userId: localStorage.getItem('userId') || undefined,
+            trainerId: trainerUserId,
+            amount: amount
           }),
         });
         

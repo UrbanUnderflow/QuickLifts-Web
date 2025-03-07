@@ -116,7 +116,8 @@ const handler = async (event) => {
           transfers: { requested: true },
         },
       });
-      console.log('Stripe account created:', account.id);
+      console.log('Stripe account created successfully with ID:', account.id);
+      console.log('Stripe account object:', JSON.stringify(account));
 
       console.log('Creating account link...');
       const accountLink = await stripe.accountLinks.create({
@@ -125,15 +126,29 @@ const handler = async (event) => {
         return_url: `https://fitwithpulse.ai/trainer/dashboard?complete=true&userId=${userId}`, // Include userId as query parameter
         type: "account_onboarding",
       });
-      console.log('Account link created');
+      console.log('Account link created successfully:', accountLink.url);
 
-      // Store the Stripe account ID in the user document
-      const userRef = db.collection("users").doc(userId);
-      await userRef.update({
-        'creator.stripeAccountId': account.id,
-        'creator.onboardingStatus': 'pending'
-      });
-      console.log('Updated user document with Stripe account ID');
+      // Store the Stripe account ID in the user document (if we have Firebase credentials)
+      if (process.env.FIREBASE_SECRET_KEY_ALT) {
+        console.log('Updating user document with Stripe account ID:', account.id);
+        const userRef = db.collection("users").doc(userId);
+        
+        // First get the current user doc to make sure it exists
+        const userDoc = await userRef.get();
+        if (!userDoc.exists) {
+          console.error(`User document not found for userId: ${userId}`);
+          throw new Error('User document not found');
+        }
+        
+        // Update the user document
+        await userRef.update({
+          'creator.stripeAccountId': account.id,
+          'creator.onboardingStatus': 'pending'
+        });
+        console.log('Updated user document with Stripe account ID successfully');
+      } else {
+        console.warn('DEV MODE: Would have updated Firebase with Stripe account ID:', account.id);
+      }
 
       await updateOnboardingLink(userId, accountLink.url, accountLink.expires_at);
 

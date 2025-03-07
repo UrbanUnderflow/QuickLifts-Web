@@ -10,12 +10,16 @@ import { userService } from '../../api/firebase/user/service';
 interface EarningsData {
   totalEarned: number;
   pendingPayout: number;
+  availableBalance: number;
   roundsSold: number;
+  lastUpdated?: string;
   recentSales: {
     date: string;
     roundTitle: string;
     amount: number;
+    status?: string;
   }[];
+  isNewAccount: boolean;
 }
 
 const TrainerDashboard = () => {
@@ -68,13 +72,52 @@ const TrainerDashboard = () => {
     
     try {
       const userData = await userService.fetchUserFromFirestore(currentUser.id);
+      console.log('User data retrieved for status check:', {
+        id: userData?.id,
+        hasCreator: !!userData?.creator,
+        creatorType: userData?.creator ? typeof userData.creator : 'n/a',
+        onboardingStatus: userData?.creator?.onboardingStatus || 'none',
+        hasStripeId: !!userData?.creator?.stripeAccountId,
+        stripeAccountId: userData?.creator?.stripeAccountId || 'none',
+        creatorObjectKeys: userData?.creator ? Object.keys(userData.creator) : [],
+        creatorJSON: userData?.creator ? JSON.stringify(userData.creator) : 'n/a'
+      });
 
-      if (userData?.creator?.onboardingStatus === 'complete') {
+      // First check if the creator object exists and has a stripeAccountId property
+      // that is not undefined, null, or empty string
+      const hasValidStripeAccount = 
+        userData?.creator && 
+        typeof userData.creator.stripeAccountId === 'string' && 
+        userData.creator.stripeAccountId.trim() !== '';
+        
+      console.log('Has valid Stripe account:', hasValidStripeAccount);
+      
+      if (hasValidStripeAccount) {
+        console.log('User has Stripe account ID:', userData?.creator?.stripeAccountId);
         setAccountStatus('complete');
+        
+        // If status doesn't match the presence of stripeAccountId, fix it
+        if (userData?.creator?.onboardingStatus !== 'complete') {
+          console.log('Fixing inconsistent onboarding status');
+          await fetch(
+            `/.netlify/functions/complete-stripe-onboarding?userId=${currentUser.id}`
+          );
+        }
+        
         // Generate Stripe Dashboard link
         generateDashboardLink();
       } else {
+        console.log('No valid stripe account ID found, checking onboarding status');
+        // If status is complete but no stripeAccountId, fix the inconsistency
+        if (userData?.creator?.onboardingStatus === 'complete') {
+          console.log('Fixing inconsistency: status is complete but no stripeAccountId');
+          await fetch(
+            `/.netlify/functions/reset-onboarding?userId=${currentUser.id}`
+          );
+        }
+        
         setAccountStatus('incomplete');
+        console.log('Account status set to incomplete');
       }
     } catch (err) {
       console.error('Error fetching account status:', err);
@@ -86,14 +129,38 @@ const TrainerDashboard = () => {
     if (!currentUser?.id) return;
     
     try {
+      console.log('Fetching earnings data for user:', currentUser.id);
       const response = await fetch(`/.netlify/functions/get-earnings?userId=${currentUser.id}`);
       const data = await response.json();
+      console.log('Earnings data received:', data);
       
       if (data.success) {
         setEarnings(data.earnings);
+      } else {
+        console.error('Error in earnings data response:', data.error);
+        // Initialize with empty data on error
+        setEarnings({
+          totalEarned: 0,
+          pendingPayout: 0,
+          availableBalance: 0,
+          roundsSold: 0,
+          recentSales: [],
+          lastUpdated: new Date().toISOString(),
+          isNewAccount: true
+        });
       }
     } catch (err) {
       console.error('Error fetching earnings data:', err);
+      // Initialize with empty data on error
+      setEarnings({
+        totalEarned: 0,
+        pendingPayout: 0,
+        availableBalance: 0,
+        roundsSold: 0,
+        recentSales: [],
+        lastUpdated: new Date().toISOString(),
+        isNewAccount: true
+      });
     }
   };
 
@@ -101,6 +168,7 @@ const TrainerDashboard = () => {
     if (!currentUser?.id) return;
     
     try {
+      console.log('Generating dashboard link for user:', currentUser.id);
       const response = await fetch('/.netlify/functions/get-dashboard-link', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -108,8 +176,12 @@ const TrainerDashboard = () => {
       });
       
       const data = await response.json();
+      console.log('Dashboard link response:', data);
+      
       if (data.success && data.url) {
         setDashboardUrl(data.url);
+      } else {
+        console.error('Error getting dashboard link:', data.error);
       }
     } catch (err) {
       console.error('Error generating dashboard link:', err);
@@ -117,6 +189,7 @@ const TrainerDashboard = () => {
   };
 
   const renderAccountStatus = () => {
+    console.log('Rendering account status:', accountStatus);
     switch (accountStatus) {
       case 'loading':
         return <div className="text-zinc-400">Loading account status...</div>;
@@ -192,21 +265,46 @@ const TrainerDashboard = () => {
         
         {renderAccountStatus()}
         
+        {earnings && accountStatus === 'complete' && earnings.isNewAccount && (
+          <div className="bg-zinc-900 p-6 rounded-xl mb-8">
+            <h2 className="text-xl font-semibold mb-4">No Transactions Yet</h2>
+            <p className="mb-6">
+              Your payment account is set up and ready to receive payments, but you haven't
+              received any payments yet. When payments are received, they'll appear here.
+            </p>
+            <div className="flex items-center justify-center p-8 border border-zinc-800 rounded-lg">
+              <div className="text-center">
+                <div className="text-zinc-400 mb-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <p>When you make your first sale, earnings information will appear here.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        
         {earnings && accountStatus === 'complete' && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            <div className="bg-zinc-900 p-6 rounded-xl">
-              <h3 className="text-zinc-400 text-sm mb-2">Total Earned</h3>
-              <p className="text-3xl font-bold">${earnings.totalEarned.toFixed(2)}</p>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+            <div className="bg-zinc-900 p-4 rounded-xl">
+              <h3 className="text-zinc-400 text-sm mb-1">Total Earned</h3>
+              <p className="text-2xl font-bold">${earnings.totalEarned.toFixed(2)}</p>
             </div>
             
-            <div className="bg-zinc-900 p-6 rounded-xl">
-              <h3 className="text-zinc-400 text-sm mb-2">Pending Payout</h3>
-              <p className="text-3xl font-bold">${earnings.pendingPayout.toFixed(2)}</p>
+            <div className="bg-zinc-900 p-4 rounded-xl">
+              <h3 className="text-zinc-400 text-sm mb-1">Available Balance</h3>
+              <p className="text-2xl font-bold">${earnings.availableBalance.toFixed(2)}</p>
             </div>
             
-            <div className="bg-zinc-900 p-6 rounded-xl">
-              <h3 className="text-zinc-400 text-sm mb-2">Rounds Sold</h3>
-              <p className="text-3xl font-bold">{earnings.roundsSold}</p>
+            <div className="bg-zinc-900 p-4 rounded-xl">
+              <h3 className="text-zinc-400 text-sm mb-1">Pending Payout</h3>
+              <p className="text-2xl font-bold">${earnings.pendingPayout.toFixed(2)}</p>
+            </div>
+            
+            <div className="bg-zinc-900 p-4 rounded-xl">
+              <h3 className="text-zinc-400 text-sm mb-1">Rounds Sold</h3>
+              <p className="text-2xl font-bold">{earnings.roundsSold}</p>
             </div>
           </div>
         )}

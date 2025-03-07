@@ -3,20 +3,6 @@
 const Stripe = require('stripe');
 const admin = require('firebase-admin');
 
-// Dummy data for development or when Stripe API access fails
-const dummyEarningsData = {
-  totalEarned: 1250.00,
-  pendingPayout: 450.00,
-  roundsSold: 18,
-  recentSales: [
-    { date: '2023-12-20', roundTitle: 'Full Body Workout', amount: 35.00 },
-    { date: '2023-12-18', roundTitle: 'Upper Body Strength', amount: 35.00 },
-    { date: '2023-12-15', roundTitle: 'Core Challenge', amount: 35.00 },
-    { date: '2023-12-12', roundTitle: 'Lower Body Focus', amount: 35.00 },
-    { date: '2023-12-10', roundTitle: 'Full Body Workout', amount: 35.00 }
-  ]
-};
-
 // Initialize Firebase Admin if not already initialized
 if (admin.apps.length === 0) {
   try {
@@ -51,7 +37,27 @@ if (admin.apps.length === 0) {
 }
 
 const db = admin.firestore();
-const stripe = process.env.STRIPE_SECRET_KEY ? Stripe(process.env.STRIPE_SECRET_KEY) : null;
+
+// Initialize Stripe with better error handling
+let stripe;
+try {
+  // Log environment variables for debugging (without exposing sensitive data)
+  console.log('Environment variables available:', {
+    STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY ? 'Set' : 'Not set',
+    FIREBASE_SECRET_KEY_ALT: process.env.FIREBASE_SECRET_KEY_ALT ? 'Set' : 'Not set',
+    FIREBASE_PRIVATE_KEY_ALT: process.env.FIREBASE_PRIVATE_KEY_ALT ? 'Set' : 'Not set',
+    NODE_ENV: process.env.NODE_ENV
+  });
+
+  if (process.env.STRIPE_SECRET_KEY) {
+    stripe = Stripe(process.env.STRIPE_SECRET_KEY);
+    console.log('Stripe initialized successfully with API key');
+  } else {
+    console.warn('STRIPE_SECRET_KEY environment variable is missing');
+  }
+} catch (error) {
+  console.error('Error initializing Stripe:', error);
+}
 
 const handler = async (event) => {
   // Only accept GET requests
@@ -74,31 +80,18 @@ const handler = async (event) => {
       };
     }
 
-    // Check if we're in development mode without proper credentials
-    if (!process.env.FIREBASE_SECRET_KEY_ALT || !stripe) {
-      console.warn('Running in development mode without proper credentials. Returning dummy data.');
-      return {
-        statusCode: 200,
-        body: JSON.stringify({
-          success: true,
-          data: dummyEarningsData
-        })
-      };
-    }
-
     try {
       // Get user document from Firestore
       console.log('Fetching user document from Firestore...');
       const userDoc = await db.collection('users').doc(userId).get();
       
       if (!userDoc.exists) {
-        console.warn(`User document not found for userId: ${userId}. Returning dummy data.`);
+        console.warn(`User document not found for userId: ${userId}`);
         return {
-          statusCode: 200,
+          statusCode: 404,
           body: JSON.stringify({
-            success: true,
-            data: dummyEarningsData,
-            message: 'User not found, returning sample data'
+            success: false,
+            error: 'User not found'
           })
         };
       }
@@ -108,109 +101,192 @@ const handler = async (event) => {
       
       // Check if user has a Stripe account
       if (!userData.creator || !userData.creator.stripeAccountId) {
-        console.warn('User has no Stripe account. Returning dummy data.');
+        console.warn('User has no Stripe account.');
         return {
-          statusCode: 200,
+          statusCode: 400,
           body: JSON.stringify({ 
-            success: true, 
-            data: dummyEarningsData,
-            message: 'No Stripe account found, returning sample data'
+            success: false, 
+            error: 'No Stripe account found for this user'
           })
         };
       }
 
-      console.log('Found Stripe account, retrieving balance...');
-      // Get Stripe account balance
-      const balance = await stripe.balance.retrieve({
-        stripeAccount: userData.creator.stripeAccountId
-      });
-
-      // Get recent payouts
-      const payouts = await stripe.payouts.list({
-        limit: 10,
-        stripeAccount: userData.creator.stripeAccountId
-      });
-
-      // Get recent payments
-      const charges = await stripe.charges.list({
-        limit: 5,
-        stripeAccount: userData.creator.stripeAccountId
-      });
-
-      // Calculate total earned
-      const totalEarned = balance.available.reduce((sum, item) => sum + item.amount, 0) / 100;
-      const pendingPayout = balance.pending.reduce((sum, item) => sum + item.amount, 0) / 100;
-
-      // Get workout rounds sold (this would need to be implemented based on your data structure)
-      // For now, using a placeholder query
-      const workoutsRef = await db.collection('workouts')
-        .where('creatorId', '==', userId)
-        .get();
-
-      const roundsSold = workoutsRef.size || 0;
-
-      // Format recent sales data (placeholder logic - adapt to your data structure)
-      const recentSales = charges.data.map(charge => {
-        return {
-          date: new Date(charge.created * 1000).toISOString().split('T')[0],
-          roundTitle: charge.description || 'Workout Round',
-          amount: charge.amount / 100
-        };
-      });
-
-      return {
-        statusCode: 200,
-        body: JSON.stringify({
-          success: true,
-          earnings: {
-            totalEarned,
-            pendingPayout,
-            roundsSold,
-            recentSales: recentSales.length > 0 ? recentSales : dummyEarningsData.recentSales
-          }
-        })
-      };
-    } catch (error) {
-      console.error('Error getting earnings data:', error);
+      const connectedAccountId = userData.creator.stripeAccountId;
+      console.log(`Found Stripe account: ${connectedAccountId}, retrieving data...`);
       
-      // In development, return dummy data on error
-      if (!process.env.FIREBASE_SECRET_KEY_ALT || !stripe) {
+      try {
+        // Start retrieving multiple pieces of data in parallel
+        const [balance, payouts, transfers, payments] = await Promise.all([
+          // Get account balance
+          stripe.balance.retrieve({
+            stripeAccount: connectedAccountId
+          }).catch(err => {
+            console.error('Error retrieving balance:', err);
+            return { available: [], pending: [] };
+          }),
+          
+          // Get recent payouts
+          stripe.payouts.list({
+            limit: 10,
+            stripeAccount: connectedAccountId
+          }).catch(err => {
+            console.error('Error retrieving payouts:', err);
+            return { data: [] };
+          }),
+          
+          // Get transfers to the connected account
+          stripe.transfers.list({
+            destination: connectedAccountId,
+            limit: 100
+          }).catch(err => {
+            console.error('Error retrieving transfers:', err);
+            return { data: [] };
+          }),
+          
+          // Get recent payment intents that involved this account
+          (async () => {
+            try {
+              // First get payment records from Firestore where this user is the trainer
+              const paymentsSnapshot = await db.collection('payments')
+                .where('trainerId', '==', userId)
+                .orderBy('createdAt', 'desc')
+                .limit(20)
+                .get();
+                
+              const paymentRecords = [];
+              paymentsSnapshot.forEach(doc => {
+                paymentRecords.push(doc.data());
+              });
+              
+              console.log(`Found ${paymentRecords.length} payment records in Firestore`);
+              
+              // Get challenge details for each payment
+              const enrichedPayments = await Promise.all(
+                paymentRecords.map(async payment => {
+                  try {
+                    // Get challenge title
+                    if (payment.challengeId) {
+                      const challengeDoc = await db.collection('challenges')
+                        .doc(payment.challengeId)
+                        .get();
+                        
+                      if (challengeDoc.exists) {
+                        const challengeData = challengeDoc.data();
+                        return {
+                          ...payment,
+                          challengeTitle: challengeData.title || 'Fitness Round'
+                        };
+                      }
+                    }
+                    return payment;
+                  } catch (err) {
+                    console.error(`Error getting challenge data for payment ${payment.paymentId}:`, err);
+                    return payment;
+                  }
+                })
+              );
+              
+              return enrichedPayments;
+            } catch (err) {
+              console.error('Error retrieving payments:', err);
+              return [];
+            }
+          })()
+        ]);
+        
+        console.log('Stripe data retrieved:', {
+          balanceAvailable: balance.available.length,
+          balancePending: balance.pending.length,
+          payoutsCount: payouts.data.length,
+          transfersCount: transfers.data.length,
+          paymentsCount: payments.length
+        });
+        
+        // Calculate total earned (from transfers to the connected account)
+        const totalTransferred = transfers.data.reduce((sum, transfer) => sum + transfer.amount, 0) / 100;
+        
+        // Calculate available and pending balance
+        const availableBalance = balance.available.reduce((sum, item) => sum + item.amount, 0) / 100;
+        const pendingBalance = balance.pending.reduce((sum, item) => sum + item.amount, 0) / 100;
+        
+        // Calculate total earnings (transferred + available + pending)
+        const totalEarned = totalTransferred + availableBalance;
+        
+        // Format payments data for the frontend
+        const recentSales = payments.map(payment => {
+          return {
+            date: payment.createdAt?.toDate?.() 
+              ? payment.createdAt.toDate().toISOString().split('T')[0] 
+              : new Date().toISOString().split('T')[0],
+            roundTitle: payment.challengeTitle || 'Fitness Round',
+            amount: (payment.amount / 100) || 0,
+            status: payment.status || 'completed'
+          };
+        });
+        
+        // Real data structure - all zeros is fine for new accounts
+        const earningsData = {
+          totalEarned: totalEarned || 0,
+          pendingPayout: pendingBalance || 0,
+          availableBalance: availableBalance || 0,
+          roundsSold: payments.length || transfers.data.length || 0,
+          recentSales: recentSales,
+          lastUpdated: new Date().toISOString(),
+          isNewAccount: transfers.data.length === 0 && payments.length === 0
+        };
+        
+        console.log('Returning earnings data:', earningsData);
+        
         return {
           statusCode: 200,
           body: JSON.stringify({
             success: true,
-            earnings: dummyEarningsData
+            earnings: earningsData,
+            message: recentSales.length === 0 ? 'No transactions found yet' : undefined
+          })
+        };
+        
+      } catch (stripeError) {
+        console.error('Error processing Stripe data:', stripeError);
+        
+        // Return empty data structure - no dummy data
+        return {
+          statusCode: 200,
+          body: JSON.stringify({
+            success: true,
+            earnings: {
+              totalEarned: 0,
+              pendingPayout: 0,
+              availableBalance: 0,
+              roundsSold: 0,
+              recentSales: [],
+              lastUpdated: new Date().toISOString(),
+              isNewAccount: true,
+              accountId: connectedAccountId
+            },
+            message: 'Error retrieving Stripe data'
           })
         };
       }
+    } catch (error) {
+      console.error('Error getting earnings data:', error);
       
       return {
         statusCode: 500,
         body: JSON.stringify({
           success: false,
-          error: error.message
+          error: error.message || 'Error retrieving user data',
         })
       };
     }
   } catch (error) {
     console.error('Error getting earnings data:', error);
     
-    // In development, return dummy data on error
-    if (!process.env.FIREBASE_SECRET_KEY_ALT || !stripe) {
-      return {
-        statusCode: 200,
-        body: JSON.stringify({
-          success: true,
-          earnings: dummyEarningsData
-        })
-      };
-    }
-    
     return {
       statusCode: 500,
       body: JSON.stringify({
         success: false,
-        error: error.message
+        error: error.message || 'Internal server error'
       })
     };
   }

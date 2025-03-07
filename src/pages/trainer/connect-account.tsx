@@ -6,6 +6,8 @@ import { useRouter } from 'next/router';
 import { useSelector } from 'react-redux';
 import { RootState } from '../../redux/store';
 import { userService } from '../../api/firebase/user';
+import { StripeOnboardingStatus } from '../../api/firebase/user/types';
+import { db } from '../../api/firebase/config';
 
 const ConnectAccountPage = () => {
   const [loading, setLoading] = useState(false);
@@ -41,12 +43,38 @@ const ConnectAccountPage = () => {
       // Fetch fresh user data directly from Firestore using userService
       const refreshedUser = await userService.fetchUserFromFirestore(currentUser.id);
       
-      if (refreshedUser?.creator?.onboardingStatus === 'complete') {
-        // Redirect to dashboard if already onboarded
+      // First, check if the user has a Stripe account ID - this is the definitive indicator
+      if (refreshedUser?.creator?.stripeAccountId) {
+        console.log('User has Stripe account ID:', refreshedUser.creator.stripeAccountId);
+        
+        // If onboardingStatus doesn't match the presence of stripeAccountId, fix it
+        if (refreshedUser.creator.onboardingStatus !== StripeOnboardingStatus.Complete) {
+          console.log('Fixing inconsistent onboarding status');
+          
+          // Call the complete-stripe-onboarding function to fix the status
+          await fetch(
+            `/.netlify/functions/complete-stripe-onboarding?userId=${currentUser.id}`
+          );
+        }
+        
+        // Redirect to dashboard because user has a Stripe account
         router.push('/trainer/dashboard');
-      } else if (refreshedUser?.creator?.onboardingLink && 
-                refreshedUser.creator.onboardingExpirationDate && 
-                new Date(refreshedUser.creator.onboardingExpirationDate) > new Date()) {
+      } 
+      // If status is complete but no stripeAccountId, fix the inconsistency
+      else if (refreshedUser?.creator?.onboardingStatus === StripeOnboardingStatus.Complete) {
+        console.log('Fixing inconsistency: status is complete but no stripeAccountId');
+        
+        // Call the reset-onboarding function to fix the status
+        await fetch(
+          `/.netlify/functions/reset-onboarding?userId=${currentUser.id}`
+        );
+        
+        // No redirect - keep user on connect account page
+      }
+      // Check for existing onboarding link if not completed
+      else if (refreshedUser?.creator?.onboardingLink && 
+               refreshedUser.creator.onboardingExpirationDate && 
+               new Date(refreshedUser.creator.onboardingExpirationDate) > new Date()) {
         // Use existing onboarding link if not expired
         setOnboardingLink(refreshedUser.creator.onboardingLink);
       }

@@ -79,6 +79,8 @@ export class User {
   updatedAt: Date;
 
   constructor(id: string, data: any) {
+    console.log('User constructor called:', data);
+    
     this.id = id;
     this.displayName = data.displayName || '';
     this.email = data.email || '';
@@ -104,7 +106,14 @@ export class User {
     this.macros = data.macros || {};
     this.profileImage = new ProfileImage(data.profileImage || {});
     this.registrationComplete = data.registrationComplete || false;
-    this.creator = data.creator ? new Creator(data.creator) : null;
+    
+    // Create the Creator instance
+    if (data.creator) {
+      this.creator = new Creator(data.creator);
+    } else {
+      this.creator = null;
+    }
+    
     this.subscriptionType = data.subscriptionType || SubscriptionType.unsubscribed;
     this.subscriptionPlatform = data.subscriptionPlatform || SubscriptionPlatform.Web;
     this.referrer = data.referrer || '';
@@ -351,6 +360,8 @@ export class User {
    updatedAt: Date;
 
    constructor(data: any) {
+     console.log('Creator constructor raw data:', JSON.stringify(data, null, 2));
+     
      this.id = data.id || '';
      this.instagramHandle = data.instagramHandle || '';
      this.twitterHandle = data.twitterHandle || '';
@@ -365,7 +376,11 @@ export class User {
      this.onboardingExpirationDate = convertFirestoreTimestamp(data.onboardingExpirationDate);
      this.onboardingLink = data.onboardingLink;
      this.onboardingStatus = data.onboardingStatus || StripeOnboardingStatus.NotStarted;
-     this.stripeAccountId = data.stripeAccountId;
+     
+     // Add explicit check for stripeAccountId
+     this.stripeAccountId = data.stripeAccountId || undefined;
+     console.log(`Setting stripeAccountId: ${this.stripeAccountId} from data: ${data.stripeAccountId}`);
+     
      this.isTrainer = data.isTrainer || false;
      this.digitalSignatures = data.digitalSignatures || [];
      this.additionalFeedback = data.additionalFeedback || '';
@@ -375,6 +390,8 @@ export class User {
      this.acceptExecutiveTerms = data.acceptExecutiveTerms || false;
      this.createdAt = convertFirestoreTimestamp(data.createdAt) || new Date();
      this.updatedAt = convertFirestoreTimestamp(data.updatedAt) || new Date();
+     
+     console.log('Creator constructed with stripeAccountId:', this.stripeAccountId);
    }
 
    toDictionary(): Record<string, any> {

@@ -2,6 +2,7 @@
   command = "next dev"
   framework = "next"
   targetPort = 3000
+  functionsPort = 8888
 
 [build]
   command = "next build"
@@ -34,6 +35,8 @@
 [functions]
   directory = "netlify/functions"
   included_files = ["netlify/functions/**"]
+  external_node_modules = ["stripe"]
+  node_bundler = "esbuild"
 
 [functions."update-challenge-status"]
   schedule = "@daily"
