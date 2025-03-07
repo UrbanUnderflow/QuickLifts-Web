@@ -10,6 +10,18 @@ import { UserChallenge } from '../../../api/firebase/workout/types';
 import { User } from '../../../api/firebase/user/types';
 import { Challenge } from '../../../api/firebase/workout/types';
 import { DocumentSnapshot } from 'firebase/firestore';
+import { 
+  CheckIcon, 
+  ExclamationCircleIcon, 
+  MagnifyingGlassIcon, 
+  SparklesIcon, 
+  UserGroupIcon, 
+  CircleStackIcon, 
+  BoltIcon, 
+  XCircleIcon,
+  SunIcon,
+  MoonIcon 
+} from '@heroicons/react/24/outline';
 
 // Enum for category tabs
 const CategoryTab = {
@@ -57,11 +69,18 @@ const Discover = () => {
 
   const getTimeBasedIcon = () => {
     const hour = new Date().getHours();
-    if (hour < 6) return "/icons/moon.svg";
-    if (hour < 10) return "/icons/sunrise.svg";
-    if (hour < 16) return "/icons/sun.svg";
-    if (hour < 19) return "/icons/sunset.svg";
-    return "/icons/moon.svg";
+    
+    if (hour < 6) {
+      return <MoonIcon className="w-5 h-5 text-blue-300" />;
+    } else if (hour < 10) {
+      return <SunIcon className="w-5 h-5 text-yellow-300" />;
+    } else if (hour < 16) {
+      return <SunIcon className="w-5 h-5 text-yellow-400" />;
+    } else if (hour < 19) {
+      return <SunIcon className="w-5 h-5 text-orange-400" />;
+    } else {
+      return <MoonIcon className="w-5 h-5 text-blue-300" />;
+    }
   };
 
   // Get random motivational message
@@ -270,15 +289,15 @@ const Discover = () => {
       <div className="bg-zinc-800 bg-opacity-30 rounded-lg shadow p-4 mb-8">
         <div className="flex justify-between items-center">
           <div>
-            <div className="flex items-center text-green-400 mb-1">
-              <img src={getTimeBasedIcon()} alt="Time icon" className="w-5 h-5 mr-2" />
-              <p className="text-md font-medium">{getTimeBasedGreeting()},</p>
+            <div className="flex items-center text-[#E0FE10] mb-1">
+              {getTimeBasedIcon()}
+              <p className="text-md font-medium ml-2">{getTimeBasedGreeting()},</p>
             </div>
             <h2 className="text-xl font-bold text-white">{currentUser.username || 'Fitness Enthusiast'}</h2>
             <p className="text-sm text-zinc-400 mt-2">{getMyDayMessage()}</p>
           </div>
           
-          <div className="flex items-center justify-center w-12 h-12 rounded-full bg-green-400 bg-opacity-20">
+          <div className="flex items-center justify-center w-12 h-12 rounded-full bg-[#E0FE10] bg-opacity-20">
             {currentUser.profileImage?.profileImageURL ? (
               <img 
                 src={currentUser.profileImage.profileImageURL} 
@@ -286,7 +305,9 @@ const Discover = () => {
                 className="w-11 h-11 rounded-full object-cover"
               />
             ) : (
-              <img src={getTimeBasedIcon()} alt="Time" className="w-6 h-6" />
+              <div className="flex items-center justify-center w-11 h-11">
+                {getTimeBasedIcon()}
+              </div>
             )}
           </div>
         </div>
@@ -297,8 +318,8 @@ const Discover = () => {
   };
 
   const renderSearchBar = () => (
-    <div className="relative flex items-center bg-zinc-900 rounded-lg mb-6 shadow">
-      <img src="/icons/search.svg" alt="Search" className="w-5 h-5 ml-4 text-zinc-400" />
+    <div className="relative flex items-center bg-zinc-800 rounded-lg mb-6 shadow-lg border border-zinc-700/30">
+      <MagnifyingGlassIcon className="w-5 h-5 ml-4 text-zinc-400" />
       <input
         type="text"
         placeholder="Search moves, rounds, or people..."
@@ -312,7 +333,7 @@ const Discover = () => {
           onClick={() => setSearchText('')}
           className="absolute right-4"
         >
-          <img src="/icons/x-circle.svg" alt="Clear" className="w-5 h-5 text-zinc-500" />
+          <XCircleIcon className="w-5 h-5 text-zinc-500 hover:text-zinc-300 transition-colors" />
         </button>
       )}
     </div>
@@ -324,13 +345,15 @@ const Discover = () => {
         <button
           key={tab}
           onClick={() => setSelectedCategory(tab)}
-          className={`flex items-center px-4 py-2 mr-3 rounded-full text-sm font-medium
+          className={`flex items-center px-4 py-2 mr-3 rounded-full text-sm font-medium transition-all
             ${selectedCategory === tab 
-              ? 'bg-green-400 text-zinc-900' 
-              : 'bg-zinc-800 text-white'}`}
+              ? 'bg-[#E0FE10] text-zinc-900 shadow-md' 
+              : 'bg-zinc-800 text-white hover:bg-zinc-700'}`}
         >
-          {getTabIcon(tab as keyof typeof CategoryTab)}
-          <span className="ml-1">{tab}</span>
+          <span className="flex items-center justify-center">
+            {getTabIcon(tab as keyof typeof CategoryTab)}
+            <span className="ml-2">{tab}</span>
+          </span>
         </button>
       ))}
     </div>
@@ -339,13 +362,13 @@ const Discover = () => {
   const getTabIcon = (tab: keyof typeof CategoryTab) => {
     switch (tab) {
       case CategoryTab.ALL:
-        return <img src="/icons/search-sparkle.svg" alt="" className="w-4 h-4" />;
+        return <SparklesIcon className="w-4 h-4" />;
       case CategoryTab.MOVES:
-        return <img src="/icons/lunge.svg" alt="" className="w-4 h-4" />;
+        return <BoltIcon className="w-4 h-4" />;
       case CategoryTab.ROUNDS:
-        return <img src="/icons/circle-hex.svg" alt="" className="w-4 h-4" />;
+        return <CircleStackIcon className="w-4 h-4" />;
       case CategoryTab.PEOPLE:
-        return <img src="/icons/people.svg" alt="" className="w-4 h-4" />;
+        return <UserGroupIcon className="w-4 h-4" />;
       default:
         return null;
     }
@@ -368,7 +391,7 @@ const Discover = () => {
 
         <div className="w-full bg-zinc-700 h-2 rounded-full mb-3">
           <div 
-            className="bg-green-400 h-2 rounded-full" 
+            className="bg-[#E0FE10] h-2 rounded-full" 
             style={{ width: `${progress}%` }}
           ></div>
         </div>
@@ -390,7 +413,7 @@ const Discover = () => {
 
           <button 
             onClick={() => router.push(`/workout/${currentWorkout.id}`)}
-            className="bg-green-400 text-zinc-900 py-2 px-4 rounded-md font-medium"
+            className="bg-[#E0FE10] text-zinc-900 py-2 px-4 rounded-md font-medium"
           >
             Resume
           </button>
@@ -432,28 +455,28 @@ const Discover = () => {
                 
                 <div className="w-full bg-zinc-700 h-1.5 rounded-full mb-4">
                   <div 
-                    className="bg-green-400 h-1.5 rounded-full" 
+                    className="bg-[#E0FE10] h-1.5 rounded-full" 
                     style={{ width: `${round.progress || 0}%` }}
                   ></div>
                 </div>
                 
                 <div className="flex justify-between text-center">
                   <div>
-                    <div className="text-green-400 font-medium">
+                    <div className="text-[#E0FE10] font-medium">
                       {round.completedWorkouts?.length || 0}/{round.challenge?.durationInDays || 30}
                     </div>
                     <div className="text-xs text-zinc-500">Workouts</div>
                   </div>
                   
                   <div>
-                    <div className="text-green-400 font-medium">
+                    <div className="text-[#E0FE10] font-medium">
                       {round.currentStreak || 0}
                     </div>
                     <div className="text-xs text-zinc-500">Day Streak</div>
                   </div>
                   
                   <div>
-                    <div className="text-green-400 font-medium">
+                    <div className="text-[#E0FE10] font-medium">
                       {round.pulsePoints?.totalPoints || 0}
                     </div>
                     <div className="text-xs text-zinc-500">Points</div>
@@ -507,8 +530,8 @@ const Discover = () => {
                     <span>{workout.estimatedDuration || 30} min</span>
                   </div>
                   
-                  <div className="flex items-center bg-green-400 bg-opacity-20 px-2 py-0.5 rounded-md">
-                    <span className="text-green-400 text-xs">{workout.zone || "Strength"}</span>
+                  <div className="flex items-center bg-[#E0FE10] bg-opacity-20 px-2 py-0.5 rounded-md">
+                    <span className="text-[#E0FE10] text-xs">{workout.zone || "Strength"}</span>
                   </div>
                 </div>
               </div>
@@ -542,7 +565,7 @@ const Discover = () => {
                   />
                 ) : (
                   <div className="w-full h-full bg-zinc-700 flex items-center justify-center">
-                    <span className="text-xl text-green-400 font-medium">
+                    <span className="text-xl text-[#E0FE10] font-medium">
                       {creator.username?.charAt(0).toUpperCase() || "U"}
                     </span>
                   </div>
@@ -629,7 +652,7 @@ const Discover = () => {
                       key={video.id}
                       className={`w-8 h-8 rounded-full overflow-hidden border-2 
                       ${(exercise.currentVideoPosition || 0) === videoIndex 
-                        ? 'border-green-400' 
+                        ? 'border-[#E0FE10]' 
                         : 'border-zinc-600'}`}
                       onClick={(e) => {
                         e.stopPropagation();
@@ -660,7 +683,7 @@ const Discover = () => {
         {hasMore && selectedCategory === CategoryTab.MOVES && (
           <div ref={loaderRef} className="flex justify-center py-6">
             {loadingMore && (
-              <div className="w-8 h-8 border-t-2 border-green-400 rounded-full animate-spin"></div>
+              <div className="w-8 h-8 border-t-2 border-[#E0FE10] rounded-full animate-spin"></div>
             )}
           </div>
         )}
@@ -750,7 +773,7 @@ const Discover = () => {
           </p>
           <button
             onClick={() => setSearchText('')}
-            className="mt-6 text-green-400 font-medium"
+            className="mt-6 text-[#E0FE10] font-medium"
           >
             Clear search
           </button>
@@ -816,7 +839,7 @@ const Discover = () => {
                   
                   <div className="flex justify-between items-center mb-2">
                     <span className="text-xs text-zinc-400">{round.durationInDays || 30} days</span>
-                    <span className="text-xs py-1 px-2 bg-green-400 bg-opacity-20 text-green-400 rounded-full">
+                    <span className="text-xs py-1 px-2 bg-[#E0FE10] bg-opacity-20 text-[#E0FE10] rounded-full">
                       {round.privacy || "Public"}
                     </span>
                   </div>
@@ -876,7 +899,7 @@ const Discover = () => {
   if (loading && !trendingExercises.length) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-zinc-900">
-        <div className="w-12 h-12 border-t-2 border-green-400 rounded-full animate-spin"></div>
+        <div className="w-12 h-12 border-t-2 border-[#E0FE10] rounded-full animate-spin"></div>
       </div>
     );
   }
@@ -885,14 +908,6 @@ const Discover = () => {
     <div className="max-w-xl mx-auto px-4 py-6 bg-zinc-900 min-h-screen">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-xl font-bold text-white">My Day</h1>
-        
-        <button 
-          onClick={() => router.push('/ai-workout')}
-          className="flex items-center bg-green-400 px-3 py-1.5 rounded-lg"
-        >
-          <img src="/icons/ai.svg" alt="AI" className="w-3.5 h-3.5 mr-1" />
-          <span className="text-zinc-900 text-xs font-bold">Pulse AI</span>
-        </button>
       </div>
       
       {renderWelcomeSection()}
