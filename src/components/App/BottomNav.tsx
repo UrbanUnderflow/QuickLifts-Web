@@ -10,11 +10,13 @@ interface BottomNavProps {
 }
 
 const BottomNav: React.FC<BottomNavProps> = ({ selectedTab, onTabChange }) => {
+  // Log which tabs we're hiding
+  console.log('[BottomNav] Hiding Search and Messages tabs');
 
   // Also add a log when rendering to see real-time values
   const currentUser = userService.currentUser;
 
-  const tabs = [
+  const allTabs = [
     {
       id: SelectedRootTabs.Discover,
       label: 'Discover',
@@ -26,6 +28,7 @@ const BottomNav: React.FC<BottomNavProps> = ({ selectedTab, onTabChange }) => {
       label: 'Search',
       icon: '/search-icon.svg',
       selectedIcon: '/search-icon-selected.svg',
+      hidden: true, // Hide Search tab
     },
     {
       id: SelectedRootTabs.Create,
@@ -38,6 +41,7 @@ const BottomNav: React.FC<BottomNavProps> = ({ selectedTab, onTabChange }) => {
       label: 'Message',
       icon: '/message-icon.svg',
       selectedIcon: '/message-icon-selected.svg',
+      hidden: true, // Hide Messages tab
     },
     {
       id: SelectedRootTabs.Profile,
@@ -48,6 +52,9 @@ const BottomNav: React.FC<BottomNavProps> = ({ selectedTab, onTabChange }) => {
       selectedIcon: '/profile-icon-selected.svg',
     },
   ];
+
+  // Filter out hidden tabs
+  const tabs = allTabs.filter(tab => !tab.hidden);
 
   return (
     <div className="fixed bottom-0 left-0 right-0 bg-zinc-800/80 backdrop-blur-sm border-t border-zinc-700">
