@@ -6,6 +6,7 @@ import {
   GoogleAuthProvider,
   browserPopupRedirectResolver,
   OAuthProvider,
+  sendPasswordResetEmail,
 } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 import { auth, db } from '../config';
@@ -72,5 +73,16 @@ import { User } from '../../firebase/user';
           console.error('Error during Apple sign-in redirect:', error);
           throw error;
       }
+  },
+
+  async resetPassword(email: string) {
+    try {
+      await sendPasswordResetEmail(auth, email);
+      console.log('Password reset email sent to:', email);
+      return true;
+    } catch (error) {
+      console.error('Error sending password reset email:', error);
+      throw error;
+    }
   }
-  };
+};
