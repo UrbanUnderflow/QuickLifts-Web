@@ -11,6 +11,7 @@ import InProgressExercise from '../components/App/InProgressExercise/InProgressE
 import { SelectedRootTabs } from '../types/DashboardTypes';
 import { RootState } from '../redux/store';
 import WorkoutPanel from '../components/App/Dashboard/WorkoutPanel';
+import WorkoutTypeSelector from '../components/App/Dashboard/WorkoutTypeSelector';
 import { ExerciseLog } from '../api/firebase/exercise/types';
 import { Workout, WorkoutStatus, WorkoutSummary, RepsAndWeightLog } from '../api/firebase/workout/types';
 import { workoutService } from '../api/firebase/workout/service';
@@ -26,6 +27,7 @@ const HomeContent = () => {
   const router = useRouter();
   const [selectedTab, setSelectedTab] = useState<SelectedRootTabs>(SelectedRootTabs.Discover);
   const [isWorkoutPanelOpen, setIsWorkoutPanelOpen] = useState(false);
+  const [showWorkoutTypeSelector, setShowWorkoutTypeSelector] = useState(false);
   const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0);
 
   const { currentUser } = useSelector((state: RootState) => state.user);
@@ -108,6 +110,7 @@ const HomeContent = () => {
       }
     
       try {
+       // This variable is kept for tracking/logging purposes but not directly used
         const currentExercise = currentExerciseLogs[currentExerciseIndex]?.exercise;
         const isBodyWeight = currentExerciseLogs[currentExerciseIndex]?.isBodyWeight;
     
@@ -189,6 +192,7 @@ const HomeContent = () => {
       return performExerciseSubmission(updatedLogsWithBodyWeight);
     };
   
+  // This function is defined for future implementation
   const showZeroWeightConfirmationModal = (
     onConfirm: () => void, 
     onCancel: () => void
@@ -389,6 +393,29 @@ const performExerciseSubmission = async (updatedLogs: ExerciseLog[]) => {
     }
   };
 
+  // Function to handle creating a workout from selected body parts
+  const handleCreateWorkout = async (selectedParts: string[]) => {
+    console.log('[HomeContent] Creating workout for body parts:', selectedParts);
+    
+    try {
+      // For now, open the regular workout panel after selecting body parts
+      // In the future, this would call an AI endpoint to generate a custom workout
+      setIsWorkoutPanelOpen(true);
+      
+      // Extract the body part names from the IDs
+      const bodyParts = selectedParts.map(part => {
+        // Extract just the body part name from the full ID (e.g., "body-parts/bicep" → "bicep")
+        return part.split('/').pop() || part;
+      });
+      
+      console.log('[HomeContent] Extracted body parts:', bodyParts);
+      
+      // Show a loading message or spinner here if needed
+    } catch (error) {
+      console.error('[HomeContent] Error creating workout:', error);
+    }
+  };
+
   // Main render logic
   return (
     <div className="min-h-screen bg-zinc-900">
@@ -404,9 +431,12 @@ const performExerciseSubmission = async (updatedLogs: ExerciseLog[]) => {
             <div className="flex items-center space-x-4">
               <button
                 className="bg-[#E0FE10] text-black px-4 py-2 rounded-lg"
-                onClick={() => setIsWorkoutPanelOpen(true)}
+                onClick={() => {
+                  console.log('[HomeContent] Opening Pulse AI WorkoutTypeSelector');
+                  setShowWorkoutTypeSelector(true);
+                }}
               >
-                Start Workout
+                Pulse AI
               </button>
               <UserMenu />
             </div>
@@ -426,6 +456,19 @@ const performExerciseSubmission = async (updatedLogs: ExerciseLog[]) => {
             onClose={() => setIsWorkoutPanelOpen(false)}
             onStartWorkout={handleStartWorkout}
           />
+
+          {/* Direct access to WorkoutTypeSelector */}
+          {showWorkoutTypeSelector && (
+            <WorkoutTypeSelector
+              onClose={() => setShowWorkoutTypeSelector(false)}
+              onCreateWorkout={(selectedParts) => {
+                console.log('[HomeContent] Creating workout with body parts:', selectedParts);
+                setShowWorkoutTypeSelector(false);
+                // Generate workout with selected body parts
+                handleCreateWorkout(selectedParts);
+              }}
+            />
+          )}
         </>
       )}
     </div>
