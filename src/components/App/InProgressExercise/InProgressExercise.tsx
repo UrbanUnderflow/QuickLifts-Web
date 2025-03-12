@@ -98,7 +98,7 @@ const InProgressExercise: React.FC<InProgressExerciseProps> = ({
     }
 
     const timerId = setInterval(() => {
-      setTimeRemaining(prev => (prev > 0 ? prev - 1 : 0));
+      setTimeRemaining((prev: number) => (prev > 0 ? prev - 1 : 0));
     }, 1000);
 
     return () => clearInterval(timerId);

@@ -18,7 +18,7 @@ const CollectionSweatlistItem: React.FC<CollectionSweatlistItemProps> = ({ worko
       <div className="flex space-x-2 mt-2">
         {displayedExercises.map((exerciseRef, index) => {
           const { exercise } = exerciseRef;
-          const videoUrl = exercise.videos[exercise.currentVideoPosition]?.videoURL;
+          const videoUrl = exercise.videos[exercise.currentVideoPosition ?? 0]?.videoURL;
           
           return (
             <div key={index} className="w-1/3 h-24 relative">
