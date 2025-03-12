@@ -13,6 +13,15 @@ interface VideoTrimmerProps {
   onCancel: () => void;
 }
 
+// Create FFmpeg instance outside component to reuse
+const ffmpeg = createFFmpeg({
+  log: true,
+  corePath: 'https://unpkg.com/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js',
+});
+
+// Track loading state globally
+let ffmpegLoadingPromise: Promise<void> | null = null;
+
 export const VideoTrimmer: React.FC<VideoTrimmerProps> = ({ file, onTrimComplete, onCancel }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [startTime, setStartTime] = useState(0);
@@ -25,6 +34,7 @@ export const VideoTrimmer: React.FC<VideoTrimmerProps> = ({ file, onTrimComplete
     captureStream: false,
   });
   const [trimProgress, setTrimProgress] = useState(0);
+  const [ffmpegError, setFfmpegError] = useState<string | null>(null);
   const objectUrlRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -85,6 +95,25 @@ export const VideoTrimmer: React.FC<VideoTrimmerProps> = ({ file, onTrimComplete
     checkTime();
   };
 
+  const loadFFmpeg = async () => {
+    try {
+      setFfmpegError(null);
+      // Reuse the loading promise to prevent multiple loads
+      if (!ffmpegLoadingPromise) {
+        ffmpegLoadingPromise = ffmpeg.load();
+      }
+      await ffmpegLoadingPromise;
+      return true;
+    } catch (error) {
+      console.error('FFmpeg loading error:', error);
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : 'Failed to load FFmpeg. Make sure you\'re using a modern browser and have the required permissions.';
+      setFfmpegError(errorMessage);
+      return false;
+    }
+  };
+
   const handleTrim = async () => {
     if (!videoRef.current) {
       alert('Video element not initialized');
@@ -98,17 +127,20 @@ export const VideoTrimmer: React.FC<VideoTrimmerProps> = ({ file, onTrimComplete
 
     try {
       setIsLoading(true);
-
-      // Create FFmpeg instance
-      const ffmpeg = createFFmpeg({
-        log: true,
-        corePath: 'https://unpkg.com/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js'
-      });
       
-      await ffmpeg.load();
+      // Load FFmpeg if not already loaded
+      const ffmpegLoaded = await loadFFmpeg();
+      if (!ffmpegLoaded) {
+        throw new Error('Failed to load FFmpeg');
+      }
+
+      // Set progress handler
+      ffmpeg.setProgress(({ ratio }) => {
+        setTrimProgress(Math.round(ratio * 100));
+      });
 
       // Write the input file to FFmpeg's virtual filesystem
-      await ffmpeg.FS('writeFile', 'input.mp4', await fetchFile(file));
+      ffmpeg.FS('writeFile', 'input.mp4', await fetchFile(file));
 
       // Run FFmpeg to trim the video
       await ffmpeg.run(
@@ -120,19 +152,23 @@ export const VideoTrimmer: React.FC<VideoTrimmerProps> = ({ file, onTrimComplete
       );
 
       // Read the output file
-      const data = await ffmpeg.FS('readFile', 'output.mp4');
+      const data = ffmpeg.FS('readFile', 'output.mp4');
 
       // Clean up files
       ffmpeg.FS('unlink', 'input.mp4');
       ffmpeg.FS('unlink', 'output.mp4');
 
       // Create a new File from the data
-      const trimmedFile = new File([data], 'trimmed.mp4', { type: 'video/mp4' });
+      const trimmedFile = new File([new Uint8Array(data.buffer)], 'trimmed.mp4', { type: 'video/mp4' });
 
       onTrimComplete(trimmedFile);
     } catch (error) {
       console.error('Video trimming failed:', error);
-      alert(error instanceof Error ? error.message : 'Failed to trim video');
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : 'Failed to trim video. Please try again or use a different browser.';
+      setFfmpegError(errorMessage);
+      alert(errorMessage);
     } finally {
       setIsLoading(false);
       setTrimProgress(0);
@@ -153,6 +189,16 @@ export const VideoTrimmer: React.FC<VideoTrimmerProps> = ({ file, onTrimComplete
         {(!browserSupport.mediaRecorder || !browserSupport.captureStream) && (
           <div className="text-red-500 mb-4">
             Your browser doesn't support video trimming. Please use Chrome, Firefox, or Edge.
+          </div>
+        )}
+
+        {ffmpegError && (
+          <div className="text-red-500 mb-4 text-sm">
+            Error: {ffmpegError}
+            <p className="mt-1">
+              Please make sure you're using a modern browser with the latest updates.
+              This feature requires cross-origin isolation to be enabled.
+            </p>
           </div>
         )}
 

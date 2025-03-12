@@ -20,6 +20,24 @@ const nextConfig = {
   trailingSlash: false,
   // Ensure pages are generated statically when possible
   generateEtags: false,
+  // Add headers for SharedArrayBuffer support
+  async headers() {
+    return [
+      {
+        source: '/(.*)',
+        headers: [
+          {
+            key: 'Cross-Origin-Embedder-Policy',
+            value: 'credentialless',
+          },
+          {
+            key: 'Cross-Origin-Opener-Policy',
+            value: 'same-origin',
+          },
+        ],
+      },
+    ];
+  },
 };
 
 module.exports = nextConfig;

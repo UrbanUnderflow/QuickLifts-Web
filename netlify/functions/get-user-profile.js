@@ -11,7 +11,7 @@ if (!process.env.FIREBASE_SECRET_KEY) {
   console.error('Missing environment variable: FIREBASE_SECRET_KEY');
 }
 
-if (!process.env.FIREBASE_PRIVATE_KEY_ALT) {
+if (!process.env.FIREBASE_PRIVATE_KEY) {
   missingVars.push('FIREBASE_PRIVATE_KEY_ALT');
   console.error('Missing environment variable: FIREBASE_PRIVATE_KEY_ALT');
 }
@@ -35,7 +35,7 @@ if (admin.apps.length === 0) {
         credential: admin.credential.cert({
           "type": "service_account",
           "project_id": "quicklifts-dd3f1",
-          "private_key_id": process.env.FIREBASE_PRIVATE_KEY_ALT,
+          "private_key_id": process.env.FIREBASE_PRIVATE_KEY,
           "private_key": privateKey,
           "client_email": "firebase-adminsdk-1qxb0@quicklifts-dd3f1.iam.gserviceaccount.com",
           "client_id": "111494077667496751062",

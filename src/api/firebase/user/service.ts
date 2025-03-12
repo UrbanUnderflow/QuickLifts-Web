@@ -339,9 +339,19 @@ class UserService {
     try {
       // Step 1: Fetch user's exercise videos
       const exerciseVideosRef = collection(db, 'exerciseVideos');
+      console.log("[DEBUG-PROFILE] Fetching videos for user ID:", currentUserId);
       const q = query(exerciseVideosRef, where('userId', '==', currentUserId));
       
       const videoSnapshot = await getDocs(q);
+      console.log(`[DEBUG-PROFILE] Found ${videoSnapshot.size} videos for user`);
+
+      // Check for our specific video ID
+      console.log("[DEBUG-PROFILE] Looking for video with ID: UYpNnfGmw9xyPA6dOv2D");
+      const targetVideoExists = videoSnapshot.docs.some(doc => doc.id === "UYpNnfGmw9xyPA6dOv2D");
+      console.log(`[DEBUG-PROFILE] Target video exists in query results: ${targetVideoExists}`);
+
+      // List all video IDs for debugging
+      console.log("[DEBUG-PROFILE] All video IDs in query results:", videoSnapshot.docs.map(doc => doc.id));
   
       // Group videos by exercise name
       const videosByExerciseName: { [key: string]: ExerciseVideo[] } = {};
@@ -353,6 +363,17 @@ class UserService {
         if (!exerciseName) {
           console.warn(`Exercise name missing for video ${doc.id}`);
           return;
+        }
+
+        console.log(`[DEBUG-PROFILE] Processing video ${doc.id}:`, {
+          exerciseName: exerciseName,
+          exerciseId: videoData.exerciseId || '',
+          userId: videoData.userId || '',
+        });
+        
+        // Special logging for Hangs videos to debug the issue
+        if (exerciseName === 'Hangs') {
+          console.log(`[DEBUG-PROFILE] Found Hangs video: ${doc.id} with exerciseId: ${videoData.exerciseId || 'none'}`);
         }
   
         const video = new ExerciseVideo({
@@ -395,6 +416,25 @@ class UserService {
           const exerciseData = doc.data();
           const exerciseName = exerciseData.name;
           
+          // Check if we have videos for this exercise name
+          const hasVideos = videosByExerciseName[exerciseName]?.length > 0;
+          console.log(`[DEBUG-PROFILE] Checking exercise "${exerciseName}" - has videos: ${hasVideos ? 'yes' : 'no'}`);
+          
+          // IMPORTANT: If the document ID doesn't match the exercise name (lowercase), find videos by document ID too
+          const exerciseDocId = doc.id.toLowerCase();
+          const exerciseNameLower = exerciseName.toLowerCase();
+          
+          // Log document ID vs name
+          console.log(`[DEBUG-PROFILE] Exercise document ID: "${exerciseDocId}", name: "${exerciseName}" (lower: "${exerciseNameLower}")`);
+          
+          // If they don't match, look for videos by document ID too
+          let videosForThisExercise = videosByExerciseName[exerciseName] || [];
+          
+          if (exerciseDocId !== exerciseNameLower && videosByExerciseName[exerciseDocId]) {
+            console.log(`[DEBUG-PROFILE] Found ${videosByExerciseName[exerciseDocId].length} additional videos by document ID`);
+            videosForThisExercise = [...videosForThisExercise, ...videosByExerciseName[exerciseDocId]];
+          }
+          
           // Create base exercise
           // For the Exercise:
           const exercise = new Exercise({
@@ -407,7 +447,7 @@ class UserService {
             description: exerciseData.description || '',
             visibility: exerciseData.visibility || 'limited',
             steps: exerciseData.steps || [],
-            videos: videosByExerciseName[exerciseName] || [],
+            videos: videosForThisExercise,
             currentVideoPosition: 0,
             reps: exerciseData.reps || '',
             sets: exerciseData.sets || 0,
@@ -422,8 +462,20 @@ class UserService {
   
           return exercise;
         })
-        .filter(exercise => exercise.videos.length > 0);
+        .filter(exercise => {
+          const hasVideos = exercise.videos.length > 0;
+          console.log(`[DEBUG-PROFILE] Filtering exercise "${exercise.name}" - has videos: ${hasVideos ? 'yes' : 'no'}, video count: ${exercise.videos.length}`);
+          return hasVideos;
+        });
   
+      console.log(`[DEBUG-PROFILE] Final user exercises count: ${userExercises.length}`);
+      console.log("[DEBUG-PROFILE] Final exercises:", userExercises.map(ex => ({
+        id: ex.id,
+        name: ex.name,
+        videoCount: ex.videos.length,
+        videoIds: ex.videos.map(v => v.id)
+      })));
+
       return userExercises;
   
     } catch (error) {

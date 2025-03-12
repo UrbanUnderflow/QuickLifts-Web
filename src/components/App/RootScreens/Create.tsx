@@ -6,6 +6,9 @@ import { firebaseStorageService, VideoType } from '../../../api/firebase/storage
 import { VideoTrimmer } from '../../../components/VideoTrimmer';
 import Spacer from '../../../components/Spacer';
 import { exerciseService } from '../../../api/firebase/exercise/service';
+import { userService } from '../../../api/firebase/user/service';
+import { videoProcessorService } from '../../../api/firebase/video-processor/service';
+import { formatExerciseNameForId } from '../../../utils/stringUtils';
 
 import { Exercise } from '../../../api/firebase/exercise/types';
 
@@ -111,66 +114,331 @@ const Create: React.FC = () => {
   const checkSimilarExercises = async (): Promise<Exercise[]> => {
     if (!exerciseName.trim()) return [];
     
-    // Fetch all exercises using the service
-    await exerciseService.fetchExercises();
-    const allExercises = exerciseService.allExercises;
+    try {
+      console.log('[DEBUG] Starting similar exercise check for:', exerciseName.trim());
+      
+      // Always check using lowercase for document ID lookup
+      const lowerCaseName = exerciseName.trim().toLowerCase();
+      console.log('[DEBUG] Directly checking Firestore for document with ID:', lowerCaseName);
+      
+      const exists = await exerciseService.verifyExerciseExistsByName(exerciseName.trim());
+      
+      if (exists) {
+        // If it exists, get the full exercise data
+        console.log('[DEBUG] Found existing exercise with this name');
+        const exercise = await exerciseService.getExerciseByName(exerciseName.trim());
+        return exercise ? [exercise] : [];
+      }
+      
+      console.log('[DEBUG] No exact match found by document ID');
+      
+      // For compatibility, also run the existing service check
+      console.log('[DEBUG] For comparison, also using exerciseService.fetchExercises()');
+      await exerciseService.fetchExercises();
+      const allExercises = exerciseService.allExercises;
+      
+      console.log(`[DEBUG] Service fetched ${allExercises.length} exercises with videos`);
 
-    // Filter exercises by name
-    const similarExercises = allExercises.filter(exercise =>
-      exercise.name.toLowerCase() === exerciseName.trim().toLowerCase()
-    );
-
-    return similarExercises;
+      // Filter exercises by name - case insensitive matching
+      const serviceMatches = allExercises.filter(exercise => {
+        // Compare names in a case-insensitive way
+        const isMatch = exercise.name.toLowerCase() === exerciseName.trim().toLowerCase();
+        if (isMatch) {
+          console.log(`[DEBUG] Service found match: "${exercise.name}" with ID: ${exercise.id}`);
+        }
+        return isMatch;
+      });
+      
+      console.log(`[DEBUG] Service found ${serviceMatches.length} similar exercises`);
+      
+      return serviceMatches;
+    } catch (error) {
+      console.error('[DEBUG] Error checking similar exercises:', error);
+      return [];
+    }
   };
 
   // Upload video function with progress callback
-  const uploadVideo = async () => {
-    if (!videoFile) return;
+  const uploadVideo = async (existingExercise?: Exercise) => {
+    if (!videoFile) {
+      console.error('[DEBUG] No video file to upload');
+      return;
+    }
+    
     try {
+      console.log('[DEBUG] Starting upload process');
+      console.log('[DEBUG] Video details:', {
+        name: videoFile.name,
+        size: videoFile.size,
+        type: videoFile.type
+      });
+      
+      // Clear the exercise service cache to ensure fresh data
+      exerciseService.clearCache();
+      
+      // Format exercise name consistently
+      const formattedExerciseName = formatExerciseNameForId(exerciseName.trim());
+      
+      if (existingExercise) {
+        console.log('[DEBUG] Using existing exercise:', {
+          id: existingExercise.id,
+          name: existingExercise.name
+        });
+        
+        // Verify the existing exercise is actually in Firestore - by name now
+        const exists = await exerciseService.verifyExerciseExistsByName(existingExercise.name);
+        if (!exists) {
+          console.error('[DEBUG] The existing exercise selected is not in Firestore!', existingExercise.name);
+          alert('There was an error with the selected exercise. Creating a new one instead.');
+          existingExercise = undefined; // Force creation of a new exercise
+        }
+      } else {
+        console.log('[DEBUG] Will create new exercise with name:', formattedExerciseName);
+      }
+      
       setIsUploading(true);
       setUploadProgress(0);
+      
+      // 1. Upload the video to Firebase Storage
+      console.log('[DEBUG] Starting Firebase Storage upload');
       const uploadResult = await firebaseStorageService.uploadVideo(
         videoFile,
         VideoType.Exercise,
-        (progress) => setUploadProgress(progress)
+        (progress) => {
+          console.log(`[DEBUG] Upload progress: ${Math.round(progress * 100)}%`);
+          setUploadProgress(progress);
+        },
+        // Pass the exercise name for the storage path
+        existingExercise ? existingExercise.name : formattedExerciseName
       );
-      console.log('Video uploaded successfully', uploadResult);
-      setUploadedExerciseId(exerciseService.generateExerciseId());
+      
+      console.log('[DEBUG] Video uploaded successfully to Firebase Storage:', uploadResult);
+      
+      // 2. Get the current user 
+      console.log('[DEBUG] Getting current user');
+      
+      // Get complete user data from userService (Redux store)
+      const completeUserData = userService.currentUser;
+      
+      if (!completeUserData) {
+        console.error('[DEBUG] No user found in Redux store');
+        throw new Error('User must be logged in to upload videos');
+      }
+      
+      const username = completeUserData.username || 'Anonymous';
+      const userId = completeUserData.id;
+      
+      console.log('[DEBUG] Current user from Redux store:', {
+        uid: userId,
+        username: username
+      });
+      
+      // 3. Generate IDs for new documents
+      const exerciseId = existingExercise?.id || exerciseService.generateExerciseId();
+      const videoId = exerciseService.generateExerciseVideoId();
+      console.log('[DEBUG] Generated IDs:', { exerciseId, videoId });
+      
+      // 4. Import Firestore modules
+      console.log('[DEBUG] Importing Firestore modules');
+      const { Timestamp } = await import('firebase/firestore');
+      
+      // 5. First, prepare the exercise video data
+      const exerciseVideoData = {
+        id: videoId,
+        exerciseId: existingExercise ? existingExercise.id : exerciseId, // Use the generated ID, not the name
+        exercise: formattedExerciseName, // Keep the name here for display purposes
+        username: username,
+        userId: userId,
+        videoURL: uploadResult.downloadURL,
+        fileName: uploadResult.gsURL.split('/').pop() || 'unknown',
+        storagePath: uploadResult.gsURL,
+        profileImage: {
+          profileImageURL: completeUserData.profileImage?.profileImageURL || '',
+          imageOffsetWidth: 0,
+          imageOffsetHeight: 0
+        },
+        caption: caption,
+        visibility: 'open',
+        totalAccountsReached: 0,
+        totalAccountLikes: 0,
+        totalAccountBookmarked: 0,
+        totalAccountUsage: 0,
+        isApproved: false,
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now()
+      };
+      
+      console.log('[DEBUG] Exercise video data prepared:', exerciseVideoData);
+      
+      // 6. Create the exercise video using the service
+      console.log('[DEBUG] Creating exercise video document in Firestore');
+      try {
+        await exerciseService.createExerciseVideo(exerciseVideoData);
+        console.log('[DEBUG] Exercise video document created successfully with ID:', videoId);
+      } catch (firestoreError) {
+        console.error('[DEBUG] Error creating exercise video document:', firestoreError);
+        throw firestoreError;
+      }
+      
+      // 7. Create or update the Exercise document if it doesn't exist
+      if (!existingExercise) {
+        console.log('[DEBUG] Preparing to create new exercise document');
+        const exerciseData = {
+          id: exerciseId, // Keep the generated ID as a field
+          name: formattedExerciseName,
+          category: exerciseCategory === 'Cardio' ? 'cardio' : 'weight-training',
+          primaryBodyParts: [],
+          secondaryBodyParts: [],
+          tags: tags,
+          description: '',
+          steps: [],
+          currentVideoPosition: 0,
+          reps: '',
+          sets: 0,
+          weight: 0,
+          visibility: 'live',
+          author: {
+            userId: userId,
+            username: username
+          },
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now()
+        };
+        
+        console.log('[DEBUG] Exercise data prepared:', exerciseData);
+        
+        // 8. Create the exercise using the service
+        console.log('[DEBUG] Creating exercise document in Firestore');
+        try {
+          await exerciseService.createExercise(exerciseData);
+          console.log('[DEBUG] Exercise document created successfully with ID:', exerciseId);
+          
+          // Verify the exercise was created - by name now
+          const created = await exerciseService.verifyExerciseExistsByName(formattedExerciseName);
+          if (created) {
+            console.log('[DEBUG] Verified exercise document was created successfully');
+          } else {
+            console.error('[DEBUG] Failed to verify exercise document creation');
+          }
+        } catch (firestoreError) {
+          console.error('[DEBUG] Error creating exercise document:', firestoreError);
+          throw firestoreError;
+        }
+      } else {
+        console.log('[DEBUG] Using existing exercise, no need to create a new one');
+      }
+      
+      // 9. Set the uploaded exercise ID and show success modal
+      console.log('[DEBUG] Setting uploaded exercise ID:', exerciseId);
+      setUploadedExerciseId(exerciseId);
+      
+      // 10. Generate GIF for the uploaded video
+      console.log('[DEBUG] Starting GIF generation for video', videoId);
+      try {
+        console.log('[DEBUG] Calling VideoProcessorService.ensureVideoHasGif');
+        
+        // Use the proper generated ID and name
+        setTimeout(async () => {
+          try {
+            // Wait 3 seconds to ensure Firebase indexing is complete
+            console.log('[DEBUG] Executing delayed GIF generation after 3s wait');
+            
+            const result = await videoProcessorService.ensureVideoHasGif(
+              exerciseId, // Pass the exercise ID (generated), not the name
+              videoId
+            );
+            console.log('[DEBUG] GIF generation result:', result);
+          } catch (gifError) {
+            console.error('[DEBUG] GIF generation error:', gifError);
+            // Don't block the upload on GIF generation failures
+          }
+        }, 3000);
+      } catch (gifError) {
+        console.error('[DEBUG] Error starting GIF generation:', gifError);
+        // Don't block the upload on GIF generation failures
+      }
+      
+      console.log('[DEBUG] Upload process completed successfully');
       setShowSuccessModal(true);
     } catch (error) {
-      console.error('Upload failed', error);
-      alert('Video upload failed');
+      console.error('[DEBUG] Upload failed - Full error:', error);
+      console.error('[DEBUG] Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+      console.error('[DEBUG] Error message:', error instanceof Error ? error.message : 'Unknown error');
+      console.error('[DEBUG] Error name:', error instanceof Error ? error.name : 'Unknown name');
+      
+      alert('Video upload failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
     } finally {
+      console.log('[DEBUG] Upload process finished');
       setIsUploading(false);
     }
   };
 
   // Handle submission: check for similar exercises first.
   const handleSubmit = async () => {
-    if (!videoFile || !exerciseName.trim()) return;
+    console.log('[DEBUG] Submit button clicked');
     
-    // Check for similar exercises by exact name match (lowercased)
+    if (!videoFile) {
+      console.error('[DEBUG] No video file selected');
+      return;
+    }
+    
+    if (!exerciseName.trim()) {
+      console.error('[DEBUG] No exercise name provided');
+      return;
+    }
+    
+    console.log('[DEBUG] Checking for similar exercises');
+    
+    // Check for similar exercises by exact name match
     const similar = await checkSimilarExercises();
+    
     if (similar.length > 0) {
+      console.log('[DEBUG] Similar exercises found, showing modal');
       setIsDuplicateExercise(true);
       setSimilarExercises(similar);
       setShowSimilarExercises(true);
       return;
     }
     
+    console.log('[DEBUG] No similar exercises found, proceeding with upload');
     // If no similar exercises found, upload immediately.
     uploadVideo();
   };
 
   // Handlers for Similar Exercises Modal
   const handleSelectSimilarExercise = (exercise: Exercise) => {
-    console.log('Selected similar exercise:', exercise);
-    // Link the video to the existing exercise as needed.
-    setShowSimilarExercises(false);
-    uploadVideo();
+    console.log('[DEBUG] User selected similar exercise:', {
+      id: exercise.id,
+      name: exercise.name
+    });
+    
+    // The document ID is the exercise name, so verify by name
+    exerciseService.verifyExerciseExistsByName(exercise.name)
+      .then(exists => {
+        if (!exists) {
+          console.error('[DEBUG] Selected exercise does not exist in Firestore!', exercise.name);
+          
+          // Show a warning and ask user to proceed with creating a new exercise instead
+          if (window.confirm('The selected exercise could not be found. Would you like to create a new exercise instead?')) {
+            setShowSimilarExercises(false);
+            uploadVideo(); // Create new exercise
+          }
+        } else {
+          // Exercise exists, proceed with linking the video
+          console.log('[DEBUG] Verified exercise exists, proceeding with upload', exercise.name);
+          setShowSimilarExercises(false);
+          uploadVideo(exercise); // Pass the existing exercise to link the video
+        }
+      })
+      .catch(error => {
+        console.error('[DEBUG] Error verifying exercise:', error);
+        setShowSimilarExercises(false);
+        uploadVideo(); // Fallback to creating new exercise
+      });
   };
 
   const handleSelectAsUnique = () => {
+    console.log('[DEBUG] User selected to create as unique exercise');
     setShowSimilarExercises(false);
     // Proceed with upload if the user confirms the exercise is unique.
     uploadVideo();
@@ -178,7 +446,30 @@ const Create: React.FC = () => {
 
   // Handlers for Success Modal
   const handleViewMove = () => {
-    router.push(`/exercise/${uploadedExerciseId}`);
+    console.log('[DEBUG] View move button clicked, exercise ID:', uploadedExerciseId);
+    if (uploadedExerciseId) {
+      // The actual URL should use the name as document ID (lowercase)
+      const documentId = exerciseName.trim().toLowerCase();
+      console.log('[DEBUG] Document ID for navigation:', documentId);
+      
+      // Verify the exercise exists before navigating
+      exerciseService.verifyExerciseExistsByName(exerciseName.trim())
+        .then(exists => {
+          if (exists) {
+            console.log('[DEBUG] Exercise exists, navigating to exercise page', documentId);
+            router.push(`/exercise/${documentId}`);
+          } else {
+            console.error('[DEBUG] Exercise does not exist in Firestore!', documentId);
+            alert('Sorry, there was an error accessing the exercise. Please try again.');
+          }
+        })
+        .catch(error => {
+          console.error('[DEBUG] Error verifying exercise for navigation:', error);
+          alert('Sorry, there was an error accessing the exercise. Please try again.');
+        });
+    } else {
+      console.error('[DEBUG] No exercise ID available for viewing');
+    }
   };
 
   const handleCloseSuccessModal = () => {

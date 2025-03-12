@@ -16,6 +16,7 @@ import { useRouter } from 'next/router';
 import { firebaseStorageService, UploadImageType } from '../../../api/firebase/storage/service';
 import { Camera, Trash2, CheckCircle } from 'lucide-react';
 import Spacer from '../../../components/Spacer';
+import { videoProcessorService } from '../../../api/firebase/video-processor/service';
 
 interface StackGridProps {
   stacks: Workout[];
@@ -107,6 +108,7 @@ const Profile: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedStacks, setSelectedStacks] = useState<Set<string>>(new Set());
   const [isSelecting, setIsSelecting] = useState(false);
+  const [isProcessingGifs, setIsProcessingGifs] = useState(false);
 
 const handleProfileImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
   const file = e.target.files?.[0];
@@ -184,7 +186,24 @@ const handleDelete = async () => {
   setIsSelecting(false);
 };
 
-
+// Function to process all videos without GIFs
+const handleProcessVideosWithoutGifs = async () => {
+  if (isProcessingGifs) return;
+  
+  setIsProcessingGifs(true);
+  try {
+    await videoProcessorService.processAllUserVideosWithoutGifs();
+    // After processing, refresh the user videos
+    if (currentUser?.id) {
+      const videos = await userService.fetchUserVideos();
+      setUserVideos(videos);
+    }
+  } catch (error) {
+    console.error('Error processing videos without GIFs:', error);
+  } finally {
+    setIsProcessingGifs(false);
+  }
+};
 
   if (!currentUser) {
     return <div>Loading...</div>;
@@ -253,10 +272,45 @@ const handleDelete = async () => {
       if (!currentUser?.id) return;
       
       try {
+        console.log('[DEBUG-PROFILE-COMPONENT] Starting to fetch user videos for:', currentUser.id);
         const videos = await userService.fetchUserVideos();
+        console.log('[DEBUG-PROFILE-COMPONENT] Received videos count:', videos.length);
+        
+        // Count total unique videos
+        const uniqueVideoIds = new Set<string>();
+        videos.forEach(exercise => {
+          exercise.videos.forEach(video => {
+            uniqueVideoIds.add(video.id);
+          });
+        });
+        
+        console.log('[DEBUG-PROFILE-COMPONENT] Total unique videos:', uniqueVideoIds.size);
+        console.log('[DEBUG-PROFILE-COMPONENT] Video details:', videos.map(v => ({
+          id: v.id,
+          name: v.name,
+          videoCount: v.videos.length,
+          videoIds: v.videos.map(vid => vid.id)
+        })));
+        
+        // Check for specific video
+        const hasTargetVideo = videos.some(v => 
+          v.videos.some(video => video.id === 'UYpNnfGmw9xyPA6dOv2D')
+        );
+        console.log('[DEBUG-PROFILE-COMPONENT] Contains target video (UYpNnfGmw9xyPA6dOv2D):', hasTargetVideo);
+        
+        if (hasTargetVideo) {
+          const targetExercise = videos.find(v => 
+            v.videos.some(video => video.id === 'UYpNnfGmw9xyPA6dOv2D')
+          );
+          console.log('[DEBUG-PROFILE-COMPONENT] Target video is in exercise:', 
+            targetExercise?.name, 
+            'with videoCount:', targetExercise?.videos.length
+          );
+        }
+        
         setUserVideos(videos);
       } catch (error) {
-        console.error('Error fetching user videos:', error);
+        console.error('[DEBUG-PROFILE-COMPONENT] Error fetching user videos:', error);
       }
     };
   
@@ -450,9 +504,22 @@ const handleDelete = async () => {
                 <div className="px-5">
                   <div className="flex justify-between items-center mb-4">
                     <h2 className="text-xl text-white font-semibold">
-                      Your Videos ({userVideos.length})
+                      Your Videos ({userVideos.reduce((total, ex) => total + ex.videos.length, 0)})
                     </h2>
                     <div className="flex gap-4">
+                      {!isSelecting && (
+                        <button
+                          onClick={handleProcessVideosWithoutGifs}
+                          disabled={isProcessingGifs}
+                          className={`text-sm px-3 py-1 rounded ${
+                            isProcessingGifs 
+                              ? 'bg-zinc-700 text-zinc-400 cursor-not-allowed' 
+                              : 'bg-zinc-800 hover:bg-zinc-700 text-white'
+                          }`}
+                        >
+                          {isProcessingGifs ? 'Processing...' : 'Generate Missing GIFs'}
+                        </button>
+                      )}
                       <button
                         onClick={() => setIsSelecting(!isSelecting)}
                         className="text-zinc-400 hover:text-white"

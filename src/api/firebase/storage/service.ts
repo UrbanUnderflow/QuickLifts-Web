@@ -30,53 +30,126 @@ export class FirebaseStorageService {
   async uploadVideo(
       file: File, 
       videoType: VideoType = VideoType.Exercise,
-      onProgress?: (progress: number) => void
+      onProgress?: (progress: number) => void,
+      exerciseName?: string
     ): Promise<UploadResult> {
+      console.log('[DEBUG-STORAGE] Starting uploadVideo method', { 
+        fileType: file.type, 
+        fileSize: file.size, 
+        videoType,
+        exerciseName
+      });
+      
       // Ensure user is authenticated
       const user = auth.currentUser;
       if (!user) {
+        console.error('[DEBUG-STORAGE] Authentication error: No current user');
         throw new Error("User must be authenticated to upload video");
       }
+      
+      console.log('[DEBUG-STORAGE] User authenticated', { 
+        uid: user.uid, 
+        email: user.email 
+      });
   
       // Validate file type and size
       const ALLOWED_TYPES = ['video/mp4', 'video/quicktime', 'video/x-msvideo'];
       const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
   
       if (!ALLOWED_TYPES.includes(file.type)) {
+        console.error('[DEBUG-STORAGE] File type validation error', { 
+          fileType: file.type, 
+          allowedTypes: ALLOWED_TYPES 
+        });
         throw new Error("Invalid file type. Only MP4, AVI, and QuickTime videos are allowed.");
       }
   
       if (file.size > MAX_FILE_SIZE) {
+        console.error('[DEBUG-STORAGE] File size validation error', { 
+          fileSize: file.size, 
+          maxSize: MAX_FILE_SIZE 
+        });
         throw new Error("File is too large. Maximum size is 100MB.");
       }
+      
+      console.log('[DEBUG-STORAGE] File validation passed');
   
       // Generate unique filename
       const fileName = `${Date.now()}_${file.name}`;
-      const storagePath = `videos/${user.uid}/${fileName}`;
+      
+      // Determine the storage path based on the video type and exercise name
+      let storagePath = '';
+      if (videoType === VideoType.Exercise && exerciseName) {
+        // Format the exercise name for storage path (capitalize first letter of each word)
+        const formattedExerciseName = exerciseName.trim()
+          .split(' ')
+          .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+          .join(' ');
+        
+        // Use exercise name for videos folder structure
+        storagePath = `videos/${formattedExerciseName}/${fileName}`;
+        console.log('[DEBUG-STORAGE] Using exercise name for storage path:', formattedExerciseName);
+      } else {
+        // Fallback to user ID if no exercise name provided
+        storagePath = `videos/${videoType}/${user.uid}/${fileName}`;
+        console.log('[DEBUG-STORAGE] Using default storage path (no exercise name provided)');
+      }
+      
+      console.log('[DEBUG-STORAGE] Generated storage path', { 
+        fileName, 
+        storagePath 
+      });
       
       // Create storage reference
       const storageRef = ref(getStorage(), storagePath);
+      console.log('[DEBUG-STORAGE] Created storage reference');
   
       try {
         // Create upload task
+        console.log('[DEBUG-STORAGE] Creating upload task');
         const uploadTask = uploadBytesResumable(storageRef, file);
+        console.log('[DEBUG-STORAGE] Upload task created');
         
         // Add progress listener if callback provided
         if (onProgress) {
-          uploadTask.on('state_changed', (snapshot) => {
-            const progress = (snapshot.bytesTransferred / snapshot.totalBytes);
-            onProgress(progress);
-          });
+          console.log('[DEBUG-STORAGE] Adding progress listener');
+          uploadTask.on('state_changed', 
+            (snapshot) => {
+              const progress = (snapshot.bytesTransferred / snapshot.totalBytes);
+              console.log(`[DEBUG-STORAGE] Upload progress: ${Math.round(progress * 100)}%`, {
+                bytesTransferred: snapshot.bytesTransferred,
+                totalBytes: snapshot.totalBytes,
+                state: snapshot.state
+              });
+              onProgress(progress);
+            },
+            (error) => {
+              console.error('[DEBUG-STORAGE] Upload state error:', error);
+            }
+          );
         }
         
         // Wait for upload to complete
+        console.log('[DEBUG-STORAGE] Waiting for upload to complete');
         const snapshot = await uploadTask;
+        console.log('[DEBUG-STORAGE] Upload completed', snapshot);
+        
+        // Get download URL
+        console.log('[DEBUG-STORAGE] Getting download URL');
         const downloadURL = await getDownloadURL(snapshot.ref);
+        console.log('[DEBUG-STORAGE] Got download URL:', downloadURL);
+        
         const gsURL = `gs://${snapshot.ref.bucket}/${snapshot.ref.fullPath}`;
+        console.log('[DEBUG-STORAGE] Complete upload result', { gsURL, downloadURL });
   
         return { gsURL, downloadURL };
       } catch (error) {
-        console.error("Video upload failed", error);
+        console.error("[DEBUG-STORAGE] Video upload failed", error);
+        console.error('[DEBUG-STORAGE] Error details:', {
+          message: error instanceof Error ? error.message : 'Unknown error',
+          name: error instanceof Error ? error.name : 'Unknown error type',
+          stack: error instanceof Error ? error.stack : 'No stack trace'
+        });
         throw error;
       }
     }
@@ -96,7 +169,7 @@ export class FirebaseStorageService {
     const storagePath = `${imageType}/${user.uid}/${fileName}`;
     
     // Create storage reference
-    const storageRef = ref(this.storage, storagePath);
+    const storageRef = ref(getStorage(), storagePath);
 
     try {
       // Upload the file

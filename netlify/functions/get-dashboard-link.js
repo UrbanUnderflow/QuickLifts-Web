@@ -19,7 +19,7 @@ if (admin.apps.length === 0) {
         credential: admin.credential.cert({
           "type": "service_account",
           "project_id": "quicklifts-dd3f1",
-          "private_key_id": process.env.FIREBASE_PRIVATE_KEY_ALT,
+          "private_key_id": process.env.FIREBASE_PRIVATE_KEY,
           "private_key": process.env.FIREBASE_SECRET_KEY_ALT.replace(/\\n/g, '\n'),
           "client_email": "firebase-adminsdk-1qxb0@quicklifts-dd3f1.iam.gserviceaccount.com",
           "client_id": "111494077667496751062",
@@ -45,7 +45,7 @@ try {
   console.log('Environment variables available:', {
     STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY ? 'Set' : 'Not set',
     FIREBASE_SECRET_KEY_ALT: process.env.FIREBASE_SECRET_KEY_ALT ? 'Set' : 'Not set',
-    FIREBASE_PRIVATE_KEY_ALT: process.env.FIREBASE_PRIVATE_KEY_ALT ? 'Set' : 'Not set',
+    FIREBASE_PRIVATE_KEY_ALT: process.env.FIREBASE_PRIVATE_KEY ? 'Set' : 'Not set',
     NODE_ENV: process.env.NODE_ENV
   });
 

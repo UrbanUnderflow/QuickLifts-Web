@@ -389,34 +389,45 @@ export const ExerciseCategory = {
 // const fromId = ExerciseCategory.fromIdentifier('weight-training');
 // const id = ExerciseCategory.identifier(weightTraining);
 
+// New interfaces for category handling with different names to avoid conflicts
+export interface ExerciseCategoryDetailsType {
+  sets: number;
+  reps: string[];
+  weight: number;
+  screenTime: number;
+  selectedVideo: ExerciseVideo | null;
+}
+
+export interface ExerciseCategoryType {
+  type: string;
+  details: ExerciseCategoryDetailsType;
+}
 
 export class Exercise {
   id: string;
   name: string;
-  description: string;
-  category: ExerciseCategory;
-  primaryBodyParts: BodyPart[];
-  secondaryBodyParts: BodyPart[];
+  documentId: string;
+  category: string | any;
+  primaryBodyParts: string[];
+  secondaryBodyParts: string[];
   tags: string[];
-  videos: ExerciseVideo[];
+  description: string;
   steps: string[];
-  visibility: ExerciseVisibility;
-  currentVideoPosition: number;
-  sets: number;
-  reps: string;
-  weight: number;
+  visibility?: string;
+  currentVideoPosition?: number;
+  sets?: number;
+  reps?: string;
+  weight?: number;
   author: ExerciseAuthor;
   createdAt: Date;
   updatedAt: Date;
+  videos: ExerciseVideo[];
 
   constructor(data: any) {
     this.id = data.id || '';
     this.name = data.name || '';
+    this.documentId = data.documentId || data.name?.toLowerCase() || data.id || '';
     this.description = data.description || '';
-    this.primaryBodyParts = (data.primaryBodyParts || []) as BodyPart[];
-    this.secondaryBodyParts = (data.secondaryBodyParts || []) as BodyPart[];
-    this.tags = data.tags || [];
-    this.videos = (data.videos || []).map((video: any) => new ExerciseVideo(video));
     this.steps = data.steps || [];
     this.visibility = data.visibility || 'live';
     this.currentVideoPosition = data.currentVideoPosition || 0;
@@ -426,41 +437,48 @@ export class Exercise {
     this.author = new ExerciseAuthor(data.author || {});
     this.createdAt = convertFirestoreTimestamp(data.createdAt);
     this.updatedAt = convertFirestoreTimestamp(data.updatedAt);
-
-    if (data.category) {
-        const categoryType = data.category.type || data.category.id;
-        
-        this.category = {
-            type: categoryType,
-            details: {
-                ...(data.category.details || {}),
-                // Convert selectedVideo to ExerciseVideo instance if it exists
-                ...(data.category.details?.selectedVideo ? {
-                    selectedVideo: new ExerciseVideo(data.category.details.selectedVideo)
-                } : {}),
-                // If it's raw data format, merge the remaining properties
-                ...((!data.category.details && data.category.sets) ? {
-                    sets: data.category.sets,
-                    reps: data.category.reps || ['12'],
-                    weight: data.category.weight || 0,
-                    screenTime: data.category.screenTime || 0,
-                    selectedVideo: data.category.selectedVideo ? new ExerciseVideo(data.category.selectedVideo) : null
-                } : {})
-            }
+    this.videos = (data.videos || []).map(
+      (video: any) => new ExerciseVideo(video)
+    );
+    
+    // Handle primaryBodyParts, secondaryBodyParts and tags
+    this.primaryBodyParts = data.primaryBodyParts || [];
+    this.secondaryBodyParts = data.secondaryBodyParts || [];
+    this.tags = data.tags || [];
+    
+    // Handle category field - can be either string or complex object
+    if (typeof data.category === 'string') {
+      this.category = data.category || '';
+    } else if (data.category && typeof data.category === 'object') {
+      const categoryObj: any = {};
+      const categoryType = data.category.type || data.category.id || '';
+      
+      categoryObj.type = categoryType;
+      categoryObj.details = {
+        ...(data.category.details || {}),
+        // Convert selectedVideo to ExerciseVideo instance if it exists
+        ...(data.category.details?.selectedVideo ? {
+          selectedVideo: new ExerciseVideo(data.category.details.selectedVideo)
+        } : {}),
+      };
+      
+      // If it's raw data format, merge the remaining properties
+      if (!data.category.details && data.category.sets) {
+        categoryObj.details = {
+          ...categoryObj.details,
+          sets: data.category.sets,
+          reps: data.category.reps || ['12'],
+          weight: data.category.weight || 0,
+          screenTime: data.category.screenTime || 0,
+          selectedVideo: data.category.selectedVideo ? new ExerciseVideo(data.category.selectedVideo) : null
         };
+      }
+      
+      this.category = categoryObj;
     } else {
-        this.category = {
-            type: 'weight-training',
-            details: {
-                sets: 3,
-                reps: ['12'],
-                weight: 0,
-                screenTime: 0,
-                selectedVideo: null
-            }
-        };
+      // Default category as string for new document structure
+      this.category = 'weight-training';
     }
-
   }
 
   toDictionary(): { [key: string]: any } {
@@ -484,11 +502,6 @@ export class Exercise {
       tags: this.tags,
       videos: this.videos.map((video) => video.toDictionary()),
       steps: this.steps,
-      visibility: this.visibility,
-      currentVideoPosition: this.currentVideoPosition,
-      sets: this.sets,
-      reps: this.reps,
-      weight: this.weight,
       author: this.author.toDictionary(),
       createdAt: dateToUnixTimestamp(this.createdAt),
       updatedAt: dateToUnixTimestamp(this.updatedAt),
