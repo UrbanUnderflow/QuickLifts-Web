@@ -92,6 +92,8 @@ const SignInModal: React.FC<SignInModalProps> = ({
   const [profileImage, setProfileImage] = useState<File | null>(null);
   const [isSignUp, setIsSignUp] = useState(false);
   const [signUpStep, setSignUpStep] = useState<SignUpStep>("initial");
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
+  const [resetEmailSent, setResetEmailSent] = useState(false);
   const [errors, setErrors] = useState<{
     email?: string;
     password?: string;
@@ -480,7 +482,13 @@ const SignInModal: React.FC<SignInModalProps> = ({
     console.log('[SignInModal] Form submission started:', {
       isSignUp,
       signUpStep,
+      isInitialStep: signUpStep === "initial",
+      isPasswordStep: signUpStep === "password",
+      isProfileStep: signUpStep === "profile",
+      signUpStepType: typeof signUpStep,
       currentEmail: email,
+      hasPassword: !!password,
+      passwordLength: password.length,
       currentUser: auth.currentUser?.email,
       timestamp: new Date().toISOString()
     });
@@ -581,23 +589,95 @@ const SignInModal: React.FC<SignInModalProps> = ({
         setIsLoading(true);
         setError(null);
         
-        const { user } = await createUserWithEmailAndPassword(auth, email, password);
-
-        if (user) {
-          // Get the dispatch function
-          const dispatch = useDispatch();
-          
-          // Create a new User object with proper SubscriptionType
-          const newUser = new User(user.uid, {
-            id: user.uid,
-            email: user.email || '',
-            subscriptionType: SubscriptionType.unsubscribed
+        console.log('[SignInModal] In sign-up flow with step:', {
+          signUpStep,
+          email,
+          hasPassword: !!password,
+          passwordLength: password ? password.length : 0,
+          timestamp: new Date().toISOString()
+        });
+        
+        // If we're at the initial step, just validate the email and move to password step
+        if (signUpStep === "initial") {
+          console.log('[SignInModal] Moving from initial to password step:', {
+            email,
+            timestamp: new Date().toISOString()
           });
           
-          dispatch(setUser(newUser));
-
-          setSignUpStep("profile");
+          // Validate email
+          if (!email) {
+            setError("Please enter your email address");
+            setIsLoading(false);
+            return;
+          }
+          
+          // Move to password step
+          setSignUpStep("password");
           setShowError(false);
+          setIsLoading(false);
+          return;
+        }
+        
+        // If we're at the password step, create the account with email and password
+        if (signUpStep === "password") {
+          console.log('[SignInModal] Creating account with email/password:', {
+            email,
+            passwordLength: password.length,
+            timestamp: new Date().toISOString()
+          });
+          
+          // Validate password
+          if (!password) {
+            setError("Please enter a password");
+            setIsLoading(false);
+            return;
+          }
+          
+          if (!hasUppercase || !hasNumber || !hasMinLength) {
+            setError("Please ensure your password meets all requirements");
+            setShowError(true);
+            setIsLoading(false);
+            return;
+          }
+          
+          if (password !== confirmPassword) {
+            setError("Passwords do not match");
+            setShowError(true);
+            setIsLoading(false);
+            return;
+          }
+          
+          try {
+            // Now we can create the user with email/password
+            const { user } = await createUserWithEmailAndPassword(auth, email, password);
+            console.log('[SignInModal] User created successfully:', {
+              uid: user.uid,
+              email: user.email,
+              timestamp: new Date().toISOString()
+            });
+
+            if (user) {
+              // Get the dispatch function
+              const dispatch = useDispatch();
+              
+              // Create a new User object with proper SubscriptionType
+              const newUser = new User(user.uid, {
+                id: user.uid,
+                email: user.email || '',
+                subscriptionType: SubscriptionType.unsubscribed
+              });
+              
+              dispatch(setUser(newUser));
+
+              setSignUpStep("profile");
+              setShowError(false);
+            }
+          } catch (createUserError) {
+            console.error("[SignInModal] Error creating user:", createUserError);
+            setError(createUserError instanceof Error ? createUserError.message : 'Error creating account');
+            setIsLoading(false);
+          }
+          return;
         }
       } catch (err) {
         const error = err as Error;
@@ -1339,6 +1419,87 @@ const SignInModal: React.FC<SignInModalProps> = ({
     </>
   );
 
+  const renderForgotPassword = () => (
+    <>
+      <div className="text-center mb-8 pt-4 sm:pt-0">
+        <img src="/pulse-logo-white.svg" alt="Pulse Logo" className="h-8 mx-auto mb-8" />
+        <h2 className="text-2xl font-bold text-white font-['Thunder'] mb-2">
+          {resetEmailSent ? "Check Your Email" : "Reset Your Password"}
+        </h2>
+        <p className="text-zinc-400 font-['HK Grotesk'] text-sm">
+          {resetEmailSent 
+            ? "We've sent password reset instructions to your email" 
+            : "Enter your email address to receive reset instructions"}
+        </p>
+      </div>
+
+      {!resetEmailSent ? (
+        <div className="space-y-6">
+          <div>
+            <label className="block text-sm font-medium text-zinc-300 mb-2 font-['HK Grotesk']">
+              Email
+            </label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                setShowError(false);
+              }}
+              className="w-full bg-zinc-800 border border-zinc-600 rounded-lg p-3 text-white placeholder-zinc-400 focus:outline-none focus:border-[#E0FE10] focus:ring-1 focus:ring-[#E0FE10] transition-colors"
+              placeholder="Enter your email"
+            />
+          </div>
+          
+          <div className="flex flex-col gap-4 mt-8">
+            <button
+              type="button"
+              onClick={handleForgotPassword}
+              disabled={isLoading}
+              className="w-full bg-[#E0FE10] text-black font-semibold py-3 px-4 rounded-lg hover:bg-[#c8e60e] transition-colors font-['HK Grotesk'] disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isLoading ? (
+                <div className="loader border-t-transparent border-4 border-black rounded-full w-5 h-5 mx-auto animate-spin"></div>
+              ) : (
+                "Send Reset Instructions"
+              )}
+            </button>
+            
+            <button
+              type="button"
+              onClick={() => {
+                setIsForgotPassword(false);
+                setResetEmailSent(false);
+              }}
+              className="text-zinc-400 text-sm hover:text-white transition-colors"
+            >
+              Back to Sign In
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-6">
+          <p className="text-zinc-300 text-center">
+            Please check your email and follow the instructions to reset your password.
+          </p>
+          
+          <div className="flex flex-col gap-4 mt-8">
+            <button
+              type="button"
+              onClick={() => {
+                setIsForgotPassword(false);
+                setResetEmailSent(false);
+              }}
+              className="w-full bg-[#E0FE10] text-black font-semibold py-3 px-4 rounded-lg hover:bg-[#c8e60e] transition-colors font-['HK Grotesk']"
+            >
+              Return to Sign In
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+  
   const renderInitialStep = () => (
     <>
       <div className="text-center mb-8 pt-4 sm:pt-0">
@@ -1426,9 +1587,18 @@ const SignInModal: React.FC<SignInModalProps> = ({
 
         {!isSignUp && (
           <div>
-            <label className="block text-sm font-medium text-zinc-300 mb-2 font-['HK Grotesk']">
-              Password
-            </label>
+            <div className="flex justify-between items-center mb-2">
+              <label className="block text-sm font-medium text-zinc-300 font-['HK Grotesk']">
+                Password
+              </label>
+              <button 
+                type="button"
+                onClick={() => setIsForgotPassword(true)}
+                className="text-[#E0FE10] text-sm hover:underline"
+              >
+                Forgot your password?
+              </button>
+            </div>
             <input
               type="password"
               value={password}
@@ -1503,6 +1673,10 @@ const SignInModal: React.FC<SignInModalProps> = ({
   };
 
   const renderCurrentStep = () => {
+    if (isForgotPassword) {
+      return renderForgotPassword();
+    }
+    
     if (isSignUp) {
       switch (signUpStep) {
         case "password":
@@ -1548,11 +1722,44 @@ const SignInModal: React.FC<SignInModalProps> = ({
     });
   }, [isVisible, closable, onClose]);
 
+  // Add debug logging for signup step changes
+  useEffect(() => {
+    console.log('[SignInModal] Sign-up step changed:', {
+      signUpStep,
+      isSignUp,
+      timestamp: new Date().toISOString()
+    });
+  }, [signUpStep, isSignUp]);
+
   // Make sure the modal is actually visible
   if (!isVisible) {
     console.log('[SignInModal] Modal not visible, not rendering');
     return null;
   }
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError(null);
+    console.log('[SignInModal] Forgot password request initiated for:', email);
+    
+    try {
+      if (!email) {
+        setError("Please enter your email address");
+        setIsLoading(false);
+        return;
+      }
+      
+      await authService.resetPassword(email);
+      setResetEmailSent(true);
+      console.log('[SignInModal] Password reset email sent successfully to:', email);
+    } catch (err) {
+      console.error("[SignInModal] Error sending password reset email:", err);
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-black z-50 sm:p-6">
@@ -1577,10 +1784,20 @@ const SignInModal: React.FC<SignInModalProps> = ({
           )}
           {renderCurrentStep()}
 
-          {signUpStep !== "quiz-prompt" && signUpStep !== "quiz" && signUpStep !== "subscription" && (
+          {signUpStep !== "quiz-prompt" && signUpStep !== "quiz" && signUpStep !== "subscription" && !isForgotPassword && (
             <div className="flex flex-col gap-4 mt-8">
               <button
                 type="submit"
+                onClick={() => {
+                  console.log('[SignInModal] Submit button clicked:', {
+                    isSignUp,
+                    signUpStep,
+                    email,
+                    hasPassword: !!password,
+                    passwordLength: password ? password.length : 0,
+                    timestamp: new Date().toISOString()
+                  });
+                }}
                 className="w-full bg-[#E0FE10] text-black font-semibold py-3 px-4 rounded-lg hover:bg-[#c8e60e] transition-colors font-['HK Grotesk']"
               >
                 {isSignUp
@@ -1597,17 +1814,9 @@ const SignInModal: React.FC<SignInModalProps> = ({
 
         {renderQuizNavigation()}
 
-        {signUpStep === "initial" && (
+        {signUpStep === "initial" && !isForgotPassword && (
           <>
             <div className="mt-6 text-center">
-              {!isSignUp && (
-                <a
-                  href="#"
-                  className="text-zinc-400 hover:text-[#E0FE10] text-sm transition-colors mb-2 block"
-                >
-                  Forgot your password?
-                </a>
-              )}
               <p className="text-zinc-500 text-sm font-['HK Grotesk']">
                 {isSignUp ? "Already have an account? " : "Don't have an account? "}
                 <button onClick={toggleMode} className="text-[#E0FE10] hover:text-[#c8e60e]">
