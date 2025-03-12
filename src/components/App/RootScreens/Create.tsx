@@ -1,9 +1,8 @@
-import React, { useState, useRef, DragEvent, ChangeEvent } from 'react';
+import React, { useState, useRef, DragEvent, ChangeEvent, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { Camera } from 'lucide-react';
 import ProgressBar from '../../../components/App/ProgressBar';
 import { firebaseStorageService, VideoType } from '../../../api/firebase/storage/service';
-import { VideoTrimmer } from '../../../components/VideoTrimmer';
 import Spacer from '../../../components/Spacer';
 import { exerciseService } from '../../../api/firebase/exercise/service';
 import { userService } from '../../../api/firebase/user/service';
@@ -22,6 +21,7 @@ const Create: React.FC = () => {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [showTrimmer, setShowTrimmer] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   
   // Exercise metadata state
   const [exerciseName, setExerciseName] = useState('');
@@ -36,6 +36,7 @@ const Create: React.FC = () => {
   const [similarExercises, setSimilarExercises] = useState<Exercise[]>([]);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [uploadedExerciseId, setUploadedExerciseId] = useState<string>('');
+  const [selectedExerciseId, setSelectedExerciseId] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -47,6 +48,32 @@ const Create: React.FC = () => {
     'Stretching', 
     'Calisthenics'
   ];
+
+  useEffect(() => {
+    // Check if we're returning from the trim-video page
+    if (typeof window !== 'undefined') {
+      const trimmedFileData = sessionStorage.getItem('trimmed_video_file');
+      if (trimmedFileData) {
+        try {
+          // Convert stored data back to File object
+          const { name, type, data } = JSON.parse(trimmedFileData);
+          const arrayBuffer = Uint8Array.from(atob(data), c => c.charCodeAt(0)).buffer;
+          const trimmedFile = new File([arrayBuffer], name, { type });
+          
+          // Update state with the trimmed file
+          const objectUrl = URL.createObjectURL(trimmedFile);
+          setVideoPreview(objectUrl);
+          setVideoFile(trimmedFile);
+          setShowTrimmer(false);
+          
+          // Clean up sessionStorage
+          sessionStorage.removeItem('trimmed_video_file');
+        } catch (err) {
+          console.error('Failed to restore trimmed video:', err);
+        }
+      }
+    }
+  }, []);
 
   // Drag and drop handlers
   const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
@@ -80,15 +107,35 @@ const Create: React.FC = () => {
       alert('Please upload a valid video file (MP4, AVI, QuickTime)');
       return;
     }
-    setVideoFile(file);
-    setShowTrimmer(true);
+
+    // Instead of showing the trimmer inline, navigate to the trim-video page
+    if (typeof window !== 'undefined') {
+      // Store the file in sessionStorage
+      const reader = new FileReader();
+      reader.onload = () => {
+        const base64data = reader.result as string;
+        const base64Content = base64data.split(',')[1]; // Remove the data URL prefix
+        
+        sessionStorage.setItem('trim_video_file', JSON.stringify({
+          name: file.name,
+          type: file.type,
+          data: base64Content
+        }));
+        
+        // Navigate to the trim page
+        const returnUrl = '/create'; // Return to this page after trimming
+        router.push(`/trim-video?returnUrl=${encodeURIComponent(returnUrl)}`);
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
+  // This method is no longer needed as trim completion is handled by the trim-video page
+  // But we'll keep a simplified version just in case we need it in the future
   const handleTrimComplete = (trimmedFile: File) => {
     const objectUrl = URL.createObjectURL(trimmedFile);
     setVideoPreview(objectUrl);
     setVideoFile(trimmedFile);
-    setShowTrimmer(false);
   };
 
   const handleAddTag = () => {
@@ -490,17 +537,6 @@ const Create: React.FC = () => {
         <h2 className="text-2xl font-bold">Create</h2>
         <p className="text-zinc-400">Start building your next workout or post.</p>
       </div>
-
-      {showTrimmer && videoFile && (
-        <VideoTrimmer 
-          file={videoFile}
-          onTrimComplete={handleTrimComplete}
-          onCancel={() => {
-            setShowTrimmer(false);
-            setVideoFile(null);
-          }}
-        />
-      )}
 
       <div 
         className={`

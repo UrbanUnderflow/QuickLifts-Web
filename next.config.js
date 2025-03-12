@@ -24,7 +24,22 @@ const nextConfig = {
   async headers() {
     return [
       {
-        source: '/(.*)',
+        // Only apply COOP/COEP headers to video trimming related routes
+        source: '/trim-video(.*)',
+        headers: [
+          {
+            key: 'Cross-Origin-Embedder-Policy',
+            value: 'credentialless',
+          },
+          {
+            key: 'Cross-Origin-Opener-Policy',
+            value: 'same-origin',
+          },
+        ],
+      },
+      {
+        // Also apply to the API route if you have one for video trimming
+        source: '/api/trim-video(.*)',
         headers: [
           {
             key: 'Cross-Origin-Embedder-Policy',

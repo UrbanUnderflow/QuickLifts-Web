@@ -99,10 +99,43 @@ const Discover = () => {
     return messages[dayOfYear % messages.length];
   };
 
+  // Helper function to check if user is authenticated
+  const isUserAuthenticated = () => {
+    return !!userService.currentUser?.id;
+  };
+
   // Load initial data
   useEffect(() => {
     loadData();
   }, []);
+
+  // Add an effect to reload user-specific data when auth state changes
+  useEffect(() => {
+    // If user becomes authenticated, reload user-specific data
+    if (isUserAuthenticated()) {
+      const loadUserSpecificData = async () => {
+        try {
+          // Load current workout
+          const currentWorkoutData = workoutService.currentWorkout;
+          setCurrentWorkout(currentWorkoutData);
+          
+          // Load active rounds
+          const userRounds = await workoutService.fetchUserChallenges();
+          setActiveRounds(userRounds.filter(round => 
+            round.challenge && new Date(round.challenge.endDate) > new Date() && !round.isCompleted
+          ));
+        } catch (error) {
+          console.error('Error loading user-specific data:', error);
+        }
+      };
+      
+      loadUserSpecificData();
+    } else {
+      // If user is signed out, clear user-specific data
+      setCurrentWorkout(null);
+      setActiveRounds([]);
+    }
+  }, [userService.currentUser]);
 
   // IntersectionObserver for "Load More"
   useEffect(() => {
@@ -134,9 +167,7 @@ const Discover = () => {
     setLoading(true);
     
     try {
-      // Load current workout
-      const currentWorkoutData = workoutService.currentWorkout;
-      setCurrentWorkout(currentWorkoutData);
+      // First, load non-user-specific data that doesn't require authentication
       
       // Load trending exercises
       const { exercises, lastVisible } = await exerciseService.fetchPaginatedExercises(null, 10);
@@ -151,16 +182,32 @@ const Discover = () => {
       const creatorsData = await userService.fetchFeaturedUsers();
       setFeaturedCreators(creatorsData || []);
       
-      // Load active rounds
-      const userRounds = await workoutService.fetchUserChallenges();
-      setActiveRounds(userRounds.filter(round => 
-        round.challenge && new Date(round.challenge.endDate) > new Date() && !round.isCompleted
-      ));
-      
       // Load featured rounds
       const collections = await workoutService.fetchLiveRounds();
       const challenges = collections.map(collection => collection.challenge).filter((c): c is Challenge => !!c);
       setFeaturedRounds(challenges);
+      
+      // Then, load user-specific data only if a user is signed in
+      if (isUserAuthenticated()) {
+        // Load current workout
+        const currentWorkoutData = workoutService.currentWorkout;
+        setCurrentWorkout(currentWorkoutData);
+        
+        // Load active rounds
+        try {
+          const userRounds = await workoutService.fetchUserChallenges();
+          setActiveRounds(userRounds.filter(round => 
+            round.challenge && new Date(round.challenge.endDate) > new Date() && !round.isCompleted
+          ));
+        } catch (error) {
+          console.log('User challenges couldn\'t be loaded, user might not be authenticated yet');
+          setActiveRounds([]);
+        }
+      } else {
+        // If no user is signed in, clear user-specific data
+        setCurrentWorkout(null);
+        setActiveRounds([]);
+      }
       
     } catch (error) {
       console.error('Error loading discover data:', error);
