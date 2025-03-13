@@ -14,24 +14,13 @@ interface GifGeneratorOptions {
 const defaultOptions: GifGeneratorOptions = {
   width: 320, // Larger size for better quality
   height: 320, // Larger size for better quality
-  numFrames: 15, // We'll adjust this based on video duration
+  numFrames: 10, // Default number of frames
   quality: 10, // Lower is better quality (more colors)
-  delay: 100, // Milliseconds between frames
-  repeat: 0 // 0 means loop forever
+  delay: 200, // 200ms delay per frame (5fps)
+  repeat: 0   // Loop forever
 };
 
-/**
- * Utility for generating GIFs from videos on the client side
- */
 export const gifGenerator = {
-  /**
-   * Generates a GIF from a video URL and uploads it to Firebase Storage
-   * @param videoUrl The URL of the video to generate a GIF from
-   * @param exerciseName The name of the exercise (for storage path)
-   * @param videoId The ID of the video
-   * @param options Optional GIF generation options
-   * @returns Promise that resolves to the URL of the generated GIF
-   */
   async generateAndUploadGif(
     videoUrl: string,
     exerciseName: string,
@@ -40,28 +29,42 @@ export const gifGenerator = {
   ): Promise<string> {
     try {
       console.log('[DEBUG] Starting GIF generation for video:', videoUrl);
+      console.log('[DEBUG] Options:', JSON.stringify(options));
       
       // Extract the path from the video URL
       const storage = getStorage();
       const videoPath = decodeURIComponent(videoUrl.split('/o/')[1].split('?')[0]);
+      console.log('[DEBUG] Extracted video path:', videoPath);
+      
       const videoRef = ref(storage, videoPath);
       
-      console.log('[DEBUG] Getting download URL for video path:', videoPath);
+      console.log('[DEBUG] Getting download URL for video path');
       const downloadURL = await getDownloadURL(videoRef);
+      console.log('[DEBUG] Got download URL:', downloadURL);
       
       // Use a CORS proxy to access the video
       const corsProxyUrl = this.createCorsProxyUrl(downloadURL);
+      console.log('[DEBUG] Created CORS proxy URL:', corsProxyUrl);
       
-      // Create a video element and properly load the video
+      // Create a video element
       const video = document.createElement('video');
-      video.crossOrigin = 'anonymous'; // This is important for CORS
-      video.muted = true; // Muted videos can autoplay
-      video.autoplay = false; // Disable autoplay
-      video.controls = false; // Hide controls
+      video.crossOrigin = 'anonymous';
+      video.muted = true;
+      video.autoplay = false;
+      video.controls = false;
       video.preload = 'auto';
-      video.playsInline = true; // Important for mobile
+      video.playsInline = true;
       
-      console.log('[DEBUG] Loading video from proxy URL:', corsProxyUrl);
+      // Add event listeners before setting src
+      video.addEventListener('error', (e) => {
+        console.error('[DEBUG] Video error event:', e);
+        if (video.error) {
+          console.error('[DEBUG] Video error code:', video.error.code);
+          console.error('[DEBUG] Video error message:', video.error.message);
+        }
+      });
+      
+      console.log('[DEBUG] Setting video src:', corsProxyUrl);
       video.src = corsProxyUrl;
       
       // Append the video to the document but make it invisible
@@ -70,31 +73,45 @@ export const gifGenerator = {
       video.style.left = '-9999px';
       video.style.opacity = '0.01';
       document.body.appendChild(video);
+      console.log('[DEBUG] Video element appended to document');
       
       // Wait for the video to load
+      console.log('[DEBUG] Waiting for video to load (metadata and data)');
       await new Promise<void>((resolve, reject) => {
-        video.onloadeddata = () => {
-          console.log('[DEBUG] Video loaded successfully, duration:', video.duration, 'seconds');
-          resolve();
+        const timeoutId = setTimeout(() => {
+          console.warn('[DEBUG] Video load timeout after 15 seconds');
+          if (video.readyState >= 2) {
+            console.log('[DEBUG] Video has enough data to continue despite timeout');
+            resolve();
+          } else {
+            reject(new Error(`Video load timeout. readyState: ${video.readyState}`));
+          }
+        }, 15000);
+        
+        video.onloadedmetadata = () => {
+          console.log('[DEBUG] Video metadata loaded, duration:', video.duration, 'seconds, dimensions:', video.videoWidth, 'x', video.videoHeight);
+          video.onloadeddata = () => {
+            clearTimeout(timeoutId);
+            console.log('[DEBUG] Video data loaded successfully');
+            resolve();
+          };
         };
+        
         video.onerror = (e) => {
+          clearTimeout(timeoutId);
           console.error('[DEBUG] Error loading video:', e);
-          reject(new Error('Failed to load video'));
+          console.error('[DEBUG] Video error details:', video.error);
+          reject(new Error(`Failed to load video: ${video.error?.message || 'Unknown error'}`));
         };
+        
         video.load();
       });
-
-      // Calculate optimal number of frames based on video duration
-      // Ensure at least 1 frame per second of video, but minimum 8 frames and maximum 30 frames
-      const videoDuration = video.duration;
-      const calculatedFrames = Math.max(8, Math.min(30, Math.ceil(videoDuration)));
-      options.numFrames = options.numFrames || calculatedFrames;
       
-      console.log(`[DEBUG] Video duration: ${videoDuration}s. Using ${options.numFrames} frames for GIF`);
-
       // Generate the GIF
       console.log('[DEBUG] Starting GIF creation with gif.js');
+      console.log('[DEBUG] Video state before GIF creation - readyState:', video.readyState, 'duration:', video.duration);
       const gifBlob = await this.createGifFromVideo(video, options);
+      console.log('[DEBUG] GIF creation completed, blob size:', gifBlob.size);
       
       // Clean up the video element
       document.body.removeChild(video);
@@ -103,60 +120,64 @@ export const gifGenerator = {
       const storageService = new FirebaseStorageService();
       const storagePath = `gifs/${exerciseName}/${videoId}.gif`;
       
-      console.log('[DEBUG] Uploading GIF to Firebase Storage');
+      console.log('[DEBUG] Uploading GIF to Firebase Storage at path:', storagePath);
       const uploadResult = await storageService.uploadGifBlob(gifBlob, storagePath);
       console.log('[DEBUG] GIF generated and uploaded successfully:', uploadResult.downloadURL);
       
       return uploadResult.downloadURL;
     } catch (error) {
       console.error('[DEBUG] Error generating and uploading GIF:', error);
+      if (error instanceof Error) {
+        console.error('[DEBUG] Error name:', error.name);
+        console.error('[DEBUG] Error message:', error.message);
+        console.error('[DEBUG] Error stack:', error.stack);
+      }
       throw error;
     }
   },
   
-  /**
-   * Creates a CORS proxy URL for accessing videos
-   * @param url The original URL to proxy
-   * @returns The proxied URL
-   */
   createCorsProxyUrl(url: string): string {
-    // For development, use our API proxy route
     if (process.env.NODE_ENV === 'development') {
       return `/api/proxy?url=${encodeURIComponent(url)}`;
     }
-    
-    // For production, return the original URL (assuming CORS is configured)
     return url;
   },
   
-  /**
-   * Creates a GIF from a video element using gif.js
-   * @param video The video element to create a GIF from
-   * @param options Optional GIF generation options
-   * @returns Promise that resolves to a Blob containing the GIF
-   */
   createGifFromVideo(
     video: HTMLVideoElement,
     options: GifGeneratorOptions
   ): Promise<Blob> {
     return new Promise((resolve, reject) => {
       try {
+        // Log detailed information about the video
+        console.log('[DEBUG] Video element info:', {
+          readyState: video.readyState,
+          videoWidth: video.videoWidth,
+          videoHeight: video.videoHeight,
+          duration: video.duration,
+          paused: video.paused,
+          ended: video.ended,
+          currentSrc: video.currentSrc,
+          crossOrigin: video.crossOrigin,
+          error: video.error,
+        });
+
         // Extract dimensions from options or video
         const width = options.width || video.videoWidth || 320;
         const height = options.height || video.videoHeight || 320;
-        const frameCount = options.numFrames || 15;
+        const frameCount = options.numFrames || 10;
+        
+        console.log(`[DEBUG] Creating GIF with dimensions ${width}x${height}, ${frameCount} frames`);
         
         // Create a canvas for frame capture
         const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
         const ctx = canvas.getContext('2d', { willReadFrequently: true });
         if (!ctx) {
           reject(new Error('Failed to get canvas context'));
           return;
         }
-        
-        // Set canvas dimensions
-        canvas.width = width;
-        canvas.height = height;
         
         // Initialize gif.js
         const gif = new GIF({
@@ -164,148 +185,215 @@ export const gifGenerator = {
           quality: options.quality || 10,
           width: width,
           height: height,
-          workerScript: '/gifjs/gif.worker.js', // Worker script path
-          repeat: options.repeat || 0, // 0 = loop forever
+          workerScript: '/gifjs/gif.worker.js',
+          repeat: options.repeat || 0,
           debug: true
         });
         
-        // Setup complete handler
+        // Setup handlers
         gif.on('finished', (blob: Blob) => {
           console.log('[DEBUG] GIF creation finished, size:', blob.size);
           resolve(blob);
         });
         
-        // Setup progress handler
         gif.on('progress', (progress: number) => {
           console.log('[DEBUG] GIF encoding progress:', Math.round(progress * 100), '%');
         });
         
-        // Calculate time distribution for frames based on video duration
-        const duration = video.duration;
+        // Track captured frames and total frames
+        let capturedFrames = 0;
+        let framesToCapture = Math.min(frameCount, 24); // Limit to reasonable number
         
-        // Determine start and end points - use the full video except the very beginning and end
-        const startTime = Math.min(0.5, duration * 0.05); // Start at 0.5s or 5% of duration
-        const endTime = Math.max(duration - 0.5, duration * 0.95); // End at 0.5s before end or 95% of duration
-        const effectiveDuration = endTime - startTime;
-        
-        // Store hash values of frames to detect duplicates
-        const frameHashes: Set<string> = new Set();
-        
-        // Simple hash function to check for duplicate frames
-        const hashCanvas = (canvas: HTMLCanvasElement): string => {
-          // Get a portion of the canvas data to use as a hash
-          // Using center portion of the image
-          const x = Math.floor(width * 0.4);
-          const y = Math.floor(height * 0.4);
-          const size = Math.floor(width * 0.2);
-          
-          const imageData = ctx?.getImageData(x, y, size, size).data;
-          if (!imageData) return '';
-          
-          // Sample every 20th pixel as a hash
-          let hash = '';
-          for (let i = 0; i < imageData.length; i += 80) {
-            hash += imageData[i];
-          }
-          return hash;
-        };
-        
-        console.log(`[DEBUG] Capturing frames from time ${startTime.toFixed(2)}s to ${endTime.toFixed(2)}s`);
-        
-        // Function to add a frame at a specific time
-        const addFrameAtTime = (time: number, frameIndex: number) => {
-          return new Promise<boolean>((resolveFrame) => {
-            // Set video time
-            video.currentTime = time;
+        // New approach: Capture frames sequentially by playing the video
+        // Instead of trying to seek (which isn't working), we'll use the timeupdate event
+        const attemptCapture = async () => {
+          try {
+            // First reset the video
+            video.pause();
+            video.currentTime = 0;
+            await new Promise(r => setTimeout(r, 500)); // Give time to update
             
-            // Wait for the video to seek to the requested time
-            const seeked = () => {
-              video.removeEventListener('seeked', seeked);
-              
-              // Draw the video frame to canvas
-              ctx.drawImage(video, 0, 0, width, height);
-              
-              // Check if this frame is a duplicate
-              const frameHash = hashCanvas(canvas);
-              const isDuplicate = frameHashes.has(frameHash);
-              
-              if (isDuplicate) {
-                console.log(`[DEBUG] Skipping duplicate frame ${frameIndex + 1} at time ${time.toFixed(2)}s`);
-                resolveFrame(false);
+            console.log('[DEBUG] Starting sequential frame capture');
+            
+            // Calculate frame times
+            const duration = video.duration;
+            if (isNaN(duration) || duration <= 0) {
+              throw new Error(`Invalid video duration: ${duration}`);
+            }
+            
+            console.log(`[DEBUG] Video duration: ${duration} seconds`);
+            
+            // Create an array of frames to capture - evenly distributed through the video
+            const frameTimes: number[] = [];
+            
+            // For very short videos, adjust number of frames
+            const actualFrameCount = duration < 3 ? 
+              Math.min(5, Math.max(3, framesToCapture)) : 
+              framesToCapture;
+            
+            // Skip the first and last 10% for better quality frames
+            const startTime = Math.min(0.5, duration * 0.1);
+            const endTime = Math.max(duration - 0.5, duration * 0.9);
+            const effectiveDuration = endTime - startTime;
+            
+            for (let i = 0; i < actualFrameCount; i++) {
+              const time = startTime + (i * effectiveDuration / Math.max(1, actualFrameCount - 1));
+              frameTimes.push(Math.min(time, duration - 0.1));
+            }
+            
+            console.log(`[DEBUG] Planned capture times: ${frameTimes.map(t => t.toFixed(2)).join(', ')}`);
+            
+            // Alternative approach #1: Capture in series using a player and the timeupdate event
+            const captureNextFrame = (index: number) => {
+              if (index >= frameTimes.length) {
+                console.log(`[DEBUG] Finished capturing all ${capturedFrames} frames`);
+                if (capturedFrames > 0) {
+                  console.log('[DEBUG] Rendering GIF...');
+                  gif.render();
+                } else {
+                  reject(new Error('Failed to capture any frames'));
+                }
                 return;
               }
               
-              // Add the hash to our set
-              frameHashes.add(frameHash);
+              const targetTime = frameTimes[index];
+              console.log(`[DEBUG] Setting video time to ${targetTime.toFixed(2)}s (frame ${index + 1}/${frameTimes.length})`);
               
-              // Add the frame to the GIF
-              gif.addFrame(ctx, {
-                copy: true,
-                delay: options.delay || 100,
-                dispose: 2 // Restore to background color
-              });
+              // Set up a one-time timeupdate listener
+              const handleTimeUpdate = () => {
+                // Only capture if we're close to our target time
+                if (Math.abs(video.currentTime - targetTime) < 0.1) {
+                  video.removeEventListener('timeupdate', handleTimeUpdate);
+                  
+                  console.log(`[DEBUG] Capturing frame at ${video.currentTime.toFixed(2)}s`);
+                  ctx.drawImage(video, 0, 0, width, height);
+                  
+                  // Add the frame to the GIF
+                  gif.addFrame(canvas, {
+                    copy: true,
+                    delay: options.delay || 200,
+                    dispose: 2
+                  });
+                  
+                  capturedFrames++;
+                  console.log(`[DEBUG] Frame ${index + 1} captured at ${video.currentTime.toFixed(2)}s`);
+                  
+                  // Pause and move to next frame
+                  video.pause();
+                  setTimeout(() => captureNextFrame(index + 1), 100);
+                }
+              };
               
-              console.log(`[DEBUG] Added frame ${frameIndex + 1}/${frameCount} at time ${time.toFixed(2)}s`);
-              resolveFrame(true);
+              // Attach listener and set time
+              video.addEventListener('timeupdate', handleTimeUpdate);
+              video.currentTime = targetTime;
+              
+              // Set a timeout in case the timeupdate event doesn't fire properly
+              setTimeout(() => {
+                video.removeEventListener('timeupdate', handleTimeUpdate);
+                
+                // Force a capture anyway
+                console.log(`[DEBUG] Timeout reached for frame ${index + 1}, capturing anyway at ${video.currentTime.toFixed(2)}s`);
+                ctx.drawImage(video, 0, 0, width, height);
+                
+                // Add the frame to the GIF
+                gif.addFrame(canvas, {
+                  copy: true,
+                  delay: options.delay || 200,
+                  dispose: 2
+                });
+                
+                capturedFrames++;
+                
+                // Move to next frame
+                setTimeout(() => captureNextFrame(index + 1), 100);
+              }, 1500);
             };
             
-            video.addEventListener('seeked', seeked);
-          });
-        };
-        
-        // Asynchronous function to capture all frames and render GIF
-        const captureFrames = async () => {
-          // Ensure video is ready
-          await video.play();
-          video.pause();
-          
-          // Calculate frame time interval
-          const framesAdded: boolean[] = [];
-          
-          // Capture frames evenly distributed through the video
-          for (let i = 0; i < frameCount; i++) {
-            // Calculate frame time position - distribute frames evenly
-            // For frame i, position = startTime + (i / (frameCount-1)) * effectiveDuration
-            const framePosition = startTime + (effectiveDuration * i / (frameCount - 1));
-            
-            // Ensure we don't go past the end of the video
-            const time = Math.min(framePosition, duration - 0.1);
-            
-            // Add the frame
-            const added = await addFrameAtTime(time, i);
-            framesAdded.push(added);
-          }
-          
-          // Check if we have enough frames for a good animation
-          const totalFramesAdded = framesAdded.filter(added => added).length;
-          console.log(`[DEBUG] Added ${totalFramesAdded} unique frames out of ${frameCount} attempted`);
-          
-          if (totalFramesAdded < 3) {
-            // Try again with different frame selection if we didn't get enough frames
-            console.log('[DEBUG] Not enough unique frames, trying alternate frame selection');
-            
-            // Clear existing frames
-            frameHashes.clear();
-            
-            // Try to capture frames at specific intervals throughout the video
-            const interval = Math.max(0.5, duration / 10);
-            
-            for (let time = 0.5; time < duration - 0.5; time += interval) {
-              const frameIndex = Math.floor((time - 0.5) / interval);
-              await addFrameAtTime(time, frameIndex);
+            // Alternative approach #2: If the video can play, use play + capture
+            if (video.readyState >= 3) {
+              console.log('[DEBUG] Video is ready, trying play-based capture approach');
+              
+              // Try playing the video and capturing frames during playback
+              const playBasedCapture = async () => {
+                try {
+                  // Reset video
+                  video.currentTime = 0;
+                  video.muted = true;
+                  
+                  // Set up a listener for regular frame capture during playback
+                  const interval = duration / framesToCapture;
+                  let lastCaptureTime = -interval; // Ensure first frame gets captured
+                  
+                  const captureInterval = (e: Event) => {
+                    // Only capture if enough time has passed since last capture
+                    if (video.currentTime - lastCaptureTime >= interval) {
+                      console.log(`[DEBUG] Play-based capture at ${video.currentTime.toFixed(2)}s`);
+                      
+                      ctx.drawImage(video, 0, 0, width, height);
+                      gif.addFrame(canvas, {
+                        copy: true,
+                        delay: options.delay || 200,
+                        dispose: 2
+                      });
+                      
+                      lastCaptureTime = video.currentTime;
+                      capturedFrames++;
+                      
+                      // If we have enough frames, stop
+                      if (capturedFrames >= framesToCapture) {
+                        video.removeEventListener('timeupdate', captureInterval);
+                        video.pause();
+                        console.log(`[DEBUG] Play-based capture complete with ${capturedFrames} frames`);
+                        gif.render();
+                      }
+                    }
+                  };
+                  
+                  // Listen for time updates for capturing
+                  video.addEventListener('timeupdate', captureInterval);
+                  
+                  // Also set a listener for when playback ends
+                  video.addEventListener('ended', () => {
+                    video.removeEventListener('timeupdate', captureInterval);
+                    console.log(`[DEBUG] Video playback ended with ${capturedFrames} frames captured`);
+                    if (capturedFrames > 0) {
+                      gif.render();
+                    } else {
+                      // If no frames captured during playback, fall back to sequential capture
+                      console.log('[DEBUG] No frames captured during playback, falling back to sequential capture');
+                      captureNextFrame(0);
+                    }
+                  });
+                  
+                  // Start playback
+                  console.log('[DEBUG] Starting video playback for frame capture');
+                  await video.play();
+                  
+                } catch (playError) {
+                  console.error('[DEBUG] Error during play-based capture:', playError);
+                  console.log('[DEBUG] Falling back to sequential capture');
+                  captureNextFrame(0);
+                }
+              };
+              
+              // Try the play-based approach
+              await playBasedCapture();
+              
+            } else {
+              // If video isn't fully loaded, use the sequential approach
+              console.log('[DEBUG] Video not fully loaded, using sequential frame capture');
+              captureNextFrame(0);
             }
+            
+          } catch (error) {
+            console.error('[DEBUG] Error in attemptCapture:', error);
+            reject(error);
           }
-          
-          // Start rendering the GIF
-          console.log('[DEBUG] All frames added, rendering GIF...');
-          gif.render();
         };
         
-        // Start the frame capture process
-        captureFrames().catch((error) => {
-          console.error('[DEBUG] Error capturing frames:', error);
-          reject(error);
-        });
+        // Start the process
+        attemptCapture();
         
       } catch (error) {
         console.error('[DEBUG] Error in createGifFromVideo:', error);
@@ -313,4 +401,4 @@ export const gifGenerator = {
       }
     });
   }
-}; 
+};

@@ -12,7 +12,8 @@ import { gifGenerator } from '../../../utils/gifGenerator';
 import { db } from '../../../api/firebase/config';
 import { Timestamp, collection, doc, updateDoc } from 'firebase/firestore';
 
-import { Exercise } from '../../../api/firebase/exercise/types';
+import { Exercise, ExerciseVideo, ExerciseAuthor, ExerciseCategory } from '../../../api/firebase/exercise/types';
+import { ProfileImage } from '../../../api/firebase/user/types';
 
 const Create: React.FC = () => {
   const router = useRouter();
@@ -324,20 +325,20 @@ const Create: React.FC = () => {
       const { Timestamp } = await import('firebase/firestore');
       
       // 5. First, prepare the exercise video data
-      const exerciseVideoData = {
+      const exerciseVideoData = new ExerciseVideo({
         id: videoId,
-        exerciseId: existingExercise ? existingExercise.id : exerciseId, // Use the generated ID, not the name
-        exercise: formattedExerciseName, // Keep the name here for display purposes
+        exerciseId: existingExercise ? existingExercise.id : exerciseId,
+        exercise: formattedExerciseName,
         username: username,
         userId: userId,
         videoURL: uploadResult.downloadURL,
         fileName: uploadResult.gsURL.split('/').pop() || 'unknown',
         storagePath: uploadResult.gsURL,
-        profileImage: {
+        profileImage: new ProfileImage({
           profileImageURL: completeUserData.profileImage?.profileImageURL || '',
           imageOffsetWidth: 0,
           imageOffsetHeight: 0
-        },
+        }),
         caption: caption,
         visibility: 'open',
         totalAccountsReached: 0,
@@ -345,8 +346,8 @@ const Create: React.FC = () => {
         totalAccountBookmarked: 0,
         totalAccountUsage: 0,
         isApproved: false,
-        createdAt: Timestamp.now(),
-        updatedAt: Timestamp.now(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
         // Include trim metadata if available
         ...(hasTrimMetadata && {
           trimMetadata: {
@@ -355,14 +356,26 @@ const Create: React.FC = () => {
             duration: (videoFile as any).trimEnd - (videoFile as any).trimStart
           }
         })
-      };
+      });
       
       console.log('[DEBUG] Exercise video data prepared:', exerciseVideoData);
       
       // 6. Create the exercise video using the service
       console.log('[DEBUG] Creating exercise video document in Firestore');
       try {
-        await exerciseService.createExerciseVideo(exerciseVideoData);
+        // Convert to plain object before saving to Firestore
+        const exerciseVideoPlainObject = exerciseVideoData.toDictionary();
+        
+        // Add the trim metadata back if it exists (it may not be in the toDictionary output)
+        if (hasTrimMetadata) {
+          exerciseVideoPlainObject.trimMetadata = {
+            trimStart: (videoFile as any).trimStart,
+            trimEnd: (videoFile as any).trimEnd,
+            duration: (videoFile as any).trimEnd - (videoFile as any).trimStart
+          };
+        }
+        
+        await exerciseService.createExerciseVideo(exerciseVideoPlainObject);
         console.log('[DEBUG] Exercise video document created successfully with ID:', videoId);
       } catch (firestoreError) {
         console.error('[DEBUG] Error creating exercise video document:', firestoreError);
@@ -372,10 +385,24 @@ const Create: React.FC = () => {
       // 7. Create or update the Exercise document if it doesn't exist
       if (!existingExercise) {
         console.log('[DEBUG] Preparing to create new exercise document');
-        const exerciseData = {
-          id: exerciseId, // Keep the generated ID as a field
+        const exerciseData = new Exercise({
+          id: exerciseId,
           name: formattedExerciseName,
-          category: exerciseCategory === 'Cardio' ? 'cardio' : 'weight-training',
+          category: exerciseCategory === 'Cardio' 
+            ? ExerciseCategory.cardio({
+                duration: 60,
+                bpm: 140,
+                calories: 0,
+                screenTime: 0,
+                selectedVideo: null
+              })
+            : ExerciseCategory.weightTraining({
+                reps: ['12'],
+                sets: 3,
+                weight: 0,
+                screenTime: 0,
+                selectedVideo: null
+              }),
           primaryBodyParts: [],
           secondaryBodyParts: [],
           tags: tags,
@@ -386,20 +413,22 @@ const Create: React.FC = () => {
           sets: 0,
           weight: 0,
           visibility: 'live',
-          author: {
+          author: new ExerciseAuthor({
             userId: userId,
             username: username
-          },
-          createdAt: Timestamp.now(),
-          updatedAt: Timestamp.now()
-        };
+          }),
+          createdAt: new Date(),
+          updatedAt: new Date()
+        });
         
         console.log('[DEBUG] Exercise data prepared:', exerciseData);
         
         // 8. Create the exercise using the service
         console.log('[DEBUG] Creating exercise document in Firestore');
         try {
-          await exerciseService.createExercise(exerciseData);
+          // Convert to plain object before saving to Firestore
+          const exerciseDataPlainObject = exerciseData.toDictionary();
+          await exerciseService.createExercise(exerciseDataPlainObject);
           console.log('[DEBUG] Exercise document created successfully with ID:', exerciseId);
           
           // Verify the exercise was created - by name now
@@ -446,8 +475,7 @@ const Create: React.FC = () => {
                   width: 320,
                   height: 320,
                   numFrames: 20,
-                  interval: 0.2,
-                  frameDuration: 0.1
+                  delay: 200   // Using delay instead of interval/frameDuration (in milliseconds)
                 }
               );
               
@@ -458,7 +486,7 @@ const Create: React.FC = () => {
                 const videoRef = doc(db, 'exerciseVideos', videoId);
                 await updateDoc(videoRef, {
                   gifURL: gifUrl,
-                  updatedAt: Timestamp.now()
+                  updatedAt: new Date()
                 });
                 
                 console.log('[DEBUG] Updated video document with GIF URL');
@@ -490,13 +518,16 @@ const Create: React.FC = () => {
           return false;
         };
         
-        // Start the GIF generation process
+        // Actually call the generateGif function!
+        console.log('[DEBUG] Starting to execute GIF generation function');
         generateGif().then(success => {
           console.log('[DEBUG] GIF generation process completed with result:', success);
           if (!success) {
             console.log('[DEBUG] GIF generation failed, but exercise was still created successfully');
             console.log('[DEBUG] You can try regenerating the GIF later from the exercise page');
           }
+        }).catch(error => {
+          console.error('[DEBUG] Fatal error during GIF generation:', error);
         });
       } catch (gifError) {
         console.error('[DEBUG] Error starting GIF generation:', gifError);
