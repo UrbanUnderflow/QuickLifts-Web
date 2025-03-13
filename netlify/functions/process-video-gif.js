@@ -322,8 +322,11 @@ async function generateGIF(videoPath, gifPath) {
     
     console.log(`Video file exists and has size: ${videoStats.size} bytes`);
     
+    // Use the detected FFmpeg path if available
+    const ffmpegPath = process.env.FFMPEG_PATH || 'ffmpeg';
+    
     // First attempt with higher quality
-    const command = `ffmpeg -i ${videoPath} -vf "fps=10,scale=320:-1:flags=lanczos" -c:v gif -f gif ${gifPath}`;
+    const command = `${ffmpegPath} -i ${videoPath} -vf "fps=10,scale=320:-1:flags=lanczos" -c:v gif -f gif ${gifPath}`;
     console.log(`Executing ffmpeg command: ${command}`);
     
     try {
@@ -362,7 +365,7 @@ async function generateGIF(videoPath, gifPath) {
       console.log(`GIF is too large (${fileSizeInMB.toFixed(2)}MB), generating smaller version`);
       
       // Try with lower quality
-      const lowerQualityCommand = `ffmpeg -i ${videoPath} -vf "fps=5,scale=256:-1:flags=lanczos" -c:v gif -f gif ${gifPath}`;
+      const lowerQualityCommand = `${ffmpegPath} -i ${videoPath} -vf "fps=5,scale=256:-1:flags=lanczos" -c:v gif -f gif ${gifPath}`;
       console.log(`Executing lower quality ffmpeg command: ${lowerQualityCommand}`);
       
       try {
@@ -555,18 +558,65 @@ exports.handler = async (event, context) => {
       }
     } catch (ffmpegError) {
       console.error('FFmpeg not found in PATH:', ffmpegError.message);
-      return {
-        statusCode: 500,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          success: false,
-          error: 'FFmpeg is not available. Cannot generate GIFs without FFmpeg.',
-          details: {
-            message: ffmpegError.message,
-            environment: envInfo
+      
+      // In production with the plugin, FFmpeg might be available but not in PATH
+      // Try to use the plugin-provided FFmpeg
+      if (!isDev) {
+        console.log('Checking for plugin-provided FFmpeg...');
+        try {
+          // The plugin typically makes FFmpeg available in the PATH
+          // But we can also try to find it in common locations
+          const possiblePaths = [
+            '/opt/build/bin/ffmpeg',
+            '/var/task/node_modules/.bin/ffmpeg',
+            '/var/runtime/ffmpeg'
+          ];
+          
+          let ffmpegFound = false;
+          for (const path of possiblePaths) {
+            try {
+              await execAsync(`${path} -version`);
+              console.log(`Found FFmpeg at ${path}`);
+              process.env.FFMPEG_PATH = path;
+              ffmpegFound = true;
+              break;
+            } catch (e) {
+              // Continue checking other paths
+            }
           }
-        })
-      };
+          
+          if (!ffmpegFound) {
+            throw new Error('FFmpeg not found in any expected location');
+          }
+        } catch (pluginError) {
+          return {
+            statusCode: 500,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              success: false,
+              error: 'FFmpeg is not available. Cannot generate GIFs without FFmpeg.',
+              details: {
+                message: 'FFmpeg not found in PATH or plugin locations',
+                environment: envInfo
+              }
+            })
+          };
+        }
+      } else {
+        // In development, we require FFmpeg to be installed locally
+        return {
+          statusCode: 500,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            success: false,
+            error: 'FFmpeg is not available. Cannot generate GIFs without FFmpeg.',
+            details: {
+              message: 'For local development, please install FFmpeg: brew install ffmpeg',
+              environment: envInfo
+            }
+          })
+        };
+      }
     }
     
     // Parse the request body
