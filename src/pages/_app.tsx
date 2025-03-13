@@ -8,6 +8,7 @@ import '../index.css';
 import '../styles/animations.css';
 
 import AuthWrapper from '../components/AuthWrapper';
+import FirebaseConfigCheck from '../components/FirebaseConfigCheck';
 
 const MyApp: React.FC<AppProps> = ({ Component, pageProps }) => {
   return (    
@@ -15,6 +16,7 @@ const MyApp: React.FC<AppProps> = ({ Component, pageProps }) => {
       <PersistGate loading={null} persistor={persistor}>
         <AuthWrapper>
           <Component {...pageProps} />
+          <FirebaseConfigCheck />
         </AuthWrapper>
       </PersistGate>
     </Provider>
