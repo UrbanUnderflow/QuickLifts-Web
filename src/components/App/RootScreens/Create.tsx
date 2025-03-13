@@ -8,6 +8,9 @@ import { userService } from '../../../api/firebase/user/service';
 import { videoProcessorService } from '../../../api/firebase/video-processor/service';
 import { formatExerciseNameForId } from '../../../utils/stringUtils';
 import { storeVideoFile, getVideoFile, removeVideoFile } from '../../../utils/indexedDBStorage';
+import { gifGenerator } from '../../../utils/gifGenerator';
+import { db } from '../../../api/firebase/config';
+import { Timestamp, collection, doc, updateDoc } from 'firebase/firestore';
 
 import { Exercise } from '../../../api/firebase/exercise/types';
 
@@ -418,45 +421,65 @@ const Create: React.FC = () => {
       console.log('[DEBUG] Setting uploaded exercise ID:', exerciseId);
       setUploadedExerciseId(exerciseId);
       
-      // 10. Generate GIF for the uploaded video - IMPROVED VERSION
-      console.log('[DEBUG] Starting GIF generation for video', videoId);
-      
-      // Immediately try to generate the GIF without setTimeout
+      // 10. Generate GIF for the uploaded video - CLIENT SIDE VERSION
+      console.log('[DEBUG] Starting client-side GIF generation for video', videoId);
+
       try {
-        console.log('[DEBUG] Calling VideoProcessorService.ensureVideoHasGif directly');
+        console.log('[DEBUG] Using client-side gifGenerator');
         
-        // Make multiple attempts to generate the GIF
         const generateGif = async (attempts = 3) => {
           for (let i = 0; i < attempts; i++) {
             try {
               console.log(`[DEBUG] GIF generation attempt ${i + 1} of ${attempts}`);
               
-              // Add a small delay before the first attempt to ensure Firestore indexing is complete
+              // Add a small delay before the first attempt to ensure video URL is accessible
               if (i === 0) {
                 console.log('[DEBUG] Waiting 2 seconds before first GIF generation attempt');
                 await new Promise(resolve => setTimeout(resolve, 2000));
               }
               
-              const result = await videoProcessorService.ensureVideoHasGif(
-                exerciseId, // Pass the exercise ID (generated), not the name
-                videoId
+              const gifUrl = await gifGenerator.generateAndUploadGif(
+                uploadResult.downloadURL,
+                formattedExerciseName,
+                videoId,
+                {
+                  width: 320,
+                  height: 320,
+                  numFrames: 20,
+                  interval: 0.2,
+                  frameDuration: 0.1
+                }
               );
               
-              if (result) {
-                console.log('[DEBUG] GIF generation successful on attempt', i + 1);
+              if (gifUrl) {
+                console.log('[DEBUG] Client-side GIF generation successful:', gifUrl);
+                
+                // Update the video document with the GIF URL
+                const videoRef = doc(db, 'exerciseVideos', videoId);
+                await updateDoc(videoRef, {
+                  gifURL: gifUrl,
+                  updatedAt: Timestamp.now()
+                });
+                
+                console.log('[DEBUG] Updated video document with GIF URL');
                 return true;
               } else {
-                console.warn('[DEBUG] GIF generation attempt', i + 1, 'failed, retrying...');
-                // Wait longer between retries
-                const waitTime = (i + 1) * 3000; // Increase wait time with each attempt
-                console.log(`[DEBUG] Waiting ${waitTime/1000} seconds before next attempt`);
-                await new Promise(resolve => setTimeout(resolve, waitTime));
+                console.warn('[DEBUG] GIF generation attempt', i + 1, 'failed (no URL returned), retrying...');
               }
             } catch (error) {
               console.error(`[DEBUG] Error in GIF generation attempt ${i + 1}:`, error);
+              
+              // Log more details about the error
+              if (error instanceof Error) {
+                console.error('[DEBUG] Error details:', {
+                  name: error.name,
+                  message: error.message,
+                  stack: error.stack
+                });
+              }
+              
               if (i < attempts - 1) {
-                // Wait longer between retries
-                const waitTime = (i + 1) * 3000; // Increase wait time with each attempt
+                const waitTime = (i + 1) * 3000;
                 console.log(`[DEBUG] Waiting ${waitTime/1000} seconds before next attempt`);
                 await new Promise(resolve => setTimeout(resolve, waitTime));
               }

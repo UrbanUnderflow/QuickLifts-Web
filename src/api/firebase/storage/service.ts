@@ -193,6 +193,65 @@ export class FirebaseStorageService {
     }
   }
 
+  /**
+   * Uploads a GIF blob to Firebase Storage
+   * @param blob The GIF blob to upload
+   * @param storagePath The path in Firebase Storage to upload to
+   * @returns Promise that resolves to the upload result
+   */
+  async uploadGifBlob(
+    blob: Blob,
+    storagePath: string
+  ): Promise<UploadResult> {
+    console.log('[DEBUG-STORAGE] Starting uploadGifBlob method', { 
+      blobSize: blob.size, 
+      storagePath
+    });
+    
+    // Ensure user is authenticated
+    const user = auth.currentUser;
+    if (!user) {
+      console.error('[DEBUG-STORAGE] Authentication error: No current user');
+      throw new Error("User must be authenticated to upload GIF");
+    }
+    
+    console.log('[DEBUG-STORAGE] User authenticated', { 
+      uid: user.uid, 
+      email: user.email 
+    });
+    
+    try {
+      // Create a storage reference
+      const storageRef = ref(this.storage, storagePath);
+      
+      // Upload the blob
+      console.log('[DEBUG-STORAGE] Uploading GIF blob to', storagePath);
+      const snapshot = await uploadBytes(storageRef, blob, {
+        contentType: 'image/gif',
+        customMetadata: {
+          'uploaded-by': user.uid,
+          'upload-timestamp': new Date().toISOString()
+        }
+      });
+      
+      // Get the download URL
+      const downloadURL = await getDownloadURL(snapshot.ref);
+      
+      console.log('[DEBUG-STORAGE] GIF upload complete', { 
+        downloadURL, 
+        storagePath 
+      });
+      
+      return {
+        gsURL: storagePath,
+        downloadURL
+      };
+    } catch (error) {
+      console.error('[DEBUG-STORAGE] Error uploading GIF:', error);
+      throw error;
+    }
+  }
+
   private async updateUserProfileImage(imageURL: string): Promise<void> {
     // Ensure current user exists
     if (!userService.currentUser) {

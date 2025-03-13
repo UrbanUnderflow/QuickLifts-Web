@@ -1,0 +1,8 @@
+[
+  {
+    "origin": ["http://localhost:8888", "http://localhost:3000", "https://quicklifts-dev-01.web.app"],
+    "method": ["GET", "HEAD", "PUT", "POST", "DELETE"],
+    "maxAgeSeconds": 3600,
+    "responseHeader": ["Content-Type", "Content-Length", "Content-Encoding", "Content-Disposition"]
+  }
+] 
