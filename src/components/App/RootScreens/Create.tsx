@@ -24,6 +24,7 @@ const Create: React.FC = () => {
   const [videoPreview, setVideoPreview] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [isLoadingVideo, setIsLoadingVideo] = useState(false);
 
   // Exercise metadata state
   const [exerciseName, setExerciseName] = useState('');
@@ -56,6 +57,11 @@ const Create: React.FC = () => {
       // Try to get video from IndexedDB instead of sessionStorage
       const checkForTrimmedVideo = async () => {
         try {
+          // Check if we have a trimmed video to load by attempting to get it
+          // If it returns non-null, we have a video to load
+          setIsLoadingVideo(true);
+          console.log('[DEBUG] Checking for trimmed video in IndexedDB...');
+          
           const trimmedFileData = await getVideoFile('trimmed_video_file');
           
           if (trimmedFileData) {
@@ -85,9 +91,14 @@ const Create: React.FC = () => {
             } catch (removeError) {
               console.error('[DEBUG] Error removing trimmed video from IndexedDB:', removeError);
             }
+          } else {
+            console.log('[DEBUG] No trimmed video found in IndexedDB');
           }
         } catch (error) {
           console.error('[DEBUG] Failed to restore trimmed video:', error);
+        } finally {
+          // Set loading state to false regardless of success or failure
+          setIsLoadingVideo(false);
         }
       };
       
@@ -281,20 +292,25 @@ const Create: React.FC = () => {
       setIsUploading(true);
       setUploadProgress(0);
       
-      // 1. Upload the video to Firebase Storage
+      // 1. Upload the video to Firebase Storage - this will account for 70% of the total progress
       console.log('[DEBUG] Starting Firebase Storage upload');
       const uploadResult = await firebaseStorageService.uploadVideo(
         videoFile,
         VideoType.Exercise,
         (progress) => {
-          console.log(`[DEBUG] Upload progress: ${Math.round(progress * 100)}%`);
-          setUploadProgress(progress);
+          // Scale progress to be 70% of the total workflow
+          const scaledProgress = progress * 0.7;
+          console.log(`[DEBUG] Upload progress: ${Math.round(progress * 100)}%, Scaled: ${Math.round(scaledProgress * 100)}%`);
+          setUploadProgress(scaledProgress);
         },
         // Pass the exercise name for the storage path
         existingExercise ? existingExercise.name : formattedExerciseName
       );
       
       console.log('[DEBUG] Video uploaded successfully to Firebase Storage:', uploadResult);
+      
+      // Update progress to 70% after successful upload
+      setUploadProgress(0.7);
       
       // 2. Get the current user 
       console.log('[DEBUG] Getting current user');
@@ -319,6 +335,9 @@ const Create: React.FC = () => {
       const exerciseId = existingExercise?.id || exerciseService.generateExerciseId();
       const videoId = exerciseService.generateExerciseVideoId();
       console.log('[DEBUG] Generated IDs:', { exerciseId, videoId });
+      
+      // Set progress to 75% after generating IDs and fetching user
+      setUploadProgress(0.75);
       
       // 4. Import Firestore modules
       console.log('[DEBUG] Importing Firestore modules');
@@ -381,6 +400,9 @@ const Create: React.FC = () => {
         console.error('[DEBUG] Error creating exercise video document:', firestoreError);
         throw firestoreError;
       }
+      
+      // Update progress to 80% after creating the video document
+      setUploadProgress(0.8);
       
       // 7. Create or update the Exercise document if it doesn't exist
       if (!existingExercise) {
@@ -446,7 +468,10 @@ const Create: React.FC = () => {
         console.log('[DEBUG] Using existing exercise, no need to create a new one');
       }
       
-      // 9. Set the uploaded exercise ID and show success modal
+      // Update progress to 85% after creating the exercise document
+      setUploadProgress(0.85);
+      
+      // 9. Set the uploaded exercise ID
       console.log('[DEBUG] Setting uploaded exercise ID:', exerciseId);
       setUploadedExerciseId(exerciseId);
       
@@ -456,7 +481,33 @@ const Create: React.FC = () => {
       try {
         console.log('[DEBUG] Using client-side gifGenerator');
         
-        const generateGif = async (attempts = 3) => {
+        // Listen for GIF encoding progress updates from the gifGenerator
+        // This will help update the progress bar during encoding
+        const encodingProgressListener = (progress: number) => {
+          // Scale encoding progress from 87% to 92%
+          const scaledProgress = 0.87 + (progress * 0.05);
+          setUploadProgress(scaledProgress);
+        };
+        
+        // Listen for frame capture progress
+        const frameCaptureListener = (e: any) => {
+          if (e.detail && typeof e.detail.progress === 'number') {
+            // Scale frame capture progress from 85% to 87%
+            const scaledProgress = 0.85 + (e.detail.progress * 0.02);
+            setUploadProgress(scaledProgress);
+          }
+        };
+        
+        // Add event listeners
+        window.addEventListener('gif-encoding-progress', (e: any) => {
+          if (e.detail && typeof e.detail.progress === 'number') {
+            encodingProgressListener(e.detail.progress);
+          }
+        });
+        
+        window.addEventListener('gif-frame-capture-progress', frameCaptureListener);
+        
+        const generateGif = async (attempts = 3): Promise<boolean> => {
           for (let i = 0; i < attempts; i++) {
             try {
               console.log(`[DEBUG] GIF generation attempt ${i + 1} of ${attempts}`);
@@ -467,31 +518,86 @@ const Create: React.FC = () => {
                 await new Promise(resolve => setTimeout(resolve, 2000));
               }
               
+              // Start with 85% progress
+              setUploadProgress(0.85);
+              
+              // Create a fallback interval in case events aren't received
+              // This ensures the progress bar isn't stuck at 85%
+              let frameProgress = 0;
+              const frameUpdateInterval = setInterval(() => {
+                // Small increments, max at 87% (reserving 87-92% for encoding)
+                frameProgress += 0.0005;
+                const newProgress = Math.min(0.869, 0.85 + frameProgress);
+                setUploadProgress(newProgress);
+              }, 100);
+              
               const gifUrl = await gifGenerator.generateAndUploadGif(
                 uploadResult.downloadURL,
                 formattedExerciseName,
                 videoId,
                 {
-                  width: 320,
-                  height: 320,
-                  numFrames: 20,
-                  delay: 200   // Using delay instead of interval/frameDuration (in milliseconds)
+                  width: 680,
+                  height: 680,
+                  numFrames: 60,
+                  quality: 3,
+                  delay: 250, // 100ms delay gives us 10 frames per second for smoother animation
+                  dither: true,
+                  workers: 4,
+                  maxDuration: 5 // Allow up to 10 seconds for the GIF
                 }
               );
+              
+              // Clear the frame capture interval
+              clearInterval(frameUpdateInterval);
               
               if (gifUrl) {
                 console.log('[DEBUG] Client-side GIF generation successful:', gifUrl);
                 
+                // GIF has been generated and uploaded, update to 92%
+                setUploadProgress(0.92);
+                
                 // Update the video document with the GIF URL
+                console.log('[DEBUG] Updating Firestore document with GIF URL');
                 const videoRef = doc(db, 'exerciseVideos', videoId);
+                
+                // Create a progress interval for Firestore update
+                let firestoreProgress = 0;
+                const firestoreUpdateInterval = setInterval(() => {
+                  // Increment progress from 92% to 95%
+                  firestoreProgress += 0.003;
+                  const newProgress = Math.min(0.95, 0.92 + firestoreProgress);
+                  setUploadProgress(newProgress);
+                }, 100);
+                
                 await updateDoc(videoRef, {
                   gifURL: gifUrl,
                   updatedAt: new Date()
                 });
                 
+                // Clear the Firestore update interval
+                clearInterval(firestoreUpdateInterval);
+                
                 console.log('[DEBUG] Updated video document with GIF URL');
+                
+                // Final progress update to 100%
+                setUploadProgress(0.97);
+                
+                // Add a short delay to show progress at 97% before completing to 100%
+                await new Promise(resolve => setTimeout(resolve, 500));
+                setUploadProgress(1.0);
+                
+                // Remove the event listeners
+                window.removeEventListener('gif-encoding-progress', (e: any) => {
+                  if (e.detail && typeof e.detail.progress === 'number') {
+                    encodingProgressListener(e.detail.progress);
+                  }
+                });
+                window.removeEventListener('gif-frame-capture-progress', frameCaptureListener);
+                
                 return true;
               } else {
+                // Clear the frame capture interval if GIF generation fails
+                clearInterval(frameUpdateInterval);
                 console.warn('[DEBUG] GIF generation attempt', i + 1, 'failed (no URL returned), retrying...');
               }
             } catch (error) {
@@ -518,20 +624,19 @@ const Create: React.FC = () => {
           return false;
         };
         
-        // Actually call the generateGif function!
+        // Actually call the generateGif function and wait for result before showing success modal!
         console.log('[DEBUG] Starting to execute GIF generation function');
-        generateGif().then(success => {
-          console.log('[DEBUG] GIF generation process completed with result:', success);
-          if (!success) {
-            console.log('[DEBUG] GIF generation failed, but exercise was still created successfully');
-            console.log('[DEBUG] You can try regenerating the GIF later from the exercise page');
-          }
-        }).catch(error => {
-          console.error('[DEBUG] Fatal error during GIF generation:', error);
-        });
+        const gifSuccess = await generateGif();
+        
+        console.log('[DEBUG] GIF generation process completed with result:', gifSuccess);
+        if (!gifSuccess) {
+          console.log('[DEBUG] GIF generation failed, but exercise was still created successfully');
+          console.log('[DEBUG] You can try regenerating the GIF later from the exercise page');
+        }
       } catch (gifError) {
         console.error('[DEBUG] Error starting GIF generation:', gifError);
-        // Don't block the upload on GIF generation failures
+        // Still complete the progress bar even if GIF generation fails
+        setUploadProgress(1.0);
       }
       
       // 11. Log a summary of the upload, including trim metadata if present
@@ -555,6 +660,7 @@ const Create: React.FC = () => {
         console.log(`[DEBUG] 4. Trim points: ${(videoFile as any).trimStart.toFixed(2)}s to ${(videoFile as any).trimEnd.toFixed(2)}s`);
       }
       
+      // Show success modal only after GIF generation is complete
       setShowSuccessModal(true);
     } catch (error) {
       console.error('[DEBUG] Upload failed - Full error:', error);
@@ -696,7 +802,12 @@ const Create: React.FC = () => {
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
-        {videoPreview ? (
+        {isLoadingVideo ? (
+          <div className="flex flex-col items-center justify-center py-10">
+            <div className="w-12 h-12 border-4 border-[#E0FE10] border-t-transparent rounded-full animate-spin mb-4"></div>
+            <p className="text-zinc-300">Loading your trimmed video...</p>
+          </div>
+        ) : videoPreview ? (
           <div className="relative">
             <video 
               src={videoPreview} 
@@ -813,7 +924,19 @@ const Create: React.FC = () => {
           {/* Progress Bar (upload progress) */}
           {isUploading && (
             <div className="mt-4">
-              <ProgressBar progress={uploadProgress} />
+              <ProgressBar 
+                progress={uploadProgress} 
+                label={
+                  uploadProgress < 0.7 ? "Uploading video..." :
+                  uploadProgress < 0.8 ? "Creating exercise..." :
+                  uploadProgress < 0.85 ? "Preparing files..." :
+                  uploadProgress < 0.87 ? "Generating preview..." :
+                  uploadProgress < 0.92 ? "Encoding preview..." :
+                  uploadProgress < 0.95 ? "Storing preview..." :
+                  uploadProgress < 1.0 ? "Finalizing..." :
+                  "Complete!"
+                }
+              />
             </div>
           )}
 
