@@ -1,68 +1,137 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { VideoTrimmer } from '../components/VideoTrimmer';
 import Head from 'next/head';
+import { storeVideoFile, getVideoFile, removeVideoFile } from '../utils/indexedDBStorage';
+import { SimpleVideoTrimmer } from '../components/SimpleVideoTrimmer';
+
+// Information component to explain the trimming process
+const InfoAlert: React.FC = () => (
+  <div className="max-w-md w-full bg-zinc-800 rounded-lg p-4 mb-4 text-sm text-zinc-300">
+    <p className="mb-2">
+      <strong className="text-[#E0FE10]">Note:</strong> Video trimming is processed on our servers for better compatibility with all devices.
+    </p>
+    <p>
+      Select your start and end points, then save. The full video will be uploaded with your trim preferences, and our system will automatically create the trimmed version.
+    </p>
+  </div>
+);
 
 const TrimVideoPage: React.FC = () => {
   const router = useRouter();
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isReady, setIsReady] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Parse the returnUrl and any state from query params
   useEffect(() => {
     if (router.isReady) {
       setIsReady(true);
       
-      // Get file from sessionStorage if available
-      const storedFile = sessionStorage.getItem('trim_video_file');
-      if (storedFile) {
+      // Get file from IndexedDB instead of sessionStorage
+      const getVideoFromIndexedDB = async () => {
         try {
-          // Convert base64 back to File object
-          const { name, type, data } = JSON.parse(storedFile);
-          const arrayBuffer = Uint8Array.from(atob(data), c => c.charCodeAt(0)).buffer;
-          const file = new File([arrayBuffer], name, { type });
-          setVideoFile(file);
+          setIsLoading(true);
+          console.log('[DEBUG] Attempting to retrieve video file from IndexedDB');
+          
+          const storedFile = await getVideoFile('trim_video_file');
+          if (storedFile) {
+            console.log('[DEBUG] Found video file in IndexedDB');
+            // Convert base64 back to File object
+            const { name, type, data } = storedFile;
+            const arrayBuffer = Uint8Array.from(atob(data), c => c.charCodeAt(0)).buffer;
+            const file = new File([arrayBuffer], name, { type });
+            setVideoFile(file);
+          } else {
+            console.log('[DEBUG] No video file found in IndexedDB');
+            setError('No video file found. Please upload a video first.');
+          }
         } catch (err) {
-          console.error('Failed to restore video file:', err);
+          console.error('[DEBUG] Failed to restore video file from IndexedDB:', err);
           setError('Could not load the video file. Please try again.');
+        } finally {
+          setIsLoading(false);
         }
-      } else {
-        setError('No video file found. Please upload a video first.');
-      }
+      };
+      
+      getVideoFromIndexedDB();
     }
   }, [router.isReady]);
 
   const handleTrimComplete = (trimmedFile: File) => {
-    // Save the trimmed file to session storage for the return route
+    // Save the trimmed file to IndexedDB for the return route
     try {
+      setIsLoading(true);
+      console.log('[DEBUG] Saving trimmed video to IndexedDB');
+      
+      // Extract trim metadata from filename and save it to the video data
+      let trimStart = 0;
+      let trimEnd = 0;
+      
+      // Check if we have trim metadata directly on the file object (our SimpleVideoTrimmer adds these)
+      if ((trimmedFile as any).trimStart !== undefined && (trimmedFile as any).trimEnd !== undefined) {
+        trimStart = (trimmedFile as any).trimStart;
+        trimEnd = (trimmedFile as any).trimEnd;
+        console.log('[DEBUG] Using trim metadata from file object:', { trimStart, trimEnd });
+      } else {
+        // Try to extract from filename as fallback
+        const filename = trimmedFile.name;
+        const trimMatch = filename.match(/_trim_(\d+\.\d+)_(\d+\.\d+)/);
+        
+        if (trimMatch && trimMatch.length === 3) {
+          trimStart = parseFloat(trimMatch[1]);
+          trimEnd = parseFloat(trimMatch[2]);
+          console.log('[DEBUG] Extracted trim metadata from filename:', { trimStart, trimEnd });
+        }
+      }
+      
       const reader = new FileReader();
-      reader.onload = () => {
+      reader.onload = async () => {
         const base64data = reader.result as string;
         const base64Content = base64data.split(',')[1]; // Remove the data URL prefix
         
-        // Store the trimmed file data
-        sessionStorage.setItem('trimmed_video_file', JSON.stringify({
-          name: trimmedFile.name,
-          type: trimmedFile.type,
-          data: base64Content
-        }));
-        
-        // Remove the original file data to free up space
-        sessionStorage.removeItem('trim_video_file');
-        
-        // Navigate back to the returnUrl or home
-        const returnUrl = router.query.returnUrl as string || '/';
-        router.push(returnUrl);
+        try {
+          // Store the trimmed file data in IndexedDB with trim metadata
+          await storeVideoFile('trimmed_video_file', {
+            name: trimmedFile.name,
+            type: trimmedFile.type,
+            data: base64Content,
+            trimStart,
+            trimEnd
+          });
+          
+          console.log('[DEBUG] Trimmed video stored in IndexedDB successfully');
+          
+          // Remove the original file data to free up space
+          await removeVideoFile('trim_video_file');
+          console.log('[DEBUG] Original video removed from IndexedDB');
+          
+          // Navigate back to the returnUrl or home
+          const returnUrl = router.query.returnUrl as string || '/';
+          router.push(returnUrl);
+        } catch (storeError) {
+          console.error('[DEBUG] Failed to store trimmed video in IndexedDB:', storeError);
+          setError('Failed to save the trimmed video. Please try again.');
+          setIsLoading(false);
+        }
       };
       reader.readAsDataURL(trimmedFile);
     } catch (err) {
-      console.error('Failed to save trimmed video:', err);
+      console.error('[DEBUG] Failed to process trimmed video:', err);
       setError('Failed to save the trimmed video. Please try again.');
+      setIsLoading(false);
     }
   };
 
-  const handleCancel = () => {
+  const handleCancel = async () => {
+    try {
+      // Clean up by removing the original file
+      await removeVideoFile('trim_video_file');
+      console.log('[DEBUG] Removed original video from IndexedDB after cancellation');
+    } catch (err) {
+      console.error('[DEBUG] Error removing video file on cancel:', err);
+    }
+    
     // Navigate back without saving
     const returnUrl = router.query.returnUrl as string || '/';
     router.push(returnUrl);
@@ -75,8 +144,8 @@ const TrimVideoPage: React.FC = () => {
         <meta name="description" content="Trim your video for QuickLifts" />
       </Head>
 
-      <div className="min-h-screen bg-black flex flex-col items-center justify-center">
-        {!isReady ? (
+      <div className="min-h-screen bg-black flex flex-col items-center justify-center p-4">
+        {!isReady || isLoading ? (
           <div className="text-white">Loading...</div>
         ) : error ? (
           <div className="p-6 bg-zinc-900 rounded-xl text-white max-w-md w-full">
@@ -90,11 +159,14 @@ const TrimVideoPage: React.FC = () => {
             </button>
           </div>
         ) : videoFile ? (
-          <VideoTrimmer 
-            file={videoFile} 
-            onTrimComplete={handleTrimComplete} 
-            onCancel={handleCancel} 
-          />
+          <>
+            <InfoAlert />
+            <SimpleVideoTrimmer 
+              file={videoFile} 
+              onTrimComplete={handleTrimComplete} 
+              onCancel={handleCancel} 
+            />
+          </>
         ) : (
           <div className="text-white">No video file found.</div>
         )}

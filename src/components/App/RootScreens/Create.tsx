@@ -1,6 +1,5 @@
 import React, { useState, useRef, DragEvent, ChangeEvent, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { Camera } from 'lucide-react';
 import ProgressBar from '../../../components/App/ProgressBar';
 import { firebaseStorageService, VideoType } from '../../../api/firebase/storage/service';
 import Spacer from '../../../components/Spacer';
@@ -8,6 +7,7 @@ import { exerciseService } from '../../../api/firebase/exercise/service';
 import { userService } from '../../../api/firebase/user/service';
 import { videoProcessorService } from '../../../api/firebase/video-processor/service';
 import { formatExerciseNameForId } from '../../../utils/stringUtils';
+import { storeVideoFile, getVideoFile, removeVideoFile } from '../../../utils/indexedDBStorage';
 
 import { Exercise } from '../../../api/firebase/exercise/types';
 
@@ -20,9 +20,7 @@ const Create: React.FC = () => {
   const [videoPreview, setVideoPreview] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [showTrimmer, setShowTrimmer] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
-  
+
   // Exercise metadata state
   const [exerciseName, setExerciseName] = useState('');
   const [exerciseCategory, setExerciseCategory] = useState('Weight Training');
@@ -36,7 +34,6 @@ const Create: React.FC = () => {
   const [similarExercises, setSimilarExercises] = useState<Exercise[]>([]);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [uploadedExerciseId, setUploadedExerciseId] = useState<string>('');
-  const [selectedExerciseId, setSelectedExerciseId] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -52,26 +49,41 @@ const Create: React.FC = () => {
   useEffect(() => {
     // Check if we're returning from the trim-video page
     if (typeof window !== 'undefined') {
-      const trimmedFileData = sessionStorage.getItem('trimmed_video_file');
-      if (trimmedFileData) {
+      // Try to get video from IndexedDB instead of sessionStorage
+      const checkForTrimmedVideo = async () => {
         try {
-          // Convert stored data back to File object
-          const { name, type, data } = JSON.parse(trimmedFileData);
-          const arrayBuffer = Uint8Array.from(atob(data), c => c.charCodeAt(0)).buffer;
-          const trimmedFile = new File([arrayBuffer], name, { type });
+          const trimmedFileData = await getVideoFile('trimmed_video_file');
           
-          // Update state with the trimmed file
-          const objectUrl = URL.createObjectURL(trimmedFile);
-          setVideoPreview(objectUrl);
-          setVideoFile(trimmedFile);
-          setShowTrimmer(false);
-          
-          // Clean up sessionStorage
-          sessionStorage.removeItem('trimmed_video_file');
-        } catch (err) {
-          console.error('Failed to restore trimmed video:', err);
+          if (trimmedFileData) {
+            console.log('[DEBUG] Retrieved trimmed video from IndexedDB');
+            
+            // Convert stored data back to File object
+            const { name, type, data, trimStart, trimEnd } = trimmedFileData;
+            const arrayBuffer = Uint8Array.from(atob(data), c => c.charCodeAt(0)).buffer;
+            const trimmedFile = new File([arrayBuffer], name, { type });
+            
+            // Store trim metadata on the file object for later use during upload
+            if (trimStart !== undefined && trimEnd !== undefined) {
+              console.log('[DEBUG] Storing trim metadata on file:', { trimStart, trimEnd });
+              (trimmedFile as any).trimStart = trimStart;
+              (trimmedFile as any).trimEnd = trimEnd;
+            }
+            
+            // Update state with the trimmed file
+            const objectUrl = URL.createObjectURL(trimmedFile);
+            setVideoPreview(objectUrl);
+            setVideoFile(trimmedFile);
+            
+            // Clean up IndexedDB
+            await removeVideoFile('trimmed_video_file');
+            console.log('[DEBUG] Removed trimmed video from IndexedDB');
+          }
+        } catch (error) {
+          console.error('[DEBUG] Failed to restore trimmed video:', error);
         }
-      }
+      };
+      
+      checkForTrimmedVideo();
     }
   }, []);
 
@@ -108,34 +120,36 @@ const Create: React.FC = () => {
       return;
     }
 
+    // Add console log to check file size
+    console.log(`[DEBUG] Video file selected - Size: ${(file.size / (1024 * 1024)).toFixed(2)} MB, Type: ${file.type}`);
+
     // Instead of showing the trimmer inline, navigate to the trim-video page
     if (typeof window !== 'undefined') {
-      // Store the file in sessionStorage
+      // Store the file in IndexedDB instead of sessionStorage
       const reader = new FileReader();
-      reader.onload = () => {
+      reader.onload = async () => {
         const base64data = reader.result as string;
         const base64Content = base64data.split(',')[1]; // Remove the data URL prefix
         
-        sessionStorage.setItem('trim_video_file', JSON.stringify({
-          name: file.name,
-          type: file.type,
-          data: base64Content
-        }));
-        
-        // Navigate to the trim page
-        const returnUrl = '/create'; // Return to this page after trimming
-        router.push(`/trim-video?returnUrl=${encodeURIComponent(returnUrl)}`);
+        console.log('[DEBUG] Storing video file in IndexedDB before trim');
+        try {
+          // Use IndexedDB to store the file data
+          await storeVideoFile('trim_video_file', {
+            name: file.name,
+            type: file.type,
+            data: base64Content
+          });
+          
+          // Navigate to the trim page
+          const returnUrl = '/create'; // Return to this page after trimming
+          router.push(`/trim-video?returnUrl=${encodeURIComponent(returnUrl)}`);
+        } catch (error) {
+          console.error('[DEBUG] Error storing video in IndexedDB:', error);
+          alert('Failed to process video file. Please try again with a smaller file.');
+        }
       };
       reader.readAsDataURL(file);
     }
-  };
-
-  // This method is no longer needed as trim completion is handled by the trim-video page
-  // But we'll keep a simplified version just in case we need it in the future
-  const handleTrimComplete = (trimmedFile: File) => {
-    const objectUrl = URL.createObjectURL(trimmedFile);
-    setVideoPreview(objectUrl);
-    setVideoFile(trimmedFile);
   };
 
   const handleAddTag = () => {
@@ -219,6 +233,19 @@ const Create: React.FC = () => {
         size: videoFile.size,
         type: videoFile.type
       });
+      
+      // Check if video has trim metadata
+      const hasTrimMetadata = !!(
+        (videoFile as any).trimStart !== undefined && 
+        (videoFile as any).trimEnd !== undefined
+      );
+      
+      if (hasTrimMetadata) {
+        console.log('[DEBUG] Video has trim metadata:', {
+          trimStart: (videoFile as any).trimStart,
+          trimEnd: (videoFile as any).trimEnd
+        });
+      }
       
       // Clear the exercise service cache to ensure fresh data
       exerciseService.clearCache();
@@ -312,7 +339,15 @@ const Create: React.FC = () => {
         totalAccountUsage: 0,
         isApproved: false,
         createdAt: Timestamp.now(),
-        updatedAt: Timestamp.now()
+        updatedAt: Timestamp.now(),
+        // Include trim metadata if available
+        ...(hasTrimMetadata && {
+          trimMetadata: {
+            trimStart: (videoFile as any).trimStart,
+            trimEnd: (videoFile as any).trimEnd,
+            duration: (videoFile as any).trimEnd - (videoFile as any).trimStart
+          }
+        })
       };
       
       console.log('[DEBUG] Exercise video data prepared:', exerciseVideoData);
@@ -405,7 +440,27 @@ const Create: React.FC = () => {
         // Don't block the upload on GIF generation failures
       }
       
-      console.log('[DEBUG] Upload process completed successfully');
+      // 11. Log a summary of the upload, including trim metadata if present
+      console.log('[DEBUG] Upload process completed successfully', {
+        exerciseId,
+        videoId,
+        hasTrimData: !!(videoFile as any).trimStart !== undefined,
+        ...(hasTrimMetadata && {
+          trimStart: (videoFile as any).trimStart,
+          trimEnd: (videoFile as any).trimEnd,
+          duration: (videoFile as any).trimEnd - (videoFile as any).trimStart
+        })
+      });
+      
+      console.log('[DEBUG] ⚠️ IMPORTANT: Server-side processing needed for video trimming!');
+      if (hasTrimMetadata) {
+        console.log('[DEBUG] This video has trim metadata and requires server-side processing:');
+        console.log('[DEBUG] 1. The full video was uploaded to Firebase Storage');
+        console.log('[DEBUG] 2. Trim metadata was added to the Firestore document');
+        console.log('[DEBUG] 3. A Cloud Function should process this video with FFmpeg');
+        console.log(`[DEBUG] 4. Trim points: ${(videoFile as any).trimStart.toFixed(2)}s to ${(videoFile as any).trimEnd.toFixed(2)}s`);
+      }
+      
       setShowSuccessModal(true);
     } catch (error) {
       console.error('[DEBUG] Upload failed - Full error:', error);
@@ -717,7 +772,6 @@ const SimilarExercisesModal: React.FC<SimilarExercisesModalProps> = ({
   similarExercises,
   onSelectExercise,
   onSelectAsUnique,
-  onClose,
   isDuplicateExercise
 }) => {
   return (
