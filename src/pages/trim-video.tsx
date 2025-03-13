@@ -91,6 +91,11 @@ const TrimVideoPage: React.FC = () => {
         const base64Content = base64data.split(',')[1]; // Remove the data URL prefix
         
         try {
+          // First, ensure any existing trimmed file is removed to prevent conflicts
+          await removeVideoFile('trimmed_video_file').catch(err => {
+            console.log('[DEBUG] No existing trimmed file to remove or error:', err);
+          });
+          
           // Store the trimmed file data in IndexedDB with trim metadata
           await storeVideoFile('trimmed_video_file', {
             name: trimmedFile.name,
@@ -103,12 +108,20 @@ const TrimVideoPage: React.FC = () => {
           console.log('[DEBUG] Trimmed video stored in IndexedDB successfully');
           
           // Remove the original file data to free up space
-          await removeVideoFile('trim_video_file');
+          await removeVideoFile('trim_video_file').catch(err => {
+            console.log('[DEBUG] Error removing original file or not found:', err);
+          });
+          
           console.log('[DEBUG] Original video removed from IndexedDB');
           
           // Navigate back to the returnUrl or home
           const returnUrl = router.query.returnUrl as string || '/';
-          router.push(returnUrl);
+          console.log('[DEBUG] Navigating to return URL:', returnUrl);
+          
+          // Use router.push with a small delay to ensure IndexedDB operations complete
+          setTimeout(() => {
+            router.push(returnUrl);
+          }, 100);
         } catch (storeError) {
           console.error('[DEBUG] Failed to store trimmed video in IndexedDB:', storeError);
           setError('Failed to save the trimmed video. Please try again.');

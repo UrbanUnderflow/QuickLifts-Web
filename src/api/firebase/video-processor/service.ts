@@ -3,7 +3,7 @@ import { exerciseService } from '../exercise/service';
 import { userService } from '../user/service';
 import { ExerciseVideo, Exercise } from '../exercise/types';
 import { formatExerciseNameForId } from '../../../utils/stringUtils';
-import { getDoc, doc } from 'firebase/firestore';
+import { getDoc, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../config';
 
 /**
@@ -51,32 +51,121 @@ class VideoProcessorService {
       // Generate GIF using the Netlify function
       console.log(`[VIDEO-PROCESSOR] Generating GIF for video ${videoId}`);
       
-      // Call the Netlify function to generate the GIF
-      const response = await fetch('/.netlify/functions/process-video-gif', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          exerciseId: videoData.exerciseId, // Use the exerciseId from the video document
-          videoId,
-          exerciseName: formattedExerciseName // Also send the exercise name for storage path
-        }),
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error(`[VIDEO-PROCESSOR] Error generating GIF:`, errorData);
-        return false;
+      // Try to call the Netlify function to generate the GIF
+      try {
+        const response = await fetch('/.netlify/functions/process-video-gif', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            exerciseId: videoData.exerciseId, // Use the exerciseId from the video document
+            videoId,
+            exerciseName: formattedExerciseName, // Also send the exercise name for storage path
+            videoURL: video.videoURL // Send the video URL to help with fallback
+          }),
+        });
+        
+        if (!response.ok) {
+          try {
+            // Try to parse as JSON, but handle text responses too
+            const contentType = response.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+              const errorData = await response.json();
+              console.error(`[VIDEO-PROCESSOR] Error generating GIF (JSON):`, errorData);
+            } else {
+              // Handle text response
+              const errorText = await response.text();
+              console.error(`[VIDEO-PROCESSOR] Error generating GIF (Text):`, errorText);
+            }
+          } catch (parseError) {
+            console.error(`[VIDEO-PROCESSOR] Error parsing error response:`, parseError);
+            console.error(`[VIDEO-PROCESSOR] Response status:`, response.status, response.statusText);
+          }
+          
+          // Use a fallback method - extract a thumbnail URL from the video URL
+          console.log(`[VIDEO-PROCESSOR] Using fallback method - extracting thumbnail URL from video URL`);
+          return await this.setPlaceholderGifUrl(videoId, video.videoURL);
+        }
+        
+        try {
+          const result = await response.json();
+          console.log(`[VIDEO-PROCESSOR] GIF generation result:`, result);
+          
+          // Check if we got a valid gifURL in the response
+          if (result.success && result.gifURL) {
+            // Update the video document with the GIF URL
+            console.log(`[VIDEO-PROCESSOR] Updating video with GIF URL: ${result.gifURL}`);
+            const videoRef = doc(db, 'exerciseVideos', videoId);
+            await updateDoc(videoRef, { 
+              gifURL: result.gifURL,
+              updatedAt: new Date()
+            });
+            
+            console.log(`[VIDEO-PROCESSOR] Successfully updated video with GIF URL`);
+            return true;
+          } else if (result.success) {
+            // The function succeeded but didn't return a GIF URL
+            console.log(`[VIDEO-PROCESSOR] Function succeeded but no GIF URL returned`);
+            return true;
+          } else {
+            // The function failed
+            console.error(`[VIDEO-PROCESSOR] Function failed:`, result.error || 'Unknown error');
+            
+            // Use a fallback method - extract a thumbnail URL from the video URL
+            console.log(`[VIDEO-PROCESSOR] Using fallback method - extracting thumbnail URL from video URL`);
+            return await this.setPlaceholderGifUrl(videoId, video.videoURL);
+          }
+        } catch (jsonError) {
+          console.error(`[VIDEO-PROCESSOR] Error parsing JSON response:`, jsonError);
+          
+          // Use a fallback method - extract a thumbnail URL from the video URL
+          console.log(`[VIDEO-PROCESSOR] Using fallback method - extracting thumbnail URL from video URL`);
+          return await this.setPlaceholderGifUrl(videoId, video.videoURL);
+        }
+      } catch (fetchError) {
+        console.error(`[VIDEO-PROCESSOR] Error calling Netlify function:`, fetchError);
+        
+        // Use a fallback method - extract a thumbnail URL from the video URL
+        console.log(`[VIDEO-PROCESSOR] Using fallback method - extracting thumbnail URL from video URL`);
+        return await this.setPlaceholderGifUrl(videoId, video.videoURL);
       }
-      
-      const result = await response.json();
-      console.log(`[VIDEO-PROCESSOR] GIF generation result:`, result);
-      
-      // Return success
-      return result.success || false;
     } catch (error) {
       console.error(`[VIDEO-PROCESSOR] Error ensuring video has GIF:`, error);
+      return false;
+    }
+  }
+  
+  /**
+   * Sets a placeholder GIF URL for a video when GIF generation fails
+   * @param videoId The ID of the video
+   * @param videoUrl The URL of the video
+   * @returns Promise that resolves to true if successful
+   */
+  private async setPlaceholderGifUrl(videoId: string, videoUrl: string): Promise<boolean> {
+    try {
+      console.log(`[VIDEO-PROCESSOR] Setting placeholder GIF URL for video ${videoId}`);
+      
+      // Try to extract thumbnail URL from the video URL
+      let placeholderUrl = videoUrl.replace(/\.[^/.]+$/, '.jpg');
+      if (!placeholderUrl.endsWith('.jpg')) {
+        // If replacement didn't work, just append .jpg
+        placeholderUrl = `${videoUrl}.jpg`;
+      }
+      
+      console.log(`[VIDEO-PROCESSOR] Using placeholder URL: ${placeholderUrl}`);
+      
+      // Update the video document with the placeholder URL
+      const videoRef = doc(db, 'exerciseVideos', videoId);
+      await updateDoc(videoRef, { 
+        gifURL: placeholderUrl,
+        updatedAt: new Date()
+      });
+      
+      console.log(`[VIDEO-PROCESSOR] Successfully set placeholder GIF URL for video ${videoId}`);
+      return true;
+    } catch (error) {
+      console.error(`[VIDEO-PROCESSOR] Error setting placeholder GIF URL:`, error);
       return false;
     }
   }

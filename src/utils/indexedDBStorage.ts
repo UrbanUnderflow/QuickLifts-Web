@@ -121,6 +121,13 @@ export const getVideoFile = async (key: string): Promise<any> => {
 export const removeVideoFile = async (key: string): Promise<void> => {
   console.log(`[IndexedDB] Removing video file with key: ${key}`);
   try {
+    // First check if the file exists to avoid unnecessary operations
+    const fileExists = await getVideoFile(key);
+    if (!fileExists) {
+      console.log(`[IndexedDB] No file found with key: ${key}, skipping removal`);
+      return;
+    }
+    
     const db = await openDatabase();
     return new Promise((resolve, reject) => {
       const transaction = db.transaction([STORE_NAME], 'readwrite');
@@ -143,6 +150,7 @@ export const removeVideoFile = async (key: string): Promise<void> => {
     });
   } catch (error) {
     console.error('[IndexedDB] Error in removeVideoFile:', error);
-    throw error;
+    // Don't throw the error, just log it and continue
+    // This prevents cascading failures if the file is already gone
   }
 }; 

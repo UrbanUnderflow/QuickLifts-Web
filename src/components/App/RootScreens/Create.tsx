@@ -74,9 +74,13 @@ const Create: React.FC = () => {
             setVideoPreview(objectUrl);
             setVideoFile(trimmedFile);
             
-            // Clean up IndexedDB
-            await removeVideoFile('trimmed_video_file');
-            console.log('[DEBUG] Removed trimmed video from IndexedDB');
+            // Clean up IndexedDB - only remove once
+            try {
+              await removeVideoFile('trimmed_video_file');
+              console.log('[DEBUG] Removed trimmed video from IndexedDB');
+            } catch (removeError) {
+              console.error('[DEBUG] Error removing trimmed video from IndexedDB:', removeError);
+            }
           }
         } catch (error) {
           console.error('[DEBUG] Failed to restore trimmed video:', error);
@@ -414,27 +418,63 @@ const Create: React.FC = () => {
       console.log('[DEBUG] Setting uploaded exercise ID:', exerciseId);
       setUploadedExerciseId(exerciseId);
       
-      // 10. Generate GIF for the uploaded video
+      // 10. Generate GIF for the uploaded video - IMPROVED VERSION
       console.log('[DEBUG] Starting GIF generation for video', videoId);
+      
+      // Immediately try to generate the GIF without setTimeout
       try {
-        console.log('[DEBUG] Calling VideoProcessorService.ensureVideoHasGif');
+        console.log('[DEBUG] Calling VideoProcessorService.ensureVideoHasGif directly');
         
-        // Use the proper generated ID and name
-        setTimeout(async () => {
-          try {
-            // Wait 3 seconds to ensure Firebase indexing is complete
-            console.log('[DEBUG] Executing delayed GIF generation after 3s wait');
-            
-            const result = await videoProcessorService.ensureVideoHasGif(
-              exerciseId, // Pass the exercise ID (generated), not the name
-              videoId
-            );
-            console.log('[DEBUG] GIF generation result:', result);
-          } catch (gifError) {
-            console.error('[DEBUG] GIF generation error:', gifError);
-            // Don't block the upload on GIF generation failures
+        // Make multiple attempts to generate the GIF
+        const generateGif = async (attempts = 3) => {
+          for (let i = 0; i < attempts; i++) {
+            try {
+              console.log(`[DEBUG] GIF generation attempt ${i + 1} of ${attempts}`);
+              
+              // Add a small delay before the first attempt to ensure Firestore indexing is complete
+              if (i === 0) {
+                console.log('[DEBUG] Waiting 2 seconds before first GIF generation attempt');
+                await new Promise(resolve => setTimeout(resolve, 2000));
+              }
+              
+              const result = await videoProcessorService.ensureVideoHasGif(
+                exerciseId, // Pass the exercise ID (generated), not the name
+                videoId
+              );
+              
+              if (result) {
+                console.log('[DEBUG] GIF generation successful on attempt', i + 1);
+                return true;
+              } else {
+                console.warn('[DEBUG] GIF generation attempt', i + 1, 'failed, retrying...');
+                // Wait longer between retries
+                const waitTime = (i + 1) * 3000; // Increase wait time with each attempt
+                console.log(`[DEBUG] Waiting ${waitTime/1000} seconds before next attempt`);
+                await new Promise(resolve => setTimeout(resolve, waitTime));
+              }
+            } catch (error) {
+              console.error(`[DEBUG] Error in GIF generation attempt ${i + 1}:`, error);
+              if (i < attempts - 1) {
+                // Wait longer between retries
+                const waitTime = (i + 1) * 3000; // Increase wait time with each attempt
+                console.log(`[DEBUG] Waiting ${waitTime/1000} seconds before next attempt`);
+                await new Promise(resolve => setTimeout(resolve, waitTime));
+              }
+            }
           }
-        }, 3000);
+          
+          console.error('[DEBUG] All GIF generation attempts failed');
+          return false;
+        };
+        
+        // Start the GIF generation process
+        generateGif().then(success => {
+          console.log('[DEBUG] GIF generation process completed with result:', success);
+          if (!success) {
+            console.log('[DEBUG] GIF generation failed, but exercise was still created successfully');
+            console.log('[DEBUG] You can try regenerating the GIF later from the exercise page');
+          }
+        });
       } catch (gifError) {
         console.error('[DEBUG] Error starting GIF generation:', gifError);
         // Don't block the upload on GIF generation failures
