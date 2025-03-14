@@ -14,6 +14,11 @@ interface GifGeneratorOptions {
   maxDuration?: number;
 }
 
+interface VideoSource {
+  url?: string;
+  file?: File | Blob;
+}
+
 const defaultOptions: GifGeneratorOptions = {
   width: 680,
   height: 680,
@@ -26,39 +31,39 @@ const defaultOptions: GifGeneratorOptions = {
 
 export const gifGenerator = {
   async generateAndUploadGif(
-    videoUrl: string,
+    videoSource: string | VideoSource,
     exerciseName: string,
     videoId: string,
     options: GifGeneratorOptions = defaultOptions
   ): Promise<string> {
     try {
-      console.log('[DEBUG] Starting GIF generation for video:', videoUrl);
+      console.log('[DEBUG] Starting GIF generation');
       console.log('[DEBUG] Options:', JSON.stringify(options));
-      
-      // Extract the path from the video URL
-      const storage = getStorage();
-      const videoPath = decodeURIComponent(videoUrl.split('/o/')[1].split('?')[0]);
-      console.log('[DEBUG] Extracted video path:', videoPath);
-      
-      const videoRef = ref(storage, videoPath);
-      
-      console.log('[DEBUG] Getting download URL for video path');
-      const downloadURL = await getDownloadURL(videoRef);
-      console.log('[DEBUG] Got download URL:', downloadURL);
-      
-      // Use a CORS proxy to access the video
-      const corsProxyUrl = this.createCorsProxyUrl(downloadURL);
-      console.log('[DEBUG] Created CORS proxy URL:', corsProxyUrl);
-      
+
       // Create a video element
       const video = document.createElement('video');
-      video.crossOrigin = 'anonymous';
       video.muted = true;
       video.autoplay = false;
       video.controls = false;
       video.preload = 'auto';
       video.playsInline = true;
-      
+
+      // Handle both string URLs and VideoSource objects
+      const source = typeof videoSource === 'string' ? { url: videoSource } : videoSource;
+
+      if (source.file) {
+        // If we have a local file, use it directly
+        console.log('[DEBUG] Using local video file');
+        video.src = URL.createObjectURL(source.file);
+      } else if (source.url) {
+        // If we only have a URL, use it
+        console.log('[DEBUG] Using video URL:', source.url);
+        video.crossOrigin = 'anonymous';
+        video.src = source.url;
+      } else {
+        throw new Error('No valid video source provided');
+      }
+
       // Add event listeners before setting src
       video.addEventListener('error', (e) => {
         console.error('[DEBUG] Video error event:', e);
@@ -67,10 +72,7 @@ export const gifGenerator = {
           console.error('[DEBUG] Video error message:', video.error.message);
         }
       });
-      
-      console.log('[DEBUG] Setting video src:', corsProxyUrl);
-      video.src = corsProxyUrl;
-      
+
       // Append the video to the document but make it invisible
       video.style.position = 'fixed';
       video.style.top = '-9999px';
@@ -78,7 +80,7 @@ export const gifGenerator = {
       video.style.opacity = '0.01';
       document.body.appendChild(video);
       console.log('[DEBUG] Video element appended to document');
-      
+
       // Wait for the video to load
       console.log('[DEBUG] Waiting for video to load (metadata and data)');
       await new Promise<void>((resolve, reject) => {

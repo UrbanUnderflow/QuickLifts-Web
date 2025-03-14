@@ -482,7 +482,6 @@ const Create: React.FC = () => {
         console.log('[DEBUG] Using client-side gifGenerator');
         
         // Listen for GIF encoding progress updates from the gifGenerator
-        // This will help update the progress bar during encoding
         const encodingProgressListener = (progress: number) => {
           // Scale encoding progress from 87% to 92%
           const scaledProgress = 0.87 + (progress * 0.05);
@@ -506,137 +505,80 @@ const Create: React.FC = () => {
         });
         
         window.addEventListener('gif-frame-capture-progress', frameCaptureListener);
-        
-        const generateGif = async (attempts = 3): Promise<boolean> => {
-          for (let i = 0; i < attempts; i++) {
-            try {
-              console.log(`[DEBUG] GIF generation attempt ${i + 1} of ${attempts}`);
-              
-              // Add a small delay before the first attempt to ensure video URL is accessible
-              if (i === 0) {
-                console.log('[DEBUG] Waiting 2 seconds before first GIF generation attempt');
-                await new Promise(resolve => setTimeout(resolve, 2000));
-              }
-              
-              // Start with 85% progress
-              setUploadProgress(0.85);
-              
-              // Create a fallback interval in case events aren't received
-              // This ensures the progress bar isn't stuck at 85%
-              let frameProgress = 0;
-              const frameUpdateInterval = setInterval(() => {
-                // Small increments, max at 87% (reserving 87-92% for encoding)
-                frameProgress += 0.0005;
-                const newProgress = Math.min(0.869, 0.85 + frameProgress);
-                setUploadProgress(newProgress);
-              }, 100);
-              
-              const gifUrl = await gifGenerator.generateAndUploadGif(
-                uploadResult.downloadURL,
-                formattedExerciseName,
-                videoId,
-                {
-                  width: 680,
-                  height: 680,
-                  numFrames: 60,
-                  quality: 3,
-                  delay: 250, // 100ms delay gives us 10 frames per second for smoother animation
-                  dither: true,
-                  workers: 4,
-                  maxDuration: 5 // Allow up to 10 seconds for the GIF
-                }
-              );
-              
-              // Clear the frame capture interval
-              clearInterval(frameUpdateInterval);
-              
-              if (gifUrl) {
-                console.log('[DEBUG] Client-side GIF generation successful:', gifUrl);
-                
-                // GIF has been generated and uploaded, update to 92%
-                setUploadProgress(0.92);
-                
-                // Update the video document with the GIF URL
-                console.log('[DEBUG] Updating Firestore document with GIF URL');
-                const videoRef = doc(db, 'exerciseVideos', videoId);
-                
-                // Create a progress interval for Firestore update
-                let firestoreProgress = 0;
-                const firestoreUpdateInterval = setInterval(() => {
-                  // Increment progress from 92% to 95%
-                  firestoreProgress += 0.003;
-                  const newProgress = Math.min(0.95, 0.92 + firestoreProgress);
-                  setUploadProgress(newProgress);
-                }, 100);
-                
-                await updateDoc(videoRef, {
-                  gifURL: gifUrl,
-                  updatedAt: new Date()
-                });
-                
-                // Clear the Firestore update interval
-                clearInterval(firestoreUpdateInterval);
-                
-                console.log('[DEBUG] Updated video document with GIF URL');
-                
-                // Final progress update to 100%
-                setUploadProgress(0.97);
-                
-                // Add a short delay to show progress at 97% before completing to 100%
-                await new Promise(resolve => setTimeout(resolve, 500));
-                setUploadProgress(1.0);
-                
-                // Remove the event listeners
-                window.removeEventListener('gif-encoding-progress', (e: any) => {
-                  if (e.detail && typeof e.detail.progress === 'number') {
-                    encodingProgressListener(e.detail.progress);
-                  }
-                });
-                window.removeEventListener('gif-frame-capture-progress', frameCaptureListener);
-                
-                return true;
-              } else {
-                // Clear the frame capture interval if GIF generation fails
-                clearInterval(frameUpdateInterval);
-                console.warn('[DEBUG] GIF generation attempt', i + 1, 'failed (no URL returned), retrying...');
-              }
-            } catch (error) {
-              console.error(`[DEBUG] Error in GIF generation attempt ${i + 1}:`, error);
-              
-              // Log more details about the error
-              if (error instanceof Error) {
-                console.error('[DEBUG] Error details:', {
-                  name: error.name,
-                  message: error.message,
-                  stack: error.stack
-                });
-              }
-              
-              if (i < attempts - 1) {
-                const waitTime = (i + 1) * 3000;
-                console.log(`[DEBUG] Waiting ${waitTime/1000} seconds before next attempt`);
-                await new Promise(resolve => setTimeout(resolve, waitTime));
-              }
-            }
+
+        const gifUrl = await gifGenerator.generateAndUploadGif(
+          { file: videoFile },  // Pass the local video file instead of the URL
+          formattedExerciseName,
+          videoId,
+          {
+            width: 680,
+            height: 680,
+            numFrames: 60,
+            quality: 3,
+            delay: 250,
+            dither: true,
+            workers: 4,
+            maxDuration: 5
           }
+        );
+        
+        if (gifUrl) {
+          console.log('[DEBUG] Client-side GIF generation successful:', gifUrl);
           
-          console.error('[DEBUG] All GIF generation attempts failed');
-          return false;
-        };
-        
-        // Actually call the generateGif function and wait for result before showing success modal!
-        console.log('[DEBUG] Starting to execute GIF generation function');
-        const gifSuccess = await generateGif();
-        
-        console.log('[DEBUG] GIF generation process completed with result:', gifSuccess);
-        if (!gifSuccess) {
-          console.log('[DEBUG] GIF generation failed, but exercise was still created successfully');
-          console.log('[DEBUG] You can try regenerating the GIF later from the exercise page');
+          // GIF has been generated and uploaded, update to 92%
+          setUploadProgress(0.92);
+          
+          // Update the video document with the GIF URL
+          console.log('[DEBUG] Updating Firestore document with GIF URL');
+          const videoRef = doc(db, 'exerciseVideos', videoId);
+          
+          // Create a progress interval for Firestore update
+          let firestoreProgress = 0;
+          const firestoreUpdateInterval = setInterval(() => {
+            // Increment progress from 92% to 95%
+            firestoreProgress += 0.003;
+            const newProgress = Math.min(0.95, 0.92 + firestoreProgress);
+            setUploadProgress(newProgress);
+          }, 100);
+          
+          await updateDoc(videoRef, {
+            gifURL: gifUrl,
+            updatedAt: new Date()
+          });
+          
+          // Clear the Firestore update interval
+          clearInterval(firestoreUpdateInterval);
+          
+          console.log('[DEBUG] Updated video document with GIF URL');
+          
+          // Final progress update to 100%
+          await new Promise(resolve => setTimeout(resolve, 500));
+          setUploadProgress(1.0);
+          
+          console.log('[DEBUG] Updated video document with GIF URL');
+          
+          // Remove the event listeners
+          window.removeEventListener('gif-encoding-progress', (e: any) => {
+            if (e.detail && typeof e.detail.progress === 'number') {
+              encodingProgressListener(e.detail.progress);
+            }
+          });
+          window.removeEventListener('gif-frame-capture-progress', frameCaptureListener);
+          
+          // Show success modal after everything is complete
+          setShowSuccessModal(true);
+          
+          return true;
+        } else {
+          console.warn('[DEBUG] GIF generation attempt failed (no URL returned), retrying...');
+          // Even if GIF fails, we should still show success modal since video was uploaded
+          setShowSuccessModal(true);
         }
       } catch (gifError) {
         console.error('[DEBUG] Error starting GIF generation:', gifError);
-        // Still complete the progress bar even if GIF generation fails
+        // Still complete the progress bar and show success modal even if GIF generation fails
         setUploadProgress(1.0);
+        setShowSuccessModal(true);
       }
       
       // 11. Log a summary of the upload, including trim metadata if present
@@ -659,9 +601,6 @@ const Create: React.FC = () => {
         console.log('[DEBUG] 3. A Cloud Function should process this video with FFmpeg');
         console.log(`[DEBUG] 4. Trim points: ${(videoFile as any).trimStart.toFixed(2)}s to ${(videoFile as any).trimEnd.toFixed(2)}s`);
       }
-      
-      // Show success modal only after GIF generation is complete
-      setShowSuccessModal(true);
     } catch (error) {
       console.error('[DEBUG] Upload failed - Full error:', error);
       console.error('[DEBUG] Error stack:', error instanceof Error ? error.stack : 'No stack trace');
