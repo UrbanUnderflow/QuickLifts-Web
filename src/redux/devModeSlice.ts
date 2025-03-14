@@ -29,8 +29,8 @@ const devModeSlice = createSlice({
         window.localStorage.setItem('devMode', JSON.stringify(state.isDevelopment));
         window.localStorage.setItem('dopplerConfig', state.dopplerConfig);
         
-        // Reload to apply new environment
-        window.location.reload();
+        // NOTE: Reload is now handled in the DevModeToggle component
+        // to prevent double reloads and allow for proper Firebase initialization
       }
     }
   }

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import type { AppProps } from 'next/app';
 import { Provider } from 'react-redux';
 import { store, persistor } from '../redux/store'; 
@@ -9,7 +9,20 @@ import '../styles/animations.css';
 
 import AuthWrapper from '../components/AuthWrapper';
 
+// Only import in development mode
+const isDev = process.env.NODE_ENV === 'development';
+if (isDev) {
+  require('../utils/envDebug');
+}
+
 const MyApp: React.FC<AppProps> = ({ Component, pageProps }) => {
+  useEffect(() => {
+    // Log a reminder about environment debugging in development mode
+    if (isDev && typeof window !== 'undefined') {
+      console.log('🔧 Debug tools available in development mode. Try window.debugEnv() in console.');
+    }
+  }, []);
+
   return (    
     <Provider store={store}>
       <PersistGate loading={null} persistor={persistor}>

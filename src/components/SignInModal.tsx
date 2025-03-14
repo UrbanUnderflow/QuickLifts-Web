@@ -41,11 +41,18 @@ interface SignInModalProps {
 const DevModeToggle: React.FC = () => {
   const dispatch = useDispatch();
   const isDevelopment = useSelector((state: RootState) => state.devMode.isDevelopment);
+  const isLocalhost = typeof window !== 'undefined' && window.location.hostname === 'localhost';
 
   // On component mount, check if we should be in dev mode
   useEffect(() => {
     const savedMode = window.localStorage.getItem('devMode') === 'true';
     if (savedMode !== isDevelopment) {
+      console.log('[DevMode] Initializing with saved mode:', {
+        savedMode,
+        currentMode: isDevelopment,
+        isLocalhost,
+        timestamp: new Date().toISOString()
+      });
       dispatch(toggleDevMode());
       initializeFirebase(savedMode);
     }
@@ -53,10 +60,21 @@ const DevModeToggle: React.FC = () => {
 
   const handleToggle = () => {
     const newMode = !isDevelopment;
+    console.log('[DevMode] Toggling mode:', {
+      from: isDevelopment ? 'development' : 'production',
+      to: newMode ? 'development' : 'production',
+      isLocalhost,
+      source: isLocalhost ? '.env.local' : (newMode ? 'firebaseConfigs' : 'Netlify'),
+      timestamp: new Date().toISOString()
+    });
     window.localStorage.setItem('devMode', String(newMode));
     dispatch(toggleDevMode());
     initializeFirebase(newMode);
-    window.location.reload();
+    
+    // Add a slight delay before reloading to ensure Firebase initialization completes
+    setTimeout(() => {
+      window.location.reload();
+    }, 300);
   };
 
   return (
@@ -67,8 +85,9 @@ const DevModeToggle: React.FC = () => {
         background: isDevelopment ? '#E0FE10' : '#3f3f46',
         color: isDevelopment ? 'black' : 'white'
       }}
+      title={`Using ${isDevelopment ? 'development' : 'production'} configuration from ${isLocalhost ? '.env.local' : (isDevelopment ? 'firebaseConfigs' : 'Netlify')}`}
     >
-      {isDevelopment ? '🔧 Dev' : '🚀 Prod'}
+      {isDevelopment ? '🔧 Dev' : '🚀 Prod'}{isLocalhost ? ' (Local)' : ''}
     </button>
   );
 };
@@ -633,15 +652,8 @@ const SignInModal: React.FC<SignInModalProps> = ({
             return;
           }
           
-          if (!hasUppercase || !hasNumber || !hasMinLength) {
+          if (!hasUppercase || !hasNumber || !hasMinLength || !passwordsMatch) {
             setError("Please ensure your password meets all requirements");
-            setShowError(true);
-            setIsLoading(false);
-            return;
-          }
-          
-          if (password !== confirmPassword) {
-            setError("Passwords do not match");
             setShowError(true);
             setIsLoading(false);
             return;
@@ -1826,99 +1838,92 @@ const SignInModal: React.FC<SignInModalProps> = ({
             </div>
 
             <div className="mt-8 pt-6 border-t border-zinc-700">
-              <p className="text-zinc-400 text-xs text-center font-['HK Grotesk'] px-4">
-                Join the Fitness Collective: Create, Share, and Progress Together
-              </p>
-              <>
-                <div className="mt-8 pt-6 border-t border-zinc-700">
-                  <div className="flex flex-col sm:flex-row justify-center items-center gap-4 text-zinc-400 text-sm mb-6">
-                    <a
-                      href="/about"
-                      className="hover:text-[#E0FE10] transition-colors"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      About Pulse
-                    </a>
-                    <div className="hidden sm:block w-1 h-1 bg-zinc-700 rounded-full"></div>
-                    <a
-                      href="/creator"
-                      className="hover:text-[#E0FE10] transition-colors"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      Creator Program
-                    </a>
-                    <div className="hidden sm:block w-1 h-1 bg-zinc-700 rounded-full"></div>
-                    <a
-                      href="/rounds"
-                      className="hover:text-[#E0FE10] transition-colors"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      Rounds Feature
-                    </a>
-                  </div>
+              <div className="flex flex-col sm:flex-row justify-center items-center gap-4 text-zinc-400 text-sm mb-6">
+                <a
+                  href="/about"
+                  className="hover:text-[#E0FE10] transition-colors"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  About Pulse
+                </a>
+                <div className="hidden sm:block w-1 h-1 bg-zinc-700 rounded-full"></div>
+                <a
+                  href="/creator"
+                  className="hover:text-[#E0FE10] transition-colors"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Creator Program
+                </a>
+                <div className="hidden sm:block w-1 h-1 bg-zinc-700 rounded-full"></div>
+                <a
+                  href="/rounds"
+                  className="hover:text-[#E0FE10] transition-colors"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Rounds Feature
+                </a>
+              </div>
 
-                  <div className="flex flex-wrap justify-center items-center gap-4 text-zinc-500 text-xs mb-6">
-                    <a
-                      href="/terms"
-                      className="hover:text-[#E0FE10] transition-colors"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      Terms & Conditions
-                    </a>
-                    <div className="hidden sm:block w-1 h-1 bg-zinc-700 rounded-full"></div>
-                    <a
-                      href="/privacyPolicy"
-                      className="hover:text-[#E0FE10] transition-colors"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      Privacy Policy
-                    </a>
-                    <div className="hidden sm:block w-1 h-1 bg-zinc-700 rounded-full"></div>
-                    <button
-                      onClick={() => (window.location.href = "mailto:pulsefitnessapp@gmail.com")}
-                      className="hover:text-[#E0FE10] transition-colors"
-                    >
-                      Contact Us
-                    </button>
-                  </div>
+              <div className="flex flex-wrap justify-center items-center gap-4 text-zinc-500 text-xs mb-6">
+                <a
+                  href="/terms"
+                  className="hover:text-[#E0FE10] transition-colors"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Terms & Conditions
+                </a>
+                <div className="hidden sm:block w-1 h-1 bg-zinc-700 rounded-full"></div>
+                <a
+                  href="/privacyPolicy"
+                  className="hover:text-[#E0FE10] transition-colors"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Privacy Policy
+                </a>
+                <div className="hidden sm:block w-1 h-1 bg-zinc-700 rounded-full"></div>
+                <button
+                  onClick={() => (window.location.href = "mailto:pulsefitnessapp@gmail.com")}
+                  className="hover:text-[#E0FE10] transition-colors"
+                >
+                  Contact Us
+                </button>
+              </div>
 
-                  <div className="flex justify-center gap-6 mb-6">
-                    <a
-                      href="https://www.instagram.com/fitwithpulse/"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-zinc-400 hover:text-[#E0FE10] transition-colors"
-                    >
-                      <img src="/instagram.svg" alt="Instagram" className="w-5 h-5" />
-                    </a>
-                    <a
-                      href="https://twitter.com/fitwithpulse"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-zinc-400 hover:text-[#E0FE10] transition-colors"
-                    >
-                      <img src="/twitter.svg" alt="Twitter" className="w-5 h-5" />
-                    </a>
-                    <a
-                      href="https://www.youtube.com/@fitwithpulse"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-zinc-400 hover:text-[#E0FE10] transition-colors"
-                    >
-                      <img src="/youtube.svg" alt="Youtube" className="w-5 h-5" />
-                    </a>
-                  </div>
+              <div className="flex justify-center gap-6 mb-6">
+                <a
+                  href="https://www.instagram.com/fitwithpulse/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-zinc-400 hover:text-[#E0FE10] transition-colors"
+                >
+                  <img src="/instagram.svg" alt="Instagram" className="w-5 h-5" />
+                </a>
+                <a
+                  href="https://twitter.com/fitwithpulse"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-zinc-400 hover:text-[#E0FE10] transition-colors"
+                >
+                  <img src="/twitter.svg" alt="Twitter" className="w-5 h-5" />
+                </a>
+                <a
+                  href="https://www.youtube.com/@fitwithpulse"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-zinc-400 hover:text-[#E0FE10] transition-colors"
+                >
+                  <img src="/youtube.svg" alt="Youtube" className="w-5 h-5" />
+                </a>
+              </div>
 
-                  <div className="text-center text-zinc-500 text-xs">
-                    © {new Date().getFullYear()} Pulse. All rights reserved.
-                  </div>
-                </div>
-              </>
+              <div className="text-center text-zinc-500 text-xs">
+                © {new Date().getFullYear()} Pulse. All rights reserved.
+              </div>
             </div>
           </>
         )}
