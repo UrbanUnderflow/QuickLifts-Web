@@ -141,9 +141,6 @@ export const gifGenerator = {
   },
   
   createCorsProxyUrl(url: string): string {
-    if (process.env.NODE_ENV === 'development') {
-      return `/api/proxy?url=${encodeURIComponent(url)}`;
-    }
     return url;
   },
   
