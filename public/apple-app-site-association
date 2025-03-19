@@ -1,0 +1,14 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "ZG887P86D5.Tremaine.QuickLifts",
+        "paths": ["/workout/*"]
+      }
+    ]
+  },
+  "appclips": {
+    "apps": ["ZG887P86D5.Tremaine.QuickLifts.Clip"]
+  }
+}

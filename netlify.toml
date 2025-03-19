@@ -1,0 +1,48 @@
+[dev]
+  command = "next dev"
+  framework = "next"
+  targetPort = 3000
+  functionsPort = 8888
+
+[build]
+  command = "next build"
+  publish = ".next"
+  functions = "netlify/functions"
+
+# Environment variables should be set in Netlify UI, not in the toml file
+[context.production]
+[context.branch-deploy]
+[context.deploy-preview]
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+# Add FFmpeg to Netlify Functions
+[[plugins]]
+  package = "netlify-plugin-inline-functions-env"
+  [plugins.inputs]
+    include = ["ffmpeg"]
+
+[[redirects]]
+  from = "/profile/*"
+  to = "/"
+  status = 200
+
+[[redirects]]
+  from = "/*"
+  to = "/"
+  status = 200
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+[functions]
+  directory = "netlify/functions"
+  included_files = ["netlify/functions/**"]
+  external_node_modules = ["stripe"]
+  node_bundler = "esbuild"
+
+[functions."update-challenge-status"]
+  schedule = "@daily"

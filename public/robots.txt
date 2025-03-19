@@ -1,0 +1,34 @@
+# https://www.robotstxt.org/robotstxt.html
+User-agent: *
+Allow: /
+
+# Prevent crawling of sensitive endpoints
+Disallow: /.netlify/
+Disallow: /api/
+Disallow: /admin/
+Disallow: /private/
+
+# Add sitemap
+Sitemap: https://fitwithpulse.ai/.netlify/functions/sitemap
+
+# Add crawl delay to prevent overwhelming the server
+Crawl-delay: 10
+
+# Optional: Add specific rules for different bots
+User-agent: Googlebot
+Allow: /
+Crawl-delay: 5
+
+User-agent: Bingbot
+Allow: /
+Crawl-delay: 5
+
+User-agent: facebookexternalhit
+Allow: /
+Crawl-delay: 5
+
+User-agent: Twitterbot
+Allow: /
+Crawl-delay: 5
+
+
