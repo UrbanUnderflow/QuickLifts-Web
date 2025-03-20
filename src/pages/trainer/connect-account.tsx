@@ -8,6 +8,7 @@ import { RootState } from '../../redux/store';
 import { userService } from '../../api/firebase/user';
 import { StripeOnboardingStatus } from '../../api/firebase/user/types';
 import { db } from '../../api/firebase/config';
+import { SubscriptionType } from '../../api/firebase/user/types';
 
 const ConnectAccountPage = () => {
   const [loading, setLoading] = useState(false);
@@ -27,29 +28,42 @@ const ConnectAccountPage = () => {
     
     // Check if user is already logged in
     if (!currentUser) {
+      console.log('[ConnectAccount] No user found, redirecting to login');
       router.push('/login?redirect=/trainer/connect-account');
       return;
     }
 
+    // Check if user has an active subscription
+    if (currentUser.subscriptionType === SubscriptionType.unsubscribed) {
+      console.log('[ConnectAccount] User is unsubscribed, redirecting to subscription page');
+      router.push('/subscribe');
+      return;
+    }
+
+    console.log('[ConnectAccount] User authenticated and subscribed, checking connect account status');
     // Check if user already has Connect account details
     checkConnectAccountStatus();
   }, [currentUser, isLoading, router]);
 
   const checkConnectAccountStatus = async () => {
     // Make sure we have a user before proceeding
-    if (!currentUser?.id) return;
+    if (!currentUser?.id) {
+      console.log('[ConnectAccount] No user ID found');
+      return;
+    }
     
     try {
+      console.log('[ConnectAccount] Fetching fresh user data for:', currentUser.id);
       // Fetch fresh user data directly from Firestore using userService
       const refreshedUser = await userService.fetchUserFromFirestore(currentUser.id);
       
       // First, check if the user has a Stripe account ID - this is the definitive indicator
       if (refreshedUser?.creator?.stripeAccountId) {
-        console.log('User has Stripe account ID:', refreshedUser.creator.stripeAccountId);
+        console.log('[ConnectAccount] User has Stripe account ID:', refreshedUser.creator.stripeAccountId);
         
         // If onboardingStatus doesn't match the presence of stripeAccountId, fix it
         if (refreshedUser.creator.onboardingStatus !== StripeOnboardingStatus.Complete) {
-          console.log('Fixing inconsistent onboarding status');
+          console.log('[ConnectAccount] Fixing inconsistent onboarding status');
           
           // Call the complete-stripe-onboarding function to fix the status
           await fetch(
@@ -58,11 +72,12 @@ const ConnectAccountPage = () => {
         }
         
         // Redirect to dashboard because user has a Stripe account
+        console.log('[ConnectAccount] Redirecting to dashboard');
         router.push('/trainer/dashboard');
       } 
       // If status is complete but no stripeAccountId, fix the inconsistency
       else if (refreshedUser?.creator?.onboardingStatus === StripeOnboardingStatus.Complete) {
-        console.log('Fixing inconsistency: status is complete but no stripeAccountId');
+        console.log('[ConnectAccount] Fixing inconsistency: status is complete but no stripeAccountId');
         
         // Call the reset-onboarding function to fix the status
         await fetch(
@@ -75,11 +90,13 @@ const ConnectAccountPage = () => {
       else if (refreshedUser?.creator?.onboardingLink && 
                refreshedUser.creator.onboardingExpirationDate && 
                new Date(refreshedUser.creator.onboardingExpirationDate) > new Date()) {
+        console.log('[ConnectAccount] Found valid onboarding link');
         // Use existing onboarding link if not expired
         setOnboardingLink(refreshedUser.creator.onboardingLink);
       }
     } catch (err) {
-      console.error('Error checking account status:', err);
+      console.error('[ConnectAccount] Error checking account status:', err);
+      setError('Failed to check account status. Please try again.');
     }
   };
 
@@ -95,25 +112,25 @@ const ConnectAccountPage = () => {
 
     try {
       // Log the request for debugging
-      console.log("Calling Netlify function with userId:", currentUser.id);
+      console.log('[ConnectAccount] Starting onboarding process for user:', currentUser.id);
       
       // Call the existing Netlify function to create Connect account
       const response = await fetch(
         `/.netlify/functions/create-connected-account?userId=${currentUser.id}`
       );
       
-      console.log("Response status:", response.status);
+      console.log('[ConnectAccount] Create account response status:', response.status);
       
       // Get raw response text for debugging
       const responseText = await response.text();
-      console.log("Raw response:", responseText);
+      console.log('[ConnectAccount] Raw response:', responseText);
       
       // Try to parse as JSON
       let data;
       try {
         data = JSON.parse(responseText);
       } catch (parseError) {
-        console.error("JSON parse error:", parseError);
+        console.error('[ConnectAccount] JSON parse error:', parseError);
         throw new Error("Invalid response format from server");
       }
 
@@ -121,16 +138,26 @@ const ConnectAccountPage = () => {
         throw new Error(data.error || 'Failed to create account');
       }
 
-      // Fetch the updated user directly from Firestore
+      // Check if the response contains the onboarding link directly
+      if (data.accountLink) {
+        console.log('[ConnectAccount] Using account link from response');
+        setOnboardingLink(data.accountLink);
+        return;
+      }
+
+      // If no direct link in response, fetch the updated user
+      console.log('[ConnectAccount] Fetching updated user data');
       const refreshedUser = await userService.fetchUserFromFirestore(currentUser.id);
       
       if (refreshedUser?.creator?.onboardingLink) {
+        console.log('[ConnectAccount] Found onboarding link in refreshed user data');
         setOnboardingLink(refreshedUser.creator.onboardingLink);
       } else {
-        throw new Error('Onboarding link not found');
+        console.error('[ConnectAccount] No onboarding link found in response or user data');
+        throw new Error('Failed to get onboarding link. Please try again.');
       }
     } catch (err) {
-      console.error('Error starting onboarding:', err);
+      console.error('[ConnectAccount] Error in onboarding process:', err);
       setError(err instanceof Error ? err.message : 'An unexpected error occurred');
     } finally {
       setLoading(false);
