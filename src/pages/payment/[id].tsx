@@ -413,6 +413,8 @@ const CheckoutForm = ({ challengeId, amount, currency, isApplePayAvailable, chal
         ? '/.netlify/functions/create-payment-intent-test'
         : '/.netlify/functions/create-payment-intent';
       
+      console.log('Using payment intent function:', functionUrl);
+      
       const response = await fetch(functionUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -447,7 +449,9 @@ const CheckoutForm = ({ challengeId, amount, currency, isApplePayAvailable, chal
       const result = await stripe.confirmCardPayment(data.clientSecret, {
         payment_method: {
           card: cardElement,
-        }
+        },
+        // Add return_url for 3D Secure authentication
+        return_url: `${window.location.origin}/payment/complete?challengeId=${challengeId}`
       });
       
       console.log('Card payment result:', result);
