@@ -126,6 +126,21 @@ const SignInModal: React.FC<SignInModalProps> = ({
   const [isImageUploading, setIsImageUploading] = useState(false);
   const currentUser = useUser();
   const dispatch = useDispatch();
+  const router = useRouter();
+
+  // Add this custom hook
+  const useDevMode = () => {
+    const dispatch = useDispatch();
+    const isDevelopment = useSelector((state: RootState) => state.devMode.isDevelopment);
+
+    const handleToggle = () => {
+      dispatch(toggleDevMode());
+      initializeFirebase();
+      window.location.reload();
+    };
+
+    return { isDevelopment, handleToggle };
+  };
 
   // Add effect to check if we need to show registration
   useEffect(() => {
@@ -197,22 +212,6 @@ const SignInModal: React.FC<SignInModalProps> = ({
     } catch (err) {
       console.error("[SignInModal] Error in subscription check:", err);
     }
-  };
-
-  const router = useRouter();
-
-  // Add this custom hook
-  const useDevMode = () => {
-    const dispatch = useDispatch();
-    const isDevelopment = useSelector((state: RootState) => state.devMode.isDevelopment);
-
-    const handleToggle = () => {
-      dispatch(toggleDevMode());
-      initializeFirebase();
-      window.location.reload();
-    };
-
-    return { isDevelopment, handleToggle };
   };
 
   const handleSocialAuth = async (provider: "google" | "apple") => {
@@ -586,8 +585,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
 
           if (betaUserHasAccess || userDoc.subscriptionType !== SubscriptionType.unsubscribed) {
             console.log('[SignInModal] User has access, attempting to close modal');
-            onSignInSuccess?.(result.user);
-            onClose?.();
+            handleSignInSuccess(result.user);
             return;
           }
 
@@ -1769,6 +1767,20 @@ const SignInModal: React.FC<SignInModalProps> = ({
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleSignInSuccess = (user: any) => {
+    // Get the redirect URL from query parameters
+    const redirectUrl = router.query.redirect as string;
+    
+    if (redirectUrl) {
+      // If there's a redirect URL, navigate to it
+      router.push(redirectUrl);
+    } else {
+      // Otherwise, just close the modal
+      onSignInSuccess?.(user);
+      onClose?.();
     }
   };
 
