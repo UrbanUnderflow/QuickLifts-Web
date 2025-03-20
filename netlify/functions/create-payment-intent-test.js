@@ -1,47 +1,36 @@
 const Stripe = require('stripe');
-const admin = require('firebase-admin');
+const { db, headers } = require('./config/firebase');
 
-// Initialize Firebase Admin if not already initialized
-if (admin.apps.length === 0) {
-  try {
-    // Check if required Firebase environment variables are present
-    if (
-      !process.env.FIREBASE_PRIVATE_KEY ||
-      !process.env.FIREBASE_CLIENT_EMAIL ||
-      !process.env.FIREBASE_PROJECT_ID
-    ) {
-      console.warn('Some Firebase environment variables are missing. Using dummy mode.');
-      // In development, just initialize with a placeholder
-      admin.initializeApp({
-        projectId: 'quicklifts-dd3f1'
-      });
-    } else {
-      // Initialize with the actual credentials
-      admin.initializeApp({
-        credential: admin.credential.cert({
-          type: 'service_account',
-          project_id: process.env.FIREBASE_PROJECT_ID,
-          private_key: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
-          client_email: process.env.FIREBASE_CLIENT_EMAIL
-        })
-      });
-    }
-    console.log('Firebase Admin initialized successfully');
-  } catch (error) {
-    console.error('Error initializing Firebase Admin:', error);
-  }
-}
+console.log('Starting create-payment-intent-test function initialization...');
 
-const db = admin.firestore();
-
-// Initialize Stripe with test key from environment variables
-const stripe = Stripe(process.env.STRIPE_TEST_SECRET_KEY);
+// Initialize Stripe with test key
+console.log('Initializing Stripe with test key...');
+const stripe = new Stripe(process.env.STRIPE_TEST_SECRET_KEY, {
+  apiVersion: '2023-10-16'
+});
+console.log('Stripe initialized successfully');
 
 const handler = async (event) => {
+  console.log('Handler called with event:', {
+    httpMethod: event.httpMethod,
+    body: event.body ? JSON.parse(event.body) : null
+  });
+
+  // Handle CORS preflight requests
+  if (event.httpMethod === 'OPTIONS') {
+    return { 
+      statusCode: 200, 
+      headers,
+      body: '' 
+    };
+  }
+
   // Only accept POST requests
   if (event.httpMethod !== 'POST') {
+    console.log('Invalid HTTP method:', event.httpMethod);
     return {
       statusCode: 405,
+      headers,
       body: JSON.stringify({ success: false, error: 'Method not allowed' })
     };
   }
@@ -49,13 +38,16 @@ const handler = async (event) => {
   try {
     // Parse the request body
     const data = JSON.parse(event.body);
+    console.log('Parsed request data:', data);
+    
     const { challengeId, amount, currency, trainerId } = data;
-
-    console.log('Creating test payment intent for challenge:', challengeId, 'amount:', amount, 'trainer:', trainerId);
+    console.log('Extracted parameters:', { challengeId, amount, currency, trainerId });
 
     if (!challengeId || !amount || !currency) {
+      console.log('Missing required parameters:', { challengeId, amount, currency });
       return {
         statusCode: 400,
+        headers,
         body: JSON.stringify({ success: false, error: 'Missing required parameters' })
       };
     }
@@ -63,10 +55,18 @@ const handler = async (event) => {
     // Get the trainer's Stripe account ID if trainerId is provided
     let connectedAccountId = null;
     if (trainerId) {
+      console.log('Fetching trainer data for ID:', trainerId);
       try {
         const trainerDoc = await db.collection('users').doc(trainerId).get();
+        console.log('Trainer document exists:', trainerDoc.exists);
+        
         if (trainerDoc.exists) {
           const trainerData = trainerDoc.data();
+          console.log('Trainer data:', {
+            hasCreator: !!trainerData.creator,
+            hasStripeAccountId: !!(trainerData.creator && trainerData.creator.stripeAccountId)
+          });
+          
           if (trainerData.creator && trainerData.creator.stripeAccountId) {
             connectedAccountId = trainerData.creator.stripeAccountId;
             console.log('Found trainer Stripe account ID:', connectedAccountId);
@@ -88,6 +88,7 @@ const handler = async (event) => {
       },
       description: `Test Payment for challenge ${challengeId}`
     };
+    console.log('Payment intent options:', paymentIntentOptions);
 
     // Add connected account as destination if available
     if (connectedAccountId) {
@@ -110,13 +111,19 @@ const handler = async (event) => {
     }
 
     // Create a payment intent
+    console.log('Creating payment intent with options:', paymentIntentOptions);
     const paymentIntent = await stripe.paymentIntents.create(paymentIntentOptions);
-
-    console.log('Test payment intent created:', paymentIntent.id);
+    console.log('Payment intent created successfully:', {
+      id: paymentIntent.id,
+      status: paymentIntent.status,
+      amount: paymentIntent.amount,
+      currency: paymentIntent.currency
+    });
 
     // Return the client secret to the client
     return {
       statusCode: 200,
+      headers,
       body: JSON.stringify({
         success: true,
         clientSecret: paymentIntent.client_secret
@@ -124,8 +131,15 @@ const handler = async (event) => {
     };
   } catch (error) {
     console.error('Error creating test payment intent:', error);
+    console.error('Error details:', {
+      message: error.message,
+      type: error.type,
+      code: error.code,
+      stack: error.stack
+    });
     return {
       statusCode: 500,
+      headers,
       body: JSON.stringify({
         success: false,
         error: error.message || 'An error occurred creating the test payment'

@@ -1,51 +1,38 @@
 // Create a payment intent that directs funds to a trainer's connected Stripe account
 
 const Stripe = require('stripe');
-const admin = require('firebase-admin');
+const { db, headers } = require('./config/firebase');
 
-// Initialize Firebase Admin if not already initialized
-if (admin.apps.length === 0) {
-  try {
-    // Check if we have the required environment variables
-    if (!process.env.FIREBASE_SECRET_KEY) {
-      console.warn('FIREBASE_SECRET_KEY environment variable is missing. Using dummy mode.');
-      // In development, we'll just initialize with a placeholder
-      admin.initializeApp({
-        projectId: "quicklifts-dd3f1"
-      });
-    } else {
-      // Initialize with the actual credentials
-      admin.initializeApp({
-        credential: admin.credential.cert({
-          "type": "service_account",
-          "project_id": "quicklifts-dd3f1",
-          "private_key_id": process.env.FIREBASE_PRIVATE_KEY,
-          "private_key": process.env.FIREBASE_SECRET_KEY.replace(/\\n/g, '\n'),
-          "client_email": "firebase-adminsdk-1qxb0@quicklifts-dd3f1.iam.gserviceaccount.com",
-          "client_id": "111494077667496751062",
-          "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-          "token_uri": "https://oauth2.googleapis.com/token",
-          "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-          "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-1qxb0@quicklifts-dd3f1.iam.gserviceaccount.com"
-        })
-      });
-    }
-    console.log('Firebase Admin initialized successfully');
-  } catch (error) {
-    console.error('Error initializing Firebase Admin:', error);
-  }
-}
+console.log('Starting create-payment-intent function initialization...');
 
-const db = admin.firestore();
-
-// Initialize Stripe with live key from environment variables
-const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
+// Initialize Stripe with live key
+console.log('Initializing Stripe with live key...');
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+  apiVersion: '2023-10-16'
+});
+console.log('Stripe initialized successfully');
 
 const handler = async (event) => {
+  console.log('Handler called with event:', {
+    httpMethod: event.httpMethod,
+    body: event.body ? JSON.parse(event.body) : null
+  });
+
+  // Handle CORS preflight requests
+  if (event.httpMethod === 'OPTIONS') {
+    return { 
+      statusCode: 200, 
+      headers,
+      body: '' 
+    };
+  }
+
   // Only accept POST requests
   if (event.httpMethod !== 'POST') {
+    console.log('Invalid HTTP method:', event.httpMethod);
     return {
       statusCode: 405,
+      headers,
       body: JSON.stringify({ success: false, error: 'Method not allowed' })
     };
   }
@@ -53,24 +40,35 @@ const handler = async (event) => {
   try {
     // Parse the request body
     const data = JSON.parse(event.body);
+    console.log('Parsed request data:', data);
+    
     const { challengeId, amount, currency, trainerId } = data;
-    
-    console.log('Creating payment intent for challenge:', challengeId, 'amount:', amount, 'trainer:', trainerId);
-    
+    console.log('Extracted parameters:', { challengeId, amount, currency, trainerId });
+
     if (!challengeId || !amount || !currency) {
+      console.log('Missing required parameters:', { challengeId, amount, currency });
       return {
         statusCode: 400,
+        headers,
         body: JSON.stringify({ success: false, error: 'Missing required parameters' })
       };
     }
-    
+
     // Get the trainer's Stripe account ID if trainerId is provided
     let connectedAccountId = null;
     if (trainerId) {
+      console.log('Fetching trainer data for ID:', trainerId);
       try {
         const trainerDoc = await db.collection('users').doc(trainerId).get();
+        console.log('Trainer document exists:', trainerDoc.exists);
+        
         if (trainerDoc.exists) {
           const trainerData = trainerDoc.data();
+          console.log('Trainer data:', {
+            hasCreator: !!trainerData.creator,
+            hasStripeAccountId: !!(trainerData.creator && trainerData.creator.stripeAccountId)
+          });
+          
           if (trainerData.creator && trainerData.creator.stripeAccountId) {
             connectedAccountId = trainerData.creator.stripeAccountId;
             console.log('Found trainer Stripe account ID:', connectedAccountId);
@@ -80,7 +78,7 @@ const handler = async (event) => {
         console.error('Error fetching trainer data:', error);
       }
     }
-    
+
     // Create options for payment intent
     const paymentIntentOptions = {
       amount: parseInt(amount),
@@ -92,30 +90,42 @@ const handler = async (event) => {
       },
       description: `Payment for challenge ${challengeId}`
     };
-    
+    console.log('Payment intent options:', paymentIntentOptions);
+
     // Add connected account as destination if available
     if (connectedAccountId) {
       // Use direct charges with application fee
       const applicationFeeAmount = Math.round(amount * 0.2); // 20% platform fee
-      
+
       paymentIntentOptions.application_fee_amount = applicationFeeAmount;
       paymentIntentOptions.transfer_data = {
-        destination: connectedAccountId,
+        destination: connectedAccountId
       };
-      
-      console.log('Setting up payment with application fee:', applicationFeeAmount, 'for account:', connectedAccountId);
+
+      console.log(
+        'Setting up payment with application fee:',
+        applicationFeeAmount,
+        'for account:',
+        connectedAccountId
+      );
     } else {
       console.warn('No connected account ID found for trainer, payment will go to platform account');
     }
-    
+
     // Create a payment intent
+    console.log('Creating payment intent with options:', paymentIntentOptions);
     const paymentIntent = await stripe.paymentIntents.create(paymentIntentOptions);
-    
-    console.log('Payment intent created:', paymentIntent.id);
-    
+    console.log('Payment intent created successfully:', {
+      id: paymentIntent.id,
+      status: paymentIntent.status,
+      amount: paymentIntent.amount,
+      currency: paymentIntent.currency
+    });
+
     // Return the client secret to the client
     return {
       statusCode: 200,
+      headers,
       body: JSON.stringify({
         success: true,
         clientSecret: paymentIntent.client_secret
@@ -123,8 +133,15 @@ const handler = async (event) => {
     };
   } catch (error) {
     console.error('Error creating payment intent:', error);
+    console.error('Error details:', {
+      message: error.message,
+      type: error.type,
+      code: error.code,
+      stack: error.stack
+    });
     return {
       statusCode: 500,
+      headers,
       body: JSON.stringify({
         success: false,
         error: error.message || 'An error occurred creating the payment'
