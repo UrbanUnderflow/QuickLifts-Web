@@ -21,6 +21,35 @@ async function updateOnboardingLink(userId, link, expiration) {
   }
 }
 
+async function createOrUpdateStripeConnect(userId, stripeAccountId, email) {
+  try {
+    const stripeConnectRef = db.collection("stripeConnect").doc(userId);
+    const stripeConnectDoc = await stripeConnectRef.get();
+
+    if (stripeConnectDoc.exists) {
+      // Update existing document
+      await stripeConnectRef.update({
+        stripeAccountId,
+        updatedAt: new Date(),
+      });
+      console.log(`[CreateConnectedAccount] Updated StripeConnect document for user ${userId}`);
+    } else {
+      // Create new document
+      await stripeConnectRef.set({
+        userId,
+        stripeAccountId,
+        email,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      console.log(`[CreateConnectedAccount] Created new StripeConnect document for user ${userId}`);
+    }
+  } catch (error) {
+    console.error(`[CreateConnectedAccount] Error managing StripeConnect document for user ${userId}:`, error);
+    throw error;
+  }
+}
+
 const handler = async (event) => {
   console.log(`[CreateConnectedAccount] Received ${event.httpMethod} request:`, {
     queryParams: event.queryStringParameters,
@@ -125,7 +154,10 @@ const handler = async (event) => {
       'creator.onboardingPayoutState': 'introduction'
     });
 
-    console.log('[CreateConnectedAccount] User document updated successfully');
+    // Create or update StripeConnect document
+    await createOrUpdateStripeConnect(userId, account.id, userData.email);
+
+    console.log('[CreateConnectedAccount] User document and StripeConnect document updated successfully');
 
     return {
       statusCode: 200,
