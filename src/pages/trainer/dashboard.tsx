@@ -287,11 +287,11 @@ const TrainerDashboard = () => {
   const renderEarningsStats = () => {
     if (isEarningsLoading) {
       return (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-          {[1, 2, 3].map(i => (
-            <div key={i} className="bg-white rounded-lg shadow p-4 animate-pulse">
-              <div className="h-6 bg-gray-200 rounded w-1/2 mb-2"></div>
-              <div className="h-8 bg-gray-200 rounded w-3/4"></div>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+          {[1, 2, 3, 4].map(i => (
+            <div key={i} className="bg-zinc-900 p-4 rounded-xl animate-pulse">
+              <div className="h-3 bg-zinc-800 rounded w-1/2 mb-2"></div>
+              <div className="h-6 bg-zinc-800 rounded w-1/3"></div>
             </div>
           ))}
         </div>
@@ -301,17 +301,24 @@ const TrainerDashboard = () => {
     if (!earningsData) return null;
     
     return (
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-        <div className="bg-white rounded-lg shadow p-4">
-          <h3 className="text-gray-500 text-sm font-semibold">Total Earned</h3>
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <div className="bg-zinc-900 p-4 rounded-xl">
+          <h3 className="text-zinc-400 text-sm mb-1">Total Earned</h3>
           <p className="text-2xl font-bold">${earningsData.totalEarned.toFixed(2)}</p>
         </div>
-        <div className="bg-white rounded-lg shadow p-4">
-          <h3 className="text-gray-500 text-sm font-semibold">Available Balance</h3>
+        
+        <div className="bg-zinc-900 p-4 rounded-xl">
+          <h3 className="text-zinc-400 text-sm mb-1">Available Balance</h3>
           <p className="text-2xl font-bold">${earningsData.availableBalance.toFixed(2)}</p>
         </div>
-        <div className="bg-white rounded-lg shadow p-4">
-          <h3 className="text-gray-500 text-sm font-semibold">Rounds Sold</h3>
+        
+        <div className="bg-zinc-900 p-4 rounded-xl">
+          <h3 className="text-zinc-400 text-sm mb-1">Pending Payout</h3>
+          <p className="text-2xl font-bold">${earningsData.pendingPayout.toFixed(2)}</p>
+        </div>
+        
+        <div className="bg-zinc-900 p-4 rounded-xl">
+          <h3 className="text-zinc-400 text-sm mb-1">Rounds Sold</h3>
           <p className="text-2xl font-bold">{earningsData.roundsSold}</p>
         </div>
       </div>
@@ -322,66 +329,58 @@ const TrainerDashboard = () => {
   const renderRecentSales = () => {
     if (isEarningsLoading) {
       return (
-        <div className="bg-white rounded-lg shadow p-4">
-          <div className="h-6 bg-gray-200 rounded w-1/4 mb-4 animate-pulse"></div>
-          <table className="w-full">
-            <thead>
-              <tr className="border-b">
-                <th className="text-left py-2">Date</th>
-                <th className="text-left py-2">Round</th>
-                <th className="text-right py-2">Amount</th>
-                <th className="text-right py-2">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {[1, 2, 3, 4].map(i => (
-                <tr key={i} className="border-b animate-pulse">
-                  <td className="py-3"><div className="h-4 bg-gray-200 rounded w-3/4"></div></td>
-                  <td className="py-3"><div className="h-4 bg-gray-200 rounded w-full"></div></td>
-                  <td className="py-3 text-right"><div className="h-4 bg-gray-200 rounded w-1/2 ml-auto"></div></td>
-                  <td className="py-3 text-right"><div className="h-4 bg-gray-200 rounded w-1/2 ml-auto"></div></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="bg-zinc-900 p-6 rounded-xl animate-pulse">
+          <div className="h-6 bg-zinc-800 rounded w-1/4 mb-6"></div>
+          <div className="space-y-4">
+            {[1, 2, 3, 4].map(i => (
+              <div key={i} className="border-b border-zinc-800 pb-4">
+                <div className="flex justify-between items-center">
+                  <div className="h-4 bg-zinc-800 rounded w-1/6"></div>
+                  <div className="h-4 bg-zinc-800 rounded w-1/3"></div>
+                  <div className="h-4 bg-zinc-800 rounded w-1/5"></div>
+                  <div className="h-4 bg-zinc-800 rounded w-1/5"></div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       );
     }
     
     if (!earningsData || !earningsData.recentSales || earningsData.recentSales.length === 0) {
       return (
-        <div className="bg-white rounded-lg shadow p-4">
-          <h3 className="text-lg font-semibold mb-4">Recent Sales</h3>
-          <p className="text-gray-500 text-center py-6">No transactions yet</p>
+        <div className="bg-zinc-900 p-6 rounded-xl">
+          <h3 className="text-xl font-semibold mb-4">Recent Sales</h3>
+          <p className="text-zinc-400 text-center py-6">No transactions yet</p>
         </div>
       );
     }
     
     return (
-      <div className="bg-white rounded-lg shadow p-4">
-        <h3 className="text-lg font-semibold mb-4">Recent Sales</h3>
+      <div className="bg-zinc-900 p-6 rounded-xl">
+        <h3 className="text-xl font-semibold mb-4">Recent Sales</h3>
         <table className="w-full">
           <thead>
-            <tr className="border-b">
-              <th className="text-left py-2">Date</th>
-              <th className="text-left py-2">Round</th>
-              <th className="text-right py-2">Amount</th>
-              <th className="text-right py-2">Status</th>
+            <tr className="border-b border-zinc-800">
+              <th className="text-left py-3 text-zinc-400">Date</th>
+              <th className="text-left py-3 text-zinc-400">Round</th>
+              <th className="text-right py-3 text-zinc-400">Amount</th>
+              <th className="text-right py-3 text-zinc-400">Status</th>
             </tr>
           </thead>
           <tbody>
             {earningsData.recentSales.map((sale, index) => (
-              <tr key={index} className="border-b">
+              <tr key={index} className="border-b border-zinc-800">
                 <td className="py-3">{sale.date}</td>
                 <td className="py-3">{sale.roundTitle}</td>
                 <td className="py-3 text-right">${sale.amount.toFixed(2)}</td>
                 <td className="py-3 text-right">
                   <span className={`px-2 py-1 rounded-full text-xs ${
                     (sale.status === 'succeeded' || sale.status === 'completed') 
-                      ? 'bg-green-100 text-green-800' 
+                      ? 'bg-green-900/50 text-green-400' 
                       : sale.status === 'pending' 
-                        ? 'bg-yellow-100 text-yellow-800' 
-                        : 'bg-gray-100 text-gray-800'
+                        ? 'bg-yellow-900/50 text-yellow-400' 
+                        : 'bg-zinc-800 text-zinc-300'
                   }`}>
                     {sale.status === 'succeeded' ? 'Completed' : 
                      sale.status === 'completed' ? 'Completed' : 
@@ -393,7 +392,7 @@ const TrainerDashboard = () => {
             ))}
           </tbody>
         </table>
-        <p className="text-xs text-gray-500 mt-4 text-right">
+        <p className="text-xs text-zinc-500 mt-4 text-right">
           Last updated: {new Date(earningsData.lastUpdated || new Date().toISOString()).toLocaleString()}
         </p>
       </div>
