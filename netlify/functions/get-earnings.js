@@ -116,7 +116,7 @@ const handler = async (event) => {
       
       try {
         // Start retrieving multiple pieces of data in parallel
-        const [balance, payouts, transfers, payments] = await Promise.all([
+        const [balance, payouts, transfers, roundPayments, legacyPayments, stripePayments] = await Promise.all([
           // Get account balance
           stripe.balance.retrieve({
             stripeAccount: connectedAccountId
@@ -143,29 +143,28 @@ const handler = async (event) => {
             return { data: [] };
           }),
           
-          // Get recent payment intents that involved this account
+          // Get recent payment records from the new round-payments collection
           (async () => {
             try {
-              // First get payment records from Firestore where this user is the trainer
-              const paymentsSnapshot = await db.collection('payments')
-                .where('trainerId', '==', userId)
+              const paymentsSnapshot = await db.collection('round-payments')
+                .where('ownerId', '==', userId)
                 .orderBy('createdAt', 'desc')
                 .limit(20)
                 .get();
                 
               const paymentRecords = [];
               paymentsSnapshot.forEach(doc => {
-                paymentRecords.push(doc.data());
+                paymentRecords.push({...doc.data(), id: doc.id});
               });
               
-              console.log(`Found ${paymentRecords.length} payment records in Firestore`);
+              console.log(`Found ${paymentRecords.length} payment records in round-payments`);
               
               // Get challenge details for each payment
               const enrichedPayments = await Promise.all(
                 paymentRecords.map(async payment => {
                   try {
                     // Get challenge title
-                    if (payment.challengeId) {
+                    if (payment.challengeId && !payment.challengeTitle) {
                       const challengeDoc = await db.collection('challenges')
                         .doc(payment.challengeId)
                         .get();
@@ -188,18 +187,121 @@ const handler = async (event) => {
               
               return enrichedPayments;
             } catch (err) {
-              console.error('Error retrieving payments:', err);
+              console.error('Error retrieving payments from round-payments:', err);
+              return [];
+            }
+          })(),
+          
+          // Also check the legacy payments collection
+          (async () => {
+            try {
+              // Check for trainerId field in legacy collection
+              const paymentsSnapshot = await db.collection('payments')
+                .where('trainerId', '==', userId)
+                .orderBy('createdAt', 'desc')
+                .limit(20)
+                .get();
+                
+              const paymentRecords = [];
+              paymentsSnapshot.forEach(doc => {
+                const data = doc.data();
+                // Transform to match the new format
+                paymentRecords.push({
+                  ...data,
+                  id: doc.id,
+                  ownerId: data.trainerId, // Map trainerId to ownerId
+                  ownerAmount: data.trainerAmount || (data.amount ? data.amount - (data.platformFee || 0) : 0),
+                  source: 'legacy_payments'
+                });
+              });
+              
+              if (paymentRecords.length > 0) {
+                console.log(`Found ${paymentRecords.length} legacy payment records that need migration`);
+              }
+              
+              return paymentRecords;
+            } catch (err) {
+              console.error('Error retrieving payments from legacy payments:', err);
+              return [];
+            }
+          })(),
+          
+          // ADDED: Also fetch payment intents directly from Stripe
+          (async () => {
+            try {
+              console.log('Fetching charges directly from Stripe...');
+              // List charges directly from Stripe that are related to this connected account
+              const charges = await stripe.charges.list({
+                limit: 20, 
+                destination: connectedAccountId
+              }).catch(err => {
+                console.error('Error listing charges from Stripe:', err);
+                return { data: [] };
+              });
+              
+              console.log(`Found ${charges.data.length} charges in Stripe for this connected account`);
+              
+              // Convert the charges to our standard payment format
+              return charges.data.map(charge => {
+                return {
+                  amount: charge.amount,
+                  createdAt: { toDate: () => new Date(charge.created * 1000) },
+                  challengeTitle: charge.description || 'Fitness Round',
+                  status: charge.status,
+                  paymentId: charge.id,
+                  source: 'stripe',
+                  ownerId: userId
+                };
+              });
+            } catch (err) {
+              console.error('Error fetching payments directly from Stripe:', err);
               return [];
             }
           })()
         ]);
+        
+        // Sync Stripe payments to Firestore if they're not already there
+        await syncStripePaymentsToFirestore(stripePayments, userId, connectedAccountId);
+        
+        // Combine payments from all sources and remove duplicates
+        // Priority: round-payments > legacy payments > direct Stripe
+        // Identify uniqueness by paymentId
+        const allPaymentIds = new Set();
+        let allPayments = [];
+        
+        // First add round-payments (highest priority)
+        roundPayments.forEach(payment => {
+          allPaymentIds.add(payment.paymentId || payment.id);
+          allPayments.push(payment);
+        });
+        
+        // Then add legacy payments if they don't exist in round-payments
+        legacyPayments.forEach(payment => {
+          const paymentId = payment.paymentId || payment.id;
+          if (!allPaymentIds.has(paymentId)) {
+            allPaymentIds.add(paymentId);
+            allPayments.push(payment);
+          }
+        });
+        
+        // Finally add direct Stripe payments if they don't exist in either collection
+        stripePayments.forEach(payment => {
+          const paymentId = payment.paymentId || payment.id;
+          if (!allPaymentIds.has(paymentId)) {
+            allPaymentIds.add(paymentId);
+            allPayments.push(payment);
+          }
+        });
         
         console.log('Stripe data retrieved:', {
           balanceAvailable: balance.available.length,
           balancePending: balance.pending.length,
           payoutsCount: payouts.data.length,
           transfersCount: transfers.data.length,
-          paymentsCount: payments.length
+          roundPaymentsCount: roundPayments.length,
+          legacyPaymentsCount: legacyPayments.length,
+          stripePaymentsCount: stripePayments.length,
+          totalUniquePayments: allPayments.length
         });
         
         // Calculate total earned (from transfers to the connected account)
@@ -213,26 +315,31 @@ const handler = async (event) => {
         const totalEarned = totalTransferred + availableBalance;
         
         // Format payments data for the frontend
-        const recentSales = payments.map(payment => {
+        const recentSales = allPayments.map(payment => {
           return {
             date: payment.createdAt?.toDate?.() 
               ? payment.createdAt.toDate().toISOString().split('T')[0] 
               : new Date().toISOString().split('T')[0],
             roundTitle: payment.challengeTitle || 'Fitness Round',
             amount: (payment.amount / 100) || 0,
-            status: payment.status || 'completed'
+            status: payment.status || 'completed',
+            source: payment.source || 'firestore',
+            id: payment.paymentId || payment.id || 'unknown'
           };
         });
+        
+        // Sort by date with newest first
+        recentSales.sort((a, b) => new Date(b.date) - new Date(a.date));
         
         // Real data structure - all zeros is fine for new accounts
         const earningsData = {
           totalEarned: totalEarned || 0,
           pendingPayout: pendingBalance || 0,
           availableBalance: availableBalance || 0,
-          roundsSold: payments.length || transfers.data.length || 0,
+          roundsSold: allPayments.length || transfers.data.length || 0,
           recentSales: recentSales,
           lastUpdated: new Date().toISOString(),
-          isNewAccount: transfers.data.length === 0 && payments.length === 0
+          isNewAccount: transfers.data.length === 0 && allPayments.length === 0
         };
         
         console.log('Returning earnings data:', earningsData);
@@ -291,5 +398,63 @@ const handler = async (event) => {
     };
   }
 };
+
+/**
+ * Syncs payments from Stripe to Firestore if they don't already exist
+ * @param {Array} stripePayments - Array of payment data from Stripe
+ * @param {string} ownerId - ID of the trainer/owner
+ * @param {string} connectedAccountId - ID of the Stripe connected account
+ */
+async function syncStripePaymentsToFirestore(stripePayments, ownerId, connectedAccountId) {
+  if (!stripePayments || stripePayments.length === 0) return;
+  
+  try {
+    console.log(`Syncing ${stripePayments.length} Stripe payments to Firestore...`);
+    
+    let syncCount = 0;
+    
+    for (const payment of stripePayments) {
+      const paymentId = payment.paymentId;
+      
+      // Check if this payment already exists in round-payments
+      const existingDoc = await db.collection('round-payments').doc(paymentId).get();
+      
+      if (!existingDoc.exists) {
+        // Also check legacy payments collection
+        const legacyDoc = await db.collection('payments').doc(paymentId).get();
+        
+        if (!legacyDoc.exists) {
+          // Payment doesn't exist in either collection, create it in round-payments
+          const paymentData = {
+            paymentId,
+            amount: payment.amount,
+            status: payment.status || 'succeeded',
+            ownerId,
+            stripeAccountId: connectedAccountId,
+            challengeTitle: payment.challengeTitle || 'Fitness Round',
+            createdAt: new Date(payment.createdAt.toDate()),
+            updatedAt: new Date(),
+            source: 'stripe_sync',
+            currency: payment.currency || 'usd',
+            // Calculate an approximate split (3% platform fee)
+            platformFee: Math.round(payment.amount * 0.03),
+            ownerAmount: Math.round(payment.amount * 0.97)
+          };
+          
+          await db.collection('round-payments').doc(paymentId).set(paymentData);
+          syncCount++;
+        }
+      }
+    }
+    
+    if (syncCount > 0) {
+      console.log(`Synced ${syncCount} new payments from Stripe to Firestore`);
+    } else {
+      console.log('No new payments needed to be synced to Firestore');
+    }
+  } catch (error) {
+    console.error('Error syncing Stripe payments to Firestore:', error);
+  }
+}
 
 module.exports = { handler }; 

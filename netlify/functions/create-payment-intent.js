@@ -35,13 +35,14 @@ const handler = async (event, context) => {
 
   try {
     // Parse the request body
-    const { challengeId, amount, currency, ownerId } = JSON.parse(event.body);
+    const { challengeId, amount, currency, ownerId, buyerId } = JSON.parse(event.body);
     
     console.log('Creating payment intent with params:', {
       challengeId,
       amount,
       currency,
       ownerId,
+      buyerId,
       ownerIdType: ownerId ? (Array.isArray(ownerId) ? 'array' : typeof ownerId) : 'undefined'
     });
 
@@ -127,37 +128,39 @@ const handler = async (event, context) => {
 
     // Try to find a valid Stripe account ID from any of the owners
     let connectedAccountId = null;
+    let selectedOwnerId = null;
     
-    for (const ownerId of ownerIds) {
-      console.log('Checking Stripe account for owner ID:', ownerId);
-      const ownerDoc = await db.collection('users').doc(ownerId).get();
+    for (const currentOwnerId of ownerIds) {
+      console.log('Checking Stripe account for owner ID:', currentOwnerId);
+      const ownerDoc = await db.collection('users').doc(currentOwnerId).get();
       
       if (ownerDoc.exists) {
         const ownerData = ownerDoc.data();
         if (ownerData?.creator?.stripeAccountId) {
           connectedAccountId = ownerData.creator.stripeAccountId;
+          selectedOwnerId = currentOwnerId; // Save the owner's ID for payment record
           console.log('Found owner Stripe account:', connectedAccountId);
           
           // Also check if this account exists in the stripeConnect collection
-          const stripeConnectDoc = await db.collection('stripeConnect').doc(ownerId).get();
+          const stripeConnectDoc = await db.collection('stripeConnect').doc(currentOwnerId).get();
           if (!stripeConnectDoc.exists) {
             // Create a backup in the stripeConnect collection
-            await db.collection('stripeConnect').doc(ownerId).set({
-              userId: ownerId,
+            await db.collection('stripeConnect').doc(currentOwnerId).set({
+              userId: currentOwnerId,
               stripeAccountId: connectedAccountId,
               email: ownerData.email || '',
               createdAt: new Date(),
               updatedAt: new Date()
             });
-            console.log('Created backup in stripeConnect collection for owner:', ownerId);
+            console.log('Created backup in stripeConnect collection for owner:', currentOwnerId);
           }
           
           break; // We found a valid Stripe account, no need to check other owners
         } else {
-          console.log('Owner has no Stripe account:', ownerId);
+          console.log('Owner has no Stripe account:', currentOwnerId);
         }
       } else {
-        console.log('Owner document not found:', ownerId);
+        console.log('Owner document not found:', currentOwnerId);
       }
     }
 
@@ -187,6 +190,7 @@ const handler = async (event, context) => {
       currency: currency.toLowerCase(),
       metadata: {
         challengeId,
+        ownerId: selectedOwnerId,
         environment: 'live'
       }
     };
@@ -208,6 +212,41 @@ const handler = async (event, context) => {
       amount: paymentIntent.amount,
       status: paymentIntent.status
     });
+
+    // Create a record in the round-payments collection for dashboard display
+    try {
+      // Get challenge info for the payment record
+      let challengeTitle = 'Fitness Round';
+      
+      const challengeDoc = await db.collection('challenges').doc(challengeId).get();
+      if (challengeDoc.exists) {
+        const challengeData = challengeDoc.data();
+        challengeTitle = challengeData.title || challengeTitle;
+      }
+      
+      // Create payment record in Firestore
+      const paymentRecord = {
+        paymentId: paymentIntent.id,
+        amount: amount,
+        currency: currency.toLowerCase(),
+        status: 'pending', // Will be updated to 'succeeded' by webhook
+        challengeId: challengeId,
+        ownerId: selectedOwnerId,
+        buyerId: buyerId || null,
+        challengeTitle: challengeTitle,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        platformFee: platformFee,
+        ownerAmount: ownerAmount,
+        stripeAccountId: connectedAccountId
+      };
+      
+      await db.collection('round-payments').doc(paymentIntent.id).set(paymentRecord);
+      console.log('Created payment record in Firestore:', paymentIntent.id);
+    } catch (recordError) {
+      console.error('Error creating payment record:', recordError);
+      // Don't fail the whole request if just the record creation fails
+    }
 
     return {
       statusCode: 200,
