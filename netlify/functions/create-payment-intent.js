@@ -194,8 +194,7 @@ const handler = async (event, context) => {
     // Only add transfer_data and application_fee_amount if we have a connected account
     if (connectedAccountId) {
       paymentIntentOptions.transfer_data = {
-        destination: connectedAccountId,
-        amount: ownerAmount
+        destination: connectedAccountId
       };
       paymentIntentOptions.application_fee_amount = platformFee;
     }
