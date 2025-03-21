@@ -78,6 +78,11 @@ const handler = async (event) => {
 
       const userData = userDoc.data();
       console.log('User data retrieved, checking for Stripe account...');
+      console.log('User document data:', {
+        hasCreator: !!userData.creator,
+        hasStripeAccount: !!(userData.creator && userData.creator.stripeAccountId),
+        stripeAccountId: userData.creator?.stripeAccountId || 'Not found'
+      });
       
       // Check if user has a Stripe account
       if (!userData.creator || !userData.creator.stripeAccountId) {
@@ -96,6 +101,56 @@ const handler = async (event) => {
       console.log(`Found Stripe account: ${connectedAccountId}, retrieving data...`);
       
       try {
+        console.log('About to retrieve balance from Stripe for connected account:', connectedAccountId);
+        
+        // First, let's try to get just the balance to see if that's working
+        try {
+          const balanceResult = await stripe.balance.retrieve({
+            stripeAccount: connectedAccountId
+          });
+          
+          console.log('SUCCESS! Balance retrieved successfully:', JSON.stringify(balanceResult, null, 2));
+          console.log('Available balance:', balanceResult.available);
+          console.log('Pending balance:', balanceResult.pending);
+          
+          // Log individual available balance items
+          if (balanceResult.available && balanceResult.available.length > 0) {
+            balanceResult.available.forEach((item, index) => {
+              console.log(`Available balance item ${index}:`, {
+                amount: item.amount,
+                currency: item.currency,
+                amountInDollars: item.amount / 100
+              });
+            });
+          } else {
+            console.log('No available balance items found');
+          }
+          
+          // Log individual pending balance items
+          if (balanceResult.pending && balanceResult.pending.length > 0) {
+            balanceResult.pending.forEach((item, index) => {
+              console.log(`Pending balance item ${index}:`, {
+                amount: item.amount,
+                currency: item.currency,
+                amountInDollars: item.amount / 100
+              });
+            });
+          } else {
+            console.log('No pending balance items found');
+          }
+        } catch (balanceError) {
+          console.error('ERROR retrieving balance:', balanceError);
+          console.error('Balance error details:', {
+            message: balanceError.message,
+            type: balanceError.type,
+            stack: balanceError.stack,
+            params: balanceError.params
+          });
+        }
+        
+        // Continue with the rest of the data retrieval
+        console.log('Starting parallel data retrieval from Stripe...');
+        
         // Start retrieving multiple pieces of data in parallel - but with strict limits to avoid timeouts
         const [balance, payouts, transfers, roundPayments, stripeCharges] = await Promise.all([
           // Get account balance
@@ -127,6 +182,7 @@ const handler = async (event) => {
           // Get recent payment records from the round-payments collection
           (async () => {
             try {
+              console.log(`Querying Firestore round-payments collection for ownerId: ${userId}`);
               const paymentsSnapshot = await db.collection('round-payments')
                 .where('ownerId', '==', userId)
                 .orderBy('createdAt', 'desc')
@@ -139,6 +195,9 @@ const handler = async (event) => {
               });
               
               console.log(`Found ${paymentRecords.length} payment records in round-payments with ownerId`);
+              if (paymentRecords.length > 0) {
+                console.log('Sample payment record:', JSON.stringify(paymentRecords[0], null, 2));
+              }
               
               return paymentRecords;
             } catch (err) {
@@ -156,6 +215,28 @@ const handler = async (event) => {
             return { data: [] };
           })
         ]);
+        
+        console.log('All Stripe data retrieved successfully');
+        console.log('Stripe balance:', {
+          availableCount: balance.available.length,
+          pendingCount: balance.pending.length,
+          sample: balance.available.length > 0 ? balance.available[0] : 'No available balance'
+        });
+        
+        console.log('Stripe payouts:', {
+          count: payouts.data.length,
+          sample: payouts.data.length > 0 ? payouts.data[0].id : 'No payouts found'
+        });
+        
+        console.log('Stripe transfers:', {
+          count: transfers.data.length,
+          sample: transfers.data.length > 0 ? transfers.data[0].id : 'No transfers found'
+        });
+        
+        console.log('Stripe charges:', {
+          count: stripeCharges.data.length,
+          sample: stripeCharges.data.length > 0 ? stripeCharges.data[0].id : 'No charges found'
+        });
         
         // Convert stripe charges to our format
         const stripePayments = stripeCharges.data.map(charge => {
@@ -203,13 +284,17 @@ const handler = async (event) => {
         
         // Calculate total earned (from transfers to the connected account)
         const totalTransferred = transfers.data.reduce((sum, transfer) => sum + transfer.amount, 0) / 100;
+        console.log('Total transferred amount:', totalTransferred);
         
         // Calculate available and pending balance
         const availableBalance = balance.available.reduce((sum, item) => sum + item.amount, 0) / 100;
         const pendingBalance = balance.pending.reduce((sum, item) => sum + item.amount, 0) / 100;
+        console.log('Available balance:', availableBalance);
+        console.log('Pending balance:', pendingBalance);
         
         // Calculate total earnings (transferred + available + pending)
         const totalEarned = totalTransferred + availableBalance;
+        console.log('Total earned:', totalEarned);
         
         // Format payments data for the frontend
         const recentSales = allPayments.map(payment => {
@@ -243,6 +328,7 @@ const handler = async (event) => {
         };
         
         console.log('Returning earnings data with', limitedSales.length, 'recent sales');
+        console.log('Final earnings data:', JSON.stringify(earningsData, null, 2));
         
         return {
           statusCode: 200,
@@ -256,6 +342,12 @@ const handler = async (event) => {
         
       } catch (stripeError) {
         console.error('Error processing Stripe data:', stripeError);
+        console.error('Stripe error details:', {
+          message: stripeError.message,
+          type: stripeError.type,
+          code: stripeError.code,
+          statusCode: stripeError.statusCode
+        });
         
         // Return empty data structure - no dummy data
         return {
@@ -279,6 +371,7 @@ const handler = async (event) => {
       }
     } catch (error) {
       console.error('Error getting earnings data:', error);
+      console.error('Error details:', error.message, error.stack);
       
       return {
         statusCode: 500,
@@ -291,6 +384,7 @@ const handler = async (event) => {
     }
   } catch (error) {
     console.error('Error getting earnings data:', error);
+    console.error('Error details:', error.message, error.stack);
     
     return {
       statusCode: 500,
