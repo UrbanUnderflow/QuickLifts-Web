@@ -69,8 +69,12 @@ const handler = async (event, context) => {
     // If ownerId is not provided or empty, fetch it from the challenge data
     if (ownerIds.length === 0 && challengeId) {
       console.log('No owner ID provided, getting owner from challenge:', challengeId);
+      
+      // Try to get data from 'challenges' collection first
       const challengeDoc = await db.collection('challenges').doc(challengeId).get();
+      
       if (challengeDoc.exists) {
+        console.log('Found challenge in challenges collection');
         const challengeData = challengeDoc.data();
         if (challengeData.ownerId) {
           if (Array.isArray(challengeData.ownerId)) {
@@ -78,7 +82,35 @@ const handler = async (event, context) => {
           } else {
             ownerIds = [challengeData.ownerId];
           }
-          console.log('Retrieved owner IDs from challenge:', ownerIds);
+          console.log('Retrieved owner IDs from challenges collection:', ownerIds);
+        }
+      } else {
+        // If not found in challenges, try sweatlist-collection
+        console.log('Challenge not found in challenges collection, checking sweatlist-collection');
+        const sweatlistQuery = await db.collection('sweatlist-collection').where('challenge.id', '==', challengeId).limit(1).get();
+        
+        if (!sweatlistQuery.empty) {
+          console.log('Found challenge in sweatlist-collection');
+          const sweatlistDoc = sweatlistQuery.docs[0];
+          const sweatlistData = sweatlistDoc.data();
+          
+          if (sweatlistData.ownerId) {
+            if (Array.isArray(sweatlistData.ownerId)) {
+              ownerIds = sweatlistData.ownerId;
+            } else {
+              ownerIds = [sweatlistData.ownerId];
+            }
+            console.log('Retrieved owner IDs from sweatlist-collection:', ownerIds);
+          } else if (sweatlistData.challenge && sweatlistData.challenge.ownerId) {
+            if (Array.isArray(sweatlistData.challenge.ownerId)) {
+              ownerIds = sweatlistData.challenge.ownerId;
+            } else {
+              ownerIds = [sweatlistData.challenge.ownerId];
+            }
+            console.log('Retrieved owner IDs from challenge in sweatlist-collection:', ownerIds);
+          }
+        } else {
+          console.log('Challenge not found in either collection');
         }
       }
     }

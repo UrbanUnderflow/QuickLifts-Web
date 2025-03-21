@@ -48,7 +48,7 @@ interface CheckoutFormProps {
       challenge: {
         id: string;
         title: string;
-        ownerId?: string;
+        ownerId?: string | string[];
         pricingInfo?: {
           isEnabled: boolean;
           amount: number;
@@ -70,7 +70,7 @@ interface PaymentPageProps {
           amount: number;
           currency: string;
         };
-        ownerId?: string;
+        ownerId?: string | string[];
       };
     };
   };
@@ -404,8 +404,8 @@ const CheckoutForm = ({ challengeId, amount, currency, isApplePayAvailable, chal
     setProcessing(true);
     
     try {
-      const trainerUserId = challengeData.collection.challenge.ownerId || '';
-      console.log('Creating payment intent for trainer:', trainerUserId);
+      const ownerId = challengeData.collection.challenge.ownerId || '';
+      console.log('Creating payment intent for owner:', ownerId);
       
       // Use the appropriate function based on test mode
       const isTestMode = localStorage.getItem('stripeTestMode') === 'true';
@@ -422,7 +422,7 @@ const CheckoutForm = ({ challengeId, amount, currency, isApplePayAvailable, chal
           challengeId, 
           amount, 
           currency,
-          trainerId: trainerUserId
+          ownerId
         }),
       });
       
@@ -472,7 +472,7 @@ const CheckoutForm = ({ challengeId, amount, currency, isApplePayAvailable, chal
             challengeId,
             paymentId: result.paymentIntent.id,
             userId: localStorage.getItem('userId') || undefined,
-            trainerId: trainerUserId,
+            ownerId: ownerId,
             amount: amount
           }),
         });

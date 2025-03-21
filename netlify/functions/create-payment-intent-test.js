@@ -8,7 +8,7 @@ console.log('Initializing Stripe with test key...');
 const stripe = new Stripe(process.env.STRIPE_TEST_SECRET_KEY, {
   apiVersion: '2023-10-16'
 });
-console.log('Stripe initialized successfully');
+console.log('Stripe test initialized successfully');
 
 const handler = async (event) => {
   console.log('Handler called with event:', {
@@ -40,8 +40,8 @@ const handler = async (event) => {
     const data = JSON.parse(event.body);
     console.log('Parsed request data:', data);
     
-    const { challengeId, amount, currency, trainerId } = data;
-    console.log('Extracted parameters:', { challengeId, amount, currency, trainerId });
+    const { challengeId, amount, currency, ownerId } = data;
+    console.log('Extracted parameters:', { challengeId, amount, currency, ownerId });
 
     if (!challengeId || !amount || !currency) {
       console.log('Missing required parameters:', { challengeId, amount, currency });
@@ -52,28 +52,49 @@ const handler = async (event) => {
       };
     }
 
-    // Get the trainer's Stripe account ID if trainerId is provided
+    // Get the owner's Stripe account ID if ownerId is provided
     let connectedAccountId = null;
-    if (trainerId) {
-      console.log('Fetching trainer data for ID:', trainerId);
-      try {
-        const trainerDoc = await db.collection('users').doc(trainerId).get();
-        console.log('Trainer document exists:', trainerDoc.exists);
-        
-        if (trainerDoc.exists) {
-          const trainerData = trainerDoc.data();
-          console.log('Trainer data:', {
-            hasCreator: !!trainerData.creator,
-            hasStripeAccountId: !!(trainerData.creator && trainerData.creator.stripeAccountId)
-          });
+    if (ownerId) {
+      console.log('Fetching owner data for ID:', ownerId);
+      
+      // Handle both string and array ownerId
+      const ownerIds = Array.isArray(ownerId) ? ownerId : [ownerId];
+      
+      for (const id of ownerIds) {
+        try {
+          const ownerDoc = await db.collection('users').doc(id).get();
+          console.log('Owner document exists:', ownerDoc.exists);
           
-          if (trainerData.creator && trainerData.creator.stripeAccountId) {
-            connectedAccountId = trainerData.creator.stripeAccountId;
-            console.log('Found trainer Stripe account ID:', connectedAccountId);
+          if (ownerDoc.exists) {
+            const ownerData = ownerDoc.data();
+            console.log('Owner data:', {
+              hasCreator: !!ownerData.creator,
+              hasStripeAccountId: !!(ownerData.creator && ownerData.creator.stripeAccountId)
+            });
+            
+            if (ownerData.creator && ownerData.creator.stripeAccountId) {
+              connectedAccountId = ownerData.creator.stripeAccountId;
+              console.log('Found owner Stripe account ID:', connectedAccountId);
+              
+              // Create a backup in the stripeConnect collection if it doesn't exist
+              const stripeConnectDoc = await db.collection('stripeConnect').doc(id).get();
+              if (!stripeConnectDoc.exists) {
+                await db.collection('stripeConnect').doc(id).set({
+                  userId: id,
+                  stripeAccountId: connectedAccountId,
+                  email: ownerData.email || '',
+                  createdAt: new Date(),
+                  updatedAt: new Date()
+                });
+                console.log('Created backup in stripeConnect collection for owner:', id);
+              }
+              
+              break; // Found a valid account, no need to check others
+            }
           }
+        } catch (error) {
+          console.error('Error fetching owner data:', error);
         }
-      } catch (error) {
-        console.error('Error fetching trainer data:', error);
       }
     }
 
@@ -83,7 +104,7 @@ const handler = async (event) => {
       currency: currency.toLowerCase(),
       metadata: {
         challengeId,
-        trainerId,
+        ownerId,
         environment: 'test'
       },
       description: `Test Payment for challenge ${challengeId}`
@@ -93,7 +114,7 @@ const handler = async (event) => {
     // Add connected account as destination if available
     if (connectedAccountId) {
       // Use direct charges with application fee
-      const applicationFeeAmount = Math.round(amount * 0.2); // 20% platform fee
+      const applicationFeeAmount = Math.round(amount * 0.03); // 3% platform fee
 
       paymentIntentOptions.application_fee_amount = applicationFeeAmount;
       paymentIntentOptions.transfer_data = {
@@ -107,7 +128,7 @@ const handler = async (event) => {
         connectedAccountId
       );
     } else {
-      console.warn('No connected account ID found for trainer, payment will go to platform account');
+      console.warn('No connected account ID found for owner, payment will go to platform account');
     }
 
     // Create a payment intent

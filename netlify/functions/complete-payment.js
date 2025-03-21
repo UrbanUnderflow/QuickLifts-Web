@@ -1,6 +1,7 @@
 // Function to record a completed payment in Firestore
 
 const admin = require('firebase-admin');
+const { db } = require('./config/firebase');
 
 // Initialize Firebase Admin if not already initialized
 if (admin.apps.length === 0) {
@@ -35,8 +36,6 @@ if (admin.apps.length === 0) {
   }
 }
 
-const db = admin.firestore();
-
 const handler = async (event) => {
   // Only accept POST requests
   if (event.httpMethod !== 'POST') {
@@ -49,13 +48,13 @@ const handler = async (event) => {
   try {
     // Parse the request body
     const data = JSON.parse(event.body);
-    const { challengeId, paymentId, userId, trainerId, amount } = data;
+    const { challengeId, paymentId, userId, ownerId, amount } = data;
     
     console.log('Recording payment completion:', {
       challengeId,
       paymentId,
       userId,
-      trainerId,
+      ownerId,
       amount
     });
     
@@ -68,13 +67,48 @@ const handler = async (event) => {
     
     // Verify the challenge exists
     const challengeDoc = await db.collection('challenges').doc(challengeId).get();
-    if (!challengeDoc.exists) {
-      console.warn(`Challenge not found: ${challengeId}`);
-      return {
-        statusCode: 404,
-        body: JSON.stringify({ success: false, error: 'Challenge not found' })
-      };
+    let challengeOwnerId = null;
+    
+    if (challengeDoc.exists) {
+      challengeOwnerId = challengeDoc.data().ownerId;
+      console.log(`Challenge found: ${challengeId}, owner:`, challengeOwnerId);
+    } else {
+      // Try to find in sweatlist-collection
+      const sweatlistQuery = await db.collection('sweatlist-collection').where('challenge.id', '==', challengeId).limit(1).get();
+      
+      if (!sweatlistQuery.empty) {
+        const sweatlistDoc = sweatlistQuery.docs[0];
+        const sweatlistData = sweatlistDoc.data();
+        
+        if (sweatlistData.ownerId) {
+          challengeOwnerId = sweatlistData.ownerId;
+        } else if (sweatlistData.challenge && sweatlistData.challenge.ownerId) {
+          challengeOwnerId = sweatlistData.challenge.ownerId;
+        }
+        
+        console.log(`Challenge found in sweatlist: ${challengeId}, owner:`, challengeOwnerId);
+      } else {
+        console.warn(`Challenge not found: ${challengeId}`);
+        return {
+          statusCode: 404,
+          body: JSON.stringify({ success: false, error: 'Challenge not found' })
+        };
+      }
     }
+    
+    // Get the effective owner ID to store in the payment record
+    let effectiveOwnerId = null;
+    
+    if (ownerId) {
+      // If ownerId is provided in the request, use it
+      effectiveOwnerId = Array.isArray(ownerId) && ownerId.length > 0 ? ownerId[0] : ownerId;
+    } else if (challengeOwnerId) {
+      // Otherwise use the owner ID from the challenge
+      effectiveOwnerId = Array.isArray(challengeOwnerId) && challengeOwnerId.length > 0 ? 
+        challengeOwnerId[0] : challengeOwnerId;
+    }
+    
+    console.log('Effective owner ID for payment record:', effectiveOwnerId);
     
     // Create a payment record in Firestore
     const paymentRef = db.collection('payments').doc(paymentId);
@@ -82,7 +116,7 @@ const handler = async (event) => {
       paymentId,
       challengeId,
       userId: userId || 'anonymous',
-      trainerId: trainerId || challengeDoc.data().ownerId,
+      ownerId: effectiveOwnerId,
       amount: amount || 0,
       status: 'completed',
       type: 'challenge_purchase',
@@ -94,30 +128,40 @@ const handler = async (event) => {
     
     // Add the user to the challenge participants
     if (userId) {
-      const challengeRef = db.collection('challenges').doc(challengeId);
-      await challengeRef.update({
-        participants: admin.firestore.FieldValue.arrayUnion(userId)
-      });
-      console.log(`User ${userId} added to challenge participants`);
+      // Try to update in challenges collection first
+      if (challengeDoc.exists) {
+        const challengeRef = db.collection('challenges').doc(challengeId);
+        await challengeRef.update({
+          participants: admin.firestore.FieldValue.arrayUnion(userId)
+        });
+        console.log(`User ${userId} added to challenge participants in challenges collection`);
+      } else {
+        // Try to update in sweatlist-collection
+        const sweatlistQuery = await db.collection('sweatlist-collection').where('challenge.id', '==', challengeId).limit(1).get();
+        
+        if (!sweatlistQuery.empty) {
+          const sweatlistDoc = sweatlistQuery.docs[0];
+          const sweatlistRef = db.collection('sweatlist-collection').doc(sweatlistDoc.id);
+          
+          await sweatlistRef.update({
+            'challenge.participants': admin.firestore.FieldValue.arrayUnion(userId)
+          });
+          console.log(`User ${userId} added to challenge participants in sweatlist-collection`);
+        }
+      }
     } else {
       console.warn('No userId provided, skipping adding to participants');
     }
     
     return {
       statusCode: 200,
-      body: JSON.stringify({
-        success: true,
-        message: 'Payment recorded successfully'
-      })
+      body: JSON.stringify({ success: true })
     };
   } catch (error) {
-    console.error('Error recording payment:', error);
+    console.error('Error completing payment:', error);
     return {
       statusCode: 500,
-      body: JSON.stringify({
-        success: false,
-        error: error.message || 'An error occurred recording the payment'
-      })
+      body: JSON.stringify({ success: false, error: error.message || 'Unknown error' })
     };
   }
 };
