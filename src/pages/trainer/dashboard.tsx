@@ -26,6 +26,9 @@ const TrainerDashboard = () => {
   const [dashboardUrl, setDashboardUrl] = useState<string>('');
   const [accountStatus, setAccountStatus] = useState<'loading' | 'not_started' | 'incomplete' | 'complete' | 'error'>('loading');
   const [earnings, setEarnings] = useState<EarningsData | null>(null);
+  const [isAccountLoading, setIsAccountLoading] = useState(true);
+  const [isEarningsLoading, setIsEarningsLoading] = useState(true);
+  const [isDashboardLinkLoading, setIsDashboardLinkLoading] = useState(false);
   const router = useRouter();
   
   // Get user from Redux store
@@ -69,6 +72,8 @@ const TrainerDashboard = () => {
 
   const fetchAccountStatus = async () => {
     if (!currentUser?.id) return;
+    
+    setIsAccountLoading(true);
     
     try {
       const userData = await userService.fetchUserFromFirestore(currentUser.id);
@@ -122,11 +127,15 @@ const TrainerDashboard = () => {
     } catch (err) {
       console.error('Error fetching account status:', err);
       setAccountStatus('error');
+    } finally {
+      setIsAccountLoading(false);
     }
   };
 
   const fetchEarningsData = async () => {
     if (!currentUser?.id) return;
+    
+    setIsEarningsLoading(true);
     
     try {
       console.log('Fetching earnings data for user:', currentUser.id);
@@ -161,11 +170,15 @@ const TrainerDashboard = () => {
         lastUpdated: new Date().toISOString(),
         isNewAccount: true
       });
+    } finally {
+      setIsEarningsLoading(false);
     }
   };
 
   const generateDashboardLink = async () => {
     if (!currentUser?.id) return;
+    
+    setIsDashboardLinkLoading(true);
     
     try {
       console.log('Generating dashboard link for user:', currentUser.id);
@@ -185,11 +198,24 @@ const TrainerDashboard = () => {
       }
     } catch (err) {
       console.error('Error generating dashboard link:', err);
+    } finally {
+      setIsDashboardLinkLoading(false);
     }
   };
 
   const renderAccountStatus = () => {
     console.log('Rendering account status:', accountStatus);
+    
+    if (isAccountLoading) {
+      return (
+        <div className="bg-zinc-900 p-6 rounded-xl mb-8 animate-pulse">
+          <div className="h-6 bg-zinc-800 rounded w-1/3 mb-4"></div>
+          <div className="h-4 bg-zinc-800 rounded w-2/3 mb-6"></div>
+          <div className="h-10 bg-zinc-800 rounded w-1/4"></div>
+        </div>
+      );
+    }
+    
     switch (accountStatus) {
       case 'loading':
         return <div className="text-zinc-400">Loading account status...</div>;
@@ -227,7 +253,9 @@ const TrainerDashboard = () => {
           <div className="bg-zinc-900 p-6 rounded-xl mb-8">
             <h2 className="text-xl font-semibold mb-4">Payment Account Active</h2>
             <p className="mb-6">Your payment account is set up and ready to receive payments.</p>
-            {dashboardUrl && (
+            {isDashboardLinkLoading ? (
+              <div className="h-10 bg-zinc-800 rounded w-48 animate-pulse"></div>
+            ) : dashboardUrl ? (
               <a 
                 href={dashboardUrl}
                 target="_blank"
@@ -236,6 +264,13 @@ const TrainerDashboard = () => {
               >
                 View Stripe Dashboard
               </a>
+            ) : (
+              <button 
+                onClick={generateDashboardLink}
+                className="bg-zinc-800 text-white py-3 px-6 rounded-xl font-semibold"
+              >
+                Load Dashboard Link
+              </button>
             )}
           </div>
         );
@@ -247,6 +282,97 @@ const TrainerDashboard = () => {
           </div>
         );
     }
+  };
+
+  // Render earnings stats with loading states
+  const renderEarningsStats = () => {
+    if (isEarningsLoading) {
+      return (
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="bg-zinc-900 p-4 rounded-xl animate-pulse">
+              <div className="h-3 bg-zinc-800 rounded w-1/2 mb-2"></div>
+              <div className="h-6 bg-zinc-800 rounded w-1/3"></div>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    if (!earnings) return null;
+
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <div className="bg-zinc-900 p-4 rounded-xl">
+          <h3 className="text-zinc-400 text-sm mb-1">Total Earned</h3>
+          <p className="text-2xl font-bold">${earnings.totalEarned.toFixed(2)}</p>
+        </div>
+        
+        <div className="bg-zinc-900 p-4 rounded-xl">
+          <h3 className="text-zinc-400 text-sm mb-1">Available Balance</h3>
+          <p className="text-2xl font-bold">${earnings.availableBalance.toFixed(2)}</p>
+        </div>
+        
+        <div className="bg-zinc-900 p-4 rounded-xl">
+          <h3 className="text-zinc-400 text-sm mb-1">Pending Payout</h3>
+          <p className="text-2xl font-bold">${earnings.pendingPayout.toFixed(2)}</p>
+        </div>
+        
+        <div className="bg-zinc-900 p-4 rounded-xl">
+          <h3 className="text-zinc-400 text-sm mb-1">Rounds Sold</h3>
+          <p className="text-2xl font-bold">{earnings.roundsSold}</p>
+        </div>
+      </div>
+    );
+  };
+
+  // Render recent sales with loading state
+  const renderRecentSales = () => {
+    if (isEarningsLoading) {
+      return (
+        <div className="bg-zinc-900 p-6 rounded-xl animate-pulse">
+          <div className="h-6 bg-zinc-800 rounded w-1/4 mb-6"></div>
+          <div className="space-y-4">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="border-b border-zinc-800 pb-4">
+                <div className="flex justify-between">
+                  <div className="h-4 bg-zinc-800 rounded w-1/6"></div>
+                  <div className="h-4 bg-zinc-800 rounded w-1/5"></div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    if (!earnings || !earnings.recentSales || earnings.recentSales.length === 0) return null;
+
+    return (
+      <div className="bg-zinc-900 p-6 rounded-xl">
+        <h2 className="text-xl font-semibold mb-4">Recent Sales</h2>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-zinc-800">
+                <th className="py-3 text-left text-zinc-400">Date</th>
+                <th className="py-3 text-left text-zinc-400">Round</th>
+                <th className="py-3 text-right text-zinc-400">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {earnings.recentSales.map((sale, index) => (
+                <tr key={index} className="border-b border-zinc-800">
+                  <td className="py-3">{new Date(sale.date).toLocaleDateString()}</td>
+                  <td className="py-3">{sale.roundTitle}</td>
+                  <td className="py-3 text-right">${sale.amount.toFixed(2)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
   };
 
   // Show loading state if Redux is loading
@@ -265,74 +391,31 @@ const TrainerDashboard = () => {
         
         {renderAccountStatus()}
         
-        {earnings && accountStatus === 'complete' && earnings.isNewAccount && (
-          <div className="bg-zinc-900 p-6 rounded-xl mb-8">
-            <h2 className="text-xl font-semibold mb-4">No Transactions Yet</h2>
-            <p className="mb-6">
-              Your payment account is set up and ready to receive payments, but you haven't
-              received any payments yet. When payments are received, they'll appear here.
-            </p>
-            <div className="flex items-center justify-center p-8 border border-zinc-800 rounded-lg">
-              <div className="text-center">
-                <div className="text-zinc-400 mb-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <p>When you make your first sale, earnings information will appear here.</p>
+        {!isAccountLoading && accountStatus === 'complete' && (
+          <>
+            {earnings && earnings.isNewAccount && !isEarningsLoading && (
+              <div className="bg-zinc-900 p-6 rounded-xl mb-8">
+                <h2 className="text-xl font-semibold mb-4">No Transactions Yet</h2>
+                <p className="mb-6">
+                  Your payment account is set up and ready to receive payments, but you haven't
+                  received any payments yet. When payments are received, they'll appear here.
+                </p>
+                <div className="flex items-center justify-center p-8 border border-zinc-800 rounded-lg">
+                  <div className="text-center">
+                    <div className="text-zinc-400 mb-2">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <p>When you make your first sale, earnings information will appear here.</p>
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
-        )}
-        
-        {earnings && accountStatus === 'complete' && (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-            <div className="bg-zinc-900 p-4 rounded-xl">
-              <h3 className="text-zinc-400 text-sm mb-1">Total Earned</h3>
-              <p className="text-2xl font-bold">${earnings.totalEarned.toFixed(2)}</p>
-            </div>
+            )}
             
-            <div className="bg-zinc-900 p-4 rounded-xl">
-              <h3 className="text-zinc-400 text-sm mb-1">Available Balance</h3>
-              <p className="text-2xl font-bold">${earnings.availableBalance.toFixed(2)}</p>
-            </div>
-            
-            <div className="bg-zinc-900 p-4 rounded-xl">
-              <h3 className="text-zinc-400 text-sm mb-1">Pending Payout</h3>
-              <p className="text-2xl font-bold">${earnings.pendingPayout.toFixed(2)}</p>
-            </div>
-            
-            <div className="bg-zinc-900 p-4 rounded-xl">
-              <h3 className="text-zinc-400 text-sm mb-1">Rounds Sold</h3>
-              <p className="text-2xl font-bold">{earnings.roundsSold}</p>
-            </div>
-          </div>
-        )}
-        
-        {earnings && earnings.recentSales && earnings.recentSales.length > 0 && (
-          <div className="bg-zinc-900 p-6 rounded-xl">
-            <h2 className="text-xl font-semibold mb-4">Recent Sales</h2>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-zinc-800">
-                    <th className="py-3 text-left text-zinc-400">Date</th>
-                    <th className="py-3 text-left text-zinc-400">Round</th>
-                    <th className="py-3 text-right text-zinc-400">Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {earnings.recentSales.map((sale, index) => (
-                    <tr key={index} className="border-b border-zinc-800">
-                      <td className="py-3">{new Date(sale.date).toLocaleDateString()}</td>
-                      <td className="py-3">{sale.roundTitle}</td>
-                      <td className="py-3 text-right">${sale.amount.toFixed(2)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+            {renderEarningsStats()}
+            {renderRecentSales()}
+          </>
         )}
       </div>
     </div>
