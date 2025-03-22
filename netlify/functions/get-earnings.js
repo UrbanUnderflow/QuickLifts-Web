@@ -188,6 +188,8 @@ const handler = async (event) => {
                 .orderBy('createdAt', 'desc')
                 .limit(10) // Reduced from 20
                 .get();
+
+              console.log('paymentsSnapshot:', paymentsSnapshot.docs.map(doc => doc.data()));
                 
               const paymentRecords = [];
               paymentsSnapshot.forEach(doc => {
