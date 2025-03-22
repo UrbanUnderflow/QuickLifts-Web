@@ -6,6 +6,8 @@ import { useRouter } from 'next/router';
 import { useSelector } from 'react-redux';
 import { RootState } from '../../redux/store';
 import { userService } from '../../api/firebase/user/service';
+import Image from 'next/image';
+import Link from 'next/link';
 
 interface EarningsData {
   totalEarned: number;
@@ -18,8 +20,16 @@ interface EarningsData {
     roundTitle: string;
     amount: number;
     status?: string;
+    buyerId?: string;
   }[];
   isNewAccount: boolean;
+}
+
+// Interface for buyer information
+interface BuyerInfo {
+  id: string;
+  username: string;
+  profileImageURL?: string;
 }
 
 const TrainerDashboard = () => {
@@ -29,11 +39,43 @@ const TrainerDashboard = () => {
   const [isAccountLoading, setIsAccountLoading] = useState(true);
   const [isEarningsLoading, setIsEarningsLoading] = useState(true);
   const [isDashboardLinkLoading, setIsDashboardLinkLoading] = useState(false);
+  const [buyerInfoMap, setBuyerInfoMap] = useState<Map<string, BuyerInfo>>(new Map());
   const router = useRouter();
   
   // Get user from Redux store
   const currentUser = useSelector((state: RootState) => state.user.currentUser);
   const isLoading = useSelector((state: RootState) => state.user.loading);
+
+  // Function to fetch buyer information for all sales
+  const fetchBuyerInformation = async (sales: EarningsData['recentSales']) => {
+    const buyerIds = sales
+      .filter(sale => sale.buyerId && sale.buyerId !== 'anonymous' && sale.buyerId !== 'unknown')
+      .map(sale => sale.buyerId as string);
+      
+    // Remove duplicates
+    const uniqueBuyerIds = Array.from(new Set(buyerIds));
+    
+    if (uniqueBuyerIds.length === 0) return;
+    
+    console.log('Fetching buyer information for IDs:', uniqueBuyerIds);
+    
+    try {
+      const users = await userService.getUsersByIds(uniqueBuyerIds);
+      const newBuyerInfoMap = new Map<string, BuyerInfo>();
+      
+      users.forEach(user => {
+        newBuyerInfoMap.set(user.id, {
+          id: user.id,
+          username: user.username || 'Anonymous User',
+          profileImageURL: user.profileImage?.profileImageURL
+        });
+      });
+      
+      setBuyerInfoMap(newBuyerInfoMap);
+    } catch (error) {
+      console.error('Error fetching buyer information:', error);
+    }
+  };
 
   useEffect(() => {
     // If still loading, wait
@@ -55,6 +97,13 @@ const TrainerDashboard = () => {
     fetchAccountStatus();
     fetchEarningsData();
   }, [router.query, currentUser, isLoading, router]);
+
+  // Update to fetch buyer info when earnings data changes
+  useEffect(() => {
+    if (earningsData?.recentSales && earningsData.recentSales.length > 0) {
+      fetchBuyerInformation(earningsData.recentSales);
+    }
+  }, [earningsData]);
 
   const markOnboardingComplete = async () => {
     if (!currentUser?.id) return;
@@ -325,6 +374,52 @@ const TrainerDashboard = () => {
     );
   };
   
+  // Function to render buyer information
+  const renderBuyerInfo = (buyerId?: string) => {
+    if (!buyerId || buyerId === 'anonymous' || buyerId === 'unknown') {
+      return (
+        <div className="flex items-center">
+          <div className="w-8 h-8 rounded-full bg-zinc-800 mr-2 flex items-center justify-center">
+            <span className="text-xs text-zinc-400">?</span>
+          </div>
+          <span className="text-zinc-400">Anonymous</span>
+        </div>
+      );
+    }
+    
+    const buyerInfo = buyerInfoMap.get(buyerId);
+    
+    if (!buyerInfo) {
+      return (
+        <div className="flex items-center">
+          <div className="w-8 h-8 rounded-full bg-zinc-800 mr-2 animate-pulse"></div>
+          <div className="h-4 bg-zinc-800 rounded w-20 animate-pulse"></div>
+        </div>
+      );
+    }
+    
+    return (
+      <Link href={`/profile/${buyerInfo.username}`} className="flex items-center hover:bg-zinc-800/30 px-2 py-1 rounded-md transition-colors">
+        <div className="w-8 h-8 rounded-full bg-zinc-800 mr-2 overflow-hidden flex-shrink-0">
+          {buyerInfo.profileImageURL ? (
+            <Image 
+              src={buyerInfo.profileImageURL} 
+              alt={buyerInfo.username} 
+              width={32} 
+              height={32} 
+              className="object-cover w-full h-full"
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center bg-zinc-700">
+              <span className="text-xs">{buyerInfo.username.substring(0, 1).toUpperCase()}</span>
+            </div>
+          )}
+        </div>
+        <span className="text-sm truncate">{buyerInfo.username}</span>
+      </Link>
+    );
+  };
+  
   // Function to render recent sales
   const renderRecentSales = () => {
     if (isEarningsLoading) {
@@ -359,39 +454,43 @@ const TrainerDashboard = () => {
     return (
       <div className="bg-zinc-900 p-6 rounded-xl">
         <h3 className="text-xl font-semibold mb-4">Recent Sales</h3>
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-zinc-800">
-              <th className="text-left py-3 text-zinc-400">Date</th>
-              <th className="text-left py-3 text-zinc-400">Round</th>
-              <th className="text-right py-3 text-zinc-400">Amount</th>
-              <th className="text-right py-3 text-zinc-400">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {earningsData.recentSales.map((sale, index) => (
-              <tr key={index} className="border-b border-zinc-800">
-                <td className="py-3">{sale.date}</td>
-                <td className="py-3">{sale.roundTitle}</td>
-                <td className="py-3 text-right">${sale.amount.toFixed(2)}</td>
-                <td className="py-3 text-right">
-                  <span className={`px-2 py-1 rounded-full text-xs ${
-                    (sale.status === 'succeeded' || sale.status === 'completed') 
-                      ? 'bg-green-900/50 text-green-400' 
-                      : sale.status === 'pending' 
-                        ? 'bg-yellow-900/50 text-yellow-400' 
-                        : 'bg-zinc-800 text-zinc-300'
-                  }`}>
-                    {sale.status === 'succeeded' ? 'Completed' : 
-                     sale.status === 'completed' ? 'Completed' : 
-                     sale.status === 'pending' ? 'Pending' : 
-                     (sale.status || 'Unknown').charAt(0).toUpperCase() + (sale.status || 'Unknown').slice(1)}
-                  </span>
-                </td>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-zinc-800">
+                <th className="text-left py-3 text-zinc-400">Date</th>
+                <th className="text-left py-3 text-zinc-400">Round</th>
+                <th className="text-left py-3 text-zinc-400">Buyer</th>
+                <th className="text-right py-3 text-zinc-400">Amount</th>
+                <th className="text-right py-3 text-zinc-400">Status</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {earningsData.recentSales.map((sale, index) => (
+                <tr key={index} className="border-b border-zinc-800">
+                  <td className="py-3 px-2">{sale.date}</td>
+                  <td className="py-3 px-2">{sale.roundTitle}</td>
+                  <td className="py-3 px-2">{renderBuyerInfo(sale.buyerId)}</td>
+                  <td className="py-3 px-2 text-right">${sale.amount.toFixed(2)}</td>
+                  <td className="py-3 px-2 text-right">
+                    <span className={`px-2 py-1 rounded-full text-xs ${
+                      (sale.status === 'succeeded' || sale.status === 'completed') 
+                        ? 'bg-green-900/50 text-green-400' 
+                        : sale.status === 'pending' 
+                          ? 'bg-yellow-900/50 text-yellow-400' 
+                          : 'bg-zinc-800 text-zinc-300'
+                    }`}>
+                      {sale.status === 'succeeded' ? 'Completed' : 
+                      sale.status === 'completed' ? 'Completed' : 
+                      sale.status === 'pending' ? 'Pending' : 
+                      (sale.status || 'Unknown').charAt(0).toUpperCase() + (sale.status || 'Unknown').slice(1)}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
         <p className="text-xs text-zinc-500 mt-4 text-right">
           Last updated: {new Date(earningsData.lastUpdated || new Date().toISOString()).toLocaleString()}
         </p>
@@ -410,7 +509,7 @@ const TrainerDashboard = () => {
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white py-10">
-      <div className="max-w-4xl mx-auto px-6">
+      <div className="max-w-6xl mx-auto px-6">
         <h1 className="text-3xl font-bold mb-6">Trainer Dashboard</h1>
         
         {renderAccountStatus()}

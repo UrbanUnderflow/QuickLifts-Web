@@ -9,10 +9,10 @@ export default async function handler(req, res) {
   }
   
   try {
-    const { challengeId, amount, currency, userId, buyerEmail } = req.body;
+    const { challengeId, amount, currency, buyerId, buyerEmail } = req.body;
     
-    if (!userId) {
-      console.warn('create-payment-intent: No userId provided in request body');
+    if (!buyerId) {
+      console.warn('create-payment-intent: No buyerId provided in request body');
     }
     
     // Create a payment intent with additional metadata for recovery
@@ -21,14 +21,14 @@ export default async function handler(req, res) {
       currency,
       metadata: {
         challengeId,
-        userId: userId || 'unknown',
+        buyerId: buyerId || 'unknown',
         buyerEmail: buyerEmail || 'unknown',
         createdAt: new Date().toISOString(),
         source: 'fitwithpulse-web'
       }
     });
     
-    console.log(`Payment intent created: ${paymentIntent.id} for user: ${userId || 'unknown'}`);
+    console.log(`Payment intent created: ${paymentIntent.id} for buyer: ${buyerId || 'unknown'}`);
     
     // Return the client secret to the client
     res.status(200).json({

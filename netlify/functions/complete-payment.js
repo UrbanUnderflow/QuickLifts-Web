@@ -48,12 +48,12 @@ const handler = async (event) => {
   try {
     // Parse the request body
     const data = JSON.parse(event.body);
-    const { challengeId, paymentId, userId, ownerId, amount } = data;
+    const { challengeId, paymentId, buyerId, ownerId, amount } = data;
     
     console.log('Recording payment completion:', {
       challengeId,
       paymentId,
-      userId,
+      buyerId,
       ownerId,
       amount
     });
@@ -68,10 +68,13 @@ const handler = async (event) => {
     // Verify the challenge exists
     const challengeDoc = await db.collection('challenges').doc(challengeId).get();
     let challengeOwnerId = null;
+    let challengeTitle = 'Round';
     
     if (challengeDoc.exists) {
-      challengeOwnerId = challengeDoc.data().ownerId;
-      console.log(`Challenge found: ${challengeId}, owner:`, challengeOwnerId);
+      const challengeData = challengeDoc.data();
+      challengeOwnerId = challengeData.ownerId;
+      challengeTitle = challengeData.title || challengeTitle;
+      console.log(`Challenge found: ${challengeId}, owner:`, challengeOwnerId, 'title:', challengeTitle);
     } else {
       // Try to find in sweatlist-collection
       const sweatlistQuery = await db.collection('sweatlist-collection').where('challenge.id', '==', challengeId).limit(1).get();
@@ -86,7 +89,12 @@ const handler = async (event) => {
           challengeOwnerId = sweatlistData.challenge.ownerId;
         }
         
-        console.log(`Challenge found in sweatlist: ${challengeId}, owner:`, challengeOwnerId);
+        // Get title from sweatlist collection
+        if (sweatlistData.challenge && sweatlistData.challenge.title) {
+          challengeTitle = sweatlistData.challenge.title;
+        }
+        
+        console.log(`Challenge found in sweatlist: ${challengeId}, owner:`, challengeOwnerId, 'title:', challengeTitle);
       } else {
         console.warn(`Challenge not found: ${challengeId}`);
         return {
@@ -115,7 +123,8 @@ const handler = async (event) => {
     await paymentRef.set({
       paymentId,
       challengeId,
-      userId: userId || 'anonymous',
+      challengeTitle,
+      buyerId: buyerId || 'anonymous',
       ownerId: effectiveOwnerId,
       amount: amount || 0,
       status: 'completed',
@@ -124,38 +133,21 @@ const handler = async (event) => {
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
     });
     
-    console.log('Payment record created in Firestore');
+    console.log('Payment record created in Firestore with challenge title:', challengeTitle);
     
-    // Add the user to the challenge participants
-    if (userId) {
-      // Try to update in challenges collection first
-      if (challengeDoc.exists) {
-        const challengeRef = db.collection('challenges').doc(challengeId);
-        await challengeRef.update({
-          participants: admin.firestore.FieldValue.arrayUnion(userId)
-        });
-        console.log(`User ${userId} added to challenge participants in challenges collection`);
-      } else {
-        // Try to update in sweatlist-collection
-        const sweatlistQuery = await db.collection('sweatlist-collection').where('challenge.id', '==', challengeId).limit(1).get();
-        
-        if (!sweatlistQuery.empty) {
-          const sweatlistDoc = sweatlistQuery.docs[0];
-          const sweatlistRef = db.collection('sweatlist-collection').doc(sweatlistDoc.id);
-          
-          await sweatlistRef.update({
-            'challenge.participants': admin.firestore.FieldValue.arrayUnion(userId)
-          });
-          console.log(`User ${userId} added to challenge participants in sweatlist-collection`);
-        }
-      }
-    } else {
-      console.warn('No userId provided, skipping adding to participants');
-    }
+    // We're not adding the user to challenge participants as you have another system for this
     
     return {
       statusCode: 200,
-      body: JSON.stringify({ success: true })
+      body: JSON.stringify({ 
+        success: true,
+        paymentDetails: {
+          id: paymentId,
+          challengeId,
+          challengeTitle,
+          amount: amount || 0
+        }
+      })
     };
   } catch (error) {
     console.error('Error completing payment:', error);

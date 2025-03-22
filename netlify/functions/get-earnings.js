@@ -279,7 +279,8 @@ const handler = async (event) => {
                 status: intent.status,
                 paymentId: intent.id,
                 source: 'stripe_intent',
-                ownerId: intent.metadata?.userId || userId, // Use metadata userId if available
+                ownerId: intent.metadata?.ownerId || userId,
+                buyerId: intent.metadata?.buyerId || intent.metadata?.userId || 'anonymous',
                 buyerEmail: intent.metadata?.buyerEmail || 'unknown'
               });
             }
@@ -381,7 +382,8 @@ const handler = async (event) => {
             amount: (payment.amount / 100) || 0,
             status: payment.status || 'completed',
             source: payment.source || 'firestore',
-            id: payment.paymentId || payment.id || 'unknown'
+            id: payment.paymentId || payment.id || 'unknown',
+            buyerId: payment.buyerId || payment.userId || payment.metadata?.buyerId || payment.metadata?.userId || 'anonymous'
           };
         });
         

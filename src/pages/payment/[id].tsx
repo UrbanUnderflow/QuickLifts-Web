@@ -372,7 +372,8 @@ const CheckoutForm = ({ challengeId, amount, currency, isApplePayAvailable, chal
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ 
                 challengeId,
-                paymentId: result.paymentIntent.id
+                paymentId: result.paymentIntent.id,
+                buyerId: userService.currentUser?.id || 'anonymous'
               }),
             });
 
@@ -471,7 +472,7 @@ const CheckoutForm = ({ challengeId, amount, currency, isApplePayAvailable, chal
           body: JSON.stringify({ 
             challengeId,
             paymentId: result.paymentIntent.id,
-            userId: localStorage.getItem('userId') || undefined,
+            buyerId: userService.currentUser?.id || 'anonymous',
             ownerId: ownerId,
             amount: amount
           }),
@@ -546,7 +547,25 @@ const CheckoutForm = ({ challengeId, amount, currency, isApplePayAvailable, chal
             return;
           }
           
+          // Record payment
+          await fetch('/.netlify/functions/complete-payment', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              challengeId,
+              paymentId: data.paymentIntentId,
+              buyerId: userService.currentUser?.id || 'anonymous',
+              ownerId: challengeData.collection.challenge.ownerId || '',
+              amount: amount
+            }),
+          });
+          
           session.completePayment(ApplePaySession.STATUS_SUCCESS);
+          
+          // Redirect after payment
+          setTimeout(() => {
+            router.push(`/download?challengeId=${challengeId}`);
+          }, 1500);
         } catch (err) {
           console.error("Payment processing failed:", err);
           session.completePayment(ApplePaySession.STATUS_FAILURE);
