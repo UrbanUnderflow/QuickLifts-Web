@@ -9,16 +9,26 @@ export default async function handler(req, res) {
   }
   
   try {
-    const { challengeId, amount, currency } = req.body;
+    const { challengeId, amount, currency, userId, buyerEmail } = req.body;
     
-    // Create a payment intent
+    if (!userId) {
+      console.warn('create-payment-intent: No userId provided in request body');
+    }
+    
+    // Create a payment intent with additional metadata for recovery
     const paymentIntent = await stripe.paymentIntents.create({
       amount,
       currency,
       metadata: {
-        challengeId
+        challengeId,
+        userId: userId || 'unknown',
+        buyerEmail: buyerEmail || 'unknown',
+        createdAt: new Date().toISOString(),
+        source: 'fitwithpulse-web'
       }
     });
+    
+    console.log(`Payment intent created: ${paymentIntent.id} for user: ${userId || 'unknown'}`);
     
     // Return the client secret to the client
     res.status(200).json({

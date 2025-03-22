@@ -40,8 +40,8 @@ const handler = async (event) => {
     const data = JSON.parse(event.body);
     console.log('Parsed request data:', data);
     
-    const { challengeId, amount, currency, ownerId } = data;
-    console.log('Extracted parameters:', { challengeId, amount, currency, ownerId });
+    const { challengeId, amount, currency, ownerId, buyerId } = data;
+    console.log('Extracted parameters:', { challengeId, amount, currency, ownerId, buyerId });
 
     if (!challengeId || !amount || !currency) {
       console.log('Missing required parameters:', { challengeId, amount, currency });
@@ -105,7 +105,10 @@ const handler = async (event) => {
       metadata: {
         challengeId,
         ownerId,
-        environment: 'test'
+        environment: 'test',
+        buyerId: buyerId || 'unknown',
+        createdAt: new Date().toISOString(),
+        source: 'fitwithpulse-web-test'
       },
       description: `Test Payment for challenge ${challengeId}`
     };

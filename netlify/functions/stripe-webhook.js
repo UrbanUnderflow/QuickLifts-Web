@@ -227,7 +227,7 @@ async function updatePaymentRecord(paymentIntent, eventType, charge = null) {
     console.log(`Processing payment record update for ${paymentId} from ${eventType}`);
     
     // Check if a payment record exists in round-payments
-    const paymentRef = db.collection('round-payments').doc(paymentId);
+    const paymentRef = db.collection('payments').doc(paymentId);
     const paymentDoc = await paymentRef.get();
     
     // Map stripe event types to our status values
@@ -295,11 +295,24 @@ async function updatePaymentRecord(paymentIntent, eventType, charge = null) {
         console.log(`Migrated and updated payment from legacy collection to round-payments: ${paymentId}`);
       } else {
         // No payment record found in either collection - create a new one
-        console.log(`No payment record found for ${paymentId}, creating one in round-payments`);
+        console.log(`No payment record found for ${paymentId}, creating one in payments collection`);
+        
+        // Extract all possible identification details from metadata
+        const metadata = paymentIntent.metadata || {};
+        console.log('Payment intent metadata:', metadata);
         
         // Extract challenge ID and owner ID from metadata if available
-        const challengeId = paymentIntent.metadata?.challengeId || '';
-        const ownerId = paymentIntent.metadata?.ownerId || paymentIntent.metadata?.trainerId || '';
+        const challengeId = metadata.challengeId || '';
+        
+        // Look for any user identifier in the following order of priority
+        const ownerId = metadata.ownerId || metadata.trainerId || '';
+        const buyerId = metadata.buyerId || metadata.userId || '';
+        
+        console.log('Extracted IDs from metadata:', { 
+          challengeId, 
+          ownerId, 
+          buyerId 
+        });
         
         // Try to get challenge details if we have a challenge ID
         let challengeTitle = 'Fitness Round';
@@ -333,6 +346,27 @@ async function updatePaymentRecord(paymentIntent, eventType, charge = null) {
           }
         }
         
+        // Try to resolve buyer ID from email if available
+        let resolvedBuyerId = buyerId;
+        const buyerEmail = metadata.buyerEmail || (charge?.billing_details?.email) || '';
+        
+        if (!resolvedBuyerId && buyerEmail) {
+          try {
+            console.log(`Attempting to find user by email: ${buyerEmail}`);
+            const userQuery = await db.collection('users')
+              .where('email', '==', buyerEmail)
+              .limit(1)
+              .get();
+              
+            if (!userQuery.empty) {
+              resolvedBuyerId = userQuery.docs[0].id;
+              console.log(`Resolved buyer ID ${resolvedBuyerId} from email ${buyerEmail}`);
+            }
+          } catch (error) {
+            console.error(`Error finding user by email: ${error.message}`);
+          }
+        }
+        
         // Calculate fee and owner amount if available
         let platformFee = 0;
         let ownerAmount = 0;
@@ -342,7 +376,7 @@ async function updatePaymentRecord(paymentIntent, eventType, charge = null) {
           ownerAmount = paymentIntent.amount - platformFee;
         }
         
-        // Create new payment record
+        // Create new payment record with as much data as we can gather
         const paymentData = {
           paymentId,
           amount: paymentIntent.amount,
@@ -350,22 +384,45 @@ async function updatePaymentRecord(paymentIntent, eventType, charge = null) {
           status,
           challengeId,
           ownerId: resolvedOwnerId,
+          buyerId: resolvedBuyerId,
           challengeTitle,
           createdAt: new Date(),
           updatedAt: new Date(),
           stripeEventType: eventType,
           stripeAccountId: paymentIntent.transfer_data?.destination || null,
           platformFee,
-          ownerAmount
+          ownerAmount,
+          metadata: metadata, // Store the original metadata for troubleshooting
+          isRecoveredPayment: true, // Flag that this was created from webhook not direct payment
+          buyerEmail: buyerEmail
         };
         
-        // If this is from a charge, add the charge ID
+        // If this is from a charge, add the charge ID and any other relevant data
         if (charge) {
           paymentData.chargeId = charge.id;
+          
+          // Add additional details from charge if available
+          if (charge.billing_details) {
+            paymentData.billingDetails = {
+              name: charge.billing_details.name,
+              email: charge.billing_details.email,
+              phone: charge.billing_details.phone,
+              address: charge.billing_details.address
+            };
+          }
         }
         
         await paymentRef.set(paymentData);
-        console.log(`Created new round-payment record for ${paymentId}`);
+        console.log(`Created new payment record for ${paymentId}`);
+        
+        // After creating the record, notify if this is an anonymous payment
+        if (!resolvedOwnerId || !resolvedBuyerId) {
+          console.warn(`⚠️ Payment ${paymentId} created with missing data:`, {
+            hasOwnerId: !!resolvedOwnerId,
+            hasBuyerId: !!resolvedBuyerId,
+            hasChallengeId: !!challengeId
+          });
+        }
       }
     }
   } catch (error) {
@@ -385,7 +442,7 @@ async function createOrUpdateChargeRecord(charge, eventType) {
     console.log(`Processing charge record update for ${chargeId} from ${eventType}`);
     
     // Look for an existing charge record in round-payments
-    const chargeRef = db.collection('round-payments').doc(chargeId);
+    const chargeRef = db.collection('payments').doc(chargeId);
     const chargeDoc = await chargeRef.get();
     
     // Map stripe event types to our status values

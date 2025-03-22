@@ -152,7 +152,7 @@ const handler = async (event) => {
         console.log('Starting parallel data retrieval from Stripe...');
         
         // Start retrieving multiple pieces of data in parallel - but with strict limits to avoid timeouts
-        const [balance, payouts, transfers, roundPayments, stripeCharges] = await Promise.all([
+        const [balance, payouts, transfers, roundPayments, stripeCharges, paymentIntents] = await Promise.all([
           // Get account balance
           stripe.balance.retrieve({
             stripeAccount: connectedAccountId
@@ -179,11 +179,11 @@ const handler = async (event) => {
             return { data: [] };
           }),
           
-          // Get recent payment records from the round-payments collection
+          // Get recent payment records from the payments collection
           (async () => {
             try {
-              console.log(`Querying Firestore round-payments collection for ownerId: ${userId}`);
-              const paymentsSnapshot = await db.collection('round-payments')
+              console.log(`Querying Firestore payments collection for ownerId: ${userId}`);
+              const paymentsSnapshot = await db.collection('payments')
                 .where('ownerId', '==', userId)
                 .orderBy('createdAt', 'desc')
                 .limit(10) // Reduced from 20
@@ -194,24 +194,33 @@ const handler = async (event) => {
                 paymentRecords.push({...doc.data(), id: doc.id});
               });
               
-              console.log(`Found ${paymentRecords.length} payment records in round-payments with ownerId`);
+              console.log(`Found ${paymentRecords.length} payment records in payments with ownerId`);
               if (paymentRecords.length > 0) {
                 console.log('Sample payment record:', JSON.stringify(paymentRecords[0], null, 2));
               }
               
               return paymentRecords;
             } catch (err) {
-              console.error('Error retrieving payments from round-payments:', err);
+              console.error('Error retrieving payments from payments:', err);
               return [];
             }
           })(),
           
-          // Get charges directly from Stripe - reduced limit
+          // Get charges directly from Stripe - WITHOUT THE INVALID DESTINATION PARAMETER
           stripe.charges.list({
-            limit: 5,
-            destination: connectedAccountId
+            limit: 10
+            // Don't use destination parameter here - it's not available in all API versions
           }).catch(err => {
             console.error('Error listing charges from Stripe:', err);
+            return { data: [] };
+          }),
+          
+          // Get payment intents from Stripe - THIS IS THE KEY TO FIXING THE ISSUE
+          stripe.paymentIntents.list({
+            limit: 20,
+            stripeAccount: connectedAccountId
+          }).catch(err => {
+            console.error('Error listing payment intents:', err);
             return { data: [] };
           })
         ]);
@@ -238,37 +247,103 @@ const handler = async (event) => {
           sample: stripeCharges.data.length > 0 ? stripeCharges.data[0].id : 'No charges found'
         });
         
-        // Convert stripe charges to our format
-        const stripePayments = stripeCharges.data.map(charge => {
-          return {
-            amount: charge.amount,
-            createdAt: { toDate: () => new Date(charge.created * 1000) },
-            challengeTitle: charge.description || 'Fitness Round',
-            status: charge.status,
-            paymentId: charge.id,
-            source: 'stripe',
-            ownerId: userId
-          };
+        console.log('Stripe payment intents:', {
+          count: paymentIntents.data.length,
+          sample: paymentIntents.data.length > 0 ? {
+            id: paymentIntents.data[0].id,
+            amount: paymentIntents.data[0].amount,
+            status: paymentIntents.data[0].status,
+            metadata: paymentIntents.data[0].metadata,
+            created: new Date(paymentIntents.data[0].created * 1000).toISOString()
+          } : 'No payment intents found'
         });
         
+        // Convert all stripe data sources to our standard payment format
+        const stripePayments = [];
+        
+        // First process payment intents (most reliable source of payment data)
+        if (paymentIntents.data.length > 0) {
+          console.log('Processing payment intents...');
+          paymentIntents.data.forEach(intent => {
+            if (intent.status === 'succeeded') {
+              console.log(`Found succeeded payment intent: ${intent.id}`, {
+                amount: intent.amount,
+                metadata: intent.metadata
+              });
+              
+              stripePayments.push({
+                amount: intent.amount,
+                createdAt: { toDate: () => new Date(intent.created * 1000) },
+                challengeTitle: intent.description || 
+                  (intent.metadata?.challengeId ? `Challenge: ${intent.metadata.challengeId}` : 'Fitness Program'),
+                status: intent.status,
+                paymentId: intent.id,
+                source: 'stripe_intent',
+                ownerId: intent.metadata?.userId || userId, // Use metadata userId if available
+                buyerEmail: intent.metadata?.buyerEmail || 'unknown'
+              });
+            }
+          });
+        }
+        
+        // Then add charges that might not be linked to payment intents
+        if (stripeCharges.data.length > 0) {
+          console.log('Processing charges...');
+          stripeCharges.data.forEach(charge => {
+            // Check if charge is related to our connected account
+            if (charge.destination === connectedAccountId) {
+              console.log(`Found charge for this account: ${charge.id}`);
+              
+              // Check if we already have this payment from payment intents
+              const paymentExists = stripePayments.some(p => 
+                p.paymentId === charge.payment_intent || 
+                p.chargeId === charge.id
+              );
+              
+              if (!paymentExists) {
+                stripePayments.push({
+                  amount: charge.amount,
+                  createdAt: { toDate: () => new Date(charge.created * 1000) },
+                  challengeTitle: charge.description || 'Fitness Program',
+                  status: charge.status,
+                  paymentId: charge.payment_intent || charge.id,
+                  chargeId: charge.id,
+                  source: 'stripe_charge',
+                  ownerId: userId
+                });
+              }
+            }
+          });
+        }
+        
+        console.log(`Found total of ${stripePayments.length} payments from Stripe APIs`);
+        
         // Combine payments from all sources and remove duplicates
-        // Priority: round-payments > direct Stripe
+        // Priority: Firestore payments > Stripe payment intents > Stripe charges
         // Identify uniqueness by paymentId
         const allPaymentIds = new Set();
         let allPayments = [];
         
-        // First add round-payments with ownerId (highest priority)
+        // First add Firestore payments (highest priority)
         roundPayments.forEach(payment => {
           allPaymentIds.add(payment.paymentId || payment.id);
           allPayments.push(payment);
         });
         
-        // Add direct Stripe payments if they don't exist in the collection
+        // Add Stripe payments if they don't exist in Firestore
         stripePayments.forEach(payment => {
           const paymentId = payment.paymentId || payment.id;
           if (!allPaymentIds.has(paymentId)) {
             allPaymentIds.add(paymentId);
             allPayments.push(payment);
+            
+            // Important: Log payments that aren't in Firestore
+            // This helps identify sync issues that need fixing
+            console.log(`Found payment in Stripe but not in Firestore: ${paymentId}`, {
+              amount: payment.amount,
+              created: payment.createdAt.toDate(),
+              source: payment.source
+            });
           }
         });
         

@@ -191,7 +191,10 @@ const handler = async (event, context) => {
       metadata: {
         challengeId,
         ownerId: selectedOwnerId,
-        environment: 'live'
+        environment: 'live',
+        buyerId: buyerId || 'unknown',
+        createdAt: new Date().toISOString(),
+        source: 'fitwithpulse-web'
       }
     };
 
@@ -213,7 +216,7 @@ const handler = async (event, context) => {
       status: paymentIntent.status
     });
 
-    // Create a record in the round-payments collection for dashboard display
+    // Create a record in the payments collection for dashboard display
     try {
       // Get challenge info for the payment record
       let challengeTitle = 'Fitness Round';
@@ -241,7 +244,7 @@ const handler = async (event, context) => {
         stripeAccountId: connectedAccountId
       };
       
-      await db.collection('round-payments').doc(paymentIntent.id).set(paymentRecord);
+      await db.collection('payments').doc(paymentIntent.id).set(paymentRecord);
       console.log('Created payment record in Firestore:', paymentIntent.id);
     } catch (recordError) {
       console.error('Error creating payment record:', recordError);
