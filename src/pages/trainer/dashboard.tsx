@@ -89,7 +89,8 @@ const TrainerDashboard = () => {
         
         console.log('Adding user to buyer info map:', {
           id: user.id,
-          username: user.username || 'Anonymous User'
+          username: user.username || 'Anonymous User',
+          userProfileImage: user.profileImage?.profileImageURL
         });
         
         newBuyerInfoMap.set(user.id, {
