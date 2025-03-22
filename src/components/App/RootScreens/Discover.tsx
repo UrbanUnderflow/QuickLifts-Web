@@ -314,7 +314,14 @@ const Discover = () => {
   };
 
   const selectExercise = (exercise: Exercise) => {
-    router.push(`/exercise/${exercise.id}`);
+    // Handle cases where exercise name already contains hyphens
+    // Replace spaces with hyphens, but use a special encoding for existing hyphens
+    const slug = exercise.name
+      .replace(/-/g, '%2D') // First encode any existing hyphens to their URL encoded form
+      .toLowerCase()
+      .replace(/\s+/g, '-'); // Then replace spaces with hyphens
+    
+    router.push(`/exercise/${slug}`);
   };
 
   const selectWorkout = (workout: Workout) => {
