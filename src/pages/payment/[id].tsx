@@ -10,6 +10,36 @@ const isLocalhost = typeof window !== 'undefined' &&
   (window.location.hostname === 'localhost' || 
    window.location.hostname === '127.0.0.1');
 
+// Helper function to detect iOS devices
+const isIOS = () => {
+  if (typeof window === 'undefined') return false;
+  
+  const userAgent = window.navigator.userAgent.toLowerCase();
+  return /iphone|ipad|ipod/.test(userAgent);
+};
+
+// Function to open the app or App Store
+const openIOSApp = (challengeId: string) => {
+  // Define your app's URL scheme and App Store URL
+  const appScheme = `quicklifts://round/${challengeId}`;
+  const appStoreUrl = 'https://apps.apple.com/us/app/quicklifts/id6446042442';
+  
+  // Try to open the app first
+  window.location.href = appScheme;
+  
+  // Set a timeout to redirect to App Store if app doesn't open
+  const timeout = setTimeout(() => {
+    window.location.href = appStoreUrl;
+  }, 500);
+  
+  // Clear the timeout if the page is hidden (app opened successfully)
+  window.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      clearTimeout(timeout);
+    }
+  });
+};
+
 // Initialize Stripe with the appropriate key based on environment
 const getStripeKey = () => {
   if (isLocalhost) {
@@ -81,6 +111,9 @@ const PaymentPage = ({ challengeData }: PaymentPageProps) => {
   const [isApplePayAvailable, setIsApplePayAvailable] = useState(false);
   const [isTestMode, setIsTestMode] = useState(false);
   const [stripeLoaded, setStripeLoaded] = useState(false);
+  const [hasPurchased, setHasPurchased] = useState(false);
+  const [isCheckingPurchase, setIsCheckingPurchase] = useState(true);
+  const router = useRouter();
 
   useEffect(() => {
     // Initialize Stripe
@@ -89,48 +122,80 @@ const PaymentPage = ({ challengeData }: PaymentPageProps) => {
       const key = getStripeKey();
       console.log('Got Stripe key:', key ? 'Key present' : 'No key found');
       
-      if (!key) {
-        console.error('Failed to initialize Stripe: No valid key found');
-        return;
+      // Get the global promise or create a new one
+      if (!stripePromise) {
+        stripePromise = loadStripe(key || '');
       }
-
+      
       try {
-        console.log('Loading Stripe with key...');
-        stripePromise = loadStripe(key, {
-          apiVersion: '2023-10-16',
-          stripeAccount: undefined,
-          betas: undefined,
-          locale: undefined
-        });
-        console.log('Stripe Key Mode:', key.startsWith('pk_test_') ? 'Test Mode' : 'Live Mode');
+        await stripePromise;
         setStripeLoaded(true);
-        console.log('Stripe loaded successfully');
       } catch (error) {
-        console.error('Error initializing Stripe:', error);
+        console.error('Error loading Stripe:', error);
+      }
+    };
+    
+    // Check for Apple Pay availability
+    const checkApplePayAvailability = () => {
+      if (window.ApplePaySession && ApplePaySession.canMakePayments()) {
+        setIsApplePayAvailable(true);
+      }
+    };
+    
+    // Initialize local storage test mode state
+    const initTestMode = () => {
+      if (isLocalhost) {
+        const savedTestMode = localStorage.getItem('stripeTestMode');
+        setIsTestMode(savedTestMode === 'true');
       }
     };
 
-    // Check if Apple Pay is available on supported browsers
-    if (typeof window !== 'undefined') {
-      console.log('Window is defined, initializing...');
-      if (window.ApplePaySession && ApplePaySession.canMakePayments()) {
-        setIsApplePayAvailable(true);
-        console.log("Apple Pay is supported on this device");
-      } else {
-        console.log("Apple Pay is NOT supported on this device");
+    // Check if user has already purchased this challenge
+    const checkPurchaseStatus = async () => {
+      setIsCheckingPurchase(true);
+      const currentUser = userService.currentUser;
+      
+      if (currentUser && challengeData.collection.challenge.id) {
+        try {
+          // Use the userService method instead of the Netlify function
+          const result = await userService.hasUserPurchasedChallenge(
+            currentUser.id, 
+            challengeData.collection.challenge.id
+          );
+          
+          setHasPurchased(result.hasPurchased);
+          console.log('Purchase check result:', result);
+        } catch (error) {
+          console.error('Error checking purchase status:', error);
+        }
       }
-
-      // Initialize test mode from localStorage if in localhost
-      if (isLocalhost) {
-        const savedTestMode = localStorage.getItem('stripeTestMode') === 'true';
-        console.log('Test mode from localStorage:', savedTestMode);
-        setIsTestMode(savedTestMode);
-      }
-
-      // Initialize Stripe
-      initStripe();
-    }
-  }, []);
+      
+      setIsCheckingPurchase(false);
+    };
+    
+    initStripe();
+    checkApplePayAvailability();
+    initTestMode();
+    checkPurchaseStatus();
+  }, [challengeData.collection.challenge.id]);
+  
+  // Calculate fees and total amount
+  const challenge = challengeData.collection.challenge;
+  const pricingInfo = challenge.pricingInfo;
+  
+  // Fix for amount handling - ensure we're working with cents
+  // If the amount is less than 100, it's likely already in dollars and needs conversion to cents
+  const rawAmount = pricingInfo?.amount || 0;
+  const baseAmount = rawAmount < 100 ? rawAmount * 100 : rawAmount;
+  const processingFee = Math.round(baseAmount * 0.029 + 30); // 2.9% + 30¢
+  const totalAmount = baseAmount + processingFee;
+  
+  const currency = pricingInfo?.currency || 'usd';
+  
+  const stripeElementsOptions = {
+    appearance,
+    locale: 'en' as const,
+  };
 
   const handleTestModeToggle = (enabled: boolean) => {
     setIsTestMode(enabled);
@@ -147,27 +212,88 @@ const PaymentPage = ({ challengeData }: PaymentPageProps) => {
     );
   }
 
-  const { challenge } = challengeData.collection;
-  const pricingInfo = challenge.pricingInfo || { isEnabled: false, amount: 0, currency: 'USD' };
-  // Calculate base amount and fee
-  const baseAmount = Math.round(pricingInfo.amount * 100); // Convert to cents for Stripe
-  const processingFee = Math.round(baseAmount * 0.035); // 3.5% fee
-  const totalAmount = baseAmount + processingFee;
-
-  // Options for the Stripe Elements
-  const stripeElementsOptions = {
-    appearance,
-    paymentRequest: {
-      country: 'US',
-      currency: pricingInfo.currency.toLowerCase(),
-      total: {
-        label: challenge.title || 'Round Access',
-        amount: totalAmount,
-      },
-      requestPayerName: true,
-      requestPayerEmail: true,
-    },
-  };
+  // If user has already purchased this challenge, display a message and redirect button
+  if (!isCheckingPurchase && hasPurchased) {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-gradient-to-b from-zinc-900 to-zinc-950 rounded-2xl shadow-lg overflow-hidden">
+          <div className="relative bg-zinc-800 p-6 pb-12">
+            <div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2">
+              <div className="bg-[#E0FE10] p-4 rounded-full shadow-lg animate-pulse">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-black" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M20 6L9 17l-5-5"></path>
+                </svg>
+              </div>
+            </div>
+          </div>
+          
+          <div className="p-6 pt-12 flex flex-col items-center text-center">
+            <h1 className="text-2xl font-bold mb-2 text-white">You Already Own This Round!</h1>
+            <p className="mb-6 text-zinc-400">
+              You've already purchased access to <span className="text-[#E0FE10] font-medium">{challenge.title}</span>
+            </p>
+            
+            <div className="grid grid-cols-2 gap-4 w-full mb-6">
+              <div className="bg-zinc-800 rounded-xl p-4 flex flex-col items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-[#E0FE10] mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span className="text-sm text-zinc-300">Start Now</span>
+              </div>
+              
+              <div className="bg-zinc-800 rounded-xl p-4 flex flex-col items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-[#E0FE10] mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                <span className="text-sm text-zinc-300">Get Moving</span>
+              </div>
+            </div>
+            
+            <div className="w-full space-y-3">
+              <button 
+                onClick={() => router.push(`/round/${challenge.id}`)}
+                className="w-full bg-[#E0FE10] text-black py-4 px-6 rounded-xl font-semibold hover:bg-opacity-90 transition-all transform hover:scale-[1.02] flex items-center justify-center space-x-2"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                </svg>
+                <span>Go to My Round</span>
+              </button>
+              
+              {isIOS() && (
+                <button 
+                  onClick={() => openIOSApp(challenge.id)}
+                  className="w-full bg-black border border-zinc-700 text-white py-4 px-6 rounded-xl font-semibold hover:bg-zinc-900 transition-all flex items-center justify-center space-x-2"
+                >
+                  <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M17.0403 12.3792C17.0211 9.57683 19.3328 8.32309 19.4323 8.25709C18.1956 6.46676 16.2302 6.19069 15.5509 6.17543C13.8945 6.00116 12.2944 7.19116 11.4538 7.19116C10.6131 7.19116 9.29943 6.19069 7.91174 6.22123C6.13087 6.25176 4.48897 7.29563 3.58371 8.89069C1.70484 12.1335 3.10724 17.0175 4.9097 19.7895C5.81497 21.149 6.86824 22.6526 8.25593 22.5915C9.61301 22.5305 10.1264 21.7004 11.7827 21.7004C13.4389 21.7004 13.9218 22.5915 15.3401 22.5609C16.7888 22.5305 17.7 21.1796 18.5846 19.8202C19.6379 18.2557 20.0745 16.7217 20.0946 16.6606C20.0543 16.6454 17.0605 15.5863 17.0403 12.3792Z" fill="white"/>
+                    <path d="M14.4349 4.25974C15.1756 3.35747 15.6787 2.14162 15.539 0.945923C14.5461 0.995789 13.3265 1.65909 12.5659 2.53601C11.8859 3.30094 11.2809 4.56522 11.4407 5.71574C12.5559 5.80228 13.674 5.16242 14.4349 4.25974Z" fill="white"/>
+                  </svg>
+                  <span>Open in iOS App</span>
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  
+  // If still checking purchase status, show loading state
+  if (isCheckingPurchase) {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-zinc-900 rounded-2xl shadow-lg p-8 flex flex-col items-center justify-center">
+          <div className="relative w-16 h-16 mb-6">
+            <div className="absolute top-0 left-0 w-full h-full border-4 border-zinc-700 rounded-full"></div>
+            <div className="absolute top-0 left-0 w-full h-full border-4 border-transparent border-t-[#E0FE10] rounded-full animate-spin"></div>
+          </div>
+          <p className="text-zinc-300 font-medium">Checking Payment Status...</p>
+          <p className="text-zinc-500 text-sm mt-2">Just a moment while we verify your purchase</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white py-10">
@@ -224,7 +350,7 @@ const PaymentPage = ({ challengeData }: PaymentPageProps) => {
             <CheckoutForm 
               challengeId={challenge.id} 
               amount={totalAmount}
-              currency={pricingInfo.currency}
+              currency={currency}
               isApplePayAvailable={isApplePayAvailable}
               challengeData={challengeData}
             />
@@ -691,10 +817,11 @@ const CheckoutForm = ({ challengeId, amount, currency, isApplePayAvailable, chal
   );
 };
 
-export const getServerSideProps: GetServerSideProps = async ({ params }) => {
+export const getServerSideProps: GetServerSideProps = async ({ params, req }) => {
   const id = params?.id as string;
   
   try {
+    // Fetch challenge data
     const response = await fetch(
       `https://fitwithpulse.ai/.netlify/functions/get-challenge-by-id?id=${id}`
     );
@@ -713,7 +840,7 @@ export const getServerSideProps: GetServerSideProps = async ({ params }) => {
     if (!data.collection.challenge.pricingInfo?.isEnabled) {
       return {
         redirect: {
-          destination: `/challenge/${id}`,
+          destination: `/round/${id}`,
           permanent: false,
         },
       };

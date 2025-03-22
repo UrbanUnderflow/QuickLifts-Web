@@ -536,7 +536,7 @@ const ChallengeDetailView = () => {
                 <h2 className="text-lg font-semibold">Stacks in this Round ({collection?.sweatlistIds.length})</h2>
               </div>
 
-              <div className="space-y-4">
+              <div className="space-y-4 pb-[100px]">
                 {collection?.sweatlistIds.map((sweatlistId, index) => {
                   // Calculate workout date based on challenge start date and index
                   const workoutDate = collection?.challenge?.startDate 

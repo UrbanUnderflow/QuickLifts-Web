@@ -683,6 +683,66 @@ class UserService {
       return [];
     }
   }
+
+  /**
+   * Check if a user has purchased a specific challenge
+   * @param userId The ID of the user to check
+   * @param challengeId The ID of the challenge to check
+   * @returns Promise resolving to an object with hasPurchased flag and payment details if found
+   */
+  async hasUserPurchasedChallenge(userId: string, challengeId: string): Promise<{
+    hasPurchased: boolean;
+    payment?: {
+      id: string;
+      purchaseDate: string | null;
+      amount: number;
+    };
+  }> {
+    if (!userId || !challengeId) {
+      console.warn('hasUserPurchasedChallenge called with missing parameters', { userId, challengeId });
+      return { hasPurchased: false };
+    }
+    
+    try {
+      console.log(`Checking if user ${userId} has purchased challenge ${challengeId}`);
+      
+      // Search for a payment record matching the buyerId and challengeId
+      const paymentsRef = collection(db, 'payments');
+      const paymentsQuery = query(
+        paymentsRef,
+        where('buyerId', '==', userId),
+        where('challengeId', '==', challengeId),
+        where('status', '==', 'completed'),
+        limit(1)
+      );
+      
+      const querySnapshot = await getDocs(paymentsQuery);
+      const hasPurchased = !querySnapshot.empty;
+      
+      console.log(`User ${userId} has ${hasPurchased ? '' : 'not '}purchased challenge ${challengeId}`);
+      
+      // If we found a payment record, return success with the payment details
+      if (hasPurchased && !querySnapshot.empty) {
+        const paymentDoc = querySnapshot.docs[0];
+        const paymentData = paymentDoc.data();
+        
+        return {
+          hasPurchased: true,
+          payment: {
+            id: paymentDoc.id,
+            purchaseDate: paymentData.createdAt ? new Date(paymentData.createdAt.toDate()).toISOString() : null,
+            amount: paymentData.amount || 0
+          }
+        };
+      }
+      
+      // If no payment record found, return with hasPurchased = false
+      return { hasPurchased: false };
+    } catch (error) {
+      console.error('Error checking if user has purchased challenge:', error);
+      return { hasPurchased: false };
+    }
+  }
 }
 
 export const userService = new UserService();
