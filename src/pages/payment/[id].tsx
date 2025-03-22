@@ -528,37 +528,75 @@ const CheckoutForm = ({ challengeId, amount, currency, isApplePayAvailable, chal
         }
       };
       
-      session.onpaymentauthorized = async (event: ApplePayJS.ApplePayPaymentAuthorizedEvent) => {
+      session.onpaymentauthorized = async (event) => {
         try {
+          console.log('Payment authorized with Apple Pay:', event.payment);
+          
+          // Get the owner ID from the challenge data
+          const ownerId = challengeData.collection.challenge.ownerId;
+          console.log('Challenge owner ID:', ownerId);
+          
+          // Create the payment intent
           const response = await fetch('/api/create-payment-intent', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-              challengeId, 
-              amount, 
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              challengeId,
+              amount,
               currency,
-              payment_data: event.payment.token.paymentData
+              buyerId: userService.currentUser?.id || 'anonymous',
+              buyerEmail: userService.currentUser?.email || 'unknown'
             }),
           });
           
-          const data = await response.json();
-          if (data.error) {
-            session.completePayment(ApplePaySession.STATUS_FAILURE);
-            return;
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Payment failed');
           }
           
-          // Record payment
-          await fetch('/.netlify/functions/complete-payment', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-              challengeId,
-              paymentId: data.paymentIntentId,
-              buyerId: userService.currentUser?.id || 'anonymous',
-              ownerId: challengeData.collection.challenge.ownerId || '',
-              amount: amount
-            }),
-          });
+          const data = await response.json();
+          console.log('Payment intent created:', data);
+          
+          // Complete merchant validation
+          const session_data = {
+            payment_data: JSON.stringify(event.payment.token.paymentData),
+            payment_method: {
+              displayName: event.payment.token.paymentMethod.displayName,
+              network: event.payment.token.paymentMethod.network,
+              type: event.payment.token.paymentMethod.type,
+            },
+            client_secret: data.clientSecret,
+            challengeId,
+          };
+          
+          // Record the payment in our system after payment is processed
+          try {
+            // Record the payment
+            console.log('Recording payment with buyer ID:', userService.currentUser?.id || 'anonymous');
+            const paymentResponse = await fetch('/.netlify/functions/complete-payment', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                challengeId,
+                paymentId: data.clientSecret.split('_secret')[0],
+                buyerId: userService.currentUser?.id || 'anonymous',
+                ownerId: ownerId,
+                amount
+              }),
+            });
+            
+            if (!paymentResponse.ok) {
+              console.error('Error recording payment:', await paymentResponse.text());
+            } else {
+              console.log('Payment recorded successfully');
+            }
+          } catch (recordError) {
+            console.error('Error recording payment:', recordError);
+          }
           
           session.completePayment(ApplePaySession.STATUS_SUCCESS);
           

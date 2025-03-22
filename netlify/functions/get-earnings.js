@@ -374,6 +374,32 @@ const handler = async (event) => {
         
         // Format payments data for the frontend
         const recentSales = allPayments.map(payment => {
+          const rawBuyerId = payment.buyerId || payment.userId || 
+            (payment.metadata && (payment.metadata.buyerId || payment.metadata.userId)) || 
+            'anonymous';
+            
+          // Log the buyer ID extraction for each payment
+          console.log('Processing payment for frontend:', {
+            paymentId: payment.paymentId || payment.id || 'unknown',
+            source: payment.source || 'unknown',
+            rawBuyerId,
+            buyerIdType: typeof rawBuyerId,
+            buyerIdLength: typeof rawBuyerId === 'string' ? rawBuyerId.length : 'n/a',
+            hasMetadata: !!payment.metadata,
+            metadataKeys: payment.metadata ? Object.keys(payment.metadata) : []
+          });
+          
+          // Clean up the buyer ID if it's malformed
+          let cleanBuyerId = rawBuyerId;
+          if (typeof cleanBuyerId === 'string' && cleanBuyerId.length > 0 && 
+              (cleanBuyerId !== 'anonymous' && cleanBuyerId !== 'unknown')) {
+            // Trim any whitespace
+            cleanBuyerId = cleanBuyerId.trim();
+            console.log(`Buyer ID cleaned: "${rawBuyerId}" -> "${cleanBuyerId}"`);
+          } else {
+            console.log(`Using default buyer ID: ${cleanBuyerId}`);
+          }
+          
           return {
             date: payment.createdAt?.toDate?.() 
               ? payment.createdAt.toDate().toISOString().split('T')[0] 
@@ -383,7 +409,7 @@ const handler = async (event) => {
             status: payment.status || 'completed',
             source: payment.source || 'firestore',
             id: payment.paymentId || payment.id || 'unknown',
-            buyerId: payment.buyerId || payment.userId || payment.metadata?.buyerId || payment.metadata?.userId || 'anonymous'
+            buyerId: cleanBuyerId
           };
         });
         

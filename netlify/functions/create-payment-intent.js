@@ -35,7 +35,7 @@ const handler = async (event, context) => {
 
   try {
     // Parse the request body
-    const { challengeId, amount, currency, ownerId, buyerId } = JSON.parse(event.body);
+    const { challengeId, amount, currency, ownerId, buyerId, buyerEmail } = JSON.parse(event.body);
     
     console.log('Creating payment intent with params:', {
       challengeId,
@@ -43,7 +43,12 @@ const handler = async (event, context) => {
       currency,
       ownerId,
       buyerId,
-      ownerIdType: ownerId ? (Array.isArray(ownerId) ? 'array' : typeof ownerId) : 'undefined'
+      buyerEmail,
+      ownerIdType: ownerId ? (Array.isArray(ownerId) ? 'array' : typeof ownerId) : 'undefined',
+      hasBuyerId: !!buyerId,
+      buyerIdType: buyerId ? typeof buyerId : 'null',
+      buyerIdValue: buyerId || 'not provided',
+      buyerEmail: buyerEmail || 'not provided'
     });
 
     // Validate required parameters
@@ -193,6 +198,7 @@ const handler = async (event, context) => {
         ownerId: selectedOwnerId,
         environment: 'live',
         buyerId: buyerId || 'unknown',
+        buyerEmail: buyerEmail || 'unknown',
         createdAt: new Date().toISOString(),
         source: 'fitwithpulse-web'
       }
@@ -236,6 +242,7 @@ const handler = async (event, context) => {
         challengeId: challengeId,
         ownerId: selectedOwnerId,
         buyerId: buyerId || null,
+        buyerEmail: buyerEmail || null,
         challengeTitle: challengeTitle,
         createdAt: new Date(),
         updatedAt: new Date(),

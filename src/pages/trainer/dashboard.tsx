@@ -55,15 +55,43 @@ const TrainerDashboard = () => {
     // Remove duplicates
     const uniqueBuyerIds = Array.from(new Set(buyerIds));
     
-    if (uniqueBuyerIds.length === 0) return;
+    console.log('All sales with buyer info:', sales.map(sale => ({
+      roundTitle: sale.roundTitle,
+      amount: sale.amount,
+      buyerId: sale.buyerId || 'none',
+      buyerIdType: sale.buyerId ? typeof sale.buyerId : 'none',
+      date: sale.date
+    })));
     
-    console.log('Fetching buyer information for IDs:', uniqueBuyerIds);
+    console.log('Unique buyer IDs extracted:', uniqueBuyerIds);
+    
+    if (uniqueBuyerIds.length === 0) {
+      console.warn('No valid buyer IDs found in sales data');
+      return;
+    }
     
     try {
+      console.log('Fetching buyer information for IDs:', uniqueBuyerIds);
       const users = await userService.getUsersByIds(uniqueBuyerIds);
+      console.log(`Received ${users.length} user records from getUsersByIds`);
+      
+      if (users.length === 0) {
+        console.warn('No users found matching the buyer IDs');
+      }
+      
       const newBuyerInfoMap = new Map<string, BuyerInfo>();
       
       users.forEach(user => {
+        if (!user.id) {
+          console.warn('User record missing ID:', user);
+          return;
+        }
+        
+        console.log('Adding user to buyer info map:', {
+          id: user.id,
+          username: user.username || 'Anonymous User'
+        });
+        
         newBuyerInfoMap.set(user.id, {
           id: user.id,
           username: user.username || 'Anonymous User',
@@ -72,6 +100,7 @@ const TrainerDashboard = () => {
       });
       
       setBuyerInfoMap(newBuyerInfoMap);
+      console.log('BuyerInfoMap updated with', newBuyerInfoMap.size, 'entries');
     } catch (error) {
       console.error('Error fetching buyer information:', error);
     }
