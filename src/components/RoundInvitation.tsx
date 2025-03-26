@@ -265,10 +265,13 @@ const PricingBadge = ({ pricingInfo }: { pricingInfo: PricingInfo }) => {
     minimumFractionDigits: 2
   });
   
+  // Convert amount from cents to dollars
+  const amountInDollars = pricingInfo.amount / 100;
+  
   return (
     <div className="bg-zinc-800 rounded-full px-4 py-1 inline-flex items-center mb-4">
       <span className="text-[#E0FE10] mr-1">Premium Round</span>
-      <span className="text-white font-semibold">{formatter.format(pricingInfo.amount)}</span>
+      <span className="text-white font-semibold">{formatter.format(amountInDollars)}</span>
     </div>
   );
 };

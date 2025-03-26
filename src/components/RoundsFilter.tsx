@@ -199,7 +199,9 @@ export const filterChallenges = (
   
   switch (tab) {
     case RoundTab.ALL:
-      return challenges;
+      return [...challenges].sort((a, b) => 
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
       
     case RoundTab.TOGETHER:
       return challenges.filter(challenge => 

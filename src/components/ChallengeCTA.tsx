@@ -142,7 +142,7 @@ const ChallengeCTA: React.FC<{ challenge: Challenge }> = ({ challenge }) => {
           ${isJoining ? 'bg-[#E0FE10]/50' : 'bg-[#E0FE10]'}
         `}
       >
-        {isJoining ? 'Processing...' : isPaid ? `Join Round ($${challenge.pricingInfo?.amount})` : 'Join Round'}
+        {isJoining ? 'Processing...' : isPaid ? `Join Round ($${(challenge.pricingInfo?.amount || 0) / 100})` : 'Join Round'}
       </button>
     </div>
   );

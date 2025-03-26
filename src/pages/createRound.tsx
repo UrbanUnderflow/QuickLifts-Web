@@ -628,7 +628,9 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
     const [isAIMode, setIsAIMode] = useState(false);
 
     const preferences = [
-      "Exclusive to selected creators"
+      "Exclusive to selected creators",
+      "Use stacks I've created/saved in my library",
+      "Create unique stacks for each day.",
     ];
 
     // Add these states in DesktopChallengeSetupView

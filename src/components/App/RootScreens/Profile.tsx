@@ -323,6 +323,8 @@ const handleProcessVideosWithoutGifs = async () => {
     youtube: currentUser.creator?.youtubeUrl
   };
 
+  const router = useRouter();
+
   return (
     <div className="min-h-screen bg-zinc-900">
       <div className="relative">
@@ -452,9 +454,20 @@ const handleProcessVideosWithoutGifs = async () => {
               {selectedTab === TABS.STACKS && (
                 <div className="px-5">
                   <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-xl text-white font-semibold">
-                      Your Stacks ({userStacks.length})
-                    </h2>
+                    <div className="flex items-center gap-4">
+                      <h2 className="text-xl text-white font-semibold">
+                        Your Stacks ({userStacks.length})
+                      </h2>
+                      <button
+                        onClick={() => router.push('/createStack')}
+                        className="flex items-center gap-2 px-4 py-2 bg-[#E0FE10] text-black rounded-lg hover:bg-[#c8e60e] transition-colors"
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M12 5V19M5 12H19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                        Create a Stack
+                      </button>
+                    </div>
                     <div className="flex gap-4">
                       <button
                         onClick={() => setIsSelecting(!isSelecting)}
@@ -473,7 +486,6 @@ const handleProcessVideosWithoutGifs = async () => {
                     </div>
                   </div>
                   <StackGrid
-                    // Sort stacks by createdAt (newest first)
                     stacks={[...userStacks].sort(
                       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
                     )}
@@ -544,12 +556,30 @@ const handleProcessVideosWithoutGifs = async () => {
               )}
 
               {selectedTab === TABS.CHALLENGES && (
-                <ChallengesTab
-                  activeChallenges={activeChallenges}
-                  onSelectChallenge={(challenge) => {
-                    console.log('Selected challenge:', challenge.startDate);
-                  }}
-                />
+                <div className="px-5">
+                  <div className="flex justify-between items-center mb-4">
+                    <div className="flex items-center gap-4">
+                      <h2 className="text-xl text-white font-semibold">
+                        Your Rounds ({activeChallenges.length})
+                      </h2>
+                      <button
+                        onClick={() => router.push('/createRound')}
+                        className="flex items-center gap-2 px-4 py-2 bg-[#E0FE10] text-black rounded-lg hover:bg-[#c8e60e] transition-colors"
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M12 5V19M5 12H19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                        Create a Round
+                      </button>
+                    </div>
+                  </div>
+                  <ChallengesTab
+                    activeChallenges={activeChallenges}
+                    onSelectChallenge={(challenge) => {
+                      console.log('Selected challenge:', challenge.startDate);
+                    }}
+                  />
+                </div>
               )}
             </div>
           </div>

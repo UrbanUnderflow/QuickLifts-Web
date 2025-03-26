@@ -183,10 +183,8 @@ const PaymentPage = ({ challengeData }: PaymentPageProps) => {
   const challenge = challengeData.collection.challenge;
   const pricingInfo = challenge.pricingInfo;
   
-  // Fix for amount handling - ensure we're working with cents
-  // If the amount is less than 100, it's likely already in dollars and needs conversion to cents
-  const rawAmount = pricingInfo?.amount || 0;
-  const baseAmount = rawAmount < 100 ? rawAmount * 100 : rawAmount;
+  // The amount from pricingInfo is already in cents, no need to convert
+  const baseAmount = pricingInfo?.amount || 0;
   const processingFee = Math.round(baseAmount * 0.029 + 30); // 2.9% + 30¢
   const totalAmount = baseAmount + processingFee;
   
@@ -810,7 +808,7 @@ const CheckoutForm = ({ challengeId, amount, currency, isApplePayAvailable, chal
             text-black transition-all
           `}
         >
-          {processing ? 'Processing...' : succeeded ? 'Payment Successful!' : `Pay ${(amount/100).toFixed(2)} ${currency.toUpperCase()}`}
+          {processing ? 'Processing...' : succeeded ? 'Payment Successful!' : `Pay $${(amount/100).toFixed(2)} ${currency.toUpperCase()}`}
         </button>
       </form>
     </div>

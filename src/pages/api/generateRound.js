@@ -20,7 +20,6 @@ async function generateWorkouts(totalNeeded, existingWorkouts = [], retryCount =
      
       PROGRAM REQUIREMENTS:
       - EXACTLY ${remainingNeeded} total workouts (including rest days) from ${promptData.startDate} to ${promptData.endDate}
-      - Each week MUST include 6 workout days and 1 rest day
       - The program MUST fill the entire date range with no gaps
       - 4-5 exercises per workout (no more than 5)
       - Use only exercises from these lists:
@@ -29,7 +28,6 @@ async function generateWorkouts(totalNeeded, existingWorkouts = [], retryCount =
 
       CRITICAL REQUIREMENTS:
       - You MUST generate exactly ${remainingNeeded} stacks
-      - Each week MUST have exactly 1 rest day
       - Current response has too few workouts - ensure you generate enough to cover the entire period
       
       USER PREFERENCES:
@@ -175,18 +173,9 @@ export default async function handler(req, res) {
     console.log(`Target total workouts: ${totalWorkouts}`);
 
     let workouts;
-    if (preferences.includes("Auto fill with 1-week program")) {
-      // Generate one week pattern and repeat
-      workouts = await generateOneWeekPattern(
-        totalWorkouts,
-        availableExercises,
-        mustIncludeExercises,
-        startDate,
-        endDate,
-        preferences
-      );
-    } else {
-      // Use existing generation logic
+    // Inside handler function, after calculating totalWorkouts...
+    if (preferences.includes("Unique stacks for each day")) {
+      // Generate unique workouts for every single day
       workouts = await generateWorkouts(totalWorkouts, [], 0, {
         mustIncludeExercises,
         userPrompt,
@@ -195,6 +184,16 @@ export default async function handler(req, res) {
         startDate,
         endDate
       });
+    } else {
+      // By default, generate a 7-day pattern and repeat it
+      workouts = await generateOneWeekPattern(
+        totalWorkouts,
+        availableExercises,
+        mustIncludeExercises,
+        startDate,
+        endDate,
+        preferences
+      );
     }
 
     res.status(200).json({
