@@ -296,8 +296,8 @@ const handler = async (event) => {
               country: existingParticipant.country || '',
               timezone: existingParticipant.timezone || '',
               username: userData.username || existingParticipant.username || '',
-              joinDate: existingParticipant.joinDate || toUnixTimestamp(joinDate),
-              createdAt: existingParticipant.createdAt || toUnixTimestamp(joinDate),
+              joinDate: toUnixTimestamp(joinDate),
+              createdAt: toUnixTimestamp(joinDate),
               updatedAt: toUnixTimestamp(new Date()),
               pulsePoints: {
                 ...existingParticipant.pulsePoints,
