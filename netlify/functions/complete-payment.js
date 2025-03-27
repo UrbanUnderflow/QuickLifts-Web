@@ -48,7 +48,7 @@ const handler = async (event) => {
   try {
     // Parse the request body
     const data = JSON.parse(event.body);
-    const { challengeId, paymentId, buyerId, ownerId, amount, buyerEmail, platformFee, ownerAmount, connectedAccountId } = data;
+    const { challengeId, paymentId, buyerId, ownerId, amount, buyerEmail, connectedAccountId } = data;
     
     console.log('Recording payment completion:', {
       challengeId,
@@ -118,51 +118,56 @@ const handler = async (event) => {
     
     console.log('Effective owner ID for payment record:', effectiveOwnerId);
     
-    // Create a payment record in Firestore
-    const paymentRecord = {
-      paymentId,
-      amount,
-      currency: 'usd',
-      status: 'pending', // Will be updated to 'succeeded' by webhook
-      challengeId,
-      ownerId: effectiveOwnerId,
-      buyerId: buyerId || null,
-      buyerEmail: buyerEmail || null,
-      challengeTitle,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      platformFee,
-      ownerAmount,
-      stripeAccountId: connectedAccountId
-    };
+    // Calculate platform fee (3%) and owner amount
+    const platformFee = Math.round((amount || 0) * 0.03);
+    const ownerAmount = (amount || 0) - platformFee;
 
+    console.log('Payment split:', {
+      totalAmount: amount || 0,
+      platformFee,
+      ownerAmount
+    });
+    
     // Start a batch write
     const batch = db.batch();
+    let userChallengeId = null;
 
-    // Add payment record
-    const paymentRef = db.collection('payments').doc(paymentId);
-    batch.set(paymentRef, paymentRecord);
-
-    // If we have a buyerId, create userChallenge record
+    // If we have a buyerId, create userChallenge record first
     if (buyerId) {
+      console.log('Starting userChallenge creation process for buyer:', buyerId);
+      
       // Get user data
       const userDoc = await db.collection('users').doc(buyerId).get();
       const userData = userDoc.data();
 
       if (userData) {
+        console.log('Found user data:', {
+          username: userData.username,
+          hasFcmToken: !!userData.fcmToken,
+          hasProfileImage: !!userData.profileImage
+        });
+
         // Get challenge data
         const challengeDoc = await db.collection('sweatlist-collection').doc(challengeId).get();
         const challengeData = challengeDoc.data();
 
         if (challengeData) {
+          console.log('Found challenge data:', {
+            challengeId,
+            title: challengeData.challenge?.title,
+            currentParticipants: challengeData.participants?.length || 0
+          });
+
           // Check if user is already a participant
           const existingParticipant = challengeData.participants?.find(
             p => p.userId === buyerId
           );
 
           if (!existingParticipant) {
+            console.log('User is not an existing participant, creating new userChallenge');
+            
             // Create userChallenge record
-            const userChallengeId = `${challengeId}-${buyerId}-${Date.now()}`;
+            userChallengeId = `${challengeId}-${buyerId}-${Date.now()}`;
             const joinDate = new Date();
             
             const userChallengeData = {
@@ -207,6 +212,13 @@ const handler = async (event) => {
               checkIns: []
             };
 
+            console.log('Preparing to create userChallenge with data:', {
+              userChallengeId,
+              userId: buyerId,
+              username: userData.username,
+              joinDate: joinDate.toISOString()
+            });
+
             // Add userChallenge record
             const userChallengeRef = db.collection('user-challenge').doc(userChallengeId);
             batch.set(userChallengeRef, userChallengeData);
@@ -217,20 +229,84 @@ const handler = async (event) => {
               participants: [...(challengeData.participants || []), userChallengeData]
             };
 
+            console.log('Updating challenge with new participant:', {
+              challengeId,
+              newParticipantId: userChallengeId,
+              totalParticipants: updatedChallenge.participants.length
+            });
+
             // Update the challenge document with new participant
             const challengeRef = db.collection('sweatlist-collection').doc(challengeId);
             batch.update(challengeRef, {
               participants: updatedChallenge.participants,
               updatedAt: new Date()
             });
+
+            console.log('Successfully prepared userChallenge creation:', {
+              userChallengeId,
+              challengeId,
+              buyerId
+            });
+          } else {
+            // If user is already a participant, use their existing userChallenge ID
+            userChallengeId = existingParticipant.id;
+            console.log('User already a participant:', {
+              userChallengeId,
+              userId: buyerId,
+              existingParticipantData: {
+                progress: existingParticipant.progress,
+                isCompleted: existingParticipant.isCompleted,
+                joinDate: existingParticipant.joinDate
+              }
+            });
           }
+        } else {
+          console.error('Challenge data not found for challengeId:', challengeId);
         }
+      } else {
+        console.error('User data not found for buyerId:', buyerId);
       }
+    } else {
+      console.log('No buyerId provided, skipping userChallenge creation');
     }
+    
+    // Create a payment record in Firestore
+    const paymentRecord = {
+      paymentId,
+      amount: amount || 0,
+      currency: 'usd',
+      status: 'pending', // Will be updated to 'succeeded' by webhook
+      challengeId,
+      ownerId: effectiveOwnerId || null,
+      buyerId: buyerId || null,
+      buyerEmail: buyerEmail || null,
+      challengeTitle: challengeTitle || 'Round',
+      userChallengeId: userChallengeId || null,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      platformFee, // Now this will always be calculated
+      ownerAmount, // Now this will always be calculated
+      stripeAccountId: connectedAccountId || null
+    };
+
+    // Remove any undefined values from the payment record
+    Object.keys(paymentRecord).forEach(key => {
+      if (paymentRecord[key] === undefined) {
+        delete paymentRecord[key];
+      }
+    });
+
+    // Add payment record
+    const paymentRef = db.collection('payments').doc(paymentId);
+    batch.set(paymentRef, paymentRecord);
 
     // Commit all changes atomically
     await batch.commit();
-    console.log('Created payment record and userChallenge in Firestore:', paymentId);
+    console.log('Created payment record and userChallenge in Firestore:', {
+      paymentId,
+      userChallengeId,
+      paymentRecord // Log the actual payment record for debugging
+    });
     
     return {
       statusCode: 200,
@@ -240,7 +316,8 @@ const handler = async (event) => {
           id: paymentId,
           challengeId,
           challengeTitle,
-          amount: amount || 0
+          amount: amount || 0,
+          userChallengeId // Include userChallenge ID in the response
         }
       })
     };
