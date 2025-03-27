@@ -707,16 +707,18 @@ class UserService {
       console.log(`Checking if user ${userId} has purchased challenge ${challengeId}`);
       
       // Search for a payment record matching the buyerId and challengeId
+      // Note: Payments can have status 'completed' (from test payments) or 'succeeded' (from Stripe)
+      // Also accept payments with status 'pending' since we use that for simulated payments in the UI
       const paymentsRef = collection(db, 'payments');
-      const paymentsQuery = query(
+      const completedQuery = query(
         paymentsRef,
         where('buyerId', '==', userId),
         where('challengeId', '==', challengeId),
-        where('status', '==', 'completed'),
+        where('status', 'in', ['completed', 'succeeded', 'pending']),
         limit(1)
       );
       
-      const querySnapshot = await getDocs(paymentsQuery);
+      const querySnapshot = await getDocs(completedQuery);
       const hasPurchased = !querySnapshot.empty;
       
       console.log(`User ${userId} has ${hasPurchased ? '' : 'not '}purchased challenge ${challengeId}`);
