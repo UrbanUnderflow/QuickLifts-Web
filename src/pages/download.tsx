@@ -122,7 +122,7 @@ const DownloadPage = () => {
                     </div>
                     <div className="text-left">
                       <h3 className="font-medium">iOS App</h3>
-                      <p className="text-sm text-zinc-400">Download the QuickLifts app</p>
+                      <p className="text-sm text-zinc-400">Download the Pulse app</p>
                     </div>
                   </div>
                   <ArrowRight className="h-5 w-5 text-zinc-400 group-hover:text-[#E0FE10] transition-colors" />

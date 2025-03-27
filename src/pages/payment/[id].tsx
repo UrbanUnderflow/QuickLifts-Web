@@ -4,6 +4,8 @@ import { useRouter } from 'next/router';
 import { loadStripe, PaymentRequest } from '@stripe/stripe-js';
 import { Elements, CardElement, PaymentRequestButtonElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { userService } from '../../api/firebase/user/service';
+import Link from 'next/link';
+import { ArrowRight, Globe } from 'lucide-react';
 
 // Helper function to check if we're in localhost
 const isLocalhost = typeof window !== 'undefined' && 
@@ -253,11 +255,11 @@ const PaymentPage = ({ challengeData }: PaymentPageProps) => {
   if (!isCheckingPurchase && hasPurchased) {
     return (
       <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-gradient-to-b from-zinc-900 to-zinc-950 rounded-2xl shadow-lg overflow-hidden">
+        <div className="max-w-4xl w-full bg-gradient-to-b from-zinc-900 to-zinc-950 rounded-2xl shadow-lg overflow-hidden">
           <div className="relative bg-zinc-800 p-6 pb-12">
             <div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2">
-              <div className="bg-[#E0FE10] p-4 rounded-full shadow-lg animate-pulse">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-black" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <div className="bg-[#E0FE10] p-3 rounded-full shadow-lg animate-pulse">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-black" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M20 6L9 17l-5-5"></path>
                 </svg>
               </div>
@@ -269,46 +271,101 @@ const PaymentPage = ({ challengeData }: PaymentPageProps) => {
             <p className="mb-6 text-zinc-400">
               You've already purchased access to <span className="text-[#E0FE10] font-medium">{challenge.title}</span>
             </p>
-            
-            <div className="grid grid-cols-2 gap-4 w-full mb-6">
-              <div className="bg-zinc-800 rounded-xl p-4 flex flex-col items-center">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-[#E0FE10] mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <span className="text-sm text-zinc-300">Start Now</span>
-              </div>
-              
-              <div className="bg-zinc-800 rounded-xl p-4 flex flex-col items-center">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-[#E0FE10] mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-                <span className="text-sm text-zinc-300">Get Moving</span>
+
+            {/* Main Content */}
+            <div className="bg-zinc-900 rounded-xl p-6 mb-8 w-full">
+              <div className="grid lg:grid-cols-2 gap-6">
+                {/* Left Column - App Info */}
+                <div className="space-y-4">
+                  <h2 className="text-lg font-semibold text-[#E0FE10]">Your Fitness Journey Continues</h2>
+                  <div className="grid sm:grid-cols-2 lg:grid-cols-1 gap-3">
+                    <div className="flex items-start space-x-3 bg-zinc-800/50 p-3 rounded-lg">
+                      <div className="bg-zinc-800 p-2 rounded-md">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-[#E0FE10]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                        </svg>
+                      </div>
+                      <div className="text-left">
+                        <h3 className="font-medium mb-1 text-white text-sm">Track Your Progress</h3>
+                        <p className="text-xs text-zinc-400">Monitor your daily workouts and track your improvements over time</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-start space-x-3 bg-zinc-800/50 p-3 rounded-lg">
+                      <div className="bg-zinc-800 p-2 rounded-md">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-[#E0FE10]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      </div>
+                      <div className="text-left">
+                        <h3 className="font-medium mb-1 text-white text-sm">Daily Workouts</h3>
+                        <p className="text-xs text-zinc-400">Access your personalized workout program day by day</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-start space-x-3 bg-zinc-800/50 p-3 rounded-lg sm:col-span-2">
+                      <div className="bg-zinc-800 p-2 rounded-md">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-[#E0FE10]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                        </svg>
+                      </div>
+                      <div className="text-left">
+                        <h3 className="font-medium mb-1 text-white text-sm">Progress Analytics</h3>
+                        <p className="text-xs text-zinc-400">View detailed analytics and insights about your fitness journey</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right Column - Access Options */}
+                <div className="space-y-4">
+                  <h2 className="text-lg font-semibold text-[#E0FE10]">Choose How to Access Your Round</h2>
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    {/* iOS App Option */}
+                    <button
+                      onClick={() => openIOSApp(challenge.id)}
+                      className="w-full bg-zinc-800 hover:bg-zinc-700 p-4 rounded-lg flex flex-col items-center justify-center group transition-all"
+                    >
+                      <div className="bg-zinc-700 p-3 rounded-md mb-3">
+                        <svg className="h-6 w-6 text-[#E0FE10]" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M17.0403 12.3792C17.0211 9.57683 19.3328 8.32309 19.4323 8.25709C18.1956 6.46676 16.2302 6.19069 15.5509 6.17543C13.8945 6.00116 12.2944 7.19116 11.4538 7.19116C10.6131 7.19116 9.29943 6.19069 7.91174 6.22123C6.13087 6.25176 4.48897 7.29563 3.58371 8.89069C1.70484 12.1335 3.10724 17.0175 4.9097 19.7895C5.81497 21.149 6.86824 22.6526 8.25593 22.5915C9.61301 22.5305 10.1264 21.7004 11.7827 21.7004C13.4389 21.7004 13.9218 22.5915 15.3401 22.5609C16.7888 22.5305 17.7 21.1796 18.5846 19.8202C19.6379 18.2557 20.0745 16.7217 20.0946 16.6606C20.0543 16.6454 17.0605 15.5863 17.0403 12.3792Z" fill="currentColor"/>
+                          <path d="M14.4349 4.25974C15.1756 3.35747 15.6787 2.14162 15.539 0.945923C14.5461 0.995789 13.3265 1.65909 12.5659 2.53601C11.8859 3.30094 11.2809 4.56522 11.4407 5.71574C12.5559 5.80228 13.674 5.16242 14.4349 4.25974Z" fill="currentColor"/>
+                        </svg>
+                      </div>
+                      <div className="text-center">
+                        <h3 className="font-medium text-white text-sm mb-1">iOS App</h3>
+                        <p className="text-xs text-zinc-400">Open in the Pulse app</p>
+                      </div>
+                      <ArrowRight className="h-4 w-4 text-zinc-400 group-hover:text-[#E0FE10] transition-colors mt-2" />
+                    </button>
+
+                    {/* Web App Option */}
+                    <button 
+                      onClick={() => router.push(`/round/${challenge.id}`)}
+                      className="w-full bg-zinc-800 hover:bg-zinc-700 p-4 rounded-lg flex flex-col items-center justify-center group transition-all"
+                    >
+                      <div className="bg-zinc-700 p-3 rounded-md mb-3">
+                        <Globe className="h-6 w-6 text-[#E0FE10]" />
+                      </div>
+                      <div className="text-center">
+                        <h3 className="font-medium text-white text-sm mb-1">Web App</h3>
+                        <p className="text-xs text-zinc-400">Access via browser</p>
+                      </div>
+                      <ArrowRight className="h-4 w-4 text-zinc-400 group-hover:text-[#E0FE10] transition-colors mt-2" />
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
-            
-            <div className="w-full space-y-3">
-              <button 
-                onClick={() => router.push(`/round/${challenge.id}`)}
-                className="w-full bg-[#E0FE10] text-black py-4 px-6 rounded-xl font-semibold hover:bg-opacity-90 transition-all transform hover:scale-[1.02] flex items-center justify-center space-x-2"
+
+            {/* Footer */}
+            <div className="text-center">
+              <Link 
+                href="/discover"
+                className="text-zinc-400 hover:text-white transition-colors text-sm"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                </svg>
-                <span>Go to My Round</span>
-              </button>
-              
-              {isIOS() && (
-                <button 
-                  onClick={() => openIOSApp(challenge.id)}
-                  className="w-full bg-black border border-zinc-700 text-white py-4 px-6 rounded-xl font-semibold hover:bg-zinc-900 transition-all flex items-center justify-center space-x-2"
-                >
-                  <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M17.0403 12.3792C17.0211 9.57683 19.3328 8.32309 19.4323 8.25709C18.1956 6.46676 16.2302 6.19069 15.5509 6.17543C13.8945 6.00116 12.2944 7.19116 11.4538 7.19116C10.6131 7.19116 9.29943 6.19069 7.91174 6.22123C6.13087 6.25176 4.48897 7.29563 3.58371 8.89069C1.70484 12.1335 3.10724 17.0175 4.9097 19.7895C5.81497 21.149 6.86824 22.6526 8.25593 22.5915C9.61301 22.5305 10.1264 21.7004 11.7827 21.7004C13.4389 21.7004 13.9218 22.5915 15.3401 22.5609C16.7888 22.5305 17.7 21.1796 18.5846 19.8202C19.6379 18.2557 20.0745 16.7217 20.0946 16.6606C20.0543 16.6454 17.0605 15.5863 17.0403 12.3792Z" fill="white"/>
-                    <path d="M14.4349 4.25974C15.1756 3.35747 15.6787 2.14162 15.539 0.945923C14.5461 0.995789 13.3265 1.65909 12.5659 2.53601C11.8859 3.30094 11.2809 4.56522 11.4407 5.71574C12.5559 5.80228 13.674 5.16242 14.4349 4.25974Z" fill="white"/>
-                  </svg>
-                  <span>Open in iOS App</span>
-                </button>
-              )}
+                Return to Discover
+              </Link>
             </div>
           </div>
         </div>
