@@ -110,6 +110,7 @@ interface PaymentPageProps {
 const PaymentPage = ({ challengeData }: PaymentPageProps) => {
   const [isApplePayAvailable, setIsApplePayAvailable] = useState(false);
   const [isTestMode, setIsTestMode] = useState(false);
+  const [isPaidMode, setIsPaidMode] = useState(false);
   const [stripeLoaded, setStripeLoaded] = useState(false);
   const [hasPurchased, setHasPurchased] = useState(false);
   const [isCheckingPurchase, setIsCheckingPurchase] = useState(true);
@@ -200,6 +201,44 @@ const PaymentPage = ({ challengeData }: PaymentPageProps) => {
     localStorage.setItem('stripeTestMode', enabled.toString());
     // Reload the page to reinitialize Stripe with the new key
     window.location.reload();
+  };
+
+  // Add this new function to handle paid mode toggle
+  const handlePaidModeToggle = async (enabled: boolean) => {
+    setIsPaidMode(enabled);
+    if (enabled) {
+      // Simulate a successful payment
+      try {
+        const ownerId = challengeData.collection.challenge.ownerId;
+        const amount = totalAmount;
+        
+        // Record the simulated payment
+        const paymentResponse = await fetch('/.netlify/functions/complete-payment', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            challengeId: challengeData.collection.challenge.id,
+            paymentId: `simulated_${Date.now()}`,
+            buyerId: userService.currentUser?.id || 'anonymous',
+            ownerId: ownerId,
+            amount: amount
+          }),
+        });
+
+        if (!paymentResponse.ok) {
+          console.error('Error recording simulated payment:', await paymentResponse.text());
+        } else {
+          console.log('Simulated payment recorded successfully');
+        }
+
+        // Use Next.js router for navigation
+        router.replace(`/download?challengeId=${challengeData.collection.challenge.id}`);
+      } catch (error) {
+        console.error('Error in paid mode simulation:', error);
+      }
+    }
   };
 
   if (!challengeData) {
@@ -297,7 +336,7 @@ const PaymentPage = ({ challengeData }: PaymentPageProps) => {
     <div className="min-h-screen bg-zinc-950 text-white py-10">
       <div className="max-w-md mx-auto px-6">
         {(isLocalhost || userService.currentUser?.email === "tremaine.grant@gmail.com") && (
-          <div className="mb-6 p-4 bg-zinc-900 rounded-lg">
+          <div className="mb-6 p-4 bg-zinc-900 rounded-lg space-y-4">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium">Test Mode</span>
               <button
@@ -317,11 +356,35 @@ const PaymentPage = ({ challengeData }: PaymentPageProps) => {
                 />
               </button>
             </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">Paid Mode (Bypass Payment)</span>
+              <button
+                onClick={() => handlePaidModeToggle(!isPaidMode)}
+                className={`
+                  relative inline-flex h-6 w-11 items-center rounded-full
+                  ${isPaidMode ? 'bg-[#E0FE10]' : 'bg-zinc-700'}
+                  transition-colors focus:outline-none
+                `}
+              >
+                <span
+                  className={`
+                    inline-block h-4 w-4 transform rounded-full bg-black
+                    transition-transform
+                    ${isPaidMode ? 'translate-x-6' : 'translate-x-1'}
+                  `}
+                />
+              </button>
+            </div>
             <p className="mt-2 text-xs text-zinc-400">
               {isTestMode 
                 ? 'Using test mode keys. Use test card numbers (e.g., 4242 4242 4242 4242)'
                 : 'Using live mode keys. Real payments will be processed'}
             </p>
+            {isPaidMode && (
+              <p className="text-xs text-[#E0FE10]">
+                Payment bypass enabled. Clicking pay will simulate a successful payment.
+              </p>
+            )}
           </div>
         )}
         
@@ -393,6 +456,9 @@ const CheckoutForm = ({ challengeId, amount, currency, isApplePayAvailable, chal
     browserPaymentMethods: false
   });
 
+  // Add this to check for paid mode
+  const isPaidMode = localStorage.getItem('paidMode') === 'true';
+
   useEffect(() => {
     if (!stripe) return;
     
@@ -448,6 +514,44 @@ const CheckoutForm = ({ challengeId, amount, currency, isApplePayAvailable, chal
             return;
           }
           
+          if (isPaidMode) {
+            // Simulate successful payment
+            setProcessing(true);
+            try {
+              const ownerId = challengeData.collection.challenge.ownerId;
+              
+              // Record the simulated payment
+              const paymentResponse = await fetch('/.netlify/functions/complete-payment', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  challengeId,
+                  paymentId: `simulated_${Date.now()}`,
+                  buyerId: userService.currentUser?.id || 'anonymous',
+                  ownerId: ownerId,
+                  amount: amount
+                }),
+              });
+
+              if (!paymentResponse.ok) {
+                throw new Error('Failed to record simulated payment');
+              }
+
+              setSucceeded(true);
+              setTimeout(() => {
+                router.replace(`/download?challengeId=${challengeId}`);
+              }, 1500);
+            } catch (err) {
+              console.error("Simulated payment error:", err);
+              setError('Failed to process simulated payment');
+            } finally {
+              setProcessing(false);
+            }
+            return;
+          }
+
           // Create payment intent on server
           const response = await fetch('/api/create-payment-intent', {
             method: 'POST',
@@ -503,7 +607,7 @@ const CheckoutForm = ({ challengeId, amount, currency, isApplePayAvailable, chal
 
             // Redirect after payment
             setTimeout(() => {
-              router.push(`/download?challengeId=${challengeId}`);
+              router.replace(`/download?challengeId=${challengeId}`);
             }, 1500);
           }
         } catch (err) {
@@ -516,11 +620,49 @@ const CheckoutForm = ({ challengeId, amount, currency, isApplePayAvailable, chal
     } catch (err) {
       console.error("Error setting up payment request:", err);
     }
-  }, [stripe, amount, currency, challengeId, router]);
+  }, [stripe, amount, currency, challengeId, router, isPaidMode, challengeData]);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     
+    if (isPaidMode) {
+      // Simulate successful payment
+      setProcessing(true);
+      try {
+        const ownerId = challengeData.collection.challenge.ownerId;
+        
+        // Record the simulated payment
+        const paymentResponse = await fetch('/.netlify/functions/complete-payment', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            challengeId,
+            paymentId: `simulated_${Date.now()}`,
+            buyerId: userService.currentUser?.id || 'anonymous',
+            ownerId: ownerId,
+            amount: amount
+          }),
+        });
+
+        if (!paymentResponse.ok) {
+          throw new Error('Failed to record simulated payment');
+        }
+
+        setSucceeded(true);
+        setTimeout(() => {
+          router.replace(`/download?challengeId=${challengeId}`);
+        }, 1500);
+      } catch (err) {
+        console.error("Simulated payment error:", err);
+        setError('Failed to process simulated payment');
+      } finally {
+        setProcessing(false);
+      }
+      return;
+    }
+
     if (!stripe || !elements) {
       console.error('Stripe or Elements not initialized');
       return;
@@ -606,7 +748,7 @@ const CheckoutForm = ({ challengeId, amount, currency, isApplePayAvailable, chal
         
         setTimeout(() => {
           console.log('Redirecting to download page');
-          router.push(`/download?challengeId=${challengeId}`);
+          router.replace(`/download?challengeId=${challengeId}`);
         }, 1500);
       }
     } catch (err) {
@@ -726,7 +868,7 @@ const CheckoutForm = ({ challengeId, amount, currency, isApplePayAvailable, chal
           
           // Redirect after payment
           setTimeout(() => {
-            router.push(`/download?challengeId=${challengeId}`);
+            router.replace(`/download?challengeId=${challengeId}`);
           }, 1500);
         } catch (err) {
           console.error("Payment processing failed:", err);

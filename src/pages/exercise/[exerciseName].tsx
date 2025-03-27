@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { GetServerSideProps } from 'next';
 import { useRouter } from 'next/router';
-import { ChevronLeft, BarChart2, Plus } from 'lucide-react';
+import { ChevronLeft, BarChart2, Plus, Download } from 'lucide-react';
 import { Exercise } from '../../api/firebase/exercise';
 import { User } from '../../api/firebase/user';
 
@@ -277,6 +277,36 @@ export default function ExerciseView({ initialExerciseData, error: serverError }
     }
   };
 
+  // Add download handler function
+  const handleDownload = async () => {
+    if (!selectedVideo?.videoURL) return;
+    
+    try {
+      const response = await fetch(selectedVideo.videoURL, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'video/mp4',
+        },
+        mode: 'cors',
+      });
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      a.download = `${exercise.name}-${selectedVideo.username || 'video'}.mp4`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      console.error('Error downloading video:', error);
+      // Open in new tab as fallback if download fails
+      window.open(selectedVideo.videoURL, '_blank');
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-zinc-900">
       {/* Back button */}
@@ -288,6 +318,19 @@ export default function ExerciseView({ initialExerciseData, error: serverError }
           <ChevronLeft size={24} />
         </button>
       </div>
+
+      {/* Download button */}
+      {selectedVideo?.videoURL && (
+        <div className="absolute top-4 right-4 z-10">
+          <button
+            onClick={handleDownload}
+            className="p-2 rounded-full bg-black/50 text-white hover:bg-black/70"
+            title="Download video"
+          >
+            <Download size={24} />
+          </button>
+        </div>
+      )}
 
       {/* Main content */}
       <div className="relative h-full w-full flex flex-col">
@@ -329,88 +372,6 @@ export default function ExerciseView({ initialExerciseData, error: serverError }
         </div>
 
         {/* Exercise details */}
-        <div className="bg-zinc-800 p-4 overflow-auto" style={{ maxHeight: '40vh' }}>
-          <div className="mb-4">
-            <h2 className="text-lg font-medium text-white mb-2">Description</h2>
-            <p className="text-gray-300 text-sm">
-              {exercise.description || "No description available for this exercise."}
-            </p>
-          </div>
-          
-          {exercise.primaryBodyParts && exercise.primaryBodyParts.length > 0 && (
-            <div className="mb-4">
-              <h2 className="text-lg font-medium text-white mb-2">Primary Muscles</h2>
-              <div className="flex flex-wrap gap-2">
-                {exercise.primaryBodyParts.map((part, index) => (
-                  <span 
-                    key={index} 
-                    className="px-3 py-1 bg-zinc-700 text-white rounded-full text-sm"
-                  >
-                    {part}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-          
-          {exercise.secondaryBodyParts && exercise.secondaryBodyParts.length > 0 && (
-            <div className="mb-4">
-              <h2 className="text-lg font-medium text-white mb-2">Secondary Muscles</h2>
-              <div className="flex flex-wrap gap-2">
-                {exercise.secondaryBodyParts.map((part, index) => (
-                  <span 
-                    key={index} 
-                    className="px-3 py-1 bg-zinc-700 text-white rounded-full text-sm"
-                  >
-                    {part}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-          
-          {hasVideos && exercise.videos.length > 1 && (
-            <div>
-              <h2 className="text-lg font-medium text-white mb-2">More Videos</h2>
-              <div className="grid grid-cols-3 gap-2">
-                {exercise.videos.map((video, index) => (
-                  <div 
-                    key={video.id || index} 
-                    className={`aspect-square relative overflow-hidden rounded-md cursor-pointer border-2 ${
-                      selectedVideoIndex === index ? 'border-[#E0FE10]' : 'border-transparent'
-                    }`}
-                    onClick={() => switchVideo(index)}
-                  >
-                    {video.gifURL ? (
-                      <img 
-                        src={video.gifURL} 
-                        alt={`Video ${index + 1}`} 
-                        className="w-full h-full object-cover"
-                      />
-                    ) : video.thumbnail ? (
-                      <img 
-                        src={video.thumbnail} 
-                        alt={`Video ${index + 1}`} 
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full bg-zinc-700 flex items-center justify-center">
-                        <span className="text-white text-xs">{index + 1}</span>
-                      </div>
-                    )}
-                    
-                    {/* Username overlay */}
-                    <div className="absolute bottom-0 left-0 right-0 bg-black/60 py-1 px-2">
-                      <span className="text-white text-xs truncate block">
-                        {video.username || 'Unknown'}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
       </div>
     </div>
   );
