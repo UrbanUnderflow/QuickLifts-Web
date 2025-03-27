@@ -119,6 +119,17 @@ const handler = async (event) => {
     
     console.log('Effective owner ID for payment record:', effectiveOwnerId);
     
+    // Get owner's Stripe account ID
+    let ownerStripeAccountId = connectedAccountId;
+    if (!ownerStripeAccountId && effectiveOwnerId) {
+      const ownerDoc = await db.collection('users').doc(effectiveOwnerId).get();
+      if (ownerDoc.exists) {
+        const ownerData = ownerDoc.data();
+        ownerStripeAccountId = ownerData?.creator?.stripeAccountId;
+        console.log('Retrieved owner Stripe account ID:', ownerStripeAccountId);
+      }
+    }
+    
     // Calculate platform fee (3%) and owner amount
     const platformFee = Math.round((amount || 0) * 0.03);
     const ownerAmount = (amount || 0) - platformFee;
@@ -310,7 +321,7 @@ const handler = async (event) => {
       updatedAt: toUnixTimestamp(now),
       platformFee, // Now this will always be calculated
       ownerAmount, // Now this will always be calculated
-      stripeAccountId: connectedAccountId || null
+      ownerStripeAccountId: ownerStripeAccountId || null
     };
 
     // Remove any undefined values from the payment record

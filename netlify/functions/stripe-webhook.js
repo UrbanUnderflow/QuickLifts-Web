@@ -389,7 +389,7 @@ async function updatePaymentRecord(paymentIntent, eventType, charge = null) {
           createdAt: new Date(),
           updatedAt: new Date(),
           stripeEventType: eventType,
-          stripeAccountId: paymentIntent.transfer_data?.destination || null,
+          ownerStripeAccountId: paymentIntent.transfer_data?.destination || null,
           platformFee,
           ownerAmount,
           metadata: metadata, // Store the original metadata for troubleshooting
