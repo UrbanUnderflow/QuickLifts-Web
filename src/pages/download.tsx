@@ -2,6 +2,7 @@ import { useRouter } from 'next/router';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, Download, Globe } from 'lucide-react';
+import ChallengeCTA from '../components/ChallengeCTA';
 
 const DownloadPage = () => {
   const router = useRouter();
@@ -28,23 +29,25 @@ const DownloadPage = () => {
     fetchChallengeDetails();
   }, [challengeId]);
 
-  // Function to open the app or App Store
+  // Function to open the app or App Store using Firebase Dynamic Links
   const openIOSApp = (challengeId: string) => {
-    const appScheme = `quicklifts://round/${challengeId}`;
-    const appStoreUrl = 'https://apps.apple.com/us/app/quicklifts/id6446042442';
+    if (!challengeId) return;
     
-    window.location.href = appScheme;
+    // Create the base URL with properly encoded parameters for deep linking
+    const baseUrl = `https://www.quickliftsapp.com/?linkType=round&roundId=${challengeId}`;
+    const encodedBaseUrl = encodeURIComponent(baseUrl);
+    const deepLinkUrl = `https://quicklifts.page.link/?link=${encodedBaseUrl}&apn=com.pulse.fitnessapp&ibi=Tremaine.QuickLifts&isi=6451497729`;
     
-    const timeout = setTimeout(() => {
-      window.location.href = appStoreUrl;
-    }, 500);
-    
-    window.addEventListener('visibilitychange', () => {
-      if (document.hidden) {
-        clearTimeout(timeout);
-      }
-    });
+    window.location.href = deepLinkUrl;
   };
+
+  // Choose the endpoint based on the environment
+  const endpoint = process.env.NODE_ENV === 'development'
+    ? 'http://localhost:8888'
+    : 'https://fitwithpulse.ai';
+
+  // Construct the web app URL using dynamic values from challenge
+  const webAppUrl = challengeId ? `${endpoint}/round/${challengeId}` : '';
 
   return (
     <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center p-6 text-white">
@@ -113,7 +116,7 @@ const DownloadPage = () => {
               <div className="space-y-4">
                 {/* iOS App Option */}
                 <button
-                  onClick={() => openIOSApp(challengeId as string)}
+                  onClick={() => challengeId && openIOSApp(challengeId as string)}
                   className="w-full bg-zinc-800 hover:bg-zinc-700 p-6 rounded-xl flex items-center justify-between group transition-all"
                 >
                   <div className="flex items-center space-x-4">
@@ -122,7 +125,7 @@ const DownloadPage = () => {
                     </div>
                     <div className="text-left">
                       <h3 className="font-medium">iOS App</h3>
-                      <p className="text-sm text-zinc-400">Download the Pulse app</p>
+                      <p className="text-sm text-zinc-400">Open or download the Pulse app</p>
                     </div>
                   </div>
                   <ArrowRight className="h-5 w-5 text-zinc-400 group-hover:text-[#E0FE10] transition-colors" />
@@ -130,7 +133,7 @@ const DownloadPage = () => {
 
                 {/* Web App Option */}
                 <Link 
-                  href={`/round/${challengeId}`}
+                  href={challengeId ? `/round/${challengeId}` : '#'}
                   className="block w-full bg-zinc-800 hover:bg-zinc-700 p-6 rounded-xl"
                 >
                   <div className="flex items-center justify-between group">
@@ -150,6 +153,13 @@ const DownloadPage = () => {
             </div>
           </div>
         </div>
+
+        {/* Optional: Render ChallengeCTA if challenge is available */}
+        {challenge && (
+          <div className="hidden">
+            <ChallengeCTA challenge={challenge} />
+          </div>
+        )}
 
         {/* Footer */}
         <div className="text-center">

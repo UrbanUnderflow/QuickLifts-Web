@@ -704,41 +704,93 @@ class UserService {
     }
     
     try {
+      console.log(`==================== PAYMENT CHECK ====================`);
       console.log(`Checking if user ${userId} has purchased challenge ${challengeId}`);
       
-      // Search for a payment record matching the buyerId and challengeId
-      // Note: Payments can have status 'completed' (from test payments) or 'succeeded' (from Stripe)
-      // Also accept payments with status 'pending' since we use that for simulated payments in the UI
-      const paymentsRef = collection(db, 'payments');
-      const completedQuery = query(
-        paymentsRef,
+      // Convert timestamp for Unix timestamps or Firestore timestamps
+      const convertTimestamp = (timestamp: any): string | null => {
+        if (!timestamp) return null;
+        
+        // If it's a number (Unix timestamp), convert it
+        if (typeof timestamp === 'number') {
+          return new Date(timestamp * 1000).toISOString();
+        }
+        
+        // If it has a toDate method (Firestore Timestamp)
+        if (timestamp && typeof timestamp.toDate === 'function') {
+          return timestamp.toDate().toISOString();
+        }
+        
+        // If it's a Firestore serialized timestamp with _seconds
+        if (timestamp && timestamp._seconds) {
+          return new Date(timestamp._seconds * 1000).toISOString();
+        }
+        
+        // Handle already converted date
+        if (timestamp instanceof Date) {
+          return timestamp.toISOString();
+        }
+        
+        // Handle string timestamp
+        if (typeof timestamp === 'string') {
+          try {
+            return new Date(timestamp).toISOString();
+          } catch (e) {
+            return timestamp;
+          }
+        }
+        
+        return null;
+      };
+      
+      // First, let's log all payments for this user
+      const allUserPaymentsRef = collection(db, 'payments');
+      const allUserPaymentsQuery = query(
+        allUserPaymentsRef,
         where('buyerId', '==', userId),
-        where('challengeId', '==', challengeId),
-        where('status', 'in', ['completed', 'succeeded', 'pending']),
-        limit(1)
       );
       
-      const querySnapshot = await getDocs(completedQuery);
-      const hasPurchased = !querySnapshot.empty;
+      const allUserPaymentsSnapshot = await getDocs(allUserPaymentsQuery);
+      console.log(`Found ${allUserPaymentsSnapshot.size} total payments for user ${userId}`);
       
-      console.log(`User ${userId} has ${hasPurchased ? '' : 'not '}purchased challenge ${challengeId}`);
+      allUserPaymentsSnapshot.forEach(doc => {
+        const data = doc.data();
+        console.log(`Payment ${doc.id}:`, {
+          challengeId: data.challengeId,
+          amount: data.amount,
+          status: data.status,
+          buyerId: data.buyerId,
+          ownerId: data.ownerId,
+          createdAt: convertTimestamp(data.createdAt),
+          rawCreatedAt: data.createdAt ? 
+            { type: typeof data.createdAt, value: JSON.stringify(data.createdAt) } : null
+        });
+      });
       
-      // If we found a payment record, return success with the payment details
-      if (hasPurchased && !querySnapshot.empty) {
-        const paymentDoc = querySnapshot.docs[0];
-        const paymentData = paymentDoc.data();
+      // Simple check: Does this user have ANY payment for this challenge?
+      const matchingPayment = allUserPaymentsSnapshot.docs.find(
+        doc => doc.data().challengeId === challengeId
+      );
+      
+      const hasPurchased = !!matchingPayment;
+      
+      console.log(`RESULT: User ${userId} has ${hasPurchased ? '' : 'NOT '}purchased challenge ${challengeId}`);
+      
+      if (hasPurchased) {
+        const paymentData = matchingPayment.data();
+        console.log('Found matching payment:', paymentData);
         
         return {
           hasPurchased: true,
           payment: {
-            id: paymentDoc.id,
-            purchaseDate: paymentData.createdAt ? new Date(paymentData.createdAt.toDate()).toISOString() : null,
+            id: matchingPayment.id,
+            purchaseDate: convertTimestamp(paymentData.createdAt),
             amount: paymentData.amount || 0
           }
         };
       }
       
-      // If no payment record found, return with hasPurchased = false
+      console.log(`==================== PAYMENT CHECK COMPLETE ====================`);
       return { hasPurchased: false };
     } catch (error) {
       console.error('Error checking if user has purchased challenge:', error);

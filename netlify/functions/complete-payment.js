@@ -2,7 +2,7 @@
 
 const admin = require('firebase-admin');
 const { db } = require('./config/firebase');
-const { toUnixTimestamp } = require('./utils/date-helpers');
+const { toUnixTimestamp, fromUnixTimestamp } = require('./utils/date-helpers');
 
 // Initialize Firebase Admin if not already initialized
 if (admin.apps.length === 0) {
@@ -374,6 +374,13 @@ const handler = async (event) => {
     // Create a payment record in Firestore
     const now = new Date();
     
+    // Log timestamp details to help debug
+    console.log('Timestamp conversion details:', {
+      currentJsDate: now.toISOString(),
+      convertedUnixTimestamp: toUnixTimestamp(now),
+      convertedBackToIsoString: fromUnixTimestamp(toUnixTimestamp(now))
+    });
+    
     // Get buyer email from user data if not provided in request
     let effectiveBuyerEmail = buyerEmail;
     let userData = null;
@@ -398,7 +405,7 @@ const handler = async (event) => {
       paymentId,
       amount: amount || 0,
       currency: 'usd',
-      status: 'pending', // Will be updated to 'succeeded' by webhook
+      status: 'completed', // Setting to completed immediately instead of waiting for webhook
       challengeId,
       ownerId: effectiveOwnerId || null,
       buyerId: buyerId || null,

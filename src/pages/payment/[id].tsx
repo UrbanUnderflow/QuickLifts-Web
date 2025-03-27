@@ -6,6 +6,7 @@ import { Elements, CardElement, PaymentRequestButtonElement, useStripe, useEleme
 import { userService } from '../../api/firebase/user/service';
 import Link from 'next/link';
 import { ArrowRight, Globe } from 'lucide-react';
+import ChallengeCTA from '../../components/ChallengeCTA';
 
 // Helper function to check if we're in localhost
 const isLocalhost = typeof window !== 'undefined' && 
@@ -20,26 +21,16 @@ const isIOS = () => {
   return /iphone|ipad|ipod/.test(userAgent);
 };
 
-// Function to open the app or App Store
+// Function to open the app or App Store using Firebase Dynamic Links
 const openIOSApp = (challengeId: string) => {
-  // Define your app's URL scheme and App Store URL
-  const appScheme = `quicklifts://round/${challengeId}`;
-  const appStoreUrl = 'https://apps.apple.com/us/app/quicklifts/id6446042442';
+  if (!challengeId) return;
   
-  // Try to open the app first
-  window.location.href = appScheme;
+  // Create the base URL with properly encoded parameters for deep linking
+  const baseUrl = `https://www.quickliftsapp.com/?linkType=round&roundId=${challengeId}`;
+  const encodedBaseUrl = encodeURIComponent(baseUrl);
+  const deepLinkUrl = `https://quicklifts.page.link/?link=${encodedBaseUrl}&apn=com.pulse.fitnessapp&ibi=Tremaine.QuickLifts&isi=6451497729`;
   
-  // Set a timeout to redirect to App Store if app doesn't open
-  const timeout = setTimeout(() => {
-    window.location.href = appStoreUrl;
-  }, 500);
-  
-  // Clear the timeout if the page is hidden (app opened successfully)
-  window.addEventListener('visibilitychange', () => {
-    if (document.hidden) {
-      clearTimeout(timeout);
-    }
-  });
+  window.location.href = deepLinkUrl;
 };
 
 // Initialize Stripe with the appropriate key based on environment
@@ -158,22 +149,62 @@ const PaymentPage = ({ challengeData }: PaymentPageProps) => {
       setIsCheckingPurchase(true);
       const currentUser = userService.currentUser;
       
+      console.log('============= CHECKING PURCHASE STATUS =============');
+      console.log('Current user:', currentUser ? {
+        id: currentUser.id,
+        email: currentUser.email,
+        username: currentUser.username,
+        isAuthenticated: !!currentUser.id
+      } : 'No user logged in');
+      console.log('Challenge ID:', challengeData.collection.challenge.id);
+      
       if (currentUser && challengeData.collection.challenge.id) {
         try {
-          // Use the userService method instead of the Netlify function
+          console.log(`Calling hasUserPurchasedChallenge with userId=${currentUser.id}, challengeId=${challengeData.collection.challenge.id}`);
           const result = await userService.hasUserPurchasedChallenge(
             currentUser.id, 
             challengeData.collection.challenge.id
           );
           
-          setHasPurchased(result.hasPurchased);
           console.log('Purchase check result:', result);
+          setHasPurchased(result.hasPurchased);
+          
+          if (result.hasPurchased) {
+            console.log('*** User HAS purchased this challenge - SHOULD show already purchased UI ***');
+          } else {
+            console.log('*** User has NOT purchased this challenge - should show payment form ***');
+          }
         } catch (error) {
           console.error('Error checking purchase status:', error);
         }
+      } else {
+        console.log('Missing currentUser or challengeId, cannot check purchase status', {
+          hasCurrentUser: !!currentUser,
+          challengeId: challengeData.collection.challenge.id
+        });
       }
       
+      console.log('============= PURCHASE STATUS CHECK COMPLETE =============');
       setIsCheckingPurchase(false);
+      
+      // Force another check in 2 seconds just to be sure
+      setTimeout(() => {
+        if (currentUser && challengeData.collection.challenge.id) {
+          console.log('Running delayed purchase check...');
+          userService.hasUserPurchasedChallenge(
+            currentUser.id, 
+            challengeData.collection.challenge.id
+          ).then(result => {
+            console.log('Delayed purchase check result:', result);
+            if (result.hasPurchased !== hasPurchased) {
+              console.log('Purchase status changed in delayed check!');
+              setHasPurchased(result.hasPurchased);
+            }
+          }).catch(error => {
+            console.error('Error in delayed purchase check:', error);
+          });
+        }
+      }, 2000);
     };
     
     initStripe();
@@ -208,33 +239,16 @@ const PaymentPage = ({ challengeData }: PaymentPageProps) => {
   // Add this new function to handle paid mode toggle
   const handlePaidModeToggle = async (enabled: boolean) => {
     setIsPaidMode(enabled);
+    localStorage.setItem('paidMode', enabled.toString());
+    
     if (enabled) {
       // Simulate a successful payment
       try {
         const challenge = challengeData.collection.challenge;
         
-        // Add detailed logging of challenge data
-        console.log('Full challenge data:', {
-          challenge,
-          ownerId: challenge.ownerId,
-          ownerIdType: typeof challenge.ownerId,
-          isArray: Array.isArray(challenge.ownerId),
-          collection: challengeData.collection,
-          fullChallengeData: challengeData
-        });
-        
         const ownerId = challenge.ownerId || (Array.isArray(challenge.ownerId) ? challenge.ownerId[0] : null);
         const amount = totalAmount;
         const currentUser = userService.currentUser;
-        
-        console.log('Creating simulated payment with:', {
-          challengeId: challenge.id,
-          ownerId,
-          amount,
-          buyerId: currentUser?.id,
-          buyerEmail: currentUser?.email,
-          challengeData: challenge
-        });
         
         if (!ownerId) {
           throw new Error('No owner ID found for this challenge');
@@ -262,10 +276,9 @@ const PaymentPage = ({ challengeData }: PaymentPageProps) => {
           throw new Error('Failed to record simulated payment');
         }
 
-        const result = await paymentResponse.json();
-        console.log('Simulated payment recorded successfully:', result);
+        console.log('Simulated payment recorded successfully');
 
-        // Use Next.js router for navigation
+        // Redirect to download page
         router.replace(`/download?challengeId=${challenge.id}`);
       } catch (error) {
         console.error('Error in paid mode simulation:', error);
@@ -281,8 +294,61 @@ const PaymentPage = ({ challengeData }: PaymentPageProps) => {
     );
   }
 
+  // If still checking purchase status, show loading state
+  if (isCheckingPurchase) {
+    console.log('Showing loading UI while checking purchase status');
+    return (
+      <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-zinc-900 rounded-2xl shadow-lg p-8 flex flex-col items-center justify-center">
+          <div className="relative w-16 h-16 mb-6">
+            <div className="absolute top-0 left-0 w-full h-full border-4 border-zinc-700 rounded-full"></div>
+            <div className="absolute top-0 left-0 w-full h-full border-4 border-transparent border-t-[#E0FE10] rounded-full animate-spin"></div>
+          </div>
+          <p className="text-zinc-300 font-medium">Checking Payment Status...</p>
+          <p className="text-zinc-500 text-sm mt-2">Just a moment while we verify your purchase</p>
+        </div>
+      </div>
+    );
+  }
+
   // If user has already purchased this challenge, display a message and redirect button
-  if (!isCheckingPurchase && hasPurchased) {
+  if (hasPurchased) {
+    console.log('Showing already purchased UI - hasPurchased is TRUE');
+
+    // Create a simplified challenge object for ChallengeCTA component with all required properties
+    const simplifiedChallenge = {
+      id: challenge.id,
+      title: challenge.title,
+      subtitle: "", 
+      participants: [],
+      status: "published" as any, // Cast to any to bypass type checking
+      pricingInfo: challenge.pricingInfo,
+      startDate: new Date(),
+      ownerId: challenge.ownerId || [],
+      endDate: new Date(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      introVideos: [],
+      privacy: "locked" as any, // Cast to any to bypass type checking
+      // Additional required properties
+      originalId: "",
+      joinWindowEnds: new Date(),
+      minParticipants: 0,
+      maxParticipants: 100,
+      allowLateJoins: true,
+      cohortAuthor: [],
+      durationInDays: 30,
+      isChallengeEnded: false
+    } as any; // Cast entire object to any to bypass strict type checking
+    
+    // Choose the endpoint based on the environment
+    const endpoint = process.env.NODE_ENV === 'development'
+      ? 'http://localhost:8888'
+      : 'https://fitwithpulse.ai';
+
+    // Construct the web app URL
+    const webAppUrl = `${endpoint}/round/${challenge.id}`;
+
     return (
       <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-4">
         <div className="max-w-4xl w-full bg-gradient-to-b from-zinc-900 to-zinc-950 rounded-2xl shadow-lg overflow-hidden">
@@ -387,15 +453,10 @@ const PaymentPage = ({ challengeData }: PaymentPageProps) => {
                 </div>
               </div>
             </div>
-
-            {/* Footer */}
-            <div className="text-center">
-              <Link 
-                href="/"
-                className="text-zinc-400 hover:text-white transition-colors text-sm"
-              >
-                Return to Discover
-              </Link>
+            
+            {/* Hidden Challenge CTA component for deep linking functionality */}
+            <div className="hidden">
+              <ChallengeCTA challenge={simplifiedChallenge} />
             </div>
           </div>
         </div>
@@ -403,22 +464,8 @@ const PaymentPage = ({ challengeData }: PaymentPageProps) => {
     );
   }
   
-  // If still checking purchase status, show loading state
-  if (isCheckingPurchase) {
-    return (
-      <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-zinc-900 rounded-2xl shadow-lg p-8 flex flex-col items-center justify-center">
-          <div className="relative w-16 h-16 mb-6">
-            <div className="absolute top-0 left-0 w-full h-full border-4 border-zinc-700 rounded-full"></div>
-            <div className="absolute top-0 left-0 w-full h-full border-4 border-transparent border-t-[#E0FE10] rounded-full animate-spin"></div>
-          </div>
-          <p className="text-zinc-300 font-medium">Checking Payment Status...</p>
-          <p className="text-zinc-500 text-sm mt-2">Just a moment while we verify your purchase</p>
-        </div>
-      </div>
-    );
-  }
-
+  // Show payment form for users who haven't purchased yet
+  console.log('Showing payment form UI - hasPurchased is FALSE');
   return (
     <div className="min-h-screen bg-zinc-950 text-white py-10">
       <div className="max-w-md mx-auto px-6">
@@ -605,6 +652,7 @@ const CheckoutForm = ({ challengeId, amount, currency, isApplePayAvailable, chal
             // Simulate successful payment
             setProcessing(true);
             try {
+              console.log('Handling simulated payment in paid mode');
               const ownerId = challengeData.collection.challenge.ownerId;
               
               // Record the simulated payment
@@ -623,17 +671,19 @@ const CheckoutForm = ({ challengeId, amount, currency, isApplePayAvailable, chal
               });
 
               if (!paymentResponse.ok) {
+                const errorText = await paymentResponse.text();
+                console.error('Failed to record simulated payment:', errorText);
                 throw new Error('Failed to record simulated payment');
               }
 
+              console.log('Simulated payment recorded successfully');
               setSucceeded(true);
-              setTimeout(() => {
-                router.replace(`/download?challengeId=${challengeId}`);
-              }, 1500);
+              
+              // Direct redirect to download page without unnecessary timeout
+              router.replace(`/download?challengeId=${challengeId}`);
             } catch (err) {
               console.error("Simulated payment error:", err);
               setError('Failed to process simulated payment');
-            } finally {
               setProcessing(false);
             }
             return;
@@ -692,10 +742,9 @@ const CheckoutForm = ({ challengeId, amount, currency, isApplePayAvailable, chal
               }),
             });
 
-            // Redirect after payment
-            setTimeout(() => {
-              router.replace(`/download?challengeId=${challengeId}`);
-            }, 1500);
+            // Direct redirect to download page without unnecessary timeout
+            console.log('Redirecting to download page...');
+            router.replace(`/download?challengeId=${challengeId}`);
           }
         } catch (err) {
           console.error("Payment error:", err);
@@ -716,6 +765,7 @@ const CheckoutForm = ({ challengeId, amount, currency, isApplePayAvailable, chal
       // Simulate successful payment
       setProcessing(true);
       try {
+        console.log('Handling simulated payment in paid mode');
         const ownerId = challengeData.collection.challenge.ownerId;
         
         // Record the simulated payment
@@ -734,17 +784,19 @@ const CheckoutForm = ({ challengeId, amount, currency, isApplePayAvailable, chal
         });
 
         if (!paymentResponse.ok) {
+          const errorText = await paymentResponse.text();
+          console.error('Failed to record simulated payment:', errorText);
           throw new Error('Failed to record simulated payment');
         }
 
+        console.log('Simulated payment recorded successfully');
         setSucceeded(true);
-        setTimeout(() => {
-          router.replace(`/download?challengeId=${challengeId}`);
-        }, 1500);
+        
+        // Direct redirect to download page without unnecessary timeout
+        router.replace(`/download?challengeId=${challengeId}`);
       } catch (err) {
         console.error("Simulated payment error:", err);
         setError('Failed to process simulated payment');
-      } finally {
         setProcessing(false);
       }
       return;
@@ -752,6 +804,7 @@ const CheckoutForm = ({ challengeId, amount, currency, isApplePayAvailable, chal
 
     if (!stripe || !elements) {
       console.error('Stripe or Elements not initialized');
+      setError('Payment system not initialized');
       return;
     }
     
@@ -759,7 +812,13 @@ const CheckoutForm = ({ challengeId, amount, currency, isApplePayAvailable, chal
     
     try {
       const ownerId = challengeData.collection.challenge.ownerId || '';
-      console.log('Creating payment intent for owner:', ownerId);
+      console.log('Processing payment for challenge:', {
+        challengeId,
+        ownerId,
+        amount,
+        currency,
+        buyerId: userService.currentUser?.id || 'anonymous'
+      });
       
       // Use the appropriate function based on test mode
       const isTestMode = localStorage.getItem('stripeTestMode') === 'true';
@@ -767,8 +826,7 @@ const CheckoutForm = ({ challengeId, amount, currency, isApplePayAvailable, chal
         ? '/.netlify/functions/create-payment-intent-test'
         : '/.netlify/functions/create-payment-intent';
       
-      console.log('Using payment intent function:', functionUrl);
-      
+      console.log(`Using payment intent endpoint: ${functionUrl}`);
       const response = await fetch(functionUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -780,17 +838,16 @@ const CheckoutForm = ({ challengeId, amount, currency, isApplePayAvailable, chal
         }),
       });
       
-      console.log('Payment intent response status:', response.status);
       const data = await response.json();
-      console.log('Payment intent response data:', data);
       
       if (!data.success || data.error) {
-        console.error('Payment intent creation failed:', data.error);
+        console.error('Failed to create payment intent:', data.error || 'Unknown error');
         setError(data.error || 'Failed to create payment intent');
         setProcessing(false);
         return;
       }
       
+      console.log('Payment intent created successfully');
       const cardElement = elements.getElement(CardElement);
       if (!cardElement) {
         console.error('Card element not found');
@@ -799,27 +856,25 @@ const CheckoutForm = ({ challengeId, amount, currency, isApplePayAvailable, chal
         return;
       }
       
-      console.log('Confirming card payment with client secret');
+      console.log('Confirming card payment...');
       const result = await stripe.confirmCardPayment(data.clientSecret, {
         payment_method: {
           card: cardElement,
         },
-        // Add return_url for 3D Secure authentication
         return_url: `${window.location.origin}/payment/complete?challengeId=${challengeId}`
       });
       
-      console.log('Card payment result:', result);
-      
       if (result.error) {
-        console.error('Card payment failed:', result.error);
+        console.error('Payment confirmation failed:', result.error);
         setError(result.error.message ?? 'Payment failed');
         setProcessing(false);
       } else {
-        console.log('Payment successful, recording payment');
+        console.log('Payment successful:', result.paymentIntent);
         setSucceeded(true);
         
         // Record payment using Netlify function
-        const recordResponse = await fetch('/.netlify/functions/complete-payment', {
+        console.log('Recording payment in database...');
+        const paymentResponse = await fetch('/.netlify/functions/complete-payment', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
@@ -831,17 +886,21 @@ const CheckoutForm = ({ challengeId, amount, currency, isApplePayAvailable, chal
           }),
         });
         
-        console.log('Payment record response:', recordResponse.status);
+        if (!paymentResponse.ok) {
+          const errorText = await paymentResponse.text();
+          console.warn('Problem recording payment (but payment was successful):', errorText);
+          // Continue with redirect since payment was processed
+        } else {
+          console.log('Payment recorded successfully');
+        }
         
-        setTimeout(() => {
-          console.log('Redirecting to download page');
-          router.replace(`/download?challengeId=${challengeId}`);
-        }, 1500);
+        // Direct redirect to download page without unnecessary timeout
+        console.log('Redirecting to download page...');
+        router.replace(`/download?challengeId=${challengeId}`);
       }
     } catch (err) {
       console.error("Payment error:", err);
       setError('An unexpected error occurred. Please try again.');
-    } finally {
       setProcessing(false);
     }
   };
