@@ -48,7 +48,7 @@ const handler = async (event) => {
   try {
     // Parse the request body
     const data = JSON.parse(event.body);
-    const { challengeId, paymentId, buyerId, ownerId, amount } = data;
+    const { challengeId, paymentId, buyerId, ownerId, amount, buyerEmail, platformFee, ownerAmount, connectedAccountId } = data;
     
     console.log('Recording payment completion:', {
       challengeId,
@@ -119,23 +119,118 @@ const handler = async (event) => {
     console.log('Effective owner ID for payment record:', effectiveOwnerId);
     
     // Create a payment record in Firestore
-    const paymentRef = db.collection('payments').doc(paymentId);
-    await paymentRef.set({
+    const paymentRecord = {
       paymentId,
+      amount,
+      currency: 'usd',
+      status: 'pending', // Will be updated to 'succeeded' by webhook
       challengeId,
-      challengeTitle,
-      buyerId: buyerId || 'anonymous',
       ownerId: effectiveOwnerId,
-      amount: amount || 0,
-      status: 'completed',
-      type: 'challenge_purchase',
+      buyerId: buyerId || null,
+      buyerEmail: buyerEmail || null,
+      challengeTitle,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp()
-    });
-    
-    console.log('Payment record created in Firestore with challenge title:', challengeTitle);
-    
-    // We're not adding the user to challenge participants as you have another system for this
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      platformFee,
+      ownerAmount,
+      stripeAccountId: connectedAccountId
+    };
+
+    // Start a batch write
+    const batch = db.batch();
+
+    // Add payment record
+    const paymentRef = db.collection('payments').doc(paymentId);
+    batch.set(paymentRef, paymentRecord);
+
+    // If we have a buyerId, create userChallenge record
+    if (buyerId) {
+      // Get user data
+      const userDoc = await db.collection('users').doc(buyerId).get();
+      const userData = userDoc.data();
+
+      if (userData) {
+        // Get challenge data
+        const challengeDoc = await db.collection('sweatlist-collection').doc(challengeId).get();
+        const challengeData = challengeDoc.data();
+
+        if (challengeData) {
+          // Check if user is already a participant
+          const existingParticipant = challengeData.participants?.find(
+            p => p.userId === buyerId
+          );
+
+          if (!existingParticipant) {
+            // Create userChallenge record
+            const userChallengeId = `${challengeId}-${buyerId}-${Date.now()}`;
+            const joinDate = new Date();
+            
+            const userChallengeData = {
+              id: userChallengeId,
+              challenge: challengeData,
+              challengeId,
+              userId: buyerId,
+              fcmToken: userData.fcmToken || '',
+              profileImage: userData.profileImage || {},
+              progress: 0,
+              completedWorkouts: [],
+              referralChain: {
+                originalHostId: '',
+                sharedBy: ''
+              },
+              isCompleted: false,
+              uid: buyerId,
+              location: userData.location || null,
+              city: '',
+              country: '',
+              timezone: '',
+              username: userData.username || '',
+              joinDate,
+              createdAt: joinDate,
+              updatedAt: new Date(),
+              pulsePoints: {
+                baseCompletion: 0,
+                firstCompletion: 0,
+                streakBonus: 0,
+                cumulativeStreakBonus: 0,
+                checkInBonus: 0,
+                effortRating: 0,
+                chatParticipation: 0,
+                locationCheckin: 0,
+                contentEngagement: 0,
+                encouragementSent: 0,
+                encouragementReceived: 0
+              },
+              currentStreak: 0,
+              encouragedUsers: [],
+              encouragedByUsers: [],
+              checkIns: []
+            };
+
+            // Add userChallenge record
+            const userChallengeRef = db.collection('user-challenge').doc(userChallengeId);
+            batch.set(userChallengeRef, userChallengeData);
+
+            // Update challenge with new participant
+            const updatedChallenge = {
+              ...challengeData,
+              participants: [...(challengeData.participants || []), userChallengeData]
+            };
+
+            // Update the challenge document with new participant
+            const challengeRef = db.collection('sweatlist-collection').doc(challengeId);
+            batch.update(challengeRef, {
+              participants: updatedChallenge.participants,
+              updatedAt: new Date()
+            });
+          }
+        }
+      }
+    }
+
+    // Commit all changes atomically
+    await batch.commit();
+    console.log('Created payment record and userChallenge in Firestore:', paymentId);
     
     return {
       statusCode: 200,
