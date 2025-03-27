@@ -2,6 +2,7 @@
 
 const admin = require('firebase-admin');
 const { db } = require('./config/firebase');
+const { toUnixTimestamp } = require('./utils/date-helpers');
 
 // Initialize Firebase Admin if not already initialized
 if (admin.apps.length === 0) {
@@ -190,9 +191,9 @@ const handler = async (event) => {
               country: '',
               timezone: '',
               username: userData.username || '',
-              joinDate,
-              createdAt: joinDate,
-              updatedAt: new Date(),
+              joinDate: toUnixTimestamp(joinDate),
+              createdAt: toUnixTimestamp(joinDate),
+              updatedAt: toUnixTimestamp(joinDate),
               pulsePoints: {
                 baseCompletion: 0,
                 firstCompletion: 0,
@@ -239,7 +240,7 @@ const handler = async (event) => {
             const challengeRef = db.collection('sweatlist-collection').doc(challengeId);
             batch.update(challengeRef, {
               participants: updatedChallenge.participants,
-              updatedAt: new Date()
+              updatedAt: toUnixTimestamp(new Date())
             });
 
             console.log('Successfully prepared userChallenge creation:', {
@@ -271,6 +272,7 @@ const handler = async (event) => {
     }
     
     // Create a payment record in Firestore
+    const now = new Date();
     const paymentRecord = {
       paymentId,
       amount: amount || 0,
@@ -282,8 +284,8 @@ const handler = async (event) => {
       buyerEmail: buyerEmail || null,
       challengeTitle: challengeTitle || 'Round',
       userChallengeId: userChallengeId || null,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: toUnixTimestamp(now),
+      updatedAt: toUnixTimestamp(now),
       platformFee, // Now this will always be calculated
       ownerAmount, // Now this will always be calculated
       stripeAccountId: connectedAccountId || null
