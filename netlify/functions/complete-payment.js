@@ -277,8 +277,16 @@ const handler = async (event) => {
     
     // Get buyer email from user data if not provided in request
     let effectiveBuyerEmail = buyerEmail;
-    if (!effectiveBuyerEmail && userData?.email) {
-      effectiveBuyerEmail = userData.email;
+    let userData = null;
+    
+    // If we have a buyerId, get the user data
+    if (buyerId) {
+      const userDoc = await db.collection('users').doc(buyerId).get();
+      userData = userDoc.data();
+      
+      if (userData && !effectiveBuyerEmail) {
+        effectiveBuyerEmail = userData.email;
+      }
     }
     
     console.log('Payment buyer email:', {

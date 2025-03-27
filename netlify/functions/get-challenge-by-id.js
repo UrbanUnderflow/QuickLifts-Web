@@ -149,7 +149,8 @@ async function getCollectionById(collectionId) {
         createdAt: convertTimestamp(data.challenge.createdAt),
         updatedAt: convertTimestamp(data.challenge.updatedAt),
         pricingInfo: data.challenge.pricingInfo || { isEnabled: false, amount: 0, currency: 'USD' },
-        participants: participants
+        participants: participants,
+        ownerId: data.ownerId || []
       } : null
     };
 

@@ -211,8 +211,34 @@ const PaymentPage = ({ challengeData }: PaymentPageProps) => {
     if (enabled) {
       // Simulate a successful payment
       try {
-        const ownerId = challengeData.collection.challenge.ownerId;
+        const challenge = challengeData.collection.challenge;
+        
+        // Add detailed logging of challenge data
+        console.log('Full challenge data:', {
+          challenge,
+          ownerId: challenge.ownerId,
+          ownerIdType: typeof challenge.ownerId,
+          isArray: Array.isArray(challenge.ownerId),
+          collection: challengeData.collection,
+          fullChallengeData: challengeData
+        });
+        
+        const ownerId = challenge.ownerId || (Array.isArray(challenge.ownerId) ? challenge.ownerId[0] : null);
         const amount = totalAmount;
+        const currentUser = userService.currentUser;
+        
+        console.log('Creating simulated payment with:', {
+          challengeId: challenge.id,
+          ownerId,
+          amount,
+          buyerId: currentUser?.id,
+          buyerEmail: currentUser?.email,
+          challengeData: challenge
+        });
+        
+        if (!ownerId) {
+          throw new Error('No owner ID found for this challenge');
+        }
         
         // Record the simulated payment
         const paymentResponse = await fetch('/.netlify/functions/complete-payment', {
@@ -221,22 +247,26 @@ const PaymentPage = ({ challengeData }: PaymentPageProps) => {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            challengeId: challengeData.collection.challenge.id,
+            challengeId: challenge.id,
             paymentId: `simulated_${Date.now()}`,
-            buyerId: userService.currentUser?.id || 'anonymous',
+            buyerId: currentUser?.id || 'anonymous',
             ownerId: ownerId,
-            amount: amount
+            amount: amount,
+            buyerEmail: currentUser?.email || null
           }),
         });
 
         if (!paymentResponse.ok) {
-          console.error('Error recording simulated payment:', await paymentResponse.text());
-        } else {
-          console.log('Simulated payment recorded successfully');
+          const errorText = await paymentResponse.text();
+          console.error('Error recording simulated payment:', errorText);
+          throw new Error('Failed to record simulated payment');
         }
 
+        const result = await paymentResponse.json();
+        console.log('Simulated payment recorded successfully:', result);
+
         // Use Next.js router for navigation
-        router.replace(`/download?challengeId=${challengeData.collection.challenge.id}`);
+        router.replace(`/download?challengeId=${challenge.id}`);
       } catch (error) {
         console.error('Error in paid mode simulation:', error);
       }
