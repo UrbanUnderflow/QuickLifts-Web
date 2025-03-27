@@ -1,9 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Calendar, Clock, Flag, Users, Play } from 'lucide-react';
+import { Calendar, Clock, Flag, Users, Play, ChevronDown } from 'lucide-react';
 import { ChallengeInvitationProps, PricingInfo } from '../api/firebase/workout/types';
 import ChallengeCTA from './ChallengeCTA';
 import {IntroVideo} from '../api/firebase/workout'
 import { useRouter } from 'next/router';
+import { useUser } from '../hooks/useUser';
+import { useDispatch } from 'react-redux';
+import { getAuth } from 'firebase/auth';
+import { signOut } from 'firebase/auth';
+import { setUser } from '../redux/userSlice';
 
 const formatDate = (dateString: string | Date): string => {
   const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
@@ -177,6 +182,90 @@ const HostSection: React.FC<HostSectionProps> = ({ userId }) => {
   );
 };
 
+const UserBadge: React.FC = () => {
+  const currentUser = useUser();
+  const router = useRouter();
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const dispatch = useDispatch();
+  const auth = getAuth();
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  const handleSignOut = async () => {
+    try {
+      await signOut(auth);
+      dispatch(setUser(null));
+      setIsMenuOpen(false);
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
+  };
+
+  if (!currentUser) return null;
+
+  return (
+    <div className="relative" ref={menuRef}>
+      <div 
+        className="inline-flex items-center gap-1.5 bg-zinc-800/80 backdrop-blur-sm rounded-full px-2 py-1 cursor-pointer hover:bg-zinc-700/80 transition-colors mb-6"
+        onClick={() => setIsMenuOpen(!isMenuOpen)}
+        role="button"
+        aria-label={`User menu for ${currentUser.username}`}
+      >
+        {currentUser.profileImage?.profileImageURL ? (
+          <img 
+            src={currentUser.profileImage.profileImageURL}
+            alt={currentUser.username}
+            className="w-5 h-5 rounded-full object-cover"
+          />
+        ) : (
+          <div className="w-5 h-5 rounded-full bg-zinc-700 flex items-center justify-center">
+            <Users className="w-3.5 h-3.5 text-zinc-400" />
+          </div>
+        )}
+        <span className="text-xs text-white/90">Signed in as {currentUser.username}</span>
+        <ChevronDown 
+          className={`w-3.5 h-3.5 text-white/70 transition-transform duration-200 ${
+            isMenuOpen ? 'rotate-180' : ''
+          }`} 
+        />
+      </div>
+
+      {isMenuOpen && (
+        <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-48 bg-zinc-800 rounded-lg shadow-lg border border-zinc-700 z-50 overflow-hidden">
+          <div 
+            className="px-4 py-2 hover:bg-zinc-700 transition-colors duration-200 cursor-pointer"
+            onClick={() => {
+              router.push(`/profile/${currentUser.username}`);
+              setIsMenuOpen(false);
+            }}
+          >
+            <span className="text-white">View Profile</span>
+          </div>
+          <div 
+            className="px-4 py-2 hover:bg-zinc-700 transition-colors duration-200 cursor-pointer"
+            onClick={handleSignOut}
+          >
+            <span className="text-white">Sign Out</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const RoundInvitation: React.FC<ChallengeInvitationProps> = ({ challenge, onClose, onJoinChallenge }) => {
   console.log("RoundInvitation Render:", {
     hasPricingInfo: !!challenge.pricingInfo,
@@ -202,6 +291,11 @@ const RoundInvitation: React.FC<ChallengeInvitationProps> = ({ challenge, onClos
   return (
     <div className="min-h-screen bg-zinc-950 text-white">
       <div className="max-w-2xl mx-auto px-6 py-8">
+        {/* User Badge */}
+        <div className="flex justify-center">
+          <UserBadge />
+        </div>
+        
         {/* Header Section */}
         <div className="text-center space-y-4 mb-8">
           <h2 className="text-lg font-semibold text-white/90">
