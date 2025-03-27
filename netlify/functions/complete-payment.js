@@ -145,7 +145,8 @@ const handler = async (event) => {
         console.log('Found user data:', {
           username: userData.username,
           hasFcmToken: !!userData.fcmToken,
-          hasProfileImage: !!userData.profileImage
+          hasProfileImage: !!userData.profileImage,
+          email: userData.email
         });
 
         // Get challenge data
@@ -273,6 +274,19 @@ const handler = async (event) => {
     
     // Create a payment record in Firestore
     const now = new Date();
+    
+    // Get buyer email from user data if not provided in request
+    let effectiveBuyerEmail = buyerEmail;
+    if (!effectiveBuyerEmail && userData?.email) {
+      effectiveBuyerEmail = userData.email;
+    }
+    
+    console.log('Payment buyer email:', {
+      fromRequest: buyerEmail,
+      fromUserData: userData?.email,
+      effective: effectiveBuyerEmail
+    });
+
     const paymentRecord = {
       paymentId,
       amount: amount || 0,
@@ -281,7 +295,7 @@ const handler = async (event) => {
       challengeId,
       ownerId: effectiveOwnerId || null,
       buyerId: buyerId || null,
-      buyerEmail: buyerEmail || null,
+      buyerEmail: effectiveBuyerEmail || null,
       challengeTitle: challengeTitle || 'Round',
       userChallengeId: userChallengeId || null,
       createdAt: toUnixTimestamp(now),
