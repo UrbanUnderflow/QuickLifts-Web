@@ -160,15 +160,19 @@ const handler = async (event) => {
           email: userData.email
         });
 
-        // Get challenge data
-        const challengeDoc = await db.collection('sweatlist-collection').doc(challengeId).get();
-        const challengeData = challengeDoc.data();
+        // Get challenge data from sweatlist-collection
+        const sweatlistQuery = await db.collection('sweatlist-collection').where('challenge.id', '==', challengeId).limit(1).get();
+        
+        if (!sweatlistQuery.empty) {
+          const sweatlistDoc = sweatlistQuery.docs[0];
+          const challengeData = sweatlistDoc.data();
 
-        if (challengeData) {
           console.log('Found challenge data:', {
             challengeId,
             title: challengeData.challenge?.title,
-            currentParticipants: challengeData.participants?.length || 0
+            currentParticipants: challengeData.participants?.length || 0,
+            hasChallenge: !!challengeData.challenge,
+            documentId: sweatlistDoc.id
           });
 
           // Check if user is already a participant
@@ -185,7 +189,7 @@ const handler = async (event) => {
             
             const userChallengeData = {
               id: userChallengeId,
-              challenge: challengeData,
+              challenge: challengeData.challenge || challengeData, // Use challenge object if available, otherwise use full data
               challengeId,
               userId: buyerId,
               fcmToken: userData.fcmToken || '',
@@ -229,7 +233,8 @@ const handler = async (event) => {
               userChallengeId,
               userId: buyerId,
               username: userData.username,
-              joinDate: joinDate.toISOString()
+              joinDate: joinDate.toISOString(),
+              hasChallengeData: !!userChallengeData.challenge
             });
 
             // Add userChallenge record
@@ -245,11 +250,12 @@ const handler = async (event) => {
             console.log('Updating challenge with new participant:', {
               challengeId,
               newParticipantId: userChallengeId,
-              totalParticipants: updatedChallenge.participants.length
+              totalParticipants: updatedChallenge.participants.length,
+              documentId: sweatlistDoc.id
             });
 
             // Update the challenge document with new participant
-            const challengeRef = db.collection('sweatlist-collection').doc(challengeId);
+            const challengeRef = db.collection('sweatlist-collection').doc(sweatlistDoc.id);
             batch.update(challengeRef, {
               participants: updatedChallenge.participants,
               updatedAt: toUnixTimestamp(new Date())
@@ -258,19 +264,101 @@ const handler = async (event) => {
             console.log('Successfully prepared userChallenge creation:', {
               userChallengeId,
               challengeId,
-              buyerId
+              buyerId,
+              documentId: sweatlistDoc.id
             });
           } else {
-            // If user is already a participant, use their existing userChallenge ID
-            userChallengeId = existingParticipant.id;
-            console.log('User already a participant:', {
-              userChallengeId,
+            // If user is already a participant, create a new userChallenge with merged data
+            console.log('User already a participant, creating new userChallenge with merged data');
+            
+            // Generate new userChallenge ID
+            userChallengeId = `${challengeId}-${buyerId}-${Date.now()}`;
+            const joinDate = new Date();
+            
+            // Create new userChallenge data, preserving existing data
+            const userChallengeData = {
+              id: userChallengeId,
+              challenge: challengeData.challenge || challengeData,
+              challengeId,
               userId: buyerId,
-              existingParticipantData: {
-                progress: existingParticipant.progress,
-                isCompleted: existingParticipant.isCompleted,
-                joinDate: existingParticipant.joinDate
+              fcmToken: userData.fcmToken || existingParticipant.fcmToken || '',
+              profileImage: userData.profileImage || existingParticipant.profileImage || {},
+              progress: existingParticipant.progress || 0,
+              completedWorkouts: existingParticipant.completedWorkouts || [],
+              referralChain: existingParticipant.referralChain || {
+                originalHostId: '',
+                sharedBy: ''
+              },
+              isCompleted: existingParticipant.isCompleted || false,
+              uid: buyerId,
+              location: userData.location || existingParticipant.location || null,
+              city: existingParticipant.city || '',
+              country: existingParticipant.country || '',
+              timezone: existingParticipant.timezone || '',
+              username: userData.username || existingParticipant.username || '',
+              joinDate: existingParticipant.joinDate || toUnixTimestamp(joinDate),
+              createdAt: existingParticipant.createdAt || toUnixTimestamp(joinDate),
+              updatedAt: toUnixTimestamp(new Date()),
+              pulsePoints: {
+                ...existingParticipant.pulsePoints,
+                baseCompletion: existingParticipant.pulsePoints?.baseCompletion || 0,
+                firstCompletion: existingParticipant.pulsePoints?.firstCompletion || 0,
+                streakBonus: existingParticipant.pulsePoints?.streakBonus || 0,
+                cumulativeStreakBonus: existingParticipant.pulsePoints?.cumulativeStreakBonus || 0,
+                checkInBonus: existingParticipant.pulsePoints?.checkInBonus || 0,
+                effortRating: existingParticipant.pulsePoints?.effortRating || 0,
+                chatParticipation: existingParticipant.pulsePoints?.chatParticipation || 0,
+                locationCheckin: existingParticipant.pulsePoints?.locationCheckin || 0,
+                contentEngagement: existingParticipant.pulsePoints?.contentEngagement || 0,
+                encouragementSent: existingParticipant.pulsePoints?.encouragementSent || 0,
+                encouragementReceived: existingParticipant.pulsePoints?.encouragementReceived || 0
+              },
+              currentStreak: existingParticipant.currentStreak || 0,
+              encouragedUsers: existingParticipant.encouragedUsers || [],
+              encouragedByUsers: existingParticipant.encouragedByUsers || [],
+              checkIns: existingParticipant.checkIns || []
+            };
+
+            console.log('Preparing to create merged userChallenge:', {
+              oldUserChallengeId: existingParticipant.id,
+              newUserChallengeId: userChallengeId,
+              userId: buyerId,
+              username: userData.username,
+              preservedData: {
+                progress: userChallengeData.progress,
+                completedWorkouts: userChallengeData.completedWorkouts.length,
+                currentStreak: userChallengeData.currentStreak,
+                joinDate: userChallengeData.joinDate
               }
+            });
+
+            // Add new userChallenge record
+            const userChallengeRef = db.collection('user-challenge').doc(userChallengeId);
+            batch.set(userChallengeRef, userChallengeData);
+
+            // Update challenge participants array to use new userChallenge
+            const updatedParticipants = challengeData.participants.map(p => 
+              p.userId === buyerId ? userChallengeData : p
+            );
+
+            const updatedChallenge = {
+              ...challengeData,
+              participants: updatedParticipants
+            };
+
+            // Update the challenge document with updated participant
+            const challengeRef = db.collection('sweatlist-collection').doc(sweatlistDoc.id);
+            batch.update(challengeRef, {
+              participants: updatedParticipants,
+              updatedAt: toUnixTimestamp(new Date())
+            });
+
+            console.log('Successfully prepared merged userChallenge:', {
+              oldUserChallengeId: existingParticipant.id,
+              newUserChallengeId: userChallengeId,
+              challengeId,
+              buyerId,
+              documentId: sweatlistDoc.id
             });
           }
         } else {
