@@ -361,7 +361,7 @@ const PaymentPage = ({ challengeData }: PaymentPageProps) => {
             {/* Footer */}
             <div className="text-center">
               <Link 
-                href="/discover"
+                href="/"
                 className="text-zinc-400 hover:text-white transition-colors text-sm"
               >
                 Return to Discover

@@ -510,7 +510,7 @@ const Discover = () => {
                 <div className="w-full bg-zinc-700 h-1.5 rounded-full mb-4">
                   <div 
                     className="bg-[#E0FE10] h-1.5 rounded-full" 
-                    style={{ width: `${round.progress || 0}%` }}
+                    style={{ width: `${Math.max(0, Math.min(100, (1 - (Math.floor((new Date(round.challenge?.endDate ?? new Date()).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)) / (round.challenge?.durationInDays || 30))) * 100))}%` }}
                   ></div>
                 </div>
                 
