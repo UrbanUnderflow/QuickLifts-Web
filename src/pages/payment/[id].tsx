@@ -350,114 +350,97 @@ const PaymentPage = ({ challengeData }: PaymentPageProps) => {
     const webAppUrl = `${endpoint}/round/${challenge.id}`;
 
     return (
-      <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-4">
-        <div className="max-w-4xl w-full bg-gradient-to-b from-zinc-900 to-zinc-950 rounded-2xl shadow-lg overflow-hidden">
-          <div className="relative bg-zinc-800 p-6 pb-12">
-            <div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2">
-              <div className="bg-[#E0FE10] p-3 rounded-full shadow-lg animate-pulse">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-black" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M20 6L9 17l-5-5"></path>
-                </svg>
+      <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center p-6 text-white">
+        <div className="max-w-2xl w-full">
+          {/* Success Icon */}
+          <div className="text-center mb-8">
+            <div className="bg-green-500/20 text-green-300 p-4 rounded-full inline-flex mb-4">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <h1 className="text-3xl font-bold mb-2">You Already Own This Round!</h1>
+            <p className="text-zinc-400 text-lg">
+              Your round is ready to begin
+            </p>
+          </div>
+
+          {/* Step by Step Instructions */}
+          <div className="bg-zinc-900 rounded-2xl p-8 mb-8">
+            <h2 className="text-xl font-semibold text-[#E0FE10] mb-6">Get Started in 2 Simple Steps</h2>
+            
+            <div className="space-y-6 mb-8">
+              {/* Step 1 */}
+              <div className="flex items-start space-x-4">
+                <div className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full bg-[#E0FE10] text-black font-bold">
+                  1
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-medium mb-2">Download the Pulse app</h3>
+                  <a
+                    href="https://apps.apple.com/ca/app/pulse-community-workouts/id6451497729"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center space-x-2 bg-zinc-800 hover:bg-zinc-700 transition-colors px-4 py-2 rounded-lg mb-2"
+                  >
+                    <svg className="h-5 w-5 text-[#E0FE10]" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M17.0403 12.3792C17.0211 9.57683 19.3328 8.32309 19.4323 8.25709C18.1956 6.46676 16.2302 6.19069 15.5509 6.17543C13.8945 6.00116 12.2944 7.19116 11.4538 7.19116C10.6131 7.19116 9.29943 6.19069 7.91174 6.22123C6.13087 6.25176 4.48897 7.29563 3.58371 8.89069C1.70484 12.1335 3.10724 17.0175 4.9097 19.7895C5.81497 21.149 6.86824 22.6526 8.25593 22.5915C9.61301 22.5305 10.1264 21.7004 11.7827 21.7004C13.4389 21.7004 13.9218 22.5915 15.3401 22.5609C16.7888 22.5305 17.7 21.1796 18.5846 19.8202C19.6379 18.2557 20.0745 16.7217 20.0946 16.6606C20.0543 16.6454 17.0605 15.5863 17.0403 12.3792Z" fill="currentColor"/>
+                      <path d="M14.4349 4.25974C15.1756 3.35747 15.6787 2.14162 15.539 0.945923C14.5461 0.995789 13.3265 1.65909 12.5659 2.53601C11.8859 3.30094 11.2809 4.56522 11.4407 5.71574C12.5559 5.80228 13.674 5.16242 14.4349 4.25974Z" fill="currentColor"/>
+                    </svg>
+                    <span>Download from App Store</span>
+                  </a>
+                  <p className="text-sm text-zinc-400">Download the Pulse app to get the best experience</p>
+                </div>
               </div>
+              
+              {/* Step 2 */}
+              <div className="flex items-start space-x-4">
+                <div className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full bg-[#E0FE10] text-black font-bold">
+                  2
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-medium mb-2">Access your round</h3>
+                  <button
+                    onClick={() => openIOSApp(challenge.id)}
+                    className="inline-flex items-center space-x-2 bg-zinc-800 hover:bg-zinc-700 transition-colors px-4 py-2 rounded-lg mb-2"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-[#E0FE10]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+                      <polyline points="10 17 15 12 10 7" />
+                      <line x1="15" y1="12" x2="3" y2="12" />
+                    </svg>
+                    <span>Launch the App</span>
+                  </button>
+                  <p className="text-sm text-zinc-400">Open the app to start your round</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col items-center pt-6 border-t border-zinc-800">
+              <p className="font-medium mb-3">On a laptop or Android device?</p>
+              <button 
+                onClick={() => router.push(`/round/${challenge.id}`)}
+                className="inline-flex items-center justify-center space-x-2 bg-zinc-800 hover:bg-zinc-700 transition-colors px-6 py-3 rounded-xl"
+              >
+                <Globe className="h-5 w-5 text-[#E0FE10]" />
+                <span>Access via Web App</span>
+              </button>
             </div>
           </div>
-          
-          <div className="p-6 pt-12 flex flex-col items-center text-center">
-            <h1 className="text-2xl font-bold mb-2 text-white">You Already Own This Round!</h1>
-            <p className="mb-6 text-zinc-400">
-              You've already purchased access to <span className="text-[#E0FE10] font-medium">{challenge.title}</span>
-            </p>
 
-            {/* Main Content */}
-            <div className="bg-zinc-900 rounded-xl p-6 mb-8 w-full">
-              <div className="grid lg:grid-cols-2 gap-6">
-                {/* Left Column - App Info */}
-                <div className="space-y-4">
-                  <h2 className="text-lg font-semibold text-[#E0FE10]">Your Fitness Journey Continues</h2>
-                  <div className="grid sm:grid-cols-2 lg:grid-cols-1 gap-3">
-                    <div className="flex items-start space-x-3 bg-zinc-800/50 p-3 rounded-lg">
-                      <div className="bg-zinc-800 p-2 rounded-md">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-[#E0FE10]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                        </svg>
-                      </div>
-                      <div className="text-left">
-                        <h3 className="font-medium mb-1 text-white text-sm">Track Your Progress</h3>
-                        <p className="text-xs text-zinc-400">Monitor your daily workouts and track your improvements over time</p>
-                      </div>
-                    </div>
+          {/* Hidden Challenge CTA component for deep linking functionality */}
+          <div className="hidden">
+            <ChallengeCTA challenge={simplifiedChallenge} />
+          </div>
 
-                    <div className="flex items-start space-x-3 bg-zinc-800/50 p-3 rounded-lg">
-                      <div className="bg-zinc-800 p-2 rounded-md">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-[#E0FE10]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                      </div>
-                      <div className="text-left">
-                        <h3 className="font-medium mb-1 text-white text-sm">Daily Workouts</h3>
-                        <p className="text-xs text-zinc-400">Access your personalized workout program day by day</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start space-x-3 bg-zinc-800/50 p-3 rounded-lg sm:col-span-2">
-                      <div className="bg-zinc-800 p-2 rounded-md">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-[#E0FE10]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                        </svg>
-                      </div>
-                      <div className="text-left">
-                        <h3 className="font-medium mb-1 text-white text-sm">Progress Analytics</h3>
-                        <p className="text-xs text-zinc-400">View detailed analytics and insights about your fitness journey</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Right Column - Access Options */}
-                <div className="space-y-4">
-                  <h2 className="text-lg font-semibold text-[#E0FE10]">Choose How to Access Your Round</h2>
-                  <div className="grid sm:grid-cols-2 gap-3">
-                    {/* iOS App Option */}
-                    <button
-                      onClick={() => openIOSApp(challenge.id)}
-                      className="w-full bg-zinc-800 hover:bg-zinc-700 p-4 rounded-lg flex flex-col items-center justify-center group transition-all"
-                    >
-                      <div className="bg-zinc-700 p-3 rounded-md mb-3">
-                        <svg className="h-6 w-6 text-[#E0FE10]" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                          <path d="M17.0403 12.3792C17.0211 9.57683 19.3328 8.32309 19.4323 8.25709C18.1956 6.46676 16.2302 6.19069 15.5509 6.17543C13.8945 6.00116 12.2944 7.19116 11.4538 7.19116C10.6131 7.19116 9.29943 6.19069 7.91174 6.22123C6.13087 6.25176 4.48897 7.29563 3.58371 8.89069C1.70484 12.1335 3.10724 17.0175 4.9097 19.7895C5.81497 21.149 6.86824 22.6526 8.25593 22.5915C9.61301 22.5305 10.1264 21.7004 11.7827 21.7004C13.4389 21.7004 13.9218 22.5915 15.3401 22.5609C16.7888 22.5305 17.7 21.1796 18.5846 19.8202C19.6379 18.2557 20.0745 16.7217 20.0946 16.6606C20.0543 16.6454 17.0605 15.5863 17.0403 12.3792Z" fill="currentColor"/>
-                          <path d="M14.4349 4.25974C15.1756 3.35747 15.6787 2.14162 15.539 0.945923C14.5461 0.995789 13.3265 1.65909 12.5659 2.53601C11.8859 3.30094 11.2809 4.56522 11.4407 5.71574C12.5559 5.80228 13.674 5.16242 14.4349 4.25974Z" fill="currentColor"/>
-                        </svg>
-                      </div>
-                      <div className="text-center">
-                        <h3 className="font-medium text-white text-sm mb-1">iOS App</h3>
-                        <p className="text-xs text-zinc-400">Open in the Pulse app</p>
-                      </div>
-                      <ArrowRight className="h-4 w-4 text-zinc-400 group-hover:text-[#E0FE10] transition-colors mt-2" />
-                    </button>
-
-                    {/* Web App Option */}
-                    <button 
-                      onClick={() => router.push(`/round/${challenge.id}`)}
-                      className="w-full bg-zinc-800 hover:bg-zinc-700 p-4 rounded-lg flex flex-col items-center justify-center group transition-all"
-                    >
-                      <div className="bg-zinc-700 p-3 rounded-md mb-3">
-                        <Globe className="h-6 w-6 text-[#E0FE10]" />
-                      </div>
-                      <div className="text-center">
-                        <h3 className="font-medium text-white text-sm mb-1">Web App</h3>
-                        <p className="text-xs text-zinc-400">Access via browser</p>
-                      </div>
-                      <ArrowRight className="h-4 w-4 text-zinc-400 group-hover:text-[#E0FE10] transition-colors mt-2" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            {/* Hidden Challenge CTA component for deep linking functionality */}
-            <div className="hidden">
-              <ChallengeCTA challenge={simplifiedChallenge} />
-            </div>
+          {/* Footer */}
+          <div className="text-center">
+            <Link 
+              href="/"
+              className="text-zinc-400 hover:text-white transition-colors text-sm"
+            >
+              Return to Discover
+            </Link>
           </div>
         </div>
       </div>
