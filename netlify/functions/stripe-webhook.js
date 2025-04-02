@@ -231,7 +231,7 @@ async function updatePaymentRecord(paymentIntent, eventType, charge = null) {
     const paymentDoc = await paymentRef.get();
     
     // Map stripe event types to our status values
-    let status = 'pending';
+    let status = 'incomplete';
     if (eventType === 'payment_intent.succeeded' || eventType === 'charge.succeeded') {
       status = 'succeeded';
     } else if (eventType === 'payment_intent.payment_failed' || eventType === 'charge.failed') {
@@ -446,7 +446,7 @@ async function createOrUpdateChargeRecord(charge, eventType) {
     const chargeDoc = await chargeRef.get();
     
     // Map stripe event types to our status values
-    let status = 'pending';
+    let status = 'incomplete';
     if (eventType === 'charge.succeeded') {
       status = 'succeeded';
     } else if (eventType === 'charge.failed') {

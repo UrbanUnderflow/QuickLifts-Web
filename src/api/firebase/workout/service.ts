@@ -39,6 +39,7 @@ import { Challenge, ChallengeStatus, UserChallenge } from '../../../api/firebase
 
 import { store } from '../../../redux/store';
 import { setCurrentWorkout, setCurrentExerciseLogs, resetWorkoutState, setWorkoutSummary } from '../../../redux/workoutSlice';
+import { dateToUnixTimestamp } from '../../../utils/formatDate';
 
 
 interface FirestoreError {
@@ -1610,7 +1611,7 @@ async deleteWorkoutSession(workoutId: string | null): Promise<void> {
   }: {
     username: string;
     challengeId: string;
-  }): Promise<void> {
+  }): Promise<any> {
     // 1) Make sure we have a signed-in user
     const currentUser = userService.currentUser;
     if (!currentUser) {
@@ -1640,6 +1641,9 @@ async deleteWorkoutSession(workoutId: string | null): Promise<void> {
 
     const challenge = challengeSnap.data();
 
+    // Current time as Date objects to be used in our app logic
+    const now = new Date();
+    
     // 4) Build new user-challenge document
     const userChallengeId = `${challengeId}-${userId}-${Date.now()}`;
     const userChallengeData = {
@@ -1658,9 +1662,10 @@ async deleteWorkoutSession(workoutId: string | null): Promise<void> {
       country: '',
       timezone: '',
       username,
-      joinDate: new Date(),
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      // Store dates as Unix timestamps (seconds since epoch) for consistency with iOS
+      joinDate: dateToUnixTimestamp(now),
+      createdAt: dateToUnixTimestamp(now),
+      updatedAt: dateToUnixTimestamp(now),
       pulsePoints: {
         baseCompletion: 0,
         firstCompletion: 0,
@@ -1681,6 +1686,9 @@ async deleteWorkoutSession(workoutId: string | null): Promise<void> {
 
     // 5) Store user-challenge doc
     await setDoc(doc(db, 'user-challenge', userChallengeId), userChallengeData);
+    
+    // Return the created data for logging/debugging purposes
+    return userChallengeData;
   }
 }
 

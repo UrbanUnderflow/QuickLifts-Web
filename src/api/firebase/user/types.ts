@@ -83,7 +83,7 @@ export class User {
     
     this.id = id;
     this.displayName = data.displayName || '';
-    this.email = data.email || '';
+    this.email = data.email;
     this.username = data.username || '';
     this.homeGym = data.homeGym || null;
     this.encouragement = data.encouragement || [];
@@ -310,7 +310,7 @@ export class User {
  }
  
  export enum StripeOnboardingStatus {
-   Parseending = 'pending',
+   Parseending = 'incomplete',
    Complete = 'complete',
    NotStarted = 'notStarted'
  }

@@ -148,7 +148,7 @@ const handler = async (event) => {
     // Update user document with Stripe account info
     await db.collection("users").doc(userId).update({
       'creator.stripeAccountId': account.id,
-      'creator.onboardingStatus': 'pending',
+      'creator.onboardingStatus': 'incomplete',
       'creator.onboardingLink': accountLink.url,
       'creator.onboardingExpirationDate': accountLink.expires_at,
       'creator.onboardingPayoutState': 'introduction'

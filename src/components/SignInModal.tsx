@@ -290,9 +290,20 @@ const SignInModal: React.FC<SignInModalProps> = ({
         console.log('Google Sign In - Firestore User:', firestoreUser);
         
         if (!firestoreUser) {
+          // CRITICAL CHECK: Ensure email exists before creating user
+          if (!user.email) {
+            console.error('[SignInModal] Google sign-in completed but no email was provided. Cannot create user.');
+            setError('Sign-in failed: Email address is required.');
+            setIsLoading(false);
+            setActiveProvider(null);
+            return; // Stop execution
+          }
+          
+          // Email exists, proceed with creation
+          console.log('[SignInModal] Creating new Firestore user after Google Sign-In');
           firestoreUser = new User(user.uid, {});
           firestoreUser.id = user.uid;
-          firestoreUser.email = user.email || "";
+          firestoreUser.email = user.email;
           firestoreUser.displayName = user.displayName || "";
           await userService.updateUser(user.uid, firestoreUser);
           console.log('Google Sign In - Created New User:', firestoreUser);
@@ -452,19 +463,28 @@ const SignInModal: React.FC<SignInModalProps> = ({
    
         if (!firestoreUser && user.metadata.creationTime === user.metadata.lastSignInTime) {
           addLog("New user detected, creating Firestore document");
+          
+          // CRITICAL CHECK: Ensure email exists before creating user
+          if (!user.email) {
+            console.error('[SignInModal] Redirect sign-in completed but no email was provided. Cannot create user.');
+            addLog("Redirect sign-in failed: Email address is required.");
+            setError('Sign-in failed: Email address is required.');
+            setIsLoading(false);
+            setActiveProvider(null);
+            return; // Stop execution
+          }
+          
+          // Email exists, proceed with creation
           firestoreUser = new User(user.uid, {
             id: user.uid,
-            email: user.email || "",
+            email: user.email,
             displayName: user.displayName || "",
           });
           await userService.updateUser(user.uid, firestoreUser);
-        }
-   
-        if (isMounted) {
-          userService.currentUser = firestoreUser;
-          
+          addLog(`Created new Firestore user: ${firestoreUser.id}`);
+        } else if (firestoreUser) {
           // Check subscription status
-          if (firestoreUser?.subscriptionType === SubscriptionType.unsubscribed) {
+          if (firestoreUser.subscriptionType === SubscriptionType.unsubscribed) {
             setSignUpStep('subscription');
             addLog("User unsubscribed, showing subscription step");
           } else if (user.metadata.creationTime === user.metadata.lastSignInTime) {
@@ -669,10 +689,18 @@ const SignInModal: React.FC<SignInModalProps> = ({
             });
 
             if (user) {
+              // CRITICAL CHECK: Ensure email exists (should always be true here, but check anyway)
+              if (!user.email) {
+                  console.error('[SignInModal] Email/Password sign-up completed but no email was provided. This should not happen.');
+                  setError('Sign-up failed: An unexpected error occurred (missing email).');
+                  setIsLoading(false);
+                  return; // Stop execution
+              }
+              
               // Create a new User object with proper SubscriptionType
               const newUser = new User(user.uid, {
                 id: user.uid,
-                email: user.email || '',
+                email: user.email,
                 subscriptionType: SubscriptionType.unsubscribed
               });
               

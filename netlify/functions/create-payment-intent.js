@@ -238,7 +238,7 @@ const handler = async (event, context) => {
         paymentId: paymentIntent.id,
         amount: amount,
         currency: currency.toLowerCase(),
-        status: 'pending', // Will be updated to 'succeeded' by webhook
+        status: 'incomplete', // Will be updated to 'succeeded' by webhook
         challengeId: challengeId,
         ownerId: selectedOwnerId,
         buyerId: buyerId || null,

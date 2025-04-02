@@ -506,13 +506,13 @@ const TrainerDashboard = () => {
                     <span className={`px-2 py-1 rounded-full text-xs ${
                       (sale.status === 'succeeded' || sale.status === 'completed') 
                         ? 'bg-green-900/50 text-green-400' 
-                        : sale.status === 'pending' 
+                        : sale.status === 'incomplete' 
                           ? 'bg-yellow-900/50 text-yellow-400' 
                           : 'bg-zinc-800 text-zinc-300'
                     }`}>
                       {sale.status === 'succeeded' ? 'Completed' : 
                       sale.status === 'completed' ? 'Completed' : 
-                      sale.status === 'pending' ? 'Pending' : 
+                      sale.status === 'incomplete' ? 'Incomplete' : 
                       (sale.status || 'Unknown').charAt(0).toUpperCase() + (sale.status || 'Unknown').slice(1)}
                     </span>
                   </td>

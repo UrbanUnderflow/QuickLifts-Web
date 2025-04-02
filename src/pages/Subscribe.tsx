@@ -3,7 +3,7 @@ import SubscriptionCard from '../components/SubscriptionCard';
 import FAQ from '../components/FAQ';
 import { useScrollFade } from '../hooks/useScrollFade';
 
-const Subscribe: React.FC = () => {
+const subscribe: React.FC = () => {
   const openPaymentLink = (url: string) => {
     window.open(url, '_blank');
   };
@@ -231,4 +231,4 @@ const Subscribe: React.FC = () => {
   );
 };
 
-export default Subscribe;
+export default subscribe;
