@@ -43,7 +43,6 @@ const handler = async (event, context) => {
       currency,
       ownerId,
       buyerId,
-      buyerEmail,
       ownerIdType: ownerId ? (Array.isArray(ownerId) ? 'array' : typeof ownerId) : 'undefined',
       hasBuyerId: !!buyerId,
       buyerIdType: buyerId ? typeof buyerId : 'null',

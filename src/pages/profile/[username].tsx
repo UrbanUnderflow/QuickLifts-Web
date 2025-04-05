@@ -14,7 +14,6 @@ import { parseActivityType } from '../../utils/activityParser';
 import { UserActivity } from '../../types/Activity';
 import FullScreenExerciseView from '../FullscreenExerciseView';
 import UserProfileMeta from '../../components/UserProfileMeta';
-import { exerciseService } from '../../api/firebase/exercise/service';
 
 interface ProfileViewProps {
   initialUserData: User | null;
@@ -233,37 +232,6 @@ useEffect(() => {
     fetchWorkoutSummaries();
   }, [user?.id, API_BASE_URL, followers, following, userVideos]);
 
-  // Add function to handle video deletion
-  const handleDeleteSpecificVideo = async (videoId: string, exerciseId: string) => {
-    // Check if the logged-in user is the same as the profile we're viewing
-    const currentUserId = localStorage.getItem('userId');
-    if (!currentUserId || currentUserId !== user?.id) {
-      console.error('Not authorized to delete videos from this profile');
-      return;
-    }
-    
-    if (!window.confirm('Are you sure you want to delete this video?')) {
-      return;
-    }
-    
-    try {
-      await exerciseService.deleteSpecificExerciseVideo(exerciseId, videoId, currentUserId);
-      
-      // Fetch updated videos from server
-      console.log(`Successfully deleted video ${videoId}`);
-      const response = await fetch(`${API_BASE_URL}/get-user-videos?userId=${user.id}`);
-      if (!response.ok) throw new Error('Failed to fetch videos');
-      
-      const data = await response.json();
-      if (data.success) {
-        setUserVideos(data.exercises);
-      }
-      
-    } catch (error) {
-      console.error('Failed to delete video:', error);
-    }
-  };
-
   if (loading || error || !user) {
     const defaultMetaData = {
       displayName: 'Pulse Profile',
@@ -304,7 +272,6 @@ useEffect(() => {
         <ExerciseGrid
           userVideos={userVideos}
           onSelectVideo={(exercise) => setSelectedExercise(exercise)}
-          onDeleteVideo={handleDeleteSpecificVideo}
         />
       </div>
     );

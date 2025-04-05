@@ -1,551 +1,209 @@
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-const axios = require('axios');
-const getRawBody = require('raw-body');
+const { initializeApp, cert } = require('firebase-admin/app');
+const { getFirestore } = require('firebase-admin/firestore');
 const admin = require('firebase-admin');
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
 // Initialize Firebase if not already initialized
-if (admin.apps.length === 0) {
-  try {
-    // Check if we have the required environment variables
-    if (!process.env.FIREBASE_SECRET_KEY_ALT) {
-      console.warn('FIREBASE_SECRET_KEY_ALT environment variable is missing.');
-      // Initialize with a placeholder for development
-      admin.initializeApp({
-        projectId: "quicklifts-dd3f1"
-      });
-    } else {
-      // Initialize with the actual credentials
-      admin.initializeApp({
-        credential: admin.credential.cert({
-          "type": "service_account",
-          "project_id": "quicklifts-dd3f1",
-          "private_key_id": process.env.FIREBASE_PRIVATE_KEY,
-          "private_key": process.env.FIREBASE_SECRET_KEY_ALT.replace(/\\n/g, '\n'),
-          "client_email": "firebase-adminsdk-1qxb0@quicklifts-dd3f1.iam.gserviceaccount.com",
-          "client_id": "111494077667496751062",
-          "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-          "token_uri": "https://oauth2.googleapis.com/token",
-          "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-          "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-1qxb0@quicklifts-dd3f1.iam.gserviceaccount.com"
-        })
-      });
-    }
-    console.log('Firebase Admin initialized successfully');
-  } catch (error) {
-    console.error('Error initializing Firebase Admin:', error);
-  }
+let db;
+if (!global.firebaseInitialized) {
+  const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+  initializeApp({
+    credential: cert(serviceAccount)
+  });
+  global.firebaseInitialized = true;
 }
-
-const db = admin.firestore();
+db = getFirestore();
 
 exports.handler = async (event) => {
-  const sig = event.headers['stripe-signature'];
-  const endpointSecret = process.env.STRIPE_ENDPOINT_SECRET;
+  if (event.httpMethod !== 'POST') {
+    return {
+      statusCode: 405,
+      body: JSON.stringify({ error: 'Method not allowed' })
+    };
+  }
 
   let stripeEvent;
-
+  
   try {
-    const rawBody = await getRawBody(event.body, {
-      length: event.headers['content-length'],
-      limit: '1mb',
-      encoding: 'utf-8',
-    });
-
-    stripeEvent = stripe.webhooks.constructEvent(rawBody, sig, endpointSecret);
+    const sig = event.headers['stripe-signature'];
+    stripeEvent = stripe.webhooks.constructEvent(event.body, sig, endpointSecret);
   } catch (err) {
-    console.error(`⚠️  Webhook signature verification failed.`, err.message);
+    console.error(`Webhook signature verification failed: ${err.message}`);
     return {
       statusCode: 400,
-      body: `Webhook Error: ${err.message}`,
+      body: JSON.stringify({ error: `Webhook Error: ${err.message}` })
     };
   }
 
-  const eventType = stripeEvent.type;
-  const eventObject = stripeEvent.data.object;
-
-  console.log(`Received event: ${eventType}`);
-
-  // Handle payment intent events specifically for updating dashboard data
-  let paymentIntent;
+  // Handle the event
+  console.log(`Processing webhook event type: ${stripeEvent.type}`);
   
-  if (eventType.startsWith('payment_intent.')) {
-    paymentIntent = eventObject;
-    
-    try {
-      await updatePaymentRecord(paymentIntent, eventType);
-    } catch (error) {
-      console.error('Error updating payment record:', error);
-    }
-  }
-  
-  // Handle charge events specifically for updating dashboard data
-  if (eventType.startsWith('charge.')) {
-    const charge = eventObject;
-    
-    // If the charge has a payment intent, update the payment record
-    if (charge.payment_intent) {
-      try {
-        const relatedPaymentIntent = await stripe.paymentIntents.retrieve(charge.payment_intent);
-        await updatePaymentRecord(relatedPaymentIntent, eventType, charge);
-      } catch (error) {
-        console.error('Error updating payment record from charge:', error);
-      }
-    } else {
-      // This is a direct charge without payment intent
-      try {
-        await createOrUpdateChargeRecord(charge, eventType);
-      } catch (error) {
-        console.error('Error updating charge record:', error);
-      }
-    }
-  }
-
-  let message;
-
-  switch (eventType) {
-    case 'invoice.payment_succeeded':
-      try {
-        const customer = await stripe.customers.retrieve(eventObject.customer);
-        message = {
-          text: `🎉 A new subscription was purchased by ${customer.email}!`,
-        };
-      } catch (err) {
-        console.error('Error retrieving customer:', err);
-        return {
-          statusCode: 500,
-          body: 'Internal Server Error',
-        };
-      }
-      break;
-
-    // Add cases for all other event types you are listening to
-    case 'charge.captured':
-    case 'charge.dispute.closed':
-    case 'charge.dispute.created':
-    case 'charge.dispute.funds_reinstated':
-    case 'charge.dispute.funds_withdrawn':
-    case 'charge.dispute.updated':
-    case 'charge.expired':
-    case 'charge.failed':
-    case 'charge.pending':
-    case 'charge.refund.updated':
-    case 'charge.refunded':
-    case 'charge.succeeded':
-    case 'charge.updated':
-    case 'checkout.session.async_payment_failed':
-    case 'checkout.session.async_payment_succeeded':
-    case 'checkout.session.completed':
-    case 'checkout.session.expired':
-    case 'customer.bank_account.created':
-    case 'customer.bank_account.deleted':
-    case 'customer.bank_account.updated':
-    case 'customer.card.created':
-    case 'customer.card.deleted':
-    case 'customer.card.updated':
-    case 'customer.created':
-    case 'customer.deleted':
-    case 'customer.discount.created':
-    case 'customer.discount.deleted':
-    case 'customer.discount.updated':
-    case 'customer.source.created':
-    case 'customer.source.deleted':
-    case 'customer.source.expiring':
-    case 'customer.source.updated':
-    case 'customer.subscription.created':
-    case 'customer.subscription.deleted':
-    case 'customer.subscription.paused':
-    case 'customer.subscription.pending_update_applied':
-    case 'customer.subscription.pending_update_expired':
-    case 'customer.subscription.resumed':
-    case 'customer.subscription.trial_will_end':
-    case 'customer.subscription.updated':
-    case 'customer.tax_id.created':
-    case 'customer.tax_id.deleted':
-    case 'customer.tax_id.updated':
-    case 'customer.updated':
-    case 'payment_link.created':
-    case 'payment_link.updated':
-    case 'payout.canceled':
-    case 'payout.created':
-    case 'payout.failed':
-    case 'payout.paid':
-    case 'payout.reconciliation_completed':
-    case 'payout.updated':
-    case 'payment_intent.succeeded':
-    case 'payment_intent.payment_failed':
-    case 'payment_intent.created':
-    case 'payment_intent.canceled':
-    case 'subscription_schedule.aborted':
-    case 'subscription_schedule.canceled':
-    case 'subscription_schedule.completed':
-    case 'subscription_schedule.created':
-    case 'subscription_schedule.expiring':
-    case 'subscription_schedule.released':
-    case 'subscription_schedule.updated':
-      message = {
-        text: `Event received: ${eventType}`,
-        event: JSON.stringify(eventObject, null, 2),
-      };
-      break;
-
-    default:
-      message = {
-        text: `Unhandled event type: ${eventType}`,
-        event: JSON.stringify(eventObject, null, 2),
-      };
-      break;
-  }
-
-  console.log(`Sending message to Slack: ${JSON.stringify(message)}`);
-
   try {
-    await axios.post("https://hooks.slack.com/services/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", message);
-    console.log('Message sent to Slack successfully.');
-  } catch (err) {
-    console.error('Error sending message to Slack:', err);
+    switch (stripeEvent.type) {
+      case 'checkout.session.completed':
+        await handleCheckoutSessionCompleted(stripeEvent.data.object);
+        break;
+      case 'account.updated':
+        await handleAccountUpdated(stripeEvent.data.object);
+        break;
+      // Handle other event types as needed
+      default:
+        console.log(`Unhandled event type: ${stripeEvent.type}`);
+    }
+
+    return {
+      statusCode: 200,
+      body: JSON.stringify({ received: true })
+    };
+  } catch (error) {
+    console.error(`Error processing webhook: ${error.message}`);
     return {
       statusCode: 500,
-      body: 'Internal Server Error',
+      body: JSON.stringify({ error: `Server Error: ${error.message}` })
     };
   }
-
-  return {
-    statusCode: 200,
-    body: 'Success',
-  };
 };
 
-/**
- * Updates a payment record in Firestore based on a Stripe payment intent event
- * @param {Object} paymentIntent - The Stripe payment intent object
- * @param {string} eventType - The Stripe event type
- * @param {Object} charge - Optional charge object if this update is from a charge event
- */
-async function updatePaymentRecord(paymentIntent, eventType, charge = null) {
+async function handleCheckoutSessionCompleted(session) {
+  console.log('Processing checkout.session.completed event');
+  
   try {
-    const paymentId = paymentIntent.id;
-    console.log(`Processing payment record update for ${paymentId} from ${eventType}`);
+    // Extract necessary information from the session
+    const { metadata, customer_email, customer, client_reference_id } = session;
+    const lineItems = await stripe.checkout.sessions.listLineItems(session.id);
     
-    // Check if a payment record exists in round-payments
-    const paymentRef = db.collection('payments').doc(paymentId);
-    const paymentDoc = await paymentRef.get();
-    
-    // Map stripe event types to our status values
-    let status = 'incomplete';
-    if (eventType === 'payment_intent.succeeded' || eventType === 'charge.succeeded') {
-      status = 'succeeded';
-    } else if (eventType === 'payment_intent.payment_failed' || eventType === 'charge.failed') {
-      status = 'failed';
-    } else if (eventType === 'payment_intent.canceled' || eventType === 'charge.expired') {
-      status = 'canceled';
-    } else if (eventType === 'charge.refunded') {
-      status = 'refunded';
+    if (!lineItems || !lineItems.data || lineItems.data.length === 0) {
+      console.error('No line items found in the checkout session');
+      return;
     }
     
-    if (paymentDoc.exists) {
-      // Update existing payment record
-      const updateData = {
-        status,
-        updatedAt: new Date(),
-        stripeEventType: eventType
-      };
-      
-      // If this is from a charge, add the charge ID
-      if (charge) {
-        updateData.chargeId = charge.id;
-        
-        // Only update amount if not already set
-        if (!paymentDoc.data().amount && charge.amount) {
-          updateData.amount = charge.amount;
+    // Extract metadata
+    const challengeId = metadata?.challengeId;
+    const challengeTitle = metadata?.challengeTitle;
+    let ownerId = metadata?.ownerId;
+    
+    console.log(`Extracted challengeId: ${challengeId}, ownerId: ${ownerId}, challengeTitle: ${challengeTitle}`);
+    
+    // Resolve customer information
+    let buyerEmail = customer_email;
+    let buyerId = client_reference_id;
+    
+    // Resolve ownerId if not present in metadata
+    let resolvedOwnerId = ownerId;
+    if (!resolvedOwnerId && challengeId) {
+      try {
+        const challengeDoc = await db.collection('challenges').doc(challengeId).get();
+        if (challengeDoc.exists) {
+          resolvedOwnerId = challengeDoc.data().ownerId || '';
+          console.log(`Resolved owner ID ${resolvedOwnerId} from challenge ID ${challengeId}`);
         }
+      } catch (error) {
+        console.error(`Error finding owner from challenge: ${error.message}`);
       }
-      
-      await paymentRef.update(updateData);
-      console.log(`Updated round-payment record ${paymentId} with status: ${status}`);
+    }
+    
+    // If we still don't have an owner ID, use the challenge title as the owner ID
+    if (!resolvedOwnerId && challengeId) {
+      resolvedOwnerId = challengeTitle;
+      console.log(`Resolved owner ID ${resolvedOwnerId} from challenge title ${challengeTitle}`);
+    }
+    
+    // Resolve buyer ID if not present in client_reference_id
+    let resolvedBuyerId = buyerId;
+    if (!resolvedBuyerId && buyerEmail) {
+      try {
+        const userQuery = await db.collection('users').where('email', '==', buyerEmail).limit(1).get();
+        if (!userQuery.empty) {
+          resolvedBuyerId = userQuery.docs[0].id;
+          console.log(`Resolved buyer ID ${resolvedBuyerId} from email ${buyerEmail}`);
+        }
+      } catch (error) {
+        console.error(`Error finding buyer by email: ${error.message}`);
+      }
+    }
+    
+    // Process purchase and record transaction
+    if (resolvedOwnerId && resolvedBuyerId) {
+      await recordPurchase({
+        ownerId: resolvedOwnerId,
+        buyerId: resolvedBuyerId,
+        challengeId,
+        amount: session.amount_total / 100, // Convert from cents to dollars
+        currency: session.currency,
+        sessionId: session.id,
+        paymentIntentId: session.payment_intent,
+        timestamp: new Date()
+      });
     } else {
-      // Also check the legacy 'payments' collection
-      const legacyPaymentRef = db.collection('payments').doc(paymentId);
-      const legacyPaymentDoc = await legacyPaymentRef.get();
-      
-      if (legacyPaymentDoc.exists) {
-        // Legacy payment exists - migrate to round-payments and update
-        const legacyData = legacyPaymentDoc.data();
-        
-        // Migrate data to new collection with correct field names
-        const migratedData = {
-          ...legacyData,
-          ownerId: legacyData.trainerId || legacyData.ownerId,
-          ownerAmount: legacyData.trainerAmount || legacyData.ownerAmount,
-          status,
-          updatedAt: new Date(),
-          stripeEventType: eventType,
-          migratedFromLegacy: true
-        };
-        
-        // Remove old fields if they exist
-        delete migratedData.trainerId;
-        delete migratedData.trainerAmount;
-        
-        // If this is from a charge, add the charge ID
-        if (charge) {
-          migratedData.chargeId = charge.id;
-        }
-        
-        await paymentRef.set(migratedData);
-        console.log(`Migrated and updated payment from legacy collection to round-payments: ${paymentId}`);
-      } else {
-        // No payment record found in either collection - create a new one
-        console.log(`No payment record found for ${paymentId}, creating one in payments collection`);
-        
-        // Extract all possible identification details from metadata
-        const metadata = paymentIntent.metadata || {};
-        console.log('Payment intent metadata:', metadata);
-        
-        // Extract challenge ID and owner ID from metadata if available
-        const challengeId = metadata.challengeId || '';
-        
-        // Look for any user identifier in the following order of priority
-        const ownerId = metadata.ownerId || metadata.trainerId || '';
-        const buyerId = metadata.buyerId || metadata.userId || '';
-        
-        console.log('Extracted IDs from metadata:', { 
-          challengeId, 
-          ownerId, 
-          buyerId 
-        });
-        
-        // Try to get challenge details if we have a challenge ID
-        let challengeTitle = 'Fitness Round';
-        if (challengeId) {
-          try {
-            const challengeDoc = await db.collection('challenges').doc(challengeId).get();
-            if (challengeDoc.exists) {
-              challengeTitle = challengeDoc.data().title || challengeTitle;
-            }
-          } catch (error) {
-            console.error(`Error fetching challenge details: ${error.message}`);
-          }
-        }
-        
-        // If we don't have an owner ID but have a destination, try to find the owner
-        let resolvedOwnerId = ownerId;
-        if (!resolvedOwnerId && paymentIntent.transfer_data?.destination) {
-          try {
-            const accountId = paymentIntent.transfer_data.destination;
-            const ownerQuery = await db.collection('users')
-              .where('creator.stripeAccountId', '==', accountId)
-              .limit(1)
-              .get();
-              
-            if (!ownerQuery.empty) {
-              resolvedOwnerId = ownerQuery.docs[0].id;
-              console.log(`Resolved owner ID ${resolvedOwnerId} from account ID ${accountId}`);
-            }
-          } catch (error) {
-            console.error(`Error finding owner for account: ${error.message}`);
-          }
-        }
-        
-        // Try to resolve buyer ID from email if available
-        let resolvedBuyerId = buyerId;
-        const buyerEmail = metadata.buyerEmail || (charge?.billing_details?.email) || '';
-        
-        if (!resolvedBuyerId && buyerEmail) {
-          try {
-            console.log(`Attempting to find user by email: ${buyerEmail}`);
-            const userQuery = await db.collection('users')
-              .where('email', '==', buyerEmail)
-              .limit(1)
-              .get();
-              
-            if (!userQuery.empty) {
-              resolvedBuyerId = userQuery.docs[0].id;
-              console.log(`Resolved buyer ID ${resolvedBuyerId} from email ${buyerEmail}`);
-            }
-          } catch (error) {
-            console.error(`Error finding user by email: ${error.message}`);
-          }
-        }
-        
-        // Calculate fee and owner amount if available
-        let platformFee = 0;
-        let ownerAmount = 0;
-        
-        if (paymentIntent.application_fee_amount) {
-          platformFee = paymentIntent.application_fee_amount;
-          ownerAmount = paymentIntent.amount - platformFee;
-        }
-        
-        // Create new payment record with as much data as we can gather
-        const paymentData = {
-          paymentId,
-          amount: paymentIntent.amount,
-          currency: paymentIntent.currency,
-          status,
-          challengeId,
-          ownerId: resolvedOwnerId,
-          buyerId: resolvedBuyerId,
-          challengeTitle,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          stripeEventType: eventType,
-          ownerStripeAccountId: paymentIntent.transfer_data?.destination || null,
-          platformFee,
-          ownerAmount,
-          metadata: metadata, // Store the original metadata for troubleshooting
-          isRecoveredPayment: true, // Flag that this was created from webhook not direct payment
-          buyerEmail: buyerEmail
-        };
-        
-        // If this is from a charge, add the charge ID and any other relevant data
-        if (charge) {
-          paymentData.chargeId = charge.id;
-          
-          // Add additional details from charge if available
-          if (charge.billing_details) {
-            paymentData.billingDetails = {
-              name: charge.billing_details.name,
-              email: charge.billing_details.email,
-              phone: charge.billing_details.phone,
-              address: charge.billing_details.address
-            };
-          }
-        }
-        
-        await paymentRef.set(paymentData);
-        console.log(`Created new payment record for ${paymentId}`);
-        
-        // After creating the record, notify if this is an anonymous payment
-        if (!resolvedOwnerId || !resolvedBuyerId) {
-          console.warn(`⚠️ Payment ${paymentId} created with missing data:`, {
-            hasOwnerId: !!resolvedOwnerId,
-            hasBuyerId: !!resolvedBuyerId,
-            hasChallengeId: !!challengeId
-          });
-        }
-      }
+      console.error(`Unable to record purchase. Missing owner ID or buyer ID. ownerId: ${resolvedOwnerId}, buyerId: ${resolvedBuyerId}`);
     }
   } catch (error) {
-    console.error(`Error updating payment record: ${error.message}`);
+    console.error(`Error handling checkout session completed: ${error.message}`);
     throw error;
   }
 }
 
-/**
- * Creates or updates a record directly from a charge object
- * @param {Object} charge - The Stripe charge object
- * @param {string} eventType - The Stripe event type
- */
-async function createOrUpdateChargeRecord(charge, eventType) {
+async function handleAccountUpdated(account) {
+  console.log('Processing account.updated event');
+  
   try {
-    const chargeId = charge.id;
-    console.log(`Processing charge record update for ${chargeId} from ${eventType}`);
+    // Process account updates as needed
+    const { id, charges_enabled, payouts_enabled, details_submitted } = account;
     
-    // Look for an existing charge record in round-payments
-    const chargeRef = db.collection('payments').doc(chargeId);
-    const chargeDoc = await chargeRef.get();
-    
-    // Map stripe event types to our status values
-    let status = 'incomplete';
-    if (eventType === 'charge.succeeded') {
-      status = 'succeeded';
-    } else if (eventType === 'charge.failed') {
-      status = 'failed';
-    } else if (eventType === 'charge.expired') {
-      status = 'canceled';
-    } else if (eventType === 'charge.refunded') {
-      status = 'refunded';
-    }
-    
-    if (chargeDoc.exists) {
-      // Update existing charge record
-      await chargeRef.update({
-        status,
-        updatedAt: new Date(),
-        stripeEventType: eventType
+    // Update user account info in Firestore
+    const userQuery = await db.collection('users').where('stripeAccountId', '==', id).limit(1).get();
+    if (!userQuery.empty) {
+      const userId = userQuery.docs[0].id;
+      await db.collection('users').doc(userId).update({
+        'stripeAccountDetails.chargesEnabled': charges_enabled,
+        'stripeAccountDetails.payoutsEnabled': payouts_enabled,
+        'stripeAccountDetails.detailsSubmitted': details_submitted,
+        'stripeAccountDetails.lastUpdated': new Date()
       });
-      console.log(`Updated round-payment charge record ${chargeId} with status: ${status}`);
+      console.log(`Updated stripe account details for user ${userId}`);
     } else {
-      // Check legacy 'payments' collection
-      const legacyChargeRef = db.collection('payments').doc(chargeId);
-      const legacyChargeDoc = await legacyChargeRef.get();
-      
-      if (legacyChargeDoc.exists) {
-        // Migrate from legacy collection
-        const legacyData = legacyChargeDoc.data();
-        
-        // Migrate data to new collection with correct field names
-        const migratedData = {
-          ...legacyData,
-          ownerId: legacyData.trainerId || legacyData.ownerId,
-          ownerAmount: legacyData.trainerAmount || legacyData.ownerAmount,
-          status,
-          updatedAt: new Date(),
-          stripeEventType: eventType,
-          migratedFromLegacy: true
-        };
-        
-        // Remove old fields if they exist
-        delete migratedData.trainerId;
-        delete migratedData.trainerAmount;
-        
-        await chargeRef.set(migratedData);
-        console.log(`Migrated and updated charge from legacy collection to round-payments: ${chargeId}`);
-      } else {
-        // Create new charge record
-        // Extract destination account ID if this is a connected account charge
-        const destAccountId = charge.destination || null;
-        
-        // If we have a destination account, try to find the owner
-        let ownerId = null;
-        if (destAccountId) {
-          try {
-            const accountQuery = await db.collection('users')
-              .where('creator.stripeAccountId', '==', destAccountId)
-              .limit(1)
-              .get();
-              
-            if (!accountQuery.empty) {
-              ownerId = accountQuery.docs[0].id;
-            }
-          } catch (error) {
-            console.error(`Error finding owner for account ${destAccountId}: ${error.message}`);
-          }
-        }
-        
-        // Calculate fee and owner amount if available
-        let platformFee = 0;
-        let ownerAmount = 0;
-        
-        if (charge.application_fee_amount) {
-          platformFee = charge.application_fee_amount;
-          ownerAmount = charge.amount - platformFee;
-        }
-        
-        // Create basic charge record
-        const chargeData = {
-          paymentId: chargeId,
-          chargeId,
-          amount: charge.amount,
-          currency: charge.currency,
-          status,
-          ownerId,
-          stripeAccountId: destAccountId,
-          challengeTitle: charge.description || 'Fitness Round',
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          stripeEventType: eventType,
-          source: 'direct_charge',
-          platformFee,
-          ownerAmount
-        };
-        
-        await chargeRef.set(chargeData);
-        console.log(`Created new round-payment charge record for ${chargeId}`);
-      }
+      console.log(`No user found with Stripe Account ID: ${id}`);
     }
   } catch (error) {
-    console.error(`Error updating charge record: ${error.message}`);
+    console.error(`Error handling account updated: ${error.message}`);
+    throw error;
+  }
+}
+
+async function recordPurchase(purchaseData) {
+  console.log(`Recording purchase: ${JSON.stringify(purchaseData)}`);
+  
+  try {
+    // Create transaction record
+    const transactionRef = await db.collection('transactions').add({
+      ...purchaseData,
+      type: 'challenge_purchase',
+      status: 'completed'
+    });
+    
+    console.log(`Transaction recorded with ID: ${transactionRef.id}`);
+    
+    // Update challenge purchases (if applicable)
+    if (purchaseData.challengeId) {
+      await db.collection('challenges').doc(purchaseData.challengeId).update({
+        purchaseCount: admin.firestore.FieldValue.increment(1),
+        totalRevenue: admin.firestore.FieldValue.increment(purchaseData.amount)
+      });
+      
+      // Add buyer to authorized users
+      await db.collection('challenges').doc(purchaseData.challengeId).collection('authorizedUsers').doc(purchaseData.buyerId).set({
+        userId: purchaseData.buyerId,
+        purchaseDate: purchaseData.timestamp,
+        transactionId: transactionRef.id
+      });
+      
+      console.log(`Updated challenge ${purchaseData.challengeId} with purchase info`);
+    }
+    
+    return transactionRef.id;
+  } catch (error) {
+    console.error(`Error recording purchase: ${error.message}`);
     throw error;
   }
 }
