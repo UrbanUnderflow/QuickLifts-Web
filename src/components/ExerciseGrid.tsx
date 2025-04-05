@@ -6,12 +6,10 @@ import VideoCard from './VideoCard';
 interface ExerciseGridProps {
   userVideos: Exercise[];
   onSelectVideo: (exercise: Exercise) => void;
-  multiSelection?: boolean;
-  selectedExercises: Exercise[];
-  onToggleSelection?: (exercise: Exercise) => void;
+  onDeleteVideo?: (videoId: string, exerciseId: string) => void;
 }
 
-const ExerciseGrid: React.FC<ExerciseGridProps> = ({ userVideos, onSelectVideo, multiSelection, selectedExercises, onToggleSelection }) => {
+const ExerciseGrid: React.FC<ExerciseGridProps> = ({ userVideos, onSelectVideo, onDeleteVideo }) => {
   const [showAllVideos, setShowAllVideos] = useState(false);
   
   // Log all user videos we receive
@@ -47,7 +45,11 @@ const ExerciseGrid: React.FC<ExerciseGridProps> = ({ userVideos, onSelectVideo, 
   const createFilteredVideos = () => {
     if (showAllVideos) {
       // Create a flattened list of all unique videos
-      const allVideos: { exercise: Exercise, videoIndex: number }[] = [];
+      const allVideos: { 
+        exercise: Exercise, 
+        videoIndex: number,
+        videoId: string // Added to track the specific video ID
+      }[] = [];
       
       userVideos.forEach(exercise => {
         exercise.videos.forEach((video, videoIndex) => {
@@ -59,7 +61,8 @@ const ExerciseGrid: React.FC<ExerciseGridProps> = ({ userVideos, onSelectVideo, 
                 ...exercise,
                 videos: [video] // Only include this specific video
               }), 
-              videoIndex 
+              videoIndex,
+              videoId: video.id // Store the video ID
             });
           }
         });
@@ -73,8 +76,7 @@ const ExerciseGrid: React.FC<ExerciseGridProps> = ({ userVideos, onSelectVideo, 
           const dateA = new Date(a.exercise.videos[0]?.createdAt || 0);
           const dateB = new Date(b.exercise.videos[0]?.createdAt || 0);
           return dateB.getTime() - dateA.getTime();
-        })
-        .map(item => item.exercise);
+        });
     }
     
     // Regular filtering (original logic)
@@ -108,7 +110,11 @@ const ExerciseGrid: React.FC<ExerciseGridProps> = ({ userVideos, onSelectVideo, 
         seenGifUrls.add(gifUrl);
         console.log(`[DEBUG-EXERCISE-GRID] Adding exercise to filtered list: ${exercise.name}`);
         return true;
-      });
+      })
+      .map(exercise => ({ 
+        exercise, 
+        videoId: exercise.videos[0]?.id || '' // Added to track the specific video ID
+      }));
   };
 
   const filteredVideos = createFilteredVideos();
@@ -139,17 +145,30 @@ const ExerciseGrid: React.FC<ExerciseGridProps> = ({ userVideos, onSelectVideo, 
       
       <div className="p-4">
         <div className="grid grid-cols-3 gap-4">
-          {filteredVideos.map((exercise, index) => (
-            <VideoCard
-              key={`${exercise.id}-${exercise.videos[0]?.id || index}`}
-              gifUrl={exercise.videos[0]?.gifURL}
-              exerciseName={exercise.name}
-              onClick={() => {
-                console.log('[DEBUG-EXERCISE-GRID] Clicked on exercise:', exercise.name);
-                onSelectVideo(exercise);
-              }}
-            />
-          ))}
+          {filteredVideos.map((item, index) => {
+            // Handling the two different data structures from createFilteredVideos
+            const exercise = showAllVideos ? item.exercise : item.exercise;
+            const videoId = showAllVideos ? item.videoId : item.videoId;
+            const exerciseId = exercise.id;
+            const gifUrl = showAllVideos 
+              ? exercise.videos[0]?.gifURL 
+              : exercise.videos[0]?.gifURL;
+
+            return (
+              <VideoCard
+                key={`${exerciseId}-${videoId || index}`}
+                gifUrl={gifUrl}
+                exerciseName={exercise.name}
+                videoId={videoId}
+                exerciseId={exerciseId}
+                onClick={() => {
+                  console.log('[DEBUG-EXERCISE-GRID] Clicked on exercise:', exercise.name);
+                  onSelectVideo(exercise);
+                }}
+                onDelete={onDeleteVideo}
+              />
+            );
+          })}
         </div>
       </div>
     </div>

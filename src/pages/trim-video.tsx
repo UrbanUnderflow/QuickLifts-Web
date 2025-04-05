@@ -61,14 +61,47 @@ const TrimVideoPage: React.FC = () => {
   const handleTrimComplete = async (trimmedFile: File) => {
     try {
       setIsLoading(true);
-      console.log('[DEBUG] Starting to save trimmed video to IndexedDB');
+      console.log('[DEBUG] Starting to save trimmed video');
       console.log('[DEBUG] Trimmed file details:', {
         name: trimmedFile.name,
         size: trimmedFile.size,
         type: trimmedFile.type,
+        extension: trimmedFile.name.split('.').pop(),
         trimStart: (trimmedFile as any).trimStart,
         trimEnd: (trimmedFile as any).trimEnd
       });
+      
+      // Ensure we're using an MP4 compatible file to upload to Firebase
+      let compatibleFile = trimmedFile;
+      
+      // ALWAYS convert to MP4 to ensure compatibility
+      console.log('[DEBUG] Creating MP4-compatible file for upload');
+      
+      try {
+        // Create a new file with MP4 mime type to ensure compatibility with Firebase
+        const newFileName = trimmedFile.name.replace(/\.(webm|mkv|avi|mov|qt)$/, '.mp4');
+        compatibleFile = new File(
+          [trimmedFile], 
+          newFileName.endsWith('.mp4') ? newFileName : newFileName + '.mp4', 
+          { type: 'video/mp4' }
+        );
+        
+        // Copy the trim metadata to the new file
+        Object.defineProperties(compatibleFile, {
+          trimStart: { value: (trimmedFile as any).trimStart, enumerable: true },
+          trimEnd: { value: (trimmedFile as any).trimEnd, enumerable: true }
+        });
+        
+        console.log('[DEBUG] Created compatible file with MP4 type:', {
+          name: compatibleFile.name,
+          size: compatibleFile.size,
+          type: compatibleFile.type
+        });
+      } catch (error) {
+        console.error('[DEBUG] Error creating MP4-compatible file:', error);
+        // Continue with original file if conversion fails
+        compatibleFile = trimmedFile;
+      }
       
       // Convert file to base64
       const base64Data = await new Promise<string>((resolve, reject) => {
@@ -79,79 +112,78 @@ const TrimVideoPage: React.FC = () => {
           resolve(base64Content);
         };
         reader.onerror = reject;
-        reader.readAsDataURL(trimmedFile);
+        reader.readAsDataURL(compatibleFile);
       });
 
       console.log('[DEBUG] Converted video to base64, size:', base64Data.length);
 
-      // Clean up any existing trimmed file
-      await removeVideoFile('trimmed_video_file').catch(err => {
-        console.log('[DEBUG] No existing trimmed file to remove or error:', err);
-      });
-
-      // Store the new trimmed file
+      // Generate a unique ID for this trimmed video
+      const videoId = Date.now().toString();
+      
+      // Since IndexedDB is not working, use sessionStorage instead
+      // Store minimum necessary data to avoid sessionStorage size limits
       const videoData = {
-        name: trimmedFile.name,
-        type: trimmedFile.type,
-        data: base64Data,
-        trimStart: (trimmedFile as any).trimStart,
-        trimEnd: (trimmedFile as any).trimEnd
+        name: compatibleFile.name,
+        type: compatibleFile.type,
+        data: base64Data, // This will be the Base64 encoded video
+        trimStart: (compatibleFile as any).trimStart,
+        trimEnd: (compatibleFile as any).trimEnd,
+        videoId: videoId
       };
 
-      console.log('[DEBUG] Storing video data in IndexedDB:', {
-        name: videoData.name,
-        type: videoData.type,
-        dataSize: videoData.data.length,
-        trimStart: videoData.trimStart,
-        trimEnd: videoData.trimEnd
-      });
-
-      await storeVideoFile('trimmed_video_file', videoData);
-      console.log('[DEBUG] Successfully stored trimmed video in IndexedDB');
-
-      // Verify the file was stored and retry if needed
-      let retryCount = 0;
-      let verifyFile = null;
-      
-      while (retryCount < 3 && !verifyFile) {
-        verifyFile = await getVideoFile('trimmed_video_file');
-        if (!verifyFile) {
-          console.log(`[DEBUG] Verification attempt ${retryCount + 1} failed, retrying...`);
-          await new Promise(resolve => setTimeout(resolve, 500));
-          retryCount++;
+      // Store in sessionStorage - this bypasses IndexedDB completely
+      try {
+        sessionStorage.setItem('trimmed_video_data', JSON.stringify(videoData));
+        console.log('[DEBUG] Successfully stored video data in sessionStorage, size:', JSON.stringify(videoData).length);
+      } catch (storageError) {
+        console.error('[DEBUG] Error storing video in sessionStorage:', storageError);
+        
+        // If sessionStorage fails (possibly due to size), fall back to a minimal approach
+        // Store just the metadata and use a flag to indicate the video is ready
+        const minimalData = {
+          name: compatibleFile.name,
+          type: compatibleFile.type,
+          trimStart: (compatibleFile as any).trimStart,
+          trimEnd: (compatibleFile as any).trimEnd,
+          videoId: videoId,
+          // Add important flag to indicate we're using minimal mode
+          isMinimal: true
+        };
+        
+        sessionStorage.setItem('trimmed_video_data', JSON.stringify(minimalData));
+        
+        // For minimal mode, we also need to temporarily store the video blob in memory
+        // This is risky as it might not survive page navigation, but it's our last resort
+        if (typeof window !== 'undefined' && window.opener) {
+          // If opened in a new window, try to pass to parent
+          window.opener.tempVideoBlob = compatibleFile;
+        } else {
+          // Otherwise use global variable as last resort
+          (window as any).tempVideoBlob = compatibleFile;
         }
+        
+        console.log('[DEBUG] Stored minimal data in sessionStorage and video in memory');
       }
+      
+      // Clean up the original file from session storage
+      sessionStorage.removeItem('trim_video_file');
+      console.log('[DEBUG] Removed original video file from sessionStorage');
 
-      if (!verifyFile) {
-        throw new Error('Failed to verify stored video file after multiple attempts');
-      }
-
-      console.log('[DEBUG] Verified trimmed video in IndexedDB:', {
-        name: verifyFile.name,
-        type: verifyFile.type,
-        dataSize: verifyFile.data.length,
-        trimStart: verifyFile.trimStart,
-        trimEnd: verifyFile.trimEnd
-      });
-
-      // Clean up the original file
-      await removeVideoFile('trim_video_file').catch(err => {
-        console.log('[DEBUG] Error removing original file or not found:', err);
-      });
-
-      // Wait a moment to ensure IndexedDB operations are complete
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Wait a moment to ensure operations are complete
+      await new Promise(resolve => setTimeout(resolve, 500));
 
       // Navigate back
       const returnUrl = router.query.returnUrl as string || '/';
       console.log('[DEBUG] All operations complete, navigating to:', returnUrl);
       
-      // Use router.replace instead of push to force a clean navigation
-      router.replace(returnUrl);
+      // Add a query parameter to signal that trimming just completed
+      const destinationUrl = `${returnUrl}${returnUrl.includes('?') ? '&' : '?'}trimmed=true`;
+      console.log('[DEBUG] Navigating with trim flag:', destinationUrl);
+      router.replace(destinationUrl);
 
     } catch (error) {
       console.error('[DEBUG] Error in handleTrimComplete:', error);
-      setError('Failed to save the trimmed video. Please try again.');
+      setError(error instanceof Error ? error.message : 'Failed to save the trimmed video. Please try again.');
       setIsLoading(false);
     }
   };

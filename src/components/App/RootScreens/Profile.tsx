@@ -17,6 +17,7 @@ import { firebaseStorageService, UploadImageType } from '../../../api/firebase/s
 import { Camera, Trash2, CheckCircle } from 'lucide-react';
 import Spacer from '../../../components/Spacer';
 import { videoProcessorService } from '../../../api/firebase/video-processor/service';
+import { exerciseService } from '../../../api/firebase/exercise/service';
 
 interface StackGridProps {
   stacks: Workout[];
@@ -202,6 +203,31 @@ const handleProcessVideosWithoutGifs = async () => {
     console.error('Error processing videos without GIFs:', error);
   } finally {
     setIsProcessingGifs(false);
+  }
+};
+
+// Add a new function to handle video deletion
+const handleDeleteSpecificVideo = async (videoId: string, exerciseId: string) => {
+  if (!window.confirm('Are you sure you want to delete this video?')) {
+    return;
+  }
+  
+  const userId = userService.currentUser?.id;
+  if (!userId) {
+    console.error('User not logged in');
+    return;
+  }
+  
+  try {
+    await exerciseService.deleteSpecificExerciseVideo(exerciseId, videoId, userId);
+    
+    // Instead of manually updating the state, fetch fresh videos
+    console.log(`Successfully deleted video ${videoId}`);
+    const videos = await userService.fetchUserVideos();
+    setUserVideos(videos);
+    
+  } catch (error) {
+    console.error('Failed to delete video:', error);
   }
 };
 
@@ -543,14 +569,12 @@ const handleProcessVideosWithoutGifs = async () => {
                   </div>
                   <ExerciseGrid
                     userVideos={userVideos}
-                    multiSelection={isSelecting}
-                    selectedExercises={selectedExercises}
-                    onToggleSelection={handleToggleSelection}
                     onSelectVideo={(exercise) => {
                       if (!isSelecting) {
                         setSelectedExercise(exercise);
                       }
                     }}
+                    onDeleteVideo={handleDeleteSpecificVideo}
                   />
                 </div>
               )}

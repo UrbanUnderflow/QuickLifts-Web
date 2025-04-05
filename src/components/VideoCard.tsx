@@ -1,12 +1,23 @@
 import React from 'react';
+import { Trash2 } from 'lucide-react';
 
 interface VideoCardProps {
   gifUrl?: string;
   exerciseName: string;
   onClick: () => void;
+  videoId?: string;
+  exerciseId?: string;
+  onDelete?: (videoId: string, exerciseId: string) => void;
 }
 
-const VideoCard: React.FC<VideoCardProps> = ({ gifUrl, exerciseName, onClick }) => {
+const VideoCard: React.FC<VideoCardProps> = ({ 
+  gifUrl, 
+  exerciseName, 
+  onClick,
+  videoId,
+  exerciseId,
+  onDelete
+}) => {
   const [isValidGif, setIsValidGif] = React.useState<boolean>(true);
 
   React.useEffect(() => {
@@ -27,11 +38,27 @@ const VideoCard: React.FC<VideoCardProps> = ({ gifUrl, exerciseName, onClick }) 
       .catch(() => setIsValidGif(false));
   }, [gifUrl]);
 
+  const handleDelete = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onDelete && videoId && exerciseId) {
+      onDelete(videoId, exerciseId);
+    }
+  };
+
   return (
     <button
       onClick={onClick}
       className="relative w-full aspect-square rounded-lg overflow-hidden group"
     >
+      {onDelete && videoId && exerciseId && (
+        <div 
+          className="absolute top-2 right-2 z-10 p-1.5 bg-black/70 rounded-full hover:bg-red-500/90 transition-colors"
+          onClick={handleDelete}
+        >
+          <Trash2 size={16} className="text-white" />
+        </div>
+      )}
+
       {isValidGif && gifUrl ? (
         <div className="w-full h-full">
           <img 

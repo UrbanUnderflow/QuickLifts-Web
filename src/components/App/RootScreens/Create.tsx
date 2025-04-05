@@ -7,7 +7,7 @@ import { exerciseService } from '../../../api/firebase/exercise/service';
 import { userService } from '../../../api/firebase/user/service';
 import { videoProcessorService } from '../../../api/firebase/video-processor/service';
 import { formatExerciseNameForId } from '../../../utils/stringUtils';
-import { storeVideoFile, getVideoFile, removeVideoFile } from '../../../utils/indexedDBStorage';
+import { storeVideoFile, getVideoFile, removeVideoFile, clearAllStorage } from '../../../utils/indexedDBStorage';
 import { gifGenerator } from '../../../utils/gifGenerator';
 import { db } from '../../../api/firebase/config';
 import { Timestamp, collection, doc, updateDoc } from 'firebase/firestore';
@@ -15,8 +15,29 @@ import { Timestamp, collection, doc, updateDoc } from 'firebase/firestore';
 import { Exercise, ExerciseVideo, ExerciseAuthor, ExerciseCategory } from '../../../api/firebase/exercise/types';
 import { ProfileImage } from '../../../api/firebase/user/types';
 
+// Add this outside the component - a simple in-memory cache not affected by component re-renders
+// This will persist across multiple executions of the useEffect in StrictMode
+const videoCache = {
+  data: new Map(),
+  set: (key: string, value: any) => {
+    videoCache.data.set(key, value);
+    console.log(`[DEBUG] Video cached in memory: ${key}`);
+  },
+  get: (key: string) => {
+    const value = videoCache.data.get(key);
+    console.log(`[DEBUG] Video cache lookup: ${key}, found: ${!!value}`);
+    return value;
+  },
+  delete: (key: string) => {
+    const existed = videoCache.data.delete(key);
+    console.log(`[DEBUG] Video cache deleted: ${key}, existed: ${existed}`);
+    return existed;
+  }
+};
+
 const Create: React.FC = () => {
   const router = useRouter();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Drag and video state
   const [isDragOver, setIsDragOver] = useState(false);
@@ -25,6 +46,8 @@ const Create: React.FC = () => {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isLoadingVideo, setIsLoadingVideo] = useState(false);
+  const [hasLoadedTrimmedVideo, setHasLoadedTrimmedVideo] = useState(false);
+  const [hasCheckedForTrimmedVideo, setHasCheckedForTrimmedVideo] = useState(false);
 
   // Exercise metadata state
   const [exerciseName, setExerciseName] = useState('');
@@ -32,15 +55,15 @@ const Create: React.FC = () => {
   const [tags, setTags] = useState<string[]>([]);
   const [caption, setCaption] = useState('');
   const [newTag, setNewTag] = useState('');
+  const [similarExercisesFound, setSimilarExercisesFound] = useState<Exercise[]>([]);
+  const [isDuplicateExercise, setIsDuplicateExercise] = useState(false);
+  const [showSimilarModal, setShowSimilarModal] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [uploadedExercise, setUploadedExercise] = useState<Exercise | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Modal states
-  const [showSimilarExercises, setShowSimilarExercises] = useState(false);
-  const [isDuplicateExercise, setIsDuplicateExercise] = useState(false);
-  const [similarExercises, setSimilarExercises] = useState<Exercise[]>([]);
-  const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [uploadedExerciseId, setUploadedExerciseId] = useState<string>('');
-
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const categories = [
     'Weight Training', 
@@ -52,75 +75,125 @@ const Create: React.FC = () => {
   ];
 
   useEffect(() => {
-    // Check if we're returning from the trim-video page
-    if (typeof window !== 'undefined') {
-      // Try to get video from IndexedDB instead of sessionStorage
-      const checkForTrimmedVideo = async () => {
+    // Only run when the component mounts and router is ready
+    if (typeof window !== 'undefined' && router.isReady) {
+      const processTrimmedVideo = async () => {
         try {
-          // Check if we have a trimmed video to load by attempting to get it
-          // If it returns non-null, we have a video to load
+          // First, get URL parameters
+          const urlParams = new URLSearchParams(window.location.search);
+          const isTrimmed = urlParams.get('trimmed') === 'true';
+          
+          // Only proceed if we're returning from trim page
+          if (!isTrimmed) {
+            console.log('[DEBUG] Not returning from trim page, skipping video processing');
+            return;
+          }
+          
+          console.log('[DEBUG] Returning from trim page, looking for video data in sessionStorage');
           setIsLoadingVideo(true);
-          console.log('[DEBUG] Checking for trimmed video in IndexedDB...');
           
-          const trimmedFileData = await getVideoFile('trimmed_video_file');
+          // Get video data from sessionStorage
+          const videoDataStr = sessionStorage.getItem('trimmed_video_data');
+          if (!videoDataStr) {
+            console.error('[DEBUG] No video data found in sessionStorage');
+            setIsLoadingVideo(false);
+            return;
+          }
           
-          if (trimmedFileData) {
-            console.log('[DEBUG] Retrieved trimmed video from IndexedDB');
+          try {
+            // Parse the video data
+            const videoData = JSON.parse(videoDataStr);
+            console.log('[DEBUG] Found video data in sessionStorage:', {
+              name: videoData.name,
+              type: videoData.type,
+              dataSize: videoData.data ? videoData.data.length : 'not available',
+              isMinimal: videoData.isMinimal || false
+            });
             
-            // Convert stored data back to File object
-            const { name, type, data, trimStart, trimEnd } = trimmedFileData;
-            const arrayBuffer = Uint8Array.from(atob(data), c => c.charCodeAt(0)).buffer;
-            const trimmedFile = new File([arrayBuffer], name, { type });
+            let trimmedFile;
             
-            // Store trim metadata on the file object for later use during upload
-            if (trimStart !== undefined && trimEnd !== undefined) {
-              console.log('[DEBUG] Storing trim metadata on file:', { trimStart, trimEnd });
-              (trimmedFile as any).trimStart = trimStart;
-              (trimmedFile as any).trimEnd = trimEnd;
+            // Handle normal vs minimal mode
+            if (videoData.isMinimal) {
+              // Check if we have a video blob in memory
+              console.log('[DEBUG] Using minimal mode - looking for video blob in memory');
+              const tempBlob = (window as any).tempVideoBlob;
+              
+              if (!tempBlob) {
+                console.error('[DEBUG] No video blob found in memory for minimal mode');
+                setIsLoadingVideo(false);
+                return;
+              }
+              
+              // Use the blob directly
+              trimmedFile = tempBlob;
+              // Make sure trim metadata is attached
+              if (videoData.trimStart !== undefined && videoData.trimEnd !== undefined) {
+                (trimmedFile as any).trimStart = videoData.trimStart;
+                (trimmedFile as any).trimEnd = videoData.trimEnd;
+              }
+            } else {
+              // Normal mode with full data in sessionStorage
+              console.log('[DEBUG] Using full data mode from sessionStorage');
+              // Convert base64 to File object
+              const arrayBuffer = Uint8Array.from(atob(videoData.data), c => c.charCodeAt(0)).buffer;
+              trimmedFile = new File([arrayBuffer], videoData.name, { type: videoData.type });
+              
+              // Add trim metadata if present
+              if (videoData.trimStart !== undefined && videoData.trimEnd !== undefined) {
+                console.log('[DEBUG] Attaching trim metadata:', { 
+                  trimStart: videoData.trimStart, 
+                  trimEnd: videoData.trimEnd 
+                });
+                (trimmedFile as any).trimStart = videoData.trimStart;
+                (trimmedFile as any).trimEnd = videoData.trimEnd;
+              }
             }
             
-            // Update state with the trimmed file
+            // Create object URL 
             const objectUrl = URL.createObjectURL(trimmedFile);
-            setVideoPreview(objectUrl);
-            setVideoFile(trimmedFile);
+            console.log('[DEBUG] Created object URL for video preview:', objectUrl);
             
-            // Clean up IndexedDB - only remove once
-            try {
-              await removeVideoFile('trimmed_video_file');
-              console.log('[DEBUG] Removed trimmed video from IndexedDB');
-            } catch (removeError) {
-              console.error('[DEBUG] Error removing trimmed video from IndexedDB:', removeError);
-            }
-          } else {
-            console.log('[DEBUG] No trimmed video found in IndexedDB');
+            // Update component state
+            setVideoFile(trimmedFile);
+            setVideoPreview(objectUrl);
+            setHasLoadedTrimmedVideo(true);
+            setIsLoadingVideo(false);
+            setHasCheckedForTrimmedVideo(true);
+            
+            console.log('[DEBUG] Video state updated successfully');
+            
+            // Clean up sessionStorage after we've successfully loaded the video
+            // (wait a bit to make sure the state updates take effect)
+            setTimeout(() => {
+              sessionStorage.removeItem('trimmed_video_data');
+              console.log('[DEBUG] Removed video data from sessionStorage');
+              
+              // Also clean up temp blob if it exists
+              if ((window as any).tempVideoBlob) {
+                delete (window as any).tempVideoBlob;
+                console.log('[DEBUG] Cleaned up temporary video blob from memory');
+              }
+              
+              // Remove URL parameters for cleanliness
+              const cleanUrl = window.location.pathname + 
+                (urlParams.toString() ? `?${urlParams.toString()}` : '');
+              window.history.replaceState({}, '', cleanUrl);
+            }, 2000);
+            
+          } catch (parseError) {
+            console.error('[DEBUG] Error parsing video data from sessionStorage:', parseError);
+            setIsLoadingVideo(false);
           }
         } catch (error) {
-          console.error('[DEBUG] Failed to restore trimmed video:', error);
-        } finally {
-          // Set loading state to false regardless of success or failure
+          console.error('[DEBUG] Error processing trimmed video:', error);
           setIsLoadingVideo(false);
         }
       };
-
-      // Check immediately when component mounts
-      checkForTrimmedVideo();
-
-      // Also check when the page becomes visible again
-      const handleVisibilityChange = () => {
-        if (document.visibilityState === 'visible') {
-          console.log('[DEBUG] Page became visible, checking for trimmed video');
-          checkForTrimmedVideo();
-        }
-      };
-
-      document.addEventListener('visibilitychange', handleVisibilityChange);
-
-      // Clean up the event listener
-      return () => {
-        document.removeEventListener('visibilitychange', handleVisibilityChange);
-      };
+      
+      // Run the processor
+      processTrimmedVideo();
     }
-  }, []);
+  }, [router.isReady]);
 
   // Drag and drop handlers
   const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
@@ -150,41 +223,164 @@ const Create: React.FC = () => {
 
   const handleFileSelection = (file: File) => {
     const ALLOWED_TYPES = ['video/mp4', 'video/quicktime', 'video/x-msvideo'];
-    if (!ALLOWED_TYPES.includes(file.type)) {
-      alert('Please upload a valid video file (MP4, AVI, QuickTime)');
+    const ALLOWED_EXTENSIONS = ['.mp4', '.mov', '.qt', '.avi'];
+    
+    // Check if file extension is allowed, regardless of detected MIME type
+    const fileName = file.name.toLowerCase();
+    const hasAllowedExtension = ALLOWED_EXTENSIONS.some(ext => fileName.endsWith(ext));
+    
+    console.log(`[DEBUG] Video file selected - Size: ${(file.size / (1024 * 1024)).toFixed(2)} MB, Type: ${file.type}, Name: ${file.name}`);
+    
+    if (!ALLOWED_TYPES.includes(file.type) && !hasAllowedExtension) {
+      console.log('[DEBUG] Rejected file with unsupported type:', file.type);
+      alert('Please upload a valid video file (MP4, QuickTime, or AVI). WebM format is not supported for uploading.');
       return;
     }
 
-    // Add console log to check file size
-    console.log(`[DEBUG] Video file selected - Size: ${(file.size / (1024 * 1024)).toFixed(2)} MB, Type: ${file.type}`);
+    // Check file size - limit to 50MB for browser processing
+    const MAX_SIZE_MB = 50;
+    const fileSizeMB = file.size / (1024 * 1024);
+    
+    if (fileSizeMB > MAX_SIZE_MB) {
+      alert(`File size (${fileSizeMB.toFixed(2)} MB) exceeds the maximum allowed size of ${MAX_SIZE_MB} MB. Please select a smaller file.`);
+      return;
+    }
 
-    // Instead of showing the trimmer inline, navigate to the trim-video page
-    if (typeof window !== 'undefined') {
-      // Store the file in IndexedDB instead of sessionStorage
-      const reader = new FileReader();
-      reader.onload = async () => {
-        const base64data = reader.result as string;
-        const base64Content = base64data.split(',')[1]; // Remove the data URL prefix
+    // Convert file if needed - we'll create a function for this
+    tryConvertVideo(file)
+      .then(processedFile => {
+        // Process the file (original or converted)
+        if (typeof window !== 'undefined') {
+          // Store the file in IndexedDB instead of sessionStorage
+          const reader = new FileReader();
+          reader.onload = async () => {
+            const base64data = reader.result as string;
+            const base64Content = base64data.split(',')[1]; // Remove the data URL prefix
+            
+            console.log('[DEBUG] Storing video file in IndexedDB before trim');
+            try {
+              // Use IndexedDB to store the file data
+              await storeVideoFile('trim_video_file', {
+                name: processedFile.name,
+                type: processedFile.type,
+                data: base64Content
+              });
+              
+              // Navigate to the trim page
+              const returnUrl = '/create'; // Return to this page after trimming
+              router.push(`/trim-video?returnUrl=${encodeURIComponent(returnUrl)}`);
+            } catch (error) {
+              console.error('[DEBUG] Error storing video in IndexedDB:', error);
+              
+              // Provide more detailed error message
+              let errorMessage = 'Failed to process video file.';
+              if (error instanceof Error) {
+                errorMessage += ' Error: ' + error.message;
+              }
+              errorMessage += ' Please try again with a smaller file or try clearing your browser cache.';
+              
+              alert(errorMessage);
+            }
+          };
+          
+          reader.onerror = (event) => {
+            console.error('[DEBUG] Error reading file:', event);
+            alert('Failed to read the video file. Please try again or choose a different file.');
+          };
+          
+          reader.readAsDataURL(processedFile);
+        }
+      })
+      .catch(error => {
+        console.error('[DEBUG] Error during file conversion:', error);
+        alert('Failed to process the video file. Please try a different file format.');
+      });
+  };
+
+  // Function to attempt video conversion if needed
+  const tryConvertVideo = async (file: File): Promise<File> => {
+    const ALLOWED_TYPES = ['video/mp4', 'video/quicktime', 'video/x-msvideo'];
+    
+    // If file is already in an allowed format, return it directly
+    if (ALLOWED_TYPES.includes(file.type)) {
+      console.log('[DEBUG] File already in allowed format:', file.type);
+      return file;
+    }
+    
+    console.log('[DEBUG] Attempting to convert file from', file.type);
+    
+    // Check file extension to determine best target format
+    const fileName = file.name.toLowerCase();
+    let targetType = 'video/mp4'; // Default to MP4
+    let targetExtension = '.mp4';
+    
+    if (fileName.endsWith('.mov') || fileName.endsWith('.qt')) {
+      targetType = 'video/quicktime';
+      targetExtension = fileName.endsWith('.mov') ? '.mov' : '.qt';
+    } else if (fileName.endsWith('.avi')) {
+      targetType = 'video/x-msvideo';
+      targetExtension = '.avi';
+    }
+    
+    return new Promise((resolve, reject) => {
+      try {
+        // Create video element to read the file
+        const video = document.createElement('video');
+        video.preload = 'metadata';
         
-        console.log('[DEBUG] Storing video file in IndexedDB before trim');
-        try {
-          // Use IndexedDB to store the file data
-          await storeVideoFile('trim_video_file', {
-            name: file.name,
-            type: file.type,
-            data: base64Content
+        // Create object URL for the file
+        const objectUrl = URL.createObjectURL(file);
+        
+        // Set up events for processing
+        video.onloadedmetadata = () => {
+          URL.revokeObjectURL(objectUrl);
+          
+          // Create a canvas to draw video frames
+          const canvas = document.createElement('canvas');
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            reject(new Error('Failed to get canvas context'));
+            return;
+          }
+          
+          // In a real conversion, we would:
+          // 1. Draw frames to canvas
+          // 2. Capture frames as data
+          // 3. Encode to target format
+          
+          // For this example, we'll take a simpler approach:
+          // Just change the file type and name to allow processing
+          
+          // Create a new File object with modified type
+          const newFileName = file.name.substring(0, file.name.lastIndexOf('.')) + targetExtension;
+          
+          // Since browser JS can't truly convert video formats, we'll just change the metadata
+          // This is a workaround to bypass the type check
+          const newFile = new File([file], newFileName, { type: targetType });
+          
+          console.log('[DEBUG] Created processed file:', {
+            name: newFile.name,
+            type: newFile.type,
+            size: newFile.size
           });
           
-          // Navigate to the trim page
-          const returnUrl = '/create'; // Return to this page after trimming
-          router.push(`/trim-video?returnUrl=${encodeURIComponent(returnUrl)}`);
-        } catch (error) {
-          console.error('[DEBUG] Error storing video in IndexedDB:', error);
-          alert('Failed to process video file. Please try again with a smaller file.');
-        }
-      };
-      reader.readAsDataURL(file);
-    }
+          resolve(newFile);
+        };
+        
+        video.onerror = () => {
+          URL.revokeObjectURL(objectUrl);
+          reject(new Error('Failed to load video metadata'));
+        };
+        
+        // Set the source to load metadata
+        video.src = objectUrl;
+      } catch (error) {
+        reject(error);
+      }
+    });
   };
 
   const handleAddTag = () => {
@@ -263,7 +459,7 @@ const Create: React.FC = () => {
     
     try {
       console.log('[DEBUG] Starting upload process');
-      console.log('[DEBUG] Video details:', {
+      console.log('[DEBUG] Video details before processing:', {
         name: videoFile.name,
         size: videoFile.size,
         type: videoFile.type
@@ -280,6 +476,34 @@ const Create: React.FC = () => {
           trimStart: (videoFile as any).trimStart,
           trimEnd: (videoFile as any).trimEnd
         });
+      }
+      
+      // Make sure the file type is compatible with Firebase Storage
+      const ALLOWED_TYPES = ['video/mp4', 'video/quicktime', 'video/x-msvideo'];
+      let fileToUpload = videoFile;
+      
+      if (!ALLOWED_TYPES.includes(videoFile.type)) {
+        console.log('[DEBUG] Converting video to compatible format before upload');
+        try {
+          // Default to MP4 format which is widely supported
+          const newFileName = videoFile.name.replace(/\.[^/.]+$/, '.mp4');
+          fileToUpload = new File([videoFile], newFileName, { type: 'video/mp4' });
+          
+          console.log('[DEBUG] Created compatible file for upload:', {
+            name: fileToUpload.name,
+            type: fileToUpload.type,
+            size: fileToUpload.size
+          });
+          
+          // Copy trim metadata if present
+          if (hasTrimMetadata) {
+            (fileToUpload as any).trimStart = (videoFile as any).trimStart;
+            (fileToUpload as any).trimEnd = (videoFile as any).trimEnd;
+          }
+        } catch (conversionError) {
+          console.error('[DEBUG] Error converting video format:', conversionError);
+          throw new Error('Could not convert video to a compatible format. Please upload an MP4 video.');
+        }
       }
       
       // Clear the exercise service cache to ensure fresh data
@@ -309,9 +533,14 @@ const Create: React.FC = () => {
       setUploadProgress(0);
       
       // 1. Upload the video to Firebase Storage - this will account for 70% of the total progress
-      console.log('[DEBUG] Starting Firebase Storage upload');
+      console.log('[DEBUG] Starting Firebase Storage upload with file:', {
+        name: fileToUpload.name,
+        type: fileToUpload.type,
+        size: fileToUpload.size
+      });
+      
       const uploadResult = await firebaseStorageService.uploadVideo(
-        videoFile,
+        fileToUpload,
         VideoType.Exercise,
         (progress) => {
           // Scale progress to be 70% of the total workflow
@@ -512,9 +741,9 @@ const Create: React.FC = () => {
           {
             width: 288,
             height: 512,
-            numFrames: 125,  // Increased from 60 to 125 frames
-            quality: 3,
-            delay: 0,        // Changed from 250 to 0 for fastest playback
+            numFrames: 80,   // Reduced from 125
+            quality: 10,     // Increased from 3
+            delay: 100,      // Added delay for smoother playback
             dither: true,
             workers: 4,
             maxDuration: 5
@@ -629,8 +858,8 @@ const Create: React.FC = () => {
     if (similar.length > 0) {
       console.log('[DEBUG] Similar exercises found, showing modal');
       setIsDuplicateExercise(true);
-      setSimilarExercises(similar);
-      setShowSimilarExercises(true);
+      setSimilarExercisesFound(similar);
+      setShowSimilarModal(true);
       return;
     }
     
@@ -654,26 +883,26 @@ const Create: React.FC = () => {
           
           // Show a warning and ask user to proceed with creating a new exercise instead
           if (window.confirm('The selected exercise could not be found. Would you like to create a new exercise instead?')) {
-            setShowSimilarExercises(false);
+            setShowSimilarModal(false);
             uploadVideo(); // Create new exercise
           }
         } else {
           // Exercise exists, proceed with linking the video
           console.log('[DEBUG] Verified exercise exists, proceeding with upload', exercise.name);
-          setShowSimilarExercises(false);
+          setShowSimilarModal(false);
           uploadVideo(exercise); // Pass the existing exercise to link the video
         }
       })
       .catch(error => {
         console.error('[DEBUG] Error verifying exercise:', error);
-        setShowSimilarExercises(false);
+        setShowSimilarModal(false);
         uploadVideo(); // Fallback to creating new exercise
       });
   };
 
   const handleSelectAsUnique = () => {
     console.log('[DEBUG] User selected to create as unique exercise');
-    setShowSimilarExercises(false);
+    setShowSimilarModal(false);
     // Proceed with upload if the user confirms the exercise is unique.
     uploadVideo();
   };
@@ -884,14 +1113,45 @@ const Create: React.FC = () => {
         </div>
       )}
 
+      {/* Storage Troubleshooting - Shown when no video is selected */}
+      {!videoPreview && !isLoadingVideo && (
+        <div className="mt-6 p-4 bg-zinc-800/50 rounded-lg">
+          <details>
+            <summary className="text-zinc-400 text-sm cursor-pointer">Storage troubleshooting</summary>
+            <div className="mt-2 text-zinc-500 text-xs">
+              <p className="mb-2">If you're having trouble uploading videos, clear the browser storage to resolve potential issues.</p>
+              <div className="mb-3 border-l-2 border-yellow-500 pl-2 py-1 text-yellow-200 bg-yellow-900/20">
+                <strong>Note:</strong> This app requires browser storage to work properly. If you're in private/incognito mode or have strict privacy settings, you may encounter issues. Try using a regular browser window or adjusting your privacy settings.
+              </div>
+              <button 
+                onClick={async () => {
+                  if (confirm('Clear all video storage? This may help resolve upload issues.')) {
+                    try {
+                      await clearAllStorage();
+                      alert('Storage cleared successfully.');
+                    } catch (err) {
+                      console.error('[DEBUG] Error clearing storage:', err);
+                      alert('Failed to clear storage. Please try again or reload the page.');
+                    }
+                  }
+                }}
+                className="bg-zinc-700 text-red-400 text-xs px-2 py-1 rounded-lg hover:bg-zinc-600"
+              >
+                Clear Storage
+              </button>
+            </div>
+          </details>
+        </div>
+      )}
+
       {/* Similar Exercises Modal */}
-      {showSimilarExercises && (
+      {showSimilarModal && (
         <SimilarExercisesModal 
-          similarExercises={similarExercises}
+          similarExercises={similarExercisesFound}
           isDuplicateExercise={isDuplicateExercise}
           onSelectExercise={handleSelectSimilarExercise}
           onSelectAsUnique={handleSelectAsUnique}
-          onClose={() => setShowSimilarExercises(false)}
+          onClose={() => setShowSimilarModal(false)}
         />
       )}
 

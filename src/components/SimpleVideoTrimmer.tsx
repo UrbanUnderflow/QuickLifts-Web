@@ -174,22 +174,51 @@ export const SimpleVideoTrimmer: React.FC<VideoTrimmerProps> = ({
 
       console.log('[DEBUG] Setting up MediaRecorder');
       const stream = canvas.captureStream();
-      console.log('[DEBUG] Available MIME types:', MediaRecorder.isTypeSupported('video/webm;codecs=h264') ? 'h264 supported' : 'h264 not supported');
+      
+      // Get a list of all supported MIME types
+      const getSupportedMimeTypes = () => {
+        const possibleTypes = [
+          'video/mp4;codecs=h264',
+          'video/mp4;codecs=avc1',
+          'video/mp4',
+          'video/webm;codecs=h264',
+          'video/webm;codecs=vp9',
+          'video/webm;codecs=vp8',
+          'video/webm'
+        ];
+        
+        return possibleTypes.filter(type => MediaRecorder.isTypeSupported(type));
+      };
+      
+      const supportedTypes = getSupportedMimeTypes();
+      console.log('[DEBUG] Supported video MIME types:', supportedTypes);
+      
+      // Always prefer MP4 format if available
+      const mp4Types = supportedTypes.filter(type => type.includes('mp4'));
+      const bestType = mp4Types.length > 0 ? mp4Types[0] : supportedTypes[0];
+      
+      console.log('[DEBUG] Selected best MIME type for recording:', bestType);
       
       let mediaRecorder;
       try {
-        mediaRecorder = new MediaRecorder(stream, {
-          mimeType: 'video/webm;codecs=h264',
-          videoBitsPerSecond: 2500000
-        });
-        console.log('[DEBUG] MediaRecorder created successfully with h264');
+        const options = {
+          mimeType: bestType,
+          videoBitsPerSecond: 8000000  // Increased to 8Mbps for higher quality
+        };
+        
+        mediaRecorder = new MediaRecorder(stream, options);
+        console.log('[DEBUG] MediaRecorder created with options:', options);
       } catch (error) {
-        console.log('[DEBUG] Failed to create MediaRecorder with h264, trying vp8');
-        mediaRecorder = new MediaRecorder(stream, {
-          mimeType: 'video/webm;codecs=vp8',
-          videoBitsPerSecond: 2500000
-        });
-        console.log('[DEBUG] MediaRecorder created successfully with vp8');
+        console.error('[DEBUG] Failed to create MediaRecorder with preferred type, trying fallback');
+        
+        // Fallback to any supported type
+        try {
+          mediaRecorder = new MediaRecorder(stream);
+          console.log('[DEBUG] MediaRecorder created with default options');
+        } catch (fallbackError) {
+          console.error('[DEBUG] All MediaRecorder options failed:', fallbackError);
+          throw new Error('Your browser does not support video recording.');
+        }
       }
 
       const chunks: Blob[] = [];
@@ -213,12 +242,16 @@ export const SimpleVideoTrimmer: React.FC<VideoTrimmerProps> = ({
 
         mediaRecorder.onstop = () => {
           console.log('[DEBUG] MediaRecorder stopped, creating final video');
-          const blob = new Blob(chunks, { type: 'video/webm' });
-          console.log('[DEBUG] Blob created, size:', blob.size);
+          // Determine appropriate mime type based on what was actually recorded
+          const mimeType = mediaRecorder.mimeType || 'video/mp4';
+          const fileExtension = mimeType.includes('webm') ? 'webm' : 'mp4';
+          
+          const blob = new Blob(chunks, { type: mimeType });
+          console.log('[DEBUG] Blob created, size:', blob.size, 'mime type:', mimeType);
           
           // Create the trimmed file with metadata
-          const trimmedFile = new File([blob], `${file.name.replace(/\.[^/.]+$/, '')}_trimmed_${startTime}_${endTime}.webm`, {
-            type: 'video/webm'
+          const trimmedFile = new File([blob], `${file.name.replace(/\.[^/.]+$/, '')}_trimmed_${startTime}_${endTime}.${fileExtension}`, {
+            type: mimeType
           });
 
           // Add trim metadata as properties
@@ -234,7 +267,8 @@ export const SimpleVideoTrimmer: React.FC<VideoTrimmerProps> = ({
             chunksCount: chunks.length,
             trimStart: startTime,
             trimEnd: endTime,
-            filename: trimmedFile.name
+            filename: trimmedFile.name,
+            mimeType: trimmedFile.type
           });
 
           // Clean up
@@ -244,29 +278,44 @@ export const SimpleVideoTrimmer: React.FC<VideoTrimmerProps> = ({
         };
       });
 
+      // Start recording process
       console.log('[DEBUG] Starting recording process');
-      mediaRecorder.start(1000); // Capture in 1-second chunks
-
-      console.log('[DEBUG] Setting video position to start time:', startTime);
-      trimVideo.currentTime = startTime;
+      mediaRecorder.start(100); // Capture in smaller chunks for better quality (100ms)
 
       // Handle the frame capture process
       await new Promise<void>((resolve) => {
-        trimVideo.onseeked = () => {
-          console.log('[DEBUG] Video seeked to start position, starting playback');
-          trimVideo.play();
-        };
-
-        trimVideo.ontimeupdate = () => {
-          console.log('[DEBUG] Time update:', trimVideo.currentTime);
+        // This function draws video frames to the canvas at high quality
+        const captureFrame = () => {
+          if (trimVideo.paused || trimVideo.ended) return;
+          
+          // Use better quality rendering
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
+          
+          // Draw the current frame
           ctx.drawImage(trimVideo, 0, 0, canvas.width, canvas.height);
+          
+          // Schedule the next frame capture using requestAnimationFrame
+          // for smoother playback and more frames
+          if (trimVideo.currentTime < endTime) {
+            requestAnimationFrame(captureFrame);
+          }
+        };
+        
+        // Start playback and capture frames
+        trimVideo.currentTime = startTime;
+        trimVideo.play().then(() => {
+          // Start capturing frames using animation frame for higher framerate
+          requestAnimationFrame(captureFrame);
+        });
 
+        // Let the original timeupdate event still handle completion
+        trimVideo.ontimeupdate = () => {
           if (trimVideo.currentTime >= endTime) {
             console.log('[DEBUG] Reached end time, stopping recording');
             trimVideo.pause();
             mediaRecorder.stop();
             trimVideo.ontimeupdate = null;
-            trimVideo.onseeked = null;
             resolve();
           }
         };

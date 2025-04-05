@@ -1,4 +1,4 @@
-const admin = require('firebase-admin');
+const { db, headers } = require('./config/firebase');
 
 // Check if we're in development mode (based on NODE_ENV)
 const isDevelopmentMode = process.env.NODE_ENV === 'development';
@@ -23,45 +23,6 @@ const useMockData = isDevelopmentMode && missingVars.length > 0;
 if (missingVars.length > 0 && !useMockData) {
   throw new Error(`Missing environment variables: ${missingVars.join(', ')}`);
 }
-
-// Initialize Firebase if not already initialized
-if (admin.apps.length === 0) {
-  try {
-    if (!useMockData) {
-      // Real Firebase initialization
-      const privateKey = process.env.FIREBASE_SECRET_KEY.replace(/\\n/g, '\n');
-      
-      admin.initializeApp({
-        credential: admin.credential.cert({
-          "type": "service_account",
-          "project_id": "quicklifts-dd3f1",
-          "private_key_id": process.env.FIREBASE_PRIVATE_KEY,
-          "private_key": privateKey,
-          "client_email": "firebase-adminsdk-1qxb0@quicklifts-dd3f1.iam.gserviceaccount.com",
-          "client_id": "111494077667496751062",
-          "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-          "token_uri": "https://oauth2.googleapis.com/token",
-          "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-          "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-1qxb0%40quicklifts-dd3f1.iam.gserviceaccount.com",
-          "universe_domain": "googleapis.com"
-        })
-      });
-      console.log('Firebase Admin SDK initialized with actual credentials');
-    } else {
-      // Development mode with mock data - no Firebase initialization needed
-      console.warn('⚠️ Running in DEVELOPMENT MODE with MOCK DATA due to missing environment variables');
-    }
-  } catch (error) {
-    if (isDevelopmentMode) {
-      console.error('Firebase initialization error (continuing with mock data):', error);
-    } else {
-      throw error; // Re-throw in production
-    }
-  }
-}
-
-// Only initialize db if not using mock data
-const db = useMockData ? null : admin.firestore();
 
 // Mock user data for development testing
 const mockUsers = {
@@ -128,13 +89,6 @@ async function getUserByUsername(username) {
 }
 
 exports.handler = async (event) => {
-  const headers = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Content-Type': 'application/json'
-  };
-
   if (event.httpMethod === 'OPTIONS') {
     return {
       statusCode: 200,

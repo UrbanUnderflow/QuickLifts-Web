@@ -10,12 +10,15 @@ import {
     where,
     getDoc,
     setDoc,
+    updateDoc,
+    deleteDoc,
   } from 'firebase/firestore';
 import { db } from '../config';
 import { Exercise } from './types';
 import { ExerciseVideo, ExerciseAuthor } from '../../firebase/exercise/types';
 import { convertFirestoreTimestamp } from '../../../utils/formatDate';
 import { formatExerciseNameForId } from '../../../utils/stringUtils';
+import { ref, deleteObject, getStorage } from 'firebase/storage';
 
 class ExerciseService {
     private _allExercises: Exercise[] = [];
@@ -483,6 +486,66 @@ class ExerciseService {
           collection(db, 'users', userId, 'MyCreatedWorkouts', workoutId, 'logs')
         ).id;
       }
-  }
+
+    // Delete a specific video from an exercise
+    async deleteSpecificExerciseVideo(exerciseId: string, videoId: string, requestingUserId: string): Promise<void> {
+      try {
+        console.log(`[DEBUG-EXERCISE] Deleting video ${videoId} linked to exercise ${exerciseId}`);
+        
+        // Get the video document directly from the exerciseVideos collection
+        const videoRef = doc(db, 'exerciseVideos', videoId);
+        const videoDoc = await getDoc(videoRef);
+        
+        if (!videoDoc.exists()) {
+          console.error(`[DEBUG-EXERCISE] Video ${videoId} not found in exerciseVideos collection`);
+          throw new Error('Video not found in exerciseVideos collection');
+        }
+        
+        const videoData = videoDoc.data();
+        
+        // Check authorization - ensure the user is the creator of the video
+        if (videoData.userId && videoData.userId !== requestingUserId) {
+          console.error(`[DEBUG-EXERCISE] Unauthorized deletion attempt. User ${requestingUserId} attempting to delete video created by ${videoData.userId}`);
+          throw new Error('Not authorized to delete this video');
+        }
+        
+        // Delete the video file from storage if it exists
+        if (videoData.videoURL) {
+          try {
+            const videoStorageRef = ref(getStorage(), videoData.videoURL);
+            await deleteObject(videoStorageRef);
+            console.log(`[DEBUG-EXERCISE] Deleted video file: ${videoData.videoURL}`);
+          } catch (error) {
+            console.error(`[DEBUG-EXERCISE] Error deleting video file: ${error}`);
+            // Continue even if file deletion fails
+          }
+        }
+        
+        // Delete the GIF file from storage if it exists
+        if (videoData.gifURL) {
+          try {
+            const gifStorageRef = ref(getStorage(), videoData.gifURL);
+            await deleteObject(gifStorageRef);
+            console.log(`[DEBUG-EXERCISE] Deleted GIF file: ${videoData.gifURL}`);
+          } catch (error) {
+            console.error(`[DEBUG-EXERCISE] Error deleting GIF file: ${error}`);
+            // Continue even if file deletion fails
+          }
+        }
+        
+        // Delete the video document from Firestore
+        await deleteDoc(videoRef);
+        
+        console.log(`[DEBUG-EXERCISE] Successfully deleted video ${videoId}`);
+        
+        // Clear cache after modification
+        this.clearCache();
+        
+      } catch (error) {
+        console.error(`[DEBUG-EXERCISE] Error deleting video: ${error}`);
+        throw error;
+      }
+    }
+}
   
-  export const exerciseService = new ExerciseService();
+export const exerciseService = new ExerciseService();
