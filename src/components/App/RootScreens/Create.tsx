@@ -5,12 +5,12 @@ import { firebaseStorageService, VideoType } from '../../../api/firebase/storage
 import Spacer from '../../../components/Spacer';
 import { exerciseService } from '../../../api/firebase/exercise/service';
 import { userService } from '../../../api/firebase/user/service';
-import { videoProcessorService } from '../../../api/firebase/video-processor/service';
 import { formatExerciseNameForId } from '../../../utils/stringUtils';
-import { storeVideoFile, getVideoFile, removeVideoFile, clearAllStorage } from '../../../utils/indexedDBStorage';
+import { clearAllStorage } from '../../../utils/indexedDBStorage';
 import { gifGenerator } from '../../../utils/gifGenerator';
 import { db } from '../../../api/firebase/config';
-import { Timestamp, collection, doc, updateDoc } from 'firebase/firestore';
+import { doc, updateDoc } from 'firebase/firestore';
+import { SimpleVideoTrimmer } from '../../../components/SimpleVideoTrimmer';
 
 import { Exercise, ExerciseVideo, ExerciseAuthor, ExerciseCategory } from '../../../api/firebase/exercise/types';
 import { ProfileImage } from '../../../api/firebase/user/types';
@@ -45,9 +45,9 @@ const Create: React.FC = () => {
   const [videoPreview, setVideoPreview] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [isLoadingVideo, setIsLoadingVideo] = useState(false);
-  const [hasLoadedTrimmedVideo, setHasLoadedTrimmedVideo] = useState(false);
-  const [hasCheckedForTrimmedVideo, setHasCheckedForTrimmedVideo] = useState(false);
+  const [showTrimmer, setShowTrimmer] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   // Exercise metadata state
   const [exerciseName, setExerciseName] = useState('');
@@ -90,13 +90,11 @@ const Create: React.FC = () => {
           }
           
           console.log('[DEBUG] Returning from trim page, looking for video data in sessionStorage');
-          setIsLoadingVideo(true);
           
           // Get video data from sessionStorage
           const videoDataStr = sessionStorage.getItem('trimmed_video_data');
           if (!videoDataStr) {
             console.error('[DEBUG] No video data found in sessionStorage');
-            setIsLoadingVideo(false);
             return;
           }
           
@@ -120,7 +118,6 @@ const Create: React.FC = () => {
               
               if (!tempBlob) {
                 console.error('[DEBUG] No video blob found in memory for minimal mode');
-                setIsLoadingVideo(false);
                 return;
               }
               
@@ -153,12 +150,25 @@ const Create: React.FC = () => {
             const objectUrl = URL.createObjectURL(trimmedFile);
             console.log('[DEBUG] Created object URL for video preview:', objectUrl);
             
+            // Check actual duration of the loaded video
+            const durationCheck = document.createElement('video');
+            durationCheck.preload = 'metadata';
+            durationCheck.onloadedmetadata = () => {
+              console.log('[DEBUG] LOADED VIDEO VERIFICATION - Actual duration after loading:', 
+                          durationCheck.duration.toFixed(3), 'seconds',
+                          'Expected:', ((trimmedFile as any).trimEnd - (trimmedFile as any).trimStart).toFixed(3), 
+                          'seconds');
+              URL.revokeObjectURL(durationCheck.src);
+            };
+            durationCheck.onerror = (e) => {
+              console.error('[DEBUG] LOADED VIDEO VERIFICATION - Error checking video duration:', e);
+              URL.revokeObjectURL(durationCheck.src);
+            };
+            durationCheck.src = objectUrl;
+            
             // Update component state
             setVideoFile(trimmedFile);
             setVideoPreview(objectUrl);
-            setHasLoadedTrimmedVideo(true);
-            setIsLoadingVideo(false);
-            setHasCheckedForTrimmedVideo(true);
             
             console.log('[DEBUG] Video state updated successfully');
             
@@ -182,11 +192,9 @@ const Create: React.FC = () => {
             
           } catch (parseError) {
             console.error('[DEBUG] Error parsing video data from sessionStorage:', parseError);
-            setIsLoadingVideo(false);
           }
         } catch (error) {
           console.error('[DEBUG] Error processing trimmed video:', error);
-          setIsLoadingVideo(false);
         }
       };
       
@@ -246,55 +254,29 @@ const Create: React.FC = () => {
       return;
     }
 
-    // Convert file if needed - we'll create a function for this
+    // Convert file if needed
+    setIsProcessing(true);
     tryConvertVideo(file)
       .then(processedFile => {
-        // Process the file (original or converted)
-        if (typeof window !== 'undefined') {
-          // Store the file in IndexedDB instead of sessionStorage
-          const reader = new FileReader();
-          reader.onload = async () => {
-            const base64data = reader.result as string;
-            const base64Content = base64data.split(',')[1]; // Remove the data URL prefix
-            
-            console.log('[DEBUG] Storing video file in IndexedDB before trim');
-            try {
-              // Use IndexedDB to store the file data
-              await storeVideoFile('trim_video_file', {
-                name: processedFile.name,
-                type: processedFile.type,
-                data: base64Content
-              });
-              
-              // Navigate to the trim page
-              const returnUrl = '/create'; // Return to this page after trimming
-              router.push(`/trim-video?returnUrl=${encodeURIComponent(returnUrl)}`);
-            } catch (error) {
-              console.error('[DEBUG] Error storing video in IndexedDB:', error);
-              
-              // Provide more detailed error message
-              let errorMessage = 'Failed to process video file.';
-              if (error instanceof Error) {
-                errorMessage += ' Error: ' + error.message;
-              }
-              errorMessage += ' Please try again with a smaller file or try clearing your browser cache.';
-              
-              alert(errorMessage);
-            }
-          };
-          
-          reader.onerror = (event) => {
-            console.error('[DEBUG] Error reading file:', event);
-            alert('Failed to read the video file. Please try again or choose a different file.');
-          };
-          
-          reader.readAsDataURL(processedFile);
-        }
+        setSelectedFile(processedFile);
+        setShowTrimmer(true);
+        setIsProcessing(false);
       })
       .catch(error => {
+        setIsProcessing(false);
         console.error('[DEBUG] Error during file conversion:', error);
         alert('Failed to process the video file. Please try a different file format.');
       });
+  };
+
+  const handleTrimComplete = (trimmedFile: File) => {
+    console.log('[DEBUG] Trim complete, setting video file');
+    setVideoFile(trimmedFile);
+    setShowTrimmer(false);
+    
+    // Create preview URL for the trimmed video
+    const previewUrl = URL.createObjectURL(trimmedFile);
+    setVideoPreview(previewUrl);
   };
 
   // Function to attempt video conversion if needed
@@ -963,10 +945,10 @@ const Create: React.FC = () => {
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
-        {isLoadingVideo ? (
+        {isProcessing ? (
           <div className="flex flex-col items-center justify-center py-10">
             <div className="w-12 h-12 border-4 border-[#E0FE10] border-t-transparent rounded-full animate-spin mb-4"></div>
-            <p className="text-zinc-300">Loading your trimmed video...</p>
+            <p className="text-zinc-300">Processing your video...</p>
           </div>
         ) : videoPreview ? (
           <div className="relative">
@@ -1114,7 +1096,7 @@ const Create: React.FC = () => {
       )}
 
       {/* Storage Troubleshooting - Shown when no video is selected */}
-      {!videoPreview && !isLoadingVideo && (
+      {!videoPreview && (
         <div className="mt-6 p-4 bg-zinc-800/50 rounded-lg">
           <details>
             <summary className="text-zinc-400 text-sm cursor-pointer">Storage troubleshooting</summary>
@@ -1162,6 +1144,14 @@ const Create: React.FC = () => {
           onClose={handleCloseSuccessModal}
         />
       )}
+
+      {/* Video Trimmer Modal */}
+      <SimpleVideoTrimmer
+        isOpen={showTrimmer}
+        file={selectedFile}
+        onClose={() => setShowTrimmer(false)}
+        onTrimComplete={handleTrimComplete}
+      />
     </div>
   );
 };

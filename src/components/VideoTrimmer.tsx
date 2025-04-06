@@ -1,60 +1,87 @@
 // VideoTrimmer.tsx
 import React, { useEffect, useRef, useState } from 'react';
-import { createFFmpeg, fetchFile } from '@ffmpeg/ffmpeg';
-
-interface BrowserSupport {
-  mediaRecorder: boolean;
-  captureStream: boolean;
-}
+// Use require for older FFmpeg version
+// @ts-ignore
+const { createFFmpeg, fetchFile } = require('@ffmpeg/ffmpeg');
 
 interface VideoTrimmerProps {
-  file: File;
+  isOpen: boolean;
+  file: File | null;
+  onClose: () => void;
   onTrimComplete: (trimmedFile: File) => void;
-  onCancel: () => void;
+}
+
+interface TrimProgress {
+  stage: 'preparing' | 'trimming' | 'finalizing';
+  percent: number;
 }
 
 // Create FFmpeg instance outside component to reuse
+// Using older version (0.8.3) that doesn't require cross-origin isolation
 const ffmpeg = createFFmpeg({
   log: true,
-  corePath: 'https://unpkg.com/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js',
 });
 
 // Track loading state globally
 let ffmpegLoadingPromise: Promise<void> | null = null;
 
-export const VideoTrimmer: React.FC<VideoTrimmerProps> = ({ file, onTrimComplete, onCancel }) => {
+export const VideoTrimmer: React.FC<VideoTrimmerProps> = ({ 
+  isOpen, 
+  file, 
+  onClose, 
+  onTrimComplete 
+}) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [startTime, setStartTime] = useState(0);
   const [endTime, setEndTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [browserSupport, setBrowserSupport] = useState<BrowserSupport>({
-    mediaRecorder: false,
-    captureStream: false,
-  });
-  const [trimProgress, setTrimProgress] = useState(0);
-  const [ffmpegError, setFfmpegError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState<TrimProgress>({ stage: 'preparing', percent: 0 });
   const objectUrlRef = useRef<string | null>(null);
+  const loggerRef = useRef<any>(null);
 
   useEffect(() => {
-    setBrowserSupport({
-      mediaRecorder: 'MediaRecorder' in window,
-      captureStream: 'captureStream' in HTMLCanvasElement.prototype,
-    });
+    // Set up logger only once to avoid re-renders
+    if (!loggerRef.current) {
+      loggerRef.current = ({ message }: { message: string }) => {
+        // Look for progress indicators in the log messages
+        const progressMatch = message.match(/time=(\d+):(\d+):(\d+)/);
+        if (progressMatch) {
+          const [, hours, minutes, seconds] = progressMatch;
+          const totalSeconds = parseInt(hours) * 3600 + parseInt(minutes) * 60 + parseInt(seconds);
+          // Convert to percentage based on trim duration
+          const totalDuration = endTime - startTime;
+          if (totalDuration > 0) {
+            const percent = Math.min(100, Math.round((totalSeconds / totalDuration) * 100));
+            setProgress({
+              stage: 'trimming',
+              percent
+            });
+          }
+        }
+      };
+      ffmpeg.setLogger(loggerRef.current);
+    }
+  }, [endTime, startTime]);
 
+  useEffect(() => {
     if (videoRef.current && file) {
+      // Create object URL for video preview
       objectUrlRef.current = URL.createObjectURL(file);
       videoRef.current.src = objectUrlRef.current;
 
+      // Set up video metadata listener
       videoRef.current.addEventListener('loadedmetadata', () => {
         const videoDuration = videoRef.current?.duration || 0;
         setDuration(videoDuration);
-        // Set the end time to either 30 seconds or the video duration, whichever is lower
+        // Set initial end time to either 30 seconds or video duration
         setEndTime(Math.min(videoDuration, 30));
       });
     }
 
+    // Cleanup
     return () => {
       if (objectUrlRef.current) {
         URL.revokeObjectURL(objectUrlRef.current);
@@ -62,6 +89,7 @@ export const VideoTrimmer: React.FC<VideoTrimmerProps> = ({ file, onTrimComplete
     };
   }, [file]);
 
+  // Handle video preview playback
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
@@ -70,6 +98,7 @@ export const VideoTrimmer: React.FC<VideoTrimmerProps> = ({ file, onTrimComplete
       if (video.currentTime >= endTime) {
         video.pause();
         video.currentTime = startTime;
+        setIsPlaying(false);
       }
     };
 
@@ -83,66 +112,65 @@ export const VideoTrimmer: React.FC<VideoTrimmerProps> = ({ file, onTrimComplete
     videoRef.current.currentTime = startTime;
     videoRef.current.play();
     setIsPlaying(true);
+  };
 
-    const checkTime = () => {
-      if (videoRef.current && videoRef.current.currentTime >= endTime) {
-        videoRef.current.pause();
-        setIsPlaying(false);
-        return;
-      }
-      requestAnimationFrame(checkTime);
-    };
-    checkTime();
+  const handlePreviewPause = () => {
+    if (!videoRef.current) return;
+    videoRef.current.pause();
+    setIsPlaying(false);
   };
 
   const loadFFmpeg = async () => {
     try {
-      setFfmpegError(null);
-      // Reuse the loading promise to prevent multiple loads
+      setError(null);
       if (!ffmpegLoadingPromise) {
         ffmpegLoadingPromise = ffmpeg.load();
       }
       await ffmpegLoadingPromise;
       return true;
     } catch (error) {
-      console.error('FFmpeg loading error:', error);
       const errorMessage = error instanceof Error 
         ? error.message 
-        : 'Failed to load FFmpeg. Make sure you\'re using a modern browser and have the required permissions.';
-      setFfmpegError(errorMessage);
+        : 'Failed to load FFmpeg';
+      setError(errorMessage);
+      console.error('FFmpeg loading error:', error);
       return false;
     }
   };
 
   const handleTrim = async () => {
-    if (!videoRef.current) {
-      alert('Video element not initialized');
+    if (!file || !videoRef.current) {
+      setError('No video file selected');
       return;
     }
 
     if (endTime - startTime < 5 || endTime - startTime > 30) {
-      alert('Video must be between 5 and 30 seconds');
+      setError('Video must be between 5 and 30 seconds');
       return;
     }
 
     try {
-      setIsLoading(true);
-      
-      // Load FFmpeg if not already loaded
+      setIsProcessing(true);
+      setError(null);
+      setProgress({ stage: 'preparing', percent: 0 });
+
+      // Load FFmpeg
+      console.log('Loading FFmpeg...');
       const ffmpegLoaded = await loadFFmpeg();
       if (!ffmpegLoaded) {
         throw new Error('Failed to load FFmpeg');
       }
+      console.log('FFmpeg loaded successfully');
 
-      // Set progress handler
-      ffmpeg.setProgress(({ ratio }) => {
-        setTrimProgress(Math.round(ratio * 100));
-      });
-
-      // Write the input file to FFmpeg's virtual filesystem
+      // Write input file to FFmpeg's virtual filesystem
+      setProgress({ stage: 'preparing', percent: 30 });
+      console.log('Writing input file...');
       ffmpeg.FS('writeFile', 'input.mp4', await fetchFile(file));
+      setProgress({ stage: 'preparing', percent: 60 });
 
-      // Run FFmpeg to trim the video
+      // Run FFmpeg trim command
+      console.log('Starting FFmpeg processing...');
+      setProgress({ stage: 'trimming', percent: 0 });
       await ffmpeg.run(
         '-ss', startTime.toString(),
         '-t', (endTime - startTime).toString(),
@@ -150,55 +178,50 @@ export const VideoTrimmer: React.FC<VideoTrimmerProps> = ({ file, onTrimComplete
         '-c', 'copy',
         'output.mp4'
       );
+      console.log('FFmpeg processing complete');
 
       // Read the output file
+      setProgress({ stage: 'finalizing', percent: 50 });
+      console.log('Reading output file...');
       const data = ffmpeg.FS('readFile', 'output.mp4');
 
       // Clean up files
       ffmpeg.FS('unlink', 'input.mp4');
       ffmpeg.FS('unlink', 'output.mp4');
 
-      // Create a new File from the data
-      const trimmedFile = new File([new Uint8Array(data.buffer)], 'trimmed.mp4', { type: 'video/mp4' });
+      // Create trimmed file with metadata
+      const trimmedFile = new File([new Uint8Array(data.buffer)], 'trimmed.mp4', { 
+        type: 'video/mp4' 
+      });
 
+      // Add trim metadata
+      Object.defineProperties(trimmedFile, {
+        trimStart: { value: startTime, enumerable: true },
+        trimEnd: { value: endTime, enumerable: true }
+      });
+
+      console.log('Trim complete, providing file to parent component');
+      setProgress({ stage: 'finalizing', percent: 100 });
       onTrimComplete(trimmedFile);
+      onClose();
     } catch (error) {
       console.error('Video trimming failed:', error);
-      const errorMessage = error instanceof Error 
-        ? error.message 
-        : 'Failed to trim video. Please try again or use a different browser.';
-      setFfmpegError(errorMessage);
-      alert(errorMessage);
+      setError(error instanceof Error ? error.message : 'Failed to trim video');
     } finally {
-      setIsLoading(false);
-      setTrimProgress(0);
+      setIsProcessing(false);
     }
   };
 
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-75 z-50 flex items-center justify-center">
       <div className="bg-zinc-900 w-full max-w-md rounded-xl p-6">
         <h2 className="text-white text-xl font-bold mb-4">Trim Your Video</h2>
         
-        {(!browserSupport.mediaRecorder || !browserSupport.captureStream) && (
-          <div className="text-red-500 mb-4">
-            Your browser doesn't support video trimming. Please use Chrome, Firefox, or Edge.
-          </div>
-        )}
-
-        {ffmpegError && (
-          <div className="text-red-500 mb-4 text-sm">
-            Error: {ffmpegError}
-            <p className="mt-1">
-              Please make sure you're using a modern browser with the latest updates.
-              This feature requires cross-origin isolation to be enabled.
-            </p>
+        {error && (
+          <div className="mb-4 p-3 bg-red-900/20 border border-red-500 rounded-lg">
+            <p className="text-red-500 text-sm">{error}</p>
           </div>
         )}
 
@@ -207,76 +230,108 @@ export const VideoTrimmer: React.FC<VideoTrimmerProps> = ({ file, onTrimComplete
             ref={videoRef}
             controls
             className="w-full rounded-lg"
-            onPlay={handlePreviewPlay}
-            onPause={() => setIsPlaying(false)}
+            controlsList="nodownload nofullscreen"
           />
         </div>
 
-        <div className="mb-4">
+        <div className="mb-6">
           <div className="flex justify-between text-white text-sm mb-2">
             <span>Start: {formatTime(startTime)}</span>
             <span>Duration: {formatTime(endTime - startTime)}</span>
             <span>End: {formatTime(endTime)}</span>
           </div>
           
-          <div className="relative mb-4">
-            <input 
-              type="range"
-              min={0}
-              max={duration}
-              value={startTime}
-              onChange={(e) => {
-                const newStart = Number(e.target.value);
-                setStartTime(Math.min(newStart, endTime - 5));
-              }}
-              className="w-full"
-            />
-            <input 
-              type="range"
-              min={0}
-              max={duration}
-              value={endTime}
-              onChange={(e) => {
-                const newEnd = Number(e.target.value);
-                setEndTime(Math.max(newEnd, startTime + 5));
-              }}
-              className="w-full mt-2"
-            />
+          <div className="space-y-4">
+            <div>
+              <label className="block text-zinc-400 text-sm mb-1">Start Time:</label>
+              <input 
+                type="range"
+                min={0}
+                max={Math.max(0, duration - 5)}
+                step={0.1}
+                value={startTime}
+                onChange={(e) => {
+                  const newStart = Number(e.target.value);
+                  setStartTime(Math.min(newStart, endTime - 5));
+                }}
+                className="w-full accent-[#E0FE10]"
+                disabled={isProcessing}
+              />
+            </div>
+            
+            <div>
+              <label className="block text-zinc-400 text-sm mb-1">End Time:</label>
+              <input 
+                type="range"
+                min={0}
+                max={duration}
+                step={0.1}
+                value={endTime}
+                onChange={(e) => {
+                  const newEnd = Number(e.target.value);
+                  setEndTime(Math.max(newEnd, startTime + 5));
+                }}
+                className="w-full accent-[#E0FE10]"
+                disabled={isProcessing}
+              />
+            </div>
           </div>
 
-          {isLoading && (
-            <div className="w-full bg-zinc-800 rounded-full h-2 mb-4">
-              <div 
-                className="bg-[#E0FE10] h-2 rounded-full transition-all duration-300"
-                style={{ width: `${trimProgress}%` }}
-              />
+          {!isProcessing && (
+            <div className="flex justify-center mt-4">
+              <button
+                onClick={isPlaying ? handlePreviewPause : handlePreviewPlay}
+                className="bg-zinc-800 text-white py-2 px-4 rounded-lg hover:bg-zinc-700"
+              >
+                {isPlaying ? 'Pause Preview' : 'Preview Trim'}
+              </button>
+            </div>
+          )}
+
+          {isProcessing && (
+            <div className="mt-4">
+              <div className="flex justify-between text-sm text-zinc-400 mb-2">
+                <span>
+                  {progress.stage === 'preparing' && 'Preparing...'}
+                  {progress.stage === 'trimming' && 'Trimming...'}
+                  {progress.stage === 'finalizing' && 'Finalizing...'}
+                </span>
+                <span>{progress.percent}%</span>
+              </div>
+              <div className="w-full bg-zinc-800 rounded-full h-2">
+                <div 
+                  className="bg-[#E0FE10] h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${progress.percent}%` }}
+                />
+              </div>
             </div>
           )}
         </div>
 
-        <div className="flex space-x-4">
-          <button 
-            onClick={onCancel}
-            disabled={isLoading}
-            className="flex-1 bg-zinc-800 text-white py-2 rounded-lg disabled:opacity-50"
+        <div className="flex space-x-3">
+          <button
+            onClick={onClose}
+            disabled={isProcessing}
+            className="flex-1 bg-zinc-800 text-white py-3 rounded-lg hover:bg-zinc-700 disabled:opacity-50"
           >
             Cancel
           </button>
-          <button 
+          <button
             onClick={handleTrim}
-            disabled={
-              isLoading || 
-              endTime - startTime < 5 || 
-              endTime - startTime > 30 ||
-              !browserSupport.mediaRecorder || 
-              !browserSupport.captureStream
-            }
-            className="flex-1 bg-[#E0FE10] text-black py-2 rounded-lg disabled:opacity-50"
+            disabled={isProcessing || endTime - startTime < 5 || endTime - startTime > 30}
+            className="flex-1 bg-[#E0FE10] text-black py-3 rounded-lg hover:bg-[#c8e60e] disabled:opacity-50"
           >
-            {isLoading ? `Trimming... ${trimProgress}%` : 'Trim Video'}
+            {isProcessing ? 'Processing...' : 'Save Trim'}
           </button>
         </div>
       </div>
     </div>
   );
+};
+
+// Helper function to format time as MM:SS
+const formatTime = (seconds: number) => {
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 };
