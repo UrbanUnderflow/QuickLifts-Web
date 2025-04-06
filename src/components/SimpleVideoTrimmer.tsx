@@ -149,13 +149,25 @@ export const SimpleVideoTrimmer: React.FC<VideoTrimmerProps> = ({
 
   // Complete the trimming process
   const handleTrim = async () => {
-    if (!file || !videoRef.current) return;
+    if (!file || !videoRef.current) {
+      console.error('[VideoTrimmer] Cannot trim: missing file or video reference');
+      return;
+    }
+
+    console.log('[VideoTrimmer] Starting trim process', {
+      startTime,
+      endTime,
+      duration: endTime - startTime,
+      originalFileSize: file.size,
+      originalFileName: file.name
+    });
 
     setIsProcessing(true);
 
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     if (!ctx) {
+      console.error('[VideoTrimmer] Failed to get canvas context');
       setIsProcessing(false);
       return;
     }
@@ -164,20 +176,43 @@ export const SimpleVideoTrimmer: React.FC<VideoTrimmerProps> = ({
     canvas.width = videoRef.current.videoWidth;
     canvas.height = videoRef.current.videoHeight;
     
+    console.log('[VideoTrimmer] Canvas initialized', {
+      width: canvas.width,
+      height: canvas.height
+    });
+    
     // Prepare our capture stream and MediaRecorder
-    const stream = canvas.captureStream();
-    const mimeType = 'video/webm'; // or pick from your supported set
+    const stream = canvas.captureStream(30);
+    const mimeType = 'video/webm';
+    console.log('[VideoTrimmer] Stream created, using mime type:', mimeType);
+
     const mediaRecorder = new MediaRecorder(stream, { mimeType });
     const chunks: Blob[] = [];
 
     mediaRecorder.ondataavailable = (e) => {
-      if (e.data.size > 0) chunks.push(e.data);
+      if (e.data.size > 0) {
+        chunks.push(e.data);
+        console.log('[VideoTrimmer] Received data chunk:', {
+          chunkSize: e.data.size,
+          totalChunks: chunks.length
+        });
+      }
     };
 
     mediaRecorder.onstop = async () => {
+      console.log('[VideoTrimmer] MediaRecorder stopped, processing chunks', {
+        numberOfChunks: chunks.length
+      });
+
       // Combine chunks into a single file
       const blob = new Blob(chunks, { type: mimeType });
       const trimmedFile = new File([blob], 'trimmedFile.webm', { type: mimeType });
+
+      console.log('[VideoTrimmer] Trim complete', {
+        originalSize: file.size,
+        trimmedSize: trimmedFile.size,
+        compressionRatio: (trimmedFile.size / file.size * 100).toFixed(2) + '%'
+      });
 
       // Add your start/end metadata
       Object.defineProperties(trimmedFile, {
@@ -188,6 +223,7 @@ export const SimpleVideoTrimmer: React.FC<VideoTrimmerProps> = ({
 
       // Reset video playback
       if (videoRef.current) {
+        console.log('[VideoTrimmer] Resetting video player state');
         // Remove the existing timeupdate handler first
         videoRef.current.removeEventListener('timeupdate', handleTimeUpdate);
         
@@ -199,36 +235,61 @@ export const SimpleVideoTrimmer: React.FC<VideoTrimmerProps> = ({
       }
 
       setIsProcessing(false);
+      console.log('[VideoTrimmer] Trim process completed successfully');
       onTrimComplete(trimmedFile);
       onClose();
     };
 
-    // Start drawing frames to the canvas
-    mediaRecorder.start(100); // capture in small chunks
+    mediaRecorder.onerror = (event) => {
+      console.error('[VideoTrimmer] MediaRecorder error:', event);
+      setError('An error occurred while processing the video');
+      setIsProcessing(false);
+    };
 
+    // Start drawing frames to the canvas
+    console.log('[VideoTrimmer] Starting MediaRecorder');
+    
     // Seek to startTime
     videoRef.current.currentTime = startTime;
     
     // Once we've successfully sought to startTime, begin playback
     videoRef.current!.onseeked = () => {
-      videoRef.current!.play().catch(console.error);
-
-      const startTS = performance.now();
-
-      function drawFrame() {
-        // Keep drawing while under endTime
-        const elapsedSec = (performance.now() - startTS) / 1000;
-        if (elapsedSec < (endTime - startTime)) {
-          ctx!.clearRect(0, 0, canvas.width, canvas.height);
-          ctx!.drawImage(videoRef.current!, 0, 0, canvas.width, canvas.height);
-          requestAnimationFrame(drawFrame);
-        } else {
-          // Done capturing
-          videoRef.current?.pause();
-          mediaRecorder.stop();
+      console.log('[VideoTrimmer] Video seeked to start time, beginning playback');
+      videoRef.current!.play().then(() => {
+        // Start MediaRecorder after video playback begins
+        mediaRecorder.start(100);
+        const startTS = performance.now();
+        let frameCount = 0;
+        function drawFrame() {
+          if (videoRef.current!.currentTime < endTime) {
+            frameCount++;
+            if (frameCount % 30 === 0) { // Log every 30 frames
+              console.log('[VideoTrimmer] Processing frame', {
+                currentTime: videoRef.current!.currentTime.toFixed(2),
+                progress: ((videoRef.current!.currentTime - startTime) / (endTime - startTime) * 100).toFixed(1) + '%',
+                frameCount
+              });
+            }
+            
+            ctx!.clearRect(0, 0, canvas.width, canvas.height);
+            ctx!.drawImage(videoRef.current!, 0, 0, canvas.width, canvas.height);
+            requestAnimationFrame(drawFrame);
+          } else {
+            const endTS = performance.now();
+            console.log('[VideoTrimmer] Frame processing complete', {
+              totalFrames: frameCount,
+              processingTime: ((endTS - startTS) / 1000).toFixed(2) + 's',
+              fps: (frameCount / ((endTS - startTS) / 1000)).toFixed(1)
+            });
+            
+            videoRef.current?.pause();
+            mediaRecorder.stop();
+          }
         }
-      }
-      requestAnimationFrame(drawFrame);
+        requestAnimationFrame(drawFrame);
+      }).catch(error => {
+        console.error('[VideoTrimmer] Error during playback:', error);
+      });
     };
   };
 
