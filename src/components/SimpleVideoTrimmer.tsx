@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 
 interface VideoTrimmerProps {
   isOpen: boolean;
@@ -35,6 +35,18 @@ export const SimpleVideoTrimmer: React.FC<VideoTrimmerProps> = ({
     const secs = Math.floor(seconds % 60);
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
+
+  // Handle video time updates to loop the preview between start and end times
+  const handleTimeUpdate = useCallback(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    if (video.currentTime >= endTime) {
+      video.pause();
+      video.currentTime = startTime;
+      setIsPlaying(false);
+    }
+  }, [endTime, startTime]);
 
   // Load the video and set up event listeners
   useEffect(() => {
@@ -108,17 +120,9 @@ export const SimpleVideoTrimmer: React.FC<VideoTrimmerProps> = ({
     const video = videoRef.current;
     if (!video) return;
 
-    const handleTimeUpdate = () => {
-      if (video.currentTime >= endTime) {
-        video.pause();
-        video.currentTime = startTime;
-        setIsPlaying(false);
-      }
-    };
-
     video.addEventListener('timeupdate', handleTimeUpdate);
     return () => video.removeEventListener('timeupdate', handleTimeUpdate);
-  }, [endTime, startTime]);
+  }, [handleTimeUpdate]);
 
   // Handler for the play button
   const handlePreviewPlay = () => {
@@ -182,6 +186,18 @@ export const SimpleVideoTrimmer: React.FC<VideoTrimmerProps> = ({
         duration: { value: endTime - startTime, enumerable: true }
       });
 
+      // Reset video playback
+      if (videoRef.current) {
+        // Remove the existing timeupdate handler first
+        videoRef.current.removeEventListener('timeupdate', handleTimeUpdate);
+        
+        // Reset video to original file for preview
+        if (objectUrlRef.current) {
+          videoRef.current.src = objectUrlRef.current;
+          videoRef.current.currentTime = startTime;
+        }
+      }
+
       setIsProcessing(false);
       onTrimComplete(trimmedFile);
       onClose();
@@ -194,19 +210,17 @@ export const SimpleVideoTrimmer: React.FC<VideoTrimmerProps> = ({
     videoRef.current.currentTime = startTime;
     
     // Once we've successfully sought to startTime, begin playback
-    videoRef.current.onseeked = () => {
-      videoRef.current?.play().catch(console.error);
+    videoRef.current!.onseeked = () => {
+      videoRef.current!.play().catch(console.error);
 
       const startTS = performance.now();
-      // Use a non-null assertion to tell TypeScript we already checked ctx earlier
-      const safeCtx = ctx!;
 
       function drawFrame() {
         // Keep drawing while under endTime
         const elapsedSec = (performance.now() - startTS) / 1000;
         if (elapsedSec < (endTime - startTime)) {
-          safeCtx.clearRect(0, 0, canvas.width, canvas.height);
-          safeCtx.drawImage(videoRef.current!, 0, 0, canvas.width, canvas.height);
+          ctx!.clearRect(0, 0, canvas.width, canvas.height);
+          ctx!.drawImage(videoRef.current!, 0, 0, canvas.width, canvas.height);
           requestAnimationFrame(drawFrame);
         } else {
           // Done capturing
