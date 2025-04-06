@@ -227,9 +227,10 @@ const TrimVideoPage: React.FC = () => {
           <>
             <InfoAlert />
             <SimpleVideoTrimmer 
+              isOpen={true}
               file={videoFile} 
               onTrimComplete={handleTrimComplete} 
-              onCancel={handleCancel} 
+              onClose={handleCancel} 
             />
           </>
         ) : (

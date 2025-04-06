@@ -54,6 +54,7 @@ const Create: React.FC = () => {
   const [exerciseCategory, setExerciseCategory] = useState('Weight Training');
   const [tags, setTags] = useState<string[]>([]);
   const [caption, setCaption] = useState('');
+  const [isGeneratingCaption, setIsGeneratingCaption] = useState(false);
   const [newTag, setNewTag] = useState('');
   const [similarExercisesFound, setSimilarExercisesFound] = useState<Exercise[]>([]);
   const [isDuplicateExercise, setIsDuplicateExercise] = useState(false);
@@ -893,8 +894,8 @@ const Create: React.FC = () => {
   const handleViewMove = () => {
     console.log('[DEBUG] View move button clicked, exercise ID:', uploadedExerciseId);
     if (uploadedExerciseId) {
-      // The actual URL should use the name as document ID (lowercase)
-      const documentId = exerciseName.trim().toLowerCase();
+      // The actual URL should use the name as document ID (lowercase with dashes instead of spaces)
+      const documentId = exerciseName.trim().toLowerCase().replace(/\s+/g, '-');
       console.log('[DEBUG] Document ID for navigation:', documentId);
       
       // Verify the exercise exists before navigating
@@ -926,7 +927,57 @@ const Create: React.FC = () => {
     setCaption('');
     setNewTag('');
     setUploadProgress(0);
+    setIsGeneratingCaption(false);
     setShowSuccessModal(false);
+  };
+
+  // Generate AI caption based on exercise details
+  const handleGenerateCaption = async () => {
+    if (!exerciseName.trim()) {
+      alert('Please enter an exercise name first');
+      return;
+    }
+
+    try {
+      setIsGeneratingCaption(true);
+      
+      // Prepare the data for the API request
+      const data = {
+        exerciseName: exerciseName.trim(),
+        category: exerciseCategory,
+        tags: tags
+      };
+      
+      console.log('[DEBUG] Generating AI caption with data:', data);
+      
+      // Make API request to our backend
+      const response = await fetch('/api/generateCaption', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`API request failed with status ${response.status}`);
+      }
+      
+      const result = await response.json();
+      console.log('[DEBUG] AI caption generated:', result);
+      
+      // Update the caption state with the generated text
+      if (result.caption) {
+        setCaption(result.caption);
+      } else {
+        throw new Error('No caption returned from API');
+      }
+    } catch (error) {
+      console.error('[DEBUG] Error generating caption:', error);
+      alert('Failed to generate caption. Please try again or enter one manually.');
+    } finally {
+      setIsGeneratingCaption(false);
+    }
   };
 
   return (
@@ -1055,13 +1106,33 @@ const Create: React.FC = () => {
           {/* Caption */}
           <div>
             <label className="block text-sm text-zinc-300 mb-2">Caption</label>
-            <textarea
-              value={caption}
-              onChange={(e) => setCaption(e.target.value)}
-              placeholder="Add a caption to your exercise..."
-              className="w-full bg-zinc-800 border border-zinc-600 rounded-lg p-3 text-white placeholder-zinc-400"
-              rows={4}
-            />
+            <div className="relative">
+              <textarea
+                value={caption}
+                onChange={(e) => setCaption(e.target.value)}
+                placeholder="Add a caption to your exercise..."
+                className="w-full bg-zinc-800 border border-zinc-600 rounded-lg p-3 text-white placeholder-zinc-400"
+                rows={4}
+              />
+              <button
+                onClick={handleGenerateCaption}
+                disabled={isGeneratingCaption || !exerciseName.trim()}
+                className="absolute right-2 top-2 bg-zinc-700 hover:bg-zinc-600 text-[#E0FE10] px-3 py-1 rounded text-sm flex items-center transition-colors"
+                title="Generate AI caption"
+              >
+                {isGeneratingCaption ? (
+                  <div className="w-4 h-4 border-2 border-[#E0FE10] border-t-transparent rounded-full animate-spin mr-1"></div>
+                ) : (
+                  <span className="mr-1">✨</span>
+                )}
+                {isGeneratingCaption ? 'Generating...' : 'AI Caption'}
+              </button>
+            </div>
+            {isGeneratingCaption && (
+              <div className="text-xs text-zinc-400 mt-1">
+                Creating caption based on exercise details...
+              </div>
+            )}
           </div>
 
           {/* Progress Bar (upload progress) */}
