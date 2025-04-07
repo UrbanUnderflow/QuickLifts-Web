@@ -282,32 +282,21 @@ const Create: React.FC = () => {
 
   // Function to attempt video conversion if needed
   const tryConvertVideo = async (file: File): Promise<File> => {
-    const ALLOWED_TYPES = ['video/mp4', 'video/quicktime', 'video/x-msvideo'];
+    // Define Safari-compatible formats
+    const SAFARI_COMPATIBLE_TYPES = ['video/mp4', 'video/quicktime'];
+    const SAFARI_COMPATIBLE_CODECS = ['avc1.42E01E, mp4a.40.2']; // H.264 with AAC audio
     
-    // If file is already in an allowed format, return it directly
-    if (ALLOWED_TYPES.includes(file.type)) {
-      console.log('[DEBUG] File already in allowed format:', file.type);
+    // If file is already in a Safari-compatible format, return it directly
+    if (SAFARI_COMPATIBLE_TYPES.includes(file.type)) {
+      console.log('[DEBUG] File already in Safari-compatible format:', file.type);
       return file;
     }
     
-    console.log('[DEBUG] Attempting to convert file from', file.type);
-    
-    // Check file extension to determine best target format
-    const fileName = file.name.toLowerCase();
-    let targetType = 'video/mp4'; // Default to MP4
-    let targetExtension = '.mp4';
-    
-    if (fileName.endsWith('.mov') || fileName.endsWith('.qt')) {
-      targetType = 'video/quicktime';
-      targetExtension = fileName.endsWith('.mov') ? '.mov' : '.qt';
-    } else if (fileName.endsWith('.avi')) {
-      targetType = 'video/x-msvideo';
-      targetExtension = '.avi';
-    }
+    console.log('[DEBUG] Attempting to verify/convert file from', file.type);
     
     return new Promise((resolve, reject) => {
       try {
-        // Create video element to read the file
+        // Create video element to test compatibility
         const video = document.createElement('video');
         video.preload = 'metadata';
         
@@ -318,39 +307,33 @@ const Create: React.FC = () => {
         video.onloadedmetadata = () => {
           URL.revokeObjectURL(objectUrl);
           
-          // Create a canvas to draw video frames
-          const canvas = document.createElement('canvas');
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
+          // Test if current format can play in Safari
+          const canPlayType = video.canPlayType('video/mp4; codecs="avc1.42E01E, mp4a.40.2"');
+          console.log('[DEBUG] Safari compatibility check:', canPlayType);
           
-          const ctx = canvas.getContext('2d');
-          if (!ctx) {
-            reject(new Error('Failed to get canvas context'));
-            return;
+          if (canPlayType === 'probably' || canPlayType === 'maybe') {
+            // If compatible, just update the container format
+            const newFileName = file.name.replace(/\.[^/.]+$/, '.mp4');
+            const newFile = new File([file], newFileName, { 
+              type: 'video/mp4',
+              lastModified: file.lastModified 
+            });
+            
+            console.log('[DEBUG] Created Safari-compatible file:', {
+              name: newFile.name,
+              type: newFile.type,
+              size: newFile.size
+            });
+            
+            resolve(newFile);
+          } else {
+            // If not compatible, we should inform the user
+            console.warn('[DEBUG] Video format not Safari-compatible');
+            alert('The selected video format may not be compatible with Safari. For best results, please upload an MP4 file encoded with H.264.');
+            // Still resolve with the original file, but with MP4 container
+            const newFileName = file.name.replace(/\.[^/.]+$/, '.mp4');
+            resolve(new File([file], newFileName, { type: 'video/mp4' }));
           }
-          
-          // In a real conversion, we would:
-          // 1. Draw frames to canvas
-          // 2. Capture frames as data
-          // 3. Encode to target format
-          
-          // For this example, we'll take a simpler approach:
-          // Just change the file type and name to allow processing
-          
-          // Create a new File object with modified type
-          const newFileName = file.name.substring(0, file.name.lastIndexOf('.')) + targetExtension;
-          
-          // Since browser JS can't truly convert video formats, we'll just change the metadata
-          // This is a workaround to bypass the type check
-          const newFile = new File([file], newFileName, { type: targetType });
-          
-          console.log('[DEBUG] Created processed file:', {
-            name: newFile.name,
-            type: newFile.type,
-            size: newFile.size
-          });
-          
-          resolve(newFile);
         };
         
         video.onerror = () => {
@@ -692,6 +675,24 @@ const Create: React.FC = () => {
       try {
         console.log('[DEBUG] Using client-side gifGenerator');
         
+        // Calculate actual video duration
+        let videoDuration = 5; // default fallback
+        if ((videoFile as any).trimEnd !== undefined && (videoFile as any).trimStart !== undefined) {
+          videoDuration = (videoFile as any).trimEnd - (videoFile as any).trimStart;
+        }
+        
+        // Calculate optimal number of frames based on duration
+        // Reduce to 15fps for smoother processing while maintaining decent animation
+        const framesPerSecond = 60;
+        const totalFrames = Math.ceil(videoDuration * framesPerSecond);
+        
+        console.log('[DEBUG] GIF Generation settings:', {
+          videoDuration,
+          framesPerSecond,
+          totalFrames,
+          delay: Math.ceil(1000 / framesPerSecond) // ms between frames
+        });
+        
         // Listen for GIF encoding progress updates from the gifGenerator
         const encodingProgressListener = (progress: number) => {
           // Scale encoding progress from 87% to 92%
@@ -718,18 +719,18 @@ const Create: React.FC = () => {
         window.addEventListener('gif-frame-capture-progress', frameCaptureListener);
 
         const gifUrl = await gifGenerator.generateAndUploadGif(
-          { file: videoFile },  // Pass the local video file instead of the URL
+          { file: videoFile },
           formattedExerciseName,
           videoId,
           {
             width: 288,
             height: 512,
-            numFrames: 80,   // Reduced from 125
-            quality: 10,     // Increased from 3
-            delay: 100,      // Added delay for smoother playback
-            dither: true,
-            workers: 4,
-            maxDuration: 5
+            numFrames: totalFrames,
+            quality: 10,        // Reduced quality to improve processing
+            delay: Math.ceil(1000 / framesPerSecond),
+            dither: true,     // Disabled dithering to reduce processing
+            workers: 2,        // Reduced workers to prevent memory overload
+            maxDuration: videoDuration
           }
         );
         
@@ -1105,7 +1106,25 @@ const Create: React.FC = () => {
 
           {/* Caption */}
           <div>
-            <label className="block text-sm text-zinc-300 mb-2">Caption</label>
+            <div className="flex justify-between items-center mb-2">
+              <label className="text-sm text-zinc-300">Caption</label>
+              {caption && (
+                <button
+                  onClick={handleGenerateCaption}
+                  disabled={isGeneratingCaption || !exerciseName.trim()}
+                  className={`bg-zinc-700 hover:bg-zinc-600 text-[#E0FE10] px-3 py-1 rounded text-sm flex items-center transition-all duration-200
+                    ${isGeneratingCaption ? 'opacity-50' : ''}`}
+                  title="Generate AI caption"
+                >
+                  {isGeneratingCaption ? (
+                    <div className="w-4 h-4 border-2 border-[#E0FE10] border-t-transparent rounded-full animate-spin mr-1"></div>
+                  ) : (
+                    <span className="mr-1">✨</span>
+                  )}
+                  {isGeneratingCaption ? 'Generating...' : 'AI Caption'}
+                </button>
+              )}
+            </div>
             <div className="relative">
               <textarea
                 value={caption}
@@ -1114,19 +1133,22 @@ const Create: React.FC = () => {
                 className="w-full bg-zinc-800 border border-zinc-600 rounded-lg p-3 text-white placeholder-zinc-400"
                 rows={4}
               />
-              <button
-                onClick={handleGenerateCaption}
-                disabled={isGeneratingCaption || !exerciseName.trim()}
-                className="absolute right-2 top-2 bg-zinc-700 hover:bg-zinc-600 text-[#E0FE10] px-3 py-1 rounded text-sm flex items-center transition-colors"
-                title="Generate AI caption"
-              >
-                {isGeneratingCaption ? (
-                  <div className="w-4 h-4 border-2 border-[#E0FE10] border-t-transparent rounded-full animate-spin mr-1"></div>
-                ) : (
-                  <span className="mr-1">✨</span>
-                )}
-                {isGeneratingCaption ? 'Generating...' : 'AI Caption'}
-              </button>
+              {!caption && (
+                <button
+                  onClick={handleGenerateCaption}
+                  disabled={isGeneratingCaption || !exerciseName.trim()}
+                  className={`absolute right-2 top-2 bg-zinc-700 hover:bg-zinc-600 text-[#E0FE10] px-3 py-1 rounded text-sm flex items-center transition-all duration-200
+                    ${isGeneratingCaption ? 'opacity-50' : ''}`}
+                  title="Generate AI caption"
+                >
+                  {isGeneratingCaption ? (
+                    <div className="w-4 h-4 border-2 border-[#E0FE10] border-t-transparent rounded-full animate-spin mr-1"></div>
+                  ) : (
+                    <span className="mr-1">✨</span>
+                  )}
+                  {isGeneratingCaption ? 'Generating...' : 'AI Caption'}
+                </button>
+              )}
             </div>
             {isGeneratingCaption && (
               <div className="text-xs text-zinc-400 mt-1">

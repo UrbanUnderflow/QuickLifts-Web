@@ -656,6 +656,13 @@ const Discover = () => {
                     muted
                     playsInline
                     autoPlay
+                    onError={(e) => {
+                      console.error('Video error:', e);
+                      console.log('Video URL:', exercise.videos[exercise.currentVideoPosition || 0]?.videoURL);
+                    }}
+                    onLoadStart={() => {
+                      console.log('Loading video URL:', exercise.videos[exercise.currentVideoPosition || 0]?.videoURL);
+                    }}
                   />
                 )}
               </div>
@@ -928,6 +935,13 @@ const Discover = () => {
                         muted
                         playsInline
                         autoPlay
+                        onError={(e) => {
+                          console.error('Video error:', e);
+                          console.log('Video URL:', exercise.videos[exercise.currentVideoPosition || 0]?.videoURL);
+                        }}
+                        onLoadStart={() => {
+                          console.log('Loading video URL:', exercise.videos[exercise.currentVideoPosition || 0]?.videoURL);
+                        }}
                       />
                     )}
                   </div>

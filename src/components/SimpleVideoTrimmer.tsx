@@ -183,8 +183,29 @@ export const SimpleVideoTrimmer: React.FC<VideoTrimmerProps> = ({
     
     // Prepare our capture stream and MediaRecorder
     const stream = canvas.captureStream(30);
-    const mimeType = 'video/webm';
-    console.log('[VideoTrimmer] Stream created, using mime type:', mimeType);
+    // Use MP4 with H.264 codec for Safari compatibility
+    let mimeType = 'video/mp4; codecs="avc1.42E01E, mp4a.40.2"';
+    
+    // Check if the browser supports MP4 recording
+    if (!MediaRecorder.isTypeSupported(mimeType)) {
+      console.warn('[DEBUG] MP4 recording not supported, falling back to default format');
+      // Fallback to a format that the browser supports
+      const supportedTypes = [
+        'video/mp4',
+        'video/webm',
+        'video/webm;codecs=h264',
+        'video/x-matroska;codecs=avc1'
+      ];
+      
+      const supportedType = supportedTypes.find(type => MediaRecorder.isTypeSupported(type));
+      if (!supportedType) {
+        throw new Error('No supported video recording format found');
+      }
+      console.log('[DEBUG] Using fallback format:', supportedType);
+      mimeType = supportedType;
+    }
+    
+    console.log('[DEBUG] Stream created, using mime type:', mimeType);
 
     const mediaRecorder = new MediaRecorder(stream, { mimeType });
     const chunks: Blob[] = [];

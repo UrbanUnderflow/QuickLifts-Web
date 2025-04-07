@@ -40,33 +40,42 @@ export default async function handler(
 
     // Construct the prompt using the provided template
     const prompt = `
-      Given the following information, create a concise, engaging exercise caption that provides the user with a practical tip or important form cue. Keep the tone motivating and actionable.
+      Create a single, technical form cue or tip for this exercise. Focus only on proper execution or a key technique point.
 
       Exercise Name: ${exerciseName}
       Category: ${category}
       Tags: ${tags.join(', ')}
 
-      Caption Guidelines:
-      - Must include a clear and specific form cue or actionable tip directly relevant to ${exerciseName}.
-      - Keep captions concise (1 short sentence preferred).
-      - Maintain an enthusiastic and motivating tone, suitable for fitness content.
+      Caption Requirements:
+      - One clear, specific form cue or technical tip
+      - No motivational phrases or exclamations
+      - No generic encouragement or "let's" statements
+      - Focus purely on technique or execution
+      - Maximum 15 words
+      - Do not use exclamation marks
+      - Do not add phrases like "let's go", "let's unlock", etc.
+
+      Example good captions:
+      - "Keep your core engaged and back straight throughout the movement"
+      - "Drive through your heels while maintaining neutral spine position"
+      - "Maintain tension in your lats as you lower the weight"
     `;
 
     // Call OpenAI API using the SDK
     const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini', // Using the same model as in generateRound
+      model: 'gpt-4o-mini',
       messages: [
         {
           role: 'system',
-          content: 'You are a fitness expert that creates concise, helpful captions for exercise videos. Your captions should provide actionable tips and form cues in an enthusiastic tone.'
+          content: 'You are a technical fitness instructor who provides clear, concise form cues. You focus solely on proper exercise execution without adding motivational phrases.'
         },
         {
           role: 'user',
           content: prompt
         }
       ],
-      temperature: 0.7,
-      max_tokens: 100
+      temperature: 0.5,
+      max_tokens: 50
     });
 
     // Extract the generated caption from the response
