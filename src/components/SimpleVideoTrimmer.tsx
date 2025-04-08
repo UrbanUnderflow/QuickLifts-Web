@@ -318,7 +318,7 @@ export const SimpleVideoTrimmer: React.FC<VideoTrimmerProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-75 z-50 flex items-center justify-center">
-      <div className="bg-zinc-900 w-full max-w-md rounded-xl p-6">
+      <div className="bg-zinc-900 w-full max-w-md rounded-xl p-6 max-h-[90vh] overflow-y-auto">
         <h2 className="text-white text-xl font-bold mb-4">Trim Your Video</h2>
         
         {error && (
