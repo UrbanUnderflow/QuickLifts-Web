@@ -45,7 +45,7 @@ const CREATOR_STEPS = [
     title: "Upload Your First Content",
     description: "Time to share your expertise! Create your first Move by recording an exercise, combine Moves into a Stack for a complete workout, and organize your Stacks into a Round for a full training program. Each piece of content you create helps others on their fitness journey.",
     detailedSteps: [
-      "Record or upload first exercise video",
+      "Record or upload your first move",
       "Create your first 'Stack'",
       "Create a 'Round'"
     ],
