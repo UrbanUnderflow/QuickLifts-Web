@@ -12,6 +12,7 @@ interface GifGeneratorOptions {
   dither?: boolean;
   workers?: number;
   maxDuration?: number;
+  skipFactor?: number;
 }
 
 interface VideoSource {
@@ -20,15 +21,16 @@ interface VideoSource {
 }
 
 const defaultOptions: GifGeneratorOptions = {
-  width: 288,
-  height: 512,
-  numFrames: 125,
-  quality: 3,
+  width: 240,
+  height: 320,
+  numFrames: 30,
+  quality: 10,
   delay: 0,
   repeat: 0,
   dither: true,
   workers: 4,
-  maxDuration: 5
+  maxDuration: 3,
+  skipFactor: 2
 };
 
 export const gifGenerator = {
@@ -36,11 +38,21 @@ export const gifGenerator = {
     videoSource: string | VideoSource,
     exerciseName: string,
     videoId: string,
-    options: GifGeneratorOptions = defaultOptions
+    options: GifGeneratorOptions = {}
   ): Promise<string> {
     try {
-      console.log('[DEBUG] Starting GIF generation');
-      console.log('[DEBUG] Options:', JSON.stringify(options));
+      // ===== LOGGING START =====
+      console.log('[DEBUG][FRAME_CALC] Starting GIF generation with default options:', JSON.stringify(defaultOptions));
+      console.log('[DEBUG][FRAME_CALC] User-provided options:', JSON.stringify(options));
+      // ===== LOGGING END =====
+      
+      // Merge with defaults to ensure all options are set
+      const mergedOptions = { ...defaultOptions, ...options };
+      
+      // ===== LOGGING START =====
+      console.log('[DEBUG][FRAME_CALC] Merged options:', JSON.stringify(mergedOptions));
+      console.log('[DEBUG][FRAME_CALC] Target frame count from options:', mergedOptions.numFrames);
+      // ===== LOGGING END =====
 
       // Create a video element
       const video = document.createElement('video');
@@ -98,6 +110,11 @@ export const gifGenerator = {
         
         video.onloadedmetadata = () => {
           console.log('[DEBUG] Video metadata loaded, duration:', video.duration, 'seconds, dimensions:', video.videoWidth, 'x', video.videoHeight);
+          
+          // ===== LOGGING START =====
+          console.log('[DEBUG][FRAME_CALC] Video actual duration:', video.duration);
+          // ===== LOGGING END =====
+          
           video.onloadeddata = () => {
             clearTimeout(timeoutId);
             console.log('[DEBUG] Video data loaded successfully');
@@ -118,7 +135,7 @@ export const gifGenerator = {
       // Generate the GIF
       console.log('[DEBUG] Starting GIF creation with gif.js');
       console.log('[DEBUG] Video state before GIF creation - readyState:', video.readyState, 'duration:', video.duration);
-      const gifBlob = await this.createGifFromVideo(video, options);
+      const gifBlob = await this.createGifFromVideo(video, mergedOptions);
       console.log('[DEBUG] GIF creation completed, blob size:', gifBlob.size);
       
       // Clean up the video element
@@ -144,10 +161,6 @@ export const gifGenerator = {
     }
   },
   
-  createCorsProxyUrl(url: string): string {
-    return url;
-  },
-  
   createGifFromVideo(
     video: HTMLVideoElement,
     options: GifGeneratorOptions
@@ -167,24 +180,80 @@ export const gifGenerator = {
           error: video.error,
         });
 
+        // ===== LOGGING START =====
+        console.log('[DEBUG][FRAME_CALC] Starting frame calculation process');
+        console.log('[DEBUG][FRAME_CALC] Options received in createGifFromVideo:', JSON.stringify(options));
+        // ===== LOGGING END =====
+
         // Extract dimensions from options or video
-        const width = options.width || video.videoWidth || 512;
-        const height = options.height || video.videoHeight || 512;
-        const maxFrames = options.numFrames || 125; // Default to 125 frames
-        const maxDuration = options.maxDuration || 5;
+        const width = options.width || video.videoWidth || 240;
+        const height = options.height || video.videoHeight || 320;
         
-        console.log(`[DEBUG] Creating GIF: ${width}x${height}, capturing ${maxFrames} frames over ${maxDuration}s`);
+        // ===== LOGGING START =====
+        console.log('[DEBUG][FRAME_CALC] Calculated dimensions - width:', width, 'height:', height);
+        // ===== LOGGING END =====
         
         // Determine actual video duration (capped at maxDuration)
+        const maxDuration = options.maxDuration || 3;
         const duration = Math.min(video.duration || 0, maxDuration);
+        
+        // ===== LOGGING START =====
+        console.log('[DEBUG][FRAME_CALC] Max duration from options:', maxDuration);
+        console.log('[DEBUG][FRAME_CALC] Actual video duration:', video.duration);
+        console.log('[DEBUG][FRAME_CALC] Calculated capped duration:', duration);
+        // ===== LOGGING END =====
+        
         if (duration <= 0) {
           reject(new Error(`Invalid video duration: ${duration}`));
           return;
         }
 
-        // Calculate exact frame timing
-        const frameInterval = duration / maxFrames; // Time between frames in seconds
-        console.log(`[DEBUG] Frame interval: ${(frameInterval * 1000).toFixed(2)}ms (${(1/frameInterval).toFixed(2)} fps)`);
+        // Get frame count from options, with fallback
+        const maxFrames = options.numFrames || 30;
+        const skipFactor = options.skipFactor || 1;
+        
+        // ===== LOGGING START =====
+        console.log('[DEBUG][FRAME_CALC] maxFrames from options:', maxFrames);
+        console.log('[DEBUG][FRAME_CALC] skipFactor from options:', skipFactor);
+        // ===== LOGGING END =====
+        
+        // Calculate frame interval
+        const frameInterval = duration / maxFrames;
+        
+        // ===== LOGGING START =====
+        console.log('[DEBUG][FRAME_CALC] Calculated frameInterval:', frameInterval, 'seconds');
+        // ===== LOGGING END =====
+        
+        // Calculate actual number of frames
+        const effectiveFrameCount = Math.ceil(maxFrames / skipFactor);
+        
+        // ===== LOGGING START =====
+        console.log('[DEBUG][FRAME_CALC] Effective frame count after skipping:', effectiveFrameCount);
+        console.log('[DEBUG][FRAME_CALC] Frame calculation summary:');
+        console.log('[DEBUG][FRAME_CALC] - Source video duration:', video.duration, 'seconds');
+        console.log('[DEBUG][FRAME_CALC] - Capped duration for GIF:', duration, 'seconds');
+        console.log('[DEBUG][FRAME_CALC] - Configured max frames:', maxFrames);
+        console.log('[DEBUG][FRAME_CALC] - Frame interval:', frameInterval, 'seconds');
+        console.log('[DEBUG][FRAME_CALC] - Skip factor:', skipFactor);
+        console.log('[DEBUG][FRAME_CALC] - Final frame count to capture:', effectiveFrameCount);
+        // ===== LOGGING END =====
+
+        // CHECK FOR HARDCODED VALUE
+        console.log('[DEBUG][FRAME_CALC] CRITICAL CHECK - Looking for any signs of hardcoded 590 frames:');
+        const sourceDivided = Math.ceil(video.duration / frameInterval);
+        console.log('[DEBUG][FRAME_CALC] - If we used entire video duration:', sourceDivided, 'frames');
+        
+        // Try to derive the 590 frames somehow
+        let possibleFrames = Math.ceil(video.duration * 60); // 60fps is a common frame rate
+        console.log('[DEBUG][FRAME_CALC] - If video is captured at 60fps:', possibleFrames, 'frames');
+        
+        possibleFrames = Math.ceil(video.duration * 30); // 30fps is another common frame rate
+        console.log('[DEBUG][FRAME_CALC] - If video is captured at 30fps:', possibleFrames, 'frames');
+        
+        // Try to look for hardcoded logic that might be using a constant
+        console.log('[DEBUG][FRAME_CALC] - IMPORTANT: Is there any value close to 590 above?');
+        
+        console.log(`[DEBUG] Creating GIF: ${width}x${height}, capturing ${maxFrames} frames over ${duration}s with skip factor ${skipFactor}`);
         
         // Create a canvas for frame capture
         const canvas = document.createElement('canvas');
@@ -199,14 +268,25 @@ export const gifGenerator = {
         // Initialize gif.js
         const gif = new GIF({
           workers: options.workers || 4,
-          quality: options.quality || 5,
+          quality: options.quality || 10,
           width: width,
           height: height,
           workerScript: '/gifjs/gif.worker.js',
           repeat: options.repeat || 0,
           debug: true,
-          dither: options.dither || true
+          dither: options.dither !== false
         });
+        
+        // ===== LOGGING START =====
+        console.log('[DEBUG][FRAME_CALC] GIF.js configuration:', {
+          workers: options.workers || 4,
+          quality: options.quality || 10,
+          width,
+          height,
+          repeat: options.repeat || 0,
+          dither: options.dither !== false
+        });
+        // ===== LOGGING END =====
         
         gif.on('finished', (blob: Blob) => {
           console.log('[DEBUG] GIF creation finished, size:', blob.size);
@@ -215,67 +295,111 @@ export const gifGenerator = {
         
         gif.on('progress', (progress: number) => {
           console.log('[DEBUG] GIF encoding progress:', Math.round(progress * 100), '%');
-          const progressEvent = new CustomEvent('gif-encoding-progress', { 
+          window.dispatchEvent(new CustomEvent('gif-encoding-progress', { 
             detail: { progress }
-          });
-          window.dispatchEvent(progressEvent);
+          }));
         });
 
-        // Frame capture using precise timing
-        const frames: ImageData[] = [];
-        let frameCount = 0;
-        let startTime: number;
+        // Create precise timestamps to capture frames at
+        const timestamps: number[] = [];
+        for (let i = 0; i < maxFrames; i += skipFactor) {
+          timestamps.push(i * frameInterval);
+        }
+        
+        // ===== LOGGING START =====
+        console.log('[DEBUG][FRAME_CALC] Generated timestamps for frame capture:', 
+          timestamps.length <= 10 ? timestamps : 
+          `${timestamps.slice(0, 5)} ... ${timestamps.slice(-5)} (total: ${timestamps.length})`);
+        // ===== LOGGING END =====
 
-        const captureFrame = () => {
-          const currentTime = (performance.now() - startTime) / 1000;
-          
-          if (currentTime <= maxDuration && frameCount < maxFrames) {
-            // Set video to exact time we want to capture
-            video.currentTime = currentTime;
+        // Helper function to wait for video to finish seeking
+        const seekVideoTime = (videoEl: HTMLVideoElement, time: number): Promise<void> => {
+          return new Promise<void>((resolveSeek, rejectSeek) => {
+            const timeoutId = setTimeout(() => {
+              videoEl.removeEventListener('seeked', onSeeked);
+              rejectSeek(new Error(`Seek timeout at ${time}s`));
+            }, 1000); // 1 second timeout for seeking
+
+            const onSeeked = () => {
+              clearTimeout(timeoutId);
+              videoEl.removeEventListener('seeked', onSeeked);
+              resolveSeek();
+            };
             
-            // Draw and capture frame
-            ctx.drawImage(video, 0, 0, width, height);
-            const imageData = ctx.getImageData(0, 0, width, height);
-            frames.push(imageData);
-            frameCount++;
-
-            // Log progress
-            console.log(`[DEBUG] Captured frame ${frameCount}/${maxFrames} at ${currentTime.toFixed(3)}s`);
-            
-            // Emit progress event
-            const captureProgress = frameCount / maxFrames;
-            const captureEvent = new CustomEvent('gif-frame-capture-progress', { 
-              detail: { progress: captureProgress, frameCount, totalFrames: maxFrames }
-            });
-            window.dispatchEvent(captureEvent);
-
-            // Schedule next frame capture
-            setTimeout(captureFrame, frameInterval * 1000);
-          } else {
-            // We've captured all frames, process them
-            console.log(`[DEBUG] Captured all ${frameCount} frames, processing...`);
-            
-            // Add all frames to the GIF
-            frames.forEach((frameData, index) => {
-              ctx.putImageData(frameData, 0, 0);
-              gif.addFrame(canvas, {
-                copy: true,
-                delay: options.delay || 0,
-                dispose: 2
-              });
-            });
-
-            // Render the final GIF
-            console.log('[DEBUG] Rendering final GIF...');
-            gif.render();
-          }
+            videoEl.addEventListener('seeked', onSeeked);
+            videoEl.currentTime = Math.min(time, duration);
+          });
         };
 
-        // Start capture process
-        video.muted = true;
-        startTime = performance.now();
-        captureFrame();
+        let totalFramesRecorded = 0;
 
+        // Capture frames - using async IIFE
+        (async () => {
+          try {
+            let capturedFrames = 0;
+            
+            console.log('[DEBUG][FRAME_CALC] Starting frame capture process for', timestamps.length, 'frames');
+            
+            for (let i = 0; i < timestamps.length; i++) {
+              const timestamp = timestamps[i];
+              
+              try {
+                // ===== LOGGING START =====
+                console.log(`[DEBUG][FRAME_CALC] Seeking to timestamp ${i+1}/${timestamps.length}: ${timestamp.toFixed(2)}s`);
+                // ===== LOGGING END =====
+                
+                // Seek to the precise time
+                await seekVideoTime(video, timestamp);
+                
+                // Draw the frame
+                ctx.clearRect(0, 0, width, height);
+                ctx.drawImage(video, 0, 0, width, height);
+                
+                // Add frame to GIF
+                gif.addFrame(canvas, {
+                  copy: true,
+                  delay: options.delay || 100,
+                  dispose: 2
+                });
+                
+                capturedFrames++;
+                totalFramesRecorded = capturedFrames;
+                
+                console.log(`[DEBUG] Captured frame ${capturedFrames}/${timestamps.length} at ${timestamp.toFixed(2)}s`);
+                
+                window.dispatchEvent(new CustomEvent('gif-frame-capture-progress', { 
+                  detail: { 
+                    progress: capturedFrames / timestamps.length, 
+                    frameCount: capturedFrames, 
+                    totalFrames: timestamps.length 
+                  } 
+                }));
+              } catch (seekError) {
+                console.error(`[DEBUG] Error seeking to ${timestamp}s:`, seekError);
+                // Continue with next frame instead of failing completely
+                continue;
+              }
+            }
+            
+            // ===== LOGGING START =====
+            console.log('[DEBUG][FRAME_CALC] Frame capture complete');
+            console.log('[DEBUG][FRAME_CALC] - Frames requested in options:', maxFrames);
+            console.log('[DEBUG][FRAME_CALC] - Timestamps generated:', timestamps.length);
+            console.log('[DEBUG][FRAME_CALC] - Frames actually captured:', capturedFrames);
+            // ===== LOGGING END =====
+            
+            console.log(`[DEBUG] Captured ${capturedFrames} frames. Rendering final GIF...`);
+            gif.render();
+          } catch (error) {
+            console.error('[DEBUG] Error during frame capture:', error);
+            
+            // ===== LOGGING START =====
+            console.error('[DEBUG][FRAME_CALC] Error occurred during frame capture. Total frames recorded:', totalFramesRecorded);
+            // ===== LOGGING END =====
+            
+            reject(error);
+          }
+        })();
       } catch (error) {
         console.error('[DEBUG] Error in createGifFromVideo:', error);
         reject(error);

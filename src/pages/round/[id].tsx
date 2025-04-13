@@ -82,7 +82,16 @@ const ChallengeDetailView = () => {
       if (!id) return;
 
       try {
-        const collectionData = await workoutService.getCollectionById(id as string);
+        // First try to fetch the collection directly with the ID
+        let collectionData = await workoutService.getCollectionById(id as string);
+
+        // If that fails, try to fetch the user challenge and then get the collection
+        if (!collectionData) {
+          const userChallenge = await workoutService.fetchUserChallengeById(id as string);
+          if (userChallenge && userChallenge.challengeId) {
+            collectionData = await workoutService.getCollectionById(userChallenge.challengeId);
+          }
+        }
 
         console.log("this is the collection data:", {...collectionData});
         if (!collectionData || !collectionData.challenge) {

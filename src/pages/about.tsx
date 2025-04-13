@@ -6,11 +6,16 @@ import Footer from '../components/Footer/Footer';
 import FAQ from '../components/FAQ';
 import { useScrollFade } from '../hooks/useScrollFade';
 
-
-
 const AboutPage: NextPage = () => {
   const [currentSection, setCurrentSection] = useState<Section>('home');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  const scrollToElement = (id: string) => {
+    const element = document.getElementById(id);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
 
   const faqData = [
     {
@@ -62,44 +67,107 @@ const AboutPage: NextPage = () => {
       {/* What is Pulse Section */}
       <section ref={useScrollFade()} className="min-h-screen bg-zinc-900 flex flex-col items-center justify-center text-center px-8 py-20">
         <div className="max-w-4xl mx-auto">
-          <h2 className="text-[#E0FE10] uppercase tracking-wide font-semibold mb-4">
+          <h2 className="text-[#E0FE10] uppercase tracking-wide font-semibold mb-4 relative inline-block hover:text-white transition-colors duration-300 group cursor-pointer">
             What is Pulse
+            <span className="absolute -bottom-1 left-0 w-full h-0.5 bg-[#E0FE10] transition-all duration-300 transform scale-x-0 group-hover:scale-x-100 origin-left"></span>
           </h2>
           <h1 className="text-white text-5xl sm:text-7xl font-bold mb-8">
-            The Fitness Collective
+            Pulse: Community Fitness
           </h1>
           <p className="text-zinc-400 text-xl leading-relaxed mb-12">
-            Pulse is more than just another fitness app - it's a collective movement 
-            where every member contributes to and benefits from a shared fitness journey. 
-            We're transforming solo workouts into shared experiences, turning individual 
-            progress into collective inspiration, and building a community where everyone 
-            has a voice in fitness.
+            A platform where fitness enthusiasts create, share, and grow together. 
+            Pulse transforms solo workouts into shared experiences and individual progress 
+            into collective inspiration.
           </p>
           <div className="flex flex-wrap justify-center gap-6">
-            <div className="bg-zinc-800/50 rounded-xl p-6 max-w-[280px]">
+            <div className="bg-zinc-800/50 hover:bg-zinc-800 transition-all duration-300 hover:shadow-lg hover:shadow-[#E0FE10]/10 rounded-xl p-6 max-w-[280px] cursor-pointer transform hover:-translate-y-1">
               <h3 className="text-white text-xl font-semibold mb-2">Create</h3>
-              <p className="text-zinc-400">Share your unique exercises and workout routines with the community</p>
+              <p className="text-zinc-400">Share exercises & routines</p>
             </div>
-            <div className="bg-zinc-800/50 rounded-xl p-6 max-w-[280px]">
+            <div className="bg-zinc-800/50 hover:bg-zinc-800 transition-all duration-300 hover:shadow-lg hover:shadow-[#E0FE10]/10 rounded-xl p-6 max-w-[280px] cursor-pointer transform hover:-translate-y-1">
               <h3 className="text-white text-xl font-semibold mb-2">Connect</h3>
-              <p className="text-zinc-400">Join a vibrant community of fitness enthusiasts and motivate each other</p>
+              <p className="text-zinc-400">Join challenges & motivate others</p>
             </div>
-            <div className="bg-zinc-800/50 rounded-xl p-6 max-w-[280px]">
+            <div className="bg-zinc-800/50 hover:bg-zinc-800 transition-all duration-300 hover:shadow-lg hover:shadow-[#E0FE10]/10 rounded-xl p-6 max-w-[280px] cursor-pointer transform hover:-translate-y-1">
               <h3 className="text-white text-xl font-semibold mb-2">Grow</h3>
-              <p className="text-zinc-400">Track your progress and evolve with a community that celebrates every win</p>
+              <p className="text-zinc-400">Track progress & celebrate wins</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Hierarchy Flowchart Section */}
+      <section ref={useScrollFade()} className="py-20 bg-zinc-950">
+        <div className="max-w-5xl mx-auto px-8">
+          <h2 className="text-center text-white text-3xl font-bold mb-16">The Pulse Ecosystem</h2>
+          
+          <div className="flex flex-col md:flex-row justify-between items-center gap-10 relative">
+            {/* Connecting lines */}
+            <div className="hidden md:block absolute inset-0 z-0">
+              <div className="absolute top-1/2 left-1/4 right-3/4 h-1 bg-gradient-to-r from-[#E0FE10] to-[#E0FE10]/70 transform -translate-y-1/2"></div>
+              <div className="absolute top-1/2 left-1/2 right-1/4 h-1 bg-gradient-to-r from-[#E0FE10]/70 to-[#E0FE10]/40 transform -translate-y-1/2"></div>
+            </div>
+            
+            {/* Mobile connecting lines */}
+            <div className="md:hidden absolute left-1/2 top-[22%] bottom-[78%] w-1 bg-gradient-to-b from-[#E0FE10] to-[#E0FE10]/70 transform -translate-x-1/2"></div>
+            <div className="md:hidden absolute left-1/2 top-[55%] bottom-[45%] w-1 bg-gradient-to-b from-[#E0FE10]/70 to-[#E0FE10]/40 transform -translate-x-1/2"></div>
+            
+            {/* Move Card */}
+            <div 
+              onClick={() => scrollToElement('move-section')}
+              className="bg-zinc-900/80 rounded-xl p-6 w-full md:w-[30%] relative z-10 border border-[#E0FE10] hover:shadow-lg hover:shadow-[#E0FE10]/20 transition-all duration-300 group cursor-pointer"
+            >
+              <div className="absolute -top-5 -left-5 w-10 h-10 rounded-full bg-[#E0FE10] flex items-center justify-center font-bold text-black">1</div>
+              <h3 className="text-[#E0FE10] text-2xl font-bold mb-3">Move</h3>
+              <p className="text-zinc-400">The foundation: short video clips of exercises that form the building blocks of your fitness journey.</p>
+              <div className="absolute right-4 bottom-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                <svg className="w-6 h-6 text-[#E0FE10]" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                </svg>
+              </div>
+            </div>
+            
+            {/* Stack Card */}
+            <div 
+              onClick={() => scrollToElement('stack-section')}
+              className="bg-zinc-900/80 rounded-xl p-6 w-full md:w-[30%] relative z-10 border border-[#E0FE10]/70 hover:shadow-lg hover:shadow-[#E0FE10]/20 transition-all duration-300 group cursor-pointer"
+            >
+              <div className="absolute -top-5 -left-5 w-10 h-10 rounded-full bg-[#E0FE10]/70 flex items-center justify-center font-bold text-black">2</div>
+              <h3 className="text-[#E0FE10]/70 text-2xl font-bold mb-3">Stack</h3>
+              <p className="text-zinc-400">Combine Moves to create complete workout routines that you can share or follow.</p>
+              <div className="absolute right-4 bottom-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                <svg className="w-6 h-6 text-[#E0FE10]/70" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                </svg>
+              </div>
+            </div>
+            
+            {/* Round Card */}
+            <div 
+              onClick={() => scrollToElement('round-section')}
+              className="bg-zinc-900/80 rounded-xl p-6 w-full md:w-[30%] relative z-10 border border-[#E0FE10]/40 hover:shadow-lg hover:shadow-[#E0FE10]/20 transition-all duration-300 group cursor-pointer"
+            >
+              <div className="absolute -top-5 -left-5 w-10 h-10 rounded-full bg-[#E0FE10]/40 flex items-center justify-center font-bold text-black">3</div>
+              <h3 className="text-[#E0FE10]/40 text-2xl font-bold mb-3">Round</h3>
+              <p className="text-zinc-400">Join community fitness challenges where members work out, compete, and support each other.</p>
+              <div className="absolute right-4 bottom-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                <svg className="w-6 h-6 text-[#E0FE10]/40" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                </svg>
+              </div>
             </div>
           </div>
         </div>
       </section>
 
       {/* Moves Section */}
-      <section ref={useScrollFade()} className="min-h-screen flex flex-col lg:flex-row items-center justify-center gap-20 p-8">
-        <div className="relative w-[300px] sm:w-[380px]">
-          <div className="relative aspect-[9/19.5] rounded-[3rem] p-[2px]">
-            <div className="absolute inset-0 rounded-[3rem] border-2 border-[#E0FE10]" />
+      <section id="move-section" ref={useScrollFade()} className="min-h-screen flex flex-col lg:flex-row items-center justify-center gap-20 p-8">
+        <div className="relative w-[300px] sm:w-[380px] group">
+          <div className="relative aspect-[9/19.5] rounded-[3rem] p-[2px] transition-transform duration-500 transform group-hover:scale-105">
+            <div className="absolute inset-0 rounded-[3rem] border-2 border-[#E0FE10] group-hover:border-4 transition-all duration-300" />
             <div className="relative h-full w-full rounded-[3rem] overflow-hidden bg-zinc-900">
               <video
-                className="w-full h-full object-cover"
+                className="w-full h-full object-cover group-hover:opacity-90 transition-opacity duration-300"
                 autoPlay
                 loop
                 muted
@@ -109,13 +177,15 @@ const AboutPage: NextPage = () => {
               />
             </div>
           </div>
+          <div className="absolute -z-10 inset-0 rounded-[3rem] bg-[#E0FE10]/20 blur-xl opacity-0 group-hover:opacity-40 transition-opacity duration-500"></div>
         </div>
         <div className="max-w-xl">
-          <h2 className="text-[#E0FE10] uppercase tracking-wide font-semibold mb-4">
+          <h2 className="text-[#E0FE10] uppercase tracking-wide font-semibold mb-4 relative inline-block hover:text-white transition-colors duration-300 group cursor-pointer">
             The Foundation
+            <span className="absolute -bottom-1 left-0 w-full h-0.5 bg-[#E0FE10] transition-all duration-300 transform scale-x-0 group-hover:scale-x-100 origin-left"></span>
           </h2>
           <h1 className="text-white text-5xl sm:text-6xl font-bold mb-6">
-            Everything starts with a Move
+            Everything starts with a <span className="text-[#E0FE10]">Move</span>
           </h1>
           <p className="text-zinc-400 text-lg leading-relaxed">
             A Move is the fundamental building block of Pulse. It's a 5-30 second video clip of a lift, stretch, exercise, or movement that is used to build a workout. Build your library of movements from basic exercises to complex variations, each Move you create becomes part of yours or maybe someone else fitness journey.
@@ -124,24 +194,25 @@ const AboutPage: NextPage = () => {
       </section>
 
       {/* Stacks Section */}
-      <section ref={useScrollFade()} className="min-h-screen bg-black flex flex-col lg:flex-row items-center justify-center gap-20 p-8">
+      <section id="stack-section" ref={useScrollFade()} className="min-h-screen bg-black flex flex-col lg:flex-row items-center justify-center gap-20 p-8">
         <div className="max-w-xl lg:order-1">
-          <h2 className="text-[#E0FE10] uppercase tracking-wide font-semibold mb-4">
+          <h2 className="text-[#E0FE10] uppercase tracking-wide font-semibold mb-4 relative inline-block hover:text-white transition-colors duration-300 group cursor-pointer">
             Build The Blocks
+            <span className="absolute -bottom-1 left-0 w-full h-0.5 bg-[#E0FE10] transition-all duration-300 transform scale-x-0 group-hover:scale-x-100 origin-left"></span>
           </h2>
           <h1 className="text-white text-4xl sm:text-5xl font-bold mb-6">
-            Stack your Moves into workouts
+            <span className="text-[#E0FE10]">Stack</span> your Moves into workouts
           </h1>
           <p className="text-zinc-400 text-lg leading-relaxed">
             Combine your Moves into powerful workouts called Stacks. Create personalized routines that target your goals, share them with the community, or discover Stacks created by others. Each Stack is a curated collection of Moves designed to challenge and inspire.
           </p>
         </div>
-        <div className="relative w-[300px] sm:w-[380px] lg:order-2">
-          <div className="relative aspect-[9/19.5] rounded-[3rem] p-[2px]">
-            <div className="absolute inset-0 rounded-[3rem] border-2 border-[#E0FE10]" />
+        <div className="relative w-[300px] sm:w-[380px] lg:order-2 group">
+          <div className="relative aspect-[9/19.5] rounded-[3rem] p-[2px] transition-transform duration-500 transform group-hover:scale-105">
+            <div className="absolute inset-0 rounded-[3rem] border-2 border-[#E0FE10] group-hover:border-4 transition-all duration-300" />
             <div className="relative h-full w-full rounded-[3rem] overflow-hidden bg-zinc-900">
               <video
-                className="w-full h-full object-cover"
+                className="w-full h-full object-cover group-hover:opacity-90 transition-opacity duration-300"
                 autoPlay
                 loop
                 muted
@@ -151,17 +222,18 @@ const AboutPage: NextPage = () => {
               />
             </div>
           </div>
+          <div className="absolute -z-10 inset-0 rounded-[3rem] bg-[#E0FE10]/20 blur-xl opacity-0 group-hover:opacity-40 transition-opacity duration-500"></div>
         </div>
       </section>
 
       {/* Community Section */}
-      <section ref={useScrollFade()} className="min-h-screen bg-zinc-900 flex flex-col lg:flex-row items-center justify-center gap-20 p-8">
-        <div className="relative w-[300px] sm:w-[380px]">
-          <div className="relative aspect-[9/19.5] rounded-[3rem] p-[2px]">
-            <div className="absolute inset-0 rounded-[3rem] border-2 border-[#E0FE10]" />
+      <section id="round-section" ref={useScrollFade()} className="min-h-screen bg-zinc-900 flex flex-col lg:flex-row items-center justify-center gap-20 p-8">
+        <div className="relative w-[300px] sm:w-[380px] group">
+          <div className="relative aspect-[9/19.5] rounded-[3rem] p-[2px] transition-transform duration-500 transform group-hover:scale-105">
+            <div className="absolute inset-0 rounded-[3rem] border-2 border-[#E0FE10] group-hover:border-4 transition-all duration-300" />
             <div className="relative h-full w-full rounded-[3rem] overflow-hidden bg-zinc-900">
               <video
-                className="w-full h-full object-cover"
+                className="w-full h-full object-cover group-hover:opacity-90 transition-opacity duration-300"
                 autoPlay
                 loop
                 muted
@@ -171,16 +243,18 @@ const AboutPage: NextPage = () => {
               />
             </div>
           </div>
+          <div className="absolute -z-10 inset-0 rounded-[3rem] bg-[#E0FE10]/20 blur-xl opacity-0 group-hover:opacity-40 transition-opacity duration-500"></div>
         </div>
         <div className="max-w-xl">
-          <h2 className="text-[#E0FE10] uppercase tracking-wide font-semibold mb-4">
+          <h2 className="text-[#E0FE10] uppercase tracking-wide font-semibold mb-4 relative inline-block hover:text-white transition-colors duration-300 group cursor-pointer">
             The Community
+            <span className="absolute -bottom-1 left-0 w-full h-0.5 bg-[#E0FE10] transition-all duration-300 transform scale-x-0 group-hover:scale-x-100 origin-left"></span>
           </h2>
           <h1 className="text-white text-5xl sm:text-6xl font-bold mb-6">
-            Share, discover, and grow together
+            Join a <span className="text-[#E0FE10]">Round</span> and compete together
           </h1>
           <p className="text-zinc-400 text-lg leading-relaxed">
-            Join a vibrant community of fitness enthusiasts. Share your Moves and Stacks, discover new workouts, and connect with others on the same journey. In Pulse, every member contributes to a growing library of fitness content.
+            Participate in community fitness challenges called Rounds where multiple people work out together. Chat, support, and check in with fellow participants as you compete for points. Earn rewards by completing workouts and engaging with your fellow Rounders in these time-based challenges that build community and accountability.
           </p>
         </div>
       </section>
@@ -189,24 +263,36 @@ const AboutPage: NextPage = () => {
       <section ref={useScrollFade()} className="min-h-screen bg-black py-20">
         <div className="max-w-7xl mx-auto px-8">
           <div className="text-center mb-16">
-            <h2 className="text-[#E0FE10] uppercase tracking-wide font-semibold mb-4">Why Choose Pulse</h2>
+            <h2 className="text-[#E0FE10] uppercase tracking-wide font-semibold mb-4 relative inline-block hover:text-white transition-colors duration-300 group cursor-pointer">
+              Why Choose Pulse
+              <span className="absolute -bottom-1 left-0 w-full h-0.5 bg-[#E0FE10] transition-all duration-300 transform scale-x-0 group-hover:scale-x-100 origin-left"></span>
+            </h2>
             <h3 className="text-white text-4xl font-bold">
-              A User-Driven Fitness Community: <br />Collective Content, Support, and Growth
+              Not Just Another Fitness App: <br /><span className="text-[#E0FE10]">With Pulse, You Shape The Experience</span>
             </h3>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-20">
-            <div>
-              <h4 className="text-white text-xl font-semibold mb-4">Growth over perfection pledge</h4>
-              <p className="text-zinc-400">We celebrate milestones and acknowledge that perfection is when we continue to push ourselves beyond what feels comfortable.</p>
+            <div className="hover:bg-zinc-900/50 p-6 rounded-xl transition-all duration-300 hover:shadow-lg hover:shadow-[#E0FE10]/10 cursor-pointer">
+              <h4 className="text-white text-xl font-semibold mb-4 group relative inline-block">
+                User-Generated Content
+                <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-[#E0FE10] transition-all duration-300 group-hover:w-full"></span>
+              </h4>
+              <p className="text-zinc-400">Unlike platforms with fixed workout libraries, Pulse lets you create and share your own exercises and routines. For trainers, this means a powerful tool to scale your influence and showcase your expertise to a wider audience.</p>
             </div>
-            <div>
-              <h4 className="text-white text-xl font-semibold mb-4">We show up</h4>
-              <p className="text-zinc-400">60 percent of the battle is simply just showing up at the gym with a plan. If we can get in the room, we can achieve our best, so we pledge to workout, share, and encourage others along the way.</p>
+            <div className="hover:bg-zinc-900/50 p-6 rounded-xl transition-all duration-300 hover:shadow-lg hover:shadow-[#E0FE10]/10 cursor-pointer">
+              <h4 className="text-white text-xl font-semibold mb-4 group relative inline-block">
+                Community Challenges
+                <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-[#E0FE10] transition-all duration-300 group-hover:w-full"></span>
+              </h4>
+              <p className="text-zinc-400">Our Rounds feature turns fitness into a social experience. Trainers can create branded competitions to keep clients engaged, while fitness enthusiasts can find accountability partners that make showing up feel effortless.</p>
             </div>
-            <div>
-              <h4 className="text-white text-xl font-semibold mb-4">Progress over pressure</h4>
-              <p className="text-zinc-400">We track what matters for lasting change – strength, endurance, mobility, not just what the scale says.</p>
+            <div className="hover:bg-zinc-900/50 p-6 rounded-xl transition-all duration-300 hover:shadow-lg hover:shadow-[#E0FE10]/10 cursor-pointer">
+              <h4 className="text-white text-xl font-semibold mb-4 group relative inline-block">
+                Data-Driven Growth
+                <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-[#E0FE10] transition-all duration-300 group-hover:w-full"></span>
+              </h4>
+              <p className="text-zinc-400">We track meaningful metrics with our Work Score system that matters for lasting change. Get actionable insights that both trainers and clients can use to optimize workouts and celebrate real progress.</p>
             </div>
           </div>
         </div>

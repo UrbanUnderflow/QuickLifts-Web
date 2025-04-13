@@ -1690,6 +1690,25 @@ async deleteWorkoutSession(workoutId: string | null): Promise<void> {
     // Return the created data for logging/debugging purposes
     return userChallengeData;
   }
+
+  async fetchUserChallengeById(id: string): Promise<UserChallenge | null> {
+    try {
+      const docRef = doc(db, 'user-challenge', id);
+      const docSnap = await getDoc(docRef);
+      
+      if (!docSnap.exists()) {
+        return null;
+      }
+
+      return new UserChallenge({
+        id: docSnap.id,
+        ...docSnap.data()
+      });
+    } catch (error) {
+      console.error('Error fetching user challenge by ID:', error);
+      return null;
+    }
+  }
 }
 
 export const workoutService = new WorkoutService();

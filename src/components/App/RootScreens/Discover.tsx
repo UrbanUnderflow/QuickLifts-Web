@@ -333,7 +333,10 @@ const Discover = () => {
   };
 
   const selectRound = (round: UserChallenge | Challenge) => {
-    router.push(`/round/${round.id}`);
+    // If it's a UserChallenge, use the challenge ID from the challenge object
+    // If it's a Challenge, use its own ID
+    const challengeId = 'challengeId' in round ? round.challengeId : round.id;
+    router.push(`/round/${challengeId}`);
   };
 
   const renderWelcomeSection = () => {

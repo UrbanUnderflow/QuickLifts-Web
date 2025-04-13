@@ -28,6 +28,11 @@ export const SimpleVideoTrimmer: React.FC<VideoTrimmerProps> = ({
   const [isProcessing, setIsProcessing] = useState(false);
   const objectUrlRef = useRef<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const isRecordingRef = useRef(false);
+  const animationFrameRef = useRef<number | null>(null);
+  const hasReachedEndRef = useRef(false);
   
   // Format time as MM:SS
   const formatTime = (seconds: number) => {
@@ -36,17 +41,45 @@ export const SimpleVideoTrimmer: React.FC<VideoTrimmerProps> = ({
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
+  // Clean up all recording-related resources
+  const stopTrimming = useCallback(() => {
+    console.log('[VideoTrimmer] Stopping trim process completely');
+    
+    // Stop the video
+    if (videoRef.current) {
+      videoRef.current.pause();
+      // Remove the onseeked handler to prevent re-triggering
+      videoRef.current.onseeked = null;
+    }
+    
+    // Clear animation frame
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+    
+    // Mark recording as stopped
+    isRecordingRef.current = false;
+    hasReachedEndRef.current = true;
+    
+    // Stop MediaRecorder if running
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop();
+    }
+  }, []);
+
   // Handle video time updates to loop the preview between start and end times
+  // Only used for preview, not during trimming
   const handleTimeUpdate = useCallback(() => {
     const video = videoRef.current;
-    if (!video) return;
+    if (!video || isProcessing || isRecordingRef.current) return;
 
     if (video.currentTime >= endTime) {
       video.pause();
       video.currentTime = startTime;
       setIsPlaying(false);
     }
-  }, [endTime, startTime]);
+  }, [endTime, startTime, isProcessing]);
 
   // Load the video and set up event listeners
   useEffect(() => {
@@ -112,21 +145,29 @@ export const SimpleVideoTrimmer: React.FC<VideoTrimmerProps> = ({
         URL.revokeObjectURL(objectUrlRef.current);
         objectUrlRef.current = null;
       }
+      
+      // Ensure all recording resources are cleaned up
+      stopTrimming();
     }
-  }, [isOpen]);
+  }, [isOpen, stopTrimming]);
 
   // Set up time update handler to loop the preview between start and end times
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
 
-    video.addEventListener('timeupdate', handleTimeUpdate);
-    return () => video.removeEventListener('timeupdate', handleTimeUpdate);
-  }, [handleTimeUpdate]);
+    // Only add the loop handler when we're not processing/trimming
+    if (!isProcessing) {
+      video.addEventListener('timeupdate', handleTimeUpdate);
+      return () => video.removeEventListener('timeupdate', handleTimeUpdate);
+    }
+    
+    return undefined;
+  }, [handleTimeUpdate, isProcessing]);
 
   // Handler for the play button
   const handlePreviewPlay = () => {
-    if (!videoRef.current) return;
+    if (!videoRef.current || isProcessing) return;
     
     videoRef.current.currentTime = startTime;
     videoRef.current.play()
@@ -154,6 +195,14 @@ export const SimpleVideoTrimmer: React.FC<VideoTrimmerProps> = ({
       return;
     }
 
+    // Ensure any existing recording is stopped
+    stopTrimming();
+    
+    // Reset flags for new recording
+    isRecordingRef.current = false;
+    hasReachedEndRef.current = false;
+    chunksRef.current = [];
+
     console.log('[VideoTrimmer] Starting trim process', {
       startTime,
       endTime,
@@ -163,6 +212,7 @@ export const SimpleVideoTrimmer: React.FC<VideoTrimmerProps> = ({
     });
 
     setIsProcessing(true);
+    setError(null);
 
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
@@ -208,94 +258,114 @@ export const SimpleVideoTrimmer: React.FC<VideoTrimmerProps> = ({
     console.log('[DEBUG] Stream created, using mime type:', mimeType);
 
     const mediaRecorder = new MediaRecorder(stream, { mimeType });
-    const chunks: Blob[] = [];
+    mediaRecorderRef.current = mediaRecorder;
 
     mediaRecorder.ondataavailable = (e) => {
       if (e.data.size > 0) {
-        chunks.push(e.data);
+        chunksRef.current.push(e.data);
         console.log('[VideoTrimmer] Received data chunk:', {
           chunkSize: e.data.size,
-          totalChunks: chunks.length
+          totalChunks: chunksRef.current.length
         });
       }
     };
 
     mediaRecorder.onstop = async () => {
       console.log('[VideoTrimmer] MediaRecorder stopped, processing chunks', {
-        numberOfChunks: chunks.length
+        numberOfChunks: chunksRef.current.length
       });
 
-      // Combine chunks into a single file
-      const blob = new Blob(chunks, { type: mimeType });
-      const trimmedFile = new File([blob], 'trimmedFile.webm', { type: mimeType });
+      // Process chunks if we have any, regardless of processing state
+      if (chunksRef.current.length > 0) {
+        try {
+          // Combine chunks into a single file
+          const blob = new Blob(chunksRef.current, { type: mimeType });
+          const trimmedFile = new File([blob], 'trimmedFile.webm', { type: mimeType });
 
-      console.log('[VideoTrimmer] Trim complete', {
-        originalSize: file.size,
-        trimmedSize: trimmedFile.size,
-        compressionRatio: (trimmedFile.size / file.size * 100).toFixed(2) + '%'
-      });
+          console.log('[VideoTrimmer] Trim complete', {
+            originalSize: file.size,
+            trimmedSize: trimmedFile.size,
+            compressionRatio: (trimmedFile.size / file.size * 100).toFixed(2) + '%'
+          });
 
-      // Add your start/end metadata
-      Object.defineProperties(trimmedFile, {
-        trimStart: { value: startTime, enumerable: true },
-        trimEnd: { value: endTime, enumerable: true },
-        duration: { value: endTime - startTime, enumerable: true }
-      });
+          // Add your start/end metadata
+          Object.defineProperties(trimmedFile, {
+            trimStart: { value: startTime, enumerable: true },
+            trimEnd: { value: endTime, enumerable: true },
+            duration: { value: endTime - startTime, enumerable: true }
+          });
 
-      // Reset video playback
-      if (videoRef.current) {
-        console.log('[VideoTrimmer] Resetting video player state');
-        // Remove the existing timeupdate handler first
-        videoRef.current.removeEventListener('timeupdate', handleTimeUpdate);
-        
-        // Reset video to original file for preview
-        if (objectUrlRef.current) {
-          videoRef.current.src = objectUrlRef.current;
-          videoRef.current.currentTime = startTime;
+          // Call onTrimComplete before cleaning up
+          onTrimComplete(trimmedFile);
+          
+          // Clean up after successful processing
+          setIsProcessing(false);
+          stopTrimming();
+          onClose();
+        } catch (err) {
+          console.error('[VideoTrimmer] Error creating final file:', err);
+          setError('Failed to create trimmed video file.');
+          setIsProcessing(false);
+          stopTrimming();
         }
+      } else {
+        console.warn('[VideoTrimmer] No chunks to process');
+        setIsProcessing(false);
+        stopTrimming();
       }
-
-      setIsProcessing(false);
-      console.log('[VideoTrimmer] Trim process completed successfully');
-      onTrimComplete(trimmedFile);
-      onClose();
     };
 
     mediaRecorder.onerror = (event) => {
       console.error('[VideoTrimmer] MediaRecorder error:', event);
       setError('An error occurred while processing the video');
       setIsProcessing(false);
+      stopTrimming();
     };
 
     // Start drawing frames to the canvas
     console.log('[VideoTrimmer] Starting MediaRecorder');
     
+    // Remove any existing timeupdate handler to avoid interfering with the recording
+    videoRef.current.removeEventListener('timeupdate', handleTimeUpdate);
+    
     // Seek to startTime
     videoRef.current.currentTime = startTime;
     
     // Once we've successfully sought to startTime, begin playback
-    videoRef.current!.onseeked = () => {
+    const seekHandler = () => {
+      // Ensure we're not already recording and haven't finished
+      if (isRecordingRef.current || hasReachedEndRef.current) {
+        console.warn('[VideoTrimmer] Recording already in progress or completed, skipping');
+        return;
+      }
+
       console.log('[VideoTrimmer] Video seeked to start time, beginning playback');
+      
+      // Remove the seek handler immediately to prevent it from being called again
+      videoRef.current!.onseeked = null;
+      
       videoRef.current!.play().then(() => {
+        // Double check recording state before starting
+        if (isRecordingRef.current || hasReachedEndRef.current) {
+          console.warn('[VideoTrimmer] Recording already in progress or completed, skipping');
+          return;
+        }
+
+        isRecordingRef.current = true;
         // Start MediaRecorder after video playback begins
         mediaRecorder.start(100);
         const startTS = performance.now();
         let frameCount = 0;
+
         function drawFrame() {
-          if (videoRef.current!.currentTime < endTime) {
-            frameCount++;
-            if (frameCount % 30 === 0) { // Log every 30 frames
-              console.log('[VideoTrimmer] Processing frame', {
-                currentTime: videoRef.current!.currentTime.toFixed(2),
-                progress: ((videoRef.current!.currentTime - startTime) / (endTime - startTime) * 100).toFixed(1) + '%',
-                frameCount
-              });
-            }
-            
-            ctx!.clearRect(0, 0, canvas.width, canvas.height);
-            ctx!.drawImage(videoRef.current!, 0, 0, canvas.width, canvas.height);
-            requestAnimationFrame(drawFrame);
-          } else {
+          // Exit early if any required references are missing or recording has been stopped
+          if (!videoRef.current || !mediaRecorderRef.current || !isRecordingRef.current || hasReachedEndRef.current) {
+            return;
+          }
+
+          const currentTime = videoRef.current.currentTime;
+          
+          if (currentTime >= endTime) {
             const endTS = performance.now();
             console.log('[VideoTrimmer] Frame processing complete', {
               totalFrames: frameCount,
@@ -303,16 +373,58 @@ export const SimpleVideoTrimmer: React.FC<VideoTrimmerProps> = ({
               fps: (frameCount / ((endTS - startTS) / 1000)).toFixed(1)
             });
             
-            videoRef.current?.pause();
-            mediaRecorder.stop();
+            // Complete the recording and clean up
+            stopTrimming();
+            return;
+          }
+
+          if (currentTime < endTime) {
+            frameCount++;
+            if (frameCount % 30 === 0) { // Log every 30 frames
+              console.log('[VideoTrimmer] Processing frame', {
+                currentTime: currentTime.toFixed(2),
+                progress: ((currentTime - startTime) / (endTime - startTime) * 100).toFixed(1) + '%',
+                frameCount
+              });
+            }
+            
+            // Draw the current video frame to the canvas
+            ctx!.clearRect(0, 0, canvas.width, canvas.height);
+            ctx!.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+            
+            // Only schedule the next frame if we're still recording
+            if (isRecordingRef.current && !hasReachedEndRef.current) {
+              animationFrameRef.current = requestAnimationFrame(drawFrame);
+            }
           }
         }
-        requestAnimationFrame(drawFrame);
+        
+        // Start the frame drawing loop
+        animationFrameRef.current = requestAnimationFrame(drawFrame);
       }).catch(error => {
         console.error('[VideoTrimmer] Error during playback:', error);
+        setError('Failed to play video during processing. Please try again.');
+        setIsProcessing(false);
+        stopTrimming();
       });
     };
+    
+    // Set up the one-time seek handler
+    videoRef.current.onseeked = seekHandler;
   };
+
+  // Clean up resources when component unmounts
+  useEffect(() => {
+    return () => {
+      stopTrimming();
+      
+      // Clean up the object URL
+      if (objectUrlRef.current) {
+        URL.revokeObjectURL(objectUrlRef.current);
+        objectUrlRef.current = null;
+      }
+    };
+  }, [stopTrimming]);
 
   if (!isOpen) return null;
 
@@ -419,4 +531,4 @@ export const SimpleVideoTrimmer: React.FC<VideoTrimmerProps> = ({
       </div>
     </div>
   );
-}; 
+};
