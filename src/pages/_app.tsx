@@ -8,6 +8,7 @@ import '../index.css';
 import '../styles/animations.css';
 
 import AuthWrapper from '../components/AuthWrapper';
+import DefaultMeta from '../components/DefaultMeta';
 
 // Only import in development mode
 const isDev = process.env.NODE_ENV === 'development';
@@ -27,6 +28,7 @@ const MyApp: React.FC<AppProps> = ({ Component, pageProps }) => {
     <Provider store={store}>
       <PersistGate loading={null} persistor={persistor}>
         <AuthWrapper>
+          <DefaultMeta />
           <Component {...pageProps} />
         </AuthWrapper>
       </PersistGate>
