@@ -139,16 +139,31 @@ const SignInModal: React.FC<SignInModalProps> = ({
 
   // Add effect to check if we need to show registration
   useEffect(() => {
-    if (currentUser && !currentUser.username) {
-      console.log('[SignInModal] User needs to complete registration:', {
+    if (currentUser) {
+      console.log('[SignInModal] Checking user registration status:', {
         userId: currentUser.id,
         hasUsername: !!currentUser.username,
+        username: currentUser.username,
+        registrationComplete: !!currentUser.registrationComplete,
         timestamp: new Date().toISOString()
       });
-      setIsSignUp(true);
-      setSignUpStep('profile');
+      
+      // If user exists but has no username, we need to complete registration
+      if (!currentUser.username) {
+        console.log('[SignInModal] User needs to complete registration - missing username');
+        setIsSignUp(true);
+        setSignUpStep('profile');
+        
+        // Make isVisible true if not already - ensures the modal shows
+        // This helps when the user is navigating the site already logged in but missing username
+        if (!isVisible && onClose) {
+          console.log('[SignInModal] Forcing modal visible for registration');
+          // We don't call onClose directly since that might hide the modal
+          // The parent component should handle showing the modal
+        }
+      }
     }
-  }, [currentUser]);
+  }, [currentUser, isVisible, onClose]);
 
   // Password validation states
   const hasUppercase = /[A-Z]/.test(password);
@@ -180,6 +195,22 @@ const SignInModal: React.FC<SignInModalProps> = ({
       const firestoreUser = await userService.fetchUserFromFirestore(user.uid);
       
       if (firestoreUser) {
+        console.log('[SignInModal] User profile check:', {
+          hasUsername: !!firestoreUser.username,
+          username: firestoreUser.username,
+          subscriptionType: firestoreUser.subscriptionType,
+          timestamp: new Date().toISOString()
+        });
+
+        // IMPORTANT: First check if username is missing - this takes priority over subscription
+        if (!firestoreUser.username) {
+          console.log('[SignInModal] User missing username, starting registration flow');
+          setIsSignUp(true);
+          setSignUpStep('profile');
+          setIsLoading(false);
+          return;
+        }
+        
         const betaUserHasAccess = await userService.getBetaUserAccess(firestoreUser.email, firestoreUser);
         
         console.log('[SignInModal] Access check results:', {
@@ -307,14 +338,19 @@ const SignInModal: React.FC<SignInModalProps> = ({
         userService.currentUser = firestoreUser;
         console.log('Google Sign In - Current User Set:', userService.currentUser);
       
-        // Check if username is empty or not set
-        console.log("Username is empty?: ", firestoreUser.username == '');
-   
-        if (firestoreUser.username == '') {
-          console.log("Starting registration");
+        // Fix: Check if username is missing (using truthy check) instead of empty string comparison
+        console.log("Username check:", {
+          username: firestoreUser.username,
+          isEmpty: !firestoreUser.username,
+          typeOf: typeof firestoreUser.username
+        });
+
+        if (!firestoreUser.username) {
+          console.log("Starting registration - username missing");
           // Set isSignUp to true and move to profile step
           setIsSignUp(true);
           setSignUpStep("profile");
+          setIsLoading(false);
           return;
         }
    
@@ -478,6 +514,15 @@ const SignInModal: React.FC<SignInModalProps> = ({
           await userService.updateUser(user.uid, firestoreUser);
           addLog(`Created new Firestore user: ${firestoreUser.id}`);
         } else if (firestoreUser) {
+          // Check if username is missing - highest priority
+          if (!firestoreUser.username) {
+            setIsSignUp(true);
+            setSignUpStep('profile');
+            addLog("User missing username, starting registration flow");
+            setIsLoading(false);
+            return;
+          }
+          
           // Check subscription status
           if (firestoreUser.subscriptionType === SubscriptionType.unsubscribed) {
             setSignUpStep('subscription');
@@ -1793,17 +1838,42 @@ const SignInModal: React.FC<SignInModalProps> = ({
     }
   };
 
-  const handleSignInSuccess = (user: any) => {
+  const handleSignInSuccess = async (user: any) => {
     // Get the redirect URL from query parameters
     const redirectUrl = router.query.redirect as string;
     
-    if (redirectUrl) {
-      // If there's a redirect URL, navigate to it
-      router.push(redirectUrl);
-    } else {
-      // Otherwise, just close the modal
-      onSignInSuccess?.(user);
-      onClose?.();
+    // Make one final check for username completion before proceeding
+    try {
+      const userDoc = await userService.fetchUserFromFirestore(user.uid);
+      if (userDoc && !userDoc.username) {
+        console.log('[SignInModal] Final check - User still missing username, redirecting to registration:', {
+          userId: user.uid,
+          timestamp: new Date().toISOString()
+        });
+        setIsSignUp(true);
+        setSignUpStep('profile');
+        setIsLoading(false);
+        return;
+      }
+      
+      // If we have a username, proceed with normal flow
+      if (redirectUrl) {
+        // If there's a redirect URL, navigate to it
+        router.push(redirectUrl);
+      } else {
+        // Otherwise, just close the modal
+        onSignInSuccess?.(user);
+        onClose?.();
+      }
+    } catch (err) {
+      console.error('[SignInModal] Error during final username check:', err);
+      // Proceed anyway as a fallback
+      if (redirectUrl) {
+        router.push(redirectUrl);
+      } else {
+        onSignInSuccess?.(user);
+        onClose?.();
+      }
     }
   };
 

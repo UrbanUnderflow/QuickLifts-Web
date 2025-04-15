@@ -80,6 +80,8 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
             console.log('Initial Firestore user:', {
               userId: firestoreUser?.id,
               hasUsername: !!firestoreUser?.username,
+              username: firestoreUser?.username || 'undefined',
+              registrationComplete: !!firestoreUser?.registrationComplete,
               subscription: firestoreUser?.subscriptionType,
               timestamp: new Date().toISOString()
             });
@@ -88,8 +90,8 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
             userService.currentUser = firestoreUser;
 
             if (!isPublicRoute(router.pathname)) {
-              if (firestoreUser && !firestoreUser.username) {
-                console.log('[AuthWrapper] User needs to complete registration');
+              if (firestoreUser && (!firestoreUser.username || firestoreUser.username === '')) {
+                console.log('[AuthWrapper] User needs to complete registration - missing username');
                 setShowSignInModal(true);
               } else if (firestoreUser?.subscriptionType === SubscriptionType.unsubscribed) {
                 setShowSubscriptionModal(true);
@@ -148,7 +150,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
                setShowSubscriptionModal(false);
              }}
            />
-         ) : (!currentUser || !currentUser.username) ? (
+         ) : (!currentUser || !currentUser.username || currentUser.username === '') ? (
            <SignInModal
              isVisible={showSignInModal}
              closable={false}
