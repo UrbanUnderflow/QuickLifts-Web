@@ -127,20 +127,15 @@ const SignInModal: React.FC<SignInModalProps> = ({
   const currentUser = useUser();
   const dispatch = useDispatch();
   const router = useRouter();
+  const [isIphone, setIsIphone] = useState(false);
 
-  // Add this custom hook
-  const useDevMode = () => {
-    const dispatch = useDispatch();
-    const isDevelopment = useSelector((state: RootState) => state.devMode.isDevelopment);
-
-    const handleToggle = () => {
-      dispatch(toggleDevMode());
-      initializeFirebase();
-      window.location.reload();
-    };
-
-    return { isDevelopment, handleToggle };
-  };
+  // Detect if the user is on an iPhone
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.navigator) {
+      const ua = window.navigator.userAgent || window.navigator.vendor || '';
+      setIsIphone(/iPhone/i.test(ua));
+    }
+  }, []);
 
   // Add effect to check if we need to show registration
   useEffect(() => {
@@ -1812,10 +1807,28 @@ const SignInModal: React.FC<SignInModalProps> = ({
     }
   };
 
+  // --- iPhone App Download Banner ---
+  // This banner appears only if the user is on an iPhone
+  const iphoneBanner = isIphone && (
+    <div className="mb-4 p-3 bg-[#E0FE10] text-black rounded-lg flex items-center justify-between shadow font-semibold">
+      <span>Get the best experience! Download the Pulse iPhone app.</span>
+      <a
+        href="https://apps.apple.com/ca/app/pulse-community-workouts/id6451497729"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="ml-4 px-3 py-1 bg-black text-[#E0FE10] rounded hover:bg-zinc-800 transition-colors"
+      >
+        Download
+      </a>
+    </div>
+  );
+
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-black z-50 sm:p-6">
       <div className="bg-zinc-900 w-full h-full sm:h-auto sm:w-[480px] sm:rounded-xl p-6 sm:p-8 border-none sm:border sm:border-zinc-700 shadow-xl overflow-y-auto">
         {window.location.hostname === 'localhost' && <DevModeToggle />}
+        {/* iPhone App Download Banner */}
+        {iphoneBanner}
         
         {closable && onClose && (
           <button

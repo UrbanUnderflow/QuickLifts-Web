@@ -32,7 +32,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
   const publicRoutes = [
     '/about', '/creator', '/rounds', '/privacyPolicy', 
     '/starter-pack', '/stacks', '/moves', '/terms',
-    '/subscribe' // Add subscription page
+    '/subscribe', '/download' // Add subscription page
   ].map(route => route?.toLowerCase());
  
   const publicPathPatterns = [
