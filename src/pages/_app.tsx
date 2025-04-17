@@ -28,8 +28,8 @@ const MyApp: React.FC<AppProps> = ({ Component, pageProps }) => {
     <Provider store={store}>
       <PersistGate loading={null} persistor={persistor}>
         <AuthWrapper>
-          <DefaultMeta />
           <Component {...pageProps} />
+          <DefaultMeta />
         </AuthWrapper>
       </PersistGate>
     </Provider>
