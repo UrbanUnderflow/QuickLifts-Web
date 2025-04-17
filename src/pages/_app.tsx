@@ -8,7 +8,6 @@ import '../index.css';
 import '../styles/animations.css';
 
 import AuthWrapper from '../components/AuthWrapper';
-import DefaultMeta from '../components/DefaultMeta';
 
 // Only import in development mode
 const isDev = process.env.NODE_ENV === 'development';
