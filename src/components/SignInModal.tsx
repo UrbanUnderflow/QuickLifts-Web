@@ -140,30 +140,38 @@ const SignInModal: React.FC<SignInModalProps> = ({
   // Add effect to check if we need to show registration
   useEffect(() => {
     if (currentUser) {
-      console.log('[SignInModal] Checking user registration status:', {
+      console.log('[SignInModal] Checking user onboarding status:', {
         userId: currentUser.id,
         hasUsername: !!currentUser.username,
         username: currentUser.username,
         registrationComplete: !!currentUser.registrationComplete,
+        height: currentUser.height,
+        birthdate: currentUser.birthdate,
+        onboardingComplete: isOnboardingComplete(currentUser),
         timestamp: new Date().toISOString()
       });
-      
-      // If user exists but has no username, we need to complete registration
-      if (!currentUser.username) {
-        console.log('[SignInModal] User needs to complete registration - missing username');
+
+      if (!isOnboardingComplete(currentUser)) {
+        const missing = [];
+        if (!currentUser.username) missing.push('username');
+        if (!currentUser.height || !currentUser.height.feet) missing.push('height');
+        if (!currentUser.birthdate) missing.push('birthdate');
+        if (!currentUser.registrationComplete) missing.push('registrationComplete');
+        console.log('[SignInModal] User missing onboarding fields:', missing);
         setIsSignUp(true);
-        setSignUpStep('profile');
-        
-        // Make isVisible true if not already - ensures the modal shows
-        // This helps when the user is navigating the site already logged in but missing username
-        if (!isVisible && onClose) {
-          console.log('[SignInModal] Forcing modal visible for registration');
-          // We don't call onClose directly since that might hide the modal
-          // The parent component should handle showing the modal
+        // Only force the step if not already in the correct onboarding step
+        if (!currentUser.username && signUpStep !== 'profile') {
+          setSignUpStep('profile');
+        } else if (
+          currentUser.username &&
+          signUpStep !== 'quiz' &&
+          signUpStep !== 'quiz-prompt'
+        ) {
+          setSignUpStep('quiz-prompt');
         }
       }
     }
-  }, [currentUser, isVisible, onClose]);
+  }, [currentUser, isVisible, onClose, signUpStep]);
 
   // Password validation states
   const hasUppercase = /[A-Z]/.test(password);
@@ -202,17 +210,17 @@ const SignInModal: React.FC<SignInModalProps> = ({
           timestamp: new Date().toISOString()
         });
 
-        // IMPORTANT: First check if username is missing - this takes priority over subscription
-        if (!firestoreUser.username) {
-          console.log('[SignInModal] User missing username, starting registration flow');
+        // --- Onboarding completeness check ---
+        if (!isOnboardingComplete(firestoreUser)) {
+          console.log('[SignInModal] User missing onboarding data, starting onboarding flow');
           setIsSignUp(true);
           setSignUpStep('profile');
           setIsLoading(false);
           return;
         }
-        
+        // --- End onboarding check ---
+
         const betaUserHasAccess = await userService.getBetaUserAccess(firestoreUser.email, firestoreUser);
-        
         console.log('[SignInModal] Access check results:', {
           betaAccess: betaUserHasAccess,
           subscriptionType: firestoreUser.subscriptionType,
@@ -303,6 +311,14 @@ const SignInModal: React.FC<SignInModalProps> = ({
       } else if (provider === 'google') {
         const result = await authService.signInWithGoogle();
         const user = result.user;
+        // Strict email check
+        if (!user || !user.email) {
+          console.error('[SignInModal] Google sign-in completed but no email was provided. Cannot create user.');
+          setError('Sign-in failed: Email address is required.');
+          setIsLoading(false);
+          setActiveProvider(null);
+          return; // Stop execution
+        }
         console.log('Google Sign In - Initial User:', user);
         console.log('Google Sign In - Firebase User:', {
           uid: user.uid,
@@ -311,58 +327,60 @@ const SignInModal: React.FC<SignInModalProps> = ({
           metadata: user.metadata,
           providerData: user.providerData
         });
-        
         let firestoreUser = await userService.fetchUserFromFirestore(user.uid);
         console.log('Google Sign In - Firestore User:', firestoreUser);
-        
+        if (firestoreUser) {
+          // Log all user properties for debugging
+          console.log('[SignInModal] Full Firestore user object after sign in:', JSON.parse(JSON.stringify(firestoreUser)));
+        }
         if (!firestoreUser) {
-          // CRITICAL CHECK: Ensure email exists before creating user
-          if (!user.email) {
-            console.error('[SignInModal] Google sign-in completed but no email was provided. Cannot create user.');
-            setError('Sign-in failed: Email address is required.');
-            setIsLoading(false);
-            setActiveProvider(null);
-            return; // Stop execution
-          }
-          
           // Email exists, proceed with creation
           console.log('[SignInModal] Creating new Firestore user after Google Sign-In');
-          firestoreUser = new User(user.uid, {});
-          firestoreUser.id = user.uid;
-          firestoreUser.email = user.email;
-          firestoreUser.displayName = user.displayName || "";
+          firestoreUser = new User(user.uid, {
+            id: user.uid,
+            email: user.email,
+            displayName: user.displayName || "",
+            registrationComplete: false,
+            subscriptionType: SubscriptionType.unsubscribed
+          });
           await userService.updateUser(user.uid, firestoreUser);
           console.log('Google Sign In - Created New User:', firestoreUser);
+        } else if (!firestoreUser.email && user.email) {
+          // If user exists but email is missing, update it
+          console.log('[SignInModal] Firestore user missing email, updating with Firebase user email');
+          firestoreUser.email = user.email;
+          await userService.updateUser(user.uid, firestoreUser);
         }
-        
         userService.currentUser = firestoreUser;
         console.log('Google Sign In - Current User Set:', userService.currentUser);
-      
         // Fix: Check if username is missing (using truthy check) instead of empty string comparison
         console.log("Username check:", {
           username: firestoreUser.username,
           isEmpty: !firestoreUser.username,
           typeOf: typeof firestoreUser.username
         });
-
         if (!firestoreUser.username) {
           console.log("Starting registration - username missing");
-          // Set isSignUp to true and move to profile step
           setIsSignUp(true);
           setSignUpStep("profile");
           setIsLoading(false);
           return;
         }
-   
-        // Check subscription status
         if (firestoreUser.subscriptionType === SubscriptionType.unsubscribed) {
           console.log("User is unsubscribed, showing subscription step");
           setSignUpStep('subscription');
           return;
         }
-        
+        // --- Onboarding completeness check ---
+        if (!isOnboardingComplete(firestoreUser)) {
+          console.log('[SignInModal] Google sign-in: User missing onboarding data, starting onboarding flow');
+          setIsSignUp(true);
+          setSignUpStep('profile');
+          setIsLoading(false);
+          return;
+        }
+        // --- End onboarding check ---
         console.log("Checking Subs");
-        // If we have a username and subscription, proceed with normal flow
         await checkSubscriptionAndProceed(user);
       }
     } catch (error: unknown) {
@@ -576,33 +594,34 @@ const SignInModal: React.FC<SignInModalProps> = ({
       try {
         setIsLoading(true);
         setError(null);
-        
-        // Check if we have a current user
         if (!auth.currentUser) {
           throw new Error("No authenticated user found");
         }
-
-        console.log('[SignInModal] Updating username for user:', {
-          uid: auth.currentUser.uid,
-          email: auth.currentUser.email,
-          newUsername: username
-        });
-
-        // Update username and set registrationComplete to true in Firestore
+        // Email fallback: use userService.currentUser.email or auth.currentUser.email
+        const currentEmail = userService.currentUser?.email || auth.currentUser.email;
+        if (!currentEmail) {
+          console.error('[SignInModal] Registration: Email is missing, cannot complete registration.');
+          throw new Error("Email is missing, cannot complete registration.");
+        }
         const updatedUser = new User(auth.currentUser.uid, {
           ...userService.currentUser?.toDictionary(),
           username: username,
+          email: currentEmail, // Ensure email is included in the update
           registrationComplete: true,
           updatedAt: new Date()
         });
-        
         await userService.updateUser(auth.currentUser.uid, updatedUser);
         console.log('[SignInModal] Username updated and registration marked as complete');
-        
-        // Move to next step or complete registration
-        setSignUpStep("quiz-prompt");
-        onRegistrationComplete?.();
-        
+        // Check if onboarding is now complete
+        const refreshedUser = await userService.fetchUserFromFirestore(auth.currentUser.uid);
+        if (isOnboardingComplete(refreshedUser)) {
+          setIsLoading(false);
+          onRegistrationComplete?.();
+          onClose?.();
+          return;
+        } else {
+          setSignUpStep("quiz-prompt");
+        }
       } catch (err) {
         console.error("[SignInModal] Error updating username:", err);
         setError(err instanceof Error ? err.message : 'An error occurred');
@@ -772,18 +791,25 @@ const SignInModal: React.FC<SignInModalProps> = ({
       setIsLoading(true);
       setError(null);
 
-      // Get the user's ID from the Firebase authentication state
       const userId = auth.currentUser?.uid;
+      if (!userId) throw new Error("No user found");
 
-      if (!userId) {
-        throw new Error("No user found");
+      // Fetch the latest user data
+      const refreshedUser = await userService.fetchUserFromFirestore(userId);
+
+      // Notify parent if needed
+      onQuizComplete?.();
+
+      // Route based on subscription status
+      if (!refreshedUser) {
+        throw new Error("No user found after quiz completion");
       }
-
-      // Construct the user object with default or empty values
-      const currentUser = useUser();
-
-      onQuizComplete?.(); // Notify that the quiz is complete
-      router.push('/'); // Add this line to route to root
+      if (refreshedUser.subscriptionType === SubscriptionType.unsubscribed) {
+        router.push('/subscribe');
+      } else {
+        router.push('/');
+        onClose?.();
+      }
     } catch (err) {
       const error = err as Error;
       console.error("Error updating user data:", error);
@@ -932,6 +958,10 @@ const SignInModal: React.FC<SignInModalProps> = ({
                 updatedUser.updatedAt = new Date();
                 
                 await userService.updateUser(auth.currentUser.uid, updatedUser);
+                // --- NEW: Refresh user and update Redux ---
+                const refreshedUser = await userService.fetchUserFromFirestore(auth.currentUser.uid);
+                userService.currentUser = refreshedUser;
+                dispatch(setUser(refreshedUser ? refreshedUser.toDictionary() : null));
               }
               
               setQuizStep(quizStep + 1);
@@ -977,6 +1007,10 @@ const SignInModal: React.FC<SignInModalProps> = ({
                 });
                 
                 await userService.updateUser(auth.currentUser.uid, updatedUser);
+                // --- NEW: Refresh user and update Redux ---
+                const refreshedUser = await userService.fetchUserFromFirestore(auth.currentUser.uid);
+                userService.currentUser = refreshedUser;
+                dispatch(setUser(refreshedUser ? refreshedUser.toDictionary() : null));
               }
             }}
             min="0"
@@ -1004,6 +1038,10 @@ const SignInModal: React.FC<SignInModalProps> = ({
                 });
                 
                 await userService.updateUser(auth.currentUser.uid, updatedUser);
+                // --- NEW: Refresh user and update Redux ---
+                const refreshedUser = await userService.fetchUserFromFirestore(auth.currentUser.uid);
+                userService.currentUser = refreshedUser;
+                dispatch(setUser(refreshedUser ? refreshedUser.toDictionary() : null));
               }
             }}
             min="0"
@@ -1051,6 +1089,10 @@ const SignInModal: React.FC<SignInModalProps> = ({
               });
               
               await userService.updateUser(auth.currentUser.uid, updatedUser);
+              // --- NEW: Refresh user and update Redux ---
+              const refreshedUser = await userService.fetchUserFromFirestore(auth.currentUser.uid);
+              userService.currentUser = refreshedUser;
+              dispatch(setUser(refreshedUser ? refreshedUser.toDictionary() : null));
             }
           }}
           className="w-full bg-zinc-800 border border-zinc-600 rounded-lg p-3 text-white"
@@ -1089,9 +1131,12 @@ const SignInModal: React.FC<SignInModalProps> = ({
                 });
                 
                 await userService.updateUser(auth.currentUser.uid, updatedUser);
-                
-                setQuizStep(quizStep + 1);
+                // --- NEW: Refresh user and update Redux ---
+                const refreshedUser = await userService.fetchUserFromFirestore(auth.currentUser.uid);
+                userService.currentUser = refreshedUser;
+                dispatch(setUser(refreshedUser ? refreshedUser.toDictionary() : null));
               }
+              setQuizStep(quizStep + 1);
             }}
             className={`w-full p-4 rounded-lg border ${
               quizData.gymExperience === level
@@ -1146,7 +1191,10 @@ const SignInModal: React.FC<SignInModalProps> = ({
                 });
                 
                 await userService.updateUser(auth.currentUser.uid, updatedUser);
-                
+                // --- NEW: Refresh user and update Redux ---
+                const refreshedUser = await userService.fetchUserFromFirestore(auth.currentUser.uid);
+                userService.currentUser = refreshedUser;
+                dispatch(setUser(refreshedUser ? refreshedUser.toDictionary() : null));
                 // Only move to next step if at least one goal is selected
                 if (updatedGoals.length > 0) {
                   setQuizStep(quizStep + 1);
@@ -1188,20 +1236,21 @@ const SignInModal: React.FC<SignInModalProps> = ({
       <div className="grid grid-cols-3 gap-4">
         <select
           className="bg-zinc-800 border border-zinc-600 rounded-lg p-3 text-white"
-          onChange={(e) => {
+          onChange={async (e) => {
             const date = new Date(quizData.birthdate || new Date());
             date.setMonth(parseInt(e.target.value));
-            
             setQuizData({ ...quizData, birthdate: date });
-            
             if (auth.currentUser?.uid && userService.currentUser) {
               const updatedUser = new User(userService.currentUser.id, {
                 ...userService.currentUser.toDictionary(),
                 birthdate: date,
                 updatedAt: new Date()
               });
-              
-              userService.updateUser(auth.currentUser.uid, updatedUser);
+              await userService.updateUser(auth.currentUser.uid, updatedUser);
+              // --- NEW: Refresh user and update Redux ---
+              const refreshedUser = await userService.fetchUserFromFirestore(auth.currentUser.uid);
+              userService.currentUser = refreshedUser;
+              dispatch(setUser(refreshedUser ? refreshedUser.toDictionary() : null));
             }
           }}
         >
@@ -1214,10 +1263,22 @@ const SignInModal: React.FC<SignInModalProps> = ({
 
         <select
           className="bg-zinc-800 border border-zinc-600 rounded-lg p-3 text-white"
-          onChange={(e) => {
+          onChange={async (e) => {
             const date = new Date(quizData.birthdate || new Date());
             date.setDate(parseInt(e.target.value));
             setQuizData({ ...quizData, birthdate: date });
+            if (auth.currentUser?.uid && userService.currentUser) {
+              const updatedUser = new User(userService.currentUser.id, {
+                ...userService.currentUser.toDictionary(),
+                birthdate: date,
+                updatedAt: new Date()
+              });
+              await userService.updateUser(auth.currentUser.uid, updatedUser);
+              // --- NEW: Refresh user and update Redux ---
+              const refreshedUser = await userService.fetchUserFromFirestore(auth.currentUser.uid);
+              userService.currentUser = refreshedUser;
+              dispatch(setUser(refreshedUser ? refreshedUser.toDictionary() : null));
+            }
           }}
         >
           {Array.from({ length: 31 }, (_, i) => (
@@ -1229,10 +1290,22 @@ const SignInModal: React.FC<SignInModalProps> = ({
 
         <select
           className="bg-zinc-800 border border-zinc-600 rounded-lg p-3 text-white"
-          onChange={(e) => {
+          onChange={async (e) => {
             const date = new Date(quizData.birthdate || new Date());
             date.setFullYear(parseInt(e.target.value));
             setQuizData({ ...quizData, birthdate: date });
+            if (auth.currentUser?.uid && userService.currentUser) {
+              const updatedUser = new User(userService.currentUser.id, {
+                ...userService.currentUser.toDictionary(),
+                birthdate: date,
+                updatedAt: new Date()
+              });
+              await userService.updateUser(auth.currentUser.uid, updatedUser);
+              // --- NEW: Refresh user and update Redux ---
+              const refreshedUser = await userService.fetchUserFromFirestore(auth.currentUser.uid);
+              userService.currentUser = refreshedUser;
+              dispatch(setUser(refreshedUser ? refreshedUser.toDictionary() : null));
+            }
           }}
         >
           {Array.from({ length: 100 }, (_, i) => {
@@ -2055,4 +2128,17 @@ const SignInModal: React.FC<SignInModalProps> = ({
 };
 
 export default SignInModal;
+
+// Utility to check if onboarding is complete
+function isOnboardingComplete(user: any) {
+  return (
+    !!user.username &&
+    user.height && user.height.feet > 0 &&
+    user.birthdate &&
+    user.gender &&
+    user.gymExperience &&
+    Array.isArray(user.fitnessGoals) && user.fitnessGoals.length > 0 &&
+    user.registrationComplete // add more fields as needed
+  );
+}
 

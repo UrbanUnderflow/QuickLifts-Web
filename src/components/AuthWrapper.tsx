@@ -13,6 +13,26 @@ interface AuthWrapperProps {
  children: React.ReactNode;
 }
 
+// Utility for shallow comparison
+function shallowEqual(objA: any, objB: any): boolean {
+  if (objA === objB) return true;
+  if (!objA || !objB) return false;
+
+  const keysA = Object.keys(objA);
+  const keysB = Object.keys(objB);
+
+  if (keysA.length !== keysB.length) return false;
+
+  for (let key of keysA) {
+    // Ignore timestamp fields for comparison to avoid loop
+    if (key === 'createdAt' || key === 'updatedAt') continue;
+    if (objA[key] !== objB[key]) {
+      return false;
+    }
+  }
+  return true;
+}
+
 const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
   console.log('AuthWrapper component mounting...');
 
@@ -25,6 +45,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
   const isLoading = useSelector((state: RootState) => state.user.loading);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
+  const prevUserRef = React.useRef<any>(null);
 
   console.log('AuthWrapper setup complete, before useEffect');
 
@@ -86,7 +107,20 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
               timestamp: new Date().toISOString()
             });
 
-            dispatch(setUser(firestoreUser ? firestoreUser.toDictionary() : null));
+            const newUserDict = firestoreUser ? firestoreUser.toDictionary() : null;
+            if (!shallowEqual(prevUserRef.current, newUserDict)) {
+              console.warn('[AuthWrapper] shallowEqual failed. Dispatching setUser. Differences:', {
+                prev: prevUserRef.current,
+                next: newUserDict,
+                diffKeys: newUserDict ? Object.keys(newUserDict).filter(key => 
+                  key !== 'createdAt' && key !== 'updatedAt' && 
+                  (!prevUserRef.current || prevUserRef.current[key] !== newUserDict[key])
+                ) : ['prev was object, next is null'],
+                timestamp: new Date().toISOString()
+              });
+              dispatch(setUser(newUserDict));
+              prevUserRef.current = newUserDict;
+            }
             userService.currentUser = firestoreUser;
 
             if (!isPublicRoute(router.pathname)) {

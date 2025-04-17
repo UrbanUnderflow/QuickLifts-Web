@@ -84,5 +84,23 @@ import { User } from '../../firebase/user';
       console.error('Error sending password reset email:', error);
       throw error;
     }
+  },
+
+  async addVersion(version: string, changeNotes: string[], isCriticalUpdate: boolean) {
+    try {
+      // Transform changeNotes array to numbered properties
+      const notesObject: { [key: string]: string } = {};
+      changeNotes.forEach((note, idx) => {
+        notesObject[(idx + 1).toString()] = note;
+      });
+      await setDoc(doc(db, 'versions', version), {
+        ...notesObject,
+        isCriticalUpdate,
+      });
+      return true;
+    } catch (error) {
+      console.error('Error adding version:', error);
+      throw error;
+    }
   }
 };

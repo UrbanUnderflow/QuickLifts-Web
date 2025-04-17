@@ -79,7 +79,7 @@ export class User {
   updatedAt: Date;
 
   constructor(id: string, data: any) {
-    console.log('User constructor called:', data);
+    // console.log('User constructor called:', data);
     
     this.id = id;
     this.displayName = data.displayName || '';
@@ -163,7 +163,7 @@ export class User {
       blockedUsers: this.blockedUsers,
       level: this.level,
       goal: this.goal,
-      bodyWeight: this.bodyWeight,
+      bodyWeight: this.bodyWeight.map(bw => (typeof bw.toDictionary === 'function' ? bw.toDictionary() : bw)),
       macros: this.macros,
       profileImage: this.profileImage.toDictionary(),
       registrationComplete: this.registrationComplete,

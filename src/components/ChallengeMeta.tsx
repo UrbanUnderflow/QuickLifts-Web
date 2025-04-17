@@ -28,40 +28,40 @@ const ChallengeMeta: React.FC<ChallengeMetaProps> = ({ challenge, id }) => {
 
   return (
     <Head>
-      <title>{`Join ${challenge.title} | Pulse`}</title>
-      <meta name="description" content={enrichedDescription} />
+      <title key="title">{`Join ${challenge.title} | Pulse`}</title>
+      <meta key="description" name="description" content={enrichedDescription} />
       
       {/* Open Graph Meta Tags */}
-      <meta property="og:title" content={`Join ${challenge.title} | Pulse`} />
-      <meta property="og:description" content={enrichedDescription} />
-      <meta property="og:type" content="website" />
-      <meta property="og:url" content={`https://fitwithpulse.ai/challenge/${id}`} />
-      <meta property="og:site_name" content="Pulse Fitness" />
-      <meta property="og:image" content={`https://fitwithpulse.ai${previewImageUrl}`} />
-      <meta property="og:image:width" content="1200" />
-      <meta property="og:image:height" content="630" />
-      <meta property="og:image:alt" content={`${challenge.title} preview`} />
+      <meta key="og:title" property="og:title" content={`Join ${challenge.title} | Pulse`} />
+      <meta key="og:description" property="og:description" content={enrichedDescription} />
+      <meta key="og:type" property="og:type" content="website" />
+      <meta key="og:url" property="og:url" content={`https://fitwithpulse.ai/challenge/${id}`} />
+      <meta key="og:site_name" property="og:site_name" content="Pulse Fitness" />
+      <meta key="og:image" property="og:image" content={`https://fitwithpulse.ai${previewImageUrl}`} />
+      <meta key="og:image:width" property="og:image:width" content="1200" />
+      <meta key="og:image:height" property="og:image:height" content="630" />
+      <meta key="og:image:alt" property="og:image:alt" content={`${challenge.title} preview`} />
       
       {/* Deep Linking Meta Tags */}
-      <meta property="al:ios:app_store_id" content="6451497729" />
-      <meta property="al:ios:app_name" content="Pulse: Community Workouts" />
-      <meta property="al:ios:url" content={deepLinkUrl} />
+      <meta key="al:ios:app_store_id" property="al:ios:app_store_id" content="6451497729" />
+      <meta key="al:ios:app_name" property="al:ios:app_name" content="Pulse: Community Workouts" />
+      <meta key="al:ios:url" property="al:ios:url" content={deepLinkUrl} />
       
       {/* Twitter Meta Tags */}
-      <meta name="twitter:card" content="summary_large_image" />
-      <meta name="twitter:site" content="@fitwithpulse" />
-      <meta name="twitter:creator" content="@fitwithpulse" />
-      <meta name="twitter:title" content={`Join ${challenge.title} | Pulse`} />
-      <meta name="twitter:description" content={enrichedDescription} />
-      <meta name="twitter:image" content={`https://fitwithpulse.ai${previewImageUrl}`} />
-      <meta name="twitter:image:alt" content={`${challenge.title} preview`} />
+      <meta key="twitter:card" name="twitter:card" content="summary_large_image" />
+      <meta key="twitter:site" name="twitter:site" content="@fitwithpulse" />
+      <meta key="twitter:creator" name="twitter:creator" content="@fitwithpulse" />
+      <meta key="twitter:title" name="twitter:title" content={`Join ${challenge.title} | Pulse`} />
+      <meta key="twitter:description" name="twitter:description" content={enrichedDescription} />
+      <meta key="twitter:image" name="twitter:image" content={`https://fitwithpulse.ai${previewImageUrl}`} />
+      <meta key="twitter:image:alt" name="twitter:image:alt" content={`${challenge.title} preview`} />
       
       {/* Additional Meta Tags */}
-      <link rel="canonical" href={`https://fitwithpulse.ai/challenge/${id}`} />
-      <meta name="theme-color" content="#E0FE10" />
-      <meta name="mobile-web-app-capable" content="yes" />
-      <meta name="apple-mobile-web-app-capable" content="yes" />
-      <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+      <link key="canonical" rel="canonical" href={`https://fitwithpulse.ai/challenge/${id}`} />
+      <meta key="theme-color" name="theme-color" content="#E0FE10" />
+      <meta key="mobile-web-app-capable" name="mobile-web-app-capable" content="yes" />
+      <meta key="apple-mobile-web-app-capable" name="apple-mobile-web-app-capable" content="yes" />
+      <meta key="apple-mobile-web-app-status-bar-style" name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     </Head>
   );
 };
