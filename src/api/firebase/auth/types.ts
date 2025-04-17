@@ -17,4 +17,5 @@ export interface SignUpData {
     signInWithGoogle: () => Promise<UserCredential>;
     signInWithApple: () => Promise<void>;
     resetPassword: (email: string) => Promise<boolean>;
+    addVersion: (version: string, changeNotes: string[], isCriticalUpdate: boolean) => Promise<boolean>;
   }
