@@ -1,11 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { workoutService } from '../api/firebase/workout/service';
 import { userService } from '../api/firebase/user';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../api/firebase/config';
 import SignInModal from '../components/SignInModal';
-import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
 import { db } from '../api/firebase/config';
 import { ProfileImage } from '../api/firebase/user/types';
 import { convertFirestoreTimestamp, dateToUnixTimestamp } from '../utils/formatDate';
@@ -17,6 +17,8 @@ interface ChallengeInfo {
   subtitle: string;
   startDate: Date | null;
   endDate: Date | null;
+  originalId?: string;
+  createdAt?: Date;
 }
 
 // Define type for user info
@@ -28,16 +30,30 @@ interface UserInfo {
   profileImage?: ProfileImage;
 }
 
+// Define type for search result
+interface ChallengeSearchResult extends ChallengeInfo {
+  displayName: string;
+  cohortNumber?: number;
+}
+
 export default function JoinChallengePage() {
   const [username, setUsername] = useState('');
   const [challengeId, setChallengeId] = useState('');
+  const [challengeSearch, setChallengeSearch] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isSearchingChallenges, setIsSearchingChallenges] = useState(false);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [challengeInfo, setChallengeInfo] = useState<ChallengeInfo | null>(null);
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
   const [isLoadingUser, setIsLoadingUser] = useState(false);
   const [userError, setUserError] = useState('');
+  const [searchResults, setSearchResults] = useState<ChallengeSearchResult[]>([]);
+  const [showSearchResults, setShowSearchResults] = useState(false);
+  const [useManualId, setUseManualId] = useState(false);
+  
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const searchResultsRef = useRef<HTMLDivElement>(null);
 
   // Track if user is signed in
   const [isSignedIn, setIsSignedIn] = useState(false);
@@ -74,6 +90,152 @@ export default function JoinChallengePage() {
     return () => unsubscribe();
   }, []);
 
+  // Handle clicks outside of the search results dropdown to close it
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (searchResultsRef.current && !searchResultsRef.current.contains(event.target as Node)) {
+        setShowSearchResults(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  // Function to search challenges by title
+  const searchChallengesByTitle = async (searchText: string) => {
+    if (!searchText.trim()) {
+      setSearchResults([]);
+      return;
+    }
+
+    try {
+      setIsSearchingChallenges(true);
+      
+      // Create a query to search for challenges by title
+      const challengesRef = collection(db, 'sweatlist-collection');
+      
+      // We'll get all challenges and filter on the client side
+      // since Firestore doesn't have great partial text search capabilities
+      const snapshot = await getDocs(challengesRef);
+      
+      if (snapshot.empty) {
+        setSearchResults([]);
+        return;
+      }
+
+      // Filter challenges where title contains the search text (case insensitive)
+      const filteredChallenges = snapshot.docs
+        .filter(doc => {
+          const data = doc.data();
+          const title = data.challenge?.title || '';
+          return title.toLowerCase().includes(searchText.toLowerCase());
+        })
+        .map(doc => {
+          const data = doc.data();
+          const startDateValue = data.challenge?.startDate;
+          const endDateValue = data.challenge?.endDate;
+          const createdAtValue = data.createdAt;
+          
+          return {
+            id: doc.id,
+            title: data.challenge?.title || 'Untitled Challenge',
+            subtitle: data.challenge?.subtitle || '',
+            originalId: data.originalId || doc.id,
+            startDate: convertFirestoreTimestamp(startDateValue),
+            endDate: convertFirestoreTimestamp(endDateValue),
+            createdAt: convertFirestoreTimestamp(createdAtValue),
+            displayName: data.challenge?.title || 'Untitled Challenge',
+          };
+        });
+
+      // First, group challenges by originalId for cohort calculation
+      const challengesByOriginalId: { [key: string]: ChallengeSearchResult[] } = {};
+      
+      filteredChallenges.forEach(challenge => {
+        const originalId = challenge.originalId || challenge.id;
+        if (!challengesByOriginalId[originalId]) {
+          challengesByOriginalId[originalId] = [];
+        }
+        challengesByOriginalId[originalId].push(challenge);
+      });
+
+      // For each group, calculate cohort numbers
+      const challengesWithCohortNumbers: ChallengeSearchResult[] = [];
+      
+      Object.values(challengesByOriginalId).forEach(challenges => {
+        // Sort by createdAt, then by id for tie-breaker (same as iOS implementation)
+        const sortedChallenges = challenges.sort((a, b) => {
+          if (a.createdAt && b.createdAt) {
+            if (a.createdAt < b.createdAt) return -1;
+            if (a.createdAt > b.createdAt) return 1;
+          }
+          return a.id < b.id ? -1 : 1;
+        });
+        
+        // Assign cohort numbers
+        sortedChallenges.forEach((challenge, index) => {
+          const cohortNumber = index + 1;
+          
+          // Update display name if it's part of a cohort
+          let displayName = challenge.title;
+          if (sortedChallenges.length > 1) {
+            displayName = `${challenge.title}-Round #${cohortNumber}`;
+          }
+          
+          challengesWithCohortNumbers.push({
+            ...challenge,
+            displayName,
+            cohortNumber: sortedChallenges.length > 1 ? cohortNumber : undefined
+          });
+        });
+      });
+
+      // Limit results to top 10
+      setSearchResults(challengesWithCohortNumbers.slice(0, 10));
+    } catch (err) {
+      console.error('Error searching challenges:', err);
+      setSearchResults([]);
+    } finally {
+      setIsSearchingChallenges(false);
+    }
+  };
+
+  // Debounced challenge search
+  const handleChallengeSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setChallengeSearch(value);
+    
+    // Clear any existing timeout
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+    
+    // Debounce the search
+    searchTimeoutRef.current = setTimeout(() => {
+      searchChallengesByTitle(value);
+    }, 300);
+    
+    setShowSearchResults(true);
+  };
+
+  const handleSelectChallenge = (challenge: ChallengeSearchResult) => {
+    setChallengeId(challenge.id);
+    setChallengeSearch(challenge.displayName);
+    setChallengeInfo({
+      id: challenge.id,
+      title: challenge.title,
+      subtitle: challenge.subtitle,
+      startDate: challenge.startDate,
+      endDate: challenge.endDate,
+      originalId: challenge.originalId,
+      createdAt: challenge.createdAt
+    });
+    setShowSearchResults(false);
+  };
+
   const fetchChallengeInfo = async (id: string): Promise<ChallengeInfo | null> => {
     if (!id.trim()) return null;
     
@@ -94,6 +256,7 @@ export default function JoinChallengePage() {
       // We need to handle different possible formats
       const startDateValue = challengeData.challenge?.startDate;
       const endDateValue = challengeData.challenge?.endDate;
+      const createdAtValue = challengeData.createdAt;
       
       return {
         id: challengeSnap.id,
@@ -101,6 +264,8 @@ export default function JoinChallengePage() {
         subtitle: challengeData.challenge?.subtitle || '',
         startDate: convertFirestoreTimestamp(startDateValue),
         endDate: convertFirestoreTimestamp(endDateValue),
+        originalId: challengeData.originalId || challengeSnap.id,
+        createdAt: convertFirestoreTimestamp(createdAtValue),
       };
     } catch (err) {
       console.error('Error fetching challenge:', err);
@@ -220,6 +385,7 @@ export default function JoinChallengePage() {
       setChallengeId('');
       setChallengeInfo(null);
       setUserInfo(null);
+      setChallengeSearch('');
     } catch (err) {
       console.error(err);
       setError(err instanceof Error ? err.message : 'Failed to join challenge');
@@ -277,32 +443,118 @@ export default function JoinChallengePage() {
 
         {/* Form */}
         <form onSubmit={handleJoinChallenge} className="mt-8 space-y-6">
-          {/* Challenge ID Input */}
-          <div>
-            <label
-              htmlFor="challengeId"
-              className="block text-sm font-medium text-zinc-300 mb-2 font-['HK Grotesk']"
-            >
-              Challenge ID
-            </label>
-            <input
-              id="challengeId"
-              type="text"
-              value={challengeId}
-              onChange={(e) => setChallengeId(e.target.value)}
-              onBlur={handleChallengeIdBlur}
-              className="w-full bg-zinc-800 border border-zinc-600 rounded-lg p-3 text-white
-                placeholder-zinc-400 focus:outline-none focus:border-[#E0FE10] focus:ring-1
-                focus:ring-[#E0FE10] transition-colors"
-              placeholder="Enter challenge ID"
-            />
-            {isLoading && (
-              <div className="mt-2 flex items-center">
-                <div className="w-4 h-4 border-2 border-[#E0FE10] border-t-transparent rounded-full animate-spin mr-2"></div>
-                <span className="text-zinc-400 text-xs">Loading challenge info...</span>
+          {/* Challenge Search Mode Toggle */}
+          <div className="flex items-center justify-end">
+            <label className="inline-flex items-center cursor-pointer">
+              <span className="mr-3 text-sm font-medium text-zinc-400">
+                {useManualId ? "Search by Name" : "Use Manual ID"}
+              </span>
+              <div className="relative">
+                <input 
+                  type="checkbox" 
+                  checked={useManualId}
+                  onChange={() => setUseManualId(!useManualId)}
+                  className="sr-only peer" 
+                />
+                <div className="w-11 h-6 bg-zinc-700 peer-focus:outline-none peer-focus:ring-1 
+                  peer-focus:ring-[#E0FE10] rounded-full peer 
+                  peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] 
+                  after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 
+                  after:transition-all peer-checked:bg-[#E0FE10]">
+                </div>
               </div>
-            )}
+            </label>
           </div>
+
+          {/* Challenge Search Input (Default) */}
+          {!useManualId && (
+            <div className="relative">
+              <label
+                htmlFor="challengeSearch"
+                className="block text-sm font-medium text-zinc-300 mb-2 font-['HK Grotesk']"
+              >
+                Search Challenge by Name
+              </label>
+              <input
+                id="challengeSearch"
+                type="text"
+                value={challengeSearch}
+                onChange={handleChallengeSearchChange}
+                onFocus={() => setShowSearchResults(true)}
+                className="w-full bg-zinc-800 border border-zinc-600 rounded-lg p-3 text-white
+                  placeholder-zinc-400 focus:outline-none focus:border-[#E0FE10] focus:ring-1
+                  focus:ring-[#E0FE10] transition-colors"
+                placeholder="Type to search for challenges"
+              />
+              {isSearchingChallenges && (
+                <div className="mt-2 flex items-center">
+                  <div className="w-4 h-4 border-2 border-[#E0FE10] border-t-transparent rounded-full animate-spin mr-2"></div>
+                  <span className="text-zinc-400 text-xs">Searching challenges...</span>
+                </div>
+              )}
+              
+              {/* Dropdown search results */}
+              {showSearchResults && searchResults.length > 0 && (
+                <div 
+                  ref={searchResultsRef}
+                  className="absolute z-10 mt-1 w-full bg-zinc-800 border border-zinc-600 rounded-lg shadow-lg max-h-60 overflow-auto"
+                >
+                  {searchResults.map((result, index) => (
+                    <div
+                      key={`${result.id}-${index}`}
+                      className="p-3 hover:bg-zinc-700 cursor-pointer border-b border-zinc-700 last:border-b-0"
+                      onClick={() => handleSelectChallenge(result)}
+                    >
+                      <div className="font-medium text-[#E0FE10]">{result.displayName}</div>
+                      {result.subtitle && (
+                        <div className="text-sm text-zinc-400">{result.subtitle}</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+              
+              {showSearchResults && challengeSearch && searchResults.length === 0 && !isSearchingChallenges && (
+                <div className="absolute z-10 mt-1 w-full bg-zinc-800 border border-zinc-600 rounded-lg shadow-lg p-3">
+                  <p className="text-zinc-400">No challenges found. Try different keywords or use manual ID input.</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Challenge ID Input (Fallback) */}
+          {useManualId && (
+            <div>
+              <label
+                htmlFor="challengeId"
+                className="block text-sm font-medium text-zinc-300 mb-2 font-['HK Grotesk']"
+              >
+                Challenge ID
+              </label>
+              <input
+                id="challengeId"
+                type="text"
+                value={challengeId}
+                onChange={(e) => setChallengeId(e.target.value)}
+                onBlur={handleChallengeIdBlur}
+                className="w-full bg-zinc-800 border border-zinc-600 rounded-lg p-3 text-white
+                  placeholder-zinc-400 focus:outline-none focus:border-[#E0FE10] focus:ring-1
+                  focus:ring-[#E0FE10] transition-colors"
+                placeholder="Enter challenge ID"
+              />
+              {isLoading && (
+                <div className="mt-2 flex items-center">
+                  <div className="w-4 h-4 border-2 border-[#E0FE10] border-t-transparent rounded-full animate-spin mr-2"></div>
+                  <span className="text-zinc-400 text-xs">Loading challenge info...</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Hidden Challenge ID input to ensure it's submitted when using search */}
+          {!useManualId && (
+            <input type="hidden" value={challengeId} />
+          )}
 
           {/* Challenge Info (if found) */}
           {challengeInfo && (
@@ -401,12 +653,12 @@ export default function JoinChallengePage() {
           {/* Submit Button */}
           <button
             type="submit"
-            disabled={isLoading || isLoadingUser}
+            disabled={isLoading || isLoadingUser || isSearchingChallenges}
             className={`w-full bg-[#E0FE10] text-black font-semibold py-4 px-4 rounded-lg
               hover:bg-[#c8e60e] transition-colors font-['HK Grotesk'] flex items-center justify-center
-              ${(isLoading || isLoadingUser) ? 'opacity-50 cursor-not-allowed' : ''}`}
+              ${(isLoading || isLoadingUser || isSearchingChallenges) ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
-            {isLoading || isLoadingUser ? (
+            {isLoading || isLoadingUser || isSearchingChallenges ? (
               <div className="w-6 h-6 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
             ) : (
               'Join User to Challenge'
