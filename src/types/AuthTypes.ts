@@ -7,10 +7,9 @@ export interface QuizData {
         inches: number;
     };
     weight: number;
-    gymExperience: 'Novice' | 'Intermediate' | 'Expert' | null;
-    fitnessGoals: FitnessGoal[]; // Now properly typed as an array of FitnessGoal
+    level: 'Novice' | 'Intermediate' | 'Expert' | null;
+    goal: FitnessGoal[]; // Now properly typed as an array of FitnessGoal
     birthdate: Date | null;
-
 }
 
 export type FitnessGoal = 'Lose weight' | 'Gain muscle mass' | 'Tone up' | 'General Fitness';

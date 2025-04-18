@@ -185,8 +185,8 @@ const SignInModal: React.FC<SignInModalProps> = ({
     gender: null,
     height: { feet: 0, inches: 0 },
     weight: 0,
-    gymExperience: null,
-    fitnessGoals: [],
+    level: null,
+    goal: [],
     birthdate: null,
   });
 
@@ -1121,7 +1121,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
                 "Expert": UserLevel.Expert
               };
             
-              setQuizData({ ...quizData, gymExperience: level as any });
+              setQuizData({ ...quizData, level: level as any });
               
               if (auth.currentUser?.uid && userService.currentUser) {
                 const updatedUser = new User(userService.currentUser.id, {
@@ -1139,7 +1139,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
               setQuizStep(quizStep + 1);
             }}
             className={`w-full p-4 rounded-lg border ${
-              quizData.gymExperience === level
+              quizData.level === level
                 ? "border-[#E0FE10] bg-[#E0FE10]/10"
                 : "border-zinc-700 hover:border-[#E0FE10]"
             } text-left text-white transition-colors`}
@@ -1174,13 +1174,13 @@ const SignInModal: React.FC<SignInModalProps> = ({
               };
             
               // Determine updated goals
-              const updatedGoals = quizData.fitnessGoals.includes(goal)
-                ? quizData.fitnessGoals.filter((g) => g !== goal)
-                : [...quizData.fitnessGoals, goal];
+              const updatedGoals = quizData.goal.includes(goal)
+                ? quizData.goal.filter((g) => g !== goal)
+                : [...quizData.goal, goal];
             
               setQuizData((prev: QuizData) => ({
                 ...prev,
-                fitnessGoals: updatedGoals,
+                goal: updatedGoals,
               }));
               
               if (auth.currentUser?.uid && userService.currentUser) {
@@ -1202,13 +1202,13 @@ const SignInModal: React.FC<SignInModalProps> = ({
               }
             }}
             className={`w-full p-4 rounded-lg border ${
-              quizData.fitnessGoals.includes(goal)
+              quizData.goal.includes(goal)
                 ? "border-[#E0FE10] bg-[#E0FE10]/10"
                 : "border-zinc-700 hover:border-[#E0FE10]"
             } text-left text-white transition-colors relative`}
           >
             <span>{goal}</span>
-            {quizData.fitnessGoals.includes(goal) && (
+            {quizData.goal.includes(goal) && (
               <svg
                 className="w-5 h-5 absolute right-4 top-1/2 transform -translate-y-1/2 text-[#E0FE10]"
                 fill="none"
@@ -1812,9 +1812,9 @@ const SignInModal: React.FC<SignInModalProps> = ({
       case 2:
         return quizData.weight > 0;
       case 3:
-        return !!quizData.gymExperience;
+        return !!quizData.level;
       case 4:
-        return quizData.fitnessGoals.length > 0;
+        return quizData.goal.length > 0;
       case 5:
         return !!quizData.birthdate;
       default:
@@ -2136,8 +2136,8 @@ function isOnboardingComplete(user: any) {
     user.height && user.height.feet > 0 &&
     user.birthdate &&
     user.gender &&
-    user.gymExperience &&
-    Array.isArray(user.fitnessGoals) && user.fitnessGoals.length > 0 &&
+    user.level &&
+    Array.isArray(user.goal) && user.goal.length > 0 &&
     user.registrationComplete // add more fields as needed
   );
 }

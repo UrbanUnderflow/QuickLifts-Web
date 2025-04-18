@@ -570,6 +570,9 @@ export default function JoinChallengePage() {
                 <span>
                   End: {challengeInfo.endDate ? challengeInfo.endDate.toLocaleDateString() : 'Not set'}
                 </span>
+                <span className="mt-1 pt-1 border-t border-zinc-700">
+                  ID: <span className="font-mono">{challengeInfo.id}</span>
+                </span>
               </div>
             </div>
           )}
