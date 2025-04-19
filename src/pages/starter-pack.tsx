@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Check } from 'lucide-react';
 import Head from 'next/head';
 import FAQ from '../components/FAQ';
@@ -86,30 +86,6 @@ const CreatorChecklist = () => {
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  useEffect(() => {
-    const sections = document.querySelectorAll<HTMLElement>('.fade-ready');
-    const observer = new window.IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            entry.target.classList.add('fade-in');
-          } else {
-            entry.target.classList.remove('fade-in');
-          }
-        });
-      },
-      {
-        root: null,
-        threshold: 0.1,
-        rootMargin: '-50px',
-      }
-    );
-    sections.forEach((section) => observer.observe(section));
-    return () => {
-      sections.forEach((section) => observer.unobserve(section));
-    };
-  }, []);
-
   const siteUrl = 'https://fitwithpulse.ai';
   const pageUrl = `${siteUrl}/creator-checklist`;
   const title = 'Creator Guide | Start Your Pulse Journey';
@@ -142,7 +118,7 @@ const CreatorChecklist = () => {
       </div>
 
       {/* Hero Section */}
-      <section className="fade-ready min-h-[80vh] py-20 text-center flex flex-col items-center justify-center">
+      <section className="min-h-[80vh] py-20 text-center flex flex-col items-center justify-center">
         <div className="max-w-3xl mx-auto px-4 space-y-12">
           {/* App Introduction */}
           <div>
@@ -199,7 +175,7 @@ const CreatorChecklist = () => {
       </section>
 
       {/* Interactive Feature Tiles */}
-      <section className="fade-ready py-20 bg-zinc-950">
+      <section className="py-20 bg-zinc-950">
         <div className="max-w-5xl mx-auto px-4 mb-20">
           <h2 className="text-center text-white text-3xl font-bold mb-16">The Pulse Ecosystem</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -264,7 +240,7 @@ const CreatorChecklist = () => {
       </section>
 
       {/* Steps Section */}
-      <section className="fade-ready py-20 bg-black">
+      <section className="py-20 bg-black">
         <div className="max-w-6xl mx-auto px-4 mb-16">
           <h2 className="text-center text-white text-4xl font-bold mb-16">Getting Started</h2>
           <div className="grid gap-16">
@@ -335,14 +311,14 @@ const CreatorChecklist = () => {
       </section>
 
       {/* FAQ Section */}
-      <section className="fade-ready bg-zinc-900 py-20">
+      <section className="bg-zinc-900 py-20">
         <div className="max-w-4xl mx-auto px-4 mb-16">
           <FAQ title="Common Questions" items={FAQ_DATA} theme="dark" />
         </div>
       </section>
 
       {/* CTA Section */}
-      <section className="fade-ready bg-black py-20">
+      <section className="bg-black py-20">
         <div className="max-w-4xl mx-auto px-4 text-center">
           <h2 className="text-white text-3xl sm:text-4xl font-bold mb-6">
             Ready to Start Creating?
