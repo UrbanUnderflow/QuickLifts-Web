@@ -1258,6 +1258,7 @@ interface ChallengeInvitationProps {
   challenge: Challenge;
   onClose: () => void;
   onJoinChallenge: (challenge: any) => Promise<void>;
+  ttclid?: string;
 }
 
 export type {

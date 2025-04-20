@@ -40,7 +40,7 @@ const ChallengePage: React.FC<ChallengePageProps> = ({ initialCollection, initia
   });
 
   const router = useRouter();
-  const { id } = router.query;
+  const { id, ttclid } = router.query;
   const [collection, setCollection] = useState<SweatlistCollection | null>(initialCollection || null);
   const [loading, setLoading] = useState(!initialCollection);
   const [error, setError] = useState<string | null>(initialError || null);
@@ -141,6 +141,15 @@ const ChallengePage: React.FC<ChallengePageProps> = ({ initialCollection, initia
     }
   }, [id, router.isReady, initialCollection]);
 
+  useEffect(() => {
+    // Fire TikTok InvitePageView event on mount
+    if (typeof window !== 'undefined' && window.ttq && collection?.challenge?.id) {
+      window.ttq.track('InvitePageView', {
+        round_id: collection.challenge.id
+      });
+    }
+  }, [collection?.challenge?.id]);
+
   if (!router.isReady || loading) {
     return <LoadingState />;
   }
@@ -186,6 +195,7 @@ const ChallengePage: React.FC<ChallengePageProps> = ({ initialCollection, initia
             setError('Failed to join challenge. Please try again.');
           }
         }}
+        ttclid={typeof ttclid === 'string' ? ttclid : undefined}
       />
     </>
   );

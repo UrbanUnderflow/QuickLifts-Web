@@ -266,7 +266,7 @@ const UserBadge: React.FC = () => {
   );
 };
 
-const RoundInvitation: React.FC<ChallengeInvitationProps> = ({ challenge, onClose, onJoinChallenge }) => {
+const RoundInvitation: React.FC<ChallengeInvitationProps> = ({ challenge, onClose, onJoinChallenge, ttclid }) => {
   console.log("RoundInvitation Render:", {
     hasPricingInfo: !!challenge.pricingInfo,
     pricingInfo: challenge.pricingInfo,
@@ -342,8 +342,8 @@ const RoundInvitation: React.FC<ChallengeInvitationProps> = ({ challenge, onClos
           />
         </div>
 
-        {/* Add the CTA component */}
-        <ChallengeCTA challenge={challenge} />
+        {/* Add the CTA component and pass ttclid */}
+        <ChallengeCTA challenge={challenge} ttclid={ttclid} />
       </div>
     </div>
   );

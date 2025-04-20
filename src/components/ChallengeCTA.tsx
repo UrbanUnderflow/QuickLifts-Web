@@ -9,7 +9,12 @@ interface OnboardingStep {
   icon: React.ReactNode;
 }
 
-const ChallengeCTA: React.FC<{ challenge: Challenge }> = ({ challenge }) => {
+interface ChallengeCTAProps {
+  challenge: Challenge;
+  ttclid?: string;
+}
+
+const ChallengeCTA: React.FC<ChallengeCTAProps> = ({ challenge, ttclid }) => {
   const router = useRouter();
   const [showInstructions, setShowInstructions] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
@@ -36,7 +41,10 @@ const ChallengeCTA: React.FC<{ challenge: Challenge }> = ({ challenge }) => {
   const appStoreUrl = 'https://apps.apple.com/ca/app/pulse-community-workouts/id6451497729';
   
   // Create the base URL with properly encoded parameters for deep linking
-  const baseUrl = `https://www.quickliftsapp.com/?linkType=round&roundId=${challenge.id}`;
+  let baseUrl = `https://www.quickliftsapp.com/?linkType=round&roundId=${challenge.id}`;
+  if (ttclid) {
+    baseUrl += `&ttclid=${ttclid}`;
+  }
   const encodedBaseUrl = encodeURIComponent(baseUrl);
   const deepLinkUrl = `https://quicklifts.page.link/?link=${encodedBaseUrl}&apn=com.pulse.fitnessapp&ibi=Tremaine.QuickLifts&isi=6451497729`;
 
@@ -69,6 +77,12 @@ const ChallengeCTA: React.FC<{ challenge: Challenge }> = ({ challenge }) => {
   };
 
   const handleOpenInApp = () => {
+    if (typeof window !== 'undefined' && window.ttq) {
+      window.ttq.track('JoinLinkClick', {
+        round_id: challenge.id,
+        ttclid: ttclid || undefined
+      });
+    }
     window.location.href = deepLinkUrl;
   };
 

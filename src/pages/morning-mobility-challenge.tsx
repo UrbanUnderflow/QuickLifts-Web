@@ -8,10 +8,45 @@ import { Swiper, SwiperSlide } from 'swiper/react';
 import 'swiper/css';
 import 'swiper/css/pagination';
 import 'swiper/css/autoplay';
+import { useRouter } from 'next/router';
+
+// Helper stubs (replace with your actual implementations or imports)
+function getReferral(): string {
+  // Example: return from query param or localStorage
+  return '';
+}
+function getUTM(param: string): string {
+  // Example: parse from URL
+  return '';
+}
+function sha256(str: string): string {
+  // You need to implement or import a SHA-256 hash function here
+  return str;
+}
+function throttle<T extends (...args: any[]) => void>(fn: T, wait: number): T {
+  let last = 0;
+  return function (this: any, ...args: any[]) {
+    const now = Date.now();
+    if (now - last > wait) {
+      last = now;
+      fn.apply(this, args);
+    }
+  } as T;
+}
+
+declare global {
+  interface Window {
+    ttq?: {
+      track: (event: string, params?: Record<string, any>) => void;
+    };
+    deepFired?: boolean;
+  }
+}
 
 const MorningMobilityChallengePage: NextPage = () => {
   // Add countdown timer state
   const [daysLeft, setDaysLeft] = useState(12);
+  const router = useRouter();
   
   // Update countdown timer (for demo purposes)
   useEffect(() => {
@@ -26,6 +61,37 @@ const MorningMobilityChallengePage: NextPage = () => {
     } else {
       setDaysLeft(0);
     }
+  }, []);
+
+  useEffect(() => {
+    // 1. Track primary CTA clicks
+    document.querySelectorAll('.join-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (window.ttq) {
+          window.ttq.track('ClickCTA', {
+            referral_code: getReferral() || 'none',
+            utm_campaign: getUTM('utm_campaign')
+          });
+        }
+      });
+    });
+
+    // 3. Optional: fire a second PageView for deep scroll
+    const onScroll = throttle(() => {
+      if (window.scrollY > 1200 && !window.deepFired) {
+        if (window.ttq) {
+          window.ttq.track('PageDeepView');
+        }
+        window.deepFired = true;
+      }
+    }, 1000);
+
+    window.addEventListener('scroll', onScroll);
+
+    // Cleanup listeners on unmount
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+    };
   }, []);
 
   return (
@@ -92,15 +158,38 @@ const MorningMobilityChallengePage: NextPage = () => {
             establishing a consistent morning routine.
           </p>
           
-          <a 
-            href="#join-now"
-            className="bg-[#E0FE10] text-black px-8 py-4 rounded-full text-lg font-semibold transition-all duration-300 inline-flex items-center hover:brightness-110 hover:-translate-y-1 hover:shadow-lg"
+          {/* Dynamic Join the Challenge button with ttclid */}
+          <button
+            type="button"
+            className="join-btn bg-[#E0FE10] text-black px-8 py-4 rounded-full text-lg font-semibold transition-all duration-300 inline-flex items-center hover:brightness-110 hover:-translate-y-1 hover:shadow-lg"
+            onClick={async () => {
+              let ttclid = '';
+              if (
+                typeof window !== 'undefined' &&
+                window.ttq &&
+                typeof (window.ttq as any).instance === 'function'
+              ) {
+                try {
+                  const user = (window.ttq as any).instance('D02CU6RC77U7JS69L7U0').getUser();
+                  ttclid = user && user.ttclid ? user.ttclid : '';
+                } catch (e) {
+                  ttclid = '';
+                }
+              }
+              const baseUrl = '/round-invitation/Kel8IL0kWpbie4PXRVgZ?id=Bq6zlqIlSdPUGki6gsv6X9TdVtG3&sharedBy=Bq6zlqIlSdPUGki6gsv6X9TdVtG3';
+              const url = ttclid ? `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}ttclid=${ttclid}` : baseUrl;
+              if (router && router.push) {
+                router.push(url);
+              } else {
+                window.location.href = url;
+              }
+            }}
           >
             Join the Challenge
             <svg className="w-5 h-5 ml-2" viewBox="0 0 20 20" fill="currentColor">
               <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
             </svg>
-          </a>
+          </button>
         </div>
       </main>
 
@@ -530,14 +619,36 @@ const MorningMobilityChallengePage: NextPage = () => {
             Join the Morning Mobility Challenge today and start your journey towards better mobility, consistency, and a chance to win $1,000.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <a 
-              href="https://fitwithpulse.ai/challenge/morning-mobility"
-              className="bg-[#E0FE10] text-black px-8 py-4 rounded-full text-lg font-semibold transition-all duration-300 hover:brightness-110 hover:-translate-y-1 hover:shadow-lg"
+            <button 
+              type="button"
+              className="join-btn bg-[#E0FE10] text-black px-8 py-4 rounded-full text-lg font-semibold transition-all duration-300 hover:brightness-110 hover:-translate-y-1 hover:shadow-lg"
+              onClick={async () => {
+                let ttclid = '';
+                if (
+                  typeof window !== 'undefined' &&
+                  window.ttq &&
+                  typeof (window.ttq as any).instance === 'function'
+                ) {
+                  try {
+                    const user = (window.ttq as any).instance('D02CU6RC77U7JS69L7U0').getUser();
+                    ttclid = user && user.ttclid ? user.ttclid : '';
+                  } catch (e) {
+                    ttclid = '';
+                  }
+                }
+                const baseUrl = '/round-invitation/Kel8IL0kWpbie4PXRVgZ?id=Bq6zlqIlSdPUGki6gsv6X9TdVtG3&sharedBy=Bq6zlqIlSdPUGki6gsv6X9TdVtG3';
+                const url = ttclid ? `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}ttclid=${ttclid}` : baseUrl;
+                if (router && router.push) {
+                  router.push(url);
+                } else {
+                  window.location.href = url;
+                }
+              }}
             >
               Join the Challenge
-            </a>
+            </button>
             <a 
-              href="https://apps.apple.com/us/app/pulse-fitness"
+              href="https://apps.apple.com/ag/app/pulse-community-fitness/id6451497729"
               className="bg-zinc-800 text-white px-8 py-4 rounded-full text-lg font-semibold hover:bg-zinc-700 transition-colors flex items-center justify-center gap-2"
             >
               <span>Download App</span>
