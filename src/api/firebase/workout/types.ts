@@ -1292,3 +1292,61 @@ export class PricingInfo {
     return new PricingInfo(dict || {});
   }
 }
+
+// NEW TYPES -------------------------------------------------------------
+// These interfaces mirror the Swift structs `ExerciseWeeklyStats` and `WeeklyWorkoutData`
+// used on iOS for the round wrap‑up analytics. They will be consumed by the
+// web `RoundWrapup` page to render week‑over‑week charts and detailed
+// exercise statistics.
+
+/**
+ * Aggregate stats for a single exercise (per week)
+ */
+export interface ExerciseWeeklyStats {
+  /** Unique identifier */
+  id: string;
+  /** Plain name of the exercise */
+  exerciseName: string;
+  /** Primary muscle group name (human readable – e.g. "Chest") */
+  muscleGroup: string;
+  /** Total weight lifted for this exercise in the given week */
+  totalWeight: number;
+  /** Total repetitions performed for this exercise in the given week */
+  totalReps: number;
+  /** Convenience – totalWeight / totalReps (NaN‑safe) */
+  averageLoadPerRep: number;
+}
+
+/**
+ * Consolidated workout statistics for a single calendar week
+ * (Sunday – Saturday) within a challenge/round.
+ */
+export interface WeeklyWorkoutData {
+  /**  ISO string representing week start (00:00:00 of Sunday) */
+  weekStartDate: Date;
+  /**  ISO string representing week end (23:59:59 of Saturday) */
+  weekEndDate: Date;
+  /** Number of sets performed */
+  totalSets: number;
+  /** Number of reps performed */
+  totalReps: number;
+  /** Aggregate volume = Σ (weight * reps) */
+  totalVolume: number;
+  /** Aggregate weight (same as totalVolume for now) */
+  totalWeight: number;
+  /** Counts of how many times each exercise appears */
+  exerciseCounts: Record<string, number>;
+  /** Volume distribution by muscle group – reps */
+  muscleGroupSets: Record<string, number>;
+  /** Volume distribution by muscle group – weight */
+  muscleGroupWeight: Record<string, number>;
+  /** Detailed per‑exercise stats */
+  exerciseStats: ExerciseWeeklyStats[];
+
+  /**
+   * Convenience label – example "Jan 1‑7". Left for consumer to compute if needed
+   * but included here for parity with iOS.
+   */
+  weekLabel?: string;
+}
+// ----------------------------------------------------------------------

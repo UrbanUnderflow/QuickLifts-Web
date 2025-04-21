@@ -4,9 +4,12 @@ import { useRouter } from 'next/router';
 import html2canvas from 'html2canvas';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Crown, Award, Flame, Sunrise, Heart, TrendingUp } from 'lucide-react';
-import { workoutService, Challenge, UserChallenge, SweatlistCollection } from '../../../api/firebase/workout';
+import { workoutService, Challenge, UserChallenge, SweatlistCollection, WorkoutSummary, WeeklyWorkoutData, ExerciseWeeklyStats } from '../../../api/firebase/workout';
 import { RootState } from '../../../redux/store';
 import { collection } from 'firebase/firestore';
+import { startOfWeek, endOfWeek, format as formatDateFns, differenceInCalendarWeeks } from 'date-fns';
+import LiftingPerformanceSection from '../../../components/RoundWrapup/LiftingPerformanceSection';
+import MuscleBalanceSection from '../../../components/RoundWrapup/MuscleBalanceSection';
 
 
 
@@ -91,6 +94,69 @@ const ActivityView: React.FC<ActivityViewProps> = ({ activityItems, applicationA
   return <div />;
 };
 
+// --------------------------------------------------------------
+// Utility helpers (could be moved out later)
+const weekLabel = (date: Date) => {
+  const fmt = (d: Date) => formatDateFns(d, 'MMM d');
+  const start = fmt(date);
+  const end = fmt(endOfWeek(date));
+  return `${start}-${end.slice(-2)}`;
+};
+
+// Utility: fallback mapping of exercise name -> primary muscle group (lower‑case keys, lower‑case values)
+const mapExerciseNameToGroup = (exerciseName: string): string => {
+  const mapping: Record<string, string> = {
+    'bench press': 'chest',
+    'incline bench press': 'chest',
+    'decline bench press': 'chest',
+    'dumbbell fly': 'chest',
+    'push-up': 'chest',
+
+    'deadlift': 'back',
+    'pull-up': 'back',
+    'lat pulldown': 'back',
+    'barbell row': 'back',
+    'dumbbell row': 'back',
+
+    'squat': 'legs',
+    'leg press': 'legs',
+    'lunge': 'legs',
+    'leg extension': 'legs',
+    'leg curl': 'legs',
+
+    'shoulder press': 'shoulders',
+    'lateral raise': 'shoulders',
+    'front raise': 'shoulders',
+    'reverse fly': 'shoulders',
+
+    'bicep curl': 'arms',
+    'tricep extension': 'arms',
+    'tricep pushdown': 'arms',
+    'hammer curl': 'arms',
+
+    'sit-up': 'core',
+    'plank': 'core',
+    'russian twist': 'core',
+    'leg raise': 'core',
+  };
+
+  const lower = exerciseName.toLowerCase();
+  // Exact match first
+  if (mapping[lower]) return mapping[lower];
+
+  // Keyword/fuzzy match
+  if (lower.includes('chest') || lower.includes('bench') || lower.includes('fly')) return 'chest';
+  if (lower.includes('back') || lower.includes('row') || lower.includes('pull')) return 'back';
+  if (lower.includes('leg') || lower.includes('squat') || lower.includes('hamstring')) return 'legs';
+  if (lower.includes('shoulder') || lower.includes('delt')) return 'shoulders';
+  if (lower.includes('bicep') || lower.includes('tricep') || lower.includes('curl')) return 'arms';
+  if (lower.includes('ab') || lower.includes('core') || lower.includes('plank')) return 'core';
+
+  return 'other';
+};
+
+// --------------------------------------------------------------
+
 // --- Main RoundWrapup Component ---
 const RoundWrapup: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
@@ -112,13 +178,33 @@ const RoundWrapup: React.FC = () => {
   // A ref for the shareable analytics view snapshot
   const shareableRef = useRef<HTMLDivElement>(null);
 
+  const [workoutSummaries, setWorkoutSummaries] = useState<WorkoutSummary[]>([]);
+  const [weeklyBreakdown, setWeeklyBreakdown] = useState<WeeklyWorkoutData[]>([]);
+  const [totalVolumeLifted, setTotalVolumeLifted] = useState<number>(0);
+  const [heaviestLift, setHeaviestLift] = useState<{ exercise: string; weight: number } | null>(null);
+  const [totalReps, setTotalReps] = useState<number>(0);
+  const [totalSets, setTotalSets] = useState<number>(0);
+  const [muscleGroupBalance, setMuscleGroupBalance] = useState<Record<string, number>>({});
+  const [personalRecords, setPersonalRecords] = useState<{ exercise: string; weight: number; reps: number }[]>([]);
+  const [weightProgressions, setWeightProgressions] = useState<{ exercise: string; startWeight: number; endWeight: number }[]>([]);
+  const [averageMuscleGroupLoad, setAverageMuscleGroupLoad] = useState<Record<string, number>>({});
+  const [muscleGroupLoad, setMuscleGroupLoad] = useState<Record<string, number>>({});
+
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
+      // Ensure we have a valid ID from the router before fetching
+      const challengeId = typeof id === 'string' ? id : null;
+      if (!challengeId) {
+        console.error('No valid round ID found in URL');
+        setLoading(false);
+        // Optional: redirect or show an error message
+        return;
+      }
       try {
-        // Fetch challenge and participants
-        const collection: SweatlistCollection = await workoutService.getCollectionById("cevWHBlBk7VobANRUsmC");
-        const participantsResponse = await workoutService.getUserChallengesByChallengeId("cevWHBlBk7VobANRUsmC");
+        // Fetch challenge and participants using the dynamic ID
+        const collection: SweatlistCollection = await workoutService.getCollectionById(challengeId);
+        const participantsResponse = await workoutService.getUserChallengesByChallengeId(challengeId);
         setChallenge(collection.challenge || null);
         setParticipants(participantsResponse.userChallenges || []);
       } catch (error) {
@@ -230,6 +316,340 @@ const RoundWrapup: React.FC = () => {
     rankedParticipants.length > 0
       ? `Top Score: ${rankedParticipants[0].pulsePoints.totalPoints} pts`
       : 'Challenge Wrap-up';
+
+  // Fetch workout summaries for the current user once we have participants & challenge
+  useEffect(() => {
+    const loadWorkoutSummaries = async () => {
+      if (!currentUser?.id || !challenge) return;
+      try {
+        const summaries = await workoutService.fetchAllWorkoutSummaries();
+        // Filter to summaries that belong to this round (roundWorkoutId exists in completedWorkouts)
+        const completedIds = new Set(
+          participants
+            .find(p => p.userId === currentUser.id)?.completedWorkouts.map(cw => cw.workoutId) || []
+        );
+        const roundSummaries = summaries.filter(s =>
+          s.roundWorkoutId && completedIds.has(s.roundWorkoutId)
+        );
+        setWorkoutSummaries(roundSummaries as WorkoutSummary[]);
+
+        // --- Simple total volume calculation ---
+        let volume = 0;
+        let heaviest: { exercise: string; weight: number } | null = null;
+
+        roundSummaries.forEach(summary => {
+          summary.exercisesCompleted?.forEach(log => {
+            (log.logs || []).forEach(set => {
+              const mainLoad = set.weight * set.reps;
+              volume += mainLoad;
+              if (set.isSplit) {
+                volume += set.leftWeight * set.leftReps;
+              }
+              const heavierSideWeight = set.isSplit ? Math.max(set.weight, set.leftWeight) : set.weight;
+              if (!heaviest || heavierSideWeight > heaviest.weight) {
+                heaviest = { exercise: log.exercise.name, weight: heavierSideWeight };
+              }
+            });
+          });
+        });
+        setTotalVolumeLifted(volume);
+        setHeaviestLift(heaviest);
+
+        // TODO: build weeklyBreakdown data structure
+      } catch (e) {
+        console.error('Error loading workout summaries', e);
+      }
+    };
+
+    loadWorkoutSummaries();
+  }, [participants, currentUser?.id, challenge]);
+
+  // Build weekly breakdown whenever workoutSummaries changes
+  useEffect(() => {
+    // Calculate breakdown using the dedicated function
+    const breakdown = calculateWeeklyBreakdown(workoutSummaries);
+
+    console.log('[RoundWrapup: WeeklyEffect] Breakdown:', breakdown);
+
+    // Update state with the results
+    setWeeklyBreakdown(breakdown.weeklyData);
+    setTotalReps(breakdown.cumulativeReps);
+    setTotalSets(breakdown.cumulativeSets);
+    setMuscleGroupBalance(breakdown.muscleRepsAggregate);
+    setMuscleGroupLoad(breakdown.muscleLoadAggregate);
+
+  }, [workoutSummaries]);
+
+  // Compute lifting performance metrics once weeklyBreakdown ready
+  useEffect(() => {
+    if (weeklyBreakdown.length === 0) return;
+
+    // --- Personal Records ---
+    const prMap: Record<string, { weight: number; reps: number }> = {};
+    workoutSummaries.forEach(summary => {
+      summary.exercisesCompleted.forEach(log => {
+        (log.logs || []).forEach(set => {
+          const exerciseName = log.exercise.name;
+          const heavier = set.isSplit ? Math.max(set.weight, set.leftWeight) : set.weight;
+          const reps = set.isSplit && set.leftWeight > set.weight ? set.leftReps : set.reps;
+          if (!prMap[exerciseName] || heavier > prMap[exerciseName].weight) {
+            prMap[exerciseName] = { weight: heavier, reps };
+          }
+        });
+      });
+    });
+
+    setPersonalRecords(Object.entries(prMap).map(([exercise, v]) => ({ exercise, weight: v.weight, reps: v.reps })).sort((a,b)=>b.weight-a.weight));
+
+    // --- Weight Progressions (avg early vs late) ---
+    const midpoint = Math.floor(workoutSummaries.length / 2);
+    const early = workoutSummaries.slice(0, midpoint);
+    const late = workoutSummaries.slice(midpoint);
+
+    console.log('[RoundWrapup: WeeklyEffect] Early:', early); 
+
+    const avgWeight = (sums: WorkoutSummary[]) => {
+      const map: Record<string, number[]> = {};
+      sums.forEach(summary => {
+        summary.exercisesCompleted.forEach(log => {
+          (log.logs || []).forEach(set => {
+            const w1 = set.weight > 0 ? set.weight : 0;
+            const w2 = set.isSplit && set.leftWeight > 0 ? set.leftWeight : 0;
+            if (w1 > 0) {
+              if (!map[log.exercise.name]) map[log.exercise.name] = [];
+              map[log.exercise.name].push(w1);
+            }
+            if (w2 > 0) {
+              if (!map[log.exercise.name]) map[log.exercise.name] = [];
+              map[log.exercise.name].push(w2);
+            }
+          });
+        });
+      });
+      const avg: Record<string, number> = {};
+      Object.entries(map).forEach(([ex, arr]) => {
+        avg[ex] = arr.reduce((a,b)=>a+b,0)/arr.length;
+      });
+      return avg;
+    };
+
+
+    const earlyAvg = avgWeight(early);
+    const lateAvg = avgWeight(late);
+
+    console.log('[RoundWrapup: WeeklyEffect] Early Avg:', earlyAvg);
+    console.log('[RoundWrapup: WeeklyEffect] Late Avg:', lateAvg);
+
+    const prog: { exercise: string; startWeight: number; endWeight: number }[] = [];
+    Object.keys(lateAvg).forEach(ex => {
+      if (earlyAvg[ex]) {
+        prog.push({ exercise: ex, startWeight: earlyAvg[ex], endWeight: lateAvg[ex] });
+      }
+    });
+    setWeightProgressions(prog.sort((a,b)=> (b.endWeight/b.startWeight)-(a.endWeight/a.startWeight)));
+
+    // --- Average load per muscle group ---
+    const totWeight: Record<string, number> = {};
+    const totReps: Record<string, number> = {};
+    weeklyBreakdown.forEach(wk => {
+      wk.exerciseStats.forEach(stat => {
+        totWeight[stat.muscleGroup] = (totWeight[stat.muscleGroup] || 0) + stat.totalWeight;
+        totReps[stat.muscleGroup] = (totReps[stat.muscleGroup] || 0) + stat.totalReps;
+      });
+    });
+    const avgMuscle: Record<string, number> = {};
+    Object.keys(totWeight).forEach(mg => {
+      avgMuscle[mg] = totWeight[mg] / Math.max(1, totReps[mg]);
+    });
+    setAverageMuscleGroupLoad(avgMuscle);
+  }, [weeklyBreakdown]);
+
+  const calculateWeeklyBreakdown = (summariesInput: WorkoutSummary[]) => {
+    console.log("[calculateWeeklyBreakdown] Starting with summaries:", summariesInput); // DEBUG
+    if (summariesInput.length === 0) {
+      return {
+        weeklyData: [],
+        cumulativeReps: 0,
+        cumulativeSets: 0,
+        muscleRepsAggregate: {},
+        muscleLoadAggregate: {},
+      };
+    }
+
+    // Group by week start (Sunday)
+    const byWeek = new Map<string, WorkoutSummary[]>();
+    summariesInput.forEach(summary => {
+      // Ensure completedAt is a Date object
+      let completedDate: Date;
+      const rawCompletedAt = summary.completedAt;
+      const rawCreatedAt = summary.createdAt;
+
+      if (rawCompletedAt instanceof Date) {
+        completedDate = rawCompletedAt;
+      } else if (rawCompletedAt && typeof (rawCompletedAt as any).toDate === 'function') {
+        completedDate = (rawCompletedAt as any).toDate(); // Use .toDate() for Timestamp
+      } else if (rawCreatedAt instanceof Date) {
+        completedDate = rawCreatedAt; // Fallback to createdAt if it's a Date
+      } else if (rawCreatedAt && typeof (rawCreatedAt as any).toDate === 'function') {
+        completedDate = (rawCreatedAt as any).toDate(); // Fallback to createdAt if it's a Timestamp
+      } else {
+        // If neither is valid, log an error and skip this summary
+        console.error('[calculateWeeklyBreakdown] Invalid date found in summary:', summary);
+        return; // Skip this iteration
+      }
+
+      // Add a check for invalid date after conversion attempts
+      if (isNaN(completedDate.getTime())) {
+         console.error('[calculateWeeklyBreakdown] Resulting completedDate is invalid for summary:', summary);
+         return; // Skip this iteration
+      }
+
+      const weekStart = startOfWeek(completedDate);
+      const key = weekStart.toISOString();
+      if (!byWeek.has(key)) byWeek.set(key, []);
+      byWeek.get(key)!.push(summary);
+    });
+
+    const weeklyDataResult: WeeklyWorkoutData[] = [];
+    let cumulativeRepsResult = 0;
+    let cumulativeSetsResult = 0;
+    const muscleRepsAggregateResult: Record<string, number> = {};
+    const muscleLoadAggregateResult: Record<string, number> = {};
+
+    const sortedWeekKeys = Array.from(byWeek.keys()).sort();
+
+    sortedWeekKeys.forEach((key) => {
+      const weekSummaries = byWeek.get(key)!;
+      const start = new Date(key);
+      const end = endOfWeek(start);
+
+      let setsCount = 0;
+      let repsCount = 0;
+      let volumeCount = 0;
+      let weightCount = 0;
+      const exerciseCounts: Record<string, number> = {};
+      const muscleGroupSets: Record<string, number> = {};
+      const muscleGroupWeight: Record<string, number> = {};
+      const exerciseStatsMap: Record<string, { load: number; reps: number; muscleGroup: string }> = {};
+
+      weekSummaries.forEach(summary => {
+        (summary.exercisesCompleted || []).forEach(log => {
+          const exName = log.exercise.name;
+          exerciseCounts[exName] = (exerciseCounts[exName] || 0) + 1;
+
+          let totalWeightForLog = 0;
+          let totalRepsForLog = 0;
+          let setsForLog = 0;
+
+          // Iterate through the actual performed sets in log.logs
+          (log.logs || []).forEach(set => {
+            // Ensure set.reps and set.weight are numbers
+            const setReps = typeof set.reps === 'number' ? set.reps : parseInt(set.reps || '0', 10);
+            const setWeight = typeof set.weight === 'number' ? set.weight : parseFloat(set.weight || '0');
+            const setLeftReps = typeof set.leftReps === 'number' ? set.leftReps : parseInt(set.leftReps || '0', 10);
+            const setLeftWeight = typeof set.leftWeight === 'number' ? set.leftWeight : parseFloat(set.leftWeight || '0');
+
+            console.log(`[calculateWeeklyBreakdown] Processing set:`, { setReps, setWeight, isSplit: set.isSplit, setLeftReps, setLeftWeight }); // DEBUG
+
+            const currentSetReps = setReps + (set.isSplit ? setLeftReps : 0);
+            const currentSetLoad = (setWeight * setReps) + (set.isSplit ? setLeftWeight * setLeftReps : 0);
+
+            totalRepsForLog += currentSetReps;
+            totalWeightForLog += currentSetLoad;
+            if (currentSetReps > 0) { // Count a set if reps were performed
+               setsForLog += 1;
+            }
+          });
+
+           console.log(`[calculateWeeklyBreakdown] Exercise: ${exName} -> Total Weight: ${totalWeightForLog}, Total Reps: ${totalRepsForLog}, Sets: ${setsForLog}`); // DEBUG
+
+          // Accumulate weekly totals based on summed sets
+          repsCount += totalRepsForLog;
+          setsCount += setsForLog;
+          volumeCount += totalWeightForLog;
+          weightCount += totalWeightForLog; // Assuming weightCount represents total load
+
+          // --- Muscle Group Aggregation --- 
+          let primaryMuscleGroup = 'other'; // Default
+          // 1. Use primaryBodyParts if available
+          if (log.exercise.primaryBodyParts && log.exercise.primaryBodyParts.length > 0) {
+            primaryMuscleGroup = log.exercise.primaryBodyParts[0]; // Use first primary part
+            log.exercise.primaryBodyParts.forEach(part => {
+              muscleGroupSets[part] = (muscleGroupSets[part] || 0) + totalRepsForLog;
+              muscleGroupWeight[part] = (muscleGroupWeight[part] || 0) + totalWeightForLog;
+              // Aggregate overall totals
+              muscleRepsAggregateResult[part] = (muscleRepsAggregateResult[part] || 0) + totalRepsForLog;
+              muscleLoadAggregateResult[part] = (muscleLoadAggregateResult[part] || 0) + totalWeightForLog;
+            });
+          } else {
+            // 2. Fallback to name mapping if primaryBodyParts is empty
+            primaryMuscleGroup = mapExerciseNameToGroup(exName);
+            muscleGroupSets[primaryMuscleGroup] = (muscleGroupSets[primaryMuscleGroup] || 0) + totalRepsForLog;
+            muscleGroupWeight[primaryMuscleGroup] = (muscleGroupWeight[primaryMuscleGroup] || 0) + totalWeightForLog;
+             // Aggregate overall totals
+            muscleRepsAggregateResult[primaryMuscleGroup] = (muscleRepsAggregateResult[primaryMuscleGroup] || 0) + totalRepsForLog;
+            muscleLoadAggregateResult[primaryMuscleGroup] = (muscleLoadAggregateResult[primaryMuscleGroup] || 0) + totalWeightForLog;
+          }
+          // --- End Muscle Group Aggregation ---
+
+
+          // --- Exercise Stats Map --- 
+          if (exerciseStatsMap[exName]) {
+            exerciseStatsMap[exName].load += totalWeightForLog;
+            exerciseStatsMap[exName].reps += totalRepsForLog;
+            // Keep the first determined muscle group if already exists
+          } else {
+            exerciseStatsMap[exName] = {
+              load: totalWeightForLog,
+              reps: totalRepsForLog,
+              muscleGroup: primaryMuscleGroup // Use the resolved group
+            };
+          }
+          // --- End Exercise Stats Map ---
+        });
+      });
+
+      // Convert exerciseStatsMap to array
+      const exerciseStatsArr = Object.entries(exerciseStatsMap).map(([name, stats]) => ({
+        id: `${start.toISOString()}-${name}`, // Unique ID for the week/exercise
+        exerciseName: name,
+        muscleGroup: stats.muscleGroup,
+        totalWeight: stats.load,
+        totalReps: stats.reps,
+        averageLoadPerRep: stats.reps > 0 ? stats.load / stats.reps : 0
+      })).sort((a, b) => a.exerciseName.localeCompare(b.exerciseName));
+
+
+      weeklyDataResult.push({
+        weekStartDate: start,
+        weekEndDate: end,
+        totalSets: setsCount,
+        totalReps: repsCount,
+        totalVolume: volumeCount,
+        totalWeight: weightCount,
+        exerciseCounts,
+        muscleGroupSets,
+        muscleGroupWeight,
+        exerciseStats: exerciseStatsArr,
+        weekLabel: weekLabel(start)
+      });
+
+      cumulativeRepsResult += repsCount;
+      cumulativeSetsResult += setsCount;
+    });
+
+    console.log("[calculateWeeklyBreakdown] Final Weekly Data:", weeklyDataResult); // DEBUG
+    console.log("[calculateWeeklyBreakdown] Final Reps Aggregate:", muscleRepsAggregateResult); // DEBUG
+    console.log("[calculateWeeklyBreakdown] Final Load Aggregate:", muscleLoadAggregateResult); // DEBUG
+
+    return {
+      weeklyData: weeklyDataResult,
+      cumulativeReps: cumulativeRepsResult,
+      cumulativeSets: cumulativeSetsResult,
+      muscleRepsAggregate: muscleRepsAggregateResult,
+      muscleLoadAggregate: muscleLoadAggregateResult,
+    };
+  };
 
   if (loading) {
     return (
@@ -459,6 +879,33 @@ const RoundWrapup: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Lifting Performance Section */}
+      {totalVolumeLifted > 0 && (
+        <LiftingPerformanceSection
+          totalVolume={totalVolumeLifted}
+          totalReps={totalReps}
+          heaviestLift={heaviestLift}
+          personalRecordsCount={personalRecords.length}
+          mostImproved={weightProgressions[0]
+            ? {
+                exercise: weightProgressions[0].exercise,
+                improvementPct:
+                  ((weightProgressions[0].endWeight - weightProgressions[0].startWeight) /
+                    Math.max(1, weightProgressions[0].startWeight)) * 100,
+              }
+            : undefined}
+        />
+      )}
+
+      {/* Muscle Balance Section */}
+      {Object.keys(muscleGroupBalance).length > 0 && (
+        <MuscleBalanceSection
+          muscleByReps={muscleGroupBalance}
+          muscleByLoad={muscleGroupLoad}
+          averageLoadPerRep={averageMuscleGroupLoad}
+        />
+      )}
 
       {/* Hidden shareable view for snapshot */}
       <div className="absolute top-0 left-0 -z-10 opacity-0">
