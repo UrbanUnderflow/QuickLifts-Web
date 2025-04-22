@@ -9,7 +9,7 @@ export const adminMethods: AdminService = {
       changeNotes.forEach((note, idx) => {
         notesObject[(idx + 1).toString()] = note;
       });
-      await setDoc(doc(db, 'versions', version), {
+      await setDoc(doc(db, 'version', version), {
         ...notesObject,
         isCriticalUpdate,
       });
