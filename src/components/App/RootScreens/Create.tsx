@@ -11,6 +11,7 @@ import { gifGenerator } from '../../../utils/gifGenerator';
 import { db } from '../../../api/firebase/config';
 import { doc, updateDoc } from 'firebase/firestore';
 import { SimpleVideoTrimmer } from '../../../components/SimpleVideoTrimmer';
+import { useUser } from '../../../hooks/useUser';
 
 import { Exercise, ExerciseVideo, ExerciseAuthor, ExerciseCategory } from '../../../api/firebase/exercise/types';
 import { ProfileImage } from '../../../api/firebase/user/types';
@@ -38,6 +39,7 @@ const videoCache = {
 const Create: React.FC = () => {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const currentUser = useUser();
 
   // Drag and video state
   const [isDragOver, setIsDragOver] = useState(false);
@@ -527,7 +529,8 @@ const Create: React.FC = () => {
       console.log('[DEBUG] Getting current user');
       
       // Get complete user data from userService (Redux store)
-      const completeUserData = userService.currentUser;
+      // const completeUserData = userService.currentUser;
+      const completeUserData = currentUser;
       
       if (!completeUserData) {
         console.error('[DEBUG] No user found in Redux store');

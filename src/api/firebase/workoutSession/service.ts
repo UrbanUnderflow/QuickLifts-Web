@@ -50,7 +50,7 @@ export class WorkoutSessionService {
 
   private async updateWorkoutServices(workoutSummary: WorkoutSummary): Promise<void> {
     try {
-      const userId = userService.currentUser?.id;
+      const userId = userService.nonUICurrentUser?.id;
       if (!userId) throw new Error('No authenticated user');
   
       // Save to Firestore using workoutService
@@ -78,7 +78,7 @@ export class WorkoutSessionService {
     workoutId: string
   ): Promise<void> {
     try {
-      const userId = userService.currentUser?.id;
+      const userId = userService.nonUICurrentUser?.id;
       if (!userId) {
         throw new Error('No authenticated user');
       }
@@ -268,7 +268,7 @@ export class WorkoutSessionService {
         return currentWorkoutSummary;
     }
 
-    if (!userService.currentUser?.id) {
+    if (!userService.nonUICurrentUser?.id) {
         throw new Error('No user is signed in');
     }
 
@@ -328,7 +328,7 @@ export class WorkoutSessionService {
 
     // Save updated summary and challenge using workoutService
     await workoutService.updateWorkoutSummary({
-        userId: userService.currentUser.id,
+        userId: userService.nonUICurrentUser.id,
         workoutId: challengeWorkoutId,
         summary: updatedSummary
     });

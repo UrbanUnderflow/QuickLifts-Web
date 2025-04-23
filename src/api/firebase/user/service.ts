@@ -11,12 +11,12 @@ import { store } from '../../../redux/store';
 import { setUser } from '../../../redux/userSlice';
 
 class UserService {
-  get currentUser(): User | null {
+  get nonUICurrentUser(): User | null {
     const userDict = store.getState().user.currentUser;
     return User.fromDictionary(userDict);
   }
 
-  set currentUser(user: User | null) {
+  set nonUICurrentUser(user: User | null) {
     store.dispatch(setUser(user ? user.toDictionary() : null));
   }
 
@@ -97,7 +97,7 @@ class UserService {
    }
 
    async deleteUserVideo(exerciseId: string): Promise<void> {
-    if (!this.currentUser?.id) {
+    if (!this.nonUICurrentUser?.id) {
       throw new Error('No user is signed in');
     }
   
@@ -133,12 +133,12 @@ class UserService {
   }
   
   async deleteStack(stackId: string): Promise<void> {
-    if (!this.currentUser?.id) {
+    if (!this.nonUICurrentUser?.id) {
       throw new Error('No user is signed in');
     }
   
     try {
-      const stackRef = doc(db, 'users', this.currentUser.id, 'MyCreatedWorkouts', stackId);
+      const stackRef = doc(db, 'users', this.nonUICurrentUser.id, 'MyCreatedWorkouts', stackId);
       
       // Delete associated logs
       const logsRef = collection(stackRef, 'logs');
@@ -190,13 +190,13 @@ class UserService {
         fullData: document.data()
       });
 
-      if (!this.currentUser) {
+      if (!this.nonUICurrentUser) {
         console.log('No current user found');
         return false;
       }
 
       if (isApproved) {
-        if (this.currentUser.subscriptionType != SubscriptionType.unsubscribed) {
+        if (this.nonUICurrentUser.subscriptionType != SubscriptionType.unsubscribed) {
           console.log('User already subscribed:', {
             currentType: user.subscriptionType,
             action: 'no change needed'
@@ -206,7 +206,7 @@ class UserService {
         
         console.log('Upgrading user to beta:', {
           user: user,
-          fromType: this.currentUser.subscriptionType,
+          fromType: this.nonUICurrentUser.subscriptionType,
           toType: SubscriptionType.beta
         });
 
@@ -252,13 +252,13 @@ class UserService {
   }
 
   async createStack(workout: Workout, exerciseLogs?: ExerciseLog[]): Promise<Workout> {
-    if (!this.currentUser?.id) {
+    if (!this.nonUICurrentUser?.id) {
       throw new Error('No user is signed in.');
     }
 
     // Reference to the new stack document under the user's MyCreatedWorkouts subcollection
     const userWorkoutRef = doc(
-      collection(db, 'users', this.currentUser.id, 'MyCreatedWorkouts'),
+      collection(db, 'users', this.nonUICurrentUser.id, 'MyCreatedWorkouts'),
       workout.id
     );
 
@@ -290,7 +290,7 @@ class UserService {
   }
 
   async fetchUserStacks(userId?: string): Promise<Workout[]> {
-    const currentUserId = userId || this.currentUser?.id;
+    const currentUserId = userId || this.nonUICurrentUser?.id;
     
     if (!currentUserId) {
       throw new Error('No user ID provided');
@@ -330,7 +330,7 @@ class UserService {
 
   async fetchUserVideos(userId?: string): Promise<Exercise[]> {
     // Use current user's ID if no ID is provided
-    const currentUserId = userId || this.currentUser?.id;
+    const currentUserId = userId || this.nonUICurrentUser?.id;
     
     if (!currentUserId) {
       throw new Error('No user ID provided');
@@ -485,7 +485,7 @@ class UserService {
   }
 
   async fetchFollowing(): Promise<FollowRequest[]> {
-    const currentUser = this.currentUser;
+    const currentUser = this.nonUICurrentUser;
     if (!currentUser?.id) {
       throw new Error('No user is signed in');
     }
@@ -530,7 +530,7 @@ class UserService {
   }
   
   async fetchFollowers(): Promise<FollowRequest[]> {
-    const currentUser = this.currentUser;
+    const currentUser = this.nonUICurrentUser;
     if (!currentUser?.id) {
       throw new Error('No user is signed in');
     }

@@ -147,7 +147,7 @@ const PaymentPage = ({ challengeData }: PaymentPageProps) => {
     // Check if user has already purchased this challenge
     const checkPurchaseStatus = async () => {
       setIsCheckingPurchase(true);
-      const currentUser = userService.currentUser;
+      const currentUser = userService.nonUICurrentUser;
       
       console.log('============= CHECKING PURCHASE STATUS =============');
       console.log('Current user:', currentUser ? {
@@ -248,7 +248,7 @@ const PaymentPage = ({ challengeData }: PaymentPageProps) => {
         
         const ownerId = challenge.ownerId || (Array.isArray(challenge.ownerId) ? challenge.ownerId[0] : null);
         const amount = totalAmount;
-        const currentUser = userService.currentUser;
+        const currentUser = userService.nonUICurrentUser;
         
         if (!ownerId) {
           throw new Error('No owner ID found for this challenge');
@@ -452,7 +452,7 @@ const PaymentPage = ({ challengeData }: PaymentPageProps) => {
   return (
     <div className="min-h-screen bg-zinc-950 text-white py-10">
       <div className="max-w-md mx-auto px-6">
-        {(isLocalhost || userService.currentUser?.email === "tremaine.grant@gmail.com") && (
+        {(isLocalhost || userService.nonUICurrentUser?.email === "tremaine.grant@gmail.com") && (
           <div className="mb-6 p-4 bg-zinc-900 rounded-lg space-y-4">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium">Test Mode</span>
@@ -647,7 +647,7 @@ const CheckoutForm = ({ challengeId, amount, currency, isApplePayAvailable, chal
                 body: JSON.stringify({
                   challengeId,
                   paymentId: `simulated_${Date.now()}`,
-                  buyerId: userService.currentUser?.id || 'anonymous',
+                  buyerId: userService.nonUICurrentUser?.id || 'anonymous',
                   ownerId: ownerId,
                   amount: amount
                 }),
@@ -721,7 +721,7 @@ const CheckoutForm = ({ challengeId, amount, currency, isApplePayAvailable, chal
               body: JSON.stringify({ 
                 challengeId,
                 paymentId: result.paymentIntent.id,
-                buyerId: userService.currentUser?.id || 'anonymous'
+                buyerId: userService.nonUICurrentUser?.id || 'anonymous'
               }),
             });
 
@@ -760,7 +760,7 @@ const CheckoutForm = ({ challengeId, amount, currency, isApplePayAvailable, chal
           body: JSON.stringify({
             challengeId,
             paymentId: `simulated_${Date.now()}`,
-            buyerId: userService.currentUser?.id || 'anonymous',
+            buyerId: userService.nonUICurrentUser?.id || 'anonymous',
             ownerId: ownerId,
             amount: amount
           }),
@@ -800,7 +800,7 @@ const CheckoutForm = ({ challengeId, amount, currency, isApplePayAvailable, chal
         ownerId,
         amount,
         currency,
-        buyerId: userService.currentUser?.id || 'anonymous'
+        buyerId: userService.nonUICurrentUser?.id || 'anonymous'
       });
       
       // Use the appropriate function based on test mode
@@ -863,7 +863,7 @@ const CheckoutForm = ({ challengeId, amount, currency, isApplePayAvailable, chal
           body: JSON.stringify({ 
             challengeId,
             paymentId: result.paymentIntent.id,
-            buyerId: userService.currentUser?.id || 'anonymous',
+            buyerId: userService.nonUICurrentUser?.id || 'anonymous',
             ownerId: ownerId,
             amount: amount
           }),
@@ -941,8 +941,8 @@ const CheckoutForm = ({ challengeId, amount, currency, isApplePayAvailable, chal
               challengeId,
               amount,
               currency,
-              buyerId: userService.currentUser?.id || 'anonymous',
-              buyerEmail: userService.currentUser?.email || 'unknown'
+              buyerId: userService.nonUICurrentUser?.id || 'anonymous',
+              buyerEmail: userService.nonUICurrentUser?.email || 'unknown'
             }),
           });
           
@@ -969,7 +969,7 @@ const CheckoutForm = ({ challengeId, amount, currency, isApplePayAvailable, chal
           // Record the payment in our system after payment is processed
           try {
             // Record the payment
-            console.log('Recording payment with buyer ID:', userService.currentUser?.id || 'anonymous');
+            console.log('Recording payment with buyer ID:', userService.nonUICurrentUser?.id || 'anonymous');
             const paymentResponse = await fetch('/.netlify/functions/complete-payment', {
               method: 'POST',
               headers: {
@@ -978,7 +978,7 @@ const CheckoutForm = ({ challengeId, amount, currency, isApplePayAvailable, chal
               body: JSON.stringify({
                 challengeId,
                 paymentId: data.clientSecret.split('_secret')[0],
-                buyerId: userService.currentUser?.id || 'anonymous',
+                buyerId: userService.nonUICurrentUser?.id || 'anonymous',
                 ownerId: ownerId,
                 amount
               }),

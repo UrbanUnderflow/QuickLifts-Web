@@ -23,6 +23,7 @@ import {
 import { ExerciseVideo } from '../api/firebase/exercise/types';
 import { UserFilter } from '../components/App/UserFilter/UserFilter';
 import { ExerciseGrid } from '../components/App/ExerciseGrid/ExerciseGrid';
+import { useUser } from '../hooks/useUser';
 
 
 // CreateWorkoutExerciseCardView Component
@@ -694,9 +695,10 @@ const CreateStackPage: React.FC = () => {
   const [useAuthorContent, setUseAuthorContent] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
+  const currentUser = useUser();
 
   const onCreateStack = async () => {
-    if (!userService.currentUser?.id) {
+    if (!currentUser?.id) {
       console.error('No user ID found');
       return;
     }
@@ -717,7 +719,7 @@ const CreateStackPage: React.FC = () => {
     try {
       const { workout, exerciseLogs } = await workoutService.formatWorkoutAndInitializeLogs(
         exerciseDetails,
-        userService.currentUser.id
+        currentUser.id
       );
 
       // Just update the essential fields
@@ -728,7 +730,7 @@ const CreateStackPage: React.FC = () => {
       console.log("Here are the final logs:", exerciseLogs);
 
       await userService.createStack(workout, exerciseLogs);
-      router.push(`/workout/${userService.currentUser.username}/${workout.id}`);
+      router.push(`/workout/${currentUser.username}/${workout.id}`);
     } catch (error) {
       console.error('Error creating stack:', error);
     } finally {

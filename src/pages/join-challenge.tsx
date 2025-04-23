@@ -72,7 +72,7 @@ export default function JoinChallengePage() {
       if (user) {
         try {
           const firestoreUser = await userService.fetchUserFromFirestore(user.uid);
-          userService.currentUser = firestoreUser;
+          userService.nonUICurrentUser = firestoreUser;
           console.log('User data fetched and set:', firestoreUser);
           setIsSignedIn(true);
           setIsSignInModalVisible(false);
@@ -81,7 +81,7 @@ export default function JoinChallengePage() {
           setError('Error loading user data');
         }
       } else {
-        userService.currentUser = null;
+        userService.nonUICurrentUser = null;
         setIsSignedIn(false);
         setIsSignInModalVisible(true);
       }

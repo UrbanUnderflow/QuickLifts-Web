@@ -1,12 +1,14 @@
 import React, { useEffect } from 'react';
 import type { AppProps } from 'next/app';
-import { Provider } from 'react-redux';
+import { Provider, useSelector } from 'react-redux';
 import { store, persistor } from '../redux/store'; 
 import { PersistGate } from 'redux-persist/integration/react';
 import '../components/Footer/GlisteningButton.css';
 import '../index.css';
 import '../styles/animations.css';
 import Script from 'next/script';
+import mixpanel from 'mixpanel-browser';
+import { RootState } from '../redux/store';
 
 import AuthWrapper from '../components/AuthWrapper';
 
@@ -15,6 +17,50 @@ const isDev = process.env.NODE_ENV === 'development';
 if (isDev) {
   require('../utils/envDebug');
 }
+
+// Helper component to handle Mixpanel logic, since hooks can only be called inside components
+const MixpanelInitializer: React.FC = () => {
+  const currentUser = useSelector((state: RootState) => state.user.currentUser);
+
+  // Initialize Mixpanel on mount
+  useEffect(() => {
+    const mixpanelToken = process.env.NEXT_PUBLIC_MIXPANEL_PROJECT_TOKEN;
+    if (mixpanelToken) {
+      mixpanel.init(mixpanelToken, {
+        debug: process.env.NODE_ENV === 'development',
+        track_pageview: true,
+        persistence: 'localStorage',
+      });
+      console.log('[Mixpanel] Initialized');
+      // Register super properties that apply to all web events
+      mixpanel.register({
+        platform: 'web',
+        // Optionally add app version if available
+        // app_version: process.env.NEXT_PUBLIC_APP_VERSION,
+      });
+    } else {
+      console.warn('[Mixpanel] Project token not found. Tracking disabled.');
+    }
+  }, []);
+
+  // Identify user when available or changes
+  useEffect(() => {
+    if (currentUser?.id) {
+      mixpanel.identify(currentUser.id);
+      mixpanel.people.set({
+        $email: currentUser.email,
+        $name: currentUser.displayName,
+        username: currentUser.username,
+        registrationComplete: currentUser.registrationComplete,
+      });
+      console.log('[Mixpanel] User identified:', currentUser.id);
+    } else {
+      console.log('[Mixpanel] No user identified.');
+    }
+  }, [currentUser]);
+
+  return null;
+};
 
 const MyApp: React.FC<AppProps> = ({ Component, pageProps }) => {
   useEffect(() => {
@@ -40,6 +86,7 @@ const MyApp: React.FC<AppProps> = ({ Component, pageProps }) => {
       {/* Redux Provider and App Content */}
       <Provider store={store}>
         <PersistGate loading={null} persistor={persistor}>
+          <MixpanelInitializer />
           <AuthWrapper>
             <Component {...pageProps} />
           </AuthWrapper>

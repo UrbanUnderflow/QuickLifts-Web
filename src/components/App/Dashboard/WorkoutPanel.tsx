@@ -9,7 +9,6 @@ import {
  } from '../../../api/firebase/workout/types';
 import WorkoutTypeSelector from '../../../components/App/Dashboard/WorkoutTypeSelector';
 import classNames from 'classnames'; // Install classnames for conditional classes
-import { userService } from '../../../api/firebase/user'; 
 import { workoutService } from '../../../api/firebase/workout'
 import { RootState } from '../../../redux/store';
 import { setCurrentWorkout, setCurrentExerciseLogs } from '../../../redux/workoutSlice';
@@ -33,6 +32,7 @@ const WorkoutPanel: React.FC<WorkoutPanelProps> = ({
   const dispatch = useDispatch();
   const currentWorkout = useSelector((state: RootState) => state.workout.currentWorkout);
   const currentExerciseLogs = useSelector((state: RootState) => state.workout.currentExerciseLogs);
+  const currentUserId = useSelector((state: RootState) => state.user.currentUser?.id);
   
   const [loading, setLoading] = useState(true);
   const [activeChallenges, setActiveChallenges] = useState<UserChallenge[]>([]);
@@ -67,10 +67,14 @@ const WorkoutPanel: React.FC<WorkoutPanelProps> = ({
   const fetchWorkoutData = async () => {
     setLoading(true);
     try {
-      const workout = await workoutService.fetchCurrentWorkoutSession(userService.currentUser?.id || '');
-      if (workout) {
-        dispatch(setCurrentWorkout(workout.workout));
-        dispatch(setCurrentExerciseLogs(workout.logs || []));
+      if (currentUserId) {
+        const workout = await workoutService.fetchCurrentWorkoutSession(currentUserId);
+        if (workout) {
+          dispatch(setCurrentWorkout(workout.workout));
+          dispatch(setCurrentExerciseLogs(workout.logs || []));
+        }
+      } else {
+        console.warn("WorkoutPanel: No current user ID found in Redux state.");
       }
     } catch (error) {
       console.error('Error fetching workout:', error);

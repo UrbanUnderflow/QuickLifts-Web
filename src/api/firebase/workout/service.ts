@@ -201,13 +201,13 @@ class WorkoutService {
     // Create exercise log with validated data
     const exerciseLogId = exerciseService.generateExerciseLogID(
       workId,
-      userService.currentUser?.id || 'anonymous'
+      userService.nonUICurrentUser?.id || 'anonymous'
     );
 
     const log = new ExerciseLog({
       id: exerciseLogId,
       workoutId: workId,
-      userId: userService.currentUser?.id || 'anonymous',
+      userId: userService.nonUICurrentUser?.id || 'anonymous',
       exercise: exerciseInstance,
       logs: setsLogs,
       feedback: '',
@@ -238,7 +238,7 @@ class WorkoutService {
     useAuthorContent: false,
     isCompleted: false,
     workoutStatus: 'archived' as WorkoutStatus,
-    author: userService.currentUser?.id || 'PulseAI',
+    author: userService.nonUICurrentUser?.id || 'PulseAI',
     createdAt: new Date(),
     updatedAt: new Date(),
     zone: Workout.determineWorkoutZone(exerciseReferences) || 'full' as BodyZone
@@ -384,11 +384,11 @@ private async fetchVideosForWorkout(workout: Workout): Promise<Workout> {
 async fetchRandomTrendingStacksFallback(): Promise<Workout[]> {
   try {
     // If 'stacks' collection doesn't exist, we can fetch from user workouts as fallback
-    if (!userService.currentUser?.id) {
+    if (!userService.nonUICurrentUser?.id) {
       return [];
     }
     
-    const workouts = await this.getAllSweatlists(userService.currentUser.id);
+    const workouts = await this.getAllSweatlists(userService.nonUICurrentUser.id);
     
     // Shuffle and take up to 10
     const shuffledWorkouts = [...workouts].sort(() => 0.5 - Math.random()).slice(0, 10);
@@ -419,21 +419,21 @@ async fetchRandomTrendingStacksFallback(): Promise<Workout[]> {
 
   // In WorkoutService
   async revertAuthorFormat(workoutId: string, authorId: string) {
-    if (!userService.currentUser?.id) throw new Error('No user signed in');
+    if (!userService.nonUICurrentUser?.id) throw new Error('No user signed in');
     
-    const workoutRef = doc(db, 'users', userService.currentUser.id, 'MyCreatedWorkouts', workoutId);
+    const workoutRef = doc(db, 'users', userService.nonUICurrentUser.id, 'MyCreatedWorkouts', workoutId);
     await updateDoc(workoutRef, {
       author: authorId
     });
    }
 
 async updateWorkout(workout: Workout): Promise<void> {
-  if (!userService.currentUser?.id) {
+  if (!userService.nonUICurrentUser?.id) {
     throw new Error('No user is signed in');
   }
 
   try {
-    const workoutRef = doc(db, 'users', userService.currentUser.id, 'MyCreatedWorkouts', workout.id);
+    const workoutRef = doc(db, 'users', userService.nonUICurrentUser.id, 'MyCreatedWorkouts', workout.id);
     await setDoc(workoutRef, workout.toDictionary(), { merge: true });
 
     // Update logs if they exist
@@ -563,7 +563,7 @@ async updateWorkout(workout: Workout): Promise<void> {
    * @throws If no user is signed in or if the Firestore query fails.
    */
   async fetchWorkoutSummaries(date: Date): Promise<WorkoutSummary[]> {
-    const currentUser = userService.currentUser;
+    const currentUser = userService.nonUICurrentUser;
     if (!currentUser?.id) {
       throw new Error('No user is signed in');
     }
@@ -594,7 +594,7 @@ async updateWorkout(workout: Workout): Promise<void> {
   }
 
   async fetchAllWorkoutSummaries(): Promise<WorkoutSummary[]> {
-    const currentUser = userService.currentUser;
+    const currentUser = userService.nonUICurrentUser;
     if (!currentUser?.id) {
       throw new Error('No user is signed in');
     }
@@ -958,7 +958,7 @@ async fetchCollections(userId: string): Promise<SweatlistCollection[]> {
    * @throws If no user is signed in or if the Firestore query fails.
    */
     async fetchActiveChallenges(): Promise<UserChallenge[]> {
-      const currentUser = userService.currentUser;
+      const currentUser = userService.nonUICurrentUser;
       if (!currentUser?.id) {
         throw new Error('No user is signed in');
       }
@@ -1034,7 +1034,7 @@ async fetchCollections(userId: string): Promise<SweatlistCollection[]> {
    * @throws If no user is signed in or if the Firestore query fails.
    */
   async fetchUserChallenges(): Promise<UserChallenge[]> {
-    const currentUser = userService.currentUser;
+    const currentUser = userService.nonUICurrentUser;
     if (!currentUser?.id) {
       throw new Error('No user is signed in');
     }
@@ -1126,7 +1126,7 @@ async fetchCollections(userId: string): Promise<SweatlistCollection[]> {
   // The cancelWorkout method – it deletes the workout session and summary (if any),
 // cleans up the local state, and logs the cancellation.
 async cancelWorkout(workout: Workout | null, workoutSummary: WorkoutSummary | null): Promise<void> {
-  if (!userService.currentUser?.id || !workout) {
+  if (!userService.nonUICurrentUser?.id || !workout) {
     throw new Error("User not authenticated.");
   }
 
@@ -1146,10 +1146,10 @@ async cancelWorkout(workout: Workout | null, workoutSummary: WorkoutSummary | nu
   
 // Deletes a workout session document and all its subcollection "logs"
 async deleteWorkoutSession(workoutId: string | null): Promise<void> {
-  if (!userService.currentUser?.id || !workoutId) {
+  if (!userService.nonUICurrentUser?.id || !workoutId) {
     throw new Error("User not authenticated.");
   }
-  const userId = userService.currentUser.id;
+  const userId = userService.nonUICurrentUser.id;
   const workoutRef = doc(db, "users", userId, "workoutSessions", workoutId);
   
   try {
@@ -1175,12 +1175,12 @@ async deleteWorkoutSession(workoutId: string | null): Promise<void> {
 
   // Deletes the workout summary document.
   async deleteWorkoutSummary(workoutSummaryId: string): Promise<void> {
-    if (!workoutSummaryId || !userService.currentUser?.id) {
+    if (!workoutSummaryId || !userService.nonUICurrentUser?.id) {
       return;
     }
     
     try {
-      const summaryRef = doc(db, "users", userService.currentUser.id, "workoutSummary", workoutSummaryId);
+      const summaryRef = doc(db, "users", userService.nonUICurrentUser.id, "workoutSummary", workoutSummaryId);
       await deleteDoc(summaryRef);
       console.log("Workout summary deleted successfully.");
     } catch (error) {
@@ -1371,7 +1371,7 @@ async deleteWorkoutSession(workoutId: string | null): Promise<void> {
 
    // Add the updateUserChallenge method
   async updateUserChallenge(challenge: UserChallenge): Promise<void> {
-    if (!userService.currentUser?.id) {
+    if (!userService.nonUICurrentUser?.id) {
         throw new Error('No user is signed in');
     }
 
@@ -1613,7 +1613,7 @@ async deleteWorkoutSession(workoutId: string | null): Promise<void> {
     challengeId: string;
   }): Promise<any> {
     // 1) Make sure we have a signed-in user
-    const currentUser = userService.currentUser;
+    const currentUser = userService.nonUICurrentUser;
     if (!currentUser) {
       throw new Error('No user is signed in');
     }
@@ -1708,6 +1708,10 @@ async deleteWorkoutSession(workoutId: string | null): Promise<void> {
       console.error('Error fetching user challenge by ID:', error);
       return null;
     }
+  }
+
+  private get nonUICurrentUser(): User | null {
+    return userService.nonUICurrentUser;
   }
 }
 

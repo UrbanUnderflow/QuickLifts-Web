@@ -36,53 +36,55 @@ const HomeContent = () => {
 
   const dispatch = useDispatch();
 
-  useEffect(() => {
-    if (userId) {
-      const fetchWorkoutSessions = async () => {
-        try {
-          const sessions = await workoutService.fetchAllWorkoutSessions(userId);
-          const queuedUpSessions = sessions.filter(session =>
-            session.workout?.workoutStatus === WorkoutStatus.QueuedUp
-          );
-
-          console.log("QueuedUp Sessions", queuedUpSessions);
-          
-          const inProgressSessions = sessions.filter(session =>
-            session.workout?.workoutStatus === WorkoutStatus.InProgress
-          );
-
-
-          if (inProgressSessions.length > 0) {
-            const currentSession = inProgressSessions[0];
-            if (currentSession.workout) {
-              const nextExerciseIndex = currentSession.logs?.findIndex(log => !log.logSubmitted) ?? 0;
-
-              dispatch(setCurrentWorkout(currentSession.workout.toDictionary()));
-              dispatch(setCurrentExerciseLogs(
-                (currentSession.logs || []).map(log => log.toDictionary())
-              ));
-              setCurrentExerciseIndex(nextExerciseIndex >= 0 ? nextExerciseIndex : 0);
-            }
-          } else if (queuedUpSessions.length > 0) {
-            const currentSession = queuedUpSessions[0];
-            if (currentSession.workout) {
-              dispatch(setCurrentWorkout(currentSession.workout.toDictionary()));
-              dispatch(setCurrentExerciseLogs(
-                (currentSession.logs || []).map(log => log.toDictionary())
-              ));
-            }
-          } else {
-            dispatch(setCurrentWorkout(null));
-            dispatch(setCurrentExerciseLogs([]));
-          }
-        } catch (error) {
-          console.error('Error fetching workout sessions:', error);
-        }
-      };
-
-      fetchWorkoutSessions();
-    }
-  }, [userId, dispatch]);
+  // useEffect(() => {
+  //   console.log(`[HomeContent useEffect] Running effect. userId: ${userId}`);
+  //   if (userId) {
+  //     console.log("[HomeContent useEffect] userId exists, fetching workout sessions...");
+  //     const fetchWorkoutSessions = async () => {
+  //       try {
+  //         const sessions = await workoutService.fetchAllWorkoutSessions(userId);
+  //         const queuedUpSessions = sessions.filter(session =>
+  //           session.workout?.workoutStatus === WorkoutStatus.QueuedUp
+  //         );
+  //
+  //         console.log("QueuedUp Sessions", queuedUpSessions);
+  //         
+  //         const inProgressSessions = sessions.filter(session =>
+  //           session.workout?.workoutStatus === WorkoutStatus.InProgress
+  //         );
+  //
+  //
+  //         if (inProgressSessions.length > 0) {
+  //           const currentSession = inProgressSessions[0];
+  //           if (currentSession.workout) {
+  //             const nextExerciseIndex = currentSession.logs?.findIndex(log => !log.logSubmitted) ?? 0;
+  //
+  //             dispatch(setCurrentWorkout(currentSession.workout.toDictionary()));
+  //             dispatch(setCurrentExerciseLogs(
+  //               (currentSession.logs || []).map(log => log.toDictionary())
+  //             ));
+  //             setCurrentExerciseIndex(nextExerciseIndex >= 0 ? nextExerciseIndex : 0);
+  //           }
+  //         } else if (queuedUpSessions.length > 0) {
+  //           const currentSession = queuedUpSessions[0];
+  //           if (currentSession.workout) {
+  //             dispatch(setCurrentWorkout(currentSession.workout.toDictionary()));
+  //             dispatch(setCurrentExerciseLogs(
+  //               (currentSession.logs || []).map(log => log.toDictionary())
+  //             ));
+  //           }
+  //         } else {
+  //           dispatch(setCurrentWorkout(null));
+  //           dispatch(setCurrentExerciseLogs([]));
+  //         }
+  //       } catch (error) {
+  //         console.error('Error fetching workout sessions:', error);
+  //       }
+  //     };
+  //
+  //     fetchWorkoutSessions();
+  //   }
+  // }, [userId, dispatch]);
   
     // Function to start a workout
     const startWorkout = (workout: Workout, logs: ExerciseLog[]) => {
@@ -392,9 +394,9 @@ const performExerciseSubmission = async (updatedLogs: ExerciseLog[]) => {
   // Main render logic
   return (
     <div className="min-h-screen bg-zinc-900">
-      {currentWorkoutSession ? (
+      {/* {currentWorkoutSession ? (
         renderWorkoutView()
-      ) : (
+      ) : ( */} 
         <>
           {/* Top Navigation */}
           <nav className="px-4 py-4 bg-zinc-900/80 backdrop-blur-sm border-b border-zinc-800 sticky top-0 z-10 flex justify-between items-center">
@@ -427,7 +429,7 @@ const performExerciseSubmission = async (updatedLogs: ExerciseLog[]) => {
             onStartWorkout={handleStartWorkout}
           />
         </>
-      )}
+-      {/* )} */}
     </div>
   );
 };

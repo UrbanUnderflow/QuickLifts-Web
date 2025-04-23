@@ -22,6 +22,7 @@ import {
   SunIcon,
   MoonIcon 
 } from '@heroicons/react/24/outline';
+import { useUser } from '../../../hooks/useUser';
 
 // Enum for category tabs
 const CategoryTab = {
@@ -33,6 +34,7 @@ const CategoryTab = {
 
 const Discover = () => {
   const router = useRouter();
+  const currentUser = useUser();
   const [selectedCategory, setSelectedCategory] = useState(CategoryTab.ALL);
   const [searchText, setSearchText] = useState('');
   const [isSearching, setIsSearching] = useState(false);
@@ -101,41 +103,41 @@ const Discover = () => {
 
   // Helper function to check if user is authenticated
   const isUserAuthenticated = () => {
-    return !!userService.currentUser?.id;
+    return !!currentUser?.id;
   };
 
   // Load initial data
   useEffect(() => {
     loadData();
-  }, []);
+  }, [currentUser?.id]);
 
   // Add an effect to reload user-specific data when auth state changes
-  useEffect(() => {
-    // If user becomes authenticated, reload user-specific data
-    if (isUserAuthenticated()) {
-      const loadUserSpecificData = async () => {
-        try {
-          // Load current workout
-          const currentWorkoutData = workoutService.currentWorkout;
-          setCurrentWorkout(currentWorkoutData);
+  // useEffect(() => {
+  //   // If user becomes authenticated, reload user-specific data
+  //   if (isUserAuthenticated()) {
+  //     const loadUserSpecificData = async () => {
+  //       try {
+  //         // Load current workout
+  //         const currentWorkoutData = workoutService.currentWorkout;
+  //         setCurrentWorkout(currentWorkoutData);
           
-          // Load active rounds
-          const userRounds = await workoutService.fetchUserChallenges();
-          setActiveRounds(userRounds.filter(round => 
-            round.challenge && new Date(round.challenge.endDate) > new Date() && !round.isCompleted
-          ));
-        } catch (error) {
-          console.error('Error loading user-specific data:', error);
-        }
-      };
+  //         // Load active rounds
+  //         const userRounds = await workoutService.fetchUserChallenges();
+  //         setActiveRounds(userRounds.filter(round => 
+  //           round.challenge && new Date(round.challenge.endDate) > new Date() && !round.isCompleted
+  //         ));
+  //       } catch (error) {
+  //         console.error('Error loading user-specific data:', error);
+  //       }
+  //     };
       
-      loadUserSpecificData();
-    } else {
-      // If user is signed out, clear user-specific data
-      setCurrentWorkout(null);
-      setActiveRounds([]);
-    }
-  }, [userService.currentUser]);
+  //     loadUserSpecificData();
+  //   } else {
+  //     // If user is signed out, clear user-specific data
+  //     setCurrentWorkout(null);
+  //     setActiveRounds([]);
+  //   }
+  // }, [userService.currentUser]);
 
   // IntersectionObserver for "Load More"
   useEffect(() => {
@@ -340,7 +342,7 @@ const Discover = () => {
   };
 
   const renderWelcomeSection = () => {
-    const currentUser = userService.currentUser || {} as User;
+    // Use the currentUser from the useUser hook defined at the top of the component
     
     return (
       <div className="bg-zinc-800 bg-opacity-30 rounded-lg shadow p-4 mb-8">
@@ -350,12 +352,14 @@ const Discover = () => {
               {getTimeBasedIcon()}
               <p className="text-md font-medium ml-2">{getTimeBasedGreeting()},</p>
             </div>
-            <h2 className="text-xl font-bold text-white">{currentUser.username || 'Fitness Enthusiast'}</h2>
+            {/* Use currentUser from hook, provide default if null */}
+            <h2 className="text-xl font-bold text-white">{currentUser?.username || 'Fitness Enthusiast'}</h2> 
             <p className="text-sm text-zinc-400 mt-2">{getMyDayMessage()}</p>
           </div>
           
           <div className="flex items-center justify-center w-12 h-12 rounded-full bg-[#E0FE10] bg-opacity-20">
-            {currentUser.profileImage?.profileImageURL ? (
+            {/* Check if currentUser and profileImage exist before accessing URL */}
+            {currentUser?.profileImage?.profileImageURL ? (
               <img 
                 src={currentUser.profileImage.profileImageURL} 
                 alt="Profile" 
@@ -363,7 +367,7 @@ const Discover = () => {
               />
             ) : (
               <div className="flex items-center justify-center w-11 h-11">
-                {getTimeBasedIcon()}
+                {getTimeBasedIcon()} 
               </div>
             )}
           </div>

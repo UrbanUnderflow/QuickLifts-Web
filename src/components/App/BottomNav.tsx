@@ -2,7 +2,8 @@
 
 import React from 'react';
 import { SelectedRootTabs } from '../../types/DashboardTypes';
-import { userService } from '../../api/firebase/user'; // or wherever you export userService
+import { useUser } from '../../hooks/useUser'; // Import useUser hook
+import { useRouter } from 'next/navigation';
 
 interface BottomNavProps {
   selectedTab: SelectedRootTabs;
@@ -13,8 +14,8 @@ const BottomNav: React.FC<BottomNavProps> = ({ selectedTab, onTabChange }) => {
   // Log which tabs we're hiding
   console.log('[BottomNav] Hiding Search and Messages tabs');
 
-  // Also add a log when rendering to see real-time values
-  const currentUser = userService.currentUser;
+  const currentUser = useUser(); // Use the hook
+  const router = useRouter();
 
   const allTabs = [
     {
@@ -50,11 +51,21 @@ const BottomNav: React.FC<BottomNavProps> = ({ selectedTab, onTabChange }) => {
       // (in case userService.currentUser is null).
       icon: '/profile-icon.svg',
       selectedIcon: '/profile-icon-selected.svg',
+      href: '#', 
+      current: selectedTab === SelectedRootTabs.Profile, 
+      showUsername: !!currentUser?.username, 
+      username: currentUser?.username || ''
     },
   ];
 
   // Filter out hidden tabs
   const tabs = allTabs.filter(tab => !tab.hidden);
+
+  // Function to determine if Profile tab should be rendered
+  const shouldRenderProfileTab = () => {
+    const currentUser = useUser(); // Use the hook again for consistency
+    return currentUser && currentUser.username;
+  };
 
   return (
     <div className="fixed bottom-0 left-0 right-0 bg-zinc-800/80 backdrop-blur-sm border-t border-zinc-700">
@@ -62,11 +73,10 @@ const BottomNav: React.FC<BottomNavProps> = ({ selectedTab, onTabChange }) => {
         {tabs.map((tab) => {
           const isSelected = selectedTab === tab.id;
 
-          // If this is the Profile tab, we might want to show the user’s actual photo
+          // If this is the Profile tab, we might want to show the user's actual photo
           const isProfileTab = (tab.id === SelectedRootTabs.Profile);
 
           // Attempt to fetch current user's image
-          const currentUser = userService.currentUser;
           const hasProfileImage =
             currentUser &&
             currentUser.profileImage &&
@@ -106,7 +116,7 @@ const BottomNav: React.FC<BottomNavProps> = ({ selectedTab, onTabChange }) => {
                     />
                     )}
 
-                  {/* Label or blank if it’s the "Create" tab */}
+                  {/* Label or blank if it's the "Create" tab */}
                   {tab.label && (
                     <span
                       className={`text-xs ${

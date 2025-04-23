@@ -22,7 +22,6 @@ import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '../redux/store';
 import { toggleDevMode } from '../redux/devModeSlice';
 import { initializeFirebase } from '../api/firebase/config';
-import { setUser } from "../redux/userSlice";
 import { useUser } from '../hooks/useUser';
 
 interface SignInModalProps {
@@ -279,7 +278,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
             await userService.updateUser(user.uid, firestoreUser);
           }
           
-          userService.currentUser = firestoreUser;
+          userService.nonUICurrentUser = firestoreUser; // Use nonUICurrentUser
    
           // Check subscription status first
           if (firestoreUser.subscriptionType === SubscriptionType.unsubscribed) {
@@ -351,8 +350,8 @@ const SignInModal: React.FC<SignInModalProps> = ({
           firestoreUser.email = user.email;
           await userService.updateUser(user.uid, firestoreUser);
         }
-        userService.currentUser = firestoreUser;
-        console.log('Google Sign In - Current User Set:', userService.currentUser);
+        userService.nonUICurrentUser = firestoreUser; // Use nonUICurrentUser
+        console.log('Google Sign In - Current User Set:', userService.nonUICurrentUser); // Use nonUICurrentUser
         // Fix: Check if username is missing (using truthy check) instead of empty string comparison
         console.log("Username check:", {
           username: firestoreUser.username,
@@ -597,14 +596,14 @@ const SignInModal: React.FC<SignInModalProps> = ({
         if (!auth.currentUser) {
           throw new Error("No authenticated user found");
         }
-        // Email fallback: use userService.currentUser.email or auth.currentUser.email
-        const currentEmail = userService.currentUser?.email || auth.currentUser.email;
+        // Email fallback: use userService.nonUICurrentUser.email or auth.currentUser.email
+        const currentEmail = userService.nonUICurrentUser?.email || auth.currentUser.email; // Use nonUICurrentUser
         if (!currentEmail) {
           console.error('[SignInModal] Registration: Email is missing, cannot complete registration.');
           throw new Error("Email is missing, cannot complete registration.");
         }
         const updatedUser = new User(auth.currentUser.uid, {
-          ...userService.currentUser?.toDictionary(),
+          ...userService.nonUICurrentUser?.toDictionary(), // Use nonUICurrentUser
           username: username,
           email: currentEmail, // Ensure email is included in the update
           registrationComplete: true,
@@ -638,7 +637,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
         
         const result = await authService.signInWithEmail(email, password);
         const userDoc = await userService.fetchUserFromFirestore(result.user.uid);
-        userService.currentUser = userDoc;
+        userService.nonUICurrentUser = userDoc; // Use nonUICurrentUser
 
         console.log('[SignInModal] User document:', {
           hasUsername: !!userDoc?.username,
@@ -763,7 +762,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
                 subscriptionType: SubscriptionType.unsubscribed
               });
               
-              dispatch(setUser(newUser));
+              userService.nonUICurrentUser = newUser;
 
               setSignUpStep("profile");
               setShowError(false);
@@ -952,16 +951,15 @@ const SignInModal: React.FC<SignInModalProps> = ({
               setQuizData({ ...quizData, gender: option as any });
             
               // Update user data
-              if (auth.currentUser?.uid && userService.currentUser) {
-                const updatedUser = userService.currentUser;
+              if (auth.currentUser?.uid && userService.nonUICurrentUser) { // Use nonUICurrentUser
+                const updatedUser = userService.nonUICurrentUser; // Use nonUICurrentUser
                 updatedUser.gender = genderValue;
                 updatedUser.updatedAt = new Date();
                 
                 await userService.updateUser(auth.currentUser.uid, updatedUser);
                 // --- NEW: Refresh user and update Redux ---
                 const refreshedUser = await userService.fetchUserFromFirestore(auth.currentUser.uid);
-                userService.currentUser = refreshedUser;
-                dispatch(setUser(refreshedUser ? refreshedUser.toDictionary() : null));
+                userService.nonUICurrentUser = refreshedUser; // Use nonUICurrentUser
               }
               
               setQuizStep(quizStep + 1);
@@ -999,9 +997,9 @@ const SignInModal: React.FC<SignInModalProps> = ({
               const newHeight = { ...quizData.height, feet: newFeet };
               setQuizData({ ...quizData, height: newHeight });
               
-              if (auth.currentUser?.uid && userService.currentUser) {
-                const updatedUser = new User(userService.currentUser.id, {
-                  ...userService.currentUser.toDictionary(),
+              if (auth.currentUser?.uid && userService.nonUICurrentUser) { // Use nonUICurrentUser
+                const updatedUser = new User(userService.nonUICurrentUser.id, { // Use nonUICurrentUser
+                  ...userService.nonUICurrentUser.toDictionary(), // Use nonUICurrentUser
                   height: newHeight,
                   updatedAt: new Date()
                 });
@@ -1009,8 +1007,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
                 await userService.updateUser(auth.currentUser.uid, updatedUser);
                 // --- NEW: Refresh user and update Redux ---
                 const refreshedUser = await userService.fetchUserFromFirestore(auth.currentUser.uid);
-                userService.currentUser = refreshedUser;
-                dispatch(setUser(refreshedUser ? refreshedUser.toDictionary() : null));
+                userService.nonUICurrentUser = refreshedUser; // Use nonUICurrentUser
               }
             }}
             min="0"
@@ -1030,9 +1027,9 @@ const SignInModal: React.FC<SignInModalProps> = ({
               const newHeight = { ...quizData.height, inches: newInches };
               setQuizData({ ...quizData, height: newHeight });
               
-              if (auth.currentUser?.uid && userService.currentUser) {
-                const updatedUser = new User(userService.currentUser.id, {
-                  ...userService.currentUser.toDictionary(),
+              if (auth.currentUser?.uid && userService.nonUICurrentUser) { // Use nonUICurrentUser
+                const updatedUser = new User(userService.nonUICurrentUser.id, { // Use nonUICurrentUser
+                  ...userService.nonUICurrentUser.toDictionary(), // Use nonUICurrentUser
                   height: newHeight,
                   updatedAt: new Date()
                 });
@@ -1040,8 +1037,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
                 await userService.updateUser(auth.currentUser.uid, updatedUser);
                 // --- NEW: Refresh user and update Redux ---
                 const refreshedUser = await userService.fetchUserFromFirestore(auth.currentUser.uid);
-                userService.currentUser = refreshedUser;
-                dispatch(setUser(refreshedUser ? refreshedUser.toDictionary() : null));
+                userService.nonUICurrentUser = refreshedUser; // Use nonUICurrentUser
               }
             }}
             min="0"
@@ -1074,25 +1070,24 @@ const SignInModal: React.FC<SignInModalProps> = ({
             const newWeight = Number(e.target.value);
             setQuizData({ ...quizData, weight: newWeight });
             
-            if (auth.currentUser?.uid && userService.currentUser) {
+            if (auth.currentUser?.uid && userService.nonUICurrentUser) { // Use nonUICurrentUser
               const newBodyWeight = new BodyWeight({
-                oldWeight: userService.currentUser.bodyWeight.length > 0 
-                  ? userService.currentUser.bodyWeight[userService.currentUser.bodyWeight.length - 1].newWeight 
+                oldWeight: userService.nonUICurrentUser.bodyWeight.length > 0  // Use nonUICurrentUser
+                  ? userService.nonUICurrentUser.bodyWeight[userService.nonUICurrentUser.bodyWeight.length - 1].newWeight  // Use nonUICurrentUser (x2)
                   : 0,
                 newWeight: newWeight
               });
               
-              const updatedUser = new User(userService.currentUser.id, {
-                ...userService.currentUser.toDictionary(),
-                bodyWeight: [...userService.currentUser.bodyWeight, newBodyWeight],
+              const updatedUser = new User(userService.nonUICurrentUser.id, { // Use nonUICurrentUser
+                ...userService.nonUICurrentUser.toDictionary(), // Use nonUICurrentUser
+                bodyWeight: [...userService.nonUICurrentUser.bodyWeight, newBodyWeight], // Use nonUICurrentUser
                 updatedAt: new Date()
               });
               
               await userService.updateUser(auth.currentUser.uid, updatedUser);
               // --- NEW: Refresh user and update Redux ---
               const refreshedUser = await userService.fetchUserFromFirestore(auth.currentUser.uid);
-              userService.currentUser = refreshedUser;
-              dispatch(setUser(refreshedUser ? refreshedUser.toDictionary() : null));
+              userService.nonUICurrentUser = refreshedUser; // Use nonUICurrentUser
             }
           }}
           className="w-full bg-zinc-800 border border-zinc-600 rounded-lg p-3 text-white"
@@ -1123,9 +1118,9 @@ const SignInModal: React.FC<SignInModalProps> = ({
             
               setQuizData({ ...quizData, level: level as any });
               
-              if (auth.currentUser?.uid && userService.currentUser) {
-                const updatedUser = new User(userService.currentUser.id, {
-                  ...userService.currentUser.toDictionary(),
+              if (auth.currentUser?.uid && userService.nonUICurrentUser) { // Use nonUICurrentUser
+                const updatedUser = new User(userService.nonUICurrentUser.id, { // Use nonUICurrentUser
+                  ...userService.nonUICurrentUser.toDictionary(), // Use nonUICurrentUser
                   level: levelMap[level as keyof typeof levelMap],
                   updatedAt: new Date()
                 });
@@ -1133,8 +1128,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
                 await userService.updateUser(auth.currentUser.uid, updatedUser);
                 // --- NEW: Refresh user and update Redux ---
                 const refreshedUser = await userService.fetchUserFromFirestore(auth.currentUser.uid);
-                userService.currentUser = refreshedUser;
-                dispatch(setUser(refreshedUser ? refreshedUser.toDictionary() : null));
+                userService.nonUICurrentUser = refreshedUser; // Use nonUICurrentUser
               }
               setQuizStep(quizStep + 1);
             }}
@@ -1183,9 +1177,9 @@ const SignInModal: React.FC<SignInModalProps> = ({
                 goal: updatedGoals,
               }));
               
-              if (auth.currentUser?.uid && userService.currentUser) {
-                const updatedUser = new User(userService.currentUser.id, {
-                  ...userService.currentUser.toDictionary(),
+              if (auth.currentUser?.uid && userService.nonUICurrentUser) { // Use nonUICurrentUser
+                const updatedUser = new User(userService.nonUICurrentUser.id, { // Use nonUICurrentUser
+                  ...userService.nonUICurrentUser.toDictionary(), // Use nonUICurrentUser
                   goal: updatedGoals.map(g => goalsMap[g]),
                   updatedAt: new Date()
                 });
@@ -1193,12 +1187,11 @@ const SignInModal: React.FC<SignInModalProps> = ({
                 await userService.updateUser(auth.currentUser.uid, updatedUser);
                 // --- NEW: Refresh user and update Redux ---
                 const refreshedUser = await userService.fetchUserFromFirestore(auth.currentUser.uid);
-                userService.currentUser = refreshedUser;
-                dispatch(setUser(refreshedUser ? refreshedUser.toDictionary() : null));
-                // Only move to next step if at least one goal is selected
-                if (updatedGoals.length > 0) {
-                  setQuizStep(quizStep + 1);
-                }
+                userService.nonUICurrentUser = refreshedUser; // Use nonUICurrentUser
+              }
+              // Only move to next step if at least one goal is selected
+              if (updatedGoals.length > 0) {
+                setQuizStep(quizStep + 1);
               }
             }}
             className={`w-full p-4 rounded-lg border ${
@@ -1240,17 +1233,16 @@ const SignInModal: React.FC<SignInModalProps> = ({
             const date = new Date(quizData.birthdate || new Date());
             date.setMonth(parseInt(e.target.value));
             setQuizData({ ...quizData, birthdate: date });
-            if (auth.currentUser?.uid && userService.currentUser) {
-              const updatedUser = new User(userService.currentUser.id, {
-                ...userService.currentUser.toDictionary(),
+            if (auth.currentUser?.uid && userService.nonUICurrentUser) { // Use nonUICurrentUser
+              const updatedUser = new User(userService.nonUICurrentUser.id, { // Use nonUICurrentUser
+                ...userService.nonUICurrentUser.toDictionary(), // Use nonUICurrentUser
                 birthdate: date,
                 updatedAt: new Date()
               });
               await userService.updateUser(auth.currentUser.uid, updatedUser);
               // --- NEW: Refresh user and update Redux ---
               const refreshedUser = await userService.fetchUserFromFirestore(auth.currentUser.uid);
-              userService.currentUser = refreshedUser;
-              dispatch(setUser(refreshedUser ? refreshedUser.toDictionary() : null));
+              userService.nonUICurrentUser = refreshedUser; // Use nonUICurrentUser
             }
           }}
         >
@@ -1267,17 +1259,16 @@ const SignInModal: React.FC<SignInModalProps> = ({
             const date = new Date(quizData.birthdate || new Date());
             date.setDate(parseInt(e.target.value));
             setQuizData({ ...quizData, birthdate: date });
-            if (auth.currentUser?.uid && userService.currentUser) {
-              const updatedUser = new User(userService.currentUser.id, {
-                ...userService.currentUser.toDictionary(),
+            if (auth.currentUser?.uid && userService.nonUICurrentUser) { // Use nonUICurrentUser
+              const updatedUser = new User(userService.nonUICurrentUser.id, { // Use nonUICurrentUser
+                ...userService.nonUICurrentUser.toDictionary(), // Use nonUICurrentUser
                 birthdate: date,
                 updatedAt: new Date()
               });
               await userService.updateUser(auth.currentUser.uid, updatedUser);
               // --- NEW: Refresh user and update Redux ---
               const refreshedUser = await userService.fetchUserFromFirestore(auth.currentUser.uid);
-              userService.currentUser = refreshedUser;
-              dispatch(setUser(refreshedUser ? refreshedUser.toDictionary() : null));
+              userService.nonUICurrentUser = refreshedUser; // Use nonUICurrentUser
             }
           }}
         >
@@ -1294,17 +1285,16 @@ const SignInModal: React.FC<SignInModalProps> = ({
             const date = new Date(quizData.birthdate || new Date());
             date.setFullYear(parseInt(e.target.value));
             setQuizData({ ...quizData, birthdate: date });
-            if (auth.currentUser?.uid && userService.currentUser) {
-              const updatedUser = new User(userService.currentUser.id, {
-                ...userService.currentUser.toDictionary(),
+            if (auth.currentUser?.uid && userService.nonUICurrentUser) { // Use nonUICurrentUser
+              const updatedUser = new User(userService.nonUICurrentUser.id, { // Use nonUICurrentUser
+                ...userService.nonUICurrentUser.toDictionary(), // Use nonUICurrentUser
                 birthdate: date,
                 updatedAt: new Date()
               });
               await userService.updateUser(auth.currentUser.uid, updatedUser);
               // --- NEW: Refresh user and update Redux ---
               const refreshedUser = await userService.fetchUserFromFirestore(auth.currentUser.uid);
-              userService.currentUser = refreshedUser;
-              dispatch(setUser(refreshedUser ? refreshedUser.toDictionary() : null));
+              userService.nonUICurrentUser = refreshedUser; // Use nonUICurrentUser
             }
           }}
         >

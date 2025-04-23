@@ -13,11 +13,14 @@ import FullScreenExerciseView from '../../../pages/FullscreenExerciseView';
 import { parseActivityType } from '../../../utils/activityParser';
 import { StackCard } from '../../../components/Rounds/StackCard';
 import { useRouter } from 'next/router';
+import { useDispatch } from 'react-redux';
+import { setUser } from '../../../redux/userSlice';
 import { firebaseStorageService, UploadImageType } from '../../../api/firebase/storage/service';
 import { Camera, Trash2, CheckCircle } from 'lucide-react';
 import Spacer from '../../../components/Spacer';
 import { videoProcessorService } from '../../../api/firebase/video-processor/service';
 import { exerciseService } from '../../../api/firebase/exercise/service';
+import { useUser } from '../../../hooks/useUser';
 
 interface StackGridProps {
   stacks: Workout[];
@@ -30,6 +33,7 @@ interface StackGridProps {
   selectedStacks?: Set<string>;
   onToggleSelection?: (stack: Workout) => void;
   onSelectStack: (stack: Workout) => void;
+  username?: string;
 }
 
 const StackGrid: React.FC<StackGridProps> = ({ 
@@ -37,7 +41,8 @@ const StackGrid: React.FC<StackGridProps> = ({
   isSelecting,
   selectedStacks,
   onToggleSelection,
-  onSelectStack 
+  onSelectStack,
+  username
 }) => {
   const router = useRouter();
 
@@ -71,8 +76,7 @@ const StackGrid: React.FC<StackGridProps> = ({
             showCalendar={true}
             onPrimaryAction={() => {
               if (!isSelecting) {
-                const username = userService.currentUser?.username;
-                router.push(`/workout/${username}/${stack.id}`);
+                router.push(`/workout/${username || 'unknown'}/${stack.id}`);
               }
             }}
           />
@@ -93,6 +97,7 @@ type TabType = typeof TABS[keyof typeof TABS];
 
 const Profile: React.FC = () => {
   const [selectedTab, setSelectedTab] = useState<TabType>(TABS.EXERCISES);
+  const [userData, setUserData] = useState<User | null>(null);
   const [userVideos, setUserVideos] = useState<Exercise[]>([]);
   const [activeChallenges, setActiveChallenges] = useState<Challenge[]>([]);
   const [workoutSummaries, setWorkoutSummaries] = useState<WorkoutSummary[]>([]);
@@ -103,148 +108,175 @@ const Profile: React.FC = () => {
   const [selectedExercises, setSelectedExercises] = useState<Exercise[]>([]);
   const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
 
-  const currentUser = userService.currentUser;
-
   const [isImageUploading, setIsImageUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedStacks, setSelectedStacks] = useState<Set<string>>(new Set());
   const [isSelecting, setIsSelecting] = useState(false);
   const [isProcessingGifs, setIsProcessingGifs] = useState(false);
 
-const handleProfileImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-  const file = e.target.files?.[0];
-  if (file) {
-    try {
-      setIsImageUploading(true);
-      
-      const uploadResult = await firebaseStorageService.uploadImage(
-        file, 
-        UploadImageType.Profile
-      );
+  const [isLoading, setIsLoading] = useState(true);
+  const [isCurrentUserProfile, setIsCurrentUserProfile] = useState(false);
+  const hookCurrentUser = useUser();
+  const router = useRouter();
+  const dispatch = useDispatch();
+  const { username: usernameFromRoute } = router.query as { username: string };
 
-      // Update user's profile image in Firestore
-      if (currentUser) {
-        const updatedUser = new User(currentUser.id, {
-          ...currentUser.toDictionary(),
-          profileImage: {
-            profileImageURL: uploadResult.downloadURL,
-            imageOffsetWidth: 0,
-            imageOffsetHeight: 0
-          },
-          updatedAt: new Date()
-        });
-
-        await userService.updateUser(currentUser.id, updatedUser);
+  const handleProfileImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      try {
+        setIsImageUploading(true);
         
-        // Optionally, update the current user in the service
-        userService.currentUser = updatedUser;
+        const uploadResult = await firebaseStorageService.uploadImage(
+          file, 
+          UploadImageType.Profile
+        );
+
+        // Update user's profile image in Firestore
+        if (hookCurrentUser) {
+          const updatedUser = new User(hookCurrentUser.id, {
+            ...hookCurrentUser.toDictionary(),
+            profileImage: {
+              profileImageURL: uploadResult.downloadURL,
+              imageOffsetWidth: 0,
+              imageOffsetHeight: 0
+            },
+            updatedAt: new Date()
+          });
+
+          await userService.updateUser(hookCurrentUser.id, updatedUser);
+          
+          // Optionally, update the current user in the service
+          userService.nonUICurrentUser = updatedUser;
+          if (isCurrentUserProfile) {
+            dispatch(setUser(updatedUser.toDictionary()));
+          }
+        }
+      } catch (error) {
+        console.error('Profile image upload failed', error);
+        // Optionally show an error toast
+      } finally {
+        setIsImageUploading(false);
+      }
+    }
+  };
+
+  const handleToggleSelection = (exercise: Exercise) => {
+    setSelectedExercises(prev => {
+      // Check if exercise is already selected
+      const alreadySelected = prev.find((ex) => ex.id === exercise.id);
+      if (alreadySelected) {
+        // Remove it
+        return prev.filter((ex) => ex.id !== exercise.id);
+      } else {
+        // Add it
+        return [...prev, exercise];
+      }
+    });
+  };
+
+  const handleDelete = async () => {
+    if (selectedTab === TABS.EXERCISES && selectedExercises.length > 0) {
+      try {
+        await Promise.all(
+          selectedExercises.map(ex => userService.deleteUserVideo(ex.id))
+        );
+        setUserVideos(prev => prev.filter(v => !selectedExercises.some(se => se.id === v.id)));
+        setSelectedExercises([]);
+      } catch (error) {
+        console.error('Error deleting videos:', error);
+      }
+    } else if (selectedTab === TABS.STACKS && selectedStacks.size > 0) {
+      try {
+        await Promise.all(
+          Array.from(selectedStacks).map(id => userService.deleteStack(id))
+        );
+        setUserStacks(prev => prev.filter(s => !selectedStacks.has(s.id)));
+        setSelectedStacks(new Set());
+      } catch (error) {
+        console.error('Error deleting stacks:', error);
+      }
+    }
+    setIsSelecting(false);
+  };
+
+  // Function to process all videos without GIFs
+  const handleProcessVideosWithoutGifs = async () => {
+    if (isProcessingGifs || !isCurrentUserProfile) return;
+    
+    setIsProcessingGifs(true);
+    try {
+      await videoProcessorService.processAllUserVideosWithoutGifs();
+      // After processing, refresh the user videos
+      if (hookCurrentUser?.id) {
+        const videos = await userService.fetchUserVideos();
+        setUserVideos(videos);
       }
     } catch (error) {
-      console.error('Profile image upload failed', error);
-      // Optionally show an error toast
+      console.error('Error processing videos without GIFs:', error);
     } finally {
-      setIsImageUploading(false);
+      setIsProcessingGifs(false);
     }
-  }
-};
+  };
 
-const handleToggleSelection = (exercise: Exercise) => {
-  setSelectedExercises(prev => {
-    // Check if exercise is already selected
-    const alreadySelected = prev.find((ex) => ex.id === exercise.id);
-    if (alreadySelected) {
-      // Remove it
-      return prev.filter((ex) => ex.id !== exercise.id);
-    } else {
-      // Add it
-      return [...prev, exercise];
+  // Add a new function to handle video deletion
+  const handleDeleteSpecificVideo = async (videoId: string, exerciseId: string) => {
+    if (!isCurrentUserProfile || !window.confirm('Are you sure you want to delete this video?')) {
+      return;
     }
-  });
-};
-
-const handleDelete = async () => {
-  if (selectedTab === TABS.EXERCISES && selectedExercises.length > 0) {
+    
+    const userId = hookCurrentUser?.id;
+    if (!userId) {
+      console.error('User not logged in');
+      return;
+    }
+    
     try {
-      await Promise.all(
-        selectedExercises.map(ex => userService.deleteUserVideo(ex.id))
-      );
-      setUserVideos(prev => prev.filter(v => !selectedExercises.some(se => se.id === v.id)));
-      setSelectedExercises([]);
-    } catch (error) {
-      console.error('Error deleting videos:', error);
-    }
-  } else if (selectedTab === TABS.STACKS && selectedStacks.size > 0) {
-    try {
-      await Promise.all(
-        Array.from(selectedStacks).map(id => userService.deleteStack(id))
-      );
-      setUserStacks(prev => prev.filter(s => !selectedStacks.has(s.id)));
-      setSelectedStacks(new Set());
-    } catch (error) {
-      console.error('Error deleting stacks:', error);
-    }
-  }
-  setIsSelecting(false);
-};
-
-// Function to process all videos without GIFs
-const handleProcessVideosWithoutGifs = async () => {
-  if (isProcessingGifs) return;
-  
-  setIsProcessingGifs(true);
-  try {
-    await videoProcessorService.processAllUserVideosWithoutGifs();
-    // After processing, refresh the user videos
-    if (currentUser?.id) {
+      await exerciseService.deleteSpecificExerciseVideo(exerciseId, videoId, userId);
+      
+      // Instead of manually updating the state, fetch fresh videos
+      console.log(`Successfully deleted video ${videoId}`);
       const videos = await userService.fetchUserVideos();
       setUserVideos(videos);
+      
+    } catch (error) {
+      console.error('Failed to delete video:', error);
     }
-  } catch (error) {
-    console.error('Error processing videos without GIFs:', error);
-  } finally {
-    setIsProcessingGifs(false);
-  }
-};
+  };
 
-// Add a new function to handle video deletion
-const handleDeleteSpecificVideo = async (videoId: string, exerciseId: string) => {
-  if (!window.confirm('Are you sure you want to delete this video?')) {
-    return;
+  if (isLoading) {
+    return <div className="flex items-center justify-center min-h-screen">Loading Profile...</div>;
   }
-  
-  const userId = userService.currentUser?.id;
-  if (!userId) {
-    console.error('User not logged in');
-    return;
-  }
-  
-  try {
-    await exerciseService.deleteSpecificExerciseVideo(exerciseId, videoId, userId);
-    
-    // Instead of manually updating the state, fetch fresh videos
-    console.log(`Successfully deleted video ${videoId}`);
-    const videos = await userService.fetchUserVideos();
-    setUserVideos(videos);
-    
-  } catch (error) {
-    console.error('Failed to delete video:', error);
-  }
-};
 
-  if (!currentUser) {
-    return <div>Loading...</div>;
+  if (!userData) {
+    return <div className="flex items-center justify-center min-h-screen">User not found.</div>;
   }
 
   useEffect(() => {
     const fetchUserData = async () => {
-      if (!currentUser?.id) return;
+      if (!usernameFromRoute) return;
+
+      setIsLoading(true);
+      const targetUsername = usernameFromRoute;
   
       try {
+        // Fetch the profile user's data based on the route username
+        const profileUser = await userService.getUserByUsername(targetUsername);
+        setUserData(profileUser);
+
+        if (!profileUser) {
+          setIsLoading(false);
+          return;
+        }
+
+        // Determine if this is the logged-in user's profile
+        setIsCurrentUserProfile(!!hookCurrentUser && hookCurrentUser.username === profileUser.username);
+
         // Fetch followers and following
         const [followers, following, challenges, summaries] = await Promise.all([
           userService.fetchFollowers(),
           userService.fetchFollowing(),
-          workoutService.fetchCollections(currentUser.id),
+          workoutService.fetchCollections(profileUser.id),
           workoutService.fetchAllWorkoutSummaries()
         ]);
   
@@ -260,29 +292,32 @@ const handleDeleteSpecificVideo = async (videoId: string, exerciseId: string) =>
         setWorkoutSummaries(summaries);
   
         // Parsing activities
-        const parsedActivities = parseActivityType(
+        const userActivities = parseActivityType(
           summaries, 
           userVideos, 
           [...followers, ...following], 
-          currentUser.id
+          profileUser.id
         );
 
-        setActivities(parsedActivities);
+        setActivities(userActivities);
   
       } catch (error) {
         console.error('Error fetching user data:', error);
+        setUserData(null);
+      } finally {
+        setIsLoading(false);
       }
     };
   
     fetchUserData();
-  }, [currentUser?.id]);
+  }, [usernameFromRoute, hookCurrentUser?.username]);
 
   useEffect(() => {
     const fetchUserStacks = async () => {
-      if (!currentUser?.id) return;
+      if (!userData?.id) return;
       
       try {
-        const stacks = await userService.fetchUserStacks();
+        const stacks = await userService.fetchUserStacks(userData.id);
         setUserStacks(stacks);
         console.log("stacks: ", stacks);
       } catch (error) {
@@ -291,15 +326,15 @@ const handleDeleteSpecificVideo = async (videoId: string, exerciseId: string) =>
     };
 
     fetchUserStacks();
-  }, [currentUser?.id]);
+  }, [userData?.id]);
 
   useEffect(() => {
     const fetchUserVideos = async () => {
-      if (!currentUser?.id) return;
+      if (!userData?.id) return;
       
       try {
-        console.log('[DEBUG-PROFILE-COMPONENT] Starting to fetch user videos for:', currentUser.id);
-        const videos = await userService.fetchUserVideos();
+        console.log('[DEBUG-PROFILE-COMPONENT] Starting to fetch user videos for:', userData.id);
+        const videos = await userService.fetchUserVideos(userData.id);
         console.log('[DEBUG-PROFILE-COMPONENT] Received videos count:', videos.length);
         
         // Count total unique videos
@@ -341,15 +376,13 @@ const handleDeleteSpecificVideo = async (videoId: string, exerciseId: string) =>
     };
   
     fetchUserVideos();
-  }, [currentUser?.id]);
+  }, [userData?.id]);
 
   const socialLinks = {
-    instagram: currentUser.creator?.instagramHandle,
-    twitter: currentUser.creator?.twitterHandle,
-    youtube: currentUser.creator?.youtubeUrl
+    instagram: userData.creator?.instagramHandle,
+    twitter: userData.creator?.twitterHandle,
+    youtube: userData.creator?.youtubeUrl
   };
-
-  const router = useRouter();
 
   return (
     <div className="min-h-screen bg-zinc-900">
@@ -370,8 +403,8 @@ const handleDeleteSpecificVideo = async (videoId: string, exerciseId: string) =>
             />
             <div className="relative">
               <img 
-                src={currentUser.profileImage?.profileImageURL || "/api/placeholder/96/96"}
-                alt={currentUser.displayName}
+                src={userData.profileImage?.profileImageURL || "/api/placeholder/96/96"}
+                alt={userData.displayName}
                 className={`w-24 h-24 rounded-full border-4 border-zinc-900 ${isImageUploading ? 'opacity-50' : ''}`}
               />
               {isImageUploading && (
@@ -390,8 +423,8 @@ const handleDeleteSpecificVideo = async (videoId: string, exerciseId: string) =>
           </div>
 
             <div className="mt-4 text-white">
-              <h1 className="text-2xl font-bold">{currentUser.displayName}</h1>
-              <p className="text-zinc-400">@{currentUser.username}</p>
+              <h1 className="text-2xl font-bold">{userData.displayName}</h1>
+              <p className="text-zinc-400">@{userData.username}</p>
               
               <div className="mt-2 flex items-center gap-4 text-sm text-zinc-400">
                 <span>{followers.length} followers</span>
@@ -399,7 +432,7 @@ const handleDeleteSpecificVideo = async (videoId: string, exerciseId: string) =>
                 <span>{following.length} following</span>
               </div>
 
-              <p className="mt-4 text-zinc-300">{currentUser.bio}</p>
+              <p className="mt-4 text-zinc-300">{userData.bio}</p>
 
               <div className="mt-4 flex gap-6">
                 {Object.entries(socialLinks).map(([platform, handle]) => {
@@ -461,7 +494,7 @@ const handleDeleteSpecificVideo = async (videoId: string, exerciseId: string) =>
                       activities={activities}
                       workoutSummaries={workoutSummaries}
                       userVideos={userVideos}
-                      username={currentUser.username}
+                      username={userData.username}
                       isPublicProfile={false}
                       onWorkoutSelect={(summary) => {
                         //select summary
@@ -533,6 +566,7 @@ const handleDeleteSpecificVideo = async (videoId: string, exerciseId: string) =>
                         // Handle normal stack selection
                       }
                     }}
+                    username={hookCurrentUser?.username}
                   />
                 </div>
               )}
@@ -613,7 +647,7 @@ const handleDeleteSpecificVideo = async (videoId: string, exerciseId: string) =>
         {selectedExercise && (
           <FullScreenExerciseView
             exercise={selectedExercise}
-            user={currentUser}
+            user={userData}
             onBack={() => setSelectedExercise(null)}
             onProfileClick={() => {
             }}

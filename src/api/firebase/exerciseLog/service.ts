@@ -1,7 +1,7 @@
 import { Firestore, collection, doc, setDoc } from 'firebase/firestore';
-import { ExerciseLog } from '../../firebase/exercise';
+import { ExerciseLog } from '../exercise/types';
 import { Workout } from '../../firebase/workout';
-import { userService } from '../../firebase/user';
+import { userService } from '../user';
 import { db } from '../config';
 
 class ExerciseLogService {
@@ -18,7 +18,7 @@ class ExerciseLogService {
     }
 
     async updateExerciseLog(log: ExerciseLog, workout: Workout): Promise<void> {
-        const userId = userService.currentUser?.id;
+        const userId = userService.nonUICurrentUser?.id || 'anonymous';
         
         if (!userId) {
             return;

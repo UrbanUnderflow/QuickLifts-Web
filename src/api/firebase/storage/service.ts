@@ -254,13 +254,13 @@ export class FirebaseStorageService {
 
   private async updateUserProfileImage(imageURL: string): Promise<void> {
     // Ensure current user exists
-    if (!userService.currentUser) {
+    if (!userService.nonUICurrentUser) {
       throw new Error("No current user found");
     }
 
     // Create a new User object with updated profile image
-    const updatedUser = new User(userService.currentUser.id, {
-      ...userService.currentUser.toDictionary(),
+    const updatedUser = new User(userService.nonUICurrentUser.id, {
+      ...userService.nonUICurrentUser.toDictionary(),
       profileImage: {
         profileImageURL: imageURL,
         imageOffsetWidth: 0,
@@ -271,6 +271,7 @@ export class FirebaseStorageService {
 
     // Update user in Firestore
     await userService.updateUser(updatedUser.id, updatedUser);
+    userService.nonUICurrentUser = updatedUser; // Update cached user
   }
 
   // Optional: Image caching similar to iOS implementation

@@ -23,10 +23,21 @@ function shallowEqual(objA: any, objB: any): boolean {
 
   if (keysA.length !== keysB.length) return false;
 
+  const ignoreKeys = ['createdAt', 'updatedAt', 'bodyWeight', 'macros', 'profileImage'];
+
   for (let key of keysA) {
-    // Ignore timestamp fields for comparison to avoid loop
-    if (key === 'createdAt' || key === 'updatedAt') continue;
-    if (objA[key] !== objB[key]) {
+    if (ignoreKeys.includes(key)) continue;
+
+    const valA = objA[key];
+    const valB = objB[key];
+
+    const areObjects = typeof valA === 'object' && typeof valB === 'object';
+
+    if (areObjects) {
+      if (JSON.stringify(valA) !== JSON.stringify(valB)) {
+        return false;
+      }
+    } else if (valA !== valB) {
       return false;
     }
   }
@@ -121,7 +132,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
               dispatch(setUser(newUserDict));
               prevUserRef.current = newUserDict;
             }
-            userService.currentUser = firestoreUser;
+            userService.nonUICurrentUser = firestoreUser;
 
             if (!isPublicRoute(router.pathname)) {
               if (firestoreUser && (!firestoreUser.username || firestoreUser.username === '')) {
@@ -134,7 +145,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
           } else {
             console.log('No firebase user, clearing state');
             dispatch(setUser(null));
-            userService.currentUser = null;
+            userService.nonUICurrentUser = null;
             if (!isPublicRoute(router.pathname)) {
               setShowSignInModal(true);
             }

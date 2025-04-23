@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { Challenge, ChallengeStatus, UserChallenge, SweatlistCollection } from '../../api/firebase/workout/types';
 import { userService, User } from '../../api/firebase/user';
 import { workoutService } from '../../api/firebase/workout/service';
 import { ChatService } from '../../api/firebase/chat/service';
 import { useRouter } from 'next/router';
 import { Calendar, ChevronDown, Users, Clock, Flag } from 'lucide-react';
+import { useUser } from '../../hooks/useUser';
 
 interface ChallengeWaitingRoomViewProps {
   viewModel: ChallengeWaitingRoomViewModel;
@@ -29,7 +30,7 @@ export const ChallengeWaitingRoomView: React.FC<ChallengeWaitingRoomViewProps> =
   const [showMenu, setShowMenu] = useState(false);
 
   const router = useRouter();
-  const currentUser: User | null = userService.currentUser;
+  const currentUser = useUser();
 
   // Compute countdown from challenge.startDate
   const computeCountdown = (startDate: Date) => {
@@ -63,7 +64,7 @@ export const ChallengeWaitingRoomView: React.FC<ChallengeWaitingRoomViewProps> =
           return;
         }
         setParticipants(userChallenges);
-        const currentUserId = userService.currentUser?.id;
+        const currentUserId = currentUser?.id;
         if (currentUserId) {
           const uc = userChallenges.find((uc) => uc.userId === currentUserId) || null;
           setUserChallenge(uc);
@@ -134,6 +135,12 @@ export const ChallengeWaitingRoomView: React.FC<ChallengeWaitingRoomViewProps> =
       }
     });
   };
+
+  const hasJoined = useMemo(() => {
+    const currentUserId = currentUser?.id;
+    if (!currentUserId) return false;
+    return viewModel.challenge?.participants?.some(p => p.id === currentUserId) || false;
+  }, [viewModel.challenge, currentUser]);
 
   return (
     <div className="min-h-screen bg-[#141A1E] text-white">

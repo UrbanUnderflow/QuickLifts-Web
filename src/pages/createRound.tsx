@@ -20,6 +20,7 @@ import { StackCard } from '../components/Rounds/StackCard'
 import { ExerciseGrid } from '../components/App/ExerciseGrid/ExerciseGrid';
 import { MultiUserSelector } from '../components/App/MultiSelectUser/MultiSelectUser';
 import { generateId } from '../utils/generateId';
+import { useUser } from '../hooks/useUser';
 
 // Type definitions
 export enum SweatlistType {
@@ -245,8 +246,9 @@ const MobileChallengeSetupView: React.FC<MobileChallengeSetupProps> = ({
         );
 
         // Save to Firebase with properly mapped data
+        const currentUser = useUser();
         await workoutService.saveWorkoutSession({
-          userId: userService.currentUser?.id || '',
+          userId: currentUser?.id || '',
           workout: mappedStacks[0], // Assuming first stack is the main one
           logs: mappedStacks[0].logs || []
         });
@@ -626,6 +628,7 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
     const [allStacks, setAllStacks] = useState<Workout[]>([]);
     const [selectedStacks, setSelectedStacks] = useState<Workout[]>([]);
     const [isAIMode, setIsAIMode] = useState(false);
+    const currentUser = useUser();
 
     const preferences = [
       "Exclusive to selected creators",
@@ -919,7 +922,7 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
           // Just create the SweatlistIdentifier for rest days
           sweatlistIds.push(new SweatlistIdentifiers({
             id: "rest-" + generateId(),
-            sweatlistAuthorId: userService.currentUser?.id || '',
+            sweatlistAuthorId: currentUser?.id || '',
             sweatlistName: "Rest",
             order: currentOrder,
             isRest: true
@@ -945,7 +948,7 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
           if (enrichedExercises.length > 0) {
             const { workout, exerciseLogs } = await workoutService.formatWorkoutAndInitializeLogs(
               enrichedExercises,
-              userService.currentUser?.id
+              currentUser?.id
             );
 
             workout.title = stackData.title;
@@ -958,7 +961,7 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
               createdStacks.push(createdStack);
               sweatlistIds.push(new SweatlistIdentifiers({
                 id: createdStack.id,
-                sweatlistAuthorId: userService.currentUser?.id || '',
+                sweatlistAuthorId: currentUser?.id || '',
                 sweatlistName: createdStack.title,
                 order: currentOrder,
                 isRest: false
@@ -977,7 +980,6 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
   
       // Create the round with the collected stacks
       const createdAt = new Date();
-      const currentUser = userService.currentUser;
   
       if (!currentUser?.id) {
         throw new Error("No user logged in");
@@ -994,7 +996,7 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
         endDate: challengeData.endDate,
         createdAt,
         updatedAt: createdAt,
-        ownerId: [userService.currentUser?.id || '']
+        ownerId: [currentUser?.id || '']
       });
   
       // Create the collection with all sweatlistIds
@@ -1005,7 +1007,7 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
         pin: challengeData.pinCode,
         challenge,
         sweatlistIds: sweatlistIds,
-        ownerId: [currentUser.id],
+        ownerId: [currentUser?.id || ''],
         participants: [],
         privacy: challengeData.roundType,
         createdAt,
@@ -1031,7 +1033,6 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
   
     try {
       const createdAt = new Date();
-      const currentUser = userService.currentUser;
   
       if (!currentUser?.id) {
         throw new Error("No user logged in");
@@ -1048,7 +1049,7 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
         endDate: challengeData.endDate,
         createdAt,
         updatedAt: createdAt,
-        ownerId: [userService.currentUser?.id || '']
+        ownerId: [currentUser?.id || '']
       });
   
       // Create SweatlistCollection with proper structure
@@ -1060,11 +1061,11 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
         challenge,
         sweatlistIds: selectedStacks.map((stack, index) => ({
           id: stack.id,
-          sweatlistAuthorId: currentUser.id,
+          sweatlistAuthorId: currentUser?.id || '',
           sweatlistName: stack.title,
           order: index + 1
         })),
-        ownerId: [currentUser.id],
+        ownerId: [currentUser?.id || ''],
         participants: [],
         privacy: challengeData.roundType === SweatlistType.locked ? 
                  SweatlistType.locked : 

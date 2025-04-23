@@ -359,9 +359,7 @@ export class User {
    createdAt: Date;
    updatedAt: Date;
 
-   constructor(data: any) {
-     console.log('Creator constructor raw data:', JSON.stringify(data, null, 2));
-     
+   constructor(data: any) {     
      this.id = data.id || '';
      this.instagramHandle = data.instagramHandle || '';
      this.twitterHandle = data.twitterHandle || '';
