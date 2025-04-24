@@ -18,8 +18,8 @@ export async function handleBrevoSubscribe({ email, listKey, utmCampaign = 'gene
   client.setApiKey(Brevo.ContactsApiApiKeys.apiKey, process.env.BREVO_MARKETING_KEY);
 
   const LIST_MAP: Record<string, number | undefined> = {
-    generic: process.env.BREVO_GENERIC_LIST_ID ? Number(process.env.BREVO_GENERIC_LIST_ID) : undefined,
-    mobility: process.env.BREVO_MOBILITY_LIST_ID ? Number(process.env.BREVO_MOBILITY_LIST_ID) : undefined,
+    generic: 5,
+    mobility: 6,
   };
 
   const chosenListId = listKey ? LIST_MAP[listKey] : LIST_MAP.generic;
