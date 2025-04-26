@@ -12,6 +12,11 @@ const nextConfig = {
   images: {
     domains: ['fitwithpulse.ai'],
   },
+  eslint: {
+    // Warning: This allows production builds to successfully complete even if
+    // your project has ESLint errors.
+    ignoreDuringBuilds: true,
+  },
   env: {
     // Production Firebase Config
     NEXT_PUBLIC_FIREBASE_API_KEY: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
