@@ -1059,6 +1059,61 @@ async fetchCollections(userId: string): Promise<SweatlistCollection[]> {
     }
   }
   
+  /**
+   * Fetch all user challenges from the database, ordered by creation date
+   * @returns A promise resolving to an array of all user challenges
+   * @throws If the Firestore query fails
+   */
+  async fetchAllUserChallenges(): Promise<UserChallenge[]> {
+    try {
+      // Reference to the user-challenge collection
+      const userChallengesRef = collection(db, 'user-challenge');
+      
+      // Query all challenges ordered by creation date (newest first)
+      const q = query(userChallengesRef, orderBy('createdAt', 'desc'));
+      const snapshot = await getDocs(q);
+      
+      console.log(`Loaded ${snapshot.docs.length} user challenges`);
+      
+      // Process and map documents to an array of UserChallenge objects
+      const userChallenges = snapshot.docs.map((doc: DocumentData) => {
+        try {
+          const data = doc.data();
+          
+          // Pre-process challenge dates if they exist
+          if (data.challenge) {
+            // Ensure the dates are properly converted
+            if (data.challenge.startDate) {
+              data.challenge.startDate = convertFirestoreTimestamp(data.challenge.startDate);
+            }
+            if (data.challenge.endDate) {
+              data.challenge.endDate = convertFirestoreTimestamp(data.challenge.endDate);
+            }
+            if (data.challenge.createdAt) {
+              data.challenge.createdAt = convertFirestoreTimestamp(data.challenge.createdAt);
+            }
+            if (data.challenge.updatedAt) {
+              data.challenge.updatedAt = convertFirestoreTimestamp(data.challenge.updatedAt);
+            }
+          }
+          
+          return new UserChallenge({
+            id: doc.id,
+            ...data
+          });
+        } catch (err) {
+          console.error(`Error processing user challenge document ${doc.id}:`, err);
+          return null; // Skip documents that fail to process
+        }
+      }).filter(Boolean); // Remove null entries
+      
+      return userChallenges as UserChallenge[];
+    } catch (error) {
+      console.error('Error fetching all user challenges:', error);
+      throw new Error('Failed to fetch all user challenges');
+    }
+  }
+  
   //update the workout summary,
   async updateWorkoutSummary({
     userId,
@@ -1707,6 +1762,48 @@ async deleteWorkoutSession(workoutId: string | null): Promise<void> {
     } catch (error) {
       console.error('Error fetching user challenge by ID:', error);
       return null;
+    }
+  }
+
+  /**
+   * Deletes a user challenge by ID
+   * @param id The ID of the user challenge to delete
+   * @returns A promise resolving to a success flag and message
+   */
+  async deleteUserChallenge(id: string): Promise<{ success: boolean; message: string }> {
+    try {
+      if (!id) {
+        return {
+          success: false,
+          message: "Invalid user challenge ID"
+        };
+      }
+
+      // First fetch to ensure it exists
+      const challengeRef = doc(db, 'user-challenge', id);
+      const challengeSnap = await getDoc(challengeRef);
+      
+      if (!challengeSnap.exists()) {
+        return {
+          success: false,
+          message: "User challenge not found"
+        };
+      }
+      
+      // Delete the document
+      await deleteDoc(challengeRef);
+      
+      return {
+        success: true,
+        message: "User challenge successfully deleted"
+      };
+    } catch (error) {
+      console.error('Error deleting user challenge:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      return {
+        success: false,
+        message: `Failed to delete: ${errorMessage}`
+      };
     }
   }
 

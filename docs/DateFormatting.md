@@ -1,0 +1,223 @@
+# Date Formatting in Pulse
+
+This guide explains date formatting and handling across our web and iOS applications. Proper date handling is crucial for consistent behavior and preventing errors across platforms.
+
+## Date Storage in Firestore
+
+Firestore supports `Timestamp` objects which store date and time as two separate values:
+- `seconds`: The number of seconds since the Unix epoch (January 1, 1970)
+- `nanoseconds`: The number of nanoseconds within the second
+
+## Common Date Issues Between Web and iOS
+
+### Issue: Format Mismatches
+
+iOS and web handle dates differently:
+- iOS typically uses `Date` objects directly from Firestore timestamps
+- JavaScript converts dates to different formats, sometimes resulting in mismatches
+
+### Issue: Timestamp Conversion
+
+When dates are retrieved from Firestore, they can be in different formats:
+- Timestamps (seconds since epoch)
+- Unix timestamps (milliseconds since epoch)
+- ISO strings
+- Timestamp objects with seconds/nanoseconds
+- Already converted Date objects
+
+## Inactivity Tracking Fields
+
+Pulse uses specific date-related fields to track user inactivity:
+
+### `isCurrentlyActive`
+
+- Boolean flag that indicates if a user is currently active in a challenge
+- Set to `true` when user joins a challenge or performs activity
+- Set to `false` when the inactivity check determines the user has been inactive
+
+### `updatedAt` (as lastActive)
+
+- The `updatedAt` timestamp serves as the "lastActive" indicator
+- Represents the last time a user interacted with their challenge
+- Used by the inactivity check function to calculate inactivity periods
+- Properly formatting this field is critical for inactivity notifications
+
+### Example: Inactivity Check Logic
+
+```typescript
+// Determine if a user is inactive based on lastActive timestamp
+const isInactive = (lastActiveDate: Date, inactivityThresholdDays: number): boolean => {
+  if (!lastActiveDate) return false;
+  
+  // Convert lastActive to proper Date object
+  const lastActive = convertFirestoreTimestamp(lastActiveDate);
+  
+  // Calculate days since last activity
+  const now = new Date();
+  const diffTime = Math.abs(now.getTime() - lastActive.getTime());
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  
+  return diffDays > inactivityThresholdDays;
+};
+```
+
+## Solution: Consistent Date Conversion Functions
+
+We have established utility functions to ensure consistency:
+
+### 1. `convertFirestoreTimestamp()`
+
+This function handles all timestamp variations:
+
+```typescript
+// From src/utils/formatDate.ts
+export const convertFirestoreTimestamp = (
+  timestamp: number | string | Date | null | undefined
+): Date => {
+  // If null or undefined, return the current date.
+  if (timestamp == null) return new Date();
+
+  // If it's already a Date, return it.
+  if (timestamp instanceof Date) return timestamp;
+
+  // Convert to number if it's a string (using parseFloat preserves decimals).
+  const numTimestamp =
+    typeof timestamp === 'string' ? parseFloat(timestamp) : timestamp;
+
+  // If the timestamp looks like seconds (less than 10 billion), convert to milliseconds.
+  if (numTimestamp < 10000000000) {
+    return new Date(numTimestamp * 1000);
+  }
+
+  // Otherwise, assume it's in milliseconds.
+  return new Date(numTimestamp);
+};
+```
+
+### 2. `dateToUnixTimestamp()`
+
+When saving dates back to Firestore, we convert to Unix timestamp format:
+
+```typescript
+export const dateToUnixTimestamp = (date: Date): number => {
+  return Math.floor(date.getTime() / 1000);
+};
+```
+
+## Best Practices
+
+1. **Always Use Conversion Functions**
+   - When retrieving dates from Firestore, always use `convertFirestoreTimestamp()`
+   - When saving dates to Firestore, always use `dateToUnixTimestamp()`
+
+2. **Pre-Process Nested Objects**
+   - When an object contains nested date fields (like Challenge in UserChallenge), manually convert each date field
+   - Example:
+     ```typescript
+     if (data.challenge) {
+       if (data.challenge.startDate) {
+         data.challenge.startDate = convertFirestoreTimestamp(data.challenge.startDate);
+       }
+       if (data.challenge.endDate) {
+         data.challenge.endDate = convertFirestoreTimestamp(data.challenge.endDate);
+       }
+     }
+     ```
+
+3. **Class Constructors Must Handle Dates**
+   - All model classes should convert dates in their constructors
+   - Example from `Challenge` constructor:
+     ```typescript
+     this.startDate = convertFirestoreTimestamp(data.startDate);
+     this.endDate = convertFirestoreTimestamp(data.endDate);
+     this.createdAt = convertFirestoreTimestamp(data.createdAt);
+     this.updatedAt = convertFirestoreTimestamp(data.updatedAt);
+     ```
+
+4. **Date Validation Before Calculations**
+   - Always check if dates are valid before performing calculations
+   - Example from `calculateDurationInDays()` in Challenge class:
+     ```typescript
+     const start = this.startDate?.valueOf();
+     const end = this.endDate?.valueOf();
+     
+     if (!start || !end || isNaN(start) || isNaN(end)) {
+       throw new Error('Invalid startDate or endDate');
+     }
+     ```
+
+5. **Always Update `updatedAt` When Modifying User Challenges**
+   - The `updatedAt` field is used to track user activity
+   - Update it whenever a user interacts with their challenge:
+     ```typescript
+     const updateUserChallenge = async (challenge: UserChallenge) => {
+       // Update the updatedAt timestamp to current time
+       challenge.updatedAt = new Date();
+       // Save to Firestore with proper conversion
+       const challengeData = {
+         ...challenge.toDictionary(),
+         updatedAt: dateToUnixTimestamp(challenge.updatedAt)
+       };
+       await setDoc(doc(db, 'user-challenge', challenge.id), challengeData);
+     };
+     ```
+
+## Common Pitfalls to Avoid
+
+1. **Direct Assignment Without Conversion**
+   ```typescript
+   // ❌ WRONG
+   this.startDate = data.startDate;
+   
+   // ✅ CORRECT
+   this.startDate = convertFirestoreTimestamp(data.startDate);
+   ```
+
+2. **Forgetting to Convert Nested Objects**
+   ```typescript
+   // ❌ WRONG - dates within challenge won't be converted
+   this.challenge = data.challenge;
+   
+   // ✅ CORRECT - process nested dates
+   if (data.challenge) {
+     data.challenge.startDate = convertFirestoreTimestamp(data.challenge.startDate);
+     // ... other date fields
+   }
+   this.challenge = data.challenge;
+   ```
+
+3. **Not Handling Null or Undefined Values**
+   ```typescript
+   // ❌ WRONG - will crash on null/undefined
+   const duration = endDate.getTime() - startDate.getTime();
+   
+   // ✅ CORRECT - validates dates first
+   if (!startDate || !endDate) {
+     return 0; // or handle the error appropriately
+   }
+   const duration = endDate.getTime() - startDate.getTime();
+   ```
+
+4. **Forgetting to Update Activity Tracking Fields**
+   ```typescript
+   // ❌ WRONG - not updating the lastActive indicator
+   await updateUserChallengeProgress(challengeId, newProgress);
+   
+   // ✅ CORRECT - updating lastActive (updatedAt) indicator
+   const challenge = await fetchUserChallengeById(challengeId);
+   challenge.progress = newProgress;
+   challenge.updatedAt = new Date(); // Update lastActive time
+   challenge.isCurrentlyActive = true; // Mark as active
+   await updateUserChallenge(challenge);
+   ```
+
+## Debugging Date Issues
+
+If you encounter date-related errors:
+
+1. Check the raw data from Firestore using `console.log()`
+2. Verify the data type (number, string, Date, object)
+3. Manually apply `convertFirestoreTimestamp()` to test conversion
+4. Add explicit error handling for date operations
+
+By consistently following these patterns, we can maintain compatibility between iOS and web applications while preventing common date-related errors. 

@@ -335,9 +335,9 @@ const MobileChallengeSetupView: React.FC<MobileChallengeSetupProps> = ({
               pinCode
             )}
             placeholder="Add a name for your round"
-            className="w-full p-3 bg-zinc-900/50 rounded-lg border border-zinc-700/50 
-                      text-white placeholder:text-zinc-600
-                      focus:border-[#E0FE10] focus:outline-none transition-all"
+            className="w-full p-3 bg-[#262a30] border border-gray-700 rounded-lg 
+                      text-white placeholder-gray-500
+                      focus:outline-none focus:ring-2 focus:ring-[#E0FE10] transition-all"
           />
         </div>
   
@@ -356,9 +356,9 @@ const MobileChallengeSetupView: React.FC<MobileChallengeSetupProps> = ({
             )}
             placeholder="Add a description for your round"
             rows={3}
-            className="w-full p-3 bg-zinc-900/50 rounded-lg border border-zinc-700/50 
-                      text-white placeholder:text-zinc-600 
-                      focus:border-[#E0FE10] focus:outline-none transition-all resize-none"
+            className="w-full p-3 bg-[#262a30] border border-gray-700 rounded-lg 
+                      text-white placeholder-gray-500
+                      focus:outline-none focus:ring-2 focus:ring-[#E0FE10] transition-all resize-none"
           />
         </div>
   
@@ -366,14 +366,14 @@ const MobileChallengeSetupView: React.FC<MobileChallengeSetupProps> = ({
         <div className="mb-8">
           <label className="text-sm text-zinc-400 mb-2 block">Selected Stacks</label>
           {selectedStacks.length === 0 ? (
-            <div className="p-4 rounded-lg bg-zinc-900/50 border border-zinc-700/50 text-center">
+            <div className="p-4 rounded-lg bg-[#262a30] border border-gray-700 text-center">
               <p className="text-zinc-400">No stacks selected yet</p>
               <p className="text-zinc-500 text-sm mt-1">Select stacks to add them to your round</p>
             </div>
           ) : (
             <div className="space-y-2">
               {selectedStacks.map((stack) => (
-                <div className="border border-zinc-700/50 rounded-lg">
+                <div className="border border-gray-700 rounded-lg bg-[#1a1e24] overflow-hidden"> 
                     <StackCard
                     key={stack.roundWorkoutId || stack.id}
                     workout={stack}
@@ -393,10 +393,10 @@ const MobileChallengeSetupView: React.FC<MobileChallengeSetupProps> = ({
           <div className="grid grid-cols-2 gap-3">
             <button
               onClick={() => setChallengeData(startDate, endDate, challengeName, challengeDesc, SweatlistType.together, pinCode)}
-              className={`p-4 rounded-lg flex flex-col items-center ${
+              className={`p-4 rounded-lg flex flex-col items-center transition-colors ${
                 roundType === SweatlistType.together 
                   ? "bg-[#E0FE10] text-black" 
-                  : "bg-zinc-900/50 border border-zinc-700/50 text-zinc-400"
+                  : "bg-[#262a30] border border-gray-700 text-gray-300 hover:bg-[#2a2f36]"
               }`}
             >
               <Users className="h-5 w-5 mb-2" />
@@ -406,10 +406,10 @@ const MobileChallengeSetupView: React.FC<MobileChallengeSetupProps> = ({
   
             <button
               onClick={() => setChallengeData(startDate, endDate, challengeName, challengeDesc, SweatlistType.locked, pinCode)}
-              className={`p-4 rounded-lg flex flex-col items-center ${
+              className={`p-4 rounded-lg flex flex-col items-center transition-colors ${
                 roundType === SweatlistType.locked 
                   ? "bg-[#E0FE10] text-black" 
-                  : "bg-zinc-900/50 border border-zinc-700/50 text-zinc-400"
+                  : "bg-[#262a30] border border-gray-700 text-gray-300 hover:bg-[#2a2f36]"
               }`}
             >
               <Lock className="h-5 w-5 mb-2" />
@@ -420,7 +420,7 @@ const MobileChallengeSetupView: React.FC<MobileChallengeSetupProps> = ({
         </div>
   
         {/* Dates */}
-        <div className={`mb-20 ${roundType === SweatlistType.locked ? 'mb-4' : 'mb-40'}`}>
+        <div className={`mb-8 ${roundType === SweatlistType.locked ? 'pb-0' : 'pb-32'}`}> 
           <label className="text-sm text-zinc-400 mb-2 block">Round Dates</label>
           <div className="space-y-2">
             <div>
@@ -436,9 +436,9 @@ const MobileChallengeSetupView: React.FC<MobileChallengeSetupProps> = ({
                   roundType,
                   pinCode
                 )}
-                className="w-full p-3 rounded-lg bg-zinc-900/50 border border-zinc-700/50 
-                        text-white placeholder:text-zinc-600
-                        focus:border-[#E0FE10] focus:outline-none transition-all
+                className="w-full p-3 rounded-lg bg-[#262a30] border border-gray-700 
+                        text-white placeholder-gray-500
+                        focus:outline-none focus:ring-2 focus:ring-[#E0FE10] transition-all
                         [color-scheme:dark]"
               />
             </div>
@@ -456,9 +456,9 @@ const MobileChallengeSetupView: React.FC<MobileChallengeSetupProps> = ({
                   roundType,
                   pinCode
                 )}
-                className="w-full p-3 rounded-lg bg-zinc-900/50 border border-zinc-700/50 
-                        text-white placeholder:text-zinc-600
-                        focus:border-[#E0FE10] focus:outline-none transition-all
+                className="w-full p-3 rounded-lg bg-[#262a30] border border-gray-700 
+                        text-white placeholder-gray-500
+                        focus:outline-none focus:ring-2 focus:ring-[#E0FE10] transition-all
                         [color-scheme:dark]"
               />
             </div>
@@ -466,7 +466,7 @@ const MobileChallengeSetupView: React.FC<MobileChallengeSetupProps> = ({
         </div>
   
         {roundType === SweatlistType.locked && (
-          <div className="mb-40">
+          <div className="mb-32"> 
             <label htmlFor="pinCode" className="text-sm text-zinc-400 mb-2 block">PIN Code</label>
             <input
               ref={pinCodeRef}
@@ -484,16 +484,15 @@ const MobileChallengeSetupView: React.FC<MobileChallengeSetupProps> = ({
                 e.target.value
               )}
               placeholder="Set 9-digit PIN"
-              className="w-full p-3 rounded-lg bg-zinc-900/50 border border-zinc-700/50 
-                        text-white placeholder:text-zinc-600
-                        focus:border-[#E0FE10] focus:outline-none transition-all"
+              className="w-full p-3 rounded-lg bg-[#262a30] border border-gray-700 
+                        text-white placeholder-gray-500
+                        focus:outline-none focus:ring-2 focus:ring-[#E0FE10] transition-all"
             />
           </div>
         )}
 
-        {activeTab === 'preferences' && (
-          <div className="space-y-4">
-            <div className="bg-zinc-900/50 rounded-lg p-4 border border-zinc-700/50">
+        <div className="space-y-4 mb-32"> 
+            <div className="bg-[#262a30] rounded-lg p-4 border border-gray-700">
               <h3 className="font-medium text-white mb-2">Workout Preferences</h3>
               <p className="text-sm text-zinc-400 mb-4">
                 Select your preferences for this program
@@ -509,10 +508,10 @@ const MobileChallengeSetupView: React.FC<MobileChallengeSetupProps> = ({
                           : [...prev, preference]
                       );
                     }}
-                    className={`p-3 rounded-lg text-sm font-medium transition-colors ${
+                    className={`p-3 rounded-lg text-sm font-medium transition-colors border ${
                       selectedPreferences.includes(preference)
-                        ? 'bg-[#E0FE10] text-black'
-                        : 'bg-zinc-800 text-white hover:bg-zinc-700'
+                        ? 'bg-[#E0FE10] text-black border-[#E0FE10]'
+                        : 'bg-[#1a1e24] text-gray-300 border-gray-600 hover:bg-[#2a2f36]'
                     }`}
                   >
                     {preference}
@@ -520,8 +519,8 @@ const MobileChallengeSetupView: React.FC<MobileChallengeSetupProps> = ({
                 ))}
               </div>
             </div>
-
-            <div className="bg-zinc-900/50 rounded-lg p-4 border border-zinc-700/50">
+            
+            <div className="bg-[#262a30] rounded-lg p-4 border border-gray-700">
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <h3 className="font-medium text-white">Rest Days</h3>
@@ -531,13 +530,15 @@ const MobileChallengeSetupView: React.FC<MobileChallengeSetupProps> = ({
                   checked={includeRestDays}
                   onChange={handleIncludeRestDaysChange}
                   className={`${
-                    includeRestDays ? 'bg-[#E0FE10]' : 'bg-zinc-700'
-                  } relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none`}
+                    includeRestDays ? 'bg-[#E0FE10]' : 'bg-gray-600'
+                  } relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-opacity-75`}
                 >
+                  <span className="sr-only">Include rest days</span>
                   <span
+                    aria-hidden="true"
                     className={`${
                       includeRestDays ? 'translate-x-6' : 'translate-x-1'
-                    } inline-block h-4 w-4 transform rounded-full bg-white transition-transform`}
+                    } inline-block h-4 w-4 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out`}
                   />
                 </Switch>
               </div>
@@ -548,10 +549,10 @@ const MobileChallengeSetupView: React.FC<MobileChallengeSetupProps> = ({
                     <button
                       key={pref.day}
                       onClick={() => handleRestDayPreferencesChange(pref.day)}
-                      className={`p-3 rounded-lg text-sm font-medium transition-colors ${
+                      className={`p-3 rounded-lg text-sm font-medium transition-colors border ${
                         pref.isSelected
-                          ? 'bg-[#E0FE10] text-black'
-                          : 'bg-zinc-800 text-white hover:bg-zinc-700'
+                          ? 'bg-[#E0FE10] text-black border-[#E0FE10]'
+                          : 'bg-[#1a1e24] text-gray-300 border-gray-600 hover:bg-[#2a2f36]'
                       }`}
                     >
                       {pref.day}
@@ -560,12 +561,11 @@ const MobileChallengeSetupView: React.FC<MobileChallengeSetupProps> = ({
                 </div>
               )}
             </div>
-          </div>
-        )}
+        </div>
 
-        <div className="absolute bottom-0 left-0 right-0 p-6 bg-zinc-800 border-t border-zinc-700 rounded-b-xl">
+        <div className="fixed bottom-0 left-0 right-0 p-4 bg-[#1a1e24] border-t border-gray-700 max-w-[500px] mx-auto">
           <button
-            className="w-full py-4 bg-[#E0FE10] text-black rounded-lg font-semibold hover:opacity-90 transition-opacity"
+            className="w-full py-3 bg-[#E0FE10] text-black rounded-lg font-semibold hover:opacity-90 transition-opacity"
             onClick={() => {
               const selectedRestDays = includeRestDays
                 ? restDayPreferences
@@ -628,6 +628,7 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
     const [allStacks, setAllStacks] = useState<Workout[]>([]);
     const [selectedStacks, setSelectedStacks] = useState<Workout[]>([]);
     const [isAIMode, setIsAIMode] = useState(false);
+    const [loading, setLoading] = useState(true);
     const currentUser = useUser();
 
     const preferences = [
@@ -654,7 +655,7 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
     const filteredStacksList = () => (
         <div className="space-y-4">
           {filteredStacks.map((stack) => (
-            <div className="border border-zinc-700/50 rounded-lg">
+            <div className="border border-gray-700 rounded-lg bg-[#262a30] overflow-hidden">
             <StackCard
                 key={stack.id}
                 workout={stack}
@@ -1197,7 +1198,7 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
 
   return (
     
-    <div className="h-screen flex justify-center gap-6 bg-zinc-900 p-6">
+    <div className="h-screen flex flex-col lg:flex-row justify-center gap-6 bg-[#111417] p-6 text-white">
       {error && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-zinc-900 p-8 rounded-2xl shadow-xl max-w-md w-full mx-4">
@@ -1253,39 +1254,42 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
         </div>
       )}
 
-      {/* Left Panel: Challenge Setup Form */}
+      {/* AI Mode Toggle Button */}
       <div className="fixed top-6 right-6 z-10">
         <button
             onClick={() => setIsAIMode(!isAIMode)}
-            className="group relative px-4 py-2 rounded-lg bg-black/20 backdrop-blur-sm 
-                    border border-zinc-800 hover:border-[#E0FE10]/50 transition-all"
+            className="group relative px-4 py-2 rounded-lg bg-[#1a1e24]/80 backdrop-blur-sm 
+                    border border-gray-700 hover:border-[#E0FE10]/50 transition-all shadow-lg"
         >
             {/* Glow effect */}
-            <div className="absolute inset-0 rounded-lg bg-gradient-to-r from-[#E0FE10] via-purple-500 to-[#E0FE10] opacity-20 
-                            blur-xl group-hover:opacity-30 transition-opacity" />
+            <div className="absolute inset-0 rounded-lg bg-gradient-to-r from-[#E0FE10] via-purple-500 to-[#E0FE10] opacity-10 
+                            blur-lg group-hover:opacity-20 transition-opacity" />
             
             <div className="relative flex items-center gap-2">
             <Sparkles className="w-5 h-5 text-[#E0FE10]" />
-            <span className="text-white font-medium">AI Round</span>
+            <span className="text-white font-medium text-sm">AI Round</span>
             </div>
         </button>
-        </div>
+      </div>
 
-        <div className="w-[600px] bg-zinc-800 rounded-xl shadow-xl relative flex flex-col">
-        <div className="h-full overflow-y-auto p-6 scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-transparent hover:scrollbar-thumb-zinc-600">
+      {/* Left Panel: Challenge Setup Form */}
+      <div className="w-full lg:w-[600px] bg-[#1a1e24] rounded-xl shadow-xl relative flex flex-col overflow-hidden border border-gray-800">
+        {/* Optional Gradient Border */}
+        <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-[#E0FE10] via-purple-500 to-blue-500 opacity-50"></div>
+
+        <div className="flex-1 overflow-y-auto p-6 scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent hover:scrollbar-thumb-gray-600">
             {isAIMode ? (
-            <div className="space-y-6">
+            <div className="space-y-6 pb-20">
                 <div>
-                <h1 className="text-2xl font-semibold text-white text-center mb-2">Create AI Round</h1>
-                <p className="text-zinc-400 text-center text-sm">
-                    Describe the type of round that you want to create. For example, a round that focuses on improving 
-                    the back and shoulders, or a round that focuses on legs. Be as descriptive as possible for best results.
-                </p>
+                    <h1 className="text-2xl font-semibold text-white text-center mb-2">Create AI Round</h1>
+                    <p className="text-zinc-400 text-center text-sm">
+                        Describe the type of round you want. Be descriptive for best results.
+                    </p>
                 </div>
 
-                {/* Add Round Title & Subtitle fields */}
+                {/* Round Title */}
                 <div>
-                  <label className="text-sm text-zinc-400 mb-2 block">Round Title</label>
+                  <label className="text-sm text-gray-300 mb-2 block">Round Title</label>
                   <input
                     type="text"
                     value={challengeData.challengeName}
@@ -1297,15 +1301,16 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
                       challengeData.roundType,
                       challengeData.pinCode
                     )}
-                    placeholder="Name your round"
-                    className="w-full p-3 bg-zinc-900/50 rounded-lg border border-zinc-700/50 
-                              text-white placeholder:text-zinc-600
-                              focus:border-[#E0FE10] focus:outline-none transition-all"
+                    placeholder="Name your AI-generated round"
+                    className="w-full p-3 bg-[#262a30] border border-gray-700 rounded-lg 
+                              text-white placeholder-gray-500
+                              focus:outline-none focus:ring-2 focus:ring-[#E0FE10] transition-all"
                   />
                 </div>
 
+                {/* Round Description */}
                 <div>
-                  <label className="text-sm text-zinc-400 mb-2 block">Round Description</label>
+                  <label className="text-sm text-gray-300 mb-2 block">Round Description</label>
                   <textarea
                     value={challengeData.challengeDesc}
                     onChange={(e) => setChallengeData(
@@ -1316,163 +1321,150 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
                       challengeData.roundType,
                       challengeData.pinCode
                     )}
-                    placeholder="Describe the purpose, or goals of this round(Members will see this)"
-                    rows={4}
-                    className="w-full p-3 bg-zinc-900/50 rounded-lg border border-zinc-700/50 
-                                text-white placeholder:text-zinc-600 
-                                focus:border-[#E0FE10] focus:outline-none transition-all resize-none"
-                    />
+                    placeholder="Describe the purpose or goals (Members will see this)"
+                    rows={3}
+                    className="w-full p-3 bg-[#262a30] border border-gray-700 rounded-lg 
+                                text-white placeholder-gray-500 
+                                focus:outline-none focus:ring-2 focus:ring-[#E0FE10] transition-all resize-none"
+                  />
                 </div>
 
                 {/* Round Type */}
-<div className="mb-8">
-  <label className="text-sm text-zinc-400 mb-2 block">Round Type</label>
-  <div className="grid grid-cols-2 gap-3">
-    <button
-      onClick={() => setChallengeData(
-        challengeData.startDate,
-        challengeData.endDate,
-        challengeData.challengeName,
-        challengeData.challengeDesc,
-        SweatlistType.together,
-        challengeData.pinCode
-      )}
-      className={`p-4 rounded-lg flex flex-col items-center ${
-        challengeData.roundType === SweatlistType.together 
-          ? "bg-[#E0FE10] text-black" 
-          : "bg-zinc-900/50 border border-zinc-700/50 text-zinc-400"
-      }`}
-    >
-      <Users className="h-5 w-5 mb-2" />
-      <span className="font-medium text-sm">Together</span>
-      <span className="text-xs mt-1">Train with the community</span>
-    </button>
+                <div className="mb-6">
+                    <label className="text-sm text-gray-300 mb-2 block">Round Type</label>
+                    <div className="grid grid-cols-2 gap-3">
+                        <button
+                        onClick={() => setChallengeData(
+                            challengeData.startDate, challengeData.endDate, challengeData.challengeName,
+                            challengeData.challengeDesc, SweatlistType.together, challengeData.pinCode
+                        )}
+                        className={`p-4 rounded-lg flex flex-col items-center transition-colors ${
+                            challengeData.roundType === SweatlistType.together 
+                            ? "bg-[#E0FE10] text-black" 
+                            : "bg-[#262a30] border border-gray-700 text-gray-300 hover:bg-[#2a2f36]"
+                        }`}
+                        >
+                        <Users className="h-5 w-5 mb-2" />
+                        <span className="font-medium text-sm">Together</span>
+                        <span className="text-xs mt-1 opacity-80">Train with the community</span>
+                        </button>
 
-    <button
-      onClick={() => setChallengeData(
-        challengeData.startDate,
-        challengeData.endDate,
-        challengeData.challengeName,
-        challengeData.challengeDesc,
-        SweatlistType.locked,
-        challengeData.pinCode
-      )}
-      className={`p-4 rounded-lg flex flex-col items-center ${
-        challengeData.roundType === SweatlistType.locked 
-          ? "bg-[#E0FE10] text-black" 
-          : "bg-zinc-900/50 border border-zinc-700/50 text-zinc-400"
-          }`}
-        >
-          <Lock className="h-5 w-5 mb-2" />
-          <span className="font-medium text-sm">Private</span>
-          <span className="text-xs mt-1">Invite-only training</span>
-        </button>
-      </div>
-    </div>
+                        <button
+                        onClick={() => setChallengeData(
+                            challengeData.startDate, challengeData.endDate, challengeData.challengeName,
+                            challengeData.challengeDesc, SweatlistType.locked, challengeData.pinCode
+                        )}
+                         className={`p-4 rounded-lg flex flex-col items-center transition-colors ${
+                            challengeData.roundType === SweatlistType.locked 
+                            ? "bg-[#E0FE10] text-black" 
+                            : "bg-[#262a30] border border-gray-700 text-gray-300 hover:bg-[#2a2f36]"
+                        }`}
+                        >
+                        <Lock className="h-5 w-5 mb-2" />
+                        <span className="font-medium text-sm">Private</span>
+                        <span className="text-xs mt-1 opacity-80">Invite-only training</span>
+                        </button>
+                    </div>
+                </div>
 
-    {/* Dates */}
-    <div className="mb-8">
-      <label className="text-sm text-zinc-400 mb-2 block">Round Dates</label>
-      <div className="space-y-2">
-        <div>
-          <label className="text-xs text-zinc-500 block mb-1">Start Date</label>
-          <input
-            type="date"
-            value={challengeData.startDate.toISOString().split('T')[0]}
-            onChange={(e) => setChallengeData(
-              new Date(e.target.value),
-              challengeData.endDate,
-              challengeData.challengeName,
-              challengeData.challengeDesc,
-              challengeData.roundType,
-              challengeData.pinCode
-            )}
-            className="w-full p-3 rounded-lg bg-zinc-900/50 border border-zinc-700/50 
-                    text-white placeholder:text-zinc-600
-                    focus:border-[#E0FE10] focus:outline-none transition-all
-                    [color-scheme:dark]"
-          />
-        </div>
-        <div>
-          <label className="text-xs text-zinc-500 block mb-1">End Date</label>
-          <input
-            type="date"
-            value={challengeData.endDate.toISOString().split('T')[0]}
-            min={challengeData.startDate.toISOString().split('T')[0]}
-            onChange={(e) => setChallengeData(
-              challengeData.startDate,
-              new Date(e.target.value),
-              challengeData.challengeName,
-              challengeData.challengeDesc,
-              challengeData.roundType,
-              challengeData.pinCode
-            )}
-            className="w-full p-3 rounded-lg bg-zinc-900/50 border border-zinc-700/50 
-                    text-white placeholder:text-zinc-600
-                    focus:border-[#E0FE10] focus:outline-none transition-all
-                    [color-scheme:dark]"
-          />
-        </div>
-      </div>
-    </div>
+                {/* Dates */}
+                <div className="mb-6">
+                    <label className="text-sm text-gray-300 mb-2 block">Round Dates</label>
+                    <div className="space-y-2">
+                        <div>
+                        <label className="text-xs text-gray-400 block mb-1">Start Date</label>
+                        <input
+                            type="date"
+                            value={challengeData.startDate.toISOString().split('T')[0]}
+                            onChange={(e) => setChallengeData(
+                                new Date(e.target.value), challengeData.endDate, challengeData.challengeName,
+                                challengeData.challengeDesc, challengeData.roundType, challengeData.pinCode
+                            )}
+                            className="w-full p-3 rounded-lg bg-[#262a30] border border-gray-700 
+                                    text-white placeholder-gray-500
+                                    focus:outline-none focus:ring-2 focus:ring-[#E0FE10] transition-all
+                                    [color-scheme:dark]"
+                        />
+                        </div>
+                        <div>
+                        <label className="text-xs text-gray-400 block mb-1">End Date</label>
+                        <input
+                            type="date"
+                            value={challengeData.endDate.toISOString().split('T')[0]}
+                            min={challengeData.startDate.toISOString().split('T')[0]}
+                            onChange={(e) => setChallengeData(
+                                challengeData.startDate, new Date(e.target.value), challengeData.challengeName,
+                                challengeData.challengeDesc, challengeData.roundType, challengeData.pinCode
+                            )}
+                            className="w-full p-3 rounded-lg bg-[#262a30] border border-gray-700 
+                                    text-white placeholder-gray-500
+                                    focus:outline-none focus:ring-2 focus:ring-[#E0FE10] transition-all
+                                    [color-scheme:dark]"
+                        />
+                        </div>
+                    </div>
+                </div>
 
-    {/* PIN input if Private */}
-    {challengeData.roundType === SweatlistType.locked && (
-      <div className="mb-8">
-        <label className="text-sm text-zinc-400 mb-2 block">PIN Code</label>
-        <input
-          type="text"
-          maxLength={9}
-          minLength={9}
-          value={challengeData.pinCode}
-          onChange={(e) => setChallengeData(
-            challengeData.startDate,
-            challengeData.endDate,
-            challengeData.challengeName,
-            challengeData.challengeDesc,
-            challengeData.roundType,
-            e.target.value
-          )}
-          placeholder="Set 9-digit PIN"
-          className="w-full p-3 rounded-lg bg-zinc-900/50 border border-zinc-700/50 
-                    text-white placeholder:text-zinc-600
-                    focus:border-[#E0FE10] focus:outline-none transition-all"
-        />
-      </div>
-    )}
-
+                {/* PIN input if Private */}
+                {challengeData.roundType === SweatlistType.locked && (
+                    <div className="mb-6">
+                        <label className="text-sm text-gray-300 mb-2 block">PIN Code</label>
+                        <input
+                            type="text"
+                            maxLength={9}
+                            minLength={9}
+                            value={challengeData.pinCode}
+                            onChange={(e) => setChallengeData(
+                                challengeData.startDate, challengeData.endDate, challengeData.challengeName,
+                                challengeData.challengeDesc, challengeData.roundType, e.target.value
+                            )}
+                            placeholder="Set 9-digit PIN"
+                            className="w-full p-3 rounded-lg bg-[#262a30] border border-gray-700 
+                                        text-white placeholder-gray-500
+                                        focus:outline-none focus:ring-2 focus:ring-[#E0FE10] transition-all"
+                        />
+                    </div>
+                )}
+                
+                {/* AI Prompt */}
                 <div>
-                <label className="text-sm text-zinc-400 mb-2 block">Round Prompt - AI will use this description create your workout.</label>
-                <textarea
-                value={aiPromptText}
-                onChange={(e) => setAiPromptText(e.target.value)}
-                placeholder="E.g., Create a 4-week strength program focused on building muscle in my shoulders and upper back. 
-                I want to train 3 times per week with progressive overload. Include compound movements like rows and presses, 
-                and isolation work for rear delts and traps. I prefer moderate weight with 8-12 reps for hypertrophy."
-                rows={10}
-                className="w-full p-3 bg-zinc-900/50 rounded-lg border border-zinc-700/50 
-                            text-white placeholder:text-zinc-600 
-                            focus:border-[#E0FE10] focus:outline-none transition-all resize-none"
-                />
+                    <label className="text-sm text-gray-300 mb-2 block">Round Prompt</label>
+                    <textarea
+                        value={aiPromptText}
+                        onChange={(e) => setAiPromptText(e.target.value)}
+                        placeholder="E.g., Create a 4-week strength program focused on building muscle..."
+                        rows={8}
+                        className="w-full p-3 bg-[#262a30] border border-gray-700 rounded-lg 
+                                    text-white placeholder-gray-500 
+                                    focus:outline-none focus:ring-2 focus:ring-[#E0FE10] transition-all resize-none"
+                    />
                 </div>
-
-                <button
-                className="w-full py-4 bg-gradient-to-r from-[#E0FE10] via-purple-500 to-[#E0FE10] 
-                            text-black rounded-lg font-semibold hover:opacity-90 transition-opacity"
-                onClick={handleGenerateAIRound}
-                >
-                <div className="flex items-center justify-center gap-2">
-                    <Sparkles className="w-5 h-5" />
-                    <span>Generate Round</span>
+                
+                {/* Sticky Footer Buttons */}
+                <div className="absolute bottom-0 left-0 right-0 p-4 bg-[#1a1e24] border-t border-gray-700 space-y-2">
+                    <button
+                        className="w-full py-3 bg-gradient-to-r from-[#E0FE10] via-purple-500 to-[#E0FE10] 
+                                    text-black rounded-lg font-semibold hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
+                        onClick={handleGenerateAIRound}
+                        disabled={isGenerating}
+                    >
+                        {isGenerating ? (
+                             <svg className="animate-spin h-5 w-5 text-black" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                              </svg>
+                        ) : (
+                            <Sparkles className="w-5 h-5" />
+                        )}
+                        <span>{isGenerating ? 'Generating...' : 'Generate AI Round'}</span>
+                    </button>
+                    <button
+                        onClick={() => setIsAIMode(false)}
+                        className="w-full py-2 text-zinc-400 hover:text-white transition-colors text-sm"
+                    >
+                        Cancel and return to manual creation
+                    </button>
                 </div>
-                </button>
-
-                <button
-                onClick={() => setIsAIMode(false)}
-                className="w-full py-2 text-zinc-400 hover:text-white transition-colors text-sm"
-                >
-                Cancel and return to manual creation
-                </button>
             </div>
             ) : (
             <MobileChallengeSetupView
@@ -1486,101 +1478,107 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
             )}
         </div>
         
-        {/* Only show the create button in non-AI mode */}
+        {/* Manual Mode Create Button (Fixed Footer) */}
         {!isAIMode && (
-            <div className="absolute bottom-0 left-0 right-0 p-6 bg-zinc-800 border-t border-zinc-700 rounded-b-xl">
-            <button
-                className="w-full py-4 bg-[#E0FE10] text-black rounded-lg font-semibold hover:opacity-90 transition-opacity"
-                onClick={handleCreateRound}
-            >
-                Create Round
-            </button>
+            <div className="absolute bottom-0 left-0 right-0 p-4 bg-[#1a1e24] border-t border-gray-700">
+                <button
+                    className="w-full py-3 bg-[#E0FE10] text-black rounded-lg font-semibold hover:opacity-90 transition-opacity"
+                    onClick={handleCreateRound}
+                >
+                    Create Round
+                </button>
             </div>
         )}
         </div>
 
         {/* Right Panel: AI Preferences or Stack Selector */}
-        <div className="w-[550px] bg-zinc-800 rounded-xl shadow-xl relative flex flex-col">
+        <div className="w-full lg:w-[550px] bg-[#1a1e24] rounded-xl shadow-xl relative flex flex-col overflow-hidden border border-gray-800">
+        {/* Optional Gradient Border */}
+        <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-[#E0FE10] via-purple-500 to-blue-500 opacity-50"></div>
         {isAIMode ? (
+            // AI Preferences Side Panel
             <>
             {/* Tabs */}
-            <div className="px-6 pt-6">
-                <div className="flex space-x-1 bg-zinc-900/50 p-1 rounded-lg">
+            <div className="px-4 pt-4">
+                 {/* Updated tab styles */}
+                <div className="flex space-x-1 bg-[#262a30] p-1 rounded-lg border border-gray-700">
                 <button
                     onClick={() => setActiveTab('preferences')}
-                    className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-all
-                    ${activeTab === 'preferences' 
-                        ? 'bg-[#E0FE10] text-black' 
-                        : 'text-zinc-400 hover:text-white'}`}
+                    className={`flex-1 flex items-center justify-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                        activeTab === 'preferences' ? 'bg-[#E0FE10] text-black shadow-sm' : 'text-gray-400 hover:text-white hover:bg-[#2a2f36]'
+                    }`}
                 >
-                    <Brain size={16} />
+                    <Brain size={14} />
                     <span>AI Preferences</span>
                 </button>
                 <button
                     onClick={() => setActiveTab('moves')}
-                    className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-all
-                    ${activeTab === 'moves' 
-                        ? 'bg-[#E0FE10] text-black' 
-                        : 'text-zinc-400 hover:text-white'}`}
+                    className={`flex-1 flex items-center justify-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                        activeTab === 'moves' ? 'bg-[#E0FE10] text-black shadow-sm' : 'text-gray-400 hover:text-white hover:bg-[#2a2f36]'
+                    }`}
                 >
-                    <Dumbbell size={16} />
+                    <Dumbbell size={14} />
                     <span>Must-Include Moves</span>
                 </button>
                 <button
                     onClick={() => setActiveTab('creators')}
-                    className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-all
-                    ${activeTab === 'creators' 
-                        ? 'bg-[#E0FE10] text-black' 
-                        : 'text-zinc-400 hover:text-white'}`}
+                     className={`flex-1 flex items-center justify-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                        activeTab === 'creators' ? 'bg-[#E0FE10] text-black shadow-sm' : 'text-gray-400 hover:text-white hover:bg-[#2a2f36]'
+                    }`}
                 >
-                    <UserCircle size={16} />
+                    <UserCircle size={14} />
                     <span>Preferred Creators</span>
                 </button>
                 </div>
             </div>
 
             {/* Tab Content */}
-            <div className="flex-1 overflow-y-auto p-6 scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-transparent">
+             {/* Reduced padding */}
+            <div className="flex-1 overflow-y-auto p-4 scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent">
             {activeTab === 'preferences' && (
               <div className="space-y-4">
-                <div className="bg-zinc-900/50 rounded-lg p-4 border border-zinc-700/50">
-                  <h3 className="font-medium text-white mb-2">AI Preferences</h3>
+                {/* Header card */}
+                <div className="bg-[#262a30] rounded-lg p-4 border border-gray-700">
+                  <h3 className="font-medium text-white mb-1">AI Preferences</h3>
                   <p className="text-sm text-zinc-400">
-                    Additional preferences to help generate your perfect round.
+                    Refine the AI generation process.
                   </p>
                 </div>
-
-                <div className="bg-zinc-900/50 rounded-lg p-4 border border-zinc-700/50">
+                
+                {/* Rest Days Section */}
+                <div className="bg-[#262a30] rounded-lg p-4 border border-gray-700">
                       <div className="flex items-center justify-between mb-4">
                         <div>
                           <h3 className="font-medium text-white">Rest Days</h3>
-                          <p className="text-sm text-zinc-400">Include specific rest days in your program</p>
+                          <p className="text-sm text-zinc-400">Include specific rest days</p>
                         </div>
                         <Switch
                           checked={includeRestDays}
                           onChange={handleIncludeRestDaysChange}
-                          className={`${
-                            includeRestDays ? 'bg-[#E0FE10]' : 'bg-zinc-700'
-                          } relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none`}
+                           className={`${
+                            includeRestDays ? 'bg-[#E0FE10]' : 'bg-gray-600'
+                          } relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-opacity-75`}
                         >
+                           <span className="sr-only">Include rest days</span>
                           <span
+                            aria-hidden="true"
                             className={`${
                               includeRestDays ? 'translate-x-6' : 'translate-x-1'
-                            } inline-block h-4 w-4 transform rounded-full bg-white transition-transform`}
+                            } inline-block h-4 w-4 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out`}
                           />
                         </Switch>
                       </div>
 
                       {includeRestDays && (
-                        <div className="grid grid-cols-2 gap-2 mt-4">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-4">
                           {restDayPreferences.map((pref) => (
                             <button
                               key={pref.day}
                               onClick={() => handleRestDayPreferencesChange(pref.day)}
-                              className={`p-3 rounded-lg text-sm font-medium transition-colors ${
+                              className={`p-2 rounded-lg text-xs font-medium transition-colors border ${
                                 pref.isSelected
-                                  ? 'bg-[#E0FE10] text-black'
-                                  : 'bg-zinc-800 text-white hover:bg-zinc-700'
+                                  ? 'bg-[#E0FE10] text-black border-[#E0FE10]'
+                                  : 'bg-[#1a1e24] text-gray-300 border-gray-600 hover:bg-[#2a2f36]'
                               }`}
                             >
                               {pref.day}
@@ -1595,7 +1593,7 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
                   {preferences.map((preference) => (
                     <label 
                       key={preference}
-                      className="flex items-center bg-zinc-900/30 p-3 rounded-lg cursor-pointer hover:bg-zinc-900/50 transition-colors"
+                      className="flex items-center bg-[#262a30] p-3 rounded-lg cursor-pointer hover:bg-[#2a2f36] transition-colors border border-gray-700"
                     >
                       <input 
                         type="checkbox" 
@@ -1607,9 +1605,9 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
                             setSelectedPreferences(prev => prev.filter(p => p !== preference));
                           }
                         }}
-                        className="form-checkbox text-[#E0FE10]" 
+                        className="form-checkbox h-4 w-4 text-[#E0FE10] bg-gray-700 border-gray-600 rounded focus:ring-[#E0FE10] focus:ring-offset-0" 
                       />
-                      <span className="ml-2 text-sm text-zinc-300">{preference}</span>
+                      <span className="ml-3 text-sm text-gray-300">{preference}</span>
                     </label>
                   ))}
                 </div>
@@ -1618,65 +1616,73 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
 
                 {activeTab === 'moves' && (
                 <div className="space-y-4">
-                    <div className="bg-zinc-900/50 rounded-lg p-4 border border-zinc-700/50">
-                      <h3 className="font-medium text-white mb-2">Must-Have Moves</h3>
+                    {/* Header card */}
+                    <div className="bg-[#262a30] rounded-lg p-4 border border-gray-700">
+                      <h3 className="font-medium text-white mb-1">Must-Have Moves</h3>
                       <p className="text-sm text-zinc-400">
-                        AI will guarantee these exercises are included in your program
+                        Guarantee these exercises are included.
                       </p>
                     </div>
-
+                    
+                    {/* Search Input */}
                     <input
-                    type="text"
-                    placeholder="Search moves to include..."
-                    className="w-full p-4 bg-zinc-900 text-white rounded-lg border border-zinc-700 focus:border-[#E0FE10] transition-colors"
+                        type="text"
+                        placeholder="Search moves to include..."
+                        className="w-full p-3 bg-[#262a30] text-white rounded-lg border border-gray-700 focus:outline-none focus:ring-2 focus:ring-[#E0FE10] transition-colors placeholder-gray-500"
                     />
-                    <ExerciseGrid
-                    userVideos={allExercises}
-                    multiSelection={true}
-                    selectedExercises={selectedMoves}
-                    onToggleSelection={(exercise) => {
-                        setSelectedMoves(prev => 
-                        prev.some(e => e.id === exercise.id)
-                            ? prev.filter(e => e.id !== exercise.id)
-                            : [...prev, exercise]
-                        )
-                    }}
-                    onSelectVideo={(exercise) => {
-                        // This can be the same as onToggleSelection since we're using multiSelection
-                        setSelectedMoves(prev => 
-                        prev.some(e => e.id === exercise.id)
-                            ? prev.filter(e => e.id !== exercise.id)
-                            : [...prev, exercise]
-                        )
-                    }}
-                    />
+                    {/* Exercise Grid */}
+                    <div className="bg-[#262a30] rounded-lg border border-gray-700 p-2">
+                        <ExerciseGrid
+                            userVideos={allExercises}
+                            multiSelection={true}
+                            selectedExercises={selectedMoves}
+                            onToggleSelection={(exercise) => {
+                                setSelectedMoves(prev => 
+                                prev.some(e => e.id === exercise.id)
+                                    ? prev.filter(e => e.id !== exercise.id)
+                                    : [...prev, exercise]
+                                )
+                            }}
+                            onSelectVideo={(exercise) => {
+                                setSelectedMoves(prev => 
+                                prev.some(e => e.id === exercise.id)
+                                    ? prev.filter(e => e.id !== exercise.id)
+                                    : [...prev, exercise]
+                                )
+                            }}
+                        />
+                    </div>
                 </div>
                 )}
 
                 {activeTab === 'creators' && (
                 <div className="space-y-4">
-                    <div className="bg-zinc-900/50 rounded-lg p-4 border border-zinc-700/50">
-                      <h3 className="font-medium text-white mb-2">Preferred Creators</h3>
+                     {/* Header card */}
+                    <div className="bg-[#262a30] rounded-lg p-4 border border-gray-700">
+                      <h3 className="font-medium text-white mb-1">Preferred Creators</h3>
                       <p className="text-sm text-zinc-400">
-                        Select trainers whose exercise videos you want to include in your program
+                        Include videos from these trainers.
                       </p>
                     </div>
-                    <MultiUserSelector
-                    selectedUserIds={selectedCreators}
-                    onUserSelect={(userId) => {
-                        setSelectedCreators(prev => [...prev, userId]);
-                    }}
-                    onUserRemove={(userId) => {
-                        setSelectedCreators(prev => prev.filter(id => id !== userId));
-                    }}
-                    />
+                    {/* Multi User Selector - Assume internal styling is acceptable or needs separate update */}
+                     <div className="bg-[#262a30] rounded-lg border border-gray-700 p-4">
+                        <MultiUserSelector
+                            selectedUserIds={selectedCreators}
+                            onUserSelect={(userId) => {
+                                setSelectedCreators(prev => [...prev, userId]);
+                            }}
+                            onUserRemove={(userId) => {
+                                setSelectedCreators(prev => prev.filter(id => id !== userId));
+                            }}
+                        />
+                     </div>
                 </div>
                 )}
             </div>
 
             {/* Summary Footer */}
-            <div className="p-4 border-t border-zinc-700/50 bg-zinc-900/50">
-                <div className="flex items-center justify-between text-sm">
+            <div className="p-3 border-t border-gray-700 bg-[#262a30]">
+                <div className="flex items-center justify-between text-xs">
                 <span className="text-zinc-400">
                     {selectedMoves.length} moves selected
                 </span>
@@ -1687,21 +1693,37 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
             </div>
             </>
         ) : (
-            // Original Stack Selector Content
-            <div className="h-full overflow-y-auto p-6 pb-24 scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-transparent">
-                <div className="h-full overflow-y-auto p-6 pb-24 scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-transparent">
-                    <h2 className="text-white text-2xl font-bold mb-4">Your Stacks</h2>
+            // Manual Stack Selector Content
+            <div className="flex flex-col h-full">
+                <div className="p-4">
+                    <h2 className="text-white text-xl font-semibold mb-3">Select Stacks</h2>
                     <input
                         type="text"
-                        placeholder="Search stacks..."
+                        placeholder="Search your stacks..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full p-4 bg-zinc-900 text-white rounded-lg border border-zinc-700 focus:border-[#E0FE10] transition-colors mb-4"
+                        className="w-full p-3 bg-[#262a30] text-white rounded-lg border border-gray-700 focus:outline-none focus:ring-2 focus:ring-[#E0FE10] transition-colors placeholder-gray-500 mb-4"
                     />
-                    {filteredStacks.length === 0 ? (
-                        <p className="text-center text-zinc-500">No stacks found</p>
+                 </div>
+                 {/* Scrollable list area */}
+                 <div className="flex-1 overflow-y-auto px-4 pb-4 scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent">
+                    {loading ? (
+                         <p className="text-center text-zinc-400">Loading stacks...</p>
+                    ): filteredStacks.length === 0 ? (
+                        <p className="text-center text-zinc-500 mt-4">No stacks found matching your search.</p>
                     ) : (
-                        filteredStacksList()
+                       <div className="space-y-3">
+                          {filteredStacks.map((stack) => (
+                             <div key={stack.id} className="border border-gray-700 rounded-lg bg-[#262a30] overflow-hidden">
+                                <StackCard
+                                    workout={stack}
+                                    gifUrls={stack.exercises?.map(ex => ex.exercise?.videos?.[0]?.gifURL || '') || []}
+                                    isChallengeEnabled={false}
+                                    onPrimaryAction={() => handleStackSelect(stack)}
+                                />
+                             </div>
+                            ))}
+                        </div>
                     )}
                 </div>
             </div>
@@ -1714,57 +1736,95 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
 const CreateRoundPage: React.FC = () => {
   const [challengeData, setChallengeData] = useState<ChallengeData>({
     startDate: new Date(),
-    endDate: new Date(new Date().getTime() + 86400 * 1000),
+    endDate: new Date(new Date().getTime() + 7 * 86400 * 1000), // Default to 1 week later
     challengeName: '',
     challengeDesc: '',
     roundType: SweatlistType.together,
     pinCode: '',
+    // Initialize restDayPreferences here if needed for Mobile view consistency
+    restDayPreferences: { 
+      includeRestDays: false, 
+      restDays: [], 
+      preferences: [] 
+    },
   });
 
   const [selectedStacks, setSelectedStacks] = useState<Workout[]>([]);
 
+  // Combine update logic
   const updateChallengeData = (
     start: Date,
     end: Date,
     name: string,
     desc: string,
     type: SweatlistType,
-    pin: string
+    pin: string,
+    restPrefs?: { includeRestDays: boolean; restDays: string[]; preferences: string[] }
   ) => {
-    setChallengeData({
+    setChallengeData(prev => ({
+      ...prev, // Keep existing state like restDayPreferences unless explicitly updated
       startDate: start,
       endDate: end,
       challengeName: name,
       challengeDesc: desc,
       roundType: type,
       pinCode: pin,
-    });
+      // Update restDayPreferences only if provided
+      ...(restPrefs && { restDayPreferences: restPrefs }), 
+    }));
   };
-
+  
   // Mock viewModel for example purposes
   const mockViewModel: ViewModel = {
     appCoordinator: {
       showFloatingTextfield: () => {},
       closeFloatingMenu: () => {},
-      closeModals: () => {},
+      closeModals: () => { console.log("Close Modals Called"); },
     },
-    validateChallengeInput: () => true,
-    setChallenge: () => {},
+    validateChallengeInput: (start, end, name, desc, type, pin) => {
+      // Basic validation example
+      if (!name.trim()) { console.error("Validation: Name required"); return false; }
+      if (!desc.trim()) { console.error("Validation: Desc required"); return false; }
+      if (end <= start) { console.error("Validation: End date before start"); return false; }
+      if (type === SweatlistType.locked && pin.length !== 9) { console.error("Validation: Invalid PIN"); return false; }
+      // Add check for selected stacks if needed in mobile context
+      // if (selectedStacks.length === 0) { console.error("Validation: No stacks selected"); return false;}
+      console.log("Validation Passed");
+      return true;
+    },
+    setChallenge: (start, end, name, desc, type, pin, restPrefs) => {
+       console.log("Set Challenge Called:", { start, end, name, desc, type, pin, restPrefs });
+       // Here you would typically navigate or show success
+    },
   };
 
   const handleRemoveStack = (stackId: string) => {
-    setSelectedStacks(prev => prev.filter(stack => stack.id !== stackId));
+    setSelectedStacks((prev: Workout[]) => {
+      // Filter out the stack to remove
+      const updatedStacks = prev.filter(s => s.roundWorkoutId !== stackId);
+      
+      // Reindex the remaining stacks
+      return updatedStacks.map((stack, index) => 
+        new Workout({
+          ...stack,
+          roundWorkoutId: index === 0 ? stack.id : `${stack.id}-${index + 1}`
+        })
+      );
+    });
   };
 
   return (
-    <>
+     // Apply base background and text color
+    <div className="min-h-screen bg-[#111417] text-white"> 
       {/* Mobile view */}
       <div className="block lg:hidden">
-        {/* Left Panel: Challenge Setup Form */}
-        <div className="w-full max-w-[500px] mx-auto bg-zinc-800 -xl relative flex flex-col min-h-screen">
-          <div className="h-full overflow-y-auto p-6 scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-transparent hover:scrollbar-thumb-zinc-600">
+        {/* Container matches admin style */}
+        <div className="w-full max-w-[500px] mx-auto bg-[#1a1e24] relative flex flex-col min-h-screen border-x border-gray-800">
+           {/* Scrollable content area */}
+           <div className="flex-1 overflow-y-auto p-4 scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent hover:scrollbar-thumb-gray-600">
+             {/* Mobile setup component */}
             <MobileChallengeSetupView
-              setChallengeData={updateChallengeData}
+              setChallengeData={updateChallengeData} // Pass combined updater
               currentChallengeData={challengeData}
               selectedStacks={selectedStacks}
               setSelectedStacks={setSelectedStacks}
@@ -1773,46 +1833,20 @@ const CreateRoundPage: React.FC = () => {
             />
           </div>
           
-          {/* Fixed Create Round Button */}
-          <div className="absolute bottom-0 left-0 right-0 p-6 bg-zinc-800 border-t border-zinc-700 rounded-b-xl">
-            <button
-              className="w-full py-4 bg-[#E0FE10] text-black rounded-lg font-semibold hover:opacity-90 transition-opacity"
-              onClick={() => {
-                if (mockViewModel.validateChallengeInput(
-                  challengeData.startDate,
-                  challengeData.endDate,
-                  challengeData.challengeName,
-                  challengeData.challengeDesc,
-                  challengeData.roundType,
-                  challengeData.pinCode
-                )) {
-                  mockViewModel.setChallenge(
-                    challengeData.startDate,
-                    challengeData.endDate,
-                    challengeData.challengeName,
-                    challengeData.challengeDesc,
-                    challengeData.roundType,
-                    challengeData.pinCode
-                  );
-                  mockViewModel.appCoordinator.closeModals();
-                }
-              }}
-            >
-              Create Round
-            </button>
-          </div>
+          {/* Fixed Create Round Button area is handled inside MobileChallengeSetupView now */}
         </div>
       </div>
   
       {/* Desktop view */}
       <div className="hidden lg:block">
+        {/* Desktop setup component already has its own layout */}
         <DesktopChallengeSetupView
           challengeData={challengeData}
-          setChallengeData={updateChallengeData}
+          setChallengeData={updateChallengeData} // Pass combined updater
           viewModel={mockViewModel}
         />
       </div>
-    </>
+    </div>
   );
 };
 

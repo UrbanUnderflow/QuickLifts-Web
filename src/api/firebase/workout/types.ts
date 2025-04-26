@@ -919,6 +919,7 @@ class UserChallenge {
   isCurrentlyActive: boolean;  // Added
   createdAt: Date;
   updatedAt: Date;
+  lastActive?: Date | null;   // New property for tracking last activity
   pulsePoints: PulsePoints;
   currentStreak: number;
   longestStreak: number;      // Added
@@ -953,6 +954,7 @@ class UserChallenge {
     this.isCurrentlyActive = data.isCurrentlyActive ?? false;  // Added
     this.createdAt = convertFirestoreTimestamp(data.createdAt);
     this.updatedAt = convertFirestoreTimestamp(data.updatedAt);
+    this.lastActive = data.lastActive ? convertFirestoreTimestamp(data.lastActive) : null;  // Initialize the new property
     this.pulsePoints = data.pulsePoints ? new PulsePoints(data.pulsePoints) : new PulsePoints({});
     this.currentStreak = data.currentStreak ?? 0;
     this.longestStreak = this.calculateLongestStreak();  // Added
@@ -1030,6 +1032,7 @@ class UserChallenge {
       isCurrentlyActive: this.isCurrentlyActive,  // Added
       createdAt: dateToUnixTimestamp(this.createdAt),
       updatedAt: dateToUnixTimestamp(this.updatedAt),
+      lastActive: this.lastActive ? dateToUnixTimestamp(this.lastActive) : null,  // Include lastActive in serialization
       pulsePoints: this.pulsePoints.toDictionary(),
       currentStreak: this.currentStreak,
       longestStreak: this.longestStreak,  // Added

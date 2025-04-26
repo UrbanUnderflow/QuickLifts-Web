@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { adminMethods } from '../../api/firebase/admin/methods';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
+import { collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
+import { db } from '../../api/firebase/config';
 
 const AddVersionPage = () => {
   const [version, setVersion] = useState('');
@@ -9,6 +11,97 @@ const AddVersionPage = () => {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
+  const [latestVersion, setLatestVersion] = useState<{
+    version: string;
+    notes: string[];
+    isCriticalUpdate: boolean;
+  } | null>(null);
+  const [loadingLatest, setLoadingLatest] = useState(false);
+
+  // Fetch the latest version information
+  useEffect(() => {
+    const fetchLatestVersion = async () => {
+      try {
+        setLoadingLatest(true);
+        
+        // Try both collections (singular and plural)
+        const collectionsToTry = ['version', 'versions'];
+        let foundVersion = false;
+        
+        for (const collectionName of collectionsToTry) {
+          if (foundVersion) break;
+          
+          try {
+            const versionsRef = collection(db, collectionName);
+            // Don't sort by version field, just get all documents
+            const q = query(versionsRef);
+            const querySnapshot = await getDocs(q);
+            
+            if (!querySnapshot.empty) {
+              // Get all versions and sort them properly (since version strings need semantic sorting)
+              const versionDocs = querySnapshot.docs.map(doc => ({
+                id: doc.id,
+                data: doc.data()
+              }));
+              
+              // Sort versions semantically (1.0.10 should come after 1.0.9)
+              const sortedVersions = versionDocs.sort((a, b) => {
+                const partsA = a.id.split('.').map(Number);
+                const partsB = b.id.split('.').map(Number);
+                
+                for (let i = 0; i < Math.max(partsA.length, partsB.length); i++) {
+                  const partA = i < partsA.length ? partsA[i] : 0;
+                  const partB = i < partsB.length ? partsB[i] : 0;
+                  
+                  if (partA !== partB) {
+                    return partB - partA; // Descending order
+                  }
+                }
+                
+                return 0;
+              });
+              
+              if (sortedVersions.length > 0) {
+                const latestDoc = sortedVersions[0];
+                const data = latestDoc.data;
+                
+                // Extract notes from numbered fields
+                const notes: string[] = [];
+                Object.keys(data).forEach(key => {
+                  if (key !== 'isCriticalUpdate' && !isNaN(Number(key))) {
+                    notes.push(data[key]);
+                  }
+                });
+                
+                setLatestVersion({
+                  version: latestDoc.id,
+                  notes,
+                  isCriticalUpdate: data.isCriticalUpdate || false
+                });
+                
+                foundVersion = true;
+                console.log(`Found latest version in '${collectionName}' collection:`, latestDoc.id);
+                break;
+              }
+            }
+          } catch (err) {
+            console.error(`Error fetching from '${collectionName}' collection:`, err);
+          }
+        }
+        
+        if (!foundVersion) {
+          console.log('No version found in any collection');
+          setLatestVersion(null);
+        }
+      } catch (err) {
+        console.error('Error fetching latest version:', err);
+      } finally {
+        setLoadingLatest(false);
+      }
+    };
+    
+    fetchLatestVersion();
+  }, [success]); // Refetch when a new version is successfully added
 
   const handleNoteChange = (idx: number, value: string) => {
     setChangeNotes(notes => notes.map((note, i) => (i === idx ? value : note)));
@@ -45,6 +138,46 @@ const AddVersionPage = () => {
     setLoading(false);
   };
 
+  const autoIncrementVersion = () => {
+    if (!latestVersion) return;
+    
+    const versionParts = latestVersion.version.split('.');
+    if (versionParts.length > 0) {
+      // Get the last part of the version number
+      const lastPart = versionParts[versionParts.length - 1];
+      
+      // Preserve leading zeros by tracking the original length
+      const originalLength = lastPart.length;
+      const hasLeadingZeros = lastPart.startsWith('0') && originalLength > 1;
+      
+      // Parse to integer and increment
+      const lastPartNum = parseInt(lastPart, 10);
+      if (!isNaN(lastPartNum)) {
+        const incrementedNum = lastPartNum + 1;
+        
+        // Format with leading zeros if needed
+        let newLastPart;
+        if (hasLeadingZeros) {
+          // Pad with zeros to maintain same length
+          newLastPart = incrementedNum.toString().padStart(originalLength, '0');
+        } else {
+          newLastPart = incrementedNum.toString();
+        }
+        
+        versionParts[versionParts.length - 1] = newLastPart;
+        const newVersion = versionParts.join('.');
+        
+        console.log(`Incrementing version from ${latestVersion.version} to ${newVersion}`);
+        setVersion(newVersion);
+        
+        // Copy notes from previous version
+        if (latestVersion.notes.length > 0) {
+          setChangeNotes([...latestVersion.notes]);
+        }
+      }
+    }
+  };
+
   return (
     <AdminRouteGuard>
       <div className="min-h-screen bg-[#111417] text-white py-10 px-4">
@@ -59,6 +192,52 @@ const AddVersionPage = () => {
             </span>
             Add New Version
           </h1>
+
+          {/* Latest Version Tile */}
+          <div className="relative bg-[#1a1e24] rounded-xl p-6 mb-6 shadow-xl overflow-hidden">
+            {/* Top gradient border */}
+            <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-teal-500 via-blue-500 to-purple-500"></div>
+            
+            {/* Right gradient border */}
+            <div className="absolute top-0 right-0 bottom-0 w-[2px] bg-gradient-to-b from-purple-500 via-blue-500 to-teal-500"></div>
+            
+            <div className="flex justify-between items-center mb-3">
+              <h2 className="text-lg font-semibold text-white">Current Version</h2>
+              {latestVersion?.isCriticalUpdate && (
+                <span className="px-2 py-1 bg-red-900/30 text-red-400 rounded-full text-xs font-medium border border-red-900">
+                  Critical
+                </span>
+              )}
+            </div>
+            
+            {loadingLatest ? (
+              <div className="py-4 flex justify-center">
+                <div className="animate-pulse flex space-x-4">
+                  <div className="h-3 w-3 bg-[#d7ff00] rounded-full"></div>
+                  <div className="h-3 w-3 bg-[#d7ff00] rounded-full"></div>
+                  <div className="h-3 w-3 bg-[#d7ff00] rounded-full"></div>
+                </div>
+              </div>
+            ) : latestVersion ? (
+              <div>
+                <div className="mb-2 flex items-center">
+                  <span className="text-xl font-bold text-[#d7ff00]">{latestVersion.version}</span>
+                </div>
+                <div className="space-y-2">
+                  {latestVersion.notes.map((note, idx) => (
+                    <div 
+                      key={idx} 
+                      className="text-sm text-gray-300 pl-3 border-l-2 border-blue-500"
+                    >
+                      {note}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="text-gray-400 text-sm">No versions available</div>
+            )}
+          </div>
 
           <div className="relative bg-[#1a1e24] rounded-xl p-6 mb-6 shadow-xl overflow-hidden">
             {/* Top gradient border */}
@@ -75,14 +254,28 @@ const AddVersionPage = () => {
             <form onSubmit={handleSubmit} className="space-y-6">
               <div>
                 <label className="block text-gray-300 mb-2 text-sm font-medium">Version Number</label>
-                <input
-                  type="text"
-                  className="w-full bg-[#262a30] border border-gray-700 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#d7ff00] transition text-white placeholder-gray-500"
-                  value={version}
-                  onChange={e => setVersion(e.target.value)}
-                  placeholder="e.g. 1.0.1"
-                  required
-                />
+                <div className="flex space-x-2">
+                  <input
+                    type="text"
+                    className="w-full bg-[#262a30] border border-gray-700 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#d7ff00] transition text-white placeholder-gray-500"
+                    value={version}
+                    onChange={e => setVersion(e.target.value)}
+                    placeholder="e.g. 1.0.1"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={autoIncrementVersion}
+                    disabled={!latestVersion}
+                    className="px-4 py-2 bg-[#262a30] hover:bg-[#2a2f36] border border-gray-700 text-gray-300 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center group"
+                    title="Auto-increment version from latest"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-[#d7ff00]" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd" />
+                    </svg>
+                    <span className="sr-only group-hover:not-sr-only ml-1 text-xs whitespace-nowrap">Auto-increment</span>
+                  </button>
+                </div>
               </div>
               
               <div>
