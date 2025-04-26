@@ -1810,6 +1810,54 @@ async deleteWorkoutSession(workoutId: string | null): Promise<void> {
   private get nonUICurrentUser(): User | null {
     return userService.nonUICurrentUser;
   }
+
+  /**
+   * Fetches all SweatlistCollections that contain a challenge object.
+   * Intended for admin purposes.
+   * @returns {Promise<SweatlistCollection[]>} Array of collections with challenges.
+   */
+  async fetchAllAdminCollections(): Promise<SweatlistCollection[]> {
+    try {
+      const collectionsRef = collection(db, 'sweatlist-collection');
+      
+      // Query for documents where the 'challenge' field exists and is not null.
+      // Firestore doesn't directly support "exists", but we can query for a known subfield
+      // or filter out nulls later. A simpler approach is to fetch all and filter client-side if needed,
+      // or query for a mandatory field within challenge like 'status'.
+      // Let's query for challenge.status exists indirectly by ordering by it and filtering non-null later
+      // Or simply fetch all collections and filter.
+      // Let's fetch all and filter for simplicity and robustness against missing optional fields.
+
+      // Fetch all documents in the collection
+      const snapshot = await getDocs(query(collectionsRef, orderBy('createdAt', 'desc'))); // Order by creation
+
+      const collections = snapshot.docs
+        .map(doc => {
+          try {
+            const data = doc.data();
+            // Only include if the challenge object exists and is not empty/null
+            if (data.challenge && typeof data.challenge === 'object' && Object.keys(data.challenge).length > 0) {
+              return new SweatlistCollection({
+                id: doc.id,
+                ...data
+              });
+            } 
+            return null;
+          } catch(mapError) {
+            console.error(`Error mapping SweatlistCollection with id ${doc.id}:`, mapError);
+            return null;
+          }
+        })
+        .filter((collection): collection is SweatlistCollection => collection !== null); // Filter out nulls
+
+      console.log(`Fetched ${collections.length} collections with challenges for admin view.`);
+      return collections;
+
+    } catch (error) {
+      console.error('Error fetching all admin collections:', error);
+      return []; // Return empty array on error
+    }
+  }
 }
 
 export const workoutService = new WorkoutService();

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import { workoutService } from '../../api/firebase/workout/service';
-import { Challenge, SweatlistCollection, UserChallenge } from '../../api/firebase/workout/types';
+import { SweatlistCollection, UserChallenge } from '../../api/firebase/workout/types';
 
 // Instead of importing, we'll use a safer approach with string comparison
 // and proper type handling
@@ -25,7 +25,6 @@ interface UpdateResult {
   message: string;
   results: {
     sweatlistCollection: CollectionResult;
-    userChallengeCollection: CollectionResult;
     timestamp: number;
     testMode: boolean;
   };
@@ -33,57 +32,36 @@ interface UpdateResult {
 
 const ChallengeStatusPage: React.FC = () => {
   const [sweatlistChallenges, setSweatlistChallenges] = useState<SweatlistCollection[]>([]);
-  const [userChallenges, setUserChallenges] = useState<UserChallenge[]>([]);
   const [loading, setLoading] = useState(true);
   const [updateLoading, setUpdateLoading] = useState(false);
   const [updateResult, setUpdateResult] = useState<UpdateResult | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchChallenges = async () => {
+    const fetchAdminChallenges = async () => {
       try {
         setLoading(true);
-        console.log('Fetching challenges...');
-
-        // Fetch all available collections (which include challenges)
-        // Note: This assumes you're logged in as an admin user with access
-        const userId = workoutService.currentWorkout?.author || '';
-        console.log('Retrieved userId:', userId);
-
-        if (userId) {
-          console.log('User ID found, fetching collections...');
-          const collections = await workoutService.fetchCollections(userId);
-          console.log('Fetched collections raw:', collections);
-          const filteredSweatlistChallenges = collections.filter(c => c.challenge);
-          console.log('Filtered Sweatlist Challenges:', filteredSweatlistChallenges);
-          setSweatlistChallenges(filteredSweatlistChallenges);
-
-          // Fetch all user challenges - you might need to adapt this based on your requirements
-          console.log('Fetching user challenges...');
-          const allUserChallenges = await workoutService.fetchUserChallenges();
-          console.log('Fetched User Challenges:', allUserChallenges);
-          setUserChallenges(allUserChallenges);
-        } else {
-          console.warn('No userId found, skipping challenge fetch.');
-        }
+        // Fetch all admin collections using the new service function
+        const collections = await workoutService.fetchAllAdminCollections();
+        setSweatlistChallenges(collections); 
       } catch (error) {
-        console.error('Error fetching challenges:', error);
+        console.error('Error fetching admin challenges:', error);
+        // Optionally set an error state here to display to the user
       } finally {
         setLoading(false);
-        console.log('Finished fetching challenges attempt.');
       }
     };
 
-    fetchChallenges();
-  }, []);
+    fetchAdminChallenges();
+  }, []); // Empty dependency array means this runs once on mount
 
   const formatDate = (date: Date | number | undefined): string => {
     if (!date) return 'N/A';
-    
-    const dateObj = typeof date === 'number' 
+
+    const dateObj = typeof date === 'number'
       ? new Date(date * 1000)  // Convert from Unix timestamp (seconds)
       : new Date(date);
-      
+
     return dateObj.toLocaleString();
   };
 
@@ -104,41 +82,36 @@ const ChallengeStatusPage: React.FC = () => {
 
       // Check content type to determine if it's JSON
       const contentType = result.headers.get('content-type');
-      
+
       if (!result.ok) {
         // Get the error content regardless of type
         const errorContent = await result.text();
         throw new Error(`Server error (${result.status}): ${errorContent}`);
       }
-      
+
       // If it's not JSON, handle the text response
       if (!contentType || !contentType.includes('application/json')) {
         const textResponse = await result.text();
         setUpdateError(`The server returned a non-JSON response: ${textResponse}`);
         return;
       }
-      
+
       // Parse the JSON response
       const data: UpdateResult = await result.json();
       setUpdateResult(data);
-      
-      // Refresh the challenges after a successful update
-      if (!testMode) {
-        const userId = workoutService.currentWorkout?.author || '';
-        if (userId) {
-          console.log('Refreshing data after successful update...');
-          const collections = await workoutService.fetchCollections(userId);
-          console.log('Refreshed collections raw:', collections);
-          const filteredSweatlistChallenges = collections.filter(c => c.challenge);
-          console.log('Refreshed Filtered Sweatlist Challenges:', filteredSweatlistChallenges);
-          setSweatlistChallenges(filteredSweatlistChallenges);
 
-          const allUserChallenges = await workoutService.fetchUserChallenges();
-          console.log('Refreshed User Challenges:', allUserChallenges);
-          setUserChallenges(allUserChallenges);
-          console.log('Data refresh complete.');
-        } else {
-           console.warn('No userId found during refresh, skipping.');
+      // Refresh the sweatlist challenges after a successful update
+      if (!testMode) {
+        // Re-fetch data to reflect changes using the admin function
+        setLoading(true); // Show loading indicator while refreshing
+        try {
+          const collections = await workoutService.fetchAllAdminCollections();
+          setSweatlistChallenges(collections);
+        } catch (refreshError) {
+           console.error('Error refreshing admin challenges:', refreshError);
+           setUpdateError('Update successful, but failed to refresh challenge list.');
+        } finally {
+          setLoading(false);
         }
       }
     } catch (err) {
@@ -264,7 +237,6 @@ const ChallengeStatusPage: React.FC = () => {
                   <div className="mt-2 text-sm">
                     <p>Timestamp: {formatDate(updateResult.results.timestamp)}</p>
                     <p>Sweatlist Updates: {updateResult.results.sweatlistCollection.updatesApplied}</p>
-                    <p>User Challenge Updates: {updateResult.results.userChallengeCollection.updatesApplied}</p>
                   </div>
                 </div>
               </div>
@@ -350,96 +322,6 @@ const ChallengeStatusPage: React.FC = () => {
                       ))}
                     </tbody>
                   </table>
-                </div>
-              )}
-            </div>
-            
-            {/* User Challenge Tables */}
-            <div>
-              <h2 className="text-xl font-medium mb-4 text-white flex items-center">
-                <span className="text-[#d7ff00] mr-2 text-sm">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
-                    <path fillRule="evenodd" d="M7.5 6a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0zM3.751 20.105a8.25 8.25 0 0116.498 0 .75.75 0 01-.437.695A18.683 18.683 0 0112 22.5c-2.786 0-5.433-.608-7.812-1.7a.75.75 0 01-.437-.695z" clipRule="evenodd" />
-                  </svg>
-                </span>
-                User Challenges
-              </h2>
-              
-              {loading ? (
-                <div className="text-center my-4 text-gray-300">
-                  <svg className="animate-spin h-6 w-6 mx-auto mb-2 text-[#d7ff00]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Loading user challenges...
-                </div>
-              ) : userChallenges.length === 0 ? (
-                <div className="flex items-center gap-2 text-gray-400 mt-4 p-3 bg-gray-800/30 rounded-lg">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <span>No user challenges found.</span>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="min-w-full bg-[#262a30] rounded-lg overflow-hidden">
-                    <thead>
-                      <tr className="border-b border-gray-700">
-                        <th className="py-3 px-4 text-left text-gray-300 font-medium">ID</th>
-                        <th className="py-3 px-4 text-left text-gray-300 font-medium">User</th>
-                        <th className="py-3 px-4 text-left text-gray-300 font-medium">Challenge</th>
-                        <th className="py-3 px-4 text-left text-gray-300 font-medium">Status</th>
-                        <th className="py-3 px-4 text-left text-gray-300 font-medium">Start Date</th>
-                        <th className="py-3 px-4 text-left text-gray-300 font-medium">End Date</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {userChallenges.map((userChallenge) => (
-                        <tr key={userChallenge.id} className="hover:bg-[#2a2f36] transition-colors">
-                          <td className="py-3 px-4 border-b border-gray-700 text-gray-300">
-                            {userChallenge.id.substring(0, 8)}...
-                          </td>
-                          <td className="py-3 px-4 border-b border-gray-700 text-gray-300">
-                            {userChallenge.username || 'N/A'}
-                          </td>
-                          <td className="py-3 px-4 border-b border-gray-700 text-gray-300">
-                            {userChallenge.challenge?.title || 'N/A'}
-                          </td>
-                          <td className="py-3 px-4 border-b border-gray-700">
-                            {String(userChallenge.challenge?.status) === 'active' ? (
-                              <span className="px-2 py-1 bg-green-900/30 text-green-400 rounded-full text-xs font-medium border border-green-900">
-                                Active
-                              </span>
-                            ) : String(userChallenge.challenge?.status) === 'completed' ? (
-                              <span className="px-2 py-1 bg-blue-900/30 text-blue-400 rounded-full text-xs font-medium border border-blue-900">
-                                Completed
-                              </span>
-                            ) : String(userChallenge.challenge?.status) === 'published' ? (
-                              <span className="px-2 py-1 bg-yellow-900/30 text-yellow-400 rounded-full text-xs font-medium border border-yellow-900">
-                                Published
-                              </span>
-                            ) : (
-                              <span className="px-2 py-1 bg-gray-900/30 text-gray-400 rounded-full text-xs font-medium border border-gray-700">
-                                {userChallenge.challenge?.status || 'N/A'}
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-3 px-4 border-b border-gray-700 text-gray-300">
-                            {formatDate(userChallenge.challenge?.startDate)}
-                          </td>
-                          <td className="py-3 px-4 border-b border-gray-700 text-gray-300">
-                            {formatDate(userChallenge.challenge?.endDate)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-              
-              {!loading && userChallenges.length > 0 && (
-                <div className="text-gray-400 text-sm mt-4">
-                  Showing {userChallenges.length} user challenges
                 </div>
               )}
             </div>
