@@ -4,6 +4,8 @@ import { useRouter } from 'next/router';
 import RoundInvitation from '../../components/RoundInvitation';
 import ChallengeMeta from '../../components/ChallengeMeta';
 import { SweatlistCollection, Challenge } from '../../api/firebase/workout/types';
+import { trackEvent } from '../../lib/analytics';
+import mixpanel from 'mixpanel-browser';
 
 const LoadingState = () => (
   <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
@@ -193,6 +195,13 @@ const ChallengePage: React.FC<ChallengePageProps> = ({ initialCollection, initia
                 round_id: challenge.id
               });
             }
+            
+            // Fire Mixpanel/Brevo Join Round event
+            const distinctId = mixpanel.get_distinct_id();
+            trackEvent(distinctId, 'Click - Join Round - Round Invitation', {
+              round_id: challenge.id,
+            });
+
             // Add your join challenge logic here
             await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
             router.push('/');
