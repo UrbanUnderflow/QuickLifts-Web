@@ -9,6 +9,8 @@ import 'swiper/css';
 import 'swiper/css/pagination';
 import 'swiper/css/autoplay';
 import { useRouter } from 'next/router';
+import { trackEvent } from '../lib/analytics';
+import mixpanel from 'mixpanel-browser';
 
 // Helper stubs (replace with your actual implementations or imports)
 function getReferral(): string {
@@ -64,21 +66,34 @@ const MorningMobilityChallengePage: NextPage = () => {
   }, []);
 
   useEffect(() => {
-    // 1. Track primary CTA clicks
-    document.querySelectorAll('.join-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        if (window.ttq) {
-          window.ttq.track('ClickCTA', {
-            referral_code: getReferral() || 'none',
-            utm_campaign: getUTM('utm_campaign')
-          });
-        }
-      });
+    // Track Page View on load
+    const distinctId = mixpanel.get_distinct_id();
+    trackEvent(distinctId, 'PageView - Morning Mobility Challenge', {
+      page_path: window.location.pathname,
     });
+
+    // 1. Track primary CTA clicks (DEPRECATED - Replaced by trackEvent below)
+    // document.querySelectorAll('.join-btn').forEach(btn => {
+    //   btn.addEventListener('click', () => {
+    //     if (window.ttq) {
+    //       window.ttq.track('ClickCTA', {
+    //         referral_code: getReferral() || 'none',
+    //         utm_campaign: getUTM('utm_campaign')
+    //       });
+    //     }
+    //   });
+    // });
 
     // 3. Optional: fire a second PageView for deep scroll
     const onScroll = throttle(() => {
       if (window.scrollY > 1200 && !window.deepFired) {
+        // Use trackEvent for deep scroll
+        const distinctId = mixpanel.get_distinct_id();
+        trackEvent(distinctId, 'Scroll - Deep View', {
+          page_path: window.location.pathname,
+        });
+        
+        // Original TikTok tracking (keep if still needed alongside main analytics)
         if (window.ttq) {
           window.ttq.track('PageDeepView');
         }
@@ -178,6 +193,13 @@ const MorningMobilityChallengePage: NextPage = () => {
               }
               const baseUrl = '/round-invitation/Kel8IL0kWpbie4PXRVgZ?id=Bq6zlqIlSdPUGki6gsv6X9TdVtG3&sharedBy=Bq6zlqIlSdPUGki6gsv6X9TdVtG3';
               const url = ttclid ? `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}ttclid=${ttclid}` : baseUrl;
+              // Track "Join Challenge" click (Hero)
+              const distinctId = mixpanel.get_distinct_id();
+              trackEvent(distinctId, 'Click - Join Challenge CTA', {
+                location: 'hero',
+                target_url: url,
+              });
+
               if (router && router.push) {
                 router.push(url);
               } else {
@@ -638,6 +660,13 @@ const MorningMobilityChallengePage: NextPage = () => {
                 }
                 const baseUrl = '/round-invitation/Kel8IL0kWpbie4PXRVgZ?id=Bq6zlqIlSdPUGki6gsv6X9TdVtG3&sharedBy=Bq6zlqIlSdPUGki6gsv6X9TdVtG3';
                 const url = ttclid ? `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}ttclid=${ttclid}` : baseUrl;
+                // Track "Join Challenge" click (Bottom CTA)
+                const distinctId = mixpanel.get_distinct_id();
+                trackEvent(distinctId, 'Click - Join Challenge CTA', {
+                  location: 'bottom_cta',
+                  target_url: url,
+                });
+
                 if (router && router.push) {
                   router.push(url);
                 } else {
@@ -650,6 +679,14 @@ const MorningMobilityChallengePage: NextPage = () => {
             <a 
               href="https://apps.apple.com/ag/app/pulse-community-fitness/id6451497729"
               className="bg-zinc-800 text-white px-8 py-4 rounded-full text-lg font-semibold hover:bg-zinc-700 transition-colors flex items-center justify-center gap-2"
+              onClick={() => {
+                // Track "Download App" click (Bottom CTA)
+                const distinctId = mixpanel.get_distinct_id();
+                trackEvent(distinctId, 'Click - Download App', {
+                  location: 'bottom_cta',
+                  target_url: 'https://apps.apple.com/ag/app/pulse-community-fitness/id6451497729',
+                });
+              }}
             >
               <span>Download App</span>
               <div className="flex items-center">
@@ -706,6 +743,14 @@ const MorningMobilityChallengePage: NextPage = () => {
           <a 
             href="https://apps.apple.com/us/app/pulse-fitness"
             className="bg-zinc-700 text-white px-5 py-3 rounded-full font-semibold hover:bg-zinc-600 transition-colors flex items-center justify-center"
+            onClick={() => {
+              // Track "Download App" click (Sticky Bar)
+              const distinctId = mixpanel.get_distinct_id();
+              trackEvent(distinctId, 'Click - Download App', {
+                location: 'sticky_bar',
+                target_url: 'https://apps.apple.com/us/app/pulse-fitness',
+              });
+            }}
           >
             <span className="mr-2">Download</span>
             <div className="flex items-center">

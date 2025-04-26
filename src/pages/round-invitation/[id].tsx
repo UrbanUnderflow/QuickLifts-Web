@@ -187,6 +187,12 @@ const ChallengePage: React.FC<ChallengePageProps> = ({ initialCollection, initia
         }}
         onJoinChallenge={async (challenge) => {
           try {
+            // Fire TikTok JoinRound event
+            if (typeof window !== 'undefined' && window.ttq) {
+              window.ttq.track('JoinRound', {
+                round_id: challenge.id
+              });
+            }
             // Add your join challenge logic here
             await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
             router.push('/');
