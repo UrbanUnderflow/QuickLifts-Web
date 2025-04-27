@@ -11,6 +11,7 @@ import mixpanel from 'mixpanel-browser';
 import { RootState } from '../redux/store';
 
 import AuthWrapper from '../components/AuthWrapper';
+import Toast from '../components/common/Toast';
 
 // Only import in development mode
 const isDev = process.env.NODE_ENV === 'development';
@@ -90,6 +91,7 @@ const MyApp: React.FC<AppProps> = ({ Component, pageProps }) => {
           <AuthWrapper>
             <Component {...pageProps} />
           </AuthWrapper>
+          <Toast />
         </PersistGate>
       </Provider>
     </>

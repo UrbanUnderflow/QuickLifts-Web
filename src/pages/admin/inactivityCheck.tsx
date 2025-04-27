@@ -809,324 +809,424 @@ const InactivityCheckPage: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody>
-  {filteredChallenges.map((userChallenge) => (
-    <React.Fragment key={userChallenge.id}>
-      {/* Main row */}
-      <tr
-        className={`hover:bg-[#2a2f36] transition-colors ${
-          selectedUserChallenge?.id === userChallenge.id ? 'bg-[#1d2b3a]' : ''
-        }`}
-      >
-        <td className="py-3 px-4 border-b border-gray-700 text-gray-300">
-          <button
-            onClick={() => copyToClipboard(userChallenge.id)}
-            className="text-blue-400 hover:text-blue-300"
+                    {filteredChallenges.map((userChallenge) => (
+  <React.Fragment key={userChallenge.id}>
+    {/* Main row */}
+    <tr
+      className={`hover:bg-[#2a2f36] transition-colors ${
+        selectedUserChallenge?.id === userChallenge.id ? 'bg-[#1d2b3a]' : ''
+      }`}
+    >
+      <td className="py-3 px-4 border-b border-gray-700 text-gray-300">
+        <button
+          onClick={() => copyToClipboard(userChallenge.id)}
+          className="text-blue-400 hover:text-blue-300"
+        >
+          {userChallenge.id.substring(0, 8)}…
+        </button>
+      </td>
+      <td className="py-3 px-4 border-b border-gray-700 text-gray-300">
+        <button
+          onClick={() => copyToClipboard(userChallenge.userId)}
+          className="text-blue-400 hover:text-blue-300"
+          title="Copy User ID"
+        >
+          {userChallenge.userId.substring(0, 8)}…
+        </button>
+      </td>
+      <td className="py-3 px-4 border-b border-gray-700 text-gray-300">
+        {userChallenge.challenge?.title || 'N/A'}
+      </td>
+      <td className="py-3 px-4 border-b border-gray-700 text-gray-300">
+        {Math.round(userChallenge.progress * 100)}%
+      </td>
+      <td className="py-3 px-4 border-b border-gray-700 text-gray-300">
+        {formatDate(userChallenge.lastActive)}
+      </td>
+      <td className="py-3 px-4 border-b border-gray-700 text-gray-300">
+        {userChallenge.currentStreak || 0}
+      </td>
+      <td className="py-3 px-4 border-b border-gray-700">
+        {userChallenge.isCurrentlyActive ? (
+          <span className="px-2 py-1 bg-blue-900/30 text-blue-400 rounded-full text-xs font-medium border border-blue-900">
+            Active
+          </span>
+        ) : (
+          <span className="px-2 py-1 bg-red-900/30 text-red-400 rounded-full text-xs font-medium border border-red-900">
+            Inactive
+          </span>
+        )}
+      </td>
+      <td className="py-3 px-4 border-b border-gray-700">
+        {userChallenge.isCompleted ? (
+          <span className="px-2 py-1 bg-green-900/30 text-green-400 rounded-full text-xs font-medium border border-green-900">
+            Completed
+          </span>
+        ) : (
+          <span className="px-2 py-1 bg-yellow-900/30 text-yellow-400 rounded-full text-xs font-medium border border-yellow-900">
+            In Progress
+          </span>
+        )}
+      </td>
+      <td className="py-3 px-4 border-b border-gray-700">
+        <button
+          onClick={() =>
+            setSelectedUserChallenge(
+              selectedUserChallenge?.id === userChallenge.id
+                ? null
+                : userChallenge
+            )
+          }
+          className="px-2 py-1 bg-purple-900/30 text-purple-400 rounded-lg text-xs font-medium border border-purple-900 hover:bg-purple-800/40 transition-colors flex items-center"
+          title="View details"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="h-3 w-3 mr-1"
+            viewBox="0 0 20 20"
+            fill="currentColor"
           >
-            {userChallenge.id.substring(0, 8)}…
-          </button>
-        </td>
-        <td className="py-3 px-4 border-b border-gray-700 text-gray-300">
-          <button
-            onClick={() => copyToClipboard(userChallenge.userId)}
-            className="text-blue-400 hover:text-blue-300"
-            title="Copy User ID"
-          >
-            {userChallenge.userId.substring(0, 8)}…
-          </button>
-        </td>
-        <td className="py-3 px-4 border-b border-gray-700 text-gray-300">
-          {userChallenge.challenge?.title || 'N/A'}
-        </td>
-        <td className="py-3 px-4 border-b border-gray-700 text-gray-300">
-          {Math.round(userChallenge.progress * 100)}%
-        </td>
-        <td className="py-3 px-4 border-b border-gray-700 text-gray-300">
-          {formatDate(userChallenge.lastActive)}
-        </td>
-        <td className="py-3 px-4 border-b border-gray-700 text-gray-300">
-          {userChallenge.currentStreak || 0}
-        </td>
-        <td className="py-3 px-4 border-b border-gray-700">
-          {userChallenge.isCurrentlyActive ? (
-            <span className="px-2 py-1 bg-blue-900/30 text-blue-400 rounded-full text-xs font-medium border border-blue-900">
-              Active
-            </span>
-          ) : (
-            <span className="px-2 py-1 bg-red-900/30 text-red-400 rounded-full text-xs font-medium border border-red-900">
-              Inactive
-            </span>
-          )}
-        </td>
-        <td className="py-3 px-4 border-b border-gray-700">
-          {userChallenge.isCompleted ? (
-            <span className="px-2 py-1 bg-green-900/30 text-green-400 rounded-full text-xs font-medium border border-green-900">
-              Completed
-            </span>
-          ) : (
-            <span className="px-2 py-1 bg-yellow-900/30 text-yellow-400 rounded-full text-xs font-medium border border-yellow-900">
-              In Progress
-            </span>
-          )}
-        </td>
-        <td className="py-3 px-4 border-b border-gray-700">
-          <button
-            onClick={() =>
-              setSelectedUserChallenge(
-                selectedUserChallenge?.id === userChallenge.id
-                  ? null
-                  : userChallenge
-              )
-            }
-            className="px-2 py-1 bg-purple-900/30 text-purple-400 rounded-lg text-xs font-medium border border-purple-900 hover:bg-purple-800/40 transition-colors flex items-center"
-            title="View details"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-3 w-3 mr-1"
-              viewBox="0 0 20 20"
-              fill="currentColor"
-            >
-              <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
-              <path
-                fillRule="evenodd"
-                d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z"
-                clipRule="evenodd"
-              />
-            </svg>
-            {selectedUserChallenge?.id === userChallenge.id ? 'Hide' : 'View'}
-          </button>
+            <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+            <path
+              fillRule="evenodd"
+              d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z"
+              clipRule="evenodd"
+            />
+          </svg>
+          {selectedUserChallenge?.id === userChallenge.id ? 'Hide' : 'View'}
+        </button>
+      </td>
+    </tr>
+
+    {/* Detail row */}
+    {selectedUserChallenge?.id === userChallenge.id && (
+      <tr className="animate-fade-in-up">
+        <td colSpan={9} className="border-b border-blue-800 p-0">
+          <div className="bg-[#1d2b3a] border border-blue-800 rounded-lg p-4">
+            {/* — Detail Card Markup — */}
+            <div className="flex justify-between items-start mb-3">
+              <h4 className="text-white font-medium">
+                User Challenge Details
+              </h4>
+              <button
+                onClick={() => setSelectedUserChallenge(null)}
+                className="text-gray-400 hover:text-white"
+                title="Hide details"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-5 w-5"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+              {/* Basic Info */}
+              <div className="space-y-4">
+                <h5 className="text-gray-400 text-sm font-medium mb-2 border-b border-gray-700 pb-1">
+                  Basic Information
+                </h5>
+                <div className="space-y-3">
+                  <div>
+                    <div className="text-gray-400 text-xs">Username</div>
+                    <div className="text-blue-400 font-medium">
+                      {selectedUserChallenge.username || 'Unknown'}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-gray-400 text-xs">Document ID</div>
+                    <div className="text-gray-300 font-mono text-sm">
+                      <button
+                        onClick={() =>
+                          copyToClipboard(selectedUserChallenge.id)
+                        }
+                        className="hover:text-blue-400 flex items-center"
+                        title="Copy document ID"
+                      >
+                        {selectedUserChallenge.id}
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-gray-400 text-xs">User ID</div>
+                    <div className="text-gray-300 font-mono text-sm">
+                      <button
+                        onClick={() =>
+                          copyToClipboard(selectedUserChallenge.userId)
+                        }
+                        className="hover:text-blue-400 flex items-center"
+                        title="Copy user ID"
+                      >
+                        {selectedUserChallenge.userId}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Challenge Info */}
+              <div className="space-y-4">
+                <h5 className="text-gray-400 text-sm font-medium mb-2 border-b border-gray-700 pb-1">
+                  Challenge Information
+                </h5>
+                <div className="space-y-3">
+                  <div>
+                    <div className="text-gray-400 text-xs">
+                      Challenge Title
+                    </div>
+                    <div className="text-gray-300">
+                      {selectedUserChallenge.challenge?.title || 'N/A'}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-gray-400 text-xs">Challenge ID</div>
+                    <div className="text-gray-300 font-mono text-sm">
+                      <button
+                        onClick={() =>
+                          copyToClipboard(selectedUserChallenge.challengeId)
+                        }
+                        className="hover:text-blue-400 flex items-center"
+                        title="Copy challenge ID"
+                      >
+                        {selectedUserChallenge.challengeId}
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-gray-400 text-xs">
+                      Challenge Status
+                    </div>
+                    <div className="mt-1 flex items-center gap-2">
+                      {selectedUserChallenge.isCompleted ? (
+                        <span className="px-2 py-1 bg-green-900/30 text-green-400 rounded-full text-xs font-medium border border-green-900">
+                          Completed
+                        </span>
+                      ) : (
+                        <span className="px-2 py-1 bg-yellow-900/30 text-yellow-400 rounded-full text-xs font-medium border border-yellow-900">
+                          In Progress
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Progress Info */}
+              <div className="space-y-4">
+                <h5 className="text-gray-400 text-sm font-medium mb-2 border-b border-gray-700 pb-1">
+                  Progress Information
+                </h5>
+                <div className="space-y-3">
+                  <div>
+                    <div className="text-gray-400 text-xs">Progress</div>
+                    <div className="mt-1">
+                      <div className="h-2 bg-gray-700 rounded-full w-full overflow-hidden">
+                        <div
+                          className="h-full bg-gradient-to-r from-blue-500 to-[#d7ff00]"
+                          style={{
+                            width: `${Math.round(
+                              selectedUserChallenge.progress * 100
+                            )}%`
+                          }}
+                        />
+                      </div>
+                      <div className="text-right text-xs mt-1 text-gray-300">
+                        {Math.round(
+                          selectedUserChallenge.progress * 100
+                        )}
+                        %
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-gray-400 text-xs">Current Streak</div>
+                    <div className="text-[#d7ff00] font-medium flex items-center mt-1">
+                      {selectedUserChallenge.currentStreak || 0}{' '}
+                      {selectedUserChallenge.currentStreak === 1
+                        ? 'day'
+                        : 'days'}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-gray-400 text-xs">Longest Streak</div>
+                    <div className="text-[#d7ff00] font-medium flex items-center mt-1">
+                      {selectedUserChallenge.longestStreak || 0}{' '}
+                      {selectedUserChallenge.longestStreak === 1
+                        ? 'day'
+                        : 'days'}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-gray-400 text-xs">Last Active</div>
+                    <div className="text-gray-300 mt-1">
+                      {selectedUserChallenge.lastActive
+                        ? formatDate(selectedUserChallenge.lastActive)
+                        : (
+                          <span className="px-2 py-1 bg-red-900/30 text-red-400 rounded-full text-xs font-medium border border-red-900">
+                            Never Active
+                          </span>
+                        )}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-gray-400 text-xs">Active Status</div>
+                    <div className="mt-1">
+                      {selectedUserChallenge.isCurrentlyActive ? (
+                        <span className="px-2 py-1 bg-blue-900/30 text-blue-400 rounded-full text-xs font-medium border border-blue-900">
+                          Active
+                        </span>
+                      ) : (
+                        <span className="px-2 py-1 bg-red-900/30 text-red-400 rounded-full text-xs font-medium border border-red-900">
+                          Inactive
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Pulse Points - NEW SECTION */}
+              <div className="space-y-4">
+                <h5 className="text-gray-400 text-sm font-medium mb-2 border-b border-gray-700 pb-1">
+                  Pulse Points
+                </h5>
+                <div className="space-y-3">
+                  <div>
+                    <div className="text-gray-400 text-xs">Total Points</div>
+                    <div className="text-[#d7ff00] text-xl font-bold flex items-center mt-1">
+                      {selectedUserChallenge.pulsePoints?.totalPoints || 0}
+                    </div>
+                  </div>
+                  
+                  {/* Points Breakdown */}
+                  <div className="mt-3">
+                    <div className="flex justify-between">
+                      <span className="text-gray-400 text-xs">Stack Points</span>
+                      <span className="text-gray-300 text-xs font-medium">
+                        {selectedUserChallenge.pulsePoints?.totalStackPoints || 0}
+                      </span>
+                    </div>
+                    <div className="flex justify-between mt-2">
+                      <span className="text-gray-400 text-xs">Community Points</span>
+                      <span className="text-gray-300 text-xs font-medium">
+                        {selectedUserChallenge.pulsePoints?.totalCommunityPoints || 0}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Detailed Points Breakdown */}
+                  <div className="mt-3 pt-3 border-t border-gray-700">
+                    <div className="text-gray-400 text-xs mb-2">Points Breakdown</div>
+                    
+                    <div className="space-y-1 text-xs">
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Base Completion</span>
+                        <span className="text-gray-300">{selectedUserChallenge.pulsePoints?.baseCompletion || 0}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">First Completion</span>
+                        <span className="text-gray-300">{selectedUserChallenge.pulsePoints?.firstCompletion || 0}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Streak Bonus</span>
+                        <span className="text-gray-300">{selectedUserChallenge.pulsePoints?.streakBonus || 0}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Check-in Bonus</span>
+                        <span className="text-gray-300">{selectedUserChallenge.pulsePoints?.checkInBonus || 0}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Effort Rating</span>
+                        <span className="text-gray-300">{selectedUserChallenge.pulsePoints?.effortRating || 0}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Chat Participation</span>
+                        <span className="text-gray-300">{selectedUserChallenge.pulsePoints?.chatParticipation || 0}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Location Check-in</span>
+                        <span className="text-gray-300">{selectedUserChallenge.pulsePoints?.locationCheckin || 0}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Content Engagement</span>
+                        <span className="text-gray-300">{selectedUserChallenge.pulsePoints?.contentEngagement || 0}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Encouragement Sent</span>
+                        <span className="text-gray-300">{selectedUserChallenge.pulsePoints?.encouragementSent || 0}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Encouragement Received</span>
+                        <span className="text-gray-300">{selectedUserChallenge.pulsePoints?.encouragementReceived || 0}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Cumulative Streak</span>
+                        <span className="text-gray-300">{selectedUserChallenge.pulsePoints?.cumulativeStreakBonus || 0}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Share Bonus</span>
+                        <span className="text-gray-300">{selectedUserChallenge.pulsePoints?.shareBonus || 0}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Referral Bonus</span>
+                        <span className="text-gray-300">{selectedUserChallenge.pulsePoints?.referralBonus || 0}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="mt-4 flex justify-end gap-2">
+              {/* Delete Button */}
+              <button
+                onClick={() => deleteUserChallenge(selectedUserChallenge.id)}
+                disabled={deleteLoading}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium border flex items-center ${
+                  deleteLoading
+                    ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                    : 'bg-red-600 text-white border-red-700 hover:bg-red-500 transition-colors'
+                }`}
+              >
+                {deleteLoading ? 'Deleting…' : 'Delete'}
+              </button>
+              <button
+                onClick={() =>
+                  setUserChallengeInactive(selectedUserChallenge.id)
+                }
+                disabled={!selectedUserChallenge.isCurrentlyActive}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium border flex items-center ${
+                  !selectedUserChallenge.isCurrentlyActive
+                    ? 'bg-gray-800 text-gray-500 border-gray-700 cursor-not-allowed'
+                    : 'bg-red-900/30 text-red-400 border-red-900 hover:bg-red-800/40 transition-colors'
+                }`}
+              >
+                Set Inactive
+              </button>
+              <button
+                onClick={() => copyToClipboard(selectedUserChallenge.id)}
+                className="px-3 py-1.5 bg-[#262a30] text-[#d7ff00] rounded-lg text-xs font-medium border border-[#616e00] hover:bg-[#2c3137] transition flex items-center"
+              >
+                Copy ID
+              </button>
+            </div>
+            {/* — End Detail Card — */}
+          </div>
         </td>
       </tr>
-
-      {/* Detail row */}
-      {selectedUserChallenge?.id === userChallenge.id && (
-        <tr className="animate-fade-in-up">
-          <td colSpan={9} className="border-b border-blue-800 p-0">
-            <div className="bg-[#1d2b3a] border border-blue-800 rounded-lg p-4">
-              {/* — Detail Card Markup — */}
-              <div className="flex justify-between items-start mb-3">
-                <h4 className="text-white font-medium">
-                  User Challenge Details
-                </h4>
-                <button
-                  onClick={() => setSelectedUserChallenge(null)}
-                  className="text-gray-400 hover:text-white"
-                  title="Hide details"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-5 w-5"
-                    viewBox="0 0 20 20"
-                    fill="currentColor"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {/* Basic Info */}
-                <div className="space-y-4">
-                  <h5 className="text-gray-400 text-sm font-medium mb-2 border-b border-gray-700 pb-1">
-                    Basic Information
-                  </h5>
-                  <div className="space-y-3">
-                    <div>
-                      <div className="text-gray-400 text-xs">Username</div>
-                      <div className="text-blue-400 font-medium">
-                        {selectedUserChallenge.username || 'Unknown'}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-gray-400 text-xs">Document ID</div>
-                      <div className="text-gray-300 font-mono text-sm">
-                        <button
-                          onClick={() =>
-                            copyToClipboard(selectedUserChallenge.id)
-                          }
-                          className="hover:text-blue-400 flex items-center"
-                          title="Copy document ID"
-                        >
-                          {selectedUserChallenge.id}
-                        </button>
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-gray-400 text-xs">User ID</div>
-                      <div className="text-gray-300 font-mono text-sm">
-                        <button
-                          onClick={() =>
-                            copyToClipboard(selectedUserChallenge.userId)
-                          }
-                          className="hover:text-blue-400 flex items-center"
-                          title="Copy user ID"
-                        >
-                          {selectedUserChallenge.userId}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Challenge Info */}
-                <div className="space-y-4">
-                  <h5 className="text-gray-400 text-sm font-medium mb-2 border-b border-gray-700 pb-1">
-                    Challenge Information
-                  </h5>
-                  <div className="space-y-3">
-                    <div>
-                      <div className="text-gray-400 text-xs">
-                        Challenge Title
-                      </div>
-                      <div className="text-gray-300">
-                        {selectedUserChallenge.challenge?.title || 'N/A'}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-gray-400 text-xs">Challenge ID</div>
-                      <div className="text-gray-300 font-mono text-sm">
-                        <button
-                          onClick={() =>
-                            copyToClipboard(selectedUserChallenge.challengeId)
-                          }
-                          className="hover:text-blue-400 flex items-center"
-                          title="Copy challenge ID"
-                        >
-                          {selectedUserChallenge.challengeId}
-                        </button>
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-gray-400 text-xs">
-                        Challenge Status
-                      </div>
-                      <div className="mt-1 flex items-center gap-2">
-                        {selectedUserChallenge.isCompleted ? (
-                          <span className="px-2 py-1 bg-green-900/30 text-green-400 rounded-full text-xs font-medium border border-green-900">
-                            Completed
-                          </span>
-                        ) : (
-                          <span className="px-2 py-1 bg-yellow-900/30 text-yellow-400 rounded-full text-xs font-medium border border-yellow-900">
-                            In Progress
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Progress Info */}
-                <div className="space-y-4">
-                  <h5 className="text-gray-400 text-sm font-medium mb-2 border-b border-gray-700 pb-1">
-                    Progress Information
-                  </h5>
-                  <div className="space-y-3">
-                    <div>
-                      <div className="text-gray-400 text-xs">Progress</div>
-                      <div className="mt-1">
-                        <div className="h-2 bg-gray-700 rounded-full w-full overflow-hidden">
-                          <div
-                            className="h-full bg-gradient-to-r from-blue-500 to-[#d7ff00]"
-                            style={{
-                              width: `${Math.round(
-                                selectedUserChallenge.progress * 100
-                              )}%`
-                            }}
-                          />
-                        </div>
-                        <div className="text-right text-xs mt-1 text-gray-300">
-                          {Math.round(
-                            selectedUserChallenge.progress * 100
-                          )}
-                          %
-                        </div>
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-gray-400 text-xs">Current Streak</div>
-                      <div className="text-[#d7ff00] font-medium flex items-center mt-1">
-                        {selectedUserChallenge.currentStreak || 0}{' '}
-                        {selectedUserChallenge.currentStreak === 1
-                          ? 'day'
-                          : 'days'}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-gray-400 text-xs">Last Active</div>
-                      <div className="text-gray-300 mt-1">
-                        {selectedUserChallenge.lastActive
-                          ? formatDate(selectedUserChallenge.lastActive)
-                          : (
-                            <span className="px-2 py-1 bg-red-900/30 text-red-400 rounded-full text-xs font-medium border border-red-900">
-                              Never Active
-                            </span>
-                          )}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-gray-400 text-xs">Active Status</div>
-                      <div className="mt-1">
-                        {selectedUserChallenge.isCurrentlyActive ? (
-                          <span className="px-2 py-1 bg-blue-900/30 text-blue-400 rounded-full text-xs font-medium border border-blue-900">
-                            Active
-                          </span>
-                        ) : (
-                          <span className="px-2 py-1 bg-red-900/30 text-red-400 rounded-full text-xs font-medium border border-red-900">
-                            Inactive
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Actions */}
-              <div className="mt-4 flex justify-end gap-2">
-                {/* ← New Delete Button */}
-                <button
-                    onClick={() => deleteUserChallenge(selectedUserChallenge.id)}
-                    disabled={deleteLoading}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium border flex items-center ${
-                    deleteLoading
-                        ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
-                        : 'bg-red-600 text-white border-red-700 hover:bg-red-500 transition-colors'
-                    }`}
-                >
-                    {deleteLoading ? 'Deleting…' : 'Delete'}
-                </button>
-                <button
-                  onClick={() =>
-                    setUserChallengeInactive(selectedUserChallenge.id)
-                  }
-                  disabled={!selectedUserChallenge.isCurrentlyActive}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium border flex items-center ${
-                    !selectedUserChallenge.isCurrentlyActive
-                      ? 'bg-gray-800 text-gray-500 border-gray-700 cursor-not-allowed'
-                      : 'bg-red-900/30 text-red-400 border-red-900 hover:bg-red-800/40 transition-colors'
-                  }`}
-                >
-                  Set Inactive
-                </button>
-                <button
-                  onClick={() => copyToClipboard(selectedUserChallenge.id)}
-                  className="px-3 py-1.5 bg-[#262a30] text-[#d7ff00] rounded-lg text-xs font-medium border border-[#616e00] hover:bg-[#2c3137] transition flex items-center"
-                >
-                  Copy ID
-                </button>
-              </div>
-              {/* — End Detail Card — */}
-            </div>
-          </td>
-        </tr>
-      )}
-    </React.Fragment>
-  ))}
-</tbody>
+    )}
+  </React.Fragment>
+))}
+                    </tbody>
 
                   </table>
                 </div>

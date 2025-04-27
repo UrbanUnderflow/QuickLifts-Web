@@ -13,10 +13,13 @@ import {
   collection as fsCollection,
   setDoc,
   deleteDoc,
-  writeBatch
+  writeBatch,
+  arrayUnion,
+  FieldValue,
+  Timestamp
 } from 'firebase/firestore';
 
-import { db } from '../config';
+import { db, storage } from '../config';
 import { userService } from '../user';
 import { 
   ExerciseLog, 
@@ -40,6 +43,8 @@ import { Challenge, ChallengeStatus, UserChallenge } from '../../../api/firebase
 import { store } from '../../../redux/store';
 import { setCurrentWorkout, setCurrentExerciseLogs, resetWorkoutState, setWorkoutSummary } from '../../../redux/workoutSlice';
 import { dateToUnixTimestamp } from '../../../utils/formatDate';
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { v4 as uuidv4 } from 'uuid';
 
 
 interface FirestoreError {
@@ -1430,18 +1435,52 @@ async deleteWorkoutSession(workoutId: string | null): Promise<void> {
         throw new Error('No user is signed in');
     }
 
+    // Add safeguard check for ID
+    if (!challenge.id) {
+      console.error('Error updating user challenge: Provided UserChallenge has no ID.', challenge);
+      throw new Error('Cannot update UserChallenge without a valid ID.');
+    }
+
     try {
         const challengeRef = doc(db, 'user-challenge', challenge.id);
-        const challengeData = {
-            ...challenge,
-            updatedAt: new Date()
-        };
+        console.log("[updateUserChallenge] Challenge to update:", challenge);
+        
+        // --- Convert UserChallenge instance to a plain object --- 
+        // Assuming UserChallenge has a toDictionary method that handles nested objects
+        const challengeData = challenge.toDictionary(); 
+        console.log("[updateUserChallenge] Challenge data:", challengeData);
+
+        // --- Add/overwrite the update timestamp using Unix timestamp ---
+        challengeData.updatedAt = dateToUnixTimestamp(new Date());
+        
+        // Optional debugging log
+        // console.log("[updateUserChallenge] Data being sent to setDoc:", challengeData);
+
+        // --- Detailed Log Before Save ---
+        console.log("[updateUserChallenge] Type of challengeData.challenge:", typeof challengeData.challenge);
+        if (challengeData.challenge && challengeData.challenge.constructor) {
+            console.log("[updateUserChallenge] Constructor name of challengeData.challenge:", challengeData.challenge.constructor.name);
+        } else if (challengeData.challenge === null) {
+            console.log("[updateUserChallenge] challengeData.challenge is null.");
+        } else {
+            console.log("[updateUserChallenge] challengeData.challenge has no constructor or is undefined/primitive.");
+        }
+        // Also log stringified version to see the structure Firestore likely gets
+        try {
+            console.log("[updateUserChallenge] Full challengeData object (stringified):", JSON.stringify(challengeData, null, 2)); 
+        } catch (stringifyError) {
+            console.error("[updateUserChallenge] Error stringifying challengeData:", stringifyError);
+            console.log("[updateUserChallenge] challengeData object (raw):", challengeData); // Log raw object if stringify fails
+        }
+        // --- End Detailed Log ---
 
         await setDoc(challengeRef, challengeData, { merge: true });
         console.log('User challenge updated successfully');
     } catch (error) {
         console.error('Error updating user challenge:', error);
-        throw error;
+        // Consider logging the data that caused the error
+        // console.error('Data that caused error:', challengeData)
+        throw error; // Re-throw original error
     }
   }
 
@@ -1858,6 +1897,84 @@ async deleteWorkoutSession(workoutId: string | null): Promise<void> {
       return []; // Return empty array on error
     }
   }
+
+  // --- Share Link Generation --- 
+  async generateShareableRoundLink(collectionData: SweatlistCollection, currentUser: User): Promise<string | null> {
+    if (!currentUser || !collectionData || !collectionData.id) {
+      console.error("Missing user or collection data for link generation.");
+      return null;
+    }
+
+    const collectionId = collectionData.id;
+    const userId = currentUser.id;
+    // Use first owner as default host ID if no specific referral logic yet
+    const hostId = collectionData.ownerId?.[0] || userId; 
+
+    const isPaid = collectionData.challenge?.pricingInfo?.isEnabled ?? false;
+
+    // --- Construct Base Fallback URL --- (Used for both paid and free links)
+    const fallbackBaseURL = `https://fitwithpulse.ai/round-invitation/${collectionId}`;
+    const fallbackParams = new URLSearchParams({
+      id: hostId,
+      sharedBy: userId
+    });
+    const fallbackURLString = `${fallbackBaseURL}?${fallbackParams.toString()}`;
+
+    // --- Paid Round: Return Direct Web Fallback --- 
+    if (isPaid) {
+      console.log("Round is paid. Generating direct web fallback link.");
+      return fallbackURLString;
+    }
+
+    // --- Free Round: Generate AppsFlyer OneLink --- 
+    console.log("Round is free. Generating AppsFlyer OneLink.");
+    try {
+      const oneLinkSubdomain = "fitwithpulse.onelink.me"; // Your OneLink subdomain
+      const oneLinkID = "yffD"; // Your OneLink Template ID
+      const oneLinkBaseURL = `https://${oneLinkSubdomain}/${oneLinkID}`;
+      
+      // URL-encode the fallback URL for the af_r parameter value
+      const encodedFallbackURL = encodeURIComponent(fallbackURLString);
+
+      // Define parameters
+      const params = new URLSearchParams({
+        pid: "user_share", // Media Source
+        c: "round_share", // Campaign
+        af_referrer_customer_id: userId, // Referrer ID
+        // --- Custom Deep Link Params --- 
+        deep_link_value: "round", 
+        roundId: collectionId,
+        id: hostId, // Original Host ID
+        sharedBy: userId, // User who shared
+        // --- Fallback Redirect --- 
+        af_r: encodedFallbackURL
+      });
+
+      // --- Social Preview (Open Graph) Params --- 
+      const challengeTitle = collectionData.challenge?.title || collectionData.title || 'Pulse Challenge';
+      const startDate = collectionData.challenge?.startDate ? new Date(collectionData.challenge.startDate).toLocaleDateString() : '';
+      const endDate = collectionData.challenge?.endDate ? new Date(collectionData.challenge.endDate).toLocaleDateString() : '';
+      const dateRange = startDate && endDate ? `${startDate} - ${endDate}` : 'Check it out!';
+      const previewTitle = challengeTitle;
+      const previewDescription = `Join me in this fitness challenge on Pulse! 🏋️‍♂️ ${dateRange}`;
+      const previewImageURL = "https://fitwithpulse.ai/round-preview.png"; // Use your actual preview image URL
+
+      params.set("af_og_title", previewTitle);
+      params.set("af_og_description", previewDescription);
+      params.set("af_og_image", previewImageURL);
+
+      const finalURL = `${oneLinkBaseURL}?${params.toString()}`;
+      console.log("Generated AppsFlyer OneLink: ", finalURL);
+      return finalURL;
+
+    } catch (error) {
+      console.error("Error generating AppsFlyer OneLink:", error);
+      console.log("Falling back to simple web URL due to OneLink generation error.")
+      // Fallback to the simpler web URL if OneLink generation fails
+      return fallbackURLString; 
+    }
+  }
+  // --- End Share Link Generation ---
 }
 
 export const workoutService = new WorkoutService();

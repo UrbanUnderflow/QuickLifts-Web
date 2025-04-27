@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Calendar, ChevronDown, Users, Clock, Flag } from 'lucide-react';
+import { Calendar, ChevronDown, Users, Clock, Flag, Share2 } from 'lucide-react';
 import { SweatlistCollection, SweatlistIdentifiers } from '../../api/firebase/workout/types';
 import { ChallengeStatus, UserChallenge, Challenge } from '../../api/firebase/workout/types';
 import { StackCard, RestDayCard } from '../../components/Rounds/StackCard';
@@ -27,6 +27,7 @@ const ChallengeDetailView = () => {
   const [showMenu, setShowMenu] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [userChallenges, setUserChallenges] = useState<UserChallenge[] | null>(null);
+  const [showWaitingRoomAsOwner, setShowWaitingRoomAsOwner] = useState(false);
 
   const [messages, setMessages] = useState<GroupMessage[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -80,33 +81,59 @@ const ChallengeDetailView = () => {
   useEffect(() => {
     const fetchData = async () => {
       if (!id) return;
+      console.log('[ChallengeDetailView] Starting fetchData for id:', id);
 
       try {
         // First try to fetch the collection directly with the ID
         let collectionData = await workoutService.getCollectionById(id as string);
+        console.log('[ChallengeDetailView] Fetched collectionData attempt 1:', collectionData);
 
         // If that fails, try to fetch the user challenge and then get the collection
         if (!collectionData) {
           const userChallenge = await workoutService.fetchUserChallengeById(id as string);
+          console.log('[ChallengeDetailView] Fetched userChallenge:', userChallenge);
           if (userChallenge && userChallenge.challengeId) {
             collectionData = await workoutService.getCollectionById(userChallenge.challengeId);
+            console.log('[ChallengeDetailView] Fetched collectionData attempt 2:', collectionData);
           }
         }
 
-        console.log("this is the collection data:", {...collectionData});
+        console.log("[ChallengeDetailView] Final collection data:", {...collectionData});
         if (!collectionData || !collectionData.challenge) {
+          console.error('[ChallengeDetailView] Invalid challenge data received');
           throw new Error('Invalid challenge data received');
         }
         
         setCollection(collectionData);
-        await fetchWorkouts(collectionData);
 
+        // Wrap fetchWorkouts in its own try...catch
+        try {
+          console.log('[ChallengeDetailView] Attempting to call fetchWorkouts');
+          await fetchWorkouts(collectionData);
+          console.log('[ChallengeDetailView] Successfully completed fetchWorkouts');
+        } catch (fetchWorkoutsError) {
+          console.error('[ChallengeDetailView] Error during fetchWorkouts:', fetchWorkoutsError);
+          setError('Failed to load workout details.'); // Set specific error
+          // Optionally re-throw or handle differently if needed
+        }
+
+        // Wrap fetchUserChallenge in its own try...catch
         if (collectionData.challenge.id) {
-          await fetchUserChallenge(collectionData.challenge.id);
+          try {
+            console.log('[ChallengeDetailView] Attempting to call fetchUserChallenge for challengeId:', collectionData.challenge.id);
+            await fetchUserChallenge(collectionData.challenge.id);
+            console.log('[ChallengeDetailView] Successfully completed fetchUserChallenge');
+          } catch (fetchUserChallengeError) {
+            console.error('[ChallengeDetailView] Error during fetchUserChallenge:', fetchUserChallengeError);
+            setError('Failed to load participant details.'); // Set specific error
+            // Optionally re-throw or handle differently if needed
+          }
         }
       } catch (err) {
+        console.error('[ChallengeDetailView] Error in fetchData:', err);
         setError(err instanceof Error ? err.message : 'An error occurred');
       } finally {
+        console.log('[ChallengeDetailView] Setting loading to false');
         setLoading(false);
       }
     };
@@ -136,6 +163,7 @@ const ChallengeDetailView = () => {
     setParticipantsLoading(true);
     const maxRetries = 3;
     let retries = 0;
+    console.log(`[ChallengeDetailView] fetchUserChallenge starting for challengeId: ${challengeId}`); // Log start
 
     const tryFetch = async (): Promise<void> => {
       try {
@@ -157,9 +185,11 @@ const ChallengeDetailView = () => {
     };
 
     await tryFetch();
+    console.log(`[ChallengeDetailView] fetchUserChallenge finished for challengeId: ${challengeId}`); // Log end
   };
 
   const fetchWorkouts = async (collection: SweatlistCollection) => {
+    console.log('[ChallengeDetailView] fetchWorkouts starting'); // Log start
     let sweatlistIds = collection.sweatlistIds;
    
     // Handle rest workouts
@@ -239,7 +269,8 @@ const ChallengeDetailView = () => {
       console.error('Error fetching workouts:', error);
       setError('Failed to fetch workouts');
     }
-   };
+    console.log('[ChallengeDetailView] fetchWorkouts finished'); // Log end
+  };
 
   const formatDate = (date: Date | string | number): string => {
     // If it's a timestamp (number), convert to milliseconds if needed
@@ -343,16 +374,120 @@ const ChallengeDetailView = () => {
     }
   };
 
+  // --- Share Handler (Copied from Waiting Room and adapted) ---
+  const handleShare = async () => {
+    if (!currentUser) {
+      alert("Please log in or sign up to share!");
+      return;
+    }
+    if (!collection) {
+      alert("Cannot generate share link: Challenge data not loaded.");
+      return;
+    }
+    
+    // Find the current user's challenge data from the state array
+    const currentUserChallenge = userChallenges?.find(uc => uc.userId === currentUser.id);
+
+    if (!currentUserChallenge) {
+      // Only warn if userChallenge data isn't loaded, still allow link generation
+      console.warn("UserChallenge data not available for awarding share points. Proceeding with link generation only.");
+    } else {
+      // Log the current bonus status before checking
+      console.log("[Share Points] Current hasReceivedShareBonus:", currentUserChallenge.hasReceivedShareBonus);
+    }
+
+    let awardedPoints = false;
+
+    // --- Award points logic ---
+    if (currentUserChallenge && !currentUserChallenge.hasReceivedShareBonus) {
+      try {
+        console.log("Attempting to award first share bonus points...");
+        // Deep copy for immutability
+        const updatedChallengeData = JSON.parse(JSON.stringify(currentUserChallenge.toDictionary()));
+        
+        // Update the necessary fields
+        updatedChallengeData.hasReceivedShareBonus = true;
+        updatedChallengeData.pulsePoints = updatedChallengeData.pulsePoints || {};
+        updatedChallengeData.pulsePoints.shareBonus = (updatedChallengeData.pulsePoints.shareBonus || 0) + 25;
+
+        // Create instance for the service call
+        const challengeToUpdate = new UserChallenge(updatedChallengeData);
+
+        // Update in Firestore
+        await workoutService.updateUserChallenge(challengeToUpdate);
+        
+        // Update local state array immutably
+        setUserChallenges(prevChallenges => 
+          prevChallenges
+            ? prevChallenges.map(p => 
+                p.id === challengeToUpdate.id ? challengeToUpdate : p
+              )
+            : null // Keep it null if it was null
+        );
+        console.log("[Share Points] Updated userChallenges state with points.");
+
+        awardedPoints = true;
+        console.log("Successfully awarded share bonus points and updated state.");
+        // Replace alert with a toast in a real implementation
+        alert("+25 points for sharing! Keep it up!"); 
+
+      } catch (error) {
+        console.error("Error awarding share bonus points:", error);
+        // Inform user points couldn't be awarded, but proceed with sharing
+        alert("Couldn't award points right now, but you can still share!");
+      }
+    }
+    // --- End award points logic ---
+
+    try {
+      // Ensure currentUser is not null and create a User instance
+      if (!currentUser) {
+        console.error("Cannot generate share link: currentUser is null.");
+        alert("Could not generate the share link: User data missing.");
+        return; // Exit if currentUser is null
+      }
+      const userInstance = new User(currentUser.id, currentUser); // Create User instance
+
+      // Generate the link using the service with the User instance
+      const generatedUrl = await workoutService.generateShareableRoundLink(collection, userInstance);
+
+      if (generatedUrl) {
+        // Copy to clipboard
+        await navigator.clipboard.writeText(generatedUrl);
+        
+        // Show success feedback (if points weren't already awarded)
+        if (!awardedPoints) {
+           alert('Link copied to clipboard! Ready to paste.'); 
+        }
+        
+      } else {
+        // Handle case where link generation failed
+        console.error('Share link generation returned null.');
+        alert('Could not generate the share link at this time.'); 
+      }
+    } catch (error) {
+      console.error('Error during share process (link gen/copy):', error);
+      // Provide specific feedback for clipboard errors vs. generation errors if possible
+      alert('Could not copy the share link at this time.'); // Basic error feedback
+    }
+  };
+  // --- End Share Handler ---
+
   if (loading) {
+    console.log('[ChallengeDetailView] Rendering Loading...');
     return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
   }
 
   if (error) {
+    console.log('[ChallengeDetailView] Rendering Error:', error);
     return <div className="flex items-center justify-center min-h-screen text-red-500">{error}</div>;
   }
 
   const daysInfo = calculateDays();
   const progress = calculateProgress();
+
+  // Determine if the current user is an owner
+  const isOwner = !!collection && !!currentUser && collection.ownerId.includes(currentUser.id);
 
   // Determine if the challenge has started
   const challengeHasStarted = collection?.challenge?.startDate
@@ -365,45 +500,66 @@ const ChallengeDetailView = () => {
   //   - A current user exists,
   //   - The current user is NOT an owner,
   //   - AND either the challenge is still in Draft status OR it hasn't started yet.
-  const shouldShowWaitingRoom =
-  collection &&
-  currentUser &&
-  !collection.ownerId.includes(currentUser.id) &&
-  (collection.challenge?.status === ChallengeStatus.Draft || !challengeHasStarted);
+  console.log('[ChallengeDetailView] Checking shouldShowWaitingRoom with:', {
+    collectionExists: !!collection,
+    currentUserExists: !!currentUser,
+    isOwner: isOwner,
+    isDraft: collection?.challenge?.status === ChallengeStatus.Draft,
+    hasStarted: challengeHasStarted,
+    challengeStatus: collection?.challenge?.status,
+  });
+  const shouldShowWaitingRoomForNonOwner =
+    collection &&
+    currentUser &&
+    !isOwner &&
+    (collection.challenge?.status === ChallengeStatus.Draft || !challengeHasStarted);
 
-  if (shouldShowWaitingRoom) {
+  console.log('[ChallengeDetailView] shouldShowWaitingRoomForNonOwner result:', shouldShowWaitingRoomForNonOwner);
+  console.log('[ChallengeDetailView] showWaitingRoomAsOwner:', showWaitingRoomAsOwner);
+
+  if (shouldShowWaitingRoomForNonOwner || (isOwner && showWaitingRoomAsOwner)) {
     // Create a minimal waiting room view model:
     const waitingRoomVM: ChallengeWaitingRoomViewModel = {
-      challenge: collection?.challenge || null, // safe to assert because waiting room shows only when collection exists
+      challenge: collection?.challenge || null,
       challengeDetailViewModel: { collection: collection! },
       fetchChatMessages: () => {
-        ChatService.getInstance()
-          .fetchChallengeMessages(collection!.challenge!.id)
-          .then(() => {})
-          .catch((err: any) => console.error(err));
+        if (collection?.challenge?.id) {
+          ChatService.getInstance()
+            .fetchChallengeMessages(collection.challenge.id)
+            .then(() => {})
+            .catch((err: any) => console.error('Error fetching messages in VM:', err));
+        } else {
+          console.warn('Cannot fetch messages, challenge ID is missing.');
+        }
       },
       joinChallenge: (challenge: Challenge, completion: (uc: UserChallenge | null) => void) => {
-        workoutService.joinChallenge({ username: currentUser!.username, challengeId: challenge.id })
+        if (!currentUser) {
+          console.error("Cannot join challenge, user not logged in.");
+          completion(null);
+          return;
+        }
+        workoutService.joinChallenge({ username: currentUser.username, challengeId: challenge.id })
           .then(() => {
-            // After joining, pass a dummy value (or re-fetch as needed)
             completion(null);
           })
           .catch((err: any) => {
-            console.error(err);
+            console.error('Error joining challenge:', err);
             completion(null);
           });
       },
-      // If you need to include appCoordinator, add it here.
     };
   
     return (
       <ChallengeWaitingRoomView 
         viewModel={waitingRoomVM}
         initialParticipants={userChallenges || []}
+        isOwner={isOwner}
+        setShowWaitingRoomAsOwner={setShowWaitingRoomAsOwner}
       />
     );
   }
 
+  console.log('[ChallengeDetailView] Rendering Main Challenge View');
   return (
     <div className="min-h-screen bg-zinc-900">
       <div className="h-48 bg-gradient-to-b from-zinc-800 to-zinc-900" />
@@ -416,6 +572,14 @@ const ChallengeDetailView = () => {
               <div>
                 <h1 className="text-2xl font-bold">{collection?.challenge?.title}</h1>
                 <p className="text-zinc-400 mt-1">{collection?.challenge?.subtitle}</p>
+                {isOwner && (
+                  <button
+                    onClick={() => setShowWaitingRoomAsOwner(!showWaitingRoomAsOwner)}
+                    className="mt-2 px-3 py-1 bg-[#E0FE10] text-black text-sm font-semibold rounded hover:bg-opacity-80 transition-colors"
+                  >
+                    {showWaitingRoomAsOwner ? 'View Owner Dashboard' : 'View Waiting Room'}
+                  </button>
+                )}
               </div>
               
               <button 
@@ -509,9 +673,23 @@ const ChallengeDetailView = () => {
               </div>
             </div>
 
+            {/* Share Section - New */}
+            <div className="mt-6 px-2"> {/* Adjusted margin */} 
+              <button 
+                onClick={handleShare}
+                className="w-full flex items-center space-x-3 p-4 rounded-lg bg-[#DFFD10]/10 border border-[#DFFD10]/50 hover:bg-[#DFFD10]/20 transition-colors"
+              >
+                <Share2 className="h-5 w-5 text-[#DFFD10]" />
+                <div className="text-left">
+                  <p className="font-semibold text-[#DFFD10]">Invite Friends to Join</p>
+                  <p className="text-sm text-gray-300">Share your link & earn +25 points per join! </p> 
+                </div>
+              </button>
+            </div>
+
             {/* Participants Section */}
             <ParticipantsSection
-                participants={userChallenges || []} // Provide an empty array if userChallenges is null
+                participants={userChallenges || []}
                 onParticipantClick={(participant: UserChallenge) => {
                   router.push(`/profile/${participant.username}`);
                 }}
@@ -530,11 +708,6 @@ const ChallengeDetailView = () => {
                   />
                 ) : (
                   <></>
-                  // <ChatPreviewCard
-                  //   messages={messages}
-                  //   unreadCount={unreadCount}
-                  //   onExpand={toggleChatExpansion}
-                  // />
                 )}
               </div>
             )}

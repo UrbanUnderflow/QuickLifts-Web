@@ -389,7 +389,6 @@ export class User {
      this.createdAt = convertFirestoreTimestamp(data.createdAt) || new Date();
      this.updatedAt = convertFirestoreTimestamp(data.updatedAt) || new Date();
      
-     console.log('Creator constructed with stripeAccountId:', this.stripeAccountId);
    }
 
    toDictionary(): Record<string, any> {

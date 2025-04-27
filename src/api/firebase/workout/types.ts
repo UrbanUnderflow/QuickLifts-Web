@@ -795,6 +795,8 @@ export class PulsePoints {
   encouragementSent: number;   // e.g. 15 points per unique user
   encouragementReceived: number; // e.g. 10 points per unique user
   cumulativeStreakBonus: number;
+  shareBonus: number;
+  referralBonus: number;
 
   constructor(data: any) {
     this.baseCompletion = data.baseCompletion ?? 0;
@@ -808,6 +810,8 @@ export class PulsePoints {
     this.encouragementSent = data.encouragementSent ?? 0;
     this.encouragementReceived = data.encouragementReceived ?? 0;
     this.cumulativeStreakBonus = data.cumulativeStreakBonus ?? 0;
+    this.shareBonus = data.shareBonus ?? 0;
+    this.referralBonus = data.referralBonus ?? 0;
   }
 
   get totalStackPoints(): number {
@@ -831,7 +835,7 @@ export class PulsePoints {
   }
 
   get totalPoints(): number {
-    return this.totalStackPoints + this.totalCommunityPoints + this.cumulativeStreakBonus;
+    return this.totalStackPoints + this.totalCommunityPoints + this.cumulativeStreakBonus + this.shareBonus + this.referralBonus;
   }
 
   toDictionary(): any {
@@ -847,6 +851,8 @@ export class PulsePoints {
       encouragementSent: this.encouragementSent,
       encouragementReceived: this.encouragementReceived,
       cumulativeStreakBonus: this.cumulativeStreakBonus,
+      shareBonus: this.shareBonus,
+      referralBonus: this.referralBonus,
       totalStackPoints: this.totalStackPoints,
       totalCommunityPoints: this.totalCommunityPoints,
       totalPoints: this.totalPoints,
@@ -926,6 +932,7 @@ class UserChallenge {
   encouragedUsers: Encouragement[];  // Changed from string[] to Encouragement[]
   encouragedByUsers: Encouragement[];  // Changed from string[] to Encouragement[]
   checkIns: CheckIn[];
+  hasReceivedShareBonus: boolean;
 
   constructor(data: any) {
     this.id = data.id;
@@ -967,6 +974,7 @@ class UserChallenge {
     this.checkIns = Array.isArray(data.checkIns)
       ? data.checkIns.map((d: any) => new CheckIn(d))
       : [];
+    this.hasReceivedShareBonus = data.hasReceivedShareBonus ?? false;
   }
 
   // Add calculateLongestStreak method
@@ -1039,6 +1047,7 @@ class UserChallenge {
       encouragedUsers: this.encouragedUsers.map(user => user.toDictionary()),
       encouragedByUsers: this.encouragedByUsers.map(user => user.toDictionary()),
       checkIns: this.checkIns.map(checkIn => checkIn.toDictionary()),
+      hasReceivedShareBonus: this.hasReceivedShareBonus
     };
   }
 }
@@ -1185,7 +1194,7 @@ class Challenge {
         checkIns: participant.checkIns
       })),
       status: this.status,
-      pin: this.pin,
+      pin: this.pin ?? null,
       startDate: dateToUnixTimestamp(this.startDate),
       endDate: dateToUnixTimestamp(this.endDate),
       createdAt: dateToUnixTimestamp(this.createdAt),
