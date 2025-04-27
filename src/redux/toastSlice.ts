@@ -4,7 +4,7 @@ import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 interface ToastState {
   isVisible: boolean;
   message: string;
-  type: 'success' | 'error' | 'info' | 'warning';
+  type: 'success' | 'error' | 'info' | 'warning' | 'award';
   duration: number; // Duration in milliseconds
 }
 
@@ -19,7 +19,7 @@ const initialState: ToastState = {
 // Define payload structure for showing the toast
 interface ShowToastPayload {
   message: string;
-  type?: 'success' | 'error' | 'info' | 'warning';
+  type?: 'success' | 'error' | 'info' | 'warning' | 'award';
   duration?: number;
 }
 

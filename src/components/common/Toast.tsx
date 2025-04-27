@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../../redux/store'; // Adjust path if needed
 import { hideToast } from '../../redux/toastSlice'; // Adjust path if needed
-import { CheckCircle, XCircle, Info, AlertTriangle } from 'lucide-react';
+import { CheckCircle, XCircle, Info, AlertTriangle, Award } from 'lucide-react';
 
 // CSS for toast animation (similar to inactivityCheck.tsx)
 const toastAnimation = `
@@ -43,44 +43,64 @@ const Toast: React.FC = () => {
     return null;
   }
 
-  // Determine background color and icon based on type
-  let bgColor = 'bg-gray-800';
-  let textColor = 'text-white';
+  // Determine base background color and icon based on type
+  let baseBgColor = 'bg-gray-800';
+  let baseTextColor = 'text-white';
   let IconComponent = Info;
 
   switch (type) {
     case 'success':
-      bgColor = 'bg-green-600'; // Or your theme's success color
+      baseBgColor = 'bg-green-600';
       IconComponent = CheckCircle;
       break;
     case 'error':
-      bgColor = 'bg-red-600'; // Or your theme's error color
+      baseBgColor = 'bg-red-600';
       IconComponent = XCircle;
       break;
     case 'warning':
-      bgColor = 'bg-yellow-500'; // Or your theme's warning color
-      textColor = 'text-black';
+      baseBgColor = 'bg-yellow-500';
+      baseTextColor = 'text-black';
       IconComponent = AlertTriangle;
+      break;
+    case 'award':
+      baseBgColor = 'bg-gradient-to-br from-yellow-400 via-amber-500 to-yellow-600';
+      baseTextColor = 'text-black';
+      IconComponent = Award;
       break;
     case 'info':
     default:
-      bgColor = 'bg-blue-600'; // Or your theme's info color
+      baseBgColor = 'bg-blue-600';
       IconComponent = Info;
       break;
   }
+
+  // Determine positioning and final styles
+  const isAward = type === 'award';
+  const positionClasses = isAward 
+    ? 'top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2'
+    : 'bottom-4 right-4 md:bottom-8 md:right-8';
+
+  const awardSpecificClasses = isAward
+    ? 'border-2 border-yellow-300 text-black'
+    : baseTextColor;
 
   return (
     <>
       <style>{toastAnimation}</style>
       <div
-        className={`fixed bottom-4 right-4 md:bottom-8 md:right-8 z-50 p-4 rounded-lg shadow-xl flex items-center gap-3 ${bgColor} ${textColor} animate-fade-in-up`}
+        className={`fixed z-[101] p-4 rounded-lg shadow-xl flex items-center gap-3 
+          ${positionClasses} 
+          ${baseBgColor} 
+          ${awardSpecificClasses} 
+          animate-fade-in-up`}
         role="alert"
       >
-        <IconComponent className="h-6 w-6 flex-shrink-0" />
+        <IconComponent className={`h-6 w-6 flex-shrink-0 ${isAward ? 'animate-pulse' : ''}`} />
         <span className="text-sm font-medium">{message}</span>
         <button
           onClick={() => dispatch(hideToast())}
-          className="ml-auto -mr-1 -my-1 p-1 rounded-md hover:bg-black/20 focus:outline-none focus:ring-2 focus:ring-white/50"
+          className={`ml-auto -mr-1 -my-1 p-1 rounded-md focus:outline-none focus:ring-2 focus:ring-white/50 
+            ${isAward ? 'hover:bg-black/10' : 'hover:bg-black/20'}`}
           aria-label="Dismiss"
         >
           <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd"></path></svg>

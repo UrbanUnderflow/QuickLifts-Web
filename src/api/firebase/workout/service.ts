@@ -829,27 +829,12 @@ async fetchUserChallengesByChallengeId(challengeId: string): Promise<UserChallen
       const data = doc.data();
       // console.log(`Processing user challenge with ID: ${doc.id}`, data);
 
-      return {
+      // --- Instantiate UserChallenge here --- 
+      return new UserChallenge({ 
         id: doc.id,
-        ...data,
-        challenge: data.challenge
-          ? new Challenge({
-              id: data.challenge.id,
-              title: data.challenge.title,
-              subtitle: data.challenge.subtitle,
-              participants: data.challenge.participants || [],
-              status: data.challenge.status as ChallengeStatus,
-              startDate: data.challenge.startDate ? new Date(data.challenge.startDate) : new Date(),
-              endDate: data.challenge.endDate ? new Date(data.challenge.endDate) : new Date(),
-              createdAt: data.challenge.createdAt ? new Date(data.challenge.createdAt) : new Date(),
-              updatedAt: data.challenge.updatedAt ? new Date(data.challenge.updatedAt) : new Date(),
-              introVideos: data.challenge.introVideos || [],
-              ownerId: data.challenge.ownerId || []
-            })
-          : undefined,
-        createdAt: convertTimestamp(data.createdAt),
-        updatedAt: convertTimestamp(data.updatedAt),
-      };
+        ...data 
+      });
+      // --- End Instantiation ---
     });
 
     // console.log('All user challenges after processing:', JSON.stringify(userChallenges, null, 2));

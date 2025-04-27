@@ -331,7 +331,7 @@ export const ChallengeWaitingRoomView: React.FC<ChallengeWaitingRoomViewProps> =
           awardedPoints = true;
           console.log("Successfully awarded share bonus points and updated state.");
           // --- Replace alert with toast --- 
-          dispatch(showToast({ message: "+25 points for sharing! Keep it up!", type: 'success' }));
+          dispatch(showToast({ message: "+25 points for sharing! Keep it up!", type: 'award' }));
         }
 
       } catch (error) {
@@ -545,7 +545,7 @@ export const ChallengeWaitingRoomView: React.FC<ChallengeWaitingRoomViewProps> =
               {userChallenge === null && (
                 <button
                   onClick={handleJoin}
-                  className="flex flex-col items-center p-4 bg-gray-700 rounded-lg border border-[#DFFD10] hover:bg-gray-600 transition-colors"
+                  className="flex flex-col items-center p-4 bg-gray-700 rounded-lg border border-[#DFFD10] hover:bg-gray-600 transition-colors w-24"
                 >
                   <div className="w-12 h-12 rounded-full border-2 border-[#DFFD10] flex items-center justify-center">
                     <span className="material-icons text-[#DFFD10]">add</span>
@@ -554,7 +554,7 @@ export const ChallengeWaitingRoomView: React.FC<ChallengeWaitingRoomViewProps> =
                 </button>
               )}
               {participants.map((participant) => (
-                <div key={participant.id} className="flex flex-col items-center p-4 bg-gray-700 rounded-lg border border-gray-700">
+                <div key={participant.id} className="flex flex-col items-center p-4 bg-gray-700 rounded-lg border border-gray-700 w-24">
                   {participant.profileImage?.profileImageURL ? (
                     <img
                       src={participant.profileImage.profileImageURL}

@@ -12,6 +12,7 @@ import { RootState } from '../redux/store';
 
 import AuthWrapper from '../components/AuthWrapper';
 import Toast from '../components/common/Toast';
+import GlobalLoader from '../components/common/GlobalLoader';
 
 // Only import in development mode
 const isDev = process.env.NODE_ENV === 'development';
@@ -92,6 +93,7 @@ const MyApp: React.FC<AppProps> = ({ Component, pageProps }) => {
             <Component {...pageProps} />
           </AuthWrapper>
           <Toast />
+          <GlobalLoader />
         </PersistGate>
       </Provider>
     </>

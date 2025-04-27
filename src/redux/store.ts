@@ -3,6 +3,7 @@ import userReducer from './userSlice';
 import workoutReducer from './workoutSlice';
 import devModeReducer from './devModeSlice';
 import toastReducer from './toastSlice';
+import loadingReducer from './loadingSlice';
 import { persistStore, persistReducer } from 'redux-persist';
 import storage from 'redux-persist-indexeddb-storage';
 import { combineReducers } from 'redux';
@@ -35,6 +36,7 @@ const rootReducer = combineReducers({
   workout: persistedWorkoutReducer,
   devMode: persistedDevModeReducer,
   toast: toastReducer,
+  loading: loadingReducer,
 });
 
 // Create the store with the persisted reducer

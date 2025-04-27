@@ -4,6 +4,7 @@ import { SweatlistCollection, SweatlistIdentifiers } from '../../api/firebase/wo
 import { ChallengeStatus, UserChallenge, Challenge } from '../../api/firebase/workout/types';
 import { StackCard, RestDayCard } from '../../components/Rounds/StackCard';
 import { Workout, WorkoutStatus, BodyZone } from '../../api/firebase/workout/types';
+import { Exercise, ExerciseReference } from '../../api/firebase/exercise/types';
 import ParticipantsSection from '../../components/Rounds/ParticipantsSection';
 import RoundChatView from '../../components/Rounds/RoundChatView';
 import { GroupMessage, MessageMediaType } from '../../api/firebase/chat/types';
@@ -11,18 +12,23 @@ import { workoutService } from '../../api/firebase/workout/service';
 import { userService, User } from '../../api/firebase/user';
 import { useRouter } from 'next/router';
 import { RootState } from '../../redux/store';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
+import { showLoader, hideLoader } from '../../redux/loadingSlice';
+import { collection as firestoreCollection, query, where, getDocs, documentId } from 'firebase/firestore';
+import { db } from '../../api/firebase/config';
+import { ExerciseVideo } from '../../api/firebase/exercise/types';
 
 import { ChatService } from '../../api/firebase/chat/service';
 import { ChallengeWaitingRoomView, ChallengeWaitingRoomViewModel } from '../../components/Rounds/ChallengeWaitingRoomView'
+import { showToast } from '../../redux/toastSlice';
 
 const ChallengeDetailView = () => {
   const router = useRouter();
   const { id } = router.query;
+  const dispatch = useDispatch();
   
   const [collection, setCollection] = useState<SweatlistCollection | null>(null);
   const [workouts, setWorkouts] = useState<Workout[]>([]);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showMenu, setShowMenu] = useState(false);
   const [editMode, setEditMode] = useState(false);
@@ -82,6 +88,7 @@ const ChallengeDetailView = () => {
     const fetchData = async () => {
       if (!id) return;
       console.log('[ChallengeDetailView] Starting fetchData for id:', id);
+      dispatch(showLoader({ message: 'Loading Round Details...' }));
 
       try {
         // First try to fetch the collection directly with the ID
@@ -133,15 +140,18 @@ const ChallengeDetailView = () => {
         console.error('[ChallengeDetailView] Error in fetchData:', err);
         setError(err instanceof Error ? err.message : 'An error occurred');
       } finally {
-        console.log('[ChallengeDetailView] Setting loading to false');
-        setLoading(false);
+        console.log('[ChallengeDetailView] Fetch complete, hiding loader');
+        dispatch(hideLoader());
       }
     };
 
     if (router.isReady && id) {
       fetchData();
     }
-  }, [id, router.isReady]);
+    return () => {
+        dispatch(hideLoader());
+    };
+  }, [id, router.isReady, dispatch]);
 
   const setupRealtimeUpdates = () => {
     return ChatService.getInstance().subscribeToMessages(collection?.challenge?.id || '', (newMessages) => {
@@ -188,88 +198,136 @@ const ChallengeDetailView = () => {
     console.log(`[ChallengeDetailView] fetchUserChallenge finished for challengeId: ${challengeId}`); // Log end
   };
 
-  const fetchWorkouts = async (collection: SweatlistCollection) => {
-    console.log('[ChallengeDetailView] fetchWorkouts starting'); // Log start
-    let sweatlistIds = collection.sweatlistIds;
-   
-    // Handle rest workouts
-    sweatlistIds = sweatlistIds.map((sweatlistId) => {
-      if (sweatlistId.id === "rest" && !sweatlistId.sweatlistAuthorId) {
-        return new SweatlistIdentifiers({
-          ...sweatlistId,
-          sweatlistAuthorId: currentUser?.id || ''
-        });
-      }
-      return sweatlistId instanceof SweatlistIdentifiers 
-        ? sweatlistId 
-        : new SweatlistIdentifiers(sweatlistId);
-    });
-   
-    // Group by author 
-    const groupedByAuthor = sweatlistIds.reduce((acc: { [key: string]: SweatlistIdentifiers[] }, curr: SweatlistIdentifiers) => {
-      const authorId = curr.sweatlistAuthorId;
-      if (!acc[authorId]) {
-        acc[authorId] = [];
-      }
-      acc[authorId].push(curr);
-      return acc;
-    }, {});
-   
-    try {
-      let allWorkouts: Workout[] = [];
-      
-      await Promise.all(Object.entries(groupedByAuthor).map(async ([authorId, sweatlistGroup]: [string, SweatlistIdentifiers[]]) => {
-        if (!authorId) return;
-   
-        const sweatlists = await workoutService.getAllSweatlists(authorId);
-        
-        sweatlistGroup.forEach(sweatlistId => {
-          if (sweatlistId.sweatlistName === "Rest") {
-            // Create rest workout placeholder
-            const restWorkout = new Workout({
-              id: "rest",
-              roundWorkoutId: "rest", 
-              title: "Rest Day",
-              description: "Recovery day",
-              author: sweatlistId.sweatlistAuthorId,
-              exercises: [],
-              logs: [],
-              duration: 0,
-              useAuthorContent: true,
-              isCompleted: false,
-              workoutStatus: WorkoutStatus.QueuedUp,
-              createdAt: new Date(),
-              updatedAt: new Date(),
-              zone: BodyZone.FullBody,
-              collectionId: [],
-              challenge: undefined,
-              startTime: undefined,
-              order: 0,
-              workoutRating: undefined
-            });
-            allWorkouts.push(restWorkout);
-          } else {
-            const workout = sweatlists?.find(sl => sl.id === sweatlistId.id);
-            if (workout) {
-              if (Array.isArray(workout.exercises)) {
-                workout.exercises.forEach((exercise, index) => {
-                  if (exercise && exercise.exercise) {
-                    // Exercise validation if needed
-                  }
-                });
-              }
-              allWorkouts.push(workout);
-            }
-          }
-        });
-      }));
-   
-      setWorkouts(allWorkouts);
-    } catch (error) {
-      console.error('Error fetching workouts:', error);
-      setError('Failed to fetch workouts');
+  const fetchWorkouts = async (collectionData: SweatlistCollection) => {
+    console.log('[ChallengeDetailView] fetchWorkouts optimized starting with video mapping');
+    if (!collectionData || !collectionData.sweatlistIds || collectionData.sweatlistIds.length === 0) {
+        setWorkouts([]);
+        console.log('[ChallengeDetailView] No sweatlist IDs found.');
+        return;
     }
-    console.log('[ChallengeDetailView] fetchWorkouts finished'); // Log end
+
+    // --- Step 2: Fetch all exercise videos --- 
+    let allExerciseVideos: ExerciseVideo[] = [];
+    try {
+      const videoSnapshot = await getDocs(firestoreCollection(db, 'exerciseVideos'));
+      allExerciseVideos = videoSnapshot.docs.map(doc => new ExerciseVideo({ id: doc.id, ...doc.data() }));
+      console.log(`[ChallengeDetailView] Fetched ${allExerciseVideos.length} exercise videos.`);
+    } catch (videoError) {
+      console.error('[ChallengeDetailView] Error fetching exercise videos:', videoError);
+      // Decide how to proceed - maybe show workouts without videos or show error
+      setError('Failed to load exercise video data.'); 
+    }
+    // ----------------------------------------
+
+    const workoutIdsToFetch: string[] = [];
+    const restDayPlaceholders: { index: number; idInfo: SweatlistIdentifiers }[] = [];
+
+    // 1. Separate IDs and identify rest days
+    collectionData.sweatlistIds.forEach((idInfo, index) => {
+        const name = idInfo.sweatlistName || (idInfo as any).id;
+        const id = idInfo.id;
+        if (name === "Rest" || id === "rest") {
+            restDayPlaceholders.push({ index, idInfo });
+        } else if (id && id !== "rest") {
+            workoutIdsToFetch.push(id);
+        }
+    });
+
+    // 3. Batch IDs and Fetch Workouts from 'stacks'
+    const MAX_IN_QUERY_SIZE = 30;
+    const fetchedDocsData: any[] = [];
+    for (let i = 0; i < workoutIdsToFetch.length; i += MAX_IN_QUERY_SIZE) {
+        const chunkOfIds = workoutIdsToFetch.slice(i, i + MAX_IN_QUERY_SIZE);
+        if (chunkOfIds.length > 0) {
+            try {
+                const stacksCollectionRef = firestoreCollection(db, 'stacks'); 
+                const q = query(stacksCollectionRef, where(documentId(), 'in', chunkOfIds));
+                const snapshot = await getDocs(q);
+                snapshot.docs.forEach(doc => fetchedDocsData.push({ id: doc.id, ...doc.data() }));
+            } catch (batchError) {
+                console.error(`[ChallengeDetailView] Error fetching workout batch:`, batchError);
+                setError(`Failed to fetch some workouts.`);
+            }
+        }
+    }
+
+    // 4. Instantiate Initial Workouts
+    const fetchedWorkoutsMap = new Map<string, Workout>();
+    fetchedDocsData.forEach(data => {
+        try {
+            const workoutInstance = new Workout(data);
+            fetchedWorkoutsMap.set(data.id, workoutInstance);
+        } catch (instantiationError) {
+             console.error(`[ChallengeDetailView] Error instantiating workout ${data.id}:`, instantiationError);
+        }
+    });
+
+    // --- Step 5: Map Videos to Exercises in each Fetched Workout --- 
+    fetchedWorkoutsMap.forEach(workoutInstance => {
+      if (workoutInstance.exercises && Array.isArray(workoutInstance.exercises)) {
+        workoutInstance.exercises = workoutInstance.exercises.map(exerciseRef => {
+          if (!exerciseRef || !exerciseRef.exercise) return exerciseRef; // Skip if structure is wrong
+
+          const currentExercise = exerciseRef.exercise;
+          const exerciseNameLower = currentExercise.name?.toLowerCase().trim();
+
+          const matchingVideos = allExerciseVideos.filter(
+            video => video.exercise?.toLowerCase().trim() === exerciseNameLower
+          );
+
+          // Create a *new* Exercise instance including the videos
+          const exerciseWithVideos = new Exercise({
+            ...currentExercise, // Spread original data
+            videos: matchingVideos // Add the filtered videos
+          });
+
+          // Return a new ExerciseReference with the updated Exercise instance
+          return new ExerciseReference({ 
+              ...exerciseRef, // Keep original groupId etc.
+              exercise: exerciseWithVideos 
+          }); 
+        });
+      }
+    });
+    console.log(`[ChallengeDetailView] Completed mapping videos to ${fetchedWorkoutsMap.size} workouts.`);
+    // -------------------------------------------------------------
+
+    // 6 & 7. Combine Fetched (with videos), Rest Days, Handle Missing
+    const finalWorkouts: Workout[] = collectionData.sweatlistIds.map((idInfo, index) => {
+        const name = idInfo.sweatlistName || (idInfo as any).id;
+        const id = idInfo.id;
+
+        if (name === "Rest" || id === "rest") {
+            // Create rest workout placeholder
+            return new Workout({
+                id: "rest", roundWorkoutId: `rest-${index}`,
+                title: "Rest Day", description: "Recovery day",
+                author: idInfo.sweatlistAuthorId || currentUser?.id || '',
+                exercises: [], logs: [], duration: 0, useAuthorContent: true, isCompleted: false,
+                workoutStatus: WorkoutStatus.QueuedUp, createdAt: new Date(), updatedAt: new Date(),
+                zone: BodyZone.FullBody, order: index
+            });
+        } else if (id && fetchedWorkoutsMap.has(id)) {
+            // Get the workout instance (which now has videos mapped)
+            const workoutWithVideos = fetchedWorkoutsMap.get(id)!;
+            // Ensure order is preserved/added correctly
+            const workoutDataForConstructor = { ...workoutWithVideos, order: index }; 
+            return new Workout(workoutDataForConstructor);
+        } else {
+            console.warn(`[ChallengeDetailView] Workout data not found for ID: ${id}. Rendering placeholder.`);
+            return new Workout({ 
+                 id: id || `missing-${index}`, title: "Workout Not Found", order: index, 
+                 author: idInfo.sweatlistAuthorId || currentUser?.id || '', 
+                 exercises: [], logs: [], duration: 0, useAuthorContent: false, isCompleted: false,
+                 workoutStatus: WorkoutStatus.Archived, createdAt: new Date(), updatedAt: new Date(),
+                 zone: BodyZone.FullBody
+             });
+        }
+    }).filter((w): w is Workout => w !== null);
+
+    // 8. Update State
+    setWorkouts(finalWorkouts);
+    console.log('[ChallengeDetailView] fetchWorkouts optimized finished with video mapping');
   };
 
   const formatDate = (date: Date | string | number): string => {
@@ -374,14 +432,14 @@ const ChallengeDetailView = () => {
     }
   };
 
-  // --- Share Handler (Copied from Waiting Room and adapted) ---
+  // --- Share Handler (Updated with full logic) ---
   const handleShare = async () => {
     if (!currentUser) {
-      alert("Please log in or sign up to share!");
+      dispatch(showToast({ message: "Please log in or sign up to share!", type: 'warning' }));
       return;
     }
     if (!collection) {
-      alert("Cannot generate share link: Challenge data not loaded.");
+      dispatch(showToast({ message: "Cannot generate share link: Challenge data not loaded.", type: 'error' }));
       return;
     }
     
@@ -391,6 +449,7 @@ const ChallengeDetailView = () => {
     if (!currentUserChallenge) {
       // Only warn if userChallenge data isn't loaded, still allow link generation
       console.warn("UserChallenge data not available for awarding share points. Proceeding with link generation only.");
+      // No toast needed here, just proceed to link generation
     } else {
       // Log the current bonus status before checking
       console.log("[Share Points] Current hasReceivedShareBonus:", currentUserChallenge.hasReceivedShareBonus);
@@ -405,6 +464,19 @@ const ChallengeDetailView = () => {
         // Deep copy for immutability
         const updatedChallengeData = JSON.parse(JSON.stringify(currentUserChallenge.toDictionary()));
         
+        // --- Explicitly set the ID ---
+        if (currentUserChallenge.id && !updatedChallengeData.id) {
+           updatedChallengeData.id = currentUserChallenge.id;
+           console.log(`[Share Points] Copied ID from original userChallenge: ${updatedChallengeData.id}`);
+        } else if (!currentUserChallenge.id) {
+           console.error("[Share Points] Original userChallenge object is missing its ID!");
+           throw new Error("Original user challenge data is missing ID."); // Throw to prevent update attempt
+        } else if (updatedChallengeData.id !== currentUserChallenge.id) {
+           console.warn("[Share Points] Mismatch between original ID and ID after JSON processing. Using original.");
+           updatedChallengeData.id = currentUserChallenge.id;
+        }
+        // -----------------------------
+
         // Update the necessary fields
         updatedChallengeData.hasReceivedShareBonus = true;
         updatedChallengeData.pulsePoints = updatedChallengeData.pulsePoints || {};
@@ -413,74 +485,88 @@ const ChallengeDetailView = () => {
         // Create instance for the service call
         const challengeToUpdate = new UserChallenge(updatedChallengeData);
 
-        // Update in Firestore
-        await workoutService.updateUserChallenge(challengeToUpdate);
-        
-        // Update local state array immutably
-        setUserChallenges(prevChallenges => 
-          prevChallenges
-            ? prevChallenges.map(p => 
-                p.id === challengeToUpdate.id ? challengeToUpdate : p
-              )
-            : null // Keep it null if it was null
-        );
-        console.log("[Share Points] Updated userChallenges state with points.");
+        // --- ID Check ---
+        if (!challengeToUpdate || !challengeToUpdate.id) {
+          console.error("[Share Points] Error: Invalid UserChallenge ID before update.", challengeToUpdate);
+          dispatch(showToast({ message: "Could not award points: Internal error (missing ID).", type: 'error' }));
+        } else {
+          // --- Update in Firestore ---
+          await workoutService.updateUserChallenge(challengeToUpdate);
+          
+          // --- Update local state array immutably --- 
+          setUserChallenges(prevChallenges => 
+            prevChallenges
+              ? prevChallenges.map(p => 
+                  p.id === challengeToUpdate.id ? challengeToUpdate : p
+                )
+              : null // Keep it null if it was null
+          );
+          console.log("[Share Points] Updated userChallenges state with points.");
 
-        awardedPoints = true;
-        console.log("Successfully awarded share bonus points and updated state.");
-        // Replace alert with a toast in a real implementation
-        alert("+25 points for sharing! Keep it up!"); 
+          awardedPoints = true;
+          console.log("Successfully awarded share bonus points and updated state.");
+          dispatch(showToast({ message: "+25 points for sharing! Keep it up!", type: 'award' }));
+        }
 
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error awarding share bonus points:", error);
-        // Inform user points couldn't be awarded, but proceed with sharing
-        alert("Couldn't award points right now, but you can still share!");
+        dispatch(showToast({ message: `Couldn't award points: ${error.message || 'Unknown error'}`, type: 'error' }));
       }
     }
     // --- End award points logic ---
+
+    let generatedUrl: string | null = null; // Declare outside the try block
 
     try {
       // Ensure currentUser is not null and create a User instance
       if (!currentUser) {
         console.error("Cannot generate share link: currentUser is null.");
-        alert("Could not generate the share link: User data missing.");
+        dispatch(showToast({ message: "Could not generate share link: User data missing.", type: 'error' }));
         return; // Exit if currentUser is null
       }
       const userInstance = new User(currentUser.id, currentUser); // Create User instance
 
       // Generate the link using the service with the User instance
-      const generatedUrl = await workoutService.generateShareableRoundLink(collection, userInstance);
+      generatedUrl = await workoutService.generateShareableRoundLink(collection, userInstance);
 
       if (generatedUrl) {
         // Copy to clipboard
-        await navigator.clipboard.writeText(generatedUrl);
-        
-        // Show success feedback (if points weren't already awarded)
-        if (!awardedPoints) {
-           alert('Link copied to clipboard! Ready to paste.'); 
+        try {
+          await navigator.clipboard.writeText(generatedUrl);
+          
+          // Show success feedback (if points weren't already awarded)
+          if (!awardedPoints) {
+             dispatch(showToast({ message: "Link copied to clipboard! Ready to paste.", type: 'success' })); 
+          }
+        } catch (clipboardError) {
+            console.error('Clipboard write failed:', clipboardError);
+            const manualCopyMsg = `Please copy this link manually:\n\n${generatedUrl}`;
+            if (clipboardError instanceof DOMException && clipboardError.name === 'NotAllowedError') {
+              dispatch(showToast({ message: `Copy failed (permission denied). ${manualCopyMsg}`, type: 'warning', duration: 6000 }));
+            } else {
+              dispatch(showToast({ message: `Copy failed. ${manualCopyMsg}`, type: 'warning', duration: 6000 }));
+            }
         }
         
       } else {
         // Handle case where link generation failed
         console.error('Share link generation returned null.');
-        alert('Could not generate the share link at this time.'); 
+        dispatch(showToast({ message: "Could not generate the share link.", type: 'error' }));
       }
-    } catch (error) {
+    } catch (error: any) {
+      // This catch block now primarily handles errors from generateShareableRoundLink
       console.error('Error during share process (link gen/copy):', error);
-      // Provide specific feedback for clipboard errors vs. generation errors if possible
-      alert('Could not copy the share link at this time.'); // Basic error feedback
+      dispatch(showToast({ message: `Could not generate/copy share link: ${error.message || 'Unknown error'}`, type: 'error' }));
     }
   };
   // --- End Share Handler ---
 
-  if (loading) {
-    console.log('[ChallengeDetailView] Rendering Loading...');
-    return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
+  if (error) {
+    return <div className="flex items-center justify-center min-h-screen text-red-500">Error: {error}</div>;
   }
 
-  if (error) {
-    console.log('[ChallengeDetailView] Rendering Error:', error);
-    return <div className="flex items-center justify-center min-h-screen text-red-500">{error}</div>;
+  if (!collection) {
+    return <div className="flex items-center justify-center min-h-screen">Challenge not found or invalid.</div>;
   }
 
   const daysInfo = calculateDays();
