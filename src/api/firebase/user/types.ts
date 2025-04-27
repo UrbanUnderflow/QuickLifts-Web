@@ -377,7 +377,6 @@ export class User {
      
      // Add explicit check for stripeAccountId
      this.stripeAccountId = data.stripeAccountId || undefined;
-     console.log(`Setting stripeAccountId: ${this.stripeAccountId} from data: ${data.stripeAccountId}`);
      
      this.isTrainer = data.isTrainer || false;
      this.digitalSignatures = data.digitalSignatures || [];

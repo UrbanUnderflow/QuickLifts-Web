@@ -8,6 +8,7 @@ import SignInModal from './SignInModal';
 import type { RootState } from '../redux/store';
 import SubscriptionModal from '../components/SignInModal';
 import { useUser } from '../hooks/useUser';
+import { setLoginRedirectPath } from '../redux/tempRedirectSlice';
 
 interface AuthWrapperProps {
  children: React.ReactNode;
@@ -147,6 +148,8 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
             dispatch(setUser(null));
             userService.nonUICurrentUser = null;
             if (!isPublicRoute(router.pathname)) {
+              console.log(`[AuthWrapper] User not authenticated on protected route: ${router.asPath}. Setting redirect path and showing modal.`);
+              dispatch(setLoginRedirectPath(router.asPath));
               setShowSignInModal(true);
             }
           }

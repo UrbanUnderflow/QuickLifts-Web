@@ -2,6 +2,9 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/router';
 import { User as UserIcon, Download, Smartphone, ArrowRight } from 'lucide-react';
 import { Challenge } from '../api/firebase/workout/types';
+import { useUser } from '../hooks/useUser';
+import { useDispatch } from 'react-redux';
+import { setRoundIdRedirect } from '../redux/tempRedirectSlice';
 
 interface OnboardingStep {
   title: string;
@@ -16,6 +19,8 @@ interface ChallengeCTAProps {
 
 const ChallengeCTA: React.FC<ChallengeCTAProps> = ({ challenge, ttclid }) => {
   const router = useRouter();
+  const currentUser = useUser();
+  const dispatch = useDispatch();
   const [showInstructions, setShowInstructions] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
   const isPaid = challenge.pricingInfo?.isEnabled && challenge.pricingInfo?.amount > 0;
@@ -87,8 +92,17 @@ const ChallengeCTA: React.FC<ChallengeCTAProps> = ({ challenge, ttclid }) => {
   };
 
   const handleWebApp = () => {
-    console.log("the web url is: ", webAppUrl);
-    window.location.href = webAppUrl;
+    const targetUrl = `/round/${challenge.id}`;
+
+    // Always set the redirect ID in case the user is logged out
+    // AuthWrapper will handle showing the modal if needed.
+    // SignInModal prioritizes this ID over the path set by AuthWrapper.
+    console.log(`[ChallengeCTA] handleWebApp: Setting roundIdRedirect: ${challenge.id}`);
+    dispatch(setRoundIdRedirect(challenge.id));
+
+    // Always navigate to the target round page.
+    console.log(`[ChallengeCTA] handleWebApp: Navigating to target: ${targetUrl}`);
+    router.push(targetUrl);
   };
 
   if (showInstructions) {

@@ -1,12 +1,12 @@
-import { configureStore } from '@reduxjs/toolkit';
+import { configureStore, combineReducers } from '@reduxjs/toolkit';
 import userReducer from './userSlice';
 import workoutReducer from './workoutSlice';
 import devModeReducer from './devModeSlice';
 import toastReducer from './toastSlice';
 import loadingReducer from './loadingSlice';
+import tempRedirectReducer from './tempRedirectSlice';
 import { persistStore, persistReducer } from 'redux-persist';
 import storage from 'redux-persist-indexeddb-storage';
-import { combineReducers } from 'redux';
 
 // Create persist config for each reducer that needs persistence
 const userPersistConfig = {
@@ -37,6 +37,7 @@ const rootReducer = combineReducers({
   devMode: persistedDevModeReducer,
   toast: toastReducer,
   loading: loadingReducer,
+  tempRedirect: tempRedirectReducer,
 });
 
 // Create the store with the persisted reducer
@@ -45,13 +46,33 @@ export const store = configureStore({
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
       serializableCheck: {
-        // Ignore non-serializable values in the persist/REGISTER action
-        ignoredActions: ['persist/REGISTER', 'persist/REHYDRATE', 'persist/PERSIST'],
+        // Ignore these action types
+        ignoredActions: [
+          'user/setUser', 
+          'tempRedirect/setRoundIdRedirect', // Can ignore if payload is just string
+          'tempRedirect/clearRoundIdRedirect'
+        ],
+        // Ignore these field paths in all actions
+        ignoredActionPaths: [
+          'meta.arg', 
+          'payload.createdAt', 
+          'payload.updatedAt', 
+          'payload.birthdate'
+        ],
+        // Ignore these paths in the state
+        ignoredPaths: [
+          'user.currentUser.createdAt',
+          'user.currentUser.updatedAt',
+          'user.currentUser.birthdate',
+          'user.currentUser.lastActive',
+          'user.currentUser.bodyWeight', 
+          'user.currentUser.macros' 
+        ],
       },
     }),
 });
 
 export const persistor = persistStore(store);
 
-export type RootState = ReturnType<typeof store.getState>;
+export type RootState = ReturnType<typeof rootReducer>;
 export type AppDispatch = typeof store.dispatch;

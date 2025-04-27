@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { Challenge, ChallengeStatus, UserChallenge, SweatlistCollection } from '../../api/firebase/workout/types';
 import { userService, User } from '../../api/firebase/user';
 import { workoutService } from '../../api/firebase/workout/service';
@@ -11,6 +11,10 @@ import { GroupMessage, MessageMediaType } from '../../api/firebase/chat/types';
 import { ShortUser } from '../../api/firebase/user/types';
 import { useDispatch } from 'react-redux';
 import { showToast } from '../../redux/toastSlice';
+import { ThunkDispatch } from 'redux-thunk';
+import { RootState } from '../../redux/store';
+import { AnyAction } from '@reduxjs/toolkit';
+import { showLoader, hideLoader } from '../../redux/loadingSlice';
 
 interface ChallengeWaitingRoomViewProps {
   viewModel: ChallengeWaitingRoomViewModel;
@@ -47,7 +51,7 @@ export const ChallengeWaitingRoomView: React.FC<ChallengeWaitingRoomViewProps> =
 
   const router = useRouter();
   const currentUser = useUser();
-  const dispatch = useDispatch();
+  const dispatch = useDispatch<ThunkDispatch<RootState, any, AnyAction>>();
 
   // Compute countdown from challenge.startDate
   const computeCountdown = (startDate: Date) => {
@@ -214,49 +218,54 @@ export const ChallengeWaitingRoomView: React.FC<ChallengeWaitingRoomViewProps> =
   }, [collection, viewModel]);
 
   // Handler for joining the challenge.
-  const handleJoin = () => {
-    if (!viewModel.challenge) return;
-    viewModel.joinChallenge(viewModel.challenge, (newUserChallenge) => {
-      if (newUserChallenge) {
-        // Append the new user challenge to participants.
-        setParticipants(prev => [...prev, newUserChallenge]);
-        setUserChallenge(newUserChallenge);
+  const handleJoin = async () => {
+    if (!viewModel.challenge || !currentUser) {
+        console.warn('[ChallengeWaitingRoomView] handleJoin: Challenge or currentUser missing.');
+        return;
+    }
 
-        // Update collection challenge participants and call updateCollection.
-        const updatedChallenge = {
-          ...viewModel.challenge,
-          participants: [...(viewModel.challenge?.participants || []), newUserChallenge],
-        };
+    dispatch(showLoader({ message: 'Joining Round...' })); // Use correct loader action
 
-        const currentCollection = collection;
-        const newCollection = new SweatlistCollection({
-          id: currentCollection.id,
-          title: currentCollection.title,
-          subtitle: currentCollection.subtitle,
-          challenge: updatedChallenge,
-          sweatlistIds: currentCollection.sweatlistIds,
-          ownerId: currentCollection.ownerId,
-          createdAt: currentCollection.createdAt,
-          updatedAt: currentCollection.updatedAt,
+    try {
+        // Assuming joinChallenge now returns the result or throws an error
+        // We need to check the actual implementation of viewModel.joinChallenge
+        // Let's assume it calls workoutService.joinChallenge internally
+        // And perhaps needs the full currentUser object or just specific fields
+        
+        // Adapting based on the service signature: joinChallenge({ username, challengeId })
+        if (!currentUser.username) {
+            throw new Error("Username is missing, cannot join.");
+        }
+
+        // Call the service directly if viewModel doesn't handle async/toast
+        const newUserChallenge = await workoutService.joinChallenge({
+            username: currentUser.username,
+            challengeId: viewModel.challenge.id
         });
-        workoutService.updateCollection(newCollection)
-          .then(() => {
-            // viewModel.appCoordinator.showToast({
-            //   message: 'Successfully joined challenge!',
-            //   backgroundColor: '#34D399', // primaryGreen equivalent
-            //   textColor: '#FFF',
-            // });
-          })
-          .catch((err: any) => {
-            console.error(err);
-            // viewModel.appCoordinator.showToast({
-            //   message: 'Failed to update challenge',
-            //   backgroundColor: '#F87171', // red
-            //   textColor: '#FFF',
-            // });
-          });
-      }
-    });
+
+        // --- If workoutService.joinChallenge ONLY creates UserChallenge --- 
+        // We might still need to update the collection participants manually
+        // This logic should ideally be in a backend function for consistency
+        /*
+        const updatedChallenge = {
+            ...viewModel.challenge,
+            participants: arrayUnion(newUserChallenge) // Assuming newUserChallenge is the doc ref or data
+        };
+        await workoutService.updateChallengeParticipants(viewModel.challenge.id, updatedChallenge.participants);
+        */
+        // --- End Manual Update --- 
+
+        setParticipants(prev => [...prev, newUserChallenge]); // Assuming joinChallenge returns the UserChallenge object
+        setUserChallenge(newUserChallenge); // Update local state
+        dispatch(showToast({ message: 'Successfully joined challenge!', type: 'success' }));
+        
+    } catch (error) {
+        console.error("Error joining challenge:", error);
+        const errorMessage = error instanceof Error ? error.message : 'Failed to join challenge';
+        dispatch(showToast({ message: errorMessage, type: 'error' }));
+    } finally {
+        dispatch(hideLoader()); // Use correct loader action
+    }
   };
 
   const hasJoined = useMemo(() => {

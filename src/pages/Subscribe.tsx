@@ -1,13 +1,35 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import SubscriptionCard from '../components/SubscriptionCard';
 import FAQ from '../components/FAQ';
 import { useScrollFade } from '../hooks/useScrollFade';
+import { CheckCircle, Star, Shield, Clock, Zap, Users, UserCheck, Video } from 'lucide-react';
 
-const subscribe: React.FC = () => {
+const Subscribe: React.FC = () => {
+  const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'yearly'>('yearly');
+  
   const openPaymentLink = (url: string) => {
     window.open(url, '_blank');
   };
 
+  // Add subtle parallax effect
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      const elements = document.querySelectorAll('.glass-card');
+      const x = e.clientX / window.innerWidth;
+      const y = e.clientY / window.innerHeight;
+      
+      elements.forEach((el) => {
+        const element = el as HTMLElement;
+        element.style.transform = `translate(${x * 10}px, ${y * 10}px)`;
+      });
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+    };
+  }, []);
+  
   const faqData = [
     {
       question: "What makes Pulse different from other fitness apps?",
@@ -43,192 +65,466 @@ const subscribe: React.FC = () => {
     }
   ];
 
+  // Testimonials data
+  const testimonials = [
+    {
+      name: "Antonio",
+      image: "/testimonial-1.png",
+      text: "I love that with the app you have the ability to not only can concentrate on specific body parts but you also can share your workout videos with your community of folks. You can learn so much about what you're doing but also how you're doing it through the app. I would definitely recommend this for beginners but also advanced trainers that are looking for a way to bring their fitness community together and share each others experience working out.",
+      rating: 5
+    },
+    {
+      name: "Bobby",
+      image: "/testimonial-2.png",
+      text: "I found PULSE to be really intuitive and helpful for my workouts. Having videos that I can refer myself and clients to is awesome. It legit shows you HOW to do any exercise. 😎 The tracking is clutch. I'm not carrying my notebook around scribbling my weight and manually tracking my progress. It's all kept right here for me. I haven't used the AI feature yet, but I'm excited to incorporate this into my workouts. 💪🏾",
+      rating: 5
+    },
+    {
+      name: "Ellie",
+      image: "/testimonial-3.png",
+      text: "Great way to track my fitness goals and share my progress with others for motivation! App is so easy to use and navigate!",
+      rating: 5
+    }
+  ];
+
+  // CSS classes for glassmorphism
+  const glassBg = "relative backdrop-blur-lg bg-black/30 border border-white/10 shadow-xl";
+  const glassCard = "glass-card transition-all duration-300 relative backdrop-blur-lg bg-white/5 border border-white/10 shadow-xl hover:bg-white/10 hover:border-white/20 hover:shadow-2xl";
+  const glassPrimary = "backdrop-blur-lg bg-[#E0FE10]/90 text-black border border-[#E0FE10]/50 shadow-lg shadow-[#E0FE10]/20 hover:bg-[#E0FE10] transition-all";
+  const glassSecondary = "backdrop-blur-lg bg-white/5 text-white border border-white/10 shadow-lg hover:bg-white/10 transition-all";
+  
+  // Gradient text classes
+  const gradientText = "text-transparent bg-clip-text bg-gradient-to-r from-[#E0FE10] to-[#B8FE00]";
+
   return (
-    <div className="min-h-screen bg-zinc-900">
-      <div className="pt-10 pb-10"> {/* explicit padding instead of margin */}
-      {/* Hero Section */}
-        <section className="max-w-[1052.76px] mx-auto text-center my-10" ref={useScrollFade()}>
-          <h2 className="text-[#E0FE10] uppercase tracking-wide font-semibold mb-4">
-            Membership
-          </h2>
-          <h1 className="text-white text-5xl sm:text-6xl font-bold mb-6">
-            Join The Fitness Collective
+    <div className="min-h-screen bg-black">
+      {/* Background gradient effects */}
+      <div className="fixed inset-0 z-0 pointer-events-none">
+        <div className="absolute top-0 left-1/4 w-1/2 h-1/2 bg-[#E0FE10]/20 rounded-full blur-[150px] transform -translate-x-1/2 -translate-y-1/2"></div>
+        <div className="absolute bottom-0 right-1/4 w-1/2 h-1/2 bg-purple-600/20 rounded-full blur-[150px] transform translate-x-1/2 translate-y-1/2"></div>
+        <div className="absolute top-1/2 left-1/2 w-1/2 h-1/2 bg-blue-600/10 rounded-full blur-[150px] transform -translate-x-1/2 -translate-y-1/2"></div>
+      </div>
+
+      <div className="relative z-10">
+        {/* Hero Section - Glassmorphic style */}
+        <section className="max-w-[1052.76px] mx-auto text-center pt-24 pb-16 px-4" ref={useScrollFade()}>
+          <h1 className={`${gradientText} text-6xl sm:text-7xl font-bold mb-6 tracking-tight`}>
+            Transform Your Fitness Journey
           </h1>
-          <p className="text-zinc-400 text-xl">
-            First month on us!
+          <p className="text-white text-xl max-w-2xl mx-auto mb-6 leading-relaxed">
+            Join thousands of members who have elevated their workout experience with Pulse
           </p>
-        </section>
-
-        {/* Feature List */}
-        <section className="flex flex-col space-y-6 max-w-[500px] mx-auto text-left mt-8 mb-20 px-4 sm:px-0" ref={useScrollFade()}>
-          <div className="flex items-center gap-4">
-            <span className="text-zinc-400 text-xl font-medium leading-7">Unlock your potential with:</span>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="w-[22px] h-[22px] flex items-center justify-center bg-[#E0FE10] rounded-full">
-              <span className="text-black">✓</span>
+          <div className="flex items-center justify-center space-x-2 text-zinc-400">
+            <div className="flex">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <Star key={star} fill="#E0FE10" color="#E0FE10" size={20} />
+              ))}
             </div>
-            <span className="text-zinc-400 text-xl font-medium leading-7">Quick and easy access to workouts when you need them.</span>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="w-[22px] h-[22px] flex items-center justify-center bg-[#E0FE10] rounded-full">
-              <span className="text-black">✓</span>
-            </div>
-            <span className="text-zinc-400 text-xl font-medium leading-7">Videos from community members that makes your exercises selection, endless.</span>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="w-[22px] h-[22px] flex items-center justify-center bg-[#E0FE10] rounded-full">
-              <span className="text-black">✓</span>
-            </div>
-            <span className="text-zinc-400 text-xl font-medium leading-7">Intelligent workout tracking using AI, to create deep insight into your workouts</span>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="w-[22px] h-[22px] flex items-center justify-center bg-[#E0FE10] rounded-full">
-              <span className="text-black">✓</span>
-            </div>
-            <span className="text-zinc-400 text-xl font-medium leading-7">You get 30 days free trial on us!</span>
+            <span>4.9/5 from 2,000+ reviews</span>
           </div>
         </section>
 
-        {/* Subscription Cards */}
-        <section className="w-full bg-zinc-800 py-20" ref={useScrollFade()}>
-          <div className="flex flex-col sm:flex-row justify-center items-center gap-8 max-w-[1052.76px] mx-auto">
-            <SubscriptionCard
-              price="$4.99"
-              period="mo"
-              description="Flexible, in case you decide to go it alone after a month."
-              titleColor="text-white"
-              textColor="text-zinc-400"
-              backgroundColor="bg-zinc-900"
-              actionText="Subscribe Now"
-              actionBgColor="bg-[#E0FE10]"
-              actionTextColor="text-black"
-              onActionClick={() => openPaymentLink('https://buy.stripe.com/9AQaFieX9bv26fSfYY')}
-            />
+        {/* Limited Time Offer Banner */}
+        <div className={`${glassPrimary} py-3 text-center mb-16 mx-4 sm:mx-auto max-w-3xl rounded-full`}>
+          <p className="text-black font-bold text-lg flex items-center justify-center">
+            <Clock size={18} className="mr-2" />
+            Limited Time Offer: First month FREE + 33% saved annually
+          </p>
+        </div>
 
-            <SubscriptionCard
-              price="$39.99"
-              period="yr"
-              description="Cost Effective, with commitment to your journey."
-              titleColor="text-white"
-              textColor="text-zinc-400"
-              backgroundColor="bg-zinc-900"
-              actionBgColor="bg-[#E0FE10]"
-              actionText="Try now for 30 days"
-              actionTextColor="text-black"
-              onActionClick={() => openPaymentLink('https://buy.stripe.com/28obJm2an8iQdIk289')}
-            />
+        {/* Subscription Cards - Glassmorphic and with clear comparison */}
+        <section className="max-w-[1052.76px] mx-auto px-4 mb-24" ref={useScrollFade()}>
+          <div className="mb-12 text-center">
+            <h2 className="text-white text-3xl sm:text-4xl font-bold mb-4">
+              Choose Your <span className={gradientText}>Membership Plan</span>
+            </h2>
+            <p className="text-zinc-400">
+              All plans include full access to all features. Cancel anytime.
+            </p>
+          </div>
+
+          {/* Toggle between plans */}
+          <div className="flex justify-center mb-10">
+            <div className={`${glassBg} p-1 rounded-full inline-flex`}>
+              <button
+                className={`px-6 py-2 rounded-full text-sm font-medium transition-all duration-300 ${
+                  selectedPlan === 'monthly' 
+                    ? 'bg-white/10 text-white' 
+                    : 'bg-transparent text-zinc-400 hover:text-white'
+                }`}
+                onClick={() => setSelectedPlan('monthly')}
+              >
+                Monthly
+              </button>
+              <button
+                className={`px-6 py-2 rounded-full text-sm font-medium transition-all duration-300 ${
+                  selectedPlan === 'yearly' 
+                    ? 'bg-white/10 text-white' 
+                    : 'bg-transparent text-zinc-400 hover:text-white'
+                }`}
+                onClick={() => setSelectedPlan('yearly')}
+              >
+                Yearly <span className="text-[#E0FE10]">Save 33%</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row justify-center items-stretch gap-8 max-w-4xl mx-auto">
+            {/* Monthly Plan */}
+            <div 
+              className={`${glassCard} relative flex-1 rounded-2xl overflow-hidden transition-all duration-500 ${
+                selectedPlan === 'monthly' 
+                  ? 'border-[#E0FE10]/30 scale-100 opacity-100 z-10' 
+                  : 'border-transparent scale-95 opacity-70'
+              }`}
+              style={{display: selectedPlan === 'monthly' ? 'block' : selectedPlan === 'yearly' ? 'none' : 'block'}}
+            >
+              <div className="p-8">
+                <div className="text-white text-2xl font-bold mb-2">Monthly Plan</div>
+                <div className="flex items-end mb-6">
+                  <span className="text-5xl font-bold text-white">$4.99</span>
+                  <span className="text-zinc-400 ml-2">/month</span>
+                </div>
+                
+                <ul className="space-y-4 mb-8">
+                  <li className="flex items-start">
+                    <CheckCircle className="text-[#E0FE10] mr-3 mt-1 flex-shrink-0" size={20} />
+                    <span className="text-zinc-300">Full access to all Pulse features</span>
+                  </li>
+                  <li className="flex items-start">
+                    <CheckCircle className="text-[#E0FE10] mr-3 mt-1 flex-shrink-0" size={20} />
+                    <span className="text-zinc-300">Access to new exercises added daily</span>
+                  </li>
+                  <li className="flex items-start">
+                    <CheckCircle className="text-[#E0FE10] mr-3 mt-1 flex-shrink-0" size={20} />
+                    <span className="text-zinc-300">Cancel anytime</span>
+                  </li>
+                </ul>
+                
+                <button 
+                  onClick={() => openPaymentLink('https://buy.stripe.com/9AQaFieX9bv26fSfYY')}
+                  className={`w-full py-4 rounded-full text-lg font-semibold transition-all ${glassSecondary}`}
+                >
+                  Start Monthly Plan
+                </button>
+              </div>
+            </div>
+            
+            {/* Yearly Plan - Featured plan */}
+            <div 
+              className={`${glassCard} relative flex-1 rounded-2xl overflow-hidden transition-all duration-500 ${
+                selectedPlan === 'yearly' 
+                  ? 'border-[#E0FE10]/30 scale-100 opacity-100 z-10' 
+                  : 'border-transparent scale-95 opacity-70'
+              }`}
+              style={{display: selectedPlan === 'yearly' ? 'block' : selectedPlan === 'monthly' ? 'none' : 'block'}}
+            >
+              <div className="absolute top-0 w-full bg-[#E0FE10]/90 backdrop-blur-sm text-black py-1 text-center font-semibold">
+                MOST POPULAR — SAVE 33%
+              </div>
+              <div className="p-8 pt-12">
+                <div className="text-white text-2xl font-bold mb-2">Annual Plan</div>
+                <div className="flex items-end mb-2">
+                  <span className="text-5xl font-bold text-white">$39.99</span>
+                  <span className="text-zinc-400 ml-2">/year</span>
+                </div>
+                <div className="text-zinc-400 mb-6">Just $3.33/month</div>
+                
+                <ul className="space-y-4 mb-8">
+                  <li className="flex items-start">
+                    <CheckCircle className="text-[#E0FE10] mr-3 mt-1 flex-shrink-0" size={20} />
+                    <span className="text-zinc-300">All Monthly Plan features</span>
+                  </li>
+                  <li className="flex items-start">
+                    <CheckCircle className="text-[#E0FE10] mr-3 mt-1 flex-shrink-0" size={20} />
+                    <span className="text-zinc-300"><strong>33% savings</strong> vs monthly plan</span>
+                  </li>
+                  <li className="flex items-start">
+                    <CheckCircle className="text-[#E0FE10] mr-3 mt-1 flex-shrink-0" size={20} />
+                    <span className="text-zinc-300">Priority customer support</span>
+                  </li>
+                  <li className="flex items-start">
+                    <CheckCircle className="text-[#E0FE10] mr-3 mt-1 flex-shrink-0" size={20} />
+                    <span className="text-zinc-300">Early access to new features</span>
+                  </li>
+                </ul>
+                
+                <button 
+                  onClick={() => openPaymentLink('https://buy.stripe.com/28obJm2an8iQdIk289')}
+                  className={`w-full py-4 rounded-full text-lg font-semibold transition-all ${glassPrimary}`}
+                >
+                  Get Started — First Month Free
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Guarantee and Trust Elements */}
+          <div className={`${glassBg} flex flex-col sm:flex-row justify-center items-center gap-6 mt-10 text-center rounded-2xl p-4`}>
+            <div className="flex items-center text-zinc-300">
+              <Shield size={20} className="mr-2 text-[#E0FE10]" />
+              <span>Secure payment</span>
+            </div>
+            <div className="flex items-center text-zinc-300">
+              <Clock size={20} className="mr-2 text-[#E0FE10]" />
+              <span>Cancel anytime</span>
+            </div>
           </div>
         </section>
 
-        {/* Features Grid */}
+        {/* Social Proof Section */}
+        <section className={`w-full ${glassBg} py-20 mb-24 relative overflow-hidden`} ref={useScrollFade()}>
+          {/* Background decoration */}
+          <div className="absolute -top-24 -left-24 w-48 h-48 bg-[#E0FE10]/10 rounded-full blur-[100px]"></div>
+          <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-[#E0FE10]/10 rounded-full blur-[100px]"></div>
+          
+          <div className="max-w-[1052.76px] mx-auto px-4 relative z-10">
+            <h2 className="text-white text-3xl sm:text-4xl font-bold mb-16 text-center">
+              Join <span className={gradientText}>100,000+ members</span> transforming their fitness journey
+            </h2>
+            
+            <div className="flex flex-wrap justify-center gap-8">
+              {testimonials.map((testimonial, index) => (
+                <div key={index} className={`${glassCard} rounded-2xl p-6 max-w-sm`}>
+                  <div className="flex mb-4">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <Star 
+                        key={star} 
+                        fill={star <= testimonial.rating ? "#E0FE10" : "transparent"} 
+                        color="#E0FE10" 
+                        size={18} 
+                      />
+                    ))}
+                  </div>
+                  <p className="text-zinc-300 mb-6 line-clamp-6">"{testimonial.text}"</p>
+                  <div className="flex items-center">
+                    <span className="text-white font-medium">- {testimonial.name}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Value Proposition Section */}
         <section className="max-w-[1052.76px] mx-auto px-4 py-20" ref={useScrollFade()}>
-          <div className="flex flex-col gap-4 sm:gap-6 mb-12">
-            <div className="text-[#E0FE10] text-3xl sm:text-4xl font-normal uppercase leading-9">
-              Our users are most excited about
+          <h2 className="text-white text-3xl sm:text-4xl font-bold mb-16 text-center">
+            What makes Pulse the <span className={gradientText}>perfect fitness companion</span>
+          </h2>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {/* Moved Video Feature First */}
+            <div className={`${glassCard} rounded-2xl p-8 text-center hover:translate-y-[-8px]`}>
+              <div className="flex justify-center mb-6">
+                <div className="w-20 h-20 rounded-full bg-[#E0FE10]/20 flex items-center justify-center">
+                  <Video size={32} className="text-[#E0FE10]" /> 
+                </div>
+              </div>
+              <h3 className="text-white text-2xl font-bold mb-3">Video-First Exercises</h3>
+              <p className="text-zinc-400">Every move includes a quick (&lt;30s) video demonstration focusing purely on the exercise form.</p>
             </div>
-            <div className="text-white text-[40px] sm:text-[64px] font-bold leading-[45px] sm:leading-[79px]">
-              Stand out features that Pulse has to offer
+            
+            <div className={`${glassCard} rounded-2xl p-8 text-center hover:translate-y-[-8px]`}>
+              <div className="flex justify-center mb-6">
+                <div className="w-20 h-20 rounded-full bg-[#E0FE10]/20 flex items-center justify-center">
+                  <Zap size={32} className="text-[#E0FE10]" />
+                </div>
+              </div>
+              <h3 className="text-white text-2xl font-bold mb-3">AI-Powered Workouts</h3>
+              <p className="text-zinc-400">Personalized recommendations that evolve with your progress and preferences</p>
+            </div>
+            
+            {/* Swapped: Rounds & Challenges now third */}
+            <div className={`${glassCard} rounded-2xl p-8 text-center hover:translate-y-[-8px]`}>
+              <div className="flex justify-center mb-6">
+                <div className="w-20 h-20 rounded-full bg-[#E0FE10]/20 flex items-center justify-center">
+                  <Users size={32} className="text-[#E0FE10]" />
+                </div>
+              </div>
+              <h3 className="text-white text-2xl font-bold mb-3">Rounds & Challenges</h3>
+              <p className="text-zinc-400">Join group challenges, compete with the community, and follow structured round programs.</p>
             </div>
           </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-8">
+            <div className={`${glassCard} rounded-2xl p-8 text-center hover:translate-y-[-8px]`}>
+              <div className="flex justify-center mb-6">
+                <div className="w-20 h-20 rounded-full bg-[#E0FE10]/20 flex items-center justify-center">
+                  <Shield size={32} className="text-[#E0FE10]" />
+                </div>
+              </div>
+              <h3 className="text-white text-2xl font-bold mb-3">Progress Tracking</h3>
+              <p className="text-zinc-400">Comprehensive tools to track your fitness journey and celebrate your achievements</p>
+            </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8">
-            {/* Feature 1 */}
-            <div className="bg-zinc-800 rounded-xl p-6">
-              <div className="aspect-[9/11] bg-zinc-900 rounded-lg overflow-hidden">
+            {/* Swapped: Community Driven now fourth */}
+            <div className={`${glassCard} rounded-2xl p-8 text-center hover:translate-y-[-8px]`}>
+              <div className="flex justify-center mb-6">
+                <div className="w-20 h-20 rounded-full bg-[#E0FE10]/20 flex items-center justify-center">
+                  <Users size={32} className="text-[#E0FE10]" />
+                </div>
+              </div>
+              <h3 className="text-white text-2xl font-bold mb-3">Community Driven</h3>
+              <p className="text-zinc-400">Access thousands of user-generated workouts and connect with like-minded fitness enthusiasts</p>
+            </div>
+
+            {/* Added Coaching Feature - Now fifth */}
+            <div className={`${glassCard} rounded-2xl p-8 text-center hover:translate-y-[-8px]`}>
+              <div className="flex justify-center mb-6">
+                <div className="w-20 h-20 rounded-full bg-[#E0FE10]/20 flex items-center justify-center">
+                  <UserCheck size={32} className="text-[#E0FE10]" />
+                </div>
+              </div>
+              <h3 className="text-white text-2xl font-bold mb-3">1-on-1 Coaching</h3>
+              <p className="text-zinc-400">Discover experienced trainers and work with them directly for a personalized fitness plan.</p>
+            </div>
+          </div>
+        </section>
+
+        {/* Features Grid - Glassmorphic */}
+        <section className="max-w-[1052.76px] mx-auto px-4 py-24 relative" ref={useScrollFade()}>
+          {/* Background decoration */}
+          <div className="absolute -top-48 left-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-[120px]"></div>
+          <div className="absolute -bottom-48 right-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-[120px]"></div>
+            
+          <div className="relative z-10 mb-16 text-center">
+            <h2 className="text-white text-3xl sm:text-4xl font-bold mb-4">
+              Everything you need for <span className={gradientText}>fitness success</span>
+            </h2>
+            <p className="text-zinc-400 max-w-2xl mx-auto">
+              Unlock all these features and more with your Pulse subscription
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 relative z-10">
+            {/* Feature cards */}
+            <div className={`${glassCard} rounded-2xl p-6 flex flex-col h-full hover:translate-y-[-8px]`}>
+              <div className="aspect-video bg-black/50 rounded-xl overflow-hidden mb-6">
                 <img src="/choose-body-parts-phone.png" alt="Body Part Selection" className="w-full h-full object-cover" />
               </div>
-              <div className="text-white text-[22.5px] font-bold leading-loose mt-4">Body Part Selection</div>
-              <div className="text-zinc-400 text-base leading-tight">
+              <div className="text-white text-2xl font-bold mb-3">Body Part Selection</div>
+              <div className="text-zinc-400 text-base flex-grow">
                 Select exactly which body parts you want to workout, with instant access to complementary exercises.
               </div>
             </div>
 
-            {/* Feature 2 */}
-            <div className="bg-zinc-800 rounded-xl p-6">
-              <div className="aspect-[9/11] bg-zinc-900 rounded-lg overflow-hidden">
+            <div className={`${glassCard} rounded-2xl p-6 flex flex-col h-full hover:translate-y-[-8px]`}>
+              <div className="aspect-video bg-black/50 rounded-xl overflow-hidden mb-6">
                 <img src="/discover-exercise-phone.png" alt="Exercise Discovery" className="w-full h-full object-cover" />
               </div>
-              <div className="text-white text-[22.5px] font-bold leading-loose mt-4">Exercise Discovery</div>
-              <div className="text-zinc-400 text-base leading-tight">
+              <div className="text-white text-2xl font-bold mb-3">Exercise Discovery</div>
+              <div className="text-zinc-400 text-base flex-grow">
                 Find your exercise, and create workouts that complement each other based off of cool exercise that you discover.
               </div>
             </div>
 
-            {/* Feature 3 */}
-            <div className="bg-zinc-800 rounded-xl p-6">
-              <div className="aspect-[9/11] bg-zinc-900 rounded-lg overflow-hidden">
+            <div className={`${glassCard} rounded-2xl p-6 flex flex-col h-full hover:translate-y-[-8px]`}>
+              <div className="aspect-video bg-black/50 rounded-xl overflow-hidden mb-6">
                 <img src="/progress-log.png" alt="Progress Logs" className="w-full h-full object-cover" />
               </div>
-              <div className="text-white text-[22.5px] font-bold leading-loose mt-4">Progress Logs</div>
-              <div className="text-zinc-400 text-base leading-tight">
+              <div className="text-white text-2xl font-bold mb-3">Progress Logs</div>
+              <div className="text-zinc-400 text-base flex-grow">
                 Logging reps, sets, and weight allows you to view your history of every workout.
               </div>
             </div>
+          </div>
+          
+          <div className="mt-16 text-center relative z-10">
+            <button 
+              onClick={() => {
+                const element = document.getElementById('subscription-section');
+                element?.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className={`${glassPrimary} px-10 py-4 rounded-full text-lg font-semibold`}
+            >
+              Get Started Today
+            </button>
+          </div>
+        </section>
 
-            {/* Additional Features */}
-            <div className="bg-zinc-800 rounded-xl p-6">
-              <div className="aspect-[9/11] bg-zinc-900 rounded-lg overflow-hidden">
-                <img src="/workout-log-phone.png" alt="Workout Logging" className="w-full h-full object-cover" />
-              </div>
-              <div className="text-white text-[22.5px] font-bold leading-loose mt-4">Workout Logging</div>
-              <div className="text-zinc-400 text-base leading-tight">
-                Log your sets, reps, and weight to achieve results through progressive overload.
-              </div>
-            </div>
-
-            <div className="bg-zinc-800 rounded-xl p-6">
-              <div className="aspect-[9/11] bg-zinc-900 rounded-lg overflow-hidden">
-                <img src="/record-exercise-phone.png" alt="Record Exercise" className="w-full h-full object-cover" />
-              </div>
-              <div className="text-white text-[22.5px] font-bold leading-loose mt-4">Record Your Exercise</div>
-              <div className="text-zinc-400 text-base leading-tight">
-                Record yourself performing each of your workouts and then edit the videos for optimal results.
-              </div>
-            </div>
-
-            <div className="bg-zinc-800 rounded-xl p-6">
-              <div className="aspect-[9/11] bg-zinc-900 rounded-lg overflow-hidden">
-                <img src="/exercise-vault-phone.png" alt="Exercise Vault" className="w-full h-full object-cover" />
-              </div>
-              <div className="text-white text-[22.5px] font-bold leading-loose mt-4">The Exercise Vault</div>
-              <div className="text-zinc-400 text-base leading-tight">
-                Search across our database of exercises we call "The Exercise Vault" to quickly find exercises.
-              </div>
+        {/* FAQ Section - Glassmorphic */}
+        <section className={`${glassBg} py-24 relative overflow-hidden`} ref={useScrollFade()}>
+          {/* Background decoration */}
+          <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-[#E0FE10]/5 to-transparent"></div>
+          
+          <div className="max-w-[1052.76px] mx-auto px-4 relative z-10">
+            <h2 className="text-white text-3xl sm:text-4xl font-bold mb-16 text-center">
+              Frequently Asked <span className={gradientText}>Questions</span>
+            </h2>
+            
+            <div className="max-w-3xl mx-auto">
+              {faqData.map((item, index) => (
+                <div key={index} className={`${glassCard} mb-6 rounded-2xl p-6`}>
+                  <h3 className="text-white text-xl font-medium mb-3">{item.question}</h3>
+                  <p className="text-zinc-400">{item.answer}</p>
+                </div>
+              ))}
             </div>
           </div>
         </section>
 
-        {/* FAQ Section */}
-        <section className="bg-zinc-800" ref={useScrollFade()}>
-          <FAQ title="Frequently Asked Questions" items={faqData} theme="dark" />
+        {/* Final CTA Section */}
+        <section id="subscription-section" ref={useScrollFade()} className="py-24 relative overflow-hidden">
+          {/* Background decoration */}
+          <div className="absolute inset-0 bg-gradient-to-b from-black/0 via-[#E0FE10]/5 to-black/0"></div>
+          <div className="absolute top-1/2 left-1/2 w-[500px] h-[500px] bg-[#E0FE10]/10 rounded-full blur-[150px] transform -translate-x-1/2 -translate-y-1/2"></div>
+          
+          <div className="relative z-10 flex flex-col items-center justify-center text-center p-8">
+            <div className={`mb-6 inline-block ${glassBg} backdrop-blur-md px-6 py-3 rounded-full`}>
+              <span className="text-[#E0FE10] font-medium">Limited Time Offer</span>
+            </div>
+            
+            <h2 className="text-white text-4xl sm:text-5xl lg:text-6xl font-bold mb-6">
+              Start your <span className={gradientText}>30-day free trial</span> today
+            </h2>
+            
+            <p className="text-zinc-400 text-xl max-w-2xl mb-12">
+              Join thousands of members who have transformed their fitness journey with Pulse
+            </p>
+
+            <div className="flex flex-col sm:flex-row gap-6 mb-12">
+              <button 
+                onClick={() => openPaymentLink('https://buy.stripe.com/28obJm2an8iQdIk289')}
+                className={`${glassPrimary} px-10 py-4 rounded-full text-lg font-semibold shadow-lg shadow-[#E0FE10]/20`}
+              >
+                Start Free Trial — Annual Plan
+              </button>
+
+              <button 
+                onClick={() => openPaymentLink('https://buy.stripe.com/9AQaFieX9bv26fSfYY')}
+                className={`${glassSecondary} px-10 py-4 rounded-full text-lg font-semibold`}
+              >
+                Start Monthly Subscription
+              </button>
+            </div>
+
+            <div className={`${glassBg} rounded-full py-3 px-6 flex flex-col sm:flex-row justify-center items-center gap-6 text-center max-w-2xl mx-auto`}>
+              <div className="flex items-center text-zinc-400">
+                <Clock size={16} className="mr-2 text-[#E0FE10]" />
+                <span>Cancel anytime</span>
+              </div>
+            </div>
+            
+            <div className="mt-16">
+              <a 
+                href="https://apps.apple.com/ca/app/pulse-community-workouts/id6451497729"
+                className="text-[#E0FE10] hover:underline mx-4"
+              >
+                Download iOS App
+              </a>
+              <span className="text-zinc-600 mx-3">|</span>
+              <a 
+                href="https://fitwithpulse.ai"
+                className="text-[#E0FE10] hover:underline mx-4"
+              >
+                Use Web App
+              </a>
+            </div>
+          </div>
         </section>
       </div>
-
-      {/* Call to Action */}
-      <section ref={useScrollFade()} className="min-h-[50vh] bg-black flex flex-col items-center justify-center text-center p-8">
-        <h2 className="text-white text-5xl sm:text-6xl font-bold mb-6">
-          Ready to start recording?
-        </h2>
-        <p className="text-zinc-400 text-xl max-w-2xl mb-10">
-          Join the Pulse community and start building your Move library today.
-        </p>
-        <a 
-          href="https://apps.apple.com/ca/app/pulse-community-workouts/id6451497729"
-          className="bg-[#E0FE10] text-black px-12 py-4 rounded-full text-lg font-semibold hover:bg-[#E0FE10]/90 transition-colors"
-        >
-          Download iOS App Now
-        </a>
-
-        <a 
-          href="https://fitwithpulse.ai"
-          className="text-[#E0FE10] px-12 py-4 rounded-full text-lg font-semibold hover:text-[#E0FE10]/90 transition-colors"
-        >
-          Use Our Web App
-        </a>
-      </section>
     </div>
   );
 };
 
-export default subscribe;
+export default Subscribe;

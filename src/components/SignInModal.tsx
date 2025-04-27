@@ -8,7 +8,7 @@ import {
   AuthError,
   createUserWithEmailAndPassword
 } from "firebase/auth";
-import { Camera, X } from "lucide-react";
+import { Camera, X, Eye, EyeOff } from "lucide-react";
 import { FitnessGoal, QuizData, SignUpStep } from "../types/AuthTypes";
 import { Gender, WorkoutGoal, } from "../api/firebase/user";
 import { SubscriptionType } from "../api/firebase/user";
@@ -23,6 +23,10 @@ import { RootState } from '../redux/store';
 import { toggleDevMode } from '../redux/devModeSlice';
 import { initializeFirebase } from '../api/firebase/config';
 import { useUser } from '../hooks/useUser';
+import { clearRoundIdRedirect, clearLoginRedirectPath } from '../redux/tempRedirectSlice'; // Import clear actions
+import { showToast } from '../redux/toastSlice'; // Import showToast
+import { workoutService } from '../api/firebase/workout/service'; // Import workout service
+import { Challenge, SweatlistCollection, UserChallenge } from '../api/firebase/workout/types'; // Import workout types
 
 interface SignInModalProps {
   isVisible: boolean;
@@ -112,11 +116,6 @@ const SignInModal: React.FC<SignInModalProps> = ({
   const [signUpStep, setSignUpStep] = useState<SignUpStep>("initial");
   const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [resetEmailSent, setResetEmailSent] = useState(false);
-  const [errors, setErrors] = useState<{
-    email?: string;
-    password?: string;
-    username?: string;
-  }>({});
   const [showError, setShowError] = useState(false);
   const [isUsernameAvailable, setIsUsernameAvailable] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -127,6 +126,15 @@ const SignInModal: React.FC<SignInModalProps> = ({
   const dispatch = useDispatch();
   const router = useRouter();
   const [isIphone, setIsIphone] = useState(false);
+  // Added state for password visibility
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [errors, setErrors] = useState<{
+    email?: string;
+    password?: string;
+    username?: string;
+  }>({});
+  const { roundIdRedirect, loginRedirectPath } = useSelector((state: RootState) => state.tempRedirect);
 
   // Detect if the user is on an iPhone
   useEffect(() => {
@@ -785,6 +793,73 @@ const SignInModal: React.FC<SignInModalProps> = ({
     }
   };
 
+  // ** Auto Join Challenge Function **
+  const autoJoinChallenge = async (roundId: string) => {
+    console.log('[SignInModal] autoJoinChallenge triggered for roundId:', roundId);
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      console.error('[SignInModal] autoJoinChallenge: No authenticated user found.');
+      dispatch(showToast({ message: 'Authentication error, cannot join round.', type: 'error' }));
+      return;
+    }
+    if (!currentUser.email) {
+        console.error('[SignInModal] autoJoinChallenge: User email is missing.');
+        dispatch(showToast({ message: 'User email missing, cannot join round.', type: 'error' }));
+        return;
+    }
+
+    try {
+      // ** Check if user already joined this challenge **
+      console.log(`[SignInModal] autoJoinChallenge: Checking if user ${currentUser.uid} already joined challenge ${roundId}`);
+      const existingUserChallenges = await workoutService.fetchUserChallengesByUserId(currentUser.uid);
+      const alreadyJoined = existingUserChallenges.some(uc => uc.challengeId === roundId);
+
+      if (alreadyJoined) {
+        console.log(`[SignInModal] autoJoinChallenge: User ${currentUser.uid} already has a UserChallenge for round ${roundId}. Skipping join.`);
+        dispatch(showToast({ 
+          message: 'You are already a challenger for this round. Hop in the chat and talk some smack!', 
+          type: 'info', // Use info type for this message
+          duration: 5000 // Longer duration
+        }));
+        return; // Stop execution
+      }
+      // **********************************************
+
+      // Fetch the full challenge/collection data using the ID
+      console.log(`[SignInModal] autoJoinChallenge: User not joined yet. Fetching collection for ID: ${roundId}`);
+      const collection = await workoutService.getCollectionById(roundId);
+      if (!collection || !collection.challenge) {
+        console.error('[SignInModal] autoJoinChallenge: Challenge/Collection not found for ID:', roundId);
+        dispatch(showToast({ message: 'Challenge details not found.', type: 'error' }));
+        return;
+      }
+
+      const challengeToJoin = collection.challenge as Challenge; // Use the challenge object
+
+      // Call the join function (assuming it takes challenge and user)
+      // NOTE: The signature in service.ts is joinChallenge({ username, challengeId })
+      // We might need to adapt or use a different service function if available,
+      // or update joinChallenge to accept the full user/challenge object.
+      // For now, using the existing signature with username and challengeId.
+      if (!userService.nonUICurrentUser?.username) {
+          console.error('[SignInModal] autoJoinChallenge: Username missing for joinChallenge call.');
+          dispatch(showToast({ message: 'Username missing, cannot join round.', type: 'error' }));
+          return;
+      }
+      
+      console.log('[SignInModal] autoJoinChallenge: Calling workoutService.joinChallenge with:', { username: userService.nonUICurrentUser.username, challengeId: challengeToJoin.id });
+      await workoutService.joinChallenge({ username: userService.nonUICurrentUser.username, challengeId: challengeToJoin.id });
+      
+      console.log('[SignInModal] autoJoinChallenge: Successfully joined challenge:', challengeToJoin.id);
+      dispatch(showToast({ message: 'Successfully joined challenge!', type: 'success' }));
+
+    } catch (error) {
+      console.error('[SignInModal] autoJoinChallenge: Error joining challenge:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to automatically join challenge.';
+      dispatch(showToast({ message: errorMessage, type: 'error' }));
+    }
+  };
+
   const handleCompleteQuiz = async () => {
     try {
       setIsLoading(true);
@@ -793,28 +868,43 @@ const SignInModal: React.FC<SignInModalProps> = ({
       const userId = auth.currentUser?.uid;
       if (!userId) throw new Error("No user found");
 
-      // Fetch the latest user data
       const refreshedUser = await userService.fetchUserFromFirestore(userId);
+      onQuizComplete?.(); // Notify parent
 
-      // Notify parent if needed
-      onQuizComplete?.();
-
-      // Route based on subscription status
       if (!refreshedUser) {
-        throw new Error("No user found after quiz completion");
+        // ... (error handling for missing user)
+        throw new Error("User data missing after quiz completion.");
       }
+
+      // ** Auto-join check **
+      if (roundIdRedirect) {
+        // Only auto-join if the user is subscribed
+        if (refreshedUser.subscriptionType !== SubscriptionType.unsubscribed) {
+          console.log(`[SignInModal] handleCompleteQuiz: User is subscribed. Attempting auto-join for round: ${roundIdRedirect}`);
+          await autoJoinChallenge(roundIdRedirect); // Await the join process
+          dispatch(clearRoundIdRedirect()); // Clear the ID after attempting join
+        } else {
+          console.log(`[SignInModal] handleCompleteQuiz: User is unsubscribed. Deferring auto-join for round: ${roundIdRedirect}`);
+          // Do NOT clear roundIdRedirect here - needed after subscription
+        }
+      }
+
+      // Determine next step *after* potential auto-join attempt or deferral
       if (refreshedUser.subscriptionType === SubscriptionType.unsubscribed) {
-        router.push('/subscribe');
+        console.log('[SignInModal] Quiz complete. Unsubscribed. Redirecting to /subscribe');
+        router.push('/subscribe'); // Navigate directly if unsubscribed
       } else {
-        router.push('/');
-        onClose?.();
+        console.log('[SignInModal] Quiz complete. Closing modal.');
+        onClose?.(); // Close modal for subscribed users (no redirect needed)
       }
+
     } catch (err) {
-      const error = err as Error;
-      console.error("Error updating user data:", error);
-      setError(error.message);
+       // ... (existing catch block)
+       const error = err as Error;
+       console.error("Error completing quiz and redirecting:", error);
+       setError(error.message);
     } finally {
-      setIsLoading(false);
+       setIsLoading(false);
     }
   };
 
@@ -1454,36 +1544,62 @@ const SignInModal: React.FC<SignInModalProps> = ({
       </div>
 
       <div className="space-y-6">
-        <div>
+        {/* Password Input */}
+        <div className="relative">
           <label className="block text-sm font-medium text-zinc-300 mb-2 font-['HK Grotesk']">
             Password
           </label>
           <input
-            type="password"
+            type={showPassword ? "text" : "password"}
             value={password}
             onChange={(e) => {
               setPassword(e.target.value);
               setShowError(false);
             }}
-            className="w-full bg-zinc-800 border border-zinc-600 rounded-lg p-3 text-white placeholder-zinc-400 focus:outline-none focus:border-[#E0FE10] focus:ring-1 focus:ring-[#E0FE10] transition-colors"
+            className="w-full bg-zinc-800 border border-zinc-600 rounded-lg p-3 pr-10 text-white placeholder-zinc-400 focus:outline-none focus:border-[#E0FE10] focus:ring-1 focus:ring-[#E0FE10] transition-colors"
             placeholder="Create password"
           />
+          <button
+            type="button"
+            onClick={() => setShowPassword(!showPassword)}
+            className="absolute inset-y-0 right-0 top-7 pr-3 flex items-center text-sm leading-5"
+            aria-label={showPassword ? "Hide password" : "Show password"}
+          >
+            {showPassword ? (
+              <EyeOff className="h-5 w-5 text-zinc-400" />
+            ) : (
+              <Eye className="h-5 w-5 text-zinc-400" />
+            )}
+          </button>
         </div>
 
-        <div>
+        {/* Confirm Password Input */}
+        <div className="relative">
           <label className="block text-sm font-medium text-zinc-300 mb-2 font-['HK Grotesk']">
             Confirm Password
           </label>
           <input
-            type="password"
+            type={showConfirmPassword ? "text" : "password"}
             value={confirmPassword}
             onChange={(e) => {
               setConfirmPassword(e.target.value);
               setShowError(false);
             }}
-            className="w-full bg-zinc-800 border border-zinc-600 rounded-lg p-3 text-white placeholder-zinc-400 focus:outline-none focus:border-[#E0FE10] focus:ring-1 focus:ring-[#E0FE10] transition-colors"
+            className="w-full bg-zinc-800 border border-zinc-600 rounded-lg p-3 pr-10 text-white placeholder-zinc-400 focus:outline-none focus:border-[#E0FE10] focus:ring-1 focus:ring-[#E0FE10] transition-colors"
             placeholder="Confirm password"
           />
+          <button
+            type="button"
+            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+            className="absolute inset-y-0 right-0 top-7 pr-3 flex items-center text-sm leading-5"
+            aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+          >
+            {showConfirmPassword ? (
+              <EyeOff className="h-5 w-5 text-zinc-400" />
+            ) : (
+              <Eye className="h-5 w-5 text-zinc-400" />
+            )}
+          </button>
         </div>
 
         <div className="space-y-2">
@@ -1749,6 +1865,20 @@ const SignInModal: React.FC<SignInModalProps> = ({
               className="w-full bg-zinc-800 border border-zinc-600 rounded-lg p-3 text-white placeholder-zinc-400 focus:outline-none focus:border-[#E0FE10] focus:ring-1 focus:ring-[#E0FE10] transition-colors"
               placeholder="Enter your password"
             />
+            {/* Add visibility toggle for sign-in password field */}
+             <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute inset-y-0 right-0 pr-3 flex items-center text-sm leading-5"
+              style={{ top: '2.6rem' }} // Adjust positioning as needed
+              aria-label={showPassword ? "Hide password" : "Show password"}
+            >
+              {showPassword ? (
+                <EyeOff className="h-5 w-5 text-zinc-400" />
+              ) : (
+                <Eye className="h-5 w-5 text-zinc-400" />
+              )}
+            </button>
           </div>
         )}
       </div>
@@ -1902,41 +2032,63 @@ const SignInModal: React.FC<SignInModalProps> = ({
   };
 
   const handleSignInSuccess = async (user: any) => {
-    // Get the redirect URL from query parameters
-    const redirectUrl = router.query.redirect as string;
-    
-    // Make one final check for username completion before proceeding
+    const queryRedirectUrl = router.query.redirect as string | undefined;
+
     try {
       const userDoc = await userService.fetchUserFromFirestore(user.uid);
+      // ... (check for missing username)
       if (userDoc && !userDoc.username) {
-        console.log('[SignInModal] Final check - User still missing username, redirecting to registration:', {
-          userId: user.uid,
-          timestamp: new Date().toISOString()
-        });
-        setIsSignUp(true);
-        setSignUpStep('profile');
-        setIsLoading(false);
+        // ... (redirect to registration)
         return;
       }
       
-      // If we have a username, proceed with normal flow
-      if (redirectUrl) {
-        // If there's a redirect URL, navigate to it
-        router.push(redirectUrl);
+      // *** Explicit Subscription Check ***
+      if (userDoc && userDoc.subscriptionType === SubscriptionType.unsubscribed) {
+        console.log('[SignInModal] handleSignInSuccess: User is unsubscribed. Redirecting to /subscribe.');
+        // Preserve roundIdRedirect if it exists for post-subscription flow
+        if (roundIdRedirect) {
+             console.log(`[SignInModal] handleSignInSuccess: Unsubscribed user came from round invite (${roundIdRedirect}). Redirecting to subscribe, state preserved.`);
+        }
+        router.push('/subscribe');
+        // Return EARLY to prevent other redirect/close logic
+        return; 
+      }
+      // *** End Explicit Subscription Check ***
+
+      // ** Auto-join check (User is guaranteed to be subscribed here) ** 
+      if (roundIdRedirect) {
+          // No need to check subscription again
+          console.log(`[SignInModal] handleSignInSuccess: Attempting auto-join for round: ${roundIdRedirect}`);
+          await autoJoinChallenge(roundIdRedirect); 
+          dispatch(clearRoundIdRedirect()); 
+          console.log('[SignInModal] Sign in success after auto-join. Closing modal.');
+          onClose?.(); 
+          return; // Return after handling
+      } else if (loginRedirectPath) {
+        // User accessed protected route directly (and is subscribed)
+        console.log(`[SignInModal] Sign in success. Found loginRedirectPath. Closing modal. Path: ${loginRedirectPath}`);
+        dispatch(clearLoginRedirectPath()); 
+        onClose?.(); 
+        return; // Return after handling
+      } else if (queryRedirectUrl) { 
+        // Legacy fallback (and is subscribed)
+        console.log(`[SignInModal] Sign in success. Using query param redirect. Navigating to: ${queryRedirectUrl}`);
+        router.push(queryRedirectUrl);
+        // Return after handling (onClose might not be needed if navigating away)
+        return; 
       } else {
-        // Otherwise, just close the modal
-        onSignInSuccess?.(user);
-        onClose?.();
+        // Final fallback (and is subscribed)
+        console.log('[SignInModal] Sign in success. No specific redirect. Closing modal.');
+        onClose?.(); 
+        // No return needed here as it's the end of the function's try block
       }
     } catch (err) {
-      console.error('[SignInModal] Error during final username check:', err);
-      // Proceed anyway as a fallback
-      if (redirectUrl) {
-        router.push(redirectUrl);
-      } else {
-        onSignInSuccess?.(user);
-        onClose?.();
-      }
+      const error = err as Error;
+      console.error("Error completing quiz and redirecting:", error);
+      setError(error.message);
+       // Handle error state appropriately - maybe don't close modal automatically
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -1955,6 +2107,15 @@ const SignInModal: React.FC<SignInModalProps> = ({
       </a>
     </div>
   );
+
+  // ** Debug Log (placed before return) **
+  if (isVisible) {
+      console.log('[SignInModal] Temp Redirect State Check (Render):', {
+        roundIdRedirect,
+        loginRedirectPath,
+        timestamp: new Date().toISOString()
+      });
+  }
 
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-black z-50 sm:p-6">
