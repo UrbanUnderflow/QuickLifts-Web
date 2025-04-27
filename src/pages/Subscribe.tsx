@@ -3,12 +3,81 @@ import SubscriptionCard from '../components/SubscriptionCard';
 import FAQ from '../components/FAQ';
 import { useScrollFade } from '../hooks/useScrollFade';
 import { CheckCircle, Star, Shield, Clock, Zap, Users, UserCheck, Video } from 'lucide-react';
+import { loadStripe, Stripe } from '@stripe/stripe-js'; // Import Stripe.js
+import { useUser } from '../hooks/useUser'; // Import useUser to get the userId
+
+// Load Stripe outside of component render to avoid recreating on every render
+// Use NEXT_PUBLIC_ prefix for client-side environment variables
+const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '');
 
 const Subscribe: React.FC = () => {
   const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'yearly'>('yearly');
-  
-  const openPaymentLink = (url: string) => {
-    window.open(url, '_blank');
+  const [isLoading, setIsLoading] = useState(false); // Loading state for API call
+  const [error, setError] = useState<string | null>(null); // Error state
+  const currentUser = useUser(); // Get current user
+
+  // --- IMPORTANT: Replace with your ACTUAL Stripe Price IDs ---
+  const monthlyPriceId = 'price_YOUR_MONTHLY_ID';
+  const annualPriceId = 'price_YOUR_ANNUAL_ID';
+  // --- ---
+
+  const handleSubscribeClick = async (planType: 'monthly' | 'yearly') => {
+    setIsLoading(true);
+    setError(null);
+
+    if (!currentUser) {
+      setError('Please sign in or sign up to subscribe.');
+      setIsLoading(false);
+      // Optionally, trigger sign-in modal here
+      console.error('[Subscribe] User not logged in.');
+      return;
+    }
+
+    const priceId = planType === 'monthly' ? monthlyPriceId : annualPriceId;
+
+    try {
+      // 1. Call your Netlify Function to create a Checkout Session
+      console.log('[Subscribe] Creating checkout session for:', { userId: currentUser.id, priceId });
+      const response = await fetch('/.netlify/functions/create-checkout-session', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ priceId: priceId, userId: currentUser.id }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to create checkout session.');
+      }
+
+      const sessionId = data.sessionId;
+      if (!sessionId) {
+        throw new Error('Could not retrieve session ID.');
+      }
+
+      // 2. Redirect to Stripe Checkout using the received sessionId
+      console.log(`[Subscribe] Redirecting to Stripe Checkout with session ID: ${sessionId}`);
+      const stripe = await stripePromise;
+      if (stripe) {
+        const { error } = await stripe.redirectToCheckout({ sessionId });
+        if (error) {
+          // This error is typically only shown if there's an issue *initiating* the redirect
+          // (e.g., network error, invalid session ID). Payment errors are handled by Stripe.
+          console.error('[Subscribe] Stripe redirect error:', error);
+          setError(error.message || 'Failed to redirect to payment.');
+        }
+      } else {
+        throw new Error('Stripe.js failed to load.');
+      }
+
+    } catch (err: any) {
+      console.error('[Subscribe] Error handling subscription click:', err);
+      setError(err.message || 'An unexpected error occurred.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // Add subtle parallax effect
@@ -169,6 +238,13 @@ const Subscribe: React.FC = () => {
             </div>
           </div>
 
+          {/* Error Display */}
+          {error && (
+            <div className="my-4 p-4 bg-red-900 border border-red-700 text-red-200 rounded-lg text-center max-w-md mx-auto">
+              Error: {error}
+            </div>
+          )}
+
           <div className="flex flex-col sm:flex-row justify-center items-stretch gap-8 max-w-4xl mx-auto">
             {/* Monthly Plan */}
             <div 
@@ -201,11 +277,12 @@ const Subscribe: React.FC = () => {
                   </li>
                 </ul>
                 
-                <button 
-                  onClick={() => openPaymentLink('https://buy.stripe.com/9AQaFieX9bv26fSfYY')}
-                  className={`w-full py-4 rounded-full text-lg font-semibold transition-all ${glassSecondary}`}
+                <button
+                  onClick={() => handleSubscribeClick('monthly')}
+                  disabled={isLoading}
+                  className={`w-full py-4 rounded-full text-lg font-semibold transition-all ${glassSecondary} ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
-                  Start Monthly Plan
+                  {isLoading ? 'Processing...' : 'Start Monthly Plan'}
                 </button>
               </div>
             </div>
@@ -249,11 +326,12 @@ const Subscribe: React.FC = () => {
                   </li>
                 </ul>
                 
-                <button 
-                  onClick={() => openPaymentLink('https://buy.stripe.com/28obJm2an8iQdIk289')}
-                  className={`w-full py-4 rounded-full text-lg font-semibold transition-all ${glassPrimary}`}
+                <button
+                  onClick={() => handleSubscribeClick('yearly')}
+                  disabled={isLoading}
+                  className={`w-full py-4 rounded-full text-lg font-semibold transition-all ${glassPrimary} ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
-                  Get Started — First Month Free
+                  {isLoading ? 'Processing...' : 'Get Started — First Month Free'}
                 </button>
               </div>
             </div>
@@ -482,19 +560,28 @@ const Subscribe: React.FC = () => {
               Join thousands of members who have transformed their fitness journey with Pulse
             </p>
 
+            {/* Error Display */}
+            {error && (
+              <div className="my-4 p-4 bg-red-900 border border-red-700 text-red-200 rounded-lg text-center max-w-md mx-auto">
+                Error: {error}
+              </div>
+            )}
+
             <div className="flex flex-col sm:flex-row gap-6 mb-12">
-              <button 
-                onClick={() => openPaymentLink('https://buy.stripe.com/28obJm2an8iQdIk289')}
-                className={`${glassPrimary} px-10 py-4 rounded-full text-lg font-semibold shadow-lg shadow-[#E0FE10]/20`}
+              <button
+                onClick={() => handleSubscribeClick('yearly')}
+                disabled={isLoading}
+                className={`${glassPrimary} px-10 py-4 rounded-full text-lg font-semibold shadow-lg shadow-[#E0FE10]/20 ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
-                Start Free Trial — Annual Plan
+                {isLoading ? 'Processing...' : 'Start Free Trial — Annual Plan'}
               </button>
 
-              <button 
-                onClick={() => openPaymentLink('https://buy.stripe.com/9AQaFieX9bv26fSfYY')}
-                className={`${glassSecondary} px-10 py-4 rounded-full text-lg font-semibold`}
+              <button
+                onClick={() => handleSubscribeClick('monthly')}
+                disabled={isLoading}
+                className={`${glassSecondary} px-10 py-4 rounded-full text-lg font-semibold ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
-                Start Monthly Subscription
+                {isLoading ? 'Processing...' : 'Start Monthly Subscription'}
               </button>
             </div>
 

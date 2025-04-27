@@ -108,6 +108,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
   onRegistrationComplete,
 }) => {
   const [email, setEmail] = useState("");
+  console.log('[SignInModal] Component rendering or re-rendering.'); // Simple render log
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [username, setUsername] = useState("");
@@ -775,9 +776,17 @@ const SignInModal: React.FC<SignInModalProps> = ({
               setSignUpStep("profile");
               setShowError(false);
             }
-          } catch (createUserError) {
+          } catch (createUserError: any) { // Catch any error type
             console.error("[SignInModal] Error creating user:", createUserError);
-            setError(createUserError instanceof Error ? createUserError.message : 'Error creating account');
+
+            // Specific handling for email-already-in-use
+            if (createUserError.code === 'auth/email-already-in-use') {
+              setError('This email is already in use. Please sign in or use a different email.');
+              setSignUpStep('initial'); // Go back to the email step
+            } else {
+              // Handle other errors generically
+              setError(createUserError instanceof Error ? createUserError.message : 'Error creating account');
+            }
             setIsLoading(false);
           }
           return;
@@ -868,7 +877,10 @@ const SignInModal: React.FC<SignInModalProps> = ({
       const userId = auth.currentUser?.uid;
       if (!userId) throw new Error("No user found");
 
+      console.log('[Quiz Debug - handleCompleteQuiz] State at start (local):', JSON.parse(JSON.stringify(userService.nonUICurrentUser)));
+
       const refreshedUser = await userService.fetchUserFromFirestore(userId);
+      console.log('[Quiz Debug - handleCompleteQuiz] State after refresh from Firestore:', JSON.parse(JSON.stringify(refreshedUser)));
       onQuizComplete?.(); // Notify parent
 
       if (!refreshedUser) {
@@ -1025,7 +1037,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
             key={option}
             onClick={async () => {
               let genderValue: Gender;
-              
+
               // Convert option to proper Gender enum
               switch(option) {
                 case "Man":
@@ -1037,21 +1049,29 @@ const SignInModal: React.FC<SignInModalProps> = ({
                 default:
                   genderValue = Gender.SelfDescribe;
               }
-            
-              setQuizData({ ...quizData, gender: option as any });
-            
-              // Update user data
-              if (auth.currentUser?.uid && userService.nonUICurrentUser) { // Use nonUICurrentUser
-                // Directly modify the existing user object
-                userService.nonUICurrentUser.gender = genderValue;
-                userService.nonUICurrentUser.updatedAt = new Date();
 
-                await userService.updateUser(auth.currentUser.uid, userService.nonUICurrentUser); // Save the modified object
-                // --- NEW: Refresh user and update Redux ---
-                const refreshedUser = await userService.fetchUserFromFirestore(auth.currentUser.uid);
-                userService.nonUICurrentUser = refreshedUser; // Use nonUICurrentUser
+              setQuizData({ ...quizData, gender: option as any });
+
+              const userId = auth.currentUser?.uid;
+              if (userId) {
+                try {
+                  const currentUserData = await userService.fetchUserFromFirestore(userId);
+                  if (currentUserData) {
+                    currentUserData.gender = genderValue;
+                    currentUserData.updatedAt = new Date();
+                    await userService.updateUser(userId, currentUserData); // Save the fetched and modified object
+
+                    // --- NEW: Refresh user and update Redux ---
+                    const refreshedUser = await userService.fetchUserFromFirestore(userId);
+                    userService.nonUICurrentUser = refreshedUser; // Use nonUICurrentUser
+                  } else {
+                     console.error("[Quiz Debug - Gender Click] Could not fetch user data for update.");
+                  }
+                } catch (error) {
+                  console.error("[Quiz Debug - Gender Click] Error fetching/updating user:", error);
+                }
               }
-              
+
               setQuizStep(quizStep + 1);
             }}
             className={`w-full p-4 rounded-lg border ${
@@ -1087,15 +1107,24 @@ const SignInModal: React.FC<SignInModalProps> = ({
               const newHeight = { ...quizData.height, feet: newFeet };
               setQuizData({ ...quizData, height: newHeight });
 
-              if (auth.currentUser?.uid && userService.nonUICurrentUser) { // Use nonUICurrentUser
-                // Directly modify the existing user object
-                userService.nonUICurrentUser.height = newHeight;
-                userService.nonUICurrentUser.updatedAt = new Date();
+              const userId = auth.currentUser?.uid;
+              if (userId) {
+                try {
+                  const currentUserData = await userService.fetchUserFromFirestore(userId);
+                  if (currentUserData) {
+                    currentUserData.height = newHeight;
+                    currentUserData.updatedAt = new Date();
+                    await userService.updateUser(userId, currentUserData);
 
-                await userService.updateUser(auth.currentUser.uid, userService.nonUICurrentUser); // Save the modified object
-                // --- NEW: Refresh user and update Redux ---
-                const refreshedUser = await userService.fetchUserFromFirestore(auth.currentUser.uid);
-                userService.nonUICurrentUser = refreshedUser; // Use nonUICurrentUser
+                    // --- NEW: Refresh user and update Redux ---
+                    const refreshedUser = await userService.fetchUserFromFirestore(userId);
+                    userService.nonUICurrentUser = refreshedUser; // Use nonUICurrentUser
+                  } else {
+                     console.error("[Quiz Debug - Height Feet Change] Could not fetch user data for update.");
+                  }
+                } catch (error) {
+                  console.error("[Quiz Debug - Height Feet Change] Error fetching/updating user:", error);
+                }
               }
             }}
             min="0"
@@ -1115,15 +1144,24 @@ const SignInModal: React.FC<SignInModalProps> = ({
               const newHeight = { ...quizData.height, inches: newInches };
               setQuizData({ ...quizData, height: newHeight });
 
-              if (auth.currentUser?.uid && userService.nonUICurrentUser) { // Use nonUICurrentUser
-                // Directly modify the existing user object
-                userService.nonUICurrentUser.height = newHeight;
-                userService.nonUICurrentUser.updatedAt = new Date();
+              const userId = auth.currentUser?.uid;
+              if (userId) {
+                try {
+                  const currentUserData = await userService.fetchUserFromFirestore(userId);
+                  if (currentUserData) {
+                    currentUserData.height = newHeight;
+                    currentUserData.updatedAt = new Date();
+                    await userService.updateUser(userId, currentUserData);
 
-                await userService.updateUser(auth.currentUser.uid, userService.nonUICurrentUser); // Save the modified object
-                // --- NEW: Refresh user and update Redux ---
-                const refreshedUser = await userService.fetchUserFromFirestore(auth.currentUser.uid);
-                userService.nonUICurrentUser = refreshedUser; // Use nonUICurrentUser
+                    // --- NEW: Refresh user and update Redux ---
+                    const refreshedUser = await userService.fetchUserFromFirestore(userId);
+                    userService.nonUICurrentUser = refreshedUser; // Use nonUICurrentUser
+                  } else {
+                     console.error("[Quiz Debug - Height Inches Change] Could not fetch user data for update.");
+                  }
+                } catch (error) {
+                  console.error("[Quiz Debug - Height Inches Change] Error fetching/updating user:", error);
+                }
               }
             }}
             min="0"
@@ -1156,22 +1194,31 @@ const SignInModal: React.FC<SignInModalProps> = ({
             const newWeight = Number(e.target.value);
             setQuizData({ ...quizData, weight: newWeight });
 
-            if (auth.currentUser?.uid && userService.nonUICurrentUser) { // Use nonUICurrentUser
-              const newBodyWeight = new BodyWeight({
-                oldWeight: userService.nonUICurrentUser.bodyWeight.length > 0  // Use nonUICurrentUser
-                  ? userService.nonUICurrentUser.bodyWeight[userService.nonUICurrentUser.bodyWeight.length - 1].newWeight  // Use nonUICurrentUser (x2)
-                  : 0,
-                newWeight: newWeight
-              });
+            const userId = auth.currentUser?.uid;
+            if (userId) {
+              try {
+                const currentUserData = await userService.fetchUserFromFirestore(userId);
+                if (currentUserData) {
+                  const newBodyWeight = new BodyWeight({
+                    oldWeight: currentUserData.bodyWeight.length > 0
+                      ? currentUserData.bodyWeight[currentUserData.bodyWeight.length - 1].newWeight
+                      : 0,
+                    newWeight: newWeight
+                  });
 
-              // Directly modify the existing user object
-              userService.nonUICurrentUser.bodyWeight = [...userService.nonUICurrentUser.bodyWeight, newBodyWeight]; // Use nonUICurrentUser
-              userService.nonUICurrentUser.updatedAt = new Date();
+                  currentUserData.bodyWeight = [...currentUserData.bodyWeight, newBodyWeight];
+                  currentUserData.updatedAt = new Date();
+                  await userService.updateUser(userId, currentUserData);
 
-              await userService.updateUser(auth.currentUser.uid, userService.nonUICurrentUser); // Save the modified object
-              // --- NEW: Refresh user and update Redux ---
-              const refreshedUser = await userService.fetchUserFromFirestore(auth.currentUser.uid);
-              userService.nonUICurrentUser = refreshedUser; // Use nonUICurrentUser
+                  // --- NEW: Refresh user and update Redux ---
+                  const refreshedUser = await userService.fetchUserFromFirestore(userId);
+                  userService.nonUICurrentUser = refreshedUser; // Use nonUICurrentUser
+                } else {
+                   console.error("[Quiz Debug - Weight Change] Could not fetch user data for update.");
+                }
+              } catch (error) {
+                console.error("[Quiz Debug - Weight Change] Error fetching/updating user:", error);
+              }
             }
           }}
           className="w-full bg-zinc-800 border border-zinc-600 rounded-lg p-3 text-white"
@@ -1199,18 +1246,27 @@ const SignInModal: React.FC<SignInModalProps> = ({
                 "Intermediate": UserLevel.Intermediate,
                 "Expert": UserLevel.Expert
               };
-            
-              setQuizData({ ...quizData, level: level as any });
-              
-              if (auth.currentUser?.uid && userService.nonUICurrentUser) { // Use nonUICurrentUser
-                // Directly modify the existing user object
-                userService.nonUICurrentUser.level = levelMap[level as keyof typeof levelMap];
-                userService.nonUICurrentUser.updatedAt = new Date();
 
-                await userService.updateUser(auth.currentUser.uid, userService.nonUICurrentUser); // Save the modified object
-                // --- NEW: Refresh user and update Redux ---
-                const refreshedUser = await userService.fetchUserFromFirestore(auth.currentUser.uid);
-                userService.nonUICurrentUser = refreshedUser; // Use nonUICurrentUser
+              setQuizData({ ...quizData, level: level as any });
+
+              const userId = auth.currentUser?.uid;
+              if (userId) {
+                try {
+                  const currentUserData = await userService.fetchUserFromFirestore(userId);
+                  if (currentUserData) {
+                    currentUserData.level = levelMap[level as keyof typeof levelMap];
+                    currentUserData.updatedAt = new Date();
+                    await userService.updateUser(userId, currentUserData);
+
+                    // --- NEW: Refresh user and update Redux ---
+                    const refreshedUser = await userService.fetchUserFromFirestore(userId);
+                    userService.nonUICurrentUser = refreshedUser; // Use nonUICurrentUser
+                  } else {
+                    console.error("[Quiz Debug - Experience Click] Could not fetch user data for update.");
+                  }
+                } catch (error) {
+                  console.error("[Quiz Debug - Experience Click] Error fetching/updating user:", error);
+                }
               }
               setQuizStep(quizStep + 1);
             }}
@@ -1248,26 +1304,35 @@ const SignInModal: React.FC<SignInModalProps> = ({
                 "Tone up": WorkoutGoal.ToneUp,
                 "General Fitness": WorkoutGoal.GeneralFitness
               };
-            
+
               // Determine updated goals
               const updatedGoals = quizData.goal.includes(goal)
                 ? quizData.goal.filter((g) => g !== goal)
                 : [...quizData.goal, goal];
-            
+
               setQuizData((prev: QuizData) => ({
                 ...prev,
                 goal: updatedGoals,
               }));
-              
-              if (auth.currentUser?.uid && userService.nonUICurrentUser) { // Use nonUICurrentUser
-                // Directly modify the existing user object
-                userService.nonUICurrentUser.goal = updatedGoals.map(g => goalsMap[g]);
-                userService.nonUICurrentUser.updatedAt = new Date();
 
-                await userService.updateUser(auth.currentUser.uid, userService.nonUICurrentUser); // Save the modified object
-                // --- NEW: Refresh user and update Redux ---
-                const refreshedUser = await userService.fetchUserFromFirestore(auth.currentUser.uid);
-                userService.nonUICurrentUser = refreshedUser; // Use nonUICurrentUser
+              const userId = auth.currentUser?.uid;
+              if (userId) {
+                try {
+                  const currentUserData = await userService.fetchUserFromFirestore(userId);
+                  if (currentUserData) {
+                    currentUserData.goal = updatedGoals.map(g => goalsMap[g]);
+                    currentUserData.updatedAt = new Date();
+                    await userService.updateUser(userId, currentUserData);
+
+                    // --- NEW: Refresh user and update Redux ---
+                    const refreshedUser = await userService.fetchUserFromFirestore(userId);
+                    userService.nonUICurrentUser = refreshedUser; // Use nonUICurrentUser
+                  } else {
+                    console.error("[Quiz Debug - Goal Click] Could not fetch user data for update.");
+                  }
+                } catch (error) {
+                  console.error("[Quiz Debug - Goal Click] Error fetching/updating user:", error);
+                }
               }
               // Only move to next step if at least one goal is selected
               if (updatedGoals.length > 0) {
@@ -1313,15 +1378,25 @@ const SignInModal: React.FC<SignInModalProps> = ({
             const date = new Date(quizData.birthdate || new Date());
             date.setMonth(parseInt(e.target.value));
             setQuizData({ ...quizData, birthdate: date });
-            if (auth.currentUser?.uid && userService.nonUICurrentUser) { // Use nonUICurrentUser
-              // Directly modify the existing user object
-              userService.nonUICurrentUser.birthdate = date;
-              userService.nonUICurrentUser.updatedAt = new Date();
-              
-              await userService.updateUser(auth.currentUser.uid, userService.nonUICurrentUser); // Save the modified object
-              // --- NEW: Refresh user and update Redux ---
-              const refreshedUser = await userService.fetchUserFromFirestore(auth.currentUser.uid);
-              userService.nonUICurrentUser = refreshedUser; // Use nonUICurrentUser
+
+            const userId = auth.currentUser?.uid;
+            if (userId) {
+              try {
+                const currentUserData = await userService.fetchUserFromFirestore(userId);
+                if (currentUserData) {
+                  currentUserData.birthdate = date;
+                  currentUserData.updatedAt = new Date();
+                  await userService.updateUser(userId, currentUserData);
+
+                  // --- NEW: Refresh user and update Redux ---
+                  const refreshedUser = await userService.fetchUserFromFirestore(userId);
+                  userService.nonUICurrentUser = refreshedUser; // Use nonUICurrentUser
+                } else {
+                  console.error("[Quiz Debug - Birthdate Month Change] Could not fetch user data for update.");
+                }
+              } catch (error) {
+                console.error("[Quiz Debug - Birthdate Month Change] Error fetching/updating user:", error);
+              }
             }
           }}
         >
@@ -1338,15 +1413,25 @@ const SignInModal: React.FC<SignInModalProps> = ({
             const date = new Date(quizData.birthdate || new Date());
             date.setDate(parseInt(e.target.value));
             setQuizData({ ...quizData, birthdate: date });
-            if (auth.currentUser?.uid && userService.nonUICurrentUser) { // Use nonUICurrentUser
-              // Directly modify the existing user object
-              userService.nonUICurrentUser.birthdate = date;
-              userService.nonUICurrentUser.updatedAt = new Date();
-              
-              await userService.updateUser(auth.currentUser.uid, userService.nonUICurrentUser); // Save the modified object
-              // --- NEW: Refresh user and update Redux ---
-              const refreshedUser = await userService.fetchUserFromFirestore(auth.currentUser.uid);
-              userService.nonUICurrentUser = refreshedUser; // Use nonUICurrentUser
+
+            const userId = auth.currentUser?.uid;
+             if (userId) {
+              try {
+                const currentUserData = await userService.fetchUserFromFirestore(userId);
+                if (currentUserData) {
+                  currentUserData.birthdate = date;
+                  currentUserData.updatedAt = new Date();
+                  await userService.updateUser(userId, currentUserData);
+
+                  // --- NEW: Refresh user and update Redux ---
+                  const refreshedUser = await userService.fetchUserFromFirestore(userId);
+                  userService.nonUICurrentUser = refreshedUser; // Use nonUICurrentUser
+                } else {
+                  console.error("[Quiz Debug - Birthdate Day Change] Could not fetch user data for update.");
+                }
+              } catch (error) {
+                console.error("[Quiz Debug - Birthdate Day Change] Error fetching/updating user:", error);
+              }
             }
           }}
         >
@@ -1363,15 +1448,25 @@ const SignInModal: React.FC<SignInModalProps> = ({
             const date = new Date(quizData.birthdate || new Date());
             date.setFullYear(parseInt(e.target.value));
             setQuizData({ ...quizData, birthdate: date });
-            if (auth.currentUser?.uid && userService.nonUICurrentUser) { // Use nonUICurrentUser
-              // Directly modify the existing user object
-              userService.nonUICurrentUser.birthdate = date;
-              userService.nonUICurrentUser.updatedAt = new Date();
 
-              await userService.updateUser(auth.currentUser.uid, userService.nonUICurrentUser); // Save the modified object
-              // --- NEW: Refresh user and update Redux ---
-              const refreshedUser = await userService.fetchUserFromFirestore(auth.currentUser.uid);
-              userService.nonUICurrentUser = refreshedUser; // Use nonUICurrentUser
+            const userId = auth.currentUser?.uid;
+            if (userId) {
+              try {
+                const currentUserData = await userService.fetchUserFromFirestore(userId);
+                if (currentUserData) {
+                  currentUserData.birthdate = date;
+                  currentUserData.updatedAt = new Date();
+                  await userService.updateUser(userId, currentUserData);
+
+                  // --- NEW: Refresh user and update Redux ---
+                  const refreshedUser = await userService.fetchUserFromFirestore(userId);
+                  userService.nonUICurrentUser = refreshedUser; // Use nonUICurrentUser
+                } else {
+                  console.error("[Quiz Debug - Birthdate Year Change] Could not fetch user data for update.");
+                }
+              } catch (error) {
+                console.error("[Quiz Debug - Birthdate Year Change] Error fetching/updating user:", error);
+              }
             }
           }}
         >
@@ -1590,6 +1685,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
         </div>
 
         <div className="space-y-2">
+          {/* Password requirement indicators... */}
           <div className="flex items-center gap-2">
             <div
               className={`w-4 h-4 rounded-full flex items-center justify-center ${
@@ -1658,6 +1754,15 @@ const SignInModal: React.FC<SignInModalProps> = ({
             </span>
           </div>
         </div>
+
+        {/* Add a Back button */}
+        <button
+          type="button"
+          onClick={() => setSignUpStep("initial")} // Go back to email entry
+          className="w-full text-center text-zinc-400 text-sm hover:text-white transition-colors mt-4"
+        >
+          Back
+        </button>
       </div>
     </>
   );
@@ -2096,13 +2201,13 @@ const SignInModal: React.FC<SignInModalProps> = ({
   );
 
   // ** Debug Log (placed before return) **
-  if (isVisible) {
-      console.log('[SignInModal] Temp Redirect State Check (Render):', {
-        roundIdRedirect,
-        loginRedirectPath,
-        timestamp: new Date().toISOString()
-      });
-  }
+  // if (isVisible) {
+  //     console.log('[SignInModal] Temp Redirect State Check (Render):', {
+  //       roundIdRedirect,
+  //       loginRedirectPath,
+  //       timestamp: new Date().toISOString()
+  //     });
+  // }
 
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-black z-50 sm:p-6">

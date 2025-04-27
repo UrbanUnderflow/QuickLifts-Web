@@ -59,6 +59,8 @@ class UserService {
 
   async updateUser(userId: string, user: User): Promise<void> {
     const userRef = doc(db, 'users', userId);
+    const userData = user.toDictionary();
+    console.log(`[UserService Update] Updating user ${userId} with data:`, JSON.parse(JSON.stringify(userData)));
     await setDoc(userRef, user.toDictionary(), { merge: true });
   }
 

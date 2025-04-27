@@ -467,3 +467,49 @@ export class User {
       };
     }
   }
+
+// Add this class definition
+export class Subscription {
+    id: string; // Firestore document ID, potentially same as stripeSubscriptionId
+    userId: string;
+    subscriptionType: SubscriptionType;
+    platform: SubscriptionPlatform;
+    stripeSubscriptionId?: string; // Store the link to Stripe Subscription
+    stripeCustomerId?: string;     // Store the link to Stripe Customer
+    createdAt: Date;
+    updatedAt: Date;
+
+    constructor(id: string, data: any) {
+        this.id = id;
+        this.userId = data.userId;
+        this.subscriptionType = data.subscriptionType || SubscriptionType.unsubscribed;
+        this.platform = data.platform || SubscriptionPlatform.Web; // Default could be web or based on context
+        this.stripeSubscriptionId = data.stripeSubscriptionId;
+        this.stripeCustomerId = data.stripeCustomerId;
+        this.createdAt = convertFirestoreTimestamp(data.createdAt) || new Date();
+        this.updatedAt = convertFirestoreTimestamp(data.updatedAt) || new Date();
+    }
+
+    static fromDictionary(dict: Record<string, any> | null): Subscription | null {
+        if (!dict || !dict.id || !dict.userId) return null; // Need id and userId
+        // Assuming convertFirestoreTimestamp handles potential timestamp formats from Firestore
+        const processedData = {
+            ...dict,
+            createdAt: convertFirestoreTimestamp(dict.createdAt) || new Date(),
+            updatedAt: convertFirestoreTimestamp(dict.updatedAt) || new Date(),
+        };
+        return new Subscription(dict.id, processedData);
+    }
+
+    toDictionary(): Record<string, any> {
+        return {
+            userId: this.userId,
+            subscriptionType: this.subscriptionType,
+            platform: this.platform,
+            stripeSubscriptionId: this.stripeSubscriptionId,
+            stripeCustomerId: this.stripeCustomerId,
+            createdAt: dateToUnixTimestamp(this.createdAt),
+            updatedAt: dateToUnixTimestamp(this.updatedAt),
+        };
+    }
+}
