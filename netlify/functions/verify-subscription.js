@@ -9,8 +9,8 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 // Helper to map Stripe Price ID to your SubscriptionType enum
 const getSubscriptionTypeFromPriceId = (priceId) => {
     // --- IMPORTANT: Replace these with your ACTUAL Stripe Price IDs ---
-    const monthlyPriceId = '4.99'; // Example: price_1Pf...
-    const annualPriceId = '39.99';   // Example: price_1Pf...
+    const monthlyPriceId = 'price_1PDq26RobSf56MUOucDIKLhd';
+    const annualPriceId = 'price_1PDq3LRobSf56MUOng0UxhCC';
     // Add more price IDs if needed
     // --- ---
 

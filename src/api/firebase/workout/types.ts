@@ -945,11 +945,13 @@ class UserChallenge {
     this.progress = data.progress ?? 0;
     this.referralChain = data.referralChain ? new ReferralChain(data.referralChain) : new ReferralChain({ originalHostId: '', sharedBy: '' });
     this.completedWorkouts = Array.isArray(data.completedWorkouts)
-      ? data.completedWorkouts.map((cw: any) => ({
-          id: cw.id || '',
-          workoutId: cw.workoutId || '',
-          completedAt: convertFirestoreTimestamp(cw.completedAt),
-        }))
+      ? data.completedWorkouts
+          .map((cw: any) => ({
+            id: cw.id || '',
+            workoutId: cw.workoutId || '', // Ensure workoutId is a string, default to empty
+            completedAt: convertFirestoreTimestamp(cw.completedAt), // Handle potential null/undefined timestamp
+          }))
+          .filter((cw: { id: string; workoutId: string; completedAt: Date }) => cw.workoutId !== '') // Filter out those where workoutId ended up empty
       : [];
     this.isCompleted = data.isCompleted ?? false;
     this.uid = data.uid || '';  // Added

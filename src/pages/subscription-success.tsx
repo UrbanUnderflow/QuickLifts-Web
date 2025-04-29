@@ -37,7 +37,7 @@ const SubscriptionSuccessPage: React.FC = () => {
       // Define async function to call backend API
       const verifySession = async () => {
         try {
-          const response = await fetch('/api/verify-subscription', {
+          const response = await fetch('/.netlify/functions/verify-subscription', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',

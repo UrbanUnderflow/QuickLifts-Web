@@ -1,6 +1,13 @@
+import { Timestamp } from 'firebase/firestore';
+
 export const convertFirestoreTimestamp = (
-  timestamp: number | string | Date | null | undefined
+  timestamp: any
 ): Date => {
+  // Check if it's a Firestore Timestamp object first
+  if (timestamp && typeof timestamp.toDate === 'function') {
+    return timestamp.toDate();
+  }
+
   // If null or undefined, return the current date.
   if (timestamp == null) return new Date();
 
@@ -11,6 +18,12 @@ export const convertFirestoreTimestamp = (
   const numTimestamp =
     typeof timestamp === 'string' ? parseFloat(timestamp) : timestamp;
 
+  // Check if conversion resulted in a valid number
+  if (typeof numTimestamp !== 'number' || isNaN(numTimestamp)) {
+    console.warn('convertFirestoreTimestamp received an invalid non-numeric, non-date value:', timestamp);
+    return new Date();
+  }
+
   // If the timestamp looks like seconds (less than 10 billion), convert to milliseconds.
   if (numTimestamp < 10000000000) {
     return new Date(numTimestamp * 1000);
@@ -20,6 +33,11 @@ export const convertFirestoreTimestamp = (
   return new Date(numTimestamp);
 };
 
-  export const dateToUnixTimestamp = (date: Date): number => {
-    return Math.floor(date.getTime() / 1000);
-  };
+export const dateToUnixTimestamp = (date: Date): number => {
+  // Add a check for invalid date
+  if (!(date instanceof Date) || isNaN(date.getTime())) {
+      console.warn('dateToUnixTimestamp received an invalid Date object');
+      return Math.floor(Date.now() / 1000);
+  }
+  return Math.floor(date.getTime() / 1000);
+};

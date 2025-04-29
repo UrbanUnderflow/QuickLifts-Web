@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import BottomNav from '../components/App/BottomNav';
 import Discover from '../../src/components/App/RootScreens/Discover';
@@ -19,6 +19,9 @@ import { workoutSessionService } from '../api/firebase/workoutSession/service';
 import { useRouter } from 'next/router';
 import { User } from '../api/firebase/user/types';
 import { useCurrentWorkout, useCurrentExerciseLogs } from '../hooks/useWorkout';
+import { collection, doc, onSnapshot, query, orderBy, updateDoc } from 'firebase/firestore';
+import { db } from '../api/firebase/config';
+import { dateToUnixTimestamp } from '../utils/formatDate';
 
 import { setCurrentWorkout, setCurrentExerciseLogs, setWorkoutSummary } from '../redux/workoutSlice';
 
@@ -35,6 +38,58 @@ const HomeContent = () => {
   const workoutSummary = useSelector((state: RootState) => state.workout.workoutSummary); // Add this
 
   const dispatch = useDispatch();
+
+  // *** START: New useEffect for Log Listener ***
+  useEffect(() => {
+    console.log('[HomeContent Log Listener Effect] Running effect...');
+    if (!userId || !currentWorkoutSession?.id) {
+      console.log('[HomeContent Log Listener Effect] No userId or workoutId, skipping listener setup.');
+      // Ensure logs are cleared if there's no active workout ID
+      if (!currentWorkoutSession?.id) {
+        dispatch(setCurrentExerciseLogs([]));
+      }
+      return () => {}; // Return empty cleanup function
+    }
+
+    const workoutId = currentWorkoutSession.id;
+    console.log(`[HomeContent Log Listener Effect] Setting up listener for userId: ${userId}, workoutId: ${workoutId}`);
+
+    const logsRef = collection(db, 'users', userId, 'workoutSessions', workoutId, 'logs');
+    // Optional: Order logs if needed, e.g., by a specific field like 'order' or 'createdAt'
+    // const q = query(logsRef, orderBy('order', 'asc')); // Example ordering
+
+    const unsubscribe = onSnapshot(logsRef, // Use logsRef directly if no specific order needed, otherwise use 'q'
+      (querySnapshot) => {
+        console.log(`[HomeContent Log Listener Effect] Snapshot received. ${querySnapshot.docs.length} logs found.`);
+        const updatedLogs = querySnapshot.docs.map(docSnap => {
+          // *** FIX: Instantiate ExerciseLog and use toDictionary for serialization ***
+          const logInstance = new ExerciseLog({ id: docSnap.id, ...docSnap.data() });
+          // The ExerciseLog constructor should use convertFirestoreTimestamp.
+          // The toDictionary method should return a plain object with serializable dates.
+          return logInstance.toDictionary(); 
+        });
+        
+        // Optional local sorting can still be applied if needed after conversion
+        // updatedLogs.sort((a, b) => (a.order || 0) - (b.order || 0));
+
+        console.log('[HomeContent Log Listener Effect] Dispatching updated logs (serialized):', updatedLogs);
+        dispatch(setCurrentExerciseLogs(updatedLogs));
+      },
+      (error) => {
+        console.error('[HomeContent Log Listener Effect] Error listening to logs:', error);
+        // Optionally dispatch an error state or clear logs
+        dispatch(setCurrentExerciseLogs([]));
+      }
+    );
+
+    // Cleanup function
+    return () => {
+      console.log(`[HomeContent Log Listener Effect] Cleaning up listener for workoutId: ${workoutId}`);
+      unsubscribe();
+    };
+
+  }, [userId, currentWorkoutSession?.id, dispatch]); // Dependencies: rerun if userId or workoutId changes
+  // *** END: New useEffect for Log Listener ***
 
   // useEffect(() => {
   //   console.log(`[HomeContent useEffect] Running effect. userId: ${userId}`);
@@ -93,89 +148,119 @@ const HomeContent = () => {
     };
   
     // Function to begin the workout (move from ready to in-progress)
-    const beginWorkout = () => {
-      if (currentWorkoutSession) {
-        const updatedWorkout = new Workout({
-          ...currentWorkoutSession,
-          workoutStatus: WorkoutStatus.InProgress
-        });
-        dispatch(setCurrentWorkout(updatedWorkout.toDictionary()));
+    const beginWorkout = async () => {
+      if (currentWorkoutSession && userId) {
+        const workoutId = currentWorkoutSession.id;
+        console.log(`[HomeContent beginWorkout] Starting workout. User: ${userId}, Session: ${workoutId}`);
+        
+        const updatedWorkoutDataForRedux = {
+          ...currentWorkoutSession, // Spread the existing data from hook/redux
+          workoutStatus: WorkoutStatus.InProgress,
+          startTime: new Date(), // Update startTime for Redux state
+          updatedAt: new Date() // Update updatedAt for Redux state
+        };
+        
+        // Optimistically update Redux state
+        dispatch(setCurrentWorkout(new Workout(updatedWorkoutDataForRedux).toDictionary()));
+        
+        try {
+          // Update Firestore document
+          const workoutSessionRef = doc(db, 'users', userId, 'workoutSessions', workoutId);
+          await updateDoc(workoutSessionRef, {
+            workoutStatus: WorkoutStatus.InProgress,
+            startTime: dateToUnixTimestamp(updatedWorkoutDataForRedux.startTime), // Use consistent timestamp fn
+            updatedAt: dateToUnixTimestamp(updatedWorkoutDataForRedux.updatedAt)  // Use consistent timestamp fn
+          });
+          console.log(`[HomeContent beginWorkout] Firestore document updated for session ${workoutId}`);
+        } catch (error) {
+          console.error(`[HomeContent beginWorkout] Error updating Firestore for session ${workoutId}:`, error);
+          // Optionally revert Redux state or show an error message
+        }
+      } else {
+        console.error('[HomeContent beginWorkout] Cannot begin workout: Missing workout session or userId.');
       }
     };
   
-    const completeExercise = async () => {
-      if (!currentWorkoutSession || !currentExerciseLogs.length) {
-        console.error('No active workout or logs');
+    // Add useEffect to log Redux state changes
+    useEffect(() => {
+      console.log('[HomeContent Effect] Redux currentExerciseLogs changed:', currentExerciseLogs);
+    }, [currentExerciseLogs]);
+
+    const completeExercise = useCallback(async () => {
+      console.log('[HomeContent completeExercise] Starting...'); 
+      if (!currentWorkoutSession || !currentExerciseLogs.length || !userId) {
+        console.error('[HomeContent completeExercise] No active workout, logs, or userId');
         return;
       }
     
       try {
-        const currentExercise = currentExerciseLogs[currentExerciseIndex]?.exercise;
-        const isBodyWeight = currentExerciseLogs[currentExerciseIndex]?.isBodyWeight;
-    
-        // Create updated logs array
+        const currentLogIndex = currentExerciseIndex; // Use state value at time of call
         const updatedLogs = [...currentExerciseLogs];
-        updatedLogs[currentExerciseIndex] = new ExerciseLog({
-          ...updatedLogs[currentExerciseIndex],
+        
+        if (currentLogIndex < 0 || currentLogIndex >= updatedLogs.length) {
+          console.error('[HomeContent completeExercise] Invalid currentExerciseIndex:', currentLogIndex);
+          return;
+        }
+
+        // Create a new ExerciseLog instance for the update
+        updatedLogs[currentLogIndex] = new ExerciseLog({
+          ...updatedLogs[currentLogIndex], // Spread existing plain object data
           logSubmitted: true,
           completedAt: new Date(),
           updatedAt: new Date()
         });
     
-        // Update workout logs in Firebase
-        if (currentWorkoutSession && userId) {
-          await workoutService.updateWorkoutLogs({
-            userId,
-            workoutId: currentWorkoutSession.id,
-            logs: updatedLogs
-          });
+        // Update workout logs in Firebase - Use the new instance's toDictionary()
+        await workoutService.updateWorkoutLogs({
+          userId,
+          workoutId: currentWorkoutSession.id,
+          logs: [updatedLogs[currentLogIndex]] // Send only the updated log for efficiency
+        });
     
-          // Update workout summary
-          const updatedSummary = new WorkoutSummary({
-            id: currentWorkoutSession.id,
-            workoutId: currentWorkoutSession.id,
-            userId,
-            exercises: updatedLogs.map(log => log.toDictionary()),
-            bodyParts: currentWorkoutSession.fetchPrimaryBodyParts(),
-            secondaryBodyParts: currentWorkoutSession.fetchSecondaryBodyParts(),
-            workoutTitle: currentWorkoutSession.title,
-            exercisesCompleted: updatedLogs
-              .filter(log => log.logSubmitted)
-              .map(log => log.toDictionary()),
-            isCompleted: false,
-            startTime: currentWorkoutSession.startTime || new Date(),
-            createdAt: currentWorkoutSession.createdAt || new Date(),
-            updatedAt: new Date()
-          });
+        // Create a new WorkoutSummary instance for the update
+        const updatedSummary = new WorkoutSummary({
+          id: currentWorkoutSession.id, // Use workout ID as summary ID for consistency?
+          workoutId: currentWorkoutSession.id,
+          userId,
+          exercises: updatedLogs.map(log => log), // Use the array of instances
+          bodyParts: currentWorkoutSession.fetchPrimaryBodyParts ? currentWorkoutSession.fetchPrimaryBodyParts() : [], // Ensure method exists
+          secondaryBodyParts: currentWorkoutSession.fetchSecondaryBodyParts ? currentWorkoutSession.fetchSecondaryBodyParts() : [], // Ensure method exists
+          workoutTitle: currentWorkoutSession.title,
+          exercisesCompleted: updatedLogs.filter(log => log.logSubmitted),
+          isCompleted: false, // This will be set later in completeWorkout
+          startTime: currentWorkoutSession.startTime || new Date(),
+          createdAt: currentWorkoutSession.createdAt || new Date(),
+          updatedAt: new Date()
+        });
     
-          dispatch(setWorkoutSummary(updatedSummary.toDictionary()));
-        }
-    
-        // Handle bodyweight vs regular exercise submission
-        if (isBodyWeight) {
-          await performBodyWeightSubmission(updatedLogs);
-        } else {
-          await performExerciseSubmission(updatedLogs);
-        }
+        // Dispatch updated summary (converted to plain object)
+        dispatch(setWorkoutSummary(updatedSummary.toDictionary()));
     
         // Update Redux state with serialized logs
         dispatch(setCurrentExerciseLogs(updatedLogs.map(log => log.toDictionary())));
     
         // Find next incomplete exercise
-        const nextIndex = updatedLogs.findIndex(log => !log.logSubmitted);
+        const nextIndex = updatedLogs.findIndex((log, index) => index > currentLogIndex && !log.logSubmitted);
+        console.log(`[HomeContent completeExercise] nextIndex found: ${nextIndex}`);
         
+        console.log(`[HomeContent completeExercise] Setting timeout to advance index...`);
         setTimeout(() => {
+          console.log(`[HomeContent completeExercise] Timeout fired. nextIndex: ${nextIndex}`);
           if (nextIndex !== -1) {
+            console.log(`[HomeContent completeExercise] Moving to next exercise index: ${nextIndex}`);
             setCurrentExerciseIndex(nextIndex);
           } else {
-            completeWorkout();
+            console.log('[HomeContent completeExercise] No more exercises, calling completeWorkout...');
+            completeWorkout(); // Call the separate completeWorkout function
           }
-        }, 100);
+        }, 100); // Short delay for state updates
     
       } catch (error) {
-        console.error('Error submitting exercise:', error);
+        console.error('[HomeContent completeExercise] Error submitting exercise:', error);
       }
-    };
+      console.log('[HomeContent completeExercise] Finished.'); 
+    // Dependencies for useCallback
+    }, [userId, currentWorkoutSession, currentExerciseLogs, currentExerciseIndex, dispatch]); 
   
     const performBodyWeightSubmission = (updatedLogs: ExerciseLog[]) => {
       const updatedLogsWithBodyWeight = updatedLogs.map(log => new ExerciseLog({
@@ -217,10 +302,11 @@ const HomeContent = () => {
   
 
 // In HomeContent component:
-const completeWorkout = async () => {
+const completeWorkout = useCallback(async () => {
+  console.log('[HomeContent completeWorkout] Starting...');
   try {
     if (!currentWorkoutSession || !currentUser) {
-      console.error('Missing required data for workout completion');
+      console.error('[HomeContent completeWorkout] Missing required data for workout completion');
       return;
     }
 
@@ -268,6 +354,7 @@ const completeWorkout = async () => {
     );
 
     if (result.status === WorkoutStatus.Complete && result.workoutSummary) {
+      console.log('[HomeContent completeWorkout] Workout complete, navigating to summary...');
       dispatch(setWorkoutSummary(result.workoutSummary));
       dispatch(setCurrentWorkout(null));
       dispatch(setCurrentExerciseLogs([]));
@@ -280,7 +367,8 @@ const completeWorkout = async () => {
   } catch (error) {
     console.error('Error completing workout:', error);
   }
-};
+  console.log('[HomeContent completeWorkout] Finished.');
+}, [currentWorkoutSession, currentUser, dispatch, router]);
 
 // Update performExerciseSubmission to track completed exercises
 const performExerciseSubmission = async (updatedLogs: ExerciseLog[]) => {
@@ -337,10 +425,21 @@ const performExerciseSubmission = async (updatedLogs: ExerciseLog[]) => {
           />
         );
       case WorkoutStatus.InProgress:
+        // Add this log before returning the component
+        const logDataForInspection = currentExerciseLogs?.[currentExerciseIndex];
+        console.log(
+          `[HomeContent renderWorkoutView] Inspecting data for index ${currentExerciseIndex}:`,
+          {
+            logExists: !!logDataForInspection,
+            exerciseName: logDataForInspection?.exercise?.name,
+            screenTime: logDataForInspection?.exercise?.category?.details?.screenTime,
+            fullLog: logDataForInspection // Log the full plain object from Redux
+          }
+        );
         return (
           <InProgressExercise
             exercises={currentExerciseLogs || []}
-            currentExerciseLogs={currentExerciseLogs}
+            currentExerciseLogs={currentExerciseLogs || []}
             currentExerciseIndex={currentExerciseIndex}
             onComplete={completeExercise}
             onClose={handleCancelWorkout}
@@ -375,14 +474,15 @@ const performExerciseSubmission = async (updatedLogs: ExerciseLog[]) => {
     try {
       if (userId) {
         // Save workout session and get logs
-        const savedWorkout = await workoutService.saveWorkoutSession({
+        const savedSessionData = await workoutService.saveWorkoutSession({
           userId,
           workout,
-          logs: workout.logs || []
+          logs: workout.logs || [] // Assuming initial logs might be on the template
         });
 
-        if (savedWorkout) {
-          startWorkout(savedWorkout, savedWorkout.logs || []);
+        // Extract workout and logs before calling startWorkout
+        if (savedSessionData && savedSessionData.workout) {
+          startWorkout(savedSessionData.workout, savedSessionData.logs || []);
           setIsWorkoutPanelOpen(false);
         }
       }
@@ -394,9 +494,9 @@ const performExerciseSubmission = async (updatedLogs: ExerciseLog[]) => {
   // Main render logic
   return (
     <div className="min-h-screen bg-zinc-900">
-      {/* {currentWorkoutSession ? (
+      {currentWorkoutSession ? (
         renderWorkoutView()
-      ) : ( */} 
+      ) : (
         <>
           {/* Top Navigation */}
           <nav className="px-4 py-4 bg-zinc-900/80 backdrop-blur-sm border-b border-zinc-800 sticky top-0 z-10 flex justify-between items-center">
@@ -429,7 +529,7 @@ const performExerciseSubmission = async (updatedLogs: ExerciseLog[]) => {
             onStartWorkout={handleStartWorkout}
           />
         </>
--      {/* )} */}
+      )}
     </div>
   );
 };

@@ -61,44 +61,61 @@ const WorkoutPreviewer: React.FC = () => {
   const dispatch = useDispatch();
   
   const handleStartWorkout = async () => {
+    console.log('[handleStartWorkout] Starting...'); // Log 1
     if (!workout || !logs.length) {
-      setError("Unable to start workout");
+      console.error('[handleStartWorkout] Error: Workout or logs missing', { workout, logs });
+      setError("Unable to start workout - workout or logs missing");
       return;
     }
   
     try {
       if (userId) {
-        console.log("Starting workout with logs:", logs.map(log => ({
-          name: log.exercise.name,
-          category: log.exercise.category,
-          type: log.exercise.category?.type,
-          details: log.exercise.category?.details
-        })));
-  
+        console.log('[handleStartWorkout] User ID found:', userId); // Log
+        console.log('[handleStartWorkout] Logs being sent to service:', logs); // Log 2
+        
         // Save workout session in Firestore
-        const savedWorkout = await workoutService.saveWorkoutSession({
+        console.log('[handleStartWorkout] Calling workoutService.saveWorkoutSession...'); // Log
+        const result = await workoutService.saveWorkoutSession({
           userId,
           workout,
           logs
         });
   
-        if (savedWorkout) {
-          console.log("Queued workout:", savedWorkout);
-          console.log("✅ Queued Workout ID:", savedWorkout.id); // 🔥 Logs workout ID
-  
-          // // ✅ Dispatch Redux actions to store workout data
-          dispatch(setCurrentWorkout(savedWorkout));
-          dispatch(setCurrentExerciseLogs(logs));
+        // Deconstruct the result
+        const savedWorkout = result?.workout;
+        const updatedLogsWithNewIds = result?.logs;
+
+        console.log('[handleStartWorkout] Received savedWorkout from service:', savedWorkout);
+        console.log('[handleStartWorkout] Received updatedLogsWithNewIds from service:', updatedLogsWithNewIds);
+
+        if (savedWorkout && updatedLogsWithNewIds) {
+          console.log('[handleStartWorkout] Workout session saved successfully. ID:', savedWorkout.id);
+          
+          // Convert workout and *updated* logs to plain objects for Redux
+          const plainWorkout = savedWorkout.toDictionary();
+          const plainLogs = updatedLogsWithNewIds.map(log => log.toDictionary());
+
+          // ✅ Dispatch Redux actions with plain objects containing correct IDs
+          console.log('[handleStartWorkout] Dispatching setCurrentWorkout with plain object:', plainWorkout);
+          dispatch(setCurrentWorkout(plainWorkout));
+          console.log('[handleStartWorkout] Dispatching setCurrentExerciseLogs with updated plain logs:', plainLogs);
+          dispatch(setCurrentExerciseLogs(plainLogs));
+          console.log('[handleStartWorkout] Redux actions dispatched.');
   
           // ✅ Navigate back to home, which handles the workout state
-          router.push('/');
+          console.log('[handleStartWorkout] Navigating to home page...'); // Log 6
+          router.push('/'); // Re-enable navigation
         } else {
+          console.error('[handleStartWorkout] Error: Failed to save workout session - service returned null/undefined.');
           setError("Failed to save workout session");
         }
+      } else {
+        console.error('[handleStartWorkout] Error: User ID not found');
+        setError("User not authenticated");
       }
     } catch (err) {
-      console.error('Error starting workout:', err);
-      setError("Failed to start workout");
+      console.error('[handleStartWorkout] Error caught:', err);
+      setError("Failed to start workout: " + (err instanceof Error ? err.message : String(err)));
     }
   };
   

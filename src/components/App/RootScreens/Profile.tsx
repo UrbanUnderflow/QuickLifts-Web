@@ -16,7 +16,7 @@ import { useRouter } from 'next/router';
 import { useDispatch } from 'react-redux';
 import { setUser } from '../../../redux/userSlice';
 import { firebaseStorageService, UploadImageType } from '../../../api/firebase/storage/service';
-import { Camera, Trash2, CheckCircle } from 'lucide-react';
+import { Camera, Trash2, CheckCircle, User as UserIcon } from 'lucide-react';
 import Spacer from '../../../components/Spacer';
 import { videoProcessorService } from '../../../api/firebase/video-processor/service';
 import { exerciseService } from '../../../api/firebase/exercise/service';
@@ -96,65 +96,54 @@ const TABS = {
 type TabType = typeof TABS[keyof typeof TABS];
 
 const Profile: React.FC = () => {
+  // --- Define ALL hooks FIRST ---
   const [selectedTab, setSelectedTab] = useState<TabType>(TABS.EXERCISES);
   const [userData, setUserData] = useState<User | null>(null);
   const [userVideos, setUserVideos] = useState<Exercise[]>([]);
   const [activeChallenges, setActiveChallenges] = useState<Challenge[]>([]);
   const [workoutSummaries, setWorkoutSummaries] = useState<WorkoutSummary[]>([]);
-  const [userStacks, setUserStacks] = useState<Workout[]>([]);
   const [activities, setActivities] = useState<UserActivity[]>([]);
   const [followers, setFollowers] = useState<FollowRequest[]>([]);
   const [following, setFollowing] = useState<FollowRequest[]>([]);
-  const [selectedExercises, setSelectedExercises] = useState<Exercise[]>([]);
+  const [loading, setLoading] = useState(true); // Start loading true
+  const [error, setError] = useState<string | null>(null);
   const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
-
   const [isImageUploading, setIsImageUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedStacks, setSelectedStacks] = useState<Set<string>>(new Set());
+  const [userStacks, setUserStacks] = useState<Workout[]>([]);
   const [isSelecting, setIsSelecting] = useState(false);
   const [isProcessingGifs, setIsProcessingGifs] = useState(false);
-
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true); // Keep this one for overall loading
   const [isCurrentUserProfile, setIsCurrentUserProfile] = useState(false);
   const hookCurrentUser = useUser();
   const router = useRouter();
   const dispatch = useDispatch();
-  const { username: usernameFromRoute } = router.query as { username: string };
+  const [selectedExercises, setSelectedExercises] = useState<Exercise[]>([]);
 
+  console.log('[Profile Component Render] Rendering component. Current User ID:', hookCurrentUser?.id);
+
+  // ... Event handlers (handleProfileImageUpload, handleToggleSelection, handleDelete, etc.) ...
   const handleProfileImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
+    if (file && hookCurrentUser) {
       try {
         setIsImageUploading(true);
-        
-        const uploadResult = await firebaseStorageService.uploadImage(
-          file, 
-          UploadImageType.Profile
-        );
-
-        // Update user's profile image in Firestore
-        if (hookCurrentUser) {
-          const updatedUser = new User(hookCurrentUser.id, {
-            ...hookCurrentUser.toDictionary(),
-            profileImage: {
-              profileImageURL: uploadResult.downloadURL,
-              imageOffsetWidth: 0,
-              imageOffsetHeight: 0
-            },
-            updatedAt: new Date()
-          });
-
-          await userService.updateUser(hookCurrentUser.id, updatedUser);
-          
-          // Optionally, update the current user in the service
-          userService.nonUICurrentUser = updatedUser;
-          if (isCurrentUserProfile) {
-            dispatch(setUser(updatedUser.toDictionary()));
-          }
-        }
+        const uploadResult = await firebaseStorageService.uploadImage(file, UploadImageType.Profile);
+        const updatedUser = new User(hookCurrentUser.id, {
+          ...hookCurrentUser.toDictionary(),
+          profileImage: { profileImageURL: uploadResult.downloadURL, imageOffsetWidth: 0, imageOffsetHeight: 0 },
+          updatedAt: new Date()
+        });
+        await userService.updateUser(hookCurrentUser.id, updatedUser);
+        userService.nonUICurrentUser = updatedUser;
+        // Dispatch update to Redux only if it's the current user's profile being viewed (which it always is here)
+        dispatch(setUser(updatedUser.toDictionary()));
+         // Manually update local state if needed, or rely on hookCurrentUser update via Redux
+         setUserData(updatedUser);
       } catch (error) {
         console.error('Profile image upload failed', error);
-        // Optionally show an error toast
+        setError('Failed to upload profile image.');
       } finally {
         setIsImageUploading(false);
       }
@@ -163,225 +152,225 @@ const Profile: React.FC = () => {
 
   const handleToggleSelection = (exercise: Exercise) => {
     setSelectedExercises(prev => {
-      // Check if exercise is already selected
       const alreadySelected = prev.find((ex) => ex.id === exercise.id);
       if (alreadySelected) {
-        // Remove it
         return prev.filter((ex) => ex.id !== exercise.id);
       } else {
-        // Add it
         return [...prev, exercise];
       }
     });
   };
 
   const handleDelete = async () => {
+    // ... (keep existing handleDelete logic) ...
+    if (!hookCurrentUser) return;
     if (selectedTab === TABS.EXERCISES && selectedExercises.length > 0) {
       try {
+        // Assuming deleteUserVideo needs user ID implicitly or is handled in service
         await Promise.all(
-          selectedExercises.map(ex => userService.deleteUserVideo(ex.id))
+          selectedExercises.map(ex => userService.deleteUserVideo(ex.id)) // Check if this needs userId
         );
         setUserVideos(prev => prev.filter(v => !selectedExercises.some(se => se.id === v.id)));
         setSelectedExercises([]);
       } catch (error) {
         console.error('Error deleting videos:', error);
+        setError('Failed to delete selected videos.');
       }
     } else if (selectedTab === TABS.STACKS && selectedStacks.size > 0) {
       try {
         await Promise.all(
-          Array.from(selectedStacks).map(id => userService.deleteStack(id))
+          Array.from(selectedStacks).map(id => userService.deleteStack(id)) // Check if this needs userId
         );
         setUserStacks(prev => prev.filter(s => !selectedStacks.has(s.id)));
         setSelectedStacks(new Set());
       } catch (error) {
         console.error('Error deleting stacks:', error);
+        setError('Failed to delete selected stacks.');
       }
     }
     setIsSelecting(false);
   };
 
-  // Function to process all videos without GIFs
   const handleProcessVideosWithoutGifs = async () => {
+     // ... (keep existing handleProcessVideosWithoutGifs logic) ...
     if (isProcessingGifs || !isCurrentUserProfile) return;
-    
     setIsProcessingGifs(true);
     try {
       await videoProcessorService.processAllUserVideosWithoutGifs();
-      // After processing, refresh the user videos
       if (hookCurrentUser?.id) {
-        const videos = await userService.fetchUserVideos();
+        const videos = await userService.fetchUserVideos(hookCurrentUser.id);
         setUserVideos(videos);
       }
     } catch (error) {
       console.error('Error processing videos without GIFs:', error);
+      setError('Failed to process videos.');
     } finally {
       setIsProcessingGifs(false);
     }
   };
 
-  // Add a new function to handle video deletion
   const handleDeleteSpecificVideo = async (videoId: string, exerciseId: string) => {
-    if (!isCurrentUserProfile || !window.confirm('Are you sure you want to delete this video?')) {
+     // ... (keep existing handleDeleteSpecificVideo logic) ...
+    if (!window.confirm('Are you sure you want to delete this video?')) {
       return;
     }
-    
     const userId = hookCurrentUser?.id;
     if (!userId) {
       console.error('User not logged in');
+      setError('You must be logged in to delete videos.');
       return;
     }
-    
     try {
       await exerciseService.deleteSpecificExerciseVideo(exerciseId, videoId, userId);
-      
-      // Instead of manually updating the state, fetch fresh videos
       console.log(`Successfully deleted video ${videoId}`);
-      const videos = await userService.fetchUserVideos();
+      const videos = await userService.fetchUserVideos(userId);
       setUserVideos(videos);
-      
     } catch (error) {
       console.error('Failed to delete video:', error);
+       setError('Failed to delete the video.');
     }
   };
 
-  if (isLoading) {
-    return <div className="flex items-center justify-center min-h-screen">Loading Profile...</div>;
-  }
-
-  if (!userData) {
-    return <div className="flex items-center justify-center min-h-screen">User not found.</div>;
-  }
-
+  // --- Define ALL useEffect hooks NEXT ---
   useEffect(() => {
     const fetchUserData = async () => {
-      if (!usernameFromRoute) return;
+      const currentUserId = hookCurrentUser?.id;
+      const currentUsername = hookCurrentUser?.username;
+      console.log('[Profile useEffect] Effect triggered. Current User ID:', currentUserId);
+      if (!currentUserId) {
+        console.log('[Profile useEffect] No current user ID available, exiting.');
+        // If no user ID, we probably shouldn't be showing this component, or should show a different state.
+        // For now, we just exit, but isLoading might stay true indefinitely.
+        // Consider setting isLoading false and showing an error/login prompt.
+        // setIsLoading(false);
+        return;
+      }
 
-      setIsLoading(true);
-      const targetUsername = usernameFromRoute;
-  
+      // Only set loading true if we are actually going to fetch
+      // and if userData is not already loaded (to avoid flicker on hook changes)
+      if (!userData) {
+           console.log('[Profile useEffect] Setting isLoading to true for user ID:', currentUserId);
+           setIsLoading(true);
+      }
+
       try {
-        // Fetch the profile user's data based on the route username
-        const profileUser = await userService.getUserByUsername(targetUsername);
-        setUserData(profileUser);
-
-        if (!profileUser) {
-          setIsLoading(false);
-          return;
+        if (!currentUsername) {
+            console.error('[Profile useEffect] Current user username is missing, cannot fetch profile by username.');
+            setError('Failed to load profile: Missing username.');
+            setIsLoading(false); // Stop loading on error
+            return;
         }
+        console.log('[Profile useEffect] Fetching user data for username:', currentUsername);
+        const profileUser = await userService.getUserByUsername(currentUsername);
+        console.log('[Profile useEffect] Fetched profileUser object:', profileUser);
+        if (!profileUser) {
+          console.warn('[Profile useEffect] No profileUser found for current user ID:', currentUserId);
+          setError('Failed to load your profile data.');
+          setUserData(null);
+          // No return here, finally will set isLoading false
+        } else {
+            setUserData(profileUser);
+            setIsCurrentUserProfile(true); // Always the current user in this component
 
-        // Determine if this is the logged-in user's profile
-        setIsCurrentUserProfile(!!hookCurrentUser && hookCurrentUser.username === profileUser.username);
+            // --- Fetch related data only after profileUser is confirmed ---
+            console.log('[Profile useEffect] Fetching followers, following, challenges, summaries for user ID:', profileUser.id);
+            const [followersData, followingData, challengesData, summariesData] = await Promise.all([
+              userService.fetchFollowers(),
+              userService.fetchFollowing(),
+              workoutService.fetchCollections(profileUser.id),
+              workoutService.fetchAllWorkoutSummaries() // Still might need filtering
+            ]);
+            console.log('[Profile useEffect] Fetched counts:', { followers: followersData.length, following: followingData.length, challenges: challengesData.length, summaries: summariesData.length });
+            setFollowers(followersData);
+            setFollowing(followingData);
+            const activeChallenges = challengesData
+              .map(uc => uc.challenge)
+              .filter((c): c is Challenge => !!c);
+            setActiveChallenges(activeChallenges);
+            setWorkoutSummaries(summariesData);
 
-        // Fetch followers and following
-        const [followers, following, challenges, summaries] = await Promise.all([
-          userService.fetchFollowers(),
-          userService.fetchFollowing(),
-          workoutService.fetchCollections(profileUser.id),
-          workoutService.fetchAllWorkoutSummaries()
-        ]);
-  
-        setFollowers(followers);
-        setFollowing(following);
-        
-        // Convert challenges
-        const activeChallenges = challenges
-          .map(uc => uc.challenge)
-          .filter(c => c !== undefined);
-          setActiveChallenges(activeChallenges.filter((challenge): challenge is Challenge => challenge !== null));
-  
-        setWorkoutSummaries(summaries);
-  
-        // Parsing activities
-        const userActivities = parseActivityType(
-          summaries, 
-          userVideos, 
-          [...followers, ...following], 
-          profileUser.id
-        );
-
-        setActivities(userActivities);
-  
+            // --- Parse activities after other data is ready --- 
+            // (Still depends on userVideos from the *other* effect, which might not be ready yet)
+            console.log('[Profile useEffect] Parsing activities (depends on userVideos state)...');
+            const userActivities = parseActivityType(
+                summariesData,
+                userVideos, // <<<<<< PROBLEM: userVideos state might be stale here
+                [...followersData, ...followingData],
+                profileUser.id
+            );
+            setActivities(userActivities);
+            console.log('[Profile useEffect] Data processing complete.');
+        }
       } catch (error) {
-        console.error('Error fetching user data:', error);
+        console.error('[Profile useEffect] Error fetching user data:', error);
         setUserData(null);
+        setError(error instanceof Error ? error.message : 'An unknown error occurred');
       } finally {
+        console.log('[Profile useEffect] Setting isLoading to false in finally block.');
         setIsLoading(false);
       }
     };
-  
     fetchUserData();
-  }, [usernameFromRoute, hookCurrentUser?.username]);
+    // Dependency: Re-run if user ID changes. Avoid depending on userVideos here.
+  }, [hookCurrentUser?.id, hookCurrentUser?.username]);
 
-  useEffect(() => {
-    const fetchUserStacks = async () => {
-      if (!userData?.id) return;
-      
-      try {
-        const stacks = await userService.fetchUserStacks(userData.id);
-        setUserStacks(stacks);
-        console.log("stacks: ", stacks);
-      } catch (error) {
-        console.error('Error fetching stacks:', error);
-      }
-    };
-
-    fetchUserStacks();
-  }, [userData?.id]);
-
+  // Separate useEffect for fetching user videos
   useEffect(() => {
     const fetchUserVideos = async () => {
-      if (!userData?.id) return;
-      
+      const userId = hookCurrentUser?.id; // Use current user ID directly
+      if (!userId) return;
+      console.log('[Profile Videos useEffect] Fetching videos for user ID:', userId);
       try {
-        console.log('[DEBUG-PROFILE-COMPONENT] Starting to fetch user videos for:', userData.id);
-        const videos = await userService.fetchUserVideos(userData.id);
-        console.log('[DEBUG-PROFILE-COMPONENT] Received videos count:', videos.length);
-        
-        // Count total unique videos
-        const uniqueVideoIds = new Set<string>();
-        videos.forEach(exercise => {
-          exercise.videos.forEach(video => {
-            uniqueVideoIds.add(video.id);
-          });
-        });
-        
-        console.log('[DEBUG-PROFILE-COMPONENT] Total unique videos:', uniqueVideoIds.size);
-        console.log('[DEBUG-PROFILE-COMPONENT] Video details:', videos.map(v => ({
-          id: v.id,
-          name: v.name,
-          videoCount: v.videos.length,
-          videoIds: v.videos.map(vid => vid.id)
-        })));
-        
-        // Check for specific video
-        const hasTargetVideo = videos.some(v => 
-          v.videos.some(video => video.id === 'UYpNnfGmw9xyPA6dOv2D')
-        );
-        console.log('[DEBUG-PROFILE-COMPONENT] Contains target video (UYpNnfGmw9xyPA6dOv2D):', hasTargetVideo);
-        
-        if (hasTargetVideo) {
-          const targetExercise = videos.find(v => 
-            v.videos.some(video => video.id === 'UYpNnfGmw9xyPA6dOv2D')
-          );
-          console.log('[DEBUG-PROFILE-COMPONENT] Target video is in exercise:', 
-            targetExercise?.name, 
-            'with videoCount:', targetExercise?.videos.length
-          );
-        }
-        
+        // Consider setting a specific loading state for videos?
+        const videos = await userService.fetchUserVideos(userId);
+        console.log('[Profile Videos useEffect] Fetched videos count:', videos.length);
         setUserVideos(videos);
       } catch (error) {
-        console.error('[DEBUG-PROFILE-COMPONENT] Error fetching user videos:', error);
+        console.error('[Profile Videos useEffect] Error fetching user videos:', error);
+        setError('Failed to load your videos.'); // Set specific error
       }
     };
-  
     fetchUserVideos();
-  }, [userData?.id]);
+  }, [hookCurrentUser?.id]); // Depend on current user ID
 
+  // Separate useEffect for fetching user stacks
+  useEffect(() => {
+    const fetchUserStacks = async () => {
+       const userId = hookCurrentUser?.id; // Use current user ID directly
+       if (!userId) return;
+       console.log('[Profile Stacks useEffect] Fetching stacks for user ID:', userId);
+      try {
+        // Consider setting a specific loading state for stacks?
+        const stacks = await userService.fetchUserStacks(userId);
+        console.log('[Profile Stacks useEffect] Fetched stacks count:', stacks.length);
+        setUserStacks(stacks);
+      } catch (error) {
+        console.error('[Profile Stacks useEffect] Error fetching stacks:', error);
+        setError('Failed to load your stacks.'); // Set specific error
+      }
+    };
+    fetchUserStacks();
+  }, [hookCurrentUser?.id]); // Depend on current user ID
+
+  // Conditional returns moved here
+  if (isLoading) {
+    console.log('[Profile Component Render] Showing loading state (initial or main data fetch).');
+    return <div className="flex items-center justify-center min-h-screen">Loading Profile...</div>;
+  }
+  if (error) {
+     console.log('[Profile Component Render] Error state is set:', error);
+     return <div className="flex items-center justify-center min-h-screen text-red-500">Error: {error}</div>;
+  }
+  if (!userData) {
+    console.log('[Profile Component Render] No userData and not loading/error, showing User not found.');
+    return <div className="flex items-center justify-center min-h-screen">User data could not be loaded.</div>;
+  }
+
+  // --- Now safe to render the main component body ---
   const socialLinks = {
-    instagram: userData.creator?.instagramHandle,
-    twitter: userData.creator?.twitterHandle,
-    youtube: userData.creator?.youtubeUrl
+      instagram: userData.creator?.instagramHandle,
+      twitter: userData.creator?.twitterHandle,
+      youtube: userData.creator?.youtubeUrl
   };
 
   return (
@@ -393,7 +382,7 @@ const Profile: React.FC = () => {
           <div className="relative -mt-24">
             
 
-          <div className="relative inline-block">
+          <div className="relative inline-block group">
             <input 
               type="file" 
               ref={fileInputRef}
@@ -402,28 +391,37 @@ const Profile: React.FC = () => {
               className="hidden"
             />
             <div className="relative">
-              <img 
-                src={userData.profileImage?.profileImageURL || "/api/placeholder/96/96"}
-                alt={userData.displayName}
-                className={`w-24 h-24 rounded-full border-4 border-zinc-900 ${isImageUploading ? 'opacity-50' : ''}`}
-              />
-              {isImageUploading && (
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="loader border-t-transparent border-4 border-white rounded-full w-8 h-8 animate-spin"></div>
+              {userData.profileImage?.profileImageURL ? (
+                <img 
+                  src={userData.profileImage.profileImageURL}
+                  alt={userData.displayName || userData.username}
+                  className={`w-24 h-24 rounded-full border-4 border-zinc-900 object-cover ${isImageUploading ? 'opacity-50' : ''}`}
+                />
+              ) : (
+                <div className={`w-24 h-24 rounded-full border-4 border-zinc-900 bg-zinc-800 flex items-center justify-center ${isImageUploading ? 'opacity-50' : ''}`}>
+                  <UserIcon className="w-12 h-12 text-zinc-400" />
                 </div>
               )}
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="absolute bottom-0 right-0 bg-[#E0FE10] text-black p-1 rounded-full shadow-lg hover:bg-[#c8e60e] transition-colors"
-                disabled={isImageUploading}
-              >
-                <Camera size={16} />
-              </button>
+              {isImageUploading && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full">
+                  <div className="loader border-t-transparent border-4 border-[#E0FE10] rounded-full w-8 h-8 animate-spin"></div>
+                </div>
+              )}
+              {isCurrentUserProfile && (
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="absolute bottom-0 right-0 bg-[#E0FE10] text-black p-1 rounded-full shadow-lg hover:bg-[#c8e60e] transition-colors"
+                  disabled={isImageUploading}
+                  aria-label="Upload profile picture"
+                >
+                  <Camera size={16} />
+                </button>
+              )}
             </div>
           </div>
 
             <div className="mt-4 text-white">
-              <h1 className="text-2xl font-bold">{userData.displayName}</h1>
+              <h1 className="text-2xl font-bold">{userData.displayName || `@${userData.username}`}</h1>
               <p className="text-zinc-400">@{userData.username}</p>
               
               <div className="mt-2 flex items-center gap-4 text-sm text-zinc-400">

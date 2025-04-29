@@ -1594,10 +1594,38 @@ async deleteWorkoutSession(workoutId: string | null): Promise<void> {
     userId: string,
     workout: Workout,
     logs: ExerciseLog[]
-  }): Promise<Workout | null> {
+  }): Promise<{ workout: Workout | null; logs: ExerciseLog[] }> {
     if (!userId) throw new Error('No user ID provided');
 
     try {
+      // *** START: Cleanup existing QueuedUp sessions ***
+      const sessionsRef = collection(db, 'users', userId, 'workoutSessions');
+      const q = query(sessionsRef, where('workoutStatus', '==', WorkoutStatus.QueuedUp));
+      const queuedSnapshot = await getDocs(q);
+
+      if (!queuedSnapshot.empty) {
+        console.log(`[WorkoutService] Found ${queuedSnapshot.size} existing QueuedUp session(s) for user ${userId}. Cleaning up...`);
+        const deleteBatch = writeBatch(db);
+        
+        // Use Promise.all to handle asynchronous log fetching for all sessions
+        await Promise.all(queuedSnapshot.docs.map(async (sessionDoc) => {
+          // Delete logs subcollection first
+          const logsToDeleteRef = collection(sessionDoc.ref, 'logs');
+          const logsToDeleteSnapshot = await getDocs(logsToDeleteRef);
+          logsToDeleteSnapshot.forEach(logDoc => {
+            deleteBatch.delete(logDoc.ref);
+          });
+          // Then delete the session doc itself
+          deleteBatch.delete(sessionDoc.ref);
+        }));
+
+        await deleteBatch.commit();
+        console.log(`[WorkoutService] Finished cleaning up existing QueuedUp sessions.`);
+      } else {
+        console.log(`[WorkoutService] No existing QueuedUp sessions found for user ${userId}.`);
+      }
+      // *** END: Cleanup existing QueuedUp sessions ***
+
       console.log('Incoming logs:', logs.map(log => ({
         name: log.exercise.name,
         category: log.exercise.category,
@@ -1608,64 +1636,43 @@ async deleteWorkoutSession(workoutId: string | null): Promise<void> {
       
       const cleanWorkout = new Workout({
         ...workout,
+        // Generate a NEW ID for the session document itself
+        id: doc(sessionsRef).id, // Generate ID here
         roundWorkoutId: `${workout.id}-${currentDate.getTime()}`,
         workoutStatus: WorkoutStatus.QueuedUp,
         createdAt: currentDate,
         updatedAt: currentDate,
         startTime: currentDate,
-        logs: []
+        logs: [] // Logs stored in subcollection
       });
 
-      const workoutSessionRef = doc(collection(db, 'users', userId, 'workoutSessions'));
+      // Use the generated ID for the document reference
+      const workoutSessionRef = doc(db, 'users', userId, 'workoutSessions', cleanWorkout.id);
       await setDoc(workoutSessionRef, cleanWorkout.toDictionary());
 
       const logsRef = collection(workoutSessionRef, 'logs');
       const logBatch = writeBatch(db);
+      const updatedLogsWithNewIds: ExerciseLog[] = []; // Array to hold logs with updated IDs
 
       logs.forEach((log, index) => {
-        const logDocRef = doc(logsRef, `${log.id}-${currentDate.getTime()}`);
+        // Generate a unique ID for the log document within the subcollection
+        const logDocRef = doc(logsRef);
+        const newLogId = logDocRef.id; // Use Firestore generated ID
         
-        console.log(`Processing log ${index}:`, {
-          name: log.exercise.name,
-          originalCategory: log.exercise.category,
-          originalType: log.exercise.category?.type
+        // Update the log instance's ID
+        const updatedLog = new ExerciseLog({ ...log, id: newLogId });
+        updatedLogsWithNewIds.push(updatedLog);
+
+        console.log(`Processing log ${index} (New ID: ${newLogId}):`, {
+          name: updatedLog.exercise.name,
+          originalCategory: updatedLog.exercise.category,
+          originalType: updatedLog.exercise.category?.type
         });
 
-        // Preserve the category structure
-        const exerciseWithCategory = {
-          ...log.exercise.toDictionary(),
-          category: log.exercise.category?.type === 'weight-training' 
-            ? {
-                type: 'weight-training',
-                details: {
-                  sets: log.exercise.category.details?.sets || 3,
-                  reps: log.exercise.category.details?.reps || ['12'],
-                  weight: log.exercise.category.details?.weight || 0,
-                  screenTime: log.exercise.category.details?.screenTime || 0,
-                  selectedVideo: log.exercise.category.details?.selectedVideo || null
-                }
-              }
-            : {
-                type: 'cardio',
-                details: {
-                  duration: log.exercise.category?.details?.duration || 60,
-                  bpm: log.exercise.category?.details?.bpm || 140,
-                  calories: log.exercise.category?.details?.calories || 0,
-                  screenTime: log.exercise.category?.details?.screenTime || 0,
-                  selectedVideo: log.exercise.category?.details?.selectedVideo || null
-                }
-              }
-        };
-
-        console.log(`Saving exercise with category:`, exerciseWithCategory.category);
-
         logBatch.set(logDocRef, {
-          id: logDocRef.id,
-          workoutId: workoutSessionRef.id,
-          exercise: exerciseWithCategory,
+          ...updatedLog.toDictionary(),
+          workoutId: cleanWorkout.id, // Use the new workout session ID
           order: index,
-          createdAt: currentDate.getTime(),
-          updatedAt: currentDate.getTime(),
           logSubmitted: false,
           isCompleted: false
         });
@@ -1673,7 +1680,8 @@ async deleteWorkoutSession(workoutId: string | null): Promise<void> {
 
       await logBatch.commit();
       
-      return cleanWorkout;
+      // Return the workout AND the logs with their new Firestore document IDs
+      return { workout: cleanWorkout, logs: updatedLogsWithNewIds }; 
     } catch (error) {
       console.error('Error saving workout session:', error);
       throw error;

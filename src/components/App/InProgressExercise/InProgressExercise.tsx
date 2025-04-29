@@ -67,42 +67,55 @@ const InProgressExercise: React.FC<InProgressExerciseProps> = ({
   const [timeRemaining, setTimeRemaining] = useState(() => {
     return currentExercise?.category?.details?.screenTime ?? 60;
   });
+  const [isCompleting, setIsCompleting] = useState(false);
 
-  // Reset timer when exercise changes
+  // Reset timer and completion guard when exercise changes
   useEffect(() => {
-    const newScreenTime = currentExercise?.category?.details?.screenTime ?? 60;
-    console.log("Exercise changed, resetting timer:", {
-      exercise: currentExercise.name,
-      newScreenTime
-    });
+    const screenTimeValue = currentExercise?.category?.details?.screenTime;
+    const newScreenTime = screenTimeValue ?? 60;
+    console.log(`[InProgressExercise Effect] Exercise index changed to ${currentExerciseIndex}. Read screenTime value: ${screenTimeValue}. Using: ${newScreenTime}`);
+    console.log('[InProgressExercise Effect] Current exercise object:', currentExercise);
     setCurrentScreenTime(newScreenTime);
     setTimeRemaining(newScreenTime);
     setIsPaused(false);
-  }, [currentExercise]);
+    setIsCompleting(false);
+  }, [currentExercise, currentExerciseIndex]);
 
   // Timer effect
   useEffect(() => {
     console.log("Timer state:", {
       timeRemaining,
       isPaused,
+      isCompleting,
       screenTime: currentScreenTime,
       exercise: currentExercise.name
     });
 
-    if (!currentScreenTime || currentScreenTime <= 0) return;
-    if (isPaused) return;
-    
-    if (timeRemaining <= 0) {
+    if (isPaused || isCompleting) return;
+
+    // If screenTime is 0 or less, complete immediately
+    if (currentScreenTime <= 0) {
+      console.log(`[InProgressExercise Timer Effect] screenTime is ${currentScreenTime}, calling onComplete immediately.`);
+      setIsCompleting(true);
       onComplete();
       return;
     }
 
+    // If time has run out, complete
+    if (timeRemaining <= 0) {
+      console.log('[InProgressExercise Timer Effect] Time reached 0, calling onComplete...');
+      setIsCompleting(true);
+      onComplete();
+      return;
+    }
+
+    // Otherwise, decrement the timer
     const timerId = setInterval(() => {
       setTimeRemaining((prev: number) => (prev > 0 ? prev - 1 : 0));
     }, 1000);
 
     return () => clearInterval(timerId);
-  }, [timeRemaining, isPaused, currentScreenTime, onComplete]);
+  }, [timeRemaining, isPaused, isCompleting, currentScreenTime, onComplete, currentExercise.name]);
 
   // Video URL handling
   const getCurrentVideoUrl = (): string => {
@@ -231,7 +244,10 @@ const InProgressExercise: React.FC<InProgressExerciseProps> = ({
               {currentExerciseLogs.map((exerciseLog, idx) => (
                 <div 
                   key={exerciseLog.id || idx}
-                  onClick={() => onExerciseSelect(idx)}
+                  onClick={() => {
+                    console.log(`[InProgressExercise SideList] Clicked item index: ${idx}`);
+                    onExerciseSelect(idx);
+                  }}
                   className={`mb-4 p-4 rounded-lg cursor-pointer hover:bg-zinc-700/50 transition-colors ${
                     idx === currentExerciseIndex 
                       ? 'bg-[#E0FE10]/10 border border-[#E0FE10]' 
@@ -252,14 +268,25 @@ const InProgressExercise: React.FC<InProgressExerciseProps> = ({
                           <span className="text-black">✓</span>
                         </div>
                       ) : (
-                        <img
-                          src={exerciseLog.exercise?.videos?.[0]?.gifURL || '/placeholder-exercise.gif'}
-                          alt={exerciseLog.exercise?.name || 'Exercise'}
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).src = '/placeholder-exercise.gif';
-                          }}
-                        />
+                        exerciseLog.exercise?.videos?.[0]?.gifURL ? (
+                          <img
+                            src={exerciseLog.exercise.videos[0].gifURL}
+                            alt={exerciseLog.exercise?.name || 'Exercise'}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              // If image fails, render placeholder div instead (handled by parent logic now)
+                              (e.target as HTMLImageElement).style.display = 'none'; 
+                              // Optionally add a class to the parent div to show placeholder
+                            }}
+                          />
+                        ) : (
+                          // Render placeholder if no gifURL
+                          <div className="w-full h-full bg-zinc-700 flex items-center justify-center">
+                            <span className="text-white font-medium text-lg">
+                              {exerciseLog.exercise?.name?.charAt(0).toUpperCase() || 'E'}
+                            </span>
+                          </div>
+                        )
                       )}
                     </div>
                     <div className="flex-1">
@@ -305,14 +332,25 @@ const InProgressExercise: React.FC<InProgressExerciseProps> = ({
                       <span className="text-black">✓</span>
                     </div>
                   ) : (
-                    <img
-                      src={exerciseLog.exercise?.videos?.[0]?.gifURL || '/placeholder-exercise.gif'}
-                      alt={exerciseLog.exercise?.name || 'Exercise'}
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).src = '/placeholder-exercise.gif';
-                      }}
-                    />
+                    exerciseLog.exercise?.videos?.[0]?.gifURL ? (
+                      <img
+                        src={exerciseLog.exercise.videos[0].gifURL}
+                        alt={exerciseLog.exercise?.name || 'Exercise'}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                            // If image fails, render placeholder div instead (handled by parent logic now)
+                            (e.target as HTMLImageElement).style.display = 'none'; 
+                            // Optionally add a class to the parent div to show placeholder
+                        }}
+                      />
+                    ) : (
+                       // Render placeholder if no gifURL
+                       <div className="w-full h-full bg-zinc-700 flex items-center justify-center">
+                        <span className="text-white font-medium text-sm">
+                            {exerciseLog.exercise?.name?.charAt(0).toUpperCase() || 'E'}
+                        </span>
+                       </div>
+                    )
                   )}
                 </div>
               ))}

@@ -8,7 +8,6 @@ interface GifImageViewerProps {
   contentMode?: 'cover' | 'contain' | 'fill';
   className?: string;
   onClick?: () => void;
-  variant?: 'circle' | 'rounded'; // New prop
 }
 
 export const GifImageViewer: React.FC<GifImageViewerProps> = ({
@@ -18,17 +17,14 @@ export const GifImageViewer: React.FC<GifImageViewerProps> = ({
   contentMode = 'cover',
   className = '',
   onClick,
-  variant = 'circle', // Default to circle for backward compatibility
 }) => {
   const style = frameSize
     ? { width: `${frameSize.width}px`, height: `${frameSize.height}px` }
     : {};
 
-  const borderRadius = variant === 'circle' ? 'rounded-full' : 'rounded-xl';
-
   return (
     <div
-      className={`relative overflow-hidden ${borderRadius} cursor-pointer ${className}`}
+      className={`relative overflow-hidden ${className}`}
       style={style}
       onClick={onClick}
     >

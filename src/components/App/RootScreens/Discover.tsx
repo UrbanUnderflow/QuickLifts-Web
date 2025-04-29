@@ -5,7 +5,7 @@ import { exerciseService } from '../../../api/firebase/exercise';
 import { GifImageViewer } from '../../../components/GifImageViewer';
 import { workoutService } from '../../../api/firebase/workout';
 import { userService } from '../../../api/firebase/user';
-import { Workout } from '../../../api/firebase/workout/types';
+import { Workout, WorkoutStatus } from '../../../api/firebase/workout/types';
 import { UserChallenge } from '../../../api/firebase/workout/types';
 import { User } from '../../../api/firebase/user/types';
 import { Challenge } from '../../../api/firebase/workout/types';
@@ -111,34 +111,6 @@ const Discover = () => {
     loadData();
   }, [currentUser?.id]);
 
-  // Add an effect to reload user-specific data when auth state changes
-  // useEffect(() => {
-  //   // If user becomes authenticated, reload user-specific data
-  //   if (isUserAuthenticated()) {
-  //     const loadUserSpecificData = async () => {
-  //       try {
-  //         // Load current workout
-  //         const currentWorkoutData = workoutService.currentWorkout;
-  //         setCurrentWorkout(currentWorkoutData);
-          
-  //         // Load active rounds
-  //         const userRounds = await workoutService.fetchUserChallenges();
-  //         setActiveRounds(userRounds.filter(round => 
-  //           round.challenge && new Date(round.challenge.endDate) > new Date() && !round.isCompleted
-  //         ));
-  //       } catch (error) {
-  //         console.error('Error loading user-specific data:', error);
-  //       }
-  //     };
-      
-  //     loadUserSpecificData();
-  //   } else {
-  //     // If user is signed out, clear user-specific data
-  //     setCurrentWorkout(null);
-  //     setActiveRounds([]);
-  //   }
-  // }, [userService.currentUser]);
-
   // IntersectionObserver for "Load More"
   useEffect(() => {
     if (!loaderRef.current || !hasMore || selectedCategory !== CategoryTab.MOVES) return;
@@ -190,10 +162,19 @@ const Discover = () => {
       setFeaturedRounds(challenges);
       
       // Then, load user-specific data only if a user is signed in
-      if (isUserAuthenticated()) {
-        // Load current workout
-        const currentWorkoutData = workoutService.currentWorkout;
-        setCurrentWorkout(currentWorkoutData);
+      if (isUserAuthenticated() && currentUser?.id) {
+        // Load current workout *only if* status is InProgress
+        try {
+          const currentSession = await workoutService.fetchCurrentWorkoutSession(currentUser.id);
+          if (currentSession?.workout?.workoutStatus === WorkoutStatus.InProgress) {
+            setCurrentWorkout(currentSession.workout);
+          } else {
+            setCurrentWorkout(null); // Ensure it's null if no workout is InProgress
+          }
+        } catch (error) {
+           console.log('Could not fetch current workout session:', error);
+           setCurrentWorkout(null);
+        }
         
         // Load active rounds
         try {
@@ -202,7 +183,7 @@ const Discover = () => {
             round.challenge && new Date(round.challenge.endDate) > new Date() && !round.isCompleted
           ));
         } catch (error) {
-          console.log('User challenges couldn\'t be loaded, user might not be authenticated yet');
+          console.log("User challenges couldn't be loaded, user might not be authenticated yet");
           setActiveRounds([]);
         }
       } else {
@@ -437,6 +418,7 @@ const Discover = () => {
 
   const renderContinueWorkoutCard = () => {
     if (!currentWorkout) return null;
+    console.log('Rendering Continue Workout Card for:', currentWorkout);
 
     const completedExercises = currentWorkout.exercises?.filter(ex => ex.isCompleted) || [];
     const progress = currentWorkout.exercises?.length 
@@ -497,54 +479,58 @@ const Discover = () => {
 
         <div className="relative">
           <div className="carousel flex gap-4 overflow-x-auto pb-4 scrollbar-none">
-            {activeRounds.map((round, index) => (
-              <div 
-                key={round.id || index}
-                className="min-w-[300px] bg-zinc-800 rounded-xl p-4 snap-start"
-                onClick={() => selectRound(round)}
-              >
-                <h4 className="text-white font-medium text-lg mb-2">
-                  {round.challenge?.title || "Active Round"}
-                </h4>
-                
-                <div className="flex justify-between text-sm text-zinc-400 mb-3">
-                  <span>
-                    {Math.max(0, Math.floor((new Date(round.challenge?.endDate ?? new Date()).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)))} days left
-                  </span>
-                  <span>{round.pulsePoints?.totalPoints || 0} Points</span>
-                </div>
-                
-                <div className="w-full bg-zinc-700 h-1.5 rounded-full mb-4">
-                  <div 
-                    className="bg-[#E0FE10] h-1.5 rounded-full" 
-                    style={{ width: `${Math.max(0, Math.min(100, (1 - (Math.floor((new Date(round.challenge?.endDate ?? new Date()).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)) / (round.challenge?.durationInDays || 30))) * 100))}%` }}
-                  ></div>
-                </div>
-                
-                <div className="flex justify-between text-center">
-                  <div>
-                    <div className="text-[#E0FE10] font-medium">
-                      {round.completedWorkouts?.length || 0}/{round.challenge?.durationInDays || 30}
-                    </div>
-                    <div className="text-xs text-zinc-500">Workouts</div>
+            {activeRounds.map((round, index) => {
+              // Log the round data, especially completedWorkouts
+
+              return (
+                <div 
+                  key={round.id || index}
+                  className="min-w-[300px] bg-zinc-800 rounded-xl p-4 snap-start"
+                  onClick={() => selectRound(round)}
+                >
+                  <h4 className="text-white font-medium text-lg mb-2">
+                    {round.challenge?.title || "Active Round"}
+                  </h4>
+                  
+                  <div className="flex justify-between text-sm text-zinc-400 mb-3">
+                    <span>
+                      {Math.max(0, Math.floor((new Date(round.challenge?.endDate ?? new Date()).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)))} days left
+                    </span>
+                    <span>{round.pulsePoints?.totalPoints || 0} Points</span>
                   </div>
                   
-                  <div>
-                    <div className="text-[#E0FE10] font-medium">
-                      {round.currentStreak || 0}
-                    </div>
-                    <div className="text-xs text-zinc-500">Day Streak</div>
+                  <div className="w-full bg-zinc-700 h-1.5 rounded-full mb-4">
+                    <div 
+                      className="bg-[#E0FE10] h-1.5 rounded-full" 
+                      style={{ width: `${Math.max(0, Math.min(100, (1 - (Math.floor((new Date(round.challenge?.endDate ?? new Date()).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)) / (round.challenge?.durationInDays || 30))) * 100))}%` }}
+                    ></div>
                   </div>
                   
-                  <div>
-                    <div className="text-[#E0FE10] font-medium">
-                      {round.pulsePoints?.totalPoints || 0}
+                  <div className="flex justify-between text-center">
+                    <div>
+                      <div className="text-[#E0FE10] font-medium">
+                        {round.completedWorkouts?.length || 0}/{round.challenge?.durationInDays || 30}
+                      </div>
+                      <div className="text-xs text-zinc-500">Workouts</div>
                     </div>
-                    <div className="text-xs text-zinc-500">Points</div>
+                    
+                    <div>
+                      <div className="text-[#E0FE10] font-medium">
+                        {round.currentStreak || 0}
+                      </div>
+                      <div className="text-xs text-zinc-500">Day Streak</div>
+                    </div>
+                    
+                    <div>
+                      <div className="text-[#E0FE10] font-medium">
+                        {round.pulsePoints?.totalPoints || 0}
+                      </div>
+                      <div className="text-xs text-zinc-500">Points</div>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </div>

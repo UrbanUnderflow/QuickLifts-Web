@@ -148,6 +148,8 @@ const SignInModal: React.FC<SignInModalProps> = ({
   // Add effect to check if we need to show registration
   useEffect(() => {
     if (currentUser) {
+      console.log('[SignInModal Onboarding Check Effect] Running. Current User:', JSON.parse(JSON.stringify(currentUser)));
+
       console.log('[SignInModal] Checking user onboarding status:', {
         userId: currentUser.id,
         hasUsername: !!currentUser.username,
@@ -159,25 +161,46 @@ const SignInModal: React.FC<SignInModalProps> = ({
         timestamp: new Date().toISOString()
       });
 
-      if (!isOnboardingComplete(currentUser)) {
+      const onboardingStatus = isOnboardingComplete(currentUser);
+      console.log('[SignInModal Onboarding Check Effect] isOnboardingComplete result:', onboardingStatus);
+
+      if (!onboardingStatus) {
+        console.log('[SignInModal Onboarding Check Effect] Onboarding NOT complete. Checking fields...');
+
         const missing = [];
         if (!currentUser.username) missing.push('username');
         if (!currentUser.height || !currentUser.height.feet) missing.push('height');
         if (!currentUser.birthdate) missing.push('birthdate');
         if (!currentUser.registrationComplete) missing.push('registrationComplete');
         console.log('[SignInModal] User missing onboarding fields:', missing);
-        setIsSignUp(true);
+
+        setIsSignUp(true); // Ensure we are in signup mode
+
         // Only force the step if not already in the correct onboarding step
-        if (!currentUser.username && signUpStep !== 'profile') {
-          setSignUpStep('profile');
+        if (!currentUser.username) { // Highest priority is username
+          // Only set back to profile if we aren't already trying to move forward
+          if (signUpStep !== 'quiz-prompt' && signUpStep !== 'quiz') {
+            console.log('[SignInModal Onboarding Check Effect] Setting step to profile (username missing and not already progressing)');
+            setSignUpStep('profile');
+          } else {
+            console.log('[SignInModal Onboarding Check Effect] Username missing, but step is already quiz/quiz-prompt. Allowing progression.', { currentStep: signUpStep });
+          }
         } else if (
           currentUser.username &&
           signUpStep !== 'quiz' &&
           signUpStep !== 'quiz-prompt'
         ) {
+          console.log('[SignInModal Onboarding Check Effect] Setting step to quiz-prompt (username exists, onboarding incomplete)');
           setSignUpStep('quiz-prompt');
+        } else {
+          console.log('[SignInModal Onboarding Check Effect] Conditions met, but not changing step from:', signUpStep);
         }
+      } else {
+        console.log('[SignInModal Onboarding Check Effect] Onboarding IS complete. User should be okay. Current step:', signUpStep);
+        // Potentially add logic here if needed when onboarding IS complete upon check
       }
+    } else {
+      console.log('[SignInModal Onboarding Check Effect] Running. No currentUser.');
     }
   }, [currentUser, isVisible, onClose, signUpStep]);
 
@@ -602,41 +625,53 @@ const SignInModal: React.FC<SignInModalProps> = ({
       try {
         setIsLoading(true);
         setError(null);
-        if (!auth.currentUser) {
-          throw new Error("No authenticated user found");
+        const userId = auth.currentUser?.uid;
+        if (!userId) {
+          throw new Error("No authenticated user found for profile update");
         }
-        // Email fallback: use userService.nonUICurrentUser.email or auth.currentUser.email
-        const currentEmail = userService.nonUICurrentUser?.email || auth.currentUser.email; // Use nonUICurrentUser
+
+        // --- Fetch current data first --- 
+        const currentUserData = await userService.fetchUserFromFirestore(userId);
+        if (!currentUserData) {
+            throw new Error("Could not load current user data for profile update.");
+        }
+        console.log('[SignInModal Profile Step] Fetched current user data before update');
+        // --- End Fetch ---
+
+        // Email fallback: Ensure email is included
+        const currentEmail = currentUserData.email || auth.currentUser?.email;
         if (!currentEmail) {
-          console.error('[SignInModal] Registration: Email is missing, cannot complete registration.');
+          console.error('[SignInModal Registration Profile]: Email is missing, cannot complete registration.');
           throw new Error("Email is missing, cannot complete registration.");
         }
-        const updatedUser = new User(auth.currentUser.uid, {
-          ...userService.nonUICurrentUser?.toDictionary(), // Use nonUICurrentUser
-          username: username,
-          email: currentEmail, // Ensure email is included in the update
-          registrationComplete: true,
-          updatedAt: new Date()
+
+        // Prepare the updated user data, merging with fetched data
+        const updatedUser = new User(userId, {
+          ...currentUserData.toDictionary(), // Base on fetched data
+          username: username,                // Add new username
+          email: currentEmail,               // Ensure email is present
+          registrationComplete: true,      // Mark registration complete
+          updatedAt: new Date()              // Update timestamp
         });
-        await userService.updateUser(auth.currentUser.uid, updatedUser);
-        console.log('[SignInModal] Username updated and registration marked as complete');
-        // Check if onboarding is now complete
-        const refreshedUser = await userService.fetchUserFromFirestore(auth.currentUser.uid);
-        if (isOnboardingComplete(refreshedUser)) {
-          setIsLoading(false);
-          onRegistrationComplete?.();
-          onClose?.();
-          return;
-        } else {
-          setSignUpStep("quiz-prompt");
-        }
+
+        console.log('[SignInModal Profile Step] Attempting to update user with:', JSON.parse(JSON.stringify(updatedUser.toDictionary())));
+        await userService.updateUser(userId, updatedUser);
+        console.log('[SignInModal Profile Step] User update successful. Moving to quiz prompt.');
+
+        // --- Directly set the next step --- 
+        setSignUpStep("quiz-prompt");
+        // --- Remove fetch/check logic from here --- 
+        
+        // Optional: Update local state immediately if needed, though AuthWrapper might handle it
+        userService.nonUICurrentUser = updatedUser; 
+
       } catch (err) {
-        console.error("[SignInModal] Error updating username:", err);
+        console.error("[SignInModal Profile Step] Error updating username:", err);
         setError(err instanceof Error ? err.message : 'An error occurred');
       } finally {
         setIsLoading(false);
       }
-      return;
+      return; // Important: Stop handleSubmit execution after profile step
     }
 
     if (!isSignUp) {
@@ -747,49 +782,72 @@ const SignInModal: React.FC<SignInModalProps> = ({
           }
           
           try {
-            // Now we can create the user with email/password
+            // Create the Firebase Auth user
             const { user } = await createUserWithEmailAndPassword(auth, email, password);
-            console.log('[SignInModal] User created successfully:', {
-              uid: user.uid,
-              email: user.email,
-              timestamp: new Date().toISOString()
-            });
+            console.log('[SignInModal] Auth User created successfully:', { uid: user.uid, email: user.email });
 
             if (user) {
-              // CRITICAL CHECK: Ensure email exists (should always be true here, but check anyway)
               if (!user.email) {
                   console.error('[SignInModal] Email/Password sign-up completed but no email was provided. This should not happen.');
                   setError('Sign-up failed: An unexpected error occurred (missing email).');
                   setIsLoading(false);
                   return; // Stop execution
               }
-              
-              // Create a new User object with proper SubscriptionType
+
+              // Create a new local User object for Firestore
               const newUser = new User(user.uid, {
                 id: user.uid,
                 email: user.email,
-                subscriptionType: SubscriptionType.unsubscribed
+                subscriptionType: SubscriptionType.unsubscribed, // Default for new user
+                registrationComplete: false, // Explicitly false initially
+                createdAt: new Date(), // Add createdAt
+                updatedAt: new Date()  // Add updatedAt
+                // Other fields will be default/null
               });
-              
+
+              // *** IMMEDIATELY CREATE FIRESTORE DOC ***
+              console.log('[SignInModal] Attempting to create initial Firestore document...');
+              try {
+                  await userService.updateUser(user.uid, newUser);
+                  console.log('[SignInModal] Initial Firestore document created/updated successfully.');
+              } catch (firestoreError) {
+                  console.error('[SignInModal] FATAL: Failed to create initial Firestore document:', firestoreError);
+                  // Handle this critical error appropriately
+                  setError('Failed to initialize user profile. Please try again or contact support.');
+                  setIsLoading(false);
+                  return; // Stop execution if Firestore creation fails
+              }
+              // *** --- ***
+
+              // Update local/Redux state - AuthWrapper will pick this up via onAuthStateChanged
               userService.nonUICurrentUser = newUser;
+              console.log('[SignInModal] New user state set locally. AuthWrapper should take over.');
 
-              setSignUpStep("profile");
+              // No need to setSignUpStep here - AuthWrapper handles it
+
               setShowError(false);
-            }
-          } catch (createUserError: any) { // Catch any error type
-            console.error("[SignInModal] Error creating user:", createUserError);
 
-            // Specific handling for email-already-in-use
-            if (createUserError.code === 'auth/email-already-in-use') {
-              setError('This email is already in use. Please sign in or use a different email.');
-              setSignUpStep('initial'); // Go back to the email step
-            } else {
-              // Handle other errors generically
-              setError(createUserError instanceof Error ? createUserError.message : 'Error creating account');
+              // Optional: Notify parent immediately if needed, though AuthWrapper's logic might suffice
+              // onSignUpSuccess?.(user);
             }
-            setIsLoading(false);
+          } catch (createUserError: any) {
+              // ... (existing error handling, including email-already-in-use) ...
+               console.error("[SignInModal] Error creating user:", createUserError);
+              // Specific handling for email-already-in-use
+              if (createUserError.code === 'auth/email-already-in-use') {
+                  setError('This email is already in use. Please sign in or use a different email.');
+                  setSignUpStep('initial'); // Go back to the email step
+              } else {
+                  // Handle other errors generically
+                  setError(createUserError instanceof Error ? createUserError.message : 'Error creating account');
+              }
+             // Keep loading spinner active on error? Maybe only set false on success?
+             // setIsLoading(false); // Commented out - let finally handle it?
+          } finally {
+              // Reset loading state only if it hasn't been reset by a specific error case above
+              // Or simply always reset it here? Let's always reset for simplicity for now.
+              setIsLoading(false); 
           }
-          return;
         }
       } catch (err) {
         const error = err as Error;
@@ -881,7 +939,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
 
       const refreshedUser = await userService.fetchUserFromFirestore(userId);
       console.log('[Quiz Debug - handleCompleteQuiz] State after refresh from Firestore:', JSON.parse(JSON.stringify(refreshedUser)));
-      onQuizComplete?.(); // Notify parent
+      onQuizComplete?.(); // Notify parent - Restore this line
 
       if (!refreshedUser) {
         // ... (error handling for missing user)
@@ -1072,7 +1130,10 @@ const SignInModal: React.FC<SignInModalProps> = ({
                 }
               }
 
-              setQuizStep(quizStep + 1);
+              // Delay the step change slightly to potentially avoid state race conditions with parent component
+              setTimeout(() => {
+                setQuizStep(quizStep + 1);
+              }, 50); // 50ms delay
             }}
             className={`w-full p-4 rounded-lg border ${
               quizData.gender === option
@@ -2373,15 +2434,27 @@ const SignInModal: React.FC<SignInModalProps> = ({
 export default SignInModal;
 
 // Utility to check if onboarding is complete
-function isOnboardingComplete(user: any) {
+function isOnboardingComplete(user: any): boolean { // Explicitly return boolean
+  if (!user) return false; // Handle null user
+
+  // Check each required field safely
+  const hasUsername = !!user.username;
+  // Safely check height: must exist AND have feet > 0
+  const hasValidHeight = !!user.height && typeof user.height === 'object' && user.height.feet > 0;
+  const hasBirthdate = !!user.birthdate;
+  const hasGender = !!user.gender;
+  const hasLevel = !!user.level;
+  const hasGoals = Array.isArray(user.goal) && user.goal.length > 0;
+  const isRegistrationMarkedComplete = !!user.registrationComplete;
+
   return (
-    !!user.username &&
-    user.height && user.height.feet > 0 &&
-    user.birthdate &&
-    user.gender &&
-    user.level &&
-    Array.isArray(user.goal) && user.goal.length > 0 &&
-    user.registrationComplete // add more fields as needed
+    hasUsername &&
+    hasValidHeight &&
+    hasBirthdate &&
+    hasGender &&
+    hasLevel &&
+    hasGoals &&
+    isRegistrationMarkedComplete
   );
 }
 

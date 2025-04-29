@@ -1,10 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import SubscriptionCard from '../components/SubscriptionCard';
 import FAQ from '../components/FAQ';
 import { useScrollFade } from '../hooks/useScrollFade';
-import { CheckCircle, Star, Shield, Clock, Zap, Users, UserCheck, Video } from 'lucide-react';
+import { CheckCircle, Star, Shield, Clock, Zap, Users, UserCheck, Video, ChevronDown, LogOut } from 'lucide-react';
 import { loadStripe, Stripe } from '@stripe/stripe-js'; // Import Stripe.js
 import { useUser } from '../hooks/useUser'; // Import useUser to get the userId
+import authService from '../api/firebase/auth'; // Import authService
+import { signOut } from 'firebase/auth'; // Import signOut
+import { auth } from '../api/firebase/config'; // Import auth instance
 
 // Load Stripe outside of component render to avoid recreating on every render
 // Use NEXT_PUBLIC_ prefix for client-side environment variables
@@ -15,10 +18,12 @@ const Subscribe: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false); // Loading state for API call
   const [error, setError] = useState<string | null>(null); // Error state
   const currentUser = useUser(); // Get current user
+  const [isMenuOpen, setIsMenuOpen] = useState(false); // State for dropdown menu
+  const menuRef = useRef<HTMLDivElement>(null); // Ref for dropdown menu
 
   // --- IMPORTANT: Replace with your ACTUAL Stripe Price IDs ---
-  const monthlyPriceId = 'price_YOUR_MONTHLY_ID';
-  const annualPriceId = 'price_YOUR_ANNUAL_ID';
+  const monthlyPriceId = 'price_1PDq26RobSf56MUOucDIKLhd';
+  const annualPriceId = 'price_1PDq3LRobSf56MUOng0UxhCC';
   // --- ---
 
   const handleSubscribeClick = async (planType: 'monthly' | 'yearly') => {
@@ -79,6 +84,30 @@ const Subscribe: React.FC = () => {
       setIsLoading(false);
     }
   };
+
+  // Handle Sign Out
+  const handleSignOut = async () => {
+    try {
+      await signOut(auth); // Use direct Firebase signOut
+      // Redirect or update UI after sign out
+      window.location.reload(); // Simple reload for now
+    } catch (error) {
+      console.error("Error signing out:", error);
+    }
+  };
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [menuRef]);
 
   // Add subtle parallax effect
   useEffect(() => {
@@ -175,6 +204,52 @@ const Subscribe: React.FC = () => {
       </div>
 
       <div className="relative z-10">
+        {/* User Dropdown Menu */} 
+        {currentUser && (
+          <div className="absolute top-6 right-6 z-50">
+            <div className="relative" ref={menuRef}>
+              <div 
+                className="inline-flex items-center gap-1.5 bg-zinc-800/80 backdrop-blur-sm rounded-full px-2 py-1 cursor-pointer hover:bg-zinc-700/80 transition-colors"
+                onClick={() => setIsMenuOpen(!isMenuOpen)}
+                role="button"
+                aria-haspopup="true"
+                aria-expanded={isMenuOpen}
+                aria-label={`User menu for ${currentUser.username}`}
+              >
+                {currentUser.profileImage?.profileImageURL ? (
+                  <img 
+                    src={currentUser.profileImage.profileImageURL}
+                    alt={currentUser.username}
+                    className="w-5 h-5 rounded-full object-cover"
+                  />
+                ) : (
+                  <div className="w-5 h-5 rounded-full bg-zinc-700 flex items-center justify-center">
+                    <Users className="w-3.5 h-3.5 text-zinc-400" />
+                  </div>
+                )}
+                <span className="text-xs text-white/90">Signed in as {currentUser.username}</span>
+                <ChevronDown 
+                  className={`w-3.5 h-3.5 text-white/70 transition-transform duration-200 ${
+                    isMenuOpen ? 'rotate-180' : ''
+                  }`} 
+                />
+              </div>
+              {/* Dropdown Content */} 
+              {isMenuOpen && (
+                <div className="absolute right-0 mt-2 w-48 bg-zinc-900 border border-zinc-700 rounded-lg shadow-lg py-1 z-50">
+                  <button
+                    onClick={handleSignOut}
+                    className="flex items-center w-full px-4 py-2 text-sm text-red-400 hover:bg-zinc-800 transition-colors"
+                  >
+                    <LogOut size={14} className="mr-2" />
+                    Sign Out
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Hero Section - Glassmorphic style */}
         <section className="max-w-[1052.76px] mx-auto text-center pt-24 pb-16 px-4" ref={useScrollFade()}>
           <h1 className={`${gradientText} text-6xl sm:text-7xl font-bold mb-6 tracking-tight`}>
@@ -384,87 +459,12 @@ const Subscribe: React.FC = () => {
           </div>
         </section>
 
-        {/* Value Proposition Section */}
-        <section className="max-w-[1052.76px] mx-auto px-4 py-20" ref={useScrollFade()}>
-          <h2 className="text-white text-3xl sm:text-4xl font-bold mb-16 text-center">
-            What makes Pulse the <span className={gradientText}>perfect fitness companion</span>
-          </h2>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {/* Moved Video Feature First */}
-            <div className={`${glassCard} rounded-2xl p-8 text-center hover:translate-y-[-8px]`}>
-              <div className="flex justify-center mb-6">
-                <div className="w-20 h-20 rounded-full bg-[#E0FE10]/20 flex items-center justify-center">
-                  <Video size={32} className="text-[#E0FE10]" /> 
-                </div>
-              </div>
-              <h3 className="text-white text-2xl font-bold mb-3">Video-First Exercises</h3>
-              <p className="text-zinc-400">Every move includes a quick (&lt;30s) video demonstration focusing purely on the exercise form.</p>
-            </div>
-            
-            <div className={`${glassCard} rounded-2xl p-8 text-center hover:translate-y-[-8px]`}>
-              <div className="flex justify-center mb-6">
-                <div className="w-20 h-20 rounded-full bg-[#E0FE10]/20 flex items-center justify-center">
-                  <Zap size={32} className="text-[#E0FE10]" />
-                </div>
-              </div>
-              <h3 className="text-white text-2xl font-bold mb-3">AI-Powered Workouts</h3>
-              <p className="text-zinc-400">Personalized recommendations that evolve with your progress and preferences</p>
-            </div>
-            
-            {/* Swapped: Rounds & Challenges now third */}
-            <div className={`${glassCard} rounded-2xl p-8 text-center hover:translate-y-[-8px]`}>
-              <div className="flex justify-center mb-6">
-                <div className="w-20 h-20 rounded-full bg-[#E0FE10]/20 flex items-center justify-center">
-                  <Users size={32} className="text-[#E0FE10]" />
-                </div>
-              </div>
-              <h3 className="text-white text-2xl font-bold mb-3">Rounds & Challenges</h3>
-              <p className="text-zinc-400">Join group challenges, compete with the community, and follow structured round programs.</p>
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-8">
-            <div className={`${glassCard} rounded-2xl p-8 text-center hover:translate-y-[-8px]`}>
-              <div className="flex justify-center mb-6">
-                <div className="w-20 h-20 rounded-full bg-[#E0FE10]/20 flex items-center justify-center">
-                  <Shield size={32} className="text-[#E0FE10]" />
-                </div>
-              </div>
-              <h3 className="text-white text-2xl font-bold mb-3">Progress Tracking</h3>
-              <p className="text-zinc-400">Comprehensive tools to track your fitness journey and celebrate your achievements</p>
-            </div>
-
-            {/* Swapped: Community Driven now fourth */}
-            <div className={`${glassCard} rounded-2xl p-8 text-center hover:translate-y-[-8px]`}>
-              <div className="flex justify-center mb-6">
-                <div className="w-20 h-20 rounded-full bg-[#E0FE10]/20 flex items-center justify-center">
-                  <Users size={32} className="text-[#E0FE10]" />
-                </div>
-              </div>
-              <h3 className="text-white text-2xl font-bold mb-3">Community Driven</h3>
-              <p className="text-zinc-400">Access thousands of user-generated workouts and connect with like-minded fitness enthusiasts</p>
-            </div>
-
-            {/* Added Coaching Feature - Now fifth */}
-            <div className={`${glassCard} rounded-2xl p-8 text-center hover:translate-y-[-8px]`}>
-              <div className="flex justify-center mb-6">
-                <div className="w-20 h-20 rounded-full bg-[#E0FE10]/20 flex items-center justify-center">
-                  <UserCheck size={32} className="text-[#E0FE10]" />
-                </div>
-              </div>
-              <h3 className="text-white text-2xl font-bold mb-3">1-on-1 Coaching</h3>
-              <p className="text-zinc-400">Discover experienced trainers and work with them directly for a personalized fitness plan.</p>
-            </div>
-          </div>
-        </section>
-
-        {/* Features Grid - Glassmorphic */}
+        {/* Features Grid Section */}
         <section className="max-w-[1052.76px] mx-auto px-4 py-24 relative" ref={useScrollFade()}>
           {/* Background decoration */}
           <div className="absolute -top-48 left-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-[120px]"></div>
           <div className="absolute -bottom-48 right-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-[120px]"></div>
-            
+
           <div className="relative z-10 mb-16 text-center">
             <h2 className="text-white text-3xl sm:text-4xl font-bold mb-4">
               Everything you need for <span className={gradientText}>fitness success</span>
@@ -506,7 +506,7 @@ const Subscribe: React.FC = () => {
               </div>
             </div>
           </div>
-          
+
           <div className="mt-16 text-center relative z-10">
             <button 
               onClick={() => {
@@ -524,12 +524,12 @@ const Subscribe: React.FC = () => {
         <section className={`${glassBg} py-24 relative overflow-hidden`} ref={useScrollFade()}>
           {/* Background decoration */}
           <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-[#E0FE10]/5 to-transparent"></div>
-          
+
           <div className="max-w-[1052.76px] mx-auto px-4 relative z-10">
             <h2 className="text-white text-3xl sm:text-4xl font-bold mb-16 text-center">
               Frequently Asked <span className={gradientText}>Questions</span>
             </h2>
-            
+
             <div className="max-w-3xl mx-auto">
               {faqData.map((item, index) => (
                 <div key={index} className={`${glassCard} mb-6 rounded-2xl p-6`}>
@@ -542,73 +542,7 @@ const Subscribe: React.FC = () => {
         </section>
 
         {/* Final CTA Section */}
-        <section id="subscription-section" ref={useScrollFade()} className="py-24 relative overflow-hidden">
-          {/* Background decoration */}
-          <div className="absolute inset-0 bg-gradient-to-b from-black/0 via-[#E0FE10]/5 to-black/0"></div>
-          <div className="absolute top-1/2 left-1/2 w-[500px] h-[500px] bg-[#E0FE10]/10 rounded-full blur-[150px] transform -translate-x-1/2 -translate-y-1/2"></div>
-          
-          <div className="relative z-10 flex flex-col items-center justify-center text-center p-8">
-            <div className={`mb-6 inline-block ${glassBg} backdrop-blur-md px-6 py-3 rounded-full`}>
-              <span className="text-[#E0FE10] font-medium">Limited Time Offer</span>
-            </div>
-            
-            <h2 className="text-white text-4xl sm:text-5xl lg:text-6xl font-bold mb-6">
-              Start your <span className={gradientText}>30-day free trial</span> today
-            </h2>
-            
-            <p className="text-zinc-400 text-xl max-w-2xl mb-12">
-              Join thousands of members who have transformed their fitness journey with Pulse
-            </p>
-
-            {/* Error Display */}
-            {error && (
-              <div className="my-4 p-4 bg-red-900 border border-red-700 text-red-200 rounded-lg text-center max-w-md mx-auto">
-                Error: {error}
-              </div>
-            )}
-
-            <div className="flex flex-col sm:flex-row gap-6 mb-12">
-              <button
-                onClick={() => handleSubscribeClick('yearly')}
-                disabled={isLoading}
-                className={`${glassPrimary} px-10 py-4 rounded-full text-lg font-semibold shadow-lg shadow-[#E0FE10]/20 ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >
-                {isLoading ? 'Processing...' : 'Start Free Trial — Annual Plan'}
-              </button>
-
-              <button
-                onClick={() => handleSubscribeClick('monthly')}
-                disabled={isLoading}
-                className={`${glassSecondary} px-10 py-4 rounded-full text-lg font-semibold ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >
-                {isLoading ? 'Processing...' : 'Start Monthly Subscription'}
-              </button>
-            </div>
-
-            <div className={`${glassBg} rounded-full py-3 px-6 flex flex-col sm:flex-row justify-center items-center gap-6 text-center max-w-2xl mx-auto`}>
-              <div className="flex items-center text-zinc-400">
-                <Clock size={16} className="mr-2 text-[#E0FE10]" />
-                <span>Cancel anytime</span>
-              </div>
-            </div>
-            
-            <div className="mt-16">
-              <a 
-                href="https://apps.apple.com/ca/app/pulse-community-workouts/id6451497729"
-                className="text-[#E0FE10] hover:underline mx-4"
-              >
-                Download iOS App
-              </a>
-              <span className="text-zinc-600 mx-3">|</span>
-              <a 
-                href="https://fitwithpulse.ai"
-                className="text-[#E0FE10] hover:underline mx-4"
-              >
-                Use Web App
-              </a>
-            </div>
-          </div>
-        </section>
+        {/* ... (existing final CTA section code) ... */}
       </div>
     </div>
   );

@@ -1,13 +1,27 @@
 // workoutSessionService.ts
 import { WorkoutSummary, Workout, WorkoutStatus, UserChallenge, PulsePoints } from '../../firebase/workout';
-import { ExerciseLog } from '../../firebase/exercise';
-import { User } from '../../firebase/user';
+import { 
+  ExerciseLog, 
+  ExerciseCategory, 
+  WeightTrainingExercise, // Renamed from WeightTrainingDetails for clarity
+  CardioExercise,       // Renamed from CardioDetails
+  MobilityExercise,      // Renamed from MobilityDetails
+  Exercise                // Ensure Exercise is imported if needed for type checks
+} from '../../firebase/exercise/types'; 
+import { User } from '../../firebase/user/types';
 import { workoutService } from '../../firebase/workout/service';
 import { userService } from '../../firebase/user/service';
 import { store } from '../../../redux/store';
 import { resetWorkoutState } from '../../../redux/workoutSlice';
 import { db } from '../../../api/firebase/config';
 import { doc, setDoc, writeBatch } from 'firebase/firestore';
+import { dateToUnixTimestamp, convertFirestoreTimestamp } from '../../../utils/formatDate';
+
+interface CompletedWorkout {
+  id: string;
+  workoutId: string;
+  completedAt: Date; // Changed from number to Date
+}
 
 export class WorkoutSessionService {
   private static instance: WorkoutSessionService;
@@ -29,13 +43,147 @@ export class WorkoutSessionService {
   }
 
   // Helper functions
-  private estimateCaloriesBurnedLocally(numberOfExercises: number, duration: number): number {
-    const baseCaloriesPerMinute = 5;
-    const exerciseMultiplier = 1.1;
-    
-    const durationInMinutes = Math.min(duration / 60, 60);
-    
-    return Math.floor(baseCaloriesPerMinute * durationInMinutes * Math.pow(exerciseMultiplier, numberOfExercises));
+  private estimateCaloriesBurnedLocally(
+    exercises: ExerciseLog[],
+    totalDurationSeconds: number, // Renamed for clarity
+    userWeightKg: number
+  ): number {
+    const totalHours = totalDurationSeconds / 3600;
+    if (exercises.length === 0 || totalHours <= 0 || userWeightKg <= 0) {
+      return 0; // Cannot estimate without necessary data
+    }
+
+    let totalCalories = 0.0;
+    const durationPerExerciseHours = totalHours / exercises.length;
+
+    for (const exerciseLog of exercises) {
+      if (!exerciseLog.exercise) continue; // Skip if exercise data is missing
+
+      const category: ExerciseCategory = exerciseLog.exercise.category as ExerciseCategory || { type: 'weight-training' }; // Provide a default if undefined
+      const met = this.getMETValue(category);
+      const reps = this.getRepsCompleted(category);
+      const weightKg = this.getWeight(category); // Assuming weight is stored in kg
+
+      const exerciseCalories = this.calculateExerciseCalories(
+        met,
+        durationPerExerciseHours,
+        userWeightKg,
+        reps,
+        weightKg
+      );
+      
+      totalCalories += exerciseCalories;
+    }
+
+    return Math.round(totalCalories);
+  }
+
+  private getMETValue(category: ExerciseCategory): number {
+    const baseMETValues: { [key: string]: number } = {
+      'weight-training': 3.5,
+      'cardio': 8.0,
+      'mobility': 2.5
+      // Add other category types if needed
+    };
+
+    switch (category.type) {
+      case 'weight-training': {
+        const details = category.details as WeightTrainingExercise | undefined;
+        const baseMET = baseMETValues[category.type] ?? 3.5;
+        const weight = details?.weight ?? 0;
+        return weight > 0 ? Math.min(baseMET * (1 + (weight / 100)), baseMET * 2.0) : baseMET;
+      }
+      case 'cardio': {
+        const details = category.details as CardioExercise | undefined;
+        const bpm = details?.bpm ?? 0;
+        if (bpm > 0) {
+          if (bpm < 120) return 6.0;
+          if (bpm < 140) return 8.0;
+          if (bpm < 160) return 10.0;
+          if (bpm < 180) return 12.0;
+          return 14.0;
+        }
+        return baseMETValues[category.type] ?? 8.0;
+      }
+      case 'mobility': {
+        const details = category.details as MobilityExercise | undefined;
+        const baseMET = baseMETValues[category.type] ?? 2.5; // Use Mobility base MET
+        const weight = details?.weight ?? 0;
+        return weight > 0 ? Math.min(baseMET * (1 + (weight / 100)), baseMET * 2.0) : baseMET;
+      }
+      // Add cases for 'pilates', 'stretching', 'calisthenics' if needed
+      default:
+        return 3.0; // Default MET for unknown categories
+    }
+  }
+
+  private getRepsCompleted(category: ExerciseCategory): number {
+     switch (category.type) {
+       case 'weight-training':
+       case 'mobility': {
+         const details = category.details as WeightTrainingExercise | MobilityExercise | undefined;
+         return Array.isArray(details?.reps) 
+           ? details.reps.reduce((sum: number, rep: string | number) => sum + (Number(rep) || 0), 0) 
+           : 0;
+       }
+       case 'cardio':
+       case 'stretching': // Stretching might not have reps in the same way
+       case 'pilates':    // Pilates might focus on duration or qualitative reps
+         return 0; 
+       case 'calisthenics': {
+           const details = category.details as any; // Use specific type if available
+           return Array.isArray(details?.reps) 
+             ? details.reps.reduce((sum: number, rep: string | number) => sum + (Number(rep) || 0), 0) 
+             : 0;
+       }
+       default:
+         return 0;
+     }
+  }
+
+  private getWeight(category: ExerciseCategory): number {
+    switch (category.type) {
+      case 'weight-training':
+      case 'mobility': { // Mobility might involve weights (e.g., weighted stretches)
+        const details = category.details as WeightTrainingExercise | MobilityExercise | undefined;
+        return details?.weight ?? 0.0; 
+      }
+      case 'cardio':
+      case 'stretching':
+      case 'pilates':
+      case 'calisthenics': // Typically bodyweight
+        return 0.0;
+      default:
+        return 0.0;
+    }
+  }
+
+  private calculateExerciseCalories(
+    met: number,
+    durationHours: number,
+    userWeightKg: number,
+    reps: number,
+    weightKg: number
+  ): number {
+    // Base calories from MET calculation
+    const metCalories = met * userWeightKg * durationHours;
+
+    // Additional calories from resistance work (only if reps and weight > 0)
+    const resistanceCalories = (reps > 0 && weightKg > 0) 
+      ? this.calculateResistanceCalories(reps, weightKg, durationHours) 
+      : 0;
+
+    return metCalories + resistanceCalories;
+  }
+
+  private calculateResistanceCalories(
+    reps: number,
+    weightKg: number,
+    durationHours: number
+  ): number {
+    const repCalories = reps * weightKg * 0.0005;
+    const durationFactor = 1 + (durationHours * 0.5); // Matches iOS logic
+    return repCalories * durationFactor;
   }
 
   private cleanUpWorkoutInProgress() {
@@ -66,10 +214,9 @@ export class WorkoutSessionService {
   }
 
   private validateWorkoutState(): 'allEmpty' | 'valid' {
-    const allEmpty = this.completedExercises.every(log => 
-      log.logs.every(entry => entry.reps === 0 && entry.weight === 0)
-    );
-    return allEmpty ? 'allEmpty' : 'valid';
+    const isAnyLogSubmitted = this.completedExercises.some(log => log.logSubmitted);
+    
+    return isAnyLogSubmitted ? 'valid' : 'allEmpty'; 
   }
 
   private async updateWorkoutSession(
@@ -184,10 +331,13 @@ export class WorkoutSessionService {
           endTime
         );
       
-        const duration = endTime.getTime() - startTime.getTime();
+        const durationSeconds = (endTime.getTime() - startTime.getTime()) / 1000; // Duration in seconds
+        // *** UPDATE: Use user's weight and completed exercises for estimation ***
+        const userWeightKg = user.bodyWeight?.length > 0 ? user.bodyWeight[user.bodyWeight.length - 1].newWeight : 70; // Default to 70kg if not available
         const caloriesBurned = this.estimateCaloriesBurnedLocally(
-          workoutSummary.exercisesCompleted.length,
-          duration / 1000
+          workoutSummary.exercisesCompleted, // Pass completed logs
+          durationSeconds,                   // Pass duration in seconds
+          userWeightKg                       // Pass user weight in kg
         );
       
         const finalSummary = await this.finalizeWorkoutSummary(
@@ -263,118 +413,136 @@ export class WorkoutSessionService {
     );
   }
   
-  private async updateChallengeIfNeeded(currentWorkoutSummary: WorkoutSummary, userChallenge: UserChallenge, challengeWorkoutId: string): Promise<WorkoutSummary> {
-    if (!userChallenge || !challengeWorkoutId || !currentWorkoutSummary) {
-        return currentWorkoutSummary;
+  private async updateChallengeIfNeeded(
+    currentWorkoutSummary: WorkoutSummary,
+    userChallenge: UserChallenge | null,
+    challengeWorkoutId: string 
+  ): Promise<WorkoutSummary> {
+    if (!userChallenge || !this.currentWorkout) {
+      console.log("[updateChallengeIfNeeded] No userChallenge or currentWorkout, skipping update.");
+      return currentWorkoutSummary; 
     }
 
-    if (!userService.nonUICurrentUser?.id) {
-        throw new Error('No user is signed in');
-    }
+    let updatedChallenge = { ...userChallenge }; 
+    const completionDate = new Date();
+    const newId = `${challengeWorkoutId}-${completionDate.getTime()}`;
 
-    // Create a new challenge object with all the updated data
-    const challengeData = {
-        ...userChallenge,
-        completedWorkouts: [
-            ...userChallenge.completedWorkouts,
-            {
-                id: `${challengeWorkoutId}-${new Date().getTime()}`,
-                workoutId: challengeWorkoutId,
-                completedAt: new Date()
-            }
-        ],
-        pulsePoints: {
-            ...userChallenge.pulsePoints,
-            baseCompletion: userChallenge.pulsePoints.baseCompletion + 100,
-            firstCompletion: userChallenge.completedWorkouts.length === 0 ? 
-                userChallenge.pulsePoints.firstCompletion + 50 : 
-                userChallenge.pulsePoints.firstCompletion,
-            streakBonus: 0,
-            cumulativeStreakBonus: this.isWorkoutAssignedForToday() ? 
-                userChallenge.currentStreak * 25 : 
-                userChallenge.pulsePoints.cumulativeStreakBonus
-        },
-        currentStreak: this.calculateStreak(userChallenge, new Date()),
-        isCurrentlyActive: false,
-        updatedAt: new Date()
+    const newCompletedWorkout: CompletedWorkout = {
+      id: newId,
+      workoutId: challengeWorkoutId, 
+      completedAt: completionDate, 
     };
+    
+    if (!Array.isArray(updatedChallenge.completedWorkouts)) {
+      updatedChallenge.completedWorkouts = [];
+    }
+    updatedChallenge.completedWorkouts.push(newCompletedWorkout);
 
-    // Create a new UserChallenge instance with the updated data
-    const updatedChallenge = new UserChallenge(challengeData);
+    if (!updatedChallenge.pulsePoints) {
+        updatedChallenge.pulsePoints = new PulsePoints({}); 
+    }
+    if (!currentWorkoutSummary.pulsePoints) {
+        updatedChallenge.pulsePoints = new PulsePoints({}); 
+    }
 
-    // Update WorkoutSummary with PulsePoints
+    // --- Point Calculation Logic ---
+    const baseCompletionPoints = 100;
+    let firstCompletionPoints = 0;
+    let newCumulativeStreakBonus = 0;
+
+    updatedChallenge.pulsePoints.baseCompletion += baseCompletionPoints; 
+
+    if (updatedChallenge.completedWorkouts.length === 1) {
+      firstCompletionPoints = 50;
+      updatedChallenge.pulsePoints.firstCompletion += firstCompletionPoints;
+    }
+
+    const currentStreak = this.calculateStreak(updatedChallenge as UserChallenge, completionDate);
+    updatedChallenge.currentStreak = currentStreak; 
+    
+    const dailyStreakPoints = currentStreak * 25; 
+
+    const assignedDate = this.currentWorkout.assignedDate; 
+    const isAssignedToday = assignedDate ? this.isSameDay(assignedDate, completionDate) : false;
+
+    if (isAssignedToday) {
+      newCumulativeStreakBonus = dailyStreakPoints;
+      updatedChallenge.pulsePoints.cumulativeStreakBonus = newCumulativeStreakBonus;
+    }
+
+    updatedChallenge.pulsePoints.streakBonus = 0; 
+    
     const sessionPulsePoints = new PulsePoints({
-        baseCompletion: 100,
-        firstCompletion: updatedChallenge.completedWorkouts.length === 1 ? 50 : 0,
-        streakBonus: 0,
-        cumulativeStreakBonus: this.isWorkoutAssignedForToday() ? 
-            updatedChallenge.pulsePoints.cumulativeStreakBonus : 0,
-        checkInBonus: currentWorkoutSummary.pulsePoints?.checkInBonus ?? 0,
-        effortRating: currentWorkoutSummary.pulsePoints?.effortRating ?? 0,
-        chatParticipation: currentWorkoutSummary.pulsePoints?.chatParticipation ?? 0,
-        locationCheckin: currentWorkoutSummary.pulsePoints?.locationCheckin ?? 0,
-        contentEngagement: currentWorkoutSummary.pulsePoints?.contentEngagement ?? 0,
-        encouragementSent: currentWorkoutSummary.pulsePoints?.encouragementSent ?? 0,
-        encouragementReceived: currentWorkoutSummary.pulsePoints?.encouragementReceived ?? 0
+      ...currentWorkoutSummary.pulsePoints?.toDictionary(),
+      baseCompletion: baseCompletionPoints,
+      firstCompletion: firstCompletionPoints,
+      streakBonus: 0, 
+      cumulativeStreakBonus: isAssignedToday ? newCumulativeStreakBonus : 0, 
     });
 
-    // Create updated summary with new PulsePoints
-    const updatedSummaryData = {
-        ...currentWorkoutSummary,
-        pulsePoints: sessionPulsePoints
-    };
+    let updatedSummary = new WorkoutSummary({ 
+        ...currentWorkoutSummary.toDictionary(),
+        pulsePoints: sessionPulsePoints.toDictionary() 
+    }); 
 
-    const updatedSummary = new WorkoutSummary(updatedSummaryData);
+    updatedChallenge.isCurrentlyActive = false;
 
-    // Save updated summary and challenge using workoutService
-    await workoutService.updateWorkoutSummary({
-        userId: userService.nonUICurrentUser.id,
-        workoutId: challengeWorkoutId,
-        summary: updatedSummary
-    });
+    // --- Save Updated Challenge --- 
+    try {
+        await workoutService.updateUserChallenge(updatedChallenge as any); 
+        console.log("[updateChallengeIfNeeded] User challenge updated successfully.");
+    } catch (error) {
+        console.error("[updateChallengeIfNeeded] Error updating user challenge:", error);
+    }
 
-    await workoutService.updateUserChallenge(updatedChallenge);
+    console.log("[updateChallengeIfNeeded] Updated summary points:", updatedSummary.pulsePoints);
+    return updatedSummary; 
+  }
 
-    return updatedSummary;
-}
+  private calculateStreak(challenge: UserChallenge, newCompletionDate: Date): number {
+    const completedWorkouts = Array.isArray(challenge.completedWorkouts) ? challenge.completedWorkouts : [];
+    if (completedWorkouts.length === 0) return 1; 
+    
+    // *** FIX: Map directly to Date objects, assuming cw.completedAt is compatible ***
+    const sortedDates = completedWorkouts
+      .map((cw: CompletedWorkout) => convertFirestoreTimestamp(cw.completedAt)) // convertFirestoreTimestamp should handle potential Timestamps
+      .filter((date): date is Date => date instanceof Date) // Ensure conversion resulted in a Date
+      .sort((a, b) => a.getTime() - b.getTime()); 
 
-  
-  private calculateStreak(challenge: any, newCompletionDate: Date): number {
-    const sortedWorkouts = [...challenge.completedWorkouts].sort(
-      (a, b) => a.completedAt.getTime() - b.completedAt.getTime()
-    );
-  
-    let streak = 1;
-  
-    for (let i = 1; i < sortedWorkouts.length; i++) {
-      const previousDate = new Date(sortedWorkouts[i - 1].completedAt);
-      const currentDate = new Date(sortedWorkouts[i].completedAt);
-  
+    sortedDates.push(newCompletionDate);
+
+    let currentStreak = 0;
+    if (sortedDates.length > 0) {
+        currentStreak = 1; 
+    }
+
+    for (let i = sortedDates.length - 2; i >= 0; i--) {
+      const previousDate = sortedDates[i];
+      const currentDate = sortedDates[i + 1];
+
       if (this.isNextDay(previousDate, currentDate)) {
-        streak++;
+        currentStreak++;
       } else if (!this.isSameDay(previousDate, currentDate)) {
-        streak = 1;
+        break; 
       }
     }
-  
-    return streak;
+
+    console.log(`[calculateStreak] Calculated streak: ${currentStreak}`);
+    return currentStreak;
   }
-  
+
   private isNextDay(date1: Date, date2: Date): boolean {
     const nextDay = new Date(date1);
-    nextDay.setDate(nextDay.getDate() + 1);
+    nextDay.setDate(date1.getDate() + 1);
     return this.isSameDay(nextDay, date2);
   }
-  
+
   private isSameDay(date1: Date, date2: Date): boolean {
-    return (
-      date1.getFullYear() === date2.getFullYear() &&
-      date1.getMonth() === date2.getMonth() &&
-      date1.getDate() === date2.getDate()
-    );
+    return date1.getFullYear() === date2.getFullYear() &&
+           date1.getMonth() === date2.getMonth() &&
+           date1.getDate() === date2.getDate();
   }
-  
-  // Update finalizeWorkoutSummary to include PulsePoints
+
   private async finalizeWorkoutSummary(
     workoutSummary: WorkoutSummary,
     userChallenge: UserChallenge | null,
@@ -390,19 +558,15 @@ export class WorkoutSessionService {
       startTime,
       completedAt: endTime,
       exercisesCompleted: this.completedExercises.filter(log => log.logSubmitted),
-      // Only initialize PulsePoints if there's a challenge
       pulsePoints: userChallenge ? new PulsePoints({}) : undefined
     });
   
     if (userChallenge) {
-      // This path includes saving to database within updateChallengeIfNeeded
       updatedSummary = await this.updateChallengeIfNeeded(updatedSummary, userChallenge, challengeWorkoutId);
     } else {
-      // Only save to database if there's no challenge (to avoid double-saving)
       await this.updateWorkoutServices(updatedSummary);
     }
   
-    // Always update localStorage
     localStorage.setItem('currentWorkoutSummary', JSON.stringify(updatedSummary));
   
     return updatedSummary;

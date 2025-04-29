@@ -123,7 +123,7 @@ const MorningMobilityChallengePage: NextPage = () => {
           content="90-day mobility challenge by Pulse. Improve flexibility in 10 min/day and compete for a $1,000 cash prize." 
         />
         <meta property="og:type" content="website" />
-        <meta property="og:image" content="/mobility-challenge-preview.jpg" />
+        <meta property="og:image" content="/MorningMobilityChallenge.png" />
       </Head>
 
       {/* Hero Section */}
@@ -139,7 +139,7 @@ const MorningMobilityChallengePage: NextPage = () => {
                 loop
                 muted
                 playsInline
-                src="/rounds.mp4"
+                src="/morningmobility.mp4"
                 poster="/sample-round-poster.jpg"
               />
             </div>
@@ -546,7 +546,7 @@ const MorningMobilityChallengePage: NextPage = () => {
                   <li>Open to natural persons 18 years or older at the time of entry.</li>
                   <li>Must be a legal resident of the United States or Canada (excluding Quebec).</li>
                   <li>Must have a valid Pulse account (free trial or paid).</li>
-                  <li>Employees, contractors, and immediate family members of Pulse are not eligible.</li>
+                  <li>Employees, contractors, and immediate family members of Pulse are not eligible to win prize money.</li>
                 </ul>
               </div>
             </details>

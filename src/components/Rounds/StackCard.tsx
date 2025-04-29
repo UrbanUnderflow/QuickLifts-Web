@@ -20,6 +20,7 @@ interface CommonCardProps {
   allWorkoutSummaries?: WorkoutSummary[];
   index?: number;
   challengeHasStarted?: boolean;  // Add this line
+  highlightBorder?: boolean; // Added prop for highlighting
   onPrimaryAction: () => void;
   onCalendarTap?: (date: Date) => void;
   onUpdateOrder?: (newOrder: number) => void;
@@ -112,19 +113,14 @@ const didUserCompleteWorkoutFromLogs = (
     return completedAt >= startOfDay && completedAt < endOfDay;
   });
 
-  // Get workout exercise IDs
-  const workoutExerciseIds = workout.exercises.map(ex => ex.exercise.id);
-
-  // Check each summary
+  // Check each summary for matching roundWorkoutId
   return sameDaySummaries.some(summary => {
     if (!summary.completedAt) return false;
     
-    const completedExerciseIds = summary.exercisesCompleted.map(ex => ex.exercise.id);
-    const hasOverlappingExercises = workoutExerciseIds.some(id => 
-      completedExerciseIds.includes(id)
-    );
+    // Match by roundWorkoutId, which is the unique identifier in the challenge context
+    const matches = summary.roundWorkoutId === workout.roundWorkoutId;
     
-    if (hasOverlappingExercises) {
+    if (matches) {
       const logHour = new Date(summary.completedAt).getHours();
       return logHour >= 6; // Only count completions after 6 AM
     }
@@ -156,6 +152,7 @@ export const StackCard: React.FC<{
   isChallengeEnabled = false,
   challengeStartDate,
   challengeHasStarted,
+  highlightBorder,
   currentDayIndex,
   userChallenge,
   allWorkoutSummaries,
@@ -184,15 +181,15 @@ export const StackCard: React.FC<{
       return;
     }
   
-    // Check userChallenge completions
+    // Check userChallenge completions - Updated to match iOS implementation using roundWorkoutId
     const isMarkedComplete = userChallenge?.completedWorkouts?.some(
       completedWorkout => {
         console.log('Comparing:', {
           completedWorkoutId: completedWorkout.workoutId,
-          currentWorkoutId: workout.id,
-          matches: completedWorkout.workoutId === workout.id
+          currentWorkoutId: workout.roundWorkoutId,
+          matches: completedWorkout.workoutId === workout.roundWorkoutId
         });
-        return completedWorkout.workoutId === workout.id;
+        return completedWorkout.workoutId === workout.roundWorkoutId;
       }
     );
     
@@ -243,78 +240,116 @@ export const StackCard: React.FC<{
     onCalendarTap: onCalendarTap,
   };
 
+  // *** FIX: Calculate estimated duration correctly ***
+  const estimatedDuration = Workout.estimatedDuration(workout.logs || []);
+
   return (
     <div 
       onClick={onPrimaryAction}
       className={`
-        relative overflow-hidden rounded-xl border border-zinc-800/50 hover:border-zinc-700/50 transition-all
-        ${backgroundColor}
-        ${index !== undefined && index < (currentDayIndex || 0) || isComplete ? 'opacity-70' : 'opacity-100'}
-        ${isToday(index, challengeStartDate) && challengeHasStarted ? 'ring-2 ring-[#E0FE10]' : ''}
+        relative overflow-hidden rounded-xl border hover:border-zinc-700/50 transition-all cursor-pointer group 
+        ${highlightBorder ? 'border-2 border-[#E0FE10]' : 'border-zinc-800/50'}
+        ${(index ?? -1) < (currentDayIndex ?? -1) || isComplete ? 'opacity-70' : 'opacity-100'}
       `}
     >
-      <div className="flex">
-        {showArrows && selectedOrder !== undefined && maxOrder !== undefined && onUpdateOrder && (
-          <div className="border-r border-zinc-800/50">
-            <NavigationArrows {...arrowProps} />
+      <div className={`flex ${backgroundColor}`}>
+        {/* Left Column (Arrows/Calendar) */} 
+        {(showArrows || showCalendar) && (
+          <div className="flex flex-col justify-between py-2 px-4 bg-zinc-800/50">
+            {showArrows && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onUpdateOrder?.(selectedOrder! - 1); }}
+                disabled={selectedOrder! <= 0}
+                className={`p-1 rounded-full ${selectedOrder! > 0 ? 'text-[#E0FE10] hover:bg-zinc-700' : 'text-gray-600 cursor-not-allowed'}`}
+              >
+                <ChevronUp size={16} />
+              </button>
+            )}
+            
+            {showCalendar && workoutDate && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onCalendarTap?.(workoutDate); }}
+                className="my-2"
+              >
+                <CalendarCell
+                  month={format(workoutDate, 'MMM').toUpperCase()}
+                  day={format(workoutDate, 'd')}
+                  weekday={format(workoutDate, 'EEE').toUpperCase()}
+                />
+              </button>
+            )}
+
+            {!showCalendar && <div className="h-full min-h-[50px]"></div>} {/* Spacer if no calendar */}
+
+            {showArrows && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onUpdateOrder?.(selectedOrder! + 1); }}
+                disabled={selectedOrder! >= maxOrder! - 1}
+                className={`p-1 rounded-full ${selectedOrder! < maxOrder! - 1 ? 'text-[#E0FE10] hover:bg-zinc-700' : 'text-gray-600 cursor-not-allowed'}`}
+              >
+                <ChevronDown size={16} />
+              </button>
+            )}
           </div>
         )}
 
-        <div className="flex-1 p-6">
-          {/* Title & Stats */}
-          <div className="flex justify-between items-start mb-6">
-            <div>
-              <h3 className="text-xl font-bold text-white mb-3">{workout.title}</h3>
-              <div className="flex gap-6">
-                <div className="flex items-center gap-2">
-                  <User className="w-4 h-4 text-[#E0FE10]" />
-                  <span className="text-zinc-400">{workout.exercises.length} moves</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Clock className="w-4 h-4 text-[#E0FE10]" />
-                  <span className="text-zinc-400">
-                    {`${Workout.estimatedDuration(workout.logs || [])} ${
-                      Workout.estimatedDuration(workout.logs || []) === 1 ? 'min' : 'mins'
-                    }`}
-                  </span>
-                </div>
+        {/* Right Column (Content) */} 
+        <div className="flex-grow flex flex-col">
+          {/* Top Section */} 
+          <div className="flex justify-between items-start p-4 pb-0">
+            <div className="flex-1">
+              <h3 className="font-semibold text-white mb-1 line-clamp-2">{workout.title}</h3>
+              {/* Stats */} 
+              <div className="flex items-center gap-3 text-xs text-gray-400">
+                 {/* *** FIX: Use calculated duration and correct static method call *** */}
+                <StatView 
+                  icon={<Clock size={12} />} 
+                  value={estimatedDuration < 1 ? "<1" : `${estimatedDuration}`} 
+                  label="min" 
+                />
+                {/* Add other stats if needed */}
               </div>
             </div>
-            
-            <div className="flex items-center gap-4">
-              {isChallengeEnabled && (
-                <CheckCircle 
-                  className={isComplete ? 'text-[#E0FE10]' : 'text-zinc-700'} 
-                  size={20} 
-                />
-              )}
-              <ChevronRight className="text-zinc-600" size={20} />
-            </div>
+            <ChevronRight size={20} className="text-gray-600 group-hover:translate-x-1 transition-transform" />
           </div>
 
-          {/* Exercise Previews */}
-          <div className="flex gap-3 mb-6">
-            {gifUrls.slice(0, 3).map((gifUrl, index) => (
+          {/* GIF Section */} 
+          <div className="flex gap-2 p-4 pt-2 overflow-hidden">
+            {gifUrls.filter(url => url).slice(0, 3).map((url, idx) => (
               <div 
-                key={`${workout.id}-gif-${index}`}
-                className="relative w-24 h-24 rounded-lg overflow-hidden bg-zinc-900/50"
+                key={idx} 
+                className="w-1/3 aspect-[3/4] rounded-xl overflow-hidden relative"
               >
-                <GifImageViewer
-                gifUrl={gifUrl}
-                alt={`Exercise ${index + 1}`}
-                className="w-full h-full object-cover"
-                variant="rounded"
+                {/* Glassmorphic card */}
+                <div className="absolute inset-0 bg-zinc-800/60 backdrop-blur-sm" />
+                
+                {/* Gradient overlay */}
+                <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent" />
+                
+                {/* Border overlay */}
+                <div className="absolute inset-0 rounded-xl border border-white/10" />
+                
+                {/* Shadow */}
+                <div className="absolute inset-0 shadow-lg" />
+                
+                {/* Image */}
+                <GifImageViewer 
+                  gifUrl={url} 
+                  alt={`Exercise preview ${idx + 1}`}
+                  className="z-0 rounded-xl"
                 />
-                <div className="absolute inset-0 ring-1 ring-inset ring-white/10" />
               </div>
             ))}
           </div>
 
-          {/* Zone Tag */}
-          <div>
-            <span className="px-3 py-1.5 bg-[#E0FE10]/10 text-[#E0FE10] rounded-full text-sm font-medium">
+          {/* Bottom Section */} 
+          <div className="flex justify-between items-center p-4 pt-0 mt-auto">
+            <span className="text-xs font-medium px-2 py-0.5 bg-[#E0FE10]/10 text-[#E0FE10] rounded">
               {workout.zone}
             </span>
+            {isChallengeEnabled && (
+              <CheckCircle size={18} className={`${isComplete ? 'text-[#E0FE10]' : 'text-gray-700'}`} />
+            )}
           </div>
         </div>
       </div>
@@ -332,6 +367,7 @@ export const RestDayCard: React.FC<CommonCardProps> = ({
   isComplete: initialIsComplete = false,
   challengeStartDate,
   challengeHasStarted,
+  highlightBorder,
   currentDayIndex,
   index,
   onPrimaryAction,
@@ -377,39 +413,66 @@ export const RestDayCard: React.FC<CommonCardProps> = ({
   return (
     <div 
       onClick={onPrimaryAction}
-      className={debugClassName}
+      className={`
+        relative overflow-hidden rounded-xl border hover:border-zinc-700/50 transition-all cursor-pointer group 
+        ${highlightBorder ? 'border-2 border-[#E0FE10]' : 'border-zinc-800/50'}
+        ${(index ?? -1) < (currentDayIndex ?? -1) || isComplete ? 'opacity-70' : 'opacity-100'}
+      `}
     >
-      <div className="flex">
-        {showArrows && selectedOrder !== undefined && maxOrder !== undefined && onUpdateOrder && (
-          <NavigationArrows
-            selectedOrder={selectedOrder}
-            maxOrder={maxOrder}
-            workoutDate={workoutDate}
-            showCalendar={!!showCalendar}
-            onUpdateOrder={onUpdateOrder}
-            onCalendarTap={onCalendarTap}
-          />
-        )}
+      <div className={`flex ${backgroundColor}`}>
+        {/* Left Column (Arrows/Calendar) */} 
+        {(showArrows || showCalendar) && (
+           <div className="flex flex-col justify-between py-2 px-4 bg-zinc-800/50">
+            {showArrows && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onUpdateOrder?.(selectedOrder! - 1); }}
+                disabled={selectedOrder! <= 0}
+                className={`p-1 rounded-full ${selectedOrder! > 0 ? 'text-[#E0FE10] hover:bg-zinc-700' : 'text-gray-600 cursor-not-allowed'}`}
+              >
+                <ChevronUp size={16} />
+              </button>
+            )}
+            
+            {showCalendar && workoutDate && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onCalendarTap?.(workoutDate); }}
+                className="my-2"
+              >
+                <CalendarCell
+                  month={format(workoutDate, 'MMM').toUpperCase()}
+                  day={format(workoutDate, 'd')}
+                  weekday={format(workoutDate, 'EEE').toUpperCase()}
+                />
+              </button>
+            )}
+             {!showCalendar && <div className="h-full min-h-[50px]"></div>} {/* Spacer if no calendar */}
 
-        <div className="flex-1 p-4">
-          <div className="flex justify-between items-start mb-4">
-            <div>
-              <h3 className="text-xl font-bold text-white mb-2">Rest Day</h3>
-              <p className="text-gray-400 text-sm">
-                Take a moment to recover and come back stronger.
-              </p>
-            </div>
+            {showArrows && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onUpdateOrder?.(selectedOrder! + 1); }}
+                disabled={selectedOrder! >= maxOrder! - 1}
+                className={`p-1 rounded-full ${selectedOrder! < maxOrder! - 1 ? 'text-[#E0FE10] hover:bg-zinc-700' : 'text-gray-600 cursor-not-allowed'}`}
+              >
+                <ChevronDown size={16} />
+              </button>
+            )}
           </div>
-
-          <div className="flex justify-between items-center">
-            <span className="px-3 py-1 bg-green-500 bg-opacity-20 text-green-500 rounded-full text-sm">
+        )}
+        {/* Right Column (Content) */} 
+        <div className="flex-grow flex flex-col p-4">
+          <div className="flex justify-between items-start">
+            <div className="flex-1">
+              <h3 className="font-semibold text-white mb-1">Rest Day</h3>
+              <p className="text-sm text-gray-400">Take a moment to recover and come back stronger.</p>
+            </div>
+            <ChevronRight size={20} className="text-gray-600 group-hover:translate-x-1 transition-transform" />
+          </div>
+          {/* Bottom Section */} 
+           <div className="flex justify-between items-center mt-4 pt-2">
+            <span className="text-xs font-medium px-2 py-0.5 bg-[#E0FE10]/10 text-[#E0FE10] rounded">
               Recovery
             </span>
-
-            <CheckCircle 
-              className={isComplete ? 'text-green-500' : 'text-gray-600'} 
-              size={20}
-            />
+            <CheckCircle size={18} className={`${isComplete ? 'text-[#E0FE10]' : 'text-gray-700'}`} />
           </div>
         </div>
       </div>

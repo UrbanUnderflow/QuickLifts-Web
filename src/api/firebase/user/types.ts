@@ -78,16 +78,16 @@ export class User {
   createdAt: Date;
   updatedAt: Date;
 
-  constructor(id: string, data: any) {
-    // console.log('User constructor called:', data);
-    
+  constructor(id: string, data: any) {    
     this.id = id;
     this.displayName = data.displayName || '';
     this.email = data.email;
     this.username = data.username || '';
     this.homeGym = data.homeGym || null;
     this.encouragement = data.encouragement || [];
+
     this.birthdate = convertFirestoreTimestamp(data.birthdate) || null;
+
     this.gender = data.gender || null;
     this.selfDisclosedGender = data.selfDisclosedGender || '';
     this.height = data.height || null;
@@ -119,7 +119,9 @@ export class User {
     this.referrer = data.referrer || '';
     this.isCurrentlyActive = data.isCurrentlyActive || false;
     this.videoCount = data.videoCount || 0;
+
     this.createdAt = convertFirestoreTimestamp(data.createdAt) || null;
+
     this.updatedAt = convertFirestoreTimestamp(data.updatedAt) || null;
   }
 

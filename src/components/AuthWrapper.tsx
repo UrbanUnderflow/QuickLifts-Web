@@ -6,7 +6,6 @@ import { setUser, setLoading } from '../redux/userSlice';
 import { userService, SubscriptionType } from '../api/firebase/user';
 import SignInModal from './SignInModal';
 import type { RootState } from '../redux/store';
-import SubscriptionModal from '../components/SignInModal';
 import { useUser } from '../hooks/useUser';
 import { setLoginRedirectPath } from '../redux/tempRedirectSlice';
 
@@ -55,7 +54,6 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
   
   const currentUser = useUser();
   const isLoading = useSelector((state: RootState) => state.user.loading);
-  const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
   const prevUserRef = React.useRef<any>(null);
 
@@ -137,10 +135,17 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
 
             if (!isPublicRoute(router.pathname)) {
               if (firestoreUser && (!firestoreUser.username || firestoreUser.username === '')) {
-                console.log('[AuthWrapper] User needs to complete registration - missing username');
+                console.log('[AuthWrapper] User needs to complete registration - showing modal');
                 setShowSignInModal(true);
               } else if (firestoreUser?.subscriptionType === SubscriptionType.unsubscribed) {
-                setShowSubscriptionModal(true);
+                console.log(`[AuthWrapper] User onboarded but unsubscribed on protected route (${router.pathname}). Redirecting to /subscribe.`);
+                if (router.pathname.toLowerCase() !== '/subscribe') {
+                  router.push('/subscribe');
+                }
+                setShowSignInModal(false);
+              } else {
+                console.log('[AuthWrapper] User onboarded and subscribed. Hiding modal if shown.');
+                setShowSignInModal(false);
               }
             }
           } else {
@@ -168,7 +173,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
       dispatch(setLoading(false));
       setAuthChecked(true);
     }
-  }, [auth, dispatch, router.pathname]);
+  }, [auth, dispatch, router.pathname, router]);
 
  const handleSignInSuccess = (user: any) => {
    // Modal will auto-close based on Redux state
@@ -185,41 +190,31 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
    </div>;
  }
 
+ // Final Render
  return (
    <>
      {children}
-     {!isPublicRoute(router.pathname) && (
-       <>
-         {currentUser?.subscriptionType === SubscriptionType.unsubscribed ? (
-           <SubscriptionModal 
-             isVisible={showSubscriptionModal}
-             onClose={() => {
-               console.log('[AuthWrapper] Closing subscription modal');
-               setShowSubscriptionModal(false);
-             }}
-           />
-         ) : (!currentUser || !currentUser.username || currentUser.username === '') ? (
-           <SignInModal
-             isVisible={showSignInModal}
-             closable={false}
-             onClose={() => {
-               console.log('[AuthWrapper] Closing sign in modal');
+     {/* Render SignInModal only if needed (unauthenticated on protected route, or onboarding incomplete) */}
+     {showSignInModal && (
+         <SignInModal
+           isVisible={showSignInModal} // Controlled by state
+           onClose={() => {
+               console.log('[AuthWrapper] Closing SignInModal');
                setShowSignInModal(false);
-             }}
-             onSignInSuccess={(user) => {
-               console.log('[AuthWrapper] Sign in success');
+           }}
+           // Pass necessary handlers
+           onSignInSuccess={handleSignInSuccess} 
+           onSignInError={handleSignInError}
+           onRegistrationComplete={() => { // Ensure this hides modal too
+               console.log('[AuthWrapper] Registration complete from modal');
                setShowSignInModal(false);
-             }}
-             onSignInError={(error) => {
-               console.error('[AuthWrapper] Sign in error:', error);
-             }}
-             onRegistrationComplete={() => {
-               console.log('[AuthWrapper] Registration complete');
+           }}
+           onQuizComplete={() => { // Ensure this hides modal too
+               console.log('[AuthWrapper] Quiz complete from modal');
                setShowSignInModal(false);
-             }}
-           />
-         ) : null}
-       </>
+           }}
+            // Add any other handlers SignInModal expects that might trigger a close/state change
+         />
      )}
    </>
  );
