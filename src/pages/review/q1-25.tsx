@@ -39,7 +39,7 @@ const q1OverallMetrics = [
   },
   {
     label: "Unique Moves Added",
-    currentValue: 310,
+    currentValue: 354,
     previousValue: 251,
     isCurrency: false,
     showGrowth: true
