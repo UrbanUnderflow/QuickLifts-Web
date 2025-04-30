@@ -67,7 +67,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
   ].map(route => route?.toLowerCase());
  
   const publicPathPatterns = [
-    '/round-invitation', '/profile', '/challenge'
+    '/round-invitation', '/profile', '/challenge', '/review'
   ].map(pattern => pattern.toLowerCase());
  
   const isPublicRoute = (path: string) => {
