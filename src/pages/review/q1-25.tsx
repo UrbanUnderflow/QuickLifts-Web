@@ -22,7 +22,7 @@ const metrics = [
   },
   {
     label: "Total Workouts Completed",
-    currentValue: 1250,
+    currentValue: 2050,
     previousValue: 0,
     isCurrency: false,
     showGrowth: true
