@@ -534,6 +534,44 @@ const ChallengeStatusPage: React.FC = () => {
                                       </div>
                                     </div>
                                   </div>
+
+                                  {/* Sweatlists Included Section */}
+                                  <div className="mt-6">
+                                    <h5 className="text-gray-400 text-sm font-medium mb-3 border-b border-gray-700 pb-1">Sweatlists Included</h5>
+                                    {selectedChallenge.sweatlistIds && selectedChallenge.sweatlistIds.length > 0 ? (
+                                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                        {selectedChallenge.sweatlistIds.map((sweatlist: { id: string; sweatlistName: string }, index: number) => (
+                                          <div
+                                            key={`${sweatlist.id}-${index}`}
+                                            className="p-3 rounded-lg border bg-[#262a30] border-gray-700"
+                                          >
+                                            <div className="flex items-start gap-2">
+                                              <div className="h-5 w-5 rounded-full flex items-center justify-center text-xs font-medium bg-gray-700 text-gray-300 flex-shrink-0">
+                                                {index + 1}
+                                              </div>
+                                              <div>
+                                                <div className="font-medium text-gray-200 break-all">
+                                                  {sweatlist.sweatlistName || 'Unnamed Sweatlist'}
+                                                </div>
+                                                <div className="text-xs text-gray-400 mt-1 font-mono break-all">
+                                                  ID: {sweatlist.id || 'N/A'}-{index}
+                                                </div>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    ) : (
+                                      <div className="flex items-center gap-2 text-gray-400 mt-4 p-3 bg-gray-800/30 rounded-lg text-sm">
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                        <span>No Sweatlists associated with this challenge.</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                  {/* End Sweatlists Included Section */}
+
                                 </div>
                               </td>
                             </tr>

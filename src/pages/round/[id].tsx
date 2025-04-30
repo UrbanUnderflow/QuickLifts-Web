@@ -797,7 +797,7 @@ const ChallengeDetailView = () => {
             completion(null);
           })
           .catch((err: any) => {
-            console.error('Error joining challenge:', err);
+            console.error('Error joining challenge:', err); 
             completion(null);
           });
       },

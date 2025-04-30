@@ -800,6 +800,9 @@ const UsersManagement: React.FC = () => {
                         <div className="font-medium text-gray-200">
                           {exerciseRef.exercise?.name || 'Unknown Exercise'}
                         </div>
+                        <div className="font-medium text-gray-200">
+                          {exerciseRef.exercise?.id || 'Unknown ExerciseID'}
+                        </div>
                         <div className="text-xs text-gray-400 mt-1">
                           {exerciseRef.exercise?.category?.type === 'weight-training' ? (
                             <>

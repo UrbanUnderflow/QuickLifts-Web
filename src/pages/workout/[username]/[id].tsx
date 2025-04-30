@@ -141,10 +141,15 @@ const WorkoutPreviewer: React.FC = () => {
 
   const videoURLs = workout.exercises
   .filter(exerciseRef => {
+    // Log exercise name and videos being considered
+    console.log(`[VideoURLs] Processing exercise: ${exerciseRef.exercise.name}, Videos:`, exerciseRef.exercise.videos);
     return exerciseRef.exercise.videos?.length > 0;
   })
   .flatMap(exerciseRef => exerciseRef.exercise.videos.map(video => video.videoURL))
   .filter(url => url);
+
+  // Log the final video URLs being passed to the player
+  console.log("[VideoURLs] Final video URLs for SequentialVideoPlayerView:", videoURLs);
 
   console.log("preview logs:", logs);
   const duration = Workout.estimatedDuration(logs);
@@ -179,13 +184,19 @@ const WorkoutPreviewer: React.FC = () => {
         <div className="px-4 -mt-6">
           <div className="bg-zinc-900/80 backdrop-blur-sm rounded-2xl p-6 border border-zinc-800">
             <div className="divide-y divide-zinc-800">
-              {logs.map((log) => (
-                <SweatListCardView
-                  key={log.id}
-                  log={log}
-                  gifUrls={log.exercise.videos?.map(video => video.gifURL).filter((url): url is string => !!url) || []}
-                />
-              ))}
+              {logs.map((log) => {
+                // Log the exercise name and gif URLs being passed to SweatListCardView
+                const gifUrls = log.exercise.videos?.map(video => video.gifURL).filter((url): url is string => !!url) || [];
+                console.log(`[SweatList] Exercise: ${log.exercise.name}, GIF URLs:`, gifUrls);
+                
+                return (
+                  <SweatListCardView
+                    key={log.id}
+                    log={log}
+                    gifUrls={gifUrls} // Use the calculated gifUrls
+                  />
+                );
+              })}
             </div>
             <Spacer size={100}></Spacer>
           </div>

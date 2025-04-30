@@ -849,29 +849,50 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
       setIsGenerating(true);
       setError(null);
   
-      // Get all exercises
-      let availableExercises = allExercises;
+      // Determine generation mode and parameters
+      const uniqueStacksPerDay = selectedPreferences.includes("Create unique stacks for each day.");
+      let numberOfUniqueStacks: number | null = null;
+      let selectedRestDays: string[] = [];
 
-      // If "Exclusive to selected creators" is selected, filter exercises
+      if (!uniqueStacksPerDay && includeRestDays) {
+        selectedRestDays = restDayPreferences
+          .filter(p => p.isSelected)
+          .map(p => p.day);
+        numberOfUniqueStacks = Math.max(1, 7 - selectedRestDays.length);
+      } else if (!uniqueStacksPerDay) {
+        numberOfUniqueStacks = 7;
+      }
+
+      // Filter available exercises based on creator preference
+      let availableExercisesForAPI = allExercises;
+      let creatorFilteredExercises = allExercises;
+
       if (selectedPreferences.includes("Exclusive to selected creators")) {
-        availableExercises = filterExercisesByCreators(allExercises, selectedCreators);
-        
-        if (availableExercises.length === 0) {
-          throw new Error("No exercises found from selected creators. Please select different creators or disable exclusive creator content.");
+        creatorFilteredExercises = filterExercisesByCreators(allExercises, selectedCreators);
+        if (creatorFilteredExercises.length === 0) {
+            throw new Error("No exercises found from selected creators. Please select different creators or disable the 'Exclusive to selected creators' preference.");
+        }
+        if (selectedCreators.length > 0) {
+            availableExercisesForAPI = creatorFilteredExercises;
         }
       }
-      console.log("selectedCreators are: ", selectedCreators);
-      console.log("Available exercises after creator filtering:", availableExercises.length);
 
-      console.log("the must indluded exercsies are: ", selectedMoves.map(move => move.name));
-      console.log("the must indluded exercsies are: ", selectedPreferences);
-      console.log("the must all creators: ", availableExercises);
-      console.log("the must all available exercises: ", allExercises);
-      console.log("the must start date: ", challengeData.startDate);
-      console.log("the must end date: ", challengeData.endDate);
+      // Now log the parameters after they are defined
+      console.log("--- AI Generation Parameters ---");
+      console.log("Unique Stacks Per Day:", uniqueStacksPerDay);
+      console.log("Number of Unique Stacks to Generate:", numberOfUniqueStacks);
+      console.log("Selected Rest Days (for API):", selectedRestDays);
+      console.log("Must Include Moves:", selectedMoves.map(m => m.name));
+      console.log("User Prompt:", aiPromptText);
+      console.log("Selected Preferences:", selectedPreferences);
+      console.log("Available Exercises Count (for API):", availableExercisesForAPI.length);
+      console.log("Start Date:", challengeData.startDate);
+      console.log("End Date:", challengeData.endDate);
+      console.log("Selected Creator IDs:", selectedCreators);
+      console.log("--------------------------------");
 
 
-      // Use availableExercises instead of allExercises in your AI generation logic
+      // Use availableExercisesForAPI in the API call
       const response = await fetch('/api/generateRound', {
         method: 'POST',
         headers: {
@@ -880,10 +901,13 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
         body: JSON.stringify({
           mustIncludeExercises: selectedMoves.map(move => move.name),
           userPrompt: aiPromptText,
-          preferences: selectedPreferences,
-          availableExercises,
+          preferences: selectedPreferences, // Send all preferences
+          availableExercises: availableExercisesForAPI.map(ex => ex.name), // <-- OPTIMIZATION: Send only names
           startDate: challengeData.startDate,
           endDate: challengeData.endDate,
+          // Send these new parameters
+          numberOfUniqueStacks: numberOfUniqueStacks, // Will be null or a number
+          selectedRestDays: selectedRestDays, // Always send the array (might be empty)
         }),
       });
   
@@ -937,9 +961,10 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
           const enrichedExercises = stackData.exercises
             .map((ex: ExerciseReference) => {
               try {
-                return enrichExerciseData(ex, allExercises, availableExercises, useOnlyCreatorExercises);
+                return enrichExerciseData(ex, allExercises, availableExercisesForAPI, useOnlyCreatorExercises);
               } catch (error) {
-                console.warn(`Skipping exercise ${ex.exercise.name}: ${error}`);
+                // Log the name directly from the API response object `ex`
+                console.warn(`Skipping exercise ${(ex as any)?.name || 'Unknown'}: ${error}`); 
                 return null;
               }
             })

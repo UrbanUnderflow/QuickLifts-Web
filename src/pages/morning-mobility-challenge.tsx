@@ -158,7 +158,7 @@ const MorningMobilityChallengePage: NextPage = () => {
               $1,000 PRIZE
             </div>
             <div className="bg-zinc-800 text-white px-3 py-1 rounded-full text-sm">
-              May 6 - July 29, 2025
+              May 6 - August 3, 2025
             </div>
           </div>
           <h1 className="text-white text-5xl sm:text-6xl font-bold mb-6">
@@ -552,8 +552,8 @@ const MorningMobilityChallengePage: NextPage = () => {
             </details>
             
             <details className="mb-4">
-              <summary className="text-white font-semibold cursor-pointer py-2">3. Contest Period - May 6 to July 29, 2025</summary>
-              <p className="text-zinc-400 pt-2 pl-4">Begins 12:01 AM ET 6 May 2025 and ends 11:59 PM ET 29 July 2025 ("Contest Period"). All challenge activity and point totals must be recorded in‑app within this window.</p>
+              <summary className="text-white font-semibold cursor-pointer py-2">3. Contest Period - May 6 to August 3, 2025</summary>
+              <p className="text-zinc-400 pt-2 pl-4">Begins 12:01 AM ET 6 May 2025 and ends 11:59 PM ET 3 August 2025 ("Contest Period"). All challenge activity and point totals must be recorded in‑app within this window.</p>
             </details>
             
             <details className="mb-4">

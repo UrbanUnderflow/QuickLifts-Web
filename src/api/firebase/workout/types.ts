@@ -1156,10 +1156,11 @@ class Challenge {
     this.joinWindowEnds = data.joinWindowEnds || new Date(this.startDate.getTime() + (48 * 3600 * 1000));
     this.minParticipants = data.minParticipants || 1;
     this.maxParticipants = data.maxParticipants || 100;
-    this.allowLateJoins = data.allowLateJoins ?? true;
+    this.allowLateJoins = data.allowLateJoins !== undefined ? data.allowLateJoins : true;
     this.cohortAuthor = data.cohortAuthor || [];
-    this.pricingInfo = data.pricingInfo ? new PricingInfo(data.pricingInfo) : new PricingInfo();
+    this.pricingInfo = new PricingInfo(data.pricingInfo);
 
+    // Calculate duration and end status after initializing dates
     this.durationInDays = this.calculateDurationInDays();
     this.isChallengeEnded = new Date() > this.endDate;
     
@@ -1204,6 +1205,8 @@ class Challenge {
       durationInDays: this.durationInDays,
       introVideos: this.introVideos.map(video => video.toDictionary()),
       pricingInfo: this.pricingInfo.toDictionary(),
+      cohortAuthor: this.cohortAuthor,
+      isChallengeEnded: this.isChallengeEnded,
     };
   }
 
@@ -1253,6 +1256,9 @@ class Challenge {
           videoUrl: video.videoUrl
         })),
         pricingInfo: obj.pricingInfo.toDictionary(),
+        cohortAuthor: obj.cohortAuthor,
+        durationInDays: obj.durationInDays,
+        isChallengeEnded: obj.isChallengeEnded,
       };
     }
 

@@ -12,6 +12,7 @@ interface Review {
   title: string;
   description: string;
   date: string;
+  reviewType: 'month' | 'year' | 'quarter';
 }
 
 interface ReviewsIndexProps {
@@ -48,12 +49,30 @@ const ReviewsIndex: React.FC<ReviewsIndexProps> = ({ reviews }) => {
               
               <div className="flex flex-col sm:flex-row sm:items-center gap-6 relative">
                 <div className="flex-shrink-0 w-32">
-                  <div className="text-sm text-zinc-500 uppercase tracking-wider">
-                    {new Date(review.date).toLocaleString('default', { month: 'long' })}
-                  </div>
-                  <div className="text-3xl font-bold">
-                    {new Date(review.date).getFullYear()}
-                  </div>
+                  {review.reviewType === 'year' ? (
+                    <div className="text-3xl font-bold">
+                      {review.date.substring(0, 4)} 
+                    </div>
+                  ) : review.reviewType === 'quarter' ? (
+                    <>
+                       <div className="text-sm text-zinc-500 uppercase tracking-wider">
+                         Q{Math.ceil(parseInt(review.date.substring(5, 7)) / 3)} {/* Calculate Q from month */} 
+                       </div>
+                       <div className="text-3xl font-bold">
+                         {review.date.substring(0, 4)} {/* Year */} 
+                       </div>
+                    </>
+                  ) : (
+                    // Monthly Review
+                    <>
+                      <div className="text-sm text-zinc-500 uppercase tracking-wider">
+                         {new Date(review.date).toLocaleString('default', { month: 'long' })}
+                      </div>
+                      <div className="text-3xl font-bold">
+                         {new Date(review.date).getFullYear()}
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 <div className="flex-grow">
@@ -95,6 +114,12 @@ export const getStaticProps: GetStaticProps = async () => {
     const reviewsDirectory = path.join(process.cwd(), 'src', 'pages', 'review');
     const filenames = fs.readdirSync(reviewsDirectory);
 
+    // Month abbreviation to number mapping
+    const monthMap: { [key: string]: string } = {
+      jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06',
+      jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12'
+    };
+
     const reviews = await Promise.all(
       filenames
         .filter((filename) => filename !== 'index.tsx' && filename.endsWith('.tsx'))
@@ -115,22 +140,64 @@ export const getStaticProps: GetStaticProps = async () => {
             document.querySelector('[data-description="true"]')?.textContent?.trim() ||
             'Monthly review of our progress and achievements.';
 
-          // Extract date from the filename
-          const dateMatch = id.match(/([a-z]+)(\d+)/);
-          const month = dateMatch ? dateMatch[1] : '';
-          const year = dateMatch ? dateMatch[2] : '';
-          const date = `20${year}-${month}`;
+          let date: string;
+          let reviewType: 'month' | 'year' | 'quarter';
+
+          if (id === 'yearInReview') {
+            // Handle the year in review file specifically
+            date = '2024-12-31'; // Assign end-of-year date for sorting
+            reviewType = 'year';
+          } else if (id.startsWith('q')) {
+            // Handle quarterly reviews (e.g., q1-25)
+            reviewType = 'quarter';
+            const quarterMatch = id.match(/q([1-4])-(\d+)/);
+            const quarter = quarterMatch ? parseInt(quarterMatch[1]) : null;
+            const yearShort = quarterMatch ? quarterMatch[2] : null;
+            const year = yearShort ? `20${yearShort}` : null;
+
+            if (year && quarter) {
+              // Assign date representing the end of the quarter for sorting
+              const endMonth = String(quarter * 3).padStart(2, '0'); // Q1->03, Q2->06, etc.
+              const endDay = (quarter === 1 || quarter === 4) ? '31' : '30'; // Approx end day
+              date = `${year}-${endMonth}-${endDay}`;
+            } else {
+              console.error(`Failed to parse date from quarterly filename: ${filename}. Assigning default date.`);
+              date = '1970-01-01'; // Default past date
+            }
+          } else {
+            // Handle monthly reviews
+            reviewType = 'month';
+            const dateMatch = id.match(/([a-z]+)(\d+)/);
+            const monthName = dateMatch ? dateMatch[1] : null;
+            const yearShort = dateMatch ? dateMatch[2] : null;
+            const monthNumber = monthName ? monthMap[monthName.toLowerCase()] : null;
+            const year = yearShort ? `20${yearShort}` : null;
+
+            if (year && monthNumber) {
+              // Construct date string in YYYY-MM-DD format (use day 01)
+              date = `${year}-${monthNumber}-01`;
+            } else {
+              // Handle files that don't match the expected format
+              console.error(`Failed to parse date from filename: ${filename}. Assigning default date.`);
+              date = '1970-01-01'; // Assign a default past date for sorting
+            }
+          }
 
           return {
             id,
             title,
             description,
-            date,
+            date, 
+            reviewType, // Include reviewType
           };
         })
     );
 
-    // Sort reviews by date (newest first)
+    // Filter out any reviews that failed date parsing (if we assigned a default)
+    // const validReviews = reviews.filter(review => review.date !== '1970-01-01');
+    // For now, we keep them to see them, but you might want to filter later.
+
+    // Sort reviews by date (YYYY-MM-DD strings sort correctly)
     reviews.sort((a, b) => b.date.localeCompare(a.date));
 
     return {
