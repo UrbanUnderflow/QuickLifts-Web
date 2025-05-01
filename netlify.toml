@@ -46,3 +46,7 @@
 
 [functions."update-challenge-status"]
   schedule = "@daily"
+
+# Configure the specific function as background
+[functions."manual-sync-sessions"]
+  is_background = true

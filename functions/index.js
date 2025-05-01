@@ -7,8 +7,12 @@ if (admin.apps.length === 0) {
 
 // Import functions from their respective files
 const { syncWorkoutSessionToRoot } = require("./syncWorkoutSessions");
+const { manualSyncWorkoutSessions } = require("./manualSync");
+const { updateParticipantCounts } = require("./updateParticipantCounts");
 
 // Export all functions for Firebase to discover
 exports.syncWorkoutSessionToRoot = syncWorkoutSessionToRoot;
+exports.manualSyncWorkoutSessions = manualSyncWorkoutSessions;
+exports.updateParticipantCounts = updateParticipantCounts;
 
 // Add any other function exports from other files here if needed 

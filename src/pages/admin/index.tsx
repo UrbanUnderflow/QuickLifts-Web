@@ -72,6 +72,12 @@ const AdminHome: React.FC = () => {
       description: 'Manage user accounts and permissions',
       icon: 'fas fa-users',
       link: '/admin/users'
+    },
+    {
+      title: 'Metrics Dashboard',
+      description: 'View key app metrics like moves, workouts, and rounds.',
+      icon: 'fas fa-chart-line',
+      link: '/admin/metrics'
     }
   ];
 

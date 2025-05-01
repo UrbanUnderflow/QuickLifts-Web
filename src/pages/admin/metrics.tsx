@@ -4,12 +4,13 @@ import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import { collection, getDocs, query, where, getCountFromServer, writeBatch, doc } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
 import { Dumbbell, Activity, Trophy, AlertCircle, RefreshCw, CheckCircle } from 'lucide-react';
+import axios from 'axios'; // Import axios
 
 // Define a type for the tabs
 type TabType = 'moves' | 'workouts' | 'rounds';
 
 const ROOT_SESSIONS_COLLECTION = "workout-sessions"; // Define root collection name
-const BATCH_LIMIT = 500; // Firestore batch write limit
+const BATCH_LIMIT = 100; // Firestore batch write limit
 
 const MetricsDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('moves');
@@ -28,11 +29,8 @@ const MetricsDashboard: React.FC = () => {
 
   // State for manual sync
   const [isSyncing, setIsSyncing] = useState(false);
-  const [syncProgress, setSyncProgress] = useState(0);
-  const [syncTotalUsers, setSyncTotalUsers] = useState(0);
-  const [syncProcessedUsers, setSyncProcessedUsers] = useState(0);
-  const [syncTotalSessions, setSyncTotalSessions] = useState(0);
   const [syncStatusText, setSyncStatusText] = useState('');
+  const [syncError, setSyncError] = useState<string | null>(null);
 
   // Show/hide toast
   useEffect(() => {
@@ -67,102 +65,67 @@ const MetricsDashboard: React.FC = () => {
   useEffect(() => {
     fetchCollectionCount('exercises', 'moves');
     fetchCollectionCount('sweatlist-collection', 'rounds');
-    // Fetch count from the new root collection (will be 0 initially)
-    fetchCollectionCount(ROOT_SESSIONS_COLLECTION, 'workouts', [where('isCompleted', '==', true)]); 
+    // Fetch count from the new root collection - REMOVED isCompleted filter
+    fetchCollectionCount(ROOT_SESSIONS_COLLECTION, 'workouts'); 
   }, [fetchCollectionCount]); // Depend on the memoized function
 
   const handleTabChange = (tab: TabType) => {
     setActiveTab(tab);
   };
 
-  // Manual Sync Logic
+  // Manual Sync Logic - UPDATED TO CALL NETLIFY FUNCTION
   const handleManualSync = async () => {
-    if (!window.confirm("This will read all users and their workout sessions, and write them to the root 'workout-sessions' collection. This can be a long and resource-intensive operation. Are you sure you want to proceed?")) {
+    if (!window.confirm("This will trigger a server-side function to sync all workout sessions. This may take some time (up to 15 mins) depending on data volume. Are you sure?")) {
       return;
     }
 
     setIsSyncing(true);
-    setSyncProgress(0);
-    setSyncTotalUsers(0);
-    setSyncProcessedUsers(0);
-    setSyncTotalSessions(0);
-    setSyncStatusText('Starting sync: Fetching users...');
-    setToastMessage({ type: 'info', text: 'Manual sync started...' });
-    setError(null);
-
-    let currentBatch = writeBatch(db);
-    let batchCounter = 0;
-    let totalSessionsSynced = 0;
+    setSyncStatusText('Initiating server-side sync...');
+    setToastMessage({ type: 'info', text: 'Manual sync requested...' });
+    setSyncError(null);
 
     try {
-      // 1. Fetch all user IDs
-      const usersRef = collection(db, 'users');
-      const usersSnapshot = await getDocs(query(usersRef)); // Consider adding select(documentId()) if only IDs are needed initially
-      const userIds = usersSnapshot.docs.map(doc => doc.id);
-      setSyncTotalUsers(userIds.length);
-      setSyncStatusText(`Fetched ${userIds.length} users. Processing workout sessions...`);
+      console.log("Calling Netlify Function: /.netlify/functions/manual-sync-sessions");
 
-      // 2. Iterate through users
-      for (let i = 0; i < userIds.length; i++) {
-        const userId = userIds[i];
-        setSyncProcessedUsers(i + 1);
-        setSyncProgress(Math.round(((i + 1) / userIds.length) * 50)); // Progress up to 50% for user processing
-        setSyncStatusText(`Processing user ${i + 1}/${userIds.length} (ID: ${userId.substring(0, 5)}...)`);
+      // --- Call the Netlify Function --- 
+      const response = await axios.post('/.netlify/functions/manual-sync-sessions', {}); // Send empty body
 
-        // 3. Fetch workoutSessions subcollection for the user
-        const sessionsRef = collection(db, 'users', userId, 'workoutSessions');
-        const sessionsSnapshot = await getDocs(sessionsRef);
+      // --- Process Response --- 
+      // The Netlify function (as written) attempts to run synchronously and return the final result.
+      let resultData = response.data; // Axios wraps response in 'data'
+      console.log("Netlify Function response:", resultData);
 
-        if (!sessionsSnapshot.empty) {
-          // 4. Add each session to the batch
-          sessionsSnapshot.docs.forEach(sessionDoc => {
-            const sessionId = sessionDoc.id;
-            const sessionData = sessionDoc.data();
-            const rootSessionRef = doc(db, ROOT_SESSIONS_COLLECTION, sessionId);
-            
-            // Add userId to the data
-            const dataToSync = { 
-              ...sessionData,
-              userId: userId
-            };
-
-            currentBatch.set(rootSessionRef, dataToSync, { merge: true }); // Use merge to handle potential overwrites safely
-            batchCounter++;
-            totalSessionsSynced++;
-
-            // 5. Commit batch if limit reached
-            if (batchCounter >= BATCH_LIMIT) {
-              console.log(`Committing batch of ${batchCounter} sessions...`);
-              currentBatch.commit(); // Commit the current batch
-              currentBatch = writeBatch(db); // Start a new batch
-              batchCounter = 0;
-              // Optional: Add a small delay to avoid hitting rate limits too hard
-              // await new Promise(resolve => setTimeout(resolve, 100)); 
-            }
-          });
-        }
-        // Update overall session count after processing each user
-        setSyncTotalSessions(totalSessionsSynced);
+      if (resultData.success) {
+          const message = resultData.message || `Sync finished successfully!`;
+          setSyncStatusText(message);
+          setToastMessage({ type: 'success', text: message });
+          // Refresh counts ONLY if sync completed successfully
+          fetchCollectionCount(ROOT_SESSIONS_COLLECTION, 'workouts');
+      } else {
+           // If the function returns a structured error like { success: false, error: '...' }
+           const errorMessage = resultData.error || 'Netlify function reported failure.';
+           throw new Error(errorMessage); // Throw to be caught below
       }
 
-      // 6. Commit any remaining items in the last batch
-      if (batchCounter > 0) {
-        console.log(`Committing final batch of ${batchCounter} sessions...`);
-        await currentBatch.commit();
-      }
+    } catch (err: any) {
+        console.error('[Manual Sync Call - Netlify] Error:', err);
+        let errorMessage = 'Unknown error';
+        let statusCode = 500;
 
-      setSyncStatusText(`Sync complete. Processed ${userIds.length} users and synced ${totalSessionsSynced} sessions.`);
-      setToastMessage({ type: 'success', text: `Sync finished successfully! ${totalSessionsSynced} sessions synced.` });
-      setSyncProgress(100);
+         if (axios.isAxiosError(err)) { // Check if it's an Axios error
+             statusCode = err.response?.status || 500;
+             // Try to get error message from Netlify function's response body
+             errorMessage = err.response?.data?.error || err.message || 'Request failed';
+             if (statusCode === 409) { // Conflict - Lock held
+                 errorMessage = "Sync process is already running. Please wait.";
+             }
+         } else if (err instanceof Error) { // Standard JS error
+             errorMessage = err.message;
+         }
 
-      // Refresh the workout count after successful sync
-      fetchCollectionCount(ROOT_SESSIONS_COLLECTION, 'workouts', [where('isCompleted', '==', true)]);
-
-    } catch (err) {
-      console.error('[Manual Sync] Error:', err);
-      setError(`Manual sync failed. ${err instanceof Error ? err.message : 'Unknown error'}`);
-      setToastMessage({ type: 'error', text: 'Manual sync failed. Check console for details.' });
-      setSyncStatusText(`Sync failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        setSyncError(`Manual sync failed: ${errorMessage}`);
+        setToastMessage({ type: 'error', text: `Manual sync failed. ${errorMessage}` });
+        setSyncStatusText(`Sync failed: ${errorMessage}`);
     } finally {
       setIsSyncing(false);
     }
@@ -205,13 +168,13 @@ const MetricsDashboard: React.FC = () => {
         return (
           <div className="p-6 bg-[#262a30] rounded-lg border border-gray-700">
             <h3 className="text-xl font-semibold mb-4 flex items-center gap-2 text-white">
-              <Activity className="text-[#d7ff00]"/> Total Completed Workouts
+              <Activity className="text-[#d7ff00]"/> Total Workout Sessions (All)
             </h3>
             <p className="text-4xl font-bold text-[#d7ff00]">{counts.workouts}</p>
             <div className="mt-4 p-3 bg-blue-900/20 border border-blue-800 rounded-lg text-blue-300 text-sm flex items-center gap-2">
                 <AlertCircle className="h-5 w-5 flex-shrink-0"/>
                 <span>
-                    Note: This count reflects documents in the <code>{ROOT_SESSIONS_COLLECTION}</code> collection where <code>isCompleted</code> is true. Ensure the Cloud Function sync is active or run Manual Sync.
+                    Note: This count reflects all documents in the <code>{ROOT_SESSIONS_COLLECTION}</code> collection. Ensure the Cloud Function sync is active or run Manual Sync for accuracy.
                 </span>
             </div>
             {/* TODO: Add table/list of workouts from flatWorkoutSessions */}
@@ -261,13 +224,13 @@ const MetricsDashboard: React.FC = () => {
             Metrics Dashboard
           </h1>
 
-          {/* Manual Sync Section */}
+          {/* Manual Sync Section - UPDATED UI FEEDBACK */}
           <div className="relative bg-[#1a1e24] rounded-xl p-6 mb-6 shadow-lg border border-blue-800 overflow-hidden">
              <div className="flex flex-wrap justify-between items-center gap-4">
                 <div>
-                  <h2 className="text-lg font-semibold text-white mb-1">Manual Workout Sync</h2>
+                  <h2 className="text-lg font-semibold text-white mb-1">Manual Workout Sync (Server-Side)</h2>
                   <p className="text-sm text-gray-400 max-w-lg">
-                    Run this to copy existing workout sessions from all user subcollections to the root <code>{ROOT_SESSIONS_COLLECTION}</code> collection. Use this for initial backfill or if the Cloud Function sync fails. <strong className="text-orange-400">Warning:</strong> May be slow and resource-intensive.
+                    Run this to trigger a background function that copies existing workout sessions to the root <code>{ROOT_SESSIONS_COLLECTION}</code> collection.
                   </p>
                 </div>
                 <button
@@ -283,26 +246,29 @@ const MetricsDashboard: React.FC = () => {
                   ) : (
                     <RefreshCw className="h-4 w-4" />
                   )}
-                  {isSyncing ? 'Syncing...' : 'Run Manual Sync'}
+                  {isSyncing ? 'Sync Running...' : 'Run Manual Sync'}
                 </button>
              </div>
-             {/* Progress Bar */}
+             {/* Simplified Progress Feedback */}
              {isSyncing && (
                 <div className="mt-4">
                     <div className="flex justify-between items-center mb-1">
                         <span className="text-xs font-medium text-blue-300">{syncStatusText}</span>
-                        <span className="text-xs font-medium text-[#d7ff00]">{syncProgress}%</span>
+                         {/* Generic spinner */}
+                         <svg className="animate-spin h-4 w-4 text-[#d7ff00]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                         </svg>
                     </div>
-                    <div className="w-full bg-[#262a30] rounded-full h-2 mb-1">
-                        <div
-                        className={`h-2 rounded-full transition-all duration-500 ease-out animated-progress ${error ? 'bg-red-600' : 'bg-gradient-to-r from-blue-500 via-purple-500 to-[#d7ff00]'}`}
-                        style={{ width: `${syncProgress}%` }}
-                        ></div>
-                    </div>
-                    <div className="text-xs text-gray-400">
-                        Users: {syncProcessedUsers}/{syncTotalUsers} | Sessions Synced: {syncTotalSessions}
-                    </div>
+                    {/* Removed detailed progress bar */}
                 </div>
+             )}
+              {/* Display error if sync failed */}
+             {!isSyncing && syncError && (
+                 <div className="mt-4 bg-red-900/20 p-3 rounded-lg border border-red-800 text-red-300 flex items-center gap-2 text-sm">
+                    <AlertCircle className="h-5 w-5 flex-shrink-0" />
+                    <span>Sync Error: {syncError}</span>
+                 </div>
              )}
           </div>
 
