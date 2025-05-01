@@ -1,3 +1,5 @@
+console.log("--- manual-sync-sessions.js loaded ---"); // Add this top-level log
+
 const { admin, db, headers } = require('./config/firebase'); // Assuming shared config
 const { FieldValue } = require("firebase-admin/firestore"); // Required for serverTimestamp
 
@@ -8,6 +10,8 @@ const LOCK_DOC_PATH = "syncStatus/manualSyncLock"; // Reuse or use a new lock pa
 
 // --- Logic ---
 exports.handler = async (event, context) => {
+    console.log("--- manual-sync-sessions handler invoked --- "); // Add this very first log in handler
+
     // Netlify functions run in response to HTTP requests.
     // Background functions are triggered but don't return a response directly to the *original* caller.
     // We log progress and errors to Netlify function logs.
