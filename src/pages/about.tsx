@@ -65,30 +65,48 @@ const AboutPage: NextPage = () => {
       </Head>
 
       {/* What is Pulse Section */}
-      <section ref={useScrollFade()} className="min-h-screen bg-zinc-900 flex flex-col items-center justify-center text-center px-8 py-20">
-        <div className="max-w-4xl mx-auto">
-          <h2 className="text-[#E0FE10] uppercase tracking-wide font-semibold mb-4 relative inline-block hover:text-white transition-colors duration-300 group cursor-pointer">
+      <section ref={useScrollFade()} className="relative min-h-screen flex flex-col items-center justify-center text-center px-8 py-20 overflow-hidden animate-gradient-background">
+        {/* Animated background elements */}
+        <div className="absolute inset-0 bg-zinc-900"></div>
+        <div className="absolute inset-0 bg-gradient-to-tr from-zinc-950 via-zinc-900 to-zinc-800 opacity-40"></div>
+        <div className="absolute inset-0">
+          <div className="absolute top-20 left-20 w-64 h-64 bg-[#E0FE10]/5 rounded-full filter blur-3xl animate-pulse-slow"></div>
+          <div className="absolute bottom-20 right-20 w-96 h-96 bg-[#E0FE10]/5 rounded-full filter blur-3xl animate-pulse-slow animation-delay-2000"></div>
+          <div className="absolute top-1/2 left-1/3 w-80 h-80 bg-blue-500/5 rounded-full filter blur-3xl animate-pulse-slow animation-delay-1000"></div>
+        </div>
+        
+        {/* Animated grid pattern overlay */}
+        <div className="absolute inset-0 opacity-10">
+          <div className="h-full w-full bg-[url('/grid-pattern.svg')] bg-repeat"></div>
+        </div>
+
+        {/* Content */}
+        <div className="relative z-20 max-w-4xl mx-auto">
+          <h2 className="text-[#E0FE10] uppercase tracking-wide font-semibold mb-4 relative inline-block hover:text-white transition-colors duration-300 group cursor-pointer animate-fade-in-up animation-delay-300">
             What is Pulse
             <span className="absolute -bottom-1 left-0 w-full h-0.5 bg-[#E0FE10] transition-all duration-300 transform scale-x-0 group-hover:scale-x-100 origin-left"></span>
           </h2>
-          <h1 className="text-white text-5xl sm:text-7xl font-bold mb-8">
+          <h1 className="text-white text-5xl sm:text-7xl font-bold mb-8 animate-fade-in-up animation-delay-600">
             Pulse: Community Fitness
           </h1>
-          <p className="text-zinc-400 text-xl leading-relaxed mb-12">
+          <p className="text-zinc-400 text-xl leading-relaxed mb-12 animate-fade-in-up animation-delay-900">
             A platform where fitness enthusiasts create, share, and grow together. 
             Pulse transforms solo workouts into shared experiences and individual progress 
             into collective inspiration.
           </p>
-          <div className="flex flex-wrap justify-center gap-6">
-            <div className="bg-zinc-800/50 hover:bg-zinc-800 transition-all duration-300 hover:shadow-lg hover:shadow-[#E0FE10]/10 rounded-xl p-6 max-w-[280px] cursor-pointer transform hover:-translate-y-1">
+          <div className="flex flex-wrap justify-center gap-6 animate-fade-in-up animation-delay-1200">
+            <div className="bg-zinc-800/50 hover:bg-zinc-800 transition-all duration-500 hover:shadow-lg hover:shadow-[#E0FE10]/20 rounded-xl p-6 max-w-[280px] cursor-pointer transform hover:-translate-y-1 relative overflow-hidden group">
+              <div className="absolute inset-0 bg-gradient-to-r from-[#E0FE10]/0 via-[#E0FE10]/5 to-[#E0FE10]/0 opacity-0 group-hover:opacity-100 transition-opacity duration-700 animate-shimmer"></div>
               <h3 className="text-white text-xl font-semibold mb-2">Create</h3>
               <p className="text-zinc-400">Share exercises & routines</p>
             </div>
-            <div className="bg-zinc-800/50 hover:bg-zinc-800 transition-all duration-300 hover:shadow-lg hover:shadow-[#E0FE10]/10 rounded-xl p-6 max-w-[280px] cursor-pointer transform hover:-translate-y-1">
+            <div className="bg-zinc-800/50 hover:bg-zinc-800 transition-all duration-500 hover:shadow-lg hover:shadow-[#E0FE10]/20 rounded-xl p-6 max-w-[280px] cursor-pointer transform hover:-translate-y-1 relative overflow-hidden group">
+              <div className="absolute inset-0 bg-gradient-to-r from-[#E0FE10]/0 via-[#E0FE10]/5 to-[#E0FE10]/0 opacity-0 group-hover:opacity-100 transition-opacity duration-700 animate-shimmer"></div>
               <h3 className="text-white text-xl font-semibold mb-2">Connect</h3>
               <p className="text-zinc-400">Join challenges & motivate others</p>
             </div>
-            <div className="bg-zinc-800/50 hover:bg-zinc-800 transition-all duration-300 hover:shadow-lg hover:shadow-[#E0FE10]/10 rounded-xl p-6 max-w-[280px] cursor-pointer transform hover:-translate-y-1">
+            <div className="bg-zinc-800/50 hover:bg-zinc-800 transition-all duration-500 hover:shadow-lg hover:shadow-[#E0FE10]/20 rounded-xl p-6 max-w-[280px] cursor-pointer transform hover:-translate-y-1 relative overflow-hidden group">
+              <div className="absolute inset-0 bg-gradient-to-r from-[#E0FE10]/0 via-[#E0FE10]/5 to-[#E0FE10]/0 opacity-0 group-hover:opacity-100 transition-opacity duration-700 animate-shimmer"></div>
               <h3 className="text-white text-xl font-semibold mb-2">Grow</h3>
               <p className="text-zinc-400">Track progress & celebrate wins</p>
             </div>
