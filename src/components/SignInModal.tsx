@@ -657,13 +657,30 @@ const SignInModal: React.FC<SignInModalProps> = ({
         console.log('[SignInModal Profile Step] Attempting to update user with:', JSON.parse(JSON.stringify(updatedUser.toDictionary())));
         await userService.updateUser(userId, updatedUser);
         console.log('[SignInModal Profile Step] User update successful. Moving to quiz prompt.');
-
-        // --- Directly set the next step --- 
-        setSignUpStep("quiz-prompt");
-        // --- Remove fetch/check logic from here --- 
         
-        // Optional: Update local state immediately if needed, though AuthWrapper might handle it
-        userService.nonUICurrentUser = updatedUser; 
+        // Update local state immediately
+        userService.nonUICurrentUser = updatedUser;
+        
+        // NEW: Check if we need to auto-join a challenge after profile completion
+        if (roundIdRedirect) {
+          console.log('[SignInModal Profile Step] Profile complete with username. Found roundIdRedirect. Attempting auto-join:', roundIdRedirect);
+          
+          // Check subscription status for auto-join decision
+          if (updatedUser.subscriptionType !== SubscriptionType.unsubscribed) {
+            await autoJoinChallenge(roundIdRedirect); // Await the join attempt
+            dispatch(clearRoundIdRedirect()); // Clear the redirect ID after join attempt
+            
+            // Still continue to quiz-prompt regardless of join success/failure
+            setSignUpStep("quiz-prompt");
+          } else {
+            console.log('[SignInModal Profile Step] User is unsubscribed. Moving to quiz-prompt first, deferring join.');
+            // Set the next step but keep roundIdRedirect for later
+            setSignUpStep("quiz-prompt");
+          }
+        } else {
+          // Normal flow - no pending challenge join
+          setSignUpStep("quiz-prompt");
+        }
 
       } catch (err) {
         console.error("[SignInModal Profile Step] Error updating username:", err);
@@ -875,7 +892,19 @@ const SignInModal: React.FC<SignInModalProps> = ({
         return;
     }
 
+    // ENHANCED VERIFICATION: Directly check for username in Firestore
     try {
+      const firestoreUser = await userService.fetchUserFromFirestore(currentUser.uid);
+      if (!firestoreUser || !firestoreUser.username) {
+        console.error('[SignInModal] autoJoinChallenge: Username missing in Firestore document');
+        dispatch(showToast({ message: 'Please complete your profile before joining this round.', type: 'warning' }));
+        
+        // Force profile completion flow
+        setIsSignUp(true);
+        setSignUpStep('profile');
+        return;
+      }
+
       // ** Check if user already joined this challenge **
       console.log(`[SignInModal] autoJoinChallenge: Checking if user ${currentUser.uid} already joined challenge ${roundId}`);
       const existingUserChallenges = await workoutService.fetchUserChallengesByUserId(currentUser.uid);
@@ -903,19 +932,12 @@ const SignInModal: React.FC<SignInModalProps> = ({
 
       const challengeToJoin = collection.challenge as Challenge; // Use the challenge object
 
-      // Call the join function (assuming it takes challenge and user)
-      // NOTE: The signature in service.ts is joinChallenge({ username, challengeId })
-      // We might need to adapt or use a different service function if available,
-      // or update joinChallenge to accept the full user/challenge object.
-      // For now, using the existing signature with username and challengeId.
-      if (!userService.nonUICurrentUser?.username) {
-          console.error('[SignInModal] autoJoinChallenge: Username missing for joinChallenge call.');
-          dispatch(showToast({ message: 'Username missing, cannot join round.', type: 'error' }));
-          return;
-      }
+      // ENHANCED VERIFICATION: Use the Firestore username instead of relying on local state
+      const username = firestoreUser.username;
+      console.log('[SignInModal] autoJoinChallenge: Using verified username from Firestore:', username);
       
-      console.log('[SignInModal] autoJoinChallenge: Calling workoutService.joinChallenge with:', { username: userService.nonUICurrentUser.username, challengeId: challengeToJoin.id });
-      await workoutService.joinChallenge({ username: userService.nonUICurrentUser.username, challengeId: challengeToJoin.id });
+      console.log('[SignInModal] autoJoinChallenge: Calling workoutService.joinChallenge with:', { username, challengeId: challengeToJoin.id });
+      await workoutService.joinChallenge({ username, challengeId: challengeToJoin.id });
       
       console.log('[SignInModal] autoJoinChallenge: Successfully joined challenge:', challengeToJoin.id);
       dispatch(showToast({ message: 'Successfully joined challenge!', type: 'success' }));
@@ -942,15 +964,24 @@ const SignInModal: React.FC<SignInModalProps> = ({
       onQuizComplete?.(); // Notify parent - Restore this line
 
       if (!refreshedUser) {
-        // ... (error handling for missing user)
         throw new Error("User data missing after quiz completion.");
+      }
+
+      // Enhanced verification - explicitly check for username
+      if (!refreshedUser.username) {
+        console.log('[SignInModal] handleCompleteQuiz: Username is missing after quiz. Forcing profile step.');
+        setIsSignUp(true);
+        setSignUpStep('profile');
+        setIsLoading(false);
+        // Keep roundIdRedirect preserved
+        return;
       }
 
       // ** Auto-join check **
       if (roundIdRedirect) {
-        // Only auto-join if the user is subscribed
+        // Only auto-join if the user is subscribed AND has a username
         if (refreshedUser.subscriptionType !== SubscriptionType.unsubscribed) {
-          console.log(`[SignInModal] handleCompleteQuiz: User is subscribed. Attempting auto-join for round: ${roundIdRedirect}`);
+          console.log(`[SignInModal] handleCompleteQuiz: User is subscribed and has username. Attempting auto-join for round: ${roundIdRedirect}`);
           await autoJoinChallenge(roundIdRedirect); // Await the join process
           dispatch(clearRoundIdRedirect()); // Clear the ID after attempting join
         } else {
@@ -2189,14 +2220,26 @@ const SignInModal: React.FC<SignInModalProps> = ({
 
     try {
       const userDoc = await userService.fetchUserFromFirestore(user.uid);
-      // ... (check for missing username)
-      if (userDoc && !userDoc.username) {
-        // ... (redirect to registration)
+      
+      // Enhanced username check with more detailed logging
+      if (!userDoc) {
+        console.error('[SignInModal] handleSignInSuccess: User document not found in Firestore');
+        setError('User profile could not be loaded. Please try again.');
+        return;
+      }
+      
+      // Explicit missing username check - prioritize this before subscription check
+      if (!userDoc.username) {
+        console.log('[SignInModal] handleSignInSuccess: User has no username. Forcing profile completion step.');
+        setIsSignUp(true);
+        setSignUpStep('profile');
+        setIsLoading(false);
+        // *** Important: Do NOT clear roundIdRedirect here so it can be used after profile completion ***
         return;
       }
       
       // *** Explicit Subscription Check ***
-      if (userDoc && userDoc.subscriptionType === SubscriptionType.unsubscribed) {
+      if (userDoc.subscriptionType === SubscriptionType.unsubscribed) {
         console.log('[SignInModal] handleSignInSuccess: User is unsubscribed. Redirecting to /subscribe.');
         // Preserve roundIdRedirect if it exists for post-subscription flow
         if (roundIdRedirect) {
@@ -2208,9 +2251,8 @@ const SignInModal: React.FC<SignInModalProps> = ({
       }
       // *** End Explicit Subscription Check ***
 
-      // ** Auto-join check (User is guaranteed to be subscribed here) ** 
+      // ** Auto-join check (User is guaranteed to be subscribed AND have username here) ** 
       if (roundIdRedirect) {
-          // No need to check subscription again
           console.log(`[SignInModal] handleSignInSuccess: Attempting auto-join for round: ${roundIdRedirect}`);
           await autoJoinChallenge(roundIdRedirect); 
           dispatch(clearRoundIdRedirect()); 
@@ -2237,7 +2279,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
       }
     } catch (err) {
       const error = err as Error;
-      console.error("Error completing quiz and redirecting:", error);
+      console.error("Error completing sign in:", error);
       setError(error.message);
        // Handle error state appropriately - maybe don't close modal automatically
     } finally {

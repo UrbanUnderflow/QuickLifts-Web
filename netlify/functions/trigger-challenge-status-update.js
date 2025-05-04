@@ -28,14 +28,19 @@ function determineChallengeStatus(challenge, now) {
     if (normalizedNow >= normalizedStart && normalizedNow <= normalizedEnd) {
       newStatus = challenge.status === 'published' ? 'active' : null;
       if (!newStatus) {
-        console.log(`Challenge is within active timeframe but status is ${challenge.status}, not 'published'. Skipping activation.`);
+        // console.log(`Challenge is within active timeframe but status is ${challenge.status}, not 'published'. Skipping activation.`);
       }
     } else if (normalizedNow > normalizedEnd) {
-      // We can complete any challenge that's past its end date
-      newStatus = 'completed';
+       // We can complete any challenge that's past its end date, regardless of current status (unless already completed)
+       if (challenge.status !== 'completed') {
+           newStatus = 'completed';
+       }
     }
 
-    logChallengeDetails(challenge, now, newStatus);
+    // Don't log if no status change is proposed
+    // if (newStatus && newStatus !== challenge.status) {
+    //  logChallengeDetails(challenge, now, newStatus);
+    // }
     return newStatus;
   } catch (error) {
     console.error('Error determining challenge status:', error, {
@@ -68,36 +73,12 @@ function logChallengeDetails(challenge, now, newStatus) {
   }
 }
 
-// Function to handle status changes and send notifications
-async function handleStatusChange(doc, newStatus, oldStatus, testMode) {
-  if (testMode) {
-    console.log(`[TEST] Would handle status change: ${oldStatus} -> ${newStatus}`);
-    return;
-  }
-
-  const data = doc.data();
-  const challenge = data.challenge;
-
-  try {
-    if (newStatus === 'active' && oldStatus !== 'active') {
-      console.log(`Sending start notifications for challenge ${doc.id}`);
-      // Send notifications (implementation would depend on your notification system)
-    } 
-    else if (newStatus === 'completed' && oldStatus !== 'completed') {
-      console.log(`Marking challenge ${doc.id} as completed`);
-      // Handle completion logic (implementation would depend on your system)
-    }
-  } catch (error) {
-    console.error('Error handling status change:', error);
-  }
-}
-
 // Process and update a collection of challenges
 async function updateChallengeCollection(collectionName, now, testMode = false) {
   console.log(`Processing ${collectionName}... ${testMode ? '(TEST MODE)' : ''}`);
   const batch = db.batch();
   const updates = [];
-  const proposedUpdates = [];
+  const proposedUpdates = []; // Keep this for logging/result
 
   try {
     const snapshot = await db.collection(collectionName).get();
@@ -105,26 +86,30 @@ async function updateChallengeCollection(collectionName, now, testMode = false) 
     for (const doc of snapshot.docs) {
       const data = doc.data();
       if (!data.challenge) {
-        console.log(`Skipping document ${doc.id} - no challenge data`);
+        // console.log(`Skipping document ${doc.id} in ${collectionName} - no challenge data`);
         continue;
       }
 
+      const currentStatus = data.challenge.status;
       const newStatus = determineChallengeStatus(data.challenge, now);
       
-      if (newStatus && newStatus !== data.challenge.status) {
-        console.log(`${testMode ? '[TEST] Would update' : 'Updating'} ${doc.id} from ${data.challenge.status} to ${newStatus}`);
+      // Check if a valid new status was determined and it's different
+      if (newStatus && newStatus !== currentStatus) {
+        console.log(`${testMode ? '[TEST] Would update' : 'Updating'} ${collectionName}/${doc.id} from ${currentStatus} to ${newStatus}`);
         
-        // Handle notifications before updating status
-        await handleStatusChange(doc, newStatus, data.challenge.status, testMode);
-        
+         // --- REMOVED call to handleStatusChange --- 
+
+        // Add to proposed updates for logging the result
         proposedUpdates.push({
           id: doc.id,
-          currentStatus: data.challenge.status,
+          collection: collectionName,
+          currentStatus: currentStatus,
           newStatus,
           startDate: convertTimestamp(data.challenge.startDate),
           endDate: convertTimestamp(data.challenge.endDate)
         });
 
+        // Only add to the actual batch if not in test mode
         if (!testMode) {
           updates.push({
             ref: doc.ref,
@@ -134,20 +119,24 @@ async function updateChallengeCollection(collectionName, now, testMode = false) 
       }
     }
 
+    // Commit the batch if not in test mode and there are updates
     if (!testMode && updates.length > 0) {
+      const updateTimestamp = Math.floor(now.getTime() / 1000);
       updates.forEach(({ ref, status }) => {
         batch.update(ref, {
           'challenge.status': status,
-          'challenge.updatedAt': Math.floor(now.getTime() / 1000)
+          'challenge.updatedAt': updateTimestamp, // Update nested challenge timestamp
+          'updatedAt': updateTimestamp          // Also update root doc timestamp
         });
       });
       await batch.commit();
-      console.log(`Updated ${updates.length} documents in ${collectionName}`);
+      console.log(`Committed ${updates.length} status updates in ${collectionName}.`);
     }
 
+    // Return counts regardless of test mode
     return {
       updatesApplied: testMode ? 0 : updates.length,
-      proposedUpdates
+      proposedUpdates // Contains details of what would/did change
     };
   } catch (error) {
     console.error(`Error processing ${collectionName}:`, error);

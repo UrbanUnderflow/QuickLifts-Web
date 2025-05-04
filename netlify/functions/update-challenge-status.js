@@ -1,159 +1,6 @@
 const { admin, db, convertTimestamp, headers } = require('./config/firebase');
 
-async function sendNotification(userId, title, body, data = {}) {
-  try {
-    const userDoc = await db.collection('users').doc(userId).get();
-    const fcmToken = userDoc.data()?.fcmToken;
-
-    if (!fcmToken) {
-      console.log(`No FCM token found for user ${userId}`);
-      return;
-    }
-
-    const requestBody = {
-      fcmToken,
-      payload: {
-        notification: {
-          title,
-          body,
-        },
-        data: {
-          ...data,
-          timestamp: String(Math.floor(Date.now() / 1000))
-        }
-      }
-    };
-
-    const response = await fetch('/.netlify/functions/send-notification', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(requestBody)
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to send notification: ${response.statusText}`);
-    }
-
-    console.log(`Notification sent successfully to user ${userId}`);
-  } catch (error) {
-    console.error(`Error sending notification to user ${userId}:`, error);
-  }
-}
-
-async function calculateWinner(challenge) {
-  try {
-    const participantScores = [];
-    const startTimestamp = challenge.startDate;
-    const endTimestamp = challenge.endDate;
-
-    for (const participant of challenge.participants) {
-      const workouts = await db.collection('users')
-        .doc(participant.userId)
-        .collection('workoutSummary')
-        .where('completedAt', '>=', startTimestamp)
-        .where('completedAt', '<=', endTimestamp)
-        .get();
-
-      let totalScore = 0;
-      workouts.forEach(doc => {
-        const workout = doc.data();
-        totalScore += workout.workScore || 0;
-      });
-
-      participantScores.push({
-        userId: participant.userId,
-        username: participant.username,
-        score: totalScore
-      });
-    }
-
-    participantScores.sort((a, b) => b.score - a.score);
-    return participantScores[0] || null;
-  } catch (error) {
-    console.error('Error calculating winner:', error);
-    return null;
-  }
-}
-
-async function handleStatusChange(doc, newStatus, oldStatus, testMode) {
-  if (testMode) {
-    console.log(`[TEST] Would handle status change: ${oldStatus} -> ${newStatus}`);
-    return;
-  }
-
-  const data = doc.data();
-  const challenge = data.challenge;
-
-  try {
-    if (newStatus === 'active' && oldStatus !== 'active') {
-      console.log(`Sending start notifications for challenge ${doc.id}`);
-      for (const participant of challenge.participants) {
-        await sendNotification(
-          participant.userId,
-          '🏃‍♂️ Challenge Started!',
-          `The challenge "${challenge.title}" has begun! Get ready to compete!`,
-          {
-            type: 'challenge_started',
-            challengeId: doc.id,
-            challengeTitle: challenge.title
-          }
-        );
-      }
-    } 
-    else if (newStatus === 'completed' && oldStatus !== 'completed') {
-      console.log(`Calculating winner for challenge ${doc.id}`);
-      const winner = await calculateWinner(challenge);
-
-      if (winner) {
-        await doc.ref.update({
-          'challenge.winner': winner,
-          'challenge.finalScores': Math.floor(winner.score)
-        });
-
-        for (const participant of challenge.participants) {
-          const isWinner = participant.userId === winner.userId;
-          
-          await sendNotification(
-            participant.userId,
-            isWinner ? '🏆 Congratulations, Champion!' : '🎉 Challenge Complete!',
-            isWinner 
-              ? `You won "${challenge.title}" with a score of ${Math.floor(winner.score)}!`
-              : `"${challenge.title}" has ended. ${winner.username} won with a score of ${Math.floor(winner.score)}!`,
-            {
-              type: 'challenge_completed',
-              challengeId: doc.id,
-              challengeTitle: challenge.title,
-              winnerId: winner.userId,
-              winnerUsername: winner.username,
-              winnerScore: String(Math.floor(winner.score)),
-              isWinner: String(isWinner)
-            }
-          );
-        }
-      } else {
-        console.log(`No winner determined for challenge ${doc.id}`);
-        for (const participant of challenge.participants) {
-          await sendNotification(
-            participant.userId,
-            '🎯 Challenge Complete',
-            `The challenge "${challenge.title}" has ended. Thanks for participating!`,
-            {
-              type: 'challenge_completed',
-              challengeId: doc.id,
-              challengeTitle: challenge.title,
-              noWinner: 'true'
-            }
-          );
-        }
-      }
-    }
-  } catch (error) {
-    console.error('Error handling status change:', error);
-  }
-}
-
+// Helper function to determine challenge status based on dates
 function determineChallengeStatus(challenge, now) {
   if (!challenge?.startDate || !challenge?.endDate) {
     console.log('Challenge missing start or end date');
@@ -181,14 +28,19 @@ function determineChallengeStatus(challenge, now) {
     if (normalizedNow >= normalizedStart && normalizedNow <= normalizedEnd) {
       newStatus = challenge.status === 'published' ? 'active' : null;
       if (!newStatus) {
-        console.log(`Challenge is within active timeframe but status is ${challenge.status}, not 'published'. Skipping activation.`);
+        // console.log(`Challenge is within active timeframe but status is ${challenge.status}, not 'published'. Skipping activation.`);
       }
     } else if (normalizedNow > normalizedEnd) {
-      // We can complete any challenge that's past its end date
-      newStatus = 'completed';
+      // We can complete any challenge that's past its end date, regardless of current status (unless already completed)
+       if (challenge.status !== 'completed') {
+           newStatus = 'completed';
+       }
     }
 
-    logChallengeDetails(challenge, now, newStatus);
+    // Don't log if no status change is proposed
+    // if (newStatus && newStatus !== challenge.status) {
+    //   logChallengeDetails(challenge, now, newStatus);
+    // }
     return newStatus;
   } catch (error) {
     console.error('Error determining challenge status:', error, {
@@ -221,11 +73,12 @@ function logChallengeDetails(challenge, now, newStatus) {
   }
 }
 
+// Process and update a collection of challenges
 async function updateChallengeCollection(collectionName, now, testMode = false) {
   console.log(`Processing ${collectionName}... ${testMode ? '(TEST MODE)' : ''}`);
   const batch = db.batch();
   const updates = [];
-  const proposedUpdates = [];
+  const proposedUpdates = []; // Keep this for logging/result
 
   try {
     const snapshot = await db.collection(collectionName).get();
@@ -233,26 +86,30 @@ async function updateChallengeCollection(collectionName, now, testMode = false) 
     for (const doc of snapshot.docs) {
       const data = doc.data();
       if (!data.challenge) {
-        console.log(`Skipping document ${doc.id} - no challenge data`);
+        // console.log(`Skipping document ${doc.id} in ${collectionName} - no challenge data`);
         continue;
       }
 
+      const currentStatus = data.challenge.status;
       const newStatus = determineChallengeStatus(data.challenge, now);
       
-      if (newStatus && newStatus !== data.challenge.status) {
-        console.log(`${testMode ? '[TEST] Would update' : 'Updating'} ${doc.id} from ${data.challenge.status} to ${newStatus}`);
+      // Check if a valid new status was determined and it's different
+      if (newStatus && newStatus !== currentStatus) {
+        console.log(`${testMode ? '[TEST] Would update' : 'Updating'} ${collectionName}/${doc.id} from ${currentStatus} to ${newStatus}`);
         
-        // Handle notifications before updating status
-        await handleStatusChange(doc, newStatus, data.challenge.status, testMode);
-        
+        // --- REMOVED call to handleStatusChange --- 
+
+        // Add to proposed updates for logging the result
         proposedUpdates.push({
           id: doc.id,
-          currentStatus: data.challenge.status,
+          collection: collectionName,
+          currentStatus: currentStatus,
           newStatus,
           startDate: convertTimestamp(data.challenge.startDate),
           endDate: convertTimestamp(data.challenge.endDate)
         });
 
+        // Only add to the actual batch if not in test mode
         if (!testMode) {
           updates.push({
             ref: doc.ref,
@@ -262,20 +119,24 @@ async function updateChallengeCollection(collectionName, now, testMode = false) 
       }
     }
 
+    // Commit the batch if not in test mode and there are updates
     if (!testMode && updates.length > 0) {
+      const updateTimestamp = Math.floor(now.getTime() / 1000);
       updates.forEach(({ ref, status }) => {
         batch.update(ref, {
           'challenge.status': status,
-          'challenge.updatedAt': Math.floor(now.getTime() / 1000)
+          'challenge.updatedAt': updateTimestamp, // Update nested challenge timestamp
+          'updatedAt': updateTimestamp          // Also update root doc timestamp
         });
       });
       await batch.commit();
-      console.log(`Updated ${updates.length} documents in ${collectionName}`);
+      console.log(`Committed ${updates.length} status updates in ${collectionName}.`);
     }
 
+    // Return counts regardless of test mode
     return {
       updatesApplied: testMode ? 0 : updates.length,
-      proposedUpdates
+      proposedUpdates // Contains details of what would/did change
     };
   } catch (error) {
     console.error(`Error processing ${collectionName}:`, error);
@@ -288,6 +149,7 @@ async function updateChallengeStatuses(testMode = false) {
   console.log(`Starting challenge status updates at: ${now.toISOString()} ${testMode ? '(TEST MODE)' : ''}`);
 
   try {
+    // Update both collections. The function now handles the batch internally.
     const [sweatlistResults, userChallengeResults] = await Promise.all([
       updateChallengeCollection('sweatlist-collection', now, testMode),
       updateChallengeCollection('user-challenge', now, testMode)
@@ -295,7 +157,7 @@ async function updateChallengeStatuses(testMode = false) {
 
     return {
       sweatlistCollection: sweatlistResults,
-      userChallengeCollection: userChallengeResults,
+      userChallengeCollection: userChallengeResults, // Changed key for clarity
       timestamp: Math.floor(now.getTime() / 1000),
       testMode
     };
@@ -306,27 +168,27 @@ async function updateChallengeStatuses(testMode = false) {
 }
 
 exports.handler = async (event) => {
+  // Handling OPTIONS request remains the same
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers, body: '' };
   }
 
-  console.log('Event received:', {
-    httpMethod: event.httpMethod,
-    body: event.body,
-    headers: event.headers
-  });
+  // Use event context if available (for scheduled functions)
+  const source = event.headers?.['x-netlify-event-source'] || 'manual'; 
+  console.log(`Scheduled function update-challenge-status triggered via ${source}.`);
 
   try {
-    // Parse the body safely with a fallback to empty object
-    const parsedBody = event.body ? JSON.parse(event.body) : {};
-    const { testMode = false } = parsedBody;
+    // Scheduled functions don't have a body, testMode is always false
+    const testMode = false; 
     
-    // Log what we're doing
-    console.log(`Running challenge status update with testMode=${testMode}`);
+    console.log(`Running scheduled challenge status update (testMode=${testMode})`);
     
     const result = await updateChallengeStatuses(testMode);
 
-    // Always return JSON with the proper Content-Type header
+    // Log success
+    console.log("Scheduled update completed.", JSON.stringify(result, null, 2));
+
+    // Return success, body might not be checked by scheduler but good practice
     return {
       statusCode: 200,
       headers: {
@@ -335,14 +197,14 @@ exports.handler = async (event) => {
       },
       body: JSON.stringify({
         success: true,
-        message: testMode ? 'Test run completed successfully' : 'Challenge statuses updated successfully',
+        message: 'Scheduled challenge statuses updated successfully.',
         results: result
       })
     };
   } catch (error) {
-    console.error('Error updating challenge statuses:', error);
+    console.error('Error during scheduled challenge status update:', error);
     
-    // Make sure the error response also has the proper Content-Type
+    // Return error status code
     return {
       statusCode: 500,
       headers: {
@@ -351,7 +213,7 @@ exports.handler = async (event) => {
       },
       body: JSON.stringify({ 
         success: false, 
-        error: error.message || 'Unknown error',
+        error: error.message || 'Unknown error during scheduled update.',
         timestamp: Math.floor(Date.now() / 1000)
       })
     };

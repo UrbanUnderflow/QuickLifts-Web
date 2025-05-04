@@ -34,7 +34,7 @@ import {
 import { exerciseService } from '../exercise/service';
 import { ProfileImage, User } from '../user/types'
 import { Workout, WorkoutSummary, BodyZone, IntroVideo, RepsAndWeightLog, WorkoutRating } from '../workout/types';
-import { WorkoutStatus, SweatlistCollection } from './types';
+import { WorkoutStatus, SweatlistCollection, SweatlistIdentifiers } from './types';
 import { format } from 'date-fns'; 
 import { convertTimestamp, serverTimestamp } from '../../../utils/timestamp'; // Adjust the import path
 import { convertFirestoreTimestamp } from '../../../utils/formatDate';
@@ -852,9 +852,15 @@ async getCollectionById(id: string): Promise<SweatlistCollection> {
     const docRef = doc(db, "sweatlist-collection", id);
     const docSnap = await getDoc(docRef);
     if (docSnap.exists()) {
+      const collectionData = docSnap.data();
+      const currentSweatlistIdsData = collectionData.sweatlistIds || [];
+      // Instantiate SweatlistIdentifiers from the raw data
+      const currentSweatlistIds: SweatlistIdentifiers[] = currentSweatlistIdsData.map((data: any) => new SweatlistIdentifiers(data));
+      console.log('Current sweatlistIds (instantiated):', currentSweatlistIds);
+
       return new SweatlistCollection({
         id: docSnap.id,
-        ...docSnap.data()
+        ...collectionData
       });
     } else {
       throw new Error("Collection not found");
@@ -1968,6 +1974,193 @@ async deleteWorkoutSession(workoutId: string | null): Promise<void> {
     }
   }
   // --- End Share Link Generation ---
+
+  // --- Remove Sweatlist from Collection --- 
+  /**
+   * Removes a specific sweatlist (stack) from a sweatlist collection (round).
+   * @param collectionId The ID of the SweatlistCollection document.
+   * @param sweatlistId The ID of the sweatlist to remove from the 'sweatlistIds' array.
+   */
+  async removeStackFromRound(collectionId: string, sweatlistId: string): Promise<void> {
+    if (!collectionId || !sweatlistId) {
+      throw new Error('Collection ID and Sweatlist ID are required.');
+    }
+
+    const collectionRef = doc(db, 'sweatlist-collection', collectionId);
+
+    try {
+      console.log(`Attempting to remove sweatlist ${sweatlistId} from collection ${collectionId}`);
+      
+      // Get the current document data
+      const docSnap = await getDoc(collectionRef);
+
+      if (!docSnap.exists()) {
+        throw new Error(`Sweatlist Collection with ID ${collectionId} not found.`);
+      }
+
+      const collectionData = docSnap.data();
+      const currentSweatlistIdsData = collectionData.sweatlistIds || [];
+      // Instantiate SweatlistIdentifiers from the raw data
+      const currentSweatlistIds: SweatlistIdentifiers[] = currentSweatlistIdsData.map((data: any) => new SweatlistIdentifiers(data));
+      console.log('Current sweatlistIds (instantiated):', currentSweatlistIds);
+
+      // Filter out the sweatlist to be removed
+      const updatedSweatlistIds = currentSweatlistIds.filter(sweatlist => sweatlist.id !== sweatlistId);
+      console.log('Updated sweatlistIds:', updatedSweatlistIds);
+
+      if (updatedSweatlistIds.length === currentSweatlistIds.length) {
+        console.warn(`Sweatlist with ID ${sweatlistId} not found within the collection ${collectionId}. No update performed.`);
+        // Optionally throw an error or just return if you consider this an issue
+        // throw new Error(`Sweatlist with ID ${sweatlistId} not found within the collection.`);
+        return; 
+      }
+
+      // Update the document with the filtered array
+      await updateDoc(collectionRef, {
+        sweatlistIds: updatedSweatlistIds.map(sl => sl.toDictionary()), // Ensure objects are plain for Firestore
+        updatedAt: serverTimestamp() // Update the timestamp
+      });
+
+      console.log(`Successfully removed sweatlist ${sweatlistId} from collection ${collectionId}`);
+
+    } catch (error) {
+      console.error(`Error removing sweatlist ${sweatlistId} from collection ${collectionId}:`, error);
+      // Re-throw the error to be caught by the calling function
+      throw error;
+    }
+  }
+  // --- End Remove Sweatlist --- 
+
+  // --- Clear All Sweatlists from Collection --- 
+  /**
+   * Removes ALL sweatlists (stacks) from a sweatlist collection (round) by setting sweatlistIds to [].
+   * @param collectionId The ID of the SweatlistCollection document.
+   */
+  async clearAllStacksFromRound(collectionId: string): Promise<void> {
+    if (!collectionId) {
+      throw new Error('Collection ID is required.');
+    }
+
+    const collectionRef = doc(db, 'sweatlist-collection', collectionId);
+
+    try {
+      console.log(`Attempting to clear all sweatlists from collection ${collectionId}`);
+      
+      // Check if the document exists before updating
+      const docSnap = await getDoc(collectionRef);
+      if (!docSnap.exists()) {
+        throw new Error(`Sweatlist Collection with ID ${collectionId} not found.`);
+      }
+
+      // Update the document, setting sweatlistIds to an empty array
+      await updateDoc(collectionRef, {
+        sweatlistIds: [], // Set to empty array
+        updatedAt: serverTimestamp() // Update the timestamp
+      });
+
+      console.log(`Successfully cleared all sweatlists from collection ${collectionId}`);
+
+    } catch (error) {
+      console.error(`Error clearing sweatlists from collection ${collectionId}:`, error);
+      // Re-throw the error to be caught by the calling function
+      throw error;
+    }
+  }
+  // --- End Clear All Sweatlists ---
+
+  // --- Update Challenge Status --- 
+  /**
+   * Updates the status of the challenge nested within a SweatlistCollection.
+   * @param collectionId The ID of the SweatlistCollection document.
+   * @param newStatus The new status to set for the challenge.
+   */
+  async updateChallengeStatus(collectionId: string, newStatus: ChallengeStatus): Promise<void> {
+    if (!collectionId || !newStatus) {
+      throw new Error('Collection ID and new status are required.');
+    }
+
+    // Validate the status value if necessary (ensure it's one of the allowed ChallengeStatus enum values)
+    const validStatuses = Object.values(ChallengeStatus);
+    if (!validStatuses.includes(newStatus)) {
+      throw new Error(`Invalid challenge status provided: ${newStatus}`);
+    }
+
+    const collectionRef = doc(db, 'sweatlist-collection', collectionId);
+
+    try {
+      console.log(`Attempting to update challenge status to '${newStatus}' for collection ${collectionId}`);
+
+      // Check if the document exists before updating
+      const docSnap = await getDoc(collectionRef);
+      if (!docSnap.exists()) {
+        throw new Error(`Sweatlist Collection with ID ${collectionId} not found.`);
+      }
+
+      // Prepare the update data using dot notation for nested field
+      const updateData = {
+        'challenge.status': newStatus,
+        'challenge.updatedAt': serverTimestamp(), // Update the challenge's timestamp
+        'updatedAt': serverTimestamp() // Also update the collection's timestamp
+      };
+
+      await updateDoc(collectionRef, updateData);
+
+      console.log(`Successfully updated challenge status to '${newStatus}' for collection ${collectionId}`);
+
+    } catch (error) {
+      console.error(`Error updating challenge status for collection ${collectionId}:`, error);
+      throw error; // Re-throw
+    }
+  }
+  // --- End Update Challenge Status ---
+
+  // --- Batch Update User Challenge Status --- 
+  /**
+   * Updates the status within the nested challenge object for all UserChallenge
+   * documents associated with a given challenge ID.
+   *
+   * @param challengeId The ID of the main challenge (equivalent to collectionId).
+   * @param newStatus The new status to set.
+   */
+  async updateStatusForAllUserChallenges(challengeId: string, newStatus: ChallengeStatus): Promise<void> {
+    if (!challengeId || !newStatus) {
+      throw new Error('Challenge ID and new status are required for batch update.');
+    }
+
+    const userChallengesRef = collection(db, 'user-challenge');
+    const q = query(userChallengesRef, where('challengeId', '==', challengeId));
+
+    console.log(`Starting batch update for user challenges status to '${newStatus}' for challenge ID: ${challengeId}`);
+
+    try {
+      const snapshot = await getDocs(q);
+
+      if (snapshot.empty) {
+        console.log(`No user challenges found for challenge ID ${challengeId}. No batch update needed.`);
+        return; // Nothing to update
+      }
+
+      const batch = writeBatch(db);
+      const nowTimestamp = serverTimestamp(); // Use server timestamp for consistency
+
+      snapshot.forEach(doc => {
+        console.log(` - Adding update for user-challenge: ${doc.id}`);
+        batch.update(doc.ref, {
+          'challenge.status': newStatus,
+          'challenge.updatedAt': nowTimestamp, // Update nested challenge timestamp
+          'updatedAt': nowTimestamp // Also update user-challenge timestamp
+        });
+      });
+
+      await batch.commit();
+      console.log(`Successfully committed batch update for ${snapshot.size} user challenges.`);
+
+    } catch (error) {
+      console.error(`Error during batch update of user challenges for challenge ID ${challengeId}:`, error);
+      throw error; // Re-throw
+    }
+  }
+  // --- End Batch Update User Challenge Status ---
 }
 
 export const workoutService = new WorkoutService();

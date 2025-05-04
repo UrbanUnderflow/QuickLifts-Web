@@ -1058,6 +1058,7 @@ class UserChallenge {
 enum ChallengeStatus {
   Draft = 'draft',
   Published = 'published',
+  Active = 'active',
   Completed = 'completed',
   Cancelled = 'cancelled'
 }
