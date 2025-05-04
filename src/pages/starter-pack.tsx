@@ -16,8 +16,8 @@ const CREATOR_STEPS = [
       "Sign up using your email or sign in with apple'",
       "Upload a profile image",
     ],
-    image: "/step1Mobile.svg",
-    mobileImage: "/step1Mobile.svg"
+    image: "/step1Mobile.png",
+    mobileImage: "/step1Mobile.png"
   },
   {
     title: "Enter the Pilot",
@@ -48,8 +48,8 @@ const CREATOR_STEPS = [
       "Create your first 'Stack'",
       "Create a 'Round'"
     ],
-    image: "/step3Mobile.svg",
-    mobileImage: "/step3Mobile.svg"
+    image: "/step3Mobile.png",
+    mobileImage: "/step3Mobile.png"
   },
   {
     title: "Start a workout",
@@ -58,8 +58,8 @@ const CREATOR_STEPS = [
       "Start and complete your first workout",
       "Join a 'Round'",
     ],
-    image: "/step4Mobile.svg",
-    mobileImage: "/step4Mobile.svg"
+    image: "/step4Mobile.png",
+    mobileImage: "/step4Mobile.png"
   }
 ];
 
