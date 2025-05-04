@@ -37,8 +37,8 @@ const CREATOR_STEPS = [
       "Fill out profile description",
       "Add social media handles",
     ],
-    image: "/step2Mobile.svg",
-    mobileImage: "/step2Mobile.svg"
+    image: "/step2Mobile.png",
+    mobileImage: "/step2Mobile.png"
   },
   {
     title: "Upload Your First Content",
