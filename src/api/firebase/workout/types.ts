@@ -933,6 +933,7 @@ class UserChallenge {
   encouragedByUsers: Encouragement[];  // Changed from string[] to Encouragement[]
   checkIns: CheckIn[];
   hasReceivedShareBonus: boolean;
+  ignoreNotifications: string[]; // <<< NEW PROPERTY
 
   constructor(data: any) {
     this.id = data.id;
@@ -977,6 +978,7 @@ class UserChallenge {
       ? data.checkIns.map((d: any) => new CheckIn(d))
       : [];
     this.hasReceivedShareBonus = data.hasReceivedShareBonus ?? false;
+    this.ignoreNotifications = Array.isArray(data.ignoreNotifications) ? data.ignoreNotifications : []; // <<< INITIALIZE
   }
 
   // Add calculateLongestStreak method
@@ -1049,7 +1051,8 @@ class UserChallenge {
       encouragedUsers: this.encouragedUsers.map(user => user.toDictionary()),
       encouragedByUsers: this.encouragedByUsers.map(user => user.toDictionary()),
       checkIns: this.checkIns.map(checkIn => checkIn.toDictionary()),
-      hasReceivedShareBonus: this.hasReceivedShareBonus
+      hasReceivedShareBonus: this.hasReceivedShareBonus,
+      ignoreNotifications: this.ignoreNotifications // <<< ADD TO DICTIONARY
     };
   }
 }

@@ -72,7 +72,9 @@ exports.sendNewUserJoinedChallengeNotification = onDocumentCreated(`${userChalle
 
 
     // --- 2. Find Other Participants and Collect Tokens ---
-    const tokens = [];
+    const eligibleTokens = [];
+    const skippedUserCount = { ignored: 0, missing: 0 };
+
     try {
       const participantsSnapshot = await db.collection(userChallengeCollection)
         .where("challengeId", "==", challengeId)
@@ -83,15 +85,25 @@ exports.sendNewUserJoinedChallengeNotification = onDocumentCreated(`${userChalle
         return null;
       }
 
-      participantsSnapshot.forEach(doc => {
+      for (const doc of participantsSnapshot.docs) {
         const participantData = doc.data();
-        // Send to everyone *except* the user who just joined
-        if (participantData.userId !== newUserId && participantData.fcmToken) {
-          tokens.push(participantData.fcmToken);
+        const participantId = participantData.userId;
+        const participantToken = participantData.fcmToken;
+        
+        // Skip if this is the user who just joined
+        if (participantId === newUserId) continue;
+        
+        // Skip if no FCM token
+        if (!participantToken) {
+          skippedUserCount.missing++;
+          continue;
         }
-      });
+        
+        // This user is eligible to receive the notification (always, if not the sender and has token)
+        eligibleTokens.push(participantToken);
+      }
 
-      console.log(`Found ${tokens.length} other participants with FCM tokens in challenge ${challengeId}.`);
+      console.log(`Found ${eligibleTokens.length} eligible participants for notifications (${skippedUserCount.missing} missing tokens).`);
 
     } catch (error) {
       console.error(`Error querying participants for challenge ${challengeId}:`, error);
@@ -99,45 +111,78 @@ exports.sendNewUserJoinedChallengeNotification = onDocumentCreated(`${userChalle
     }
 
     // --- 3. Check if there are tokens to send to ---
-    if (tokens.length === 0) {
-      console.log(`No other participants with tokens found for challenge ${challengeId}. No notifications sent.`);
+    if (eligibleTokens.length === 0) {
+      console.log(`No eligible participants found for challenge ${challengeId}. No notifications sent.`);
       return null;
     }
 
     // --- 4. Construct Notification Payload ---
     const payload = {
       notification: {
-        title: `New Participant in "${challengeTitle}"!`,
-        body: `${newUsername} just joined the challenge! 🎉`,
-        // You might want to add sound, badge, etc.
-        // sound: "default",
-        // badge: "1", // Careful with badge count management
+        title: `"New Challenger!" 🤺`,
+        body: `${newUsername} just joined ${challengeTitle}! Let's welcome them in the chat! 🎉`,
+        sound: "default",
       },
-      // You can add 'data' for handling background taps if needed
-      // data: {
-      //   challengeId: challengeId,
-      //   type: 'NEW_PARTICIPANT'
-      // }
+      data: {
+        challengeId: challengeId,
+        type: 'NEW_PARTICIPANT',
+        newUserId: newUserId,
+        newUsername: newUsername,
+        timestamp: String(Math.floor(Date.now() / 1000))
+      },
+      apns: {
+        headers: {
+          'apns-priority': '10',
+        },
+        payload: {
+          aps: {
+            sound: 'default',
+            badge: 1
+          }
+        }
+      },
+      android: {
+        priority: 'high',
+        notification: {
+          sound: 'default',
+          clickAction: 'FLUTTER_NOTIFICATION_CLICK'
+        }
+      }
     };
 
     // --- 5. Send Notifications ---
-    console.log(`Sending notification to ${tokens.length} tokens.`);
+    console.log(`Sending notification to ${eligibleTokens.length} tokens.`);
     try {
-      const response = await messaging.sendToDevice(tokens, payload);
-      // Log results, especially failures and potentially clean up invalid tokens
-      console.log(`Successfully sent message to ${response.successCount} devices.`);
+      // Use sendMulticast for more consistent approach with batch notifications
+      const message = {
+        tokens: eligibleTokens,
+        notification: payload.notification,
+        data: payload.data,
+        apns: payload.apns,
+        android: payload.android
+      };
+
+      const response = await messaging.sendMulticast(message);
+      console.log(`Successfully sent messages: ${response.successCount} of ${eligibleTokens.length}`);
+      
       if (response.failureCount > 0) {
         console.warn(`Failed to send message to ${response.failureCount} devices.`);
-        // Optional: Log specific errors or handle token cleanup
-        response.results.forEach((result, index) => {
-          if (!result.error) return;
-          console.error(`Failure sending to token ${tokens[index]}: ${result.error}`);
-          // Consider removing invalid tokens from Firestore here based on error codes
-          // e.g., if (error.code === 'messaging/registration-token-not-registered') { ... remove token ... }
+        
+        // Log failures for debugging
+        response.responses.forEach((resp, idx) => {
+          if (!resp.success) {
+            console.error(`Error sending to token #${idx}: ${resp.error.message}`);
+            
+            // Handle invalid tokens
+            if (resp.error.code === 'messaging/registration-token-not-registered') {
+              console.log(`Token is invalid and should be removed: ${eligibleTokens[idx].substring(0, 10)}...`);
+              // Future enhancement: clean up invalid tokens
+            }
+          }
         });
       }
     } catch (error) {
-      console.error("Error sending FCM message:", error);
+      console.error("Error sending FCM messages:", error);
       // Depending on the error, you might want the function to fail for retries
       // throw error; // Uncomment if retry is desired for send errors
     }
@@ -394,3 +439,169 @@ async function calculateWinner(challenge) {
 }
 
 // --- REMOVED sendWaitingRoomNotification helper function as it's now inline --- 
+
+
+// --- NEW FUNCTION: Triggered on Workout Session Start --- 
+/**
+ * Sends notifications to challenge participants when a user starts a workout
+ * associated with that challenge.
+ *
+ * Triggered when a document in 'users/{userId}/workoutSessions/{sessionId}' transitions
+ * to 'inProgress' status and has a challengeId.
+ */
+exports.sendWorkoutStartNotification = onDocumentUpdated("users/{userId}/workoutSessions/{sessionId}", async (event) => {
+    const change = event.data;
+    if (!change) {
+        console.log(`No change data associated with the event for workout session ${event.params.sessionId}. Exiting.`);
+        return null;
+    }
+    const before = change.before.data();
+    const after = change.after.data();
+    const userId = event.params.userId; // User who started the workout
+    const sessionId = event.params.sessionId;
+
+    // --- Essential checks --- 
+    // Check if status changed to 'inProgress'
+    if (before?.workoutStatus === 'inProgress' || after?.workoutStatus !== 'inProgress') {
+        // console.log(`Workout session ${sessionId}: Status did not transition to inProgress. No notification needed.`);
+        return null;
+    }
+
+    // Check if it's part of a challenge
+    const challengeId = after.challengeId || after.collectionId; // Use collectionId as fallback if needed
+    if (!challengeId) {
+        console.log(`Workout session ${sessionId} is not part of a challenge. Skipping notification.`);
+        return null;
+    }
+
+    console.log(`User ${userId} started workout session ${sessionId} for challenge ${challengeId}. Preparing notifications.`);
+
+    // --- Get common data --- 
+    const workoutTitle = after.title || 'Workout';
+    let startingUsername = 'Someone';
+
+    // Fetch the username of the user starting the workout
+    try {
+        const userChallengeDoc = await db.collection(userChallengeCollection)
+                                       .where('userId', '==', userId)
+                                       .where('challengeId', '==', challengeId)
+                                       .limit(1)
+                                       .get();
+        if (!userChallengeDoc.empty) {
+            startingUsername = userChallengeDoc.docs[0].data().username || startingUsername;
+        }
+    } catch (err) {
+        console.error(`Error fetching username for user ${userId} in challenge ${challengeId}:`, err);
+    }
+
+    // --- Find Other Participants and Collect Tokens ---
+    const eligibleTokens = [];
+    const skippedUserCount = { ignored: 0, missing: 0 };
+
+    try {
+      const participantsSnapshot = await db.collection(userChallengeCollection)
+        .where("challengeId", "==", challengeId)
+        .get();
+
+      if (participantsSnapshot.empty) {
+        console.log(`No participants found for challenge ${challengeId}.`);
+        return null;
+      }
+
+      for (const doc of participantsSnapshot.docs) {
+        const participantData = doc.data();
+        const participantId = participantData.userId;
+        const participantToken = participantData.fcmToken;
+        
+        // Skip if this is the user who started the workout
+        if (participantId === userId) continue;
+        
+        // Skip if no FCM token
+        if (!participantToken) {
+          skippedUserCount.missing++;
+          continue;
+        }
+        
+        // Check if this user has ignored notifications from the workout starter
+        const hasIgnoredSender = Array.isArray(participantData.ignoreNotifications) && 
+                                 participantData.ignoreNotifications.includes(userId);
+        
+        if (hasIgnoredSender) {
+          console.log(`User ${participantId} has muted notifications from ${userId}, skipping.`);
+          skippedUserCount.ignored++;
+          continue;
+        }
+        
+        // This user is eligible to receive the notification
+        eligibleTokens.push(participantToken);
+      }
+
+      console.log(`Found ${eligibleTokens.length} eligible participants for notifications (${skippedUserCount.ignored} ignored sender, ${skippedUserCount.missing} missing tokens).`);
+
+    } catch (error) {
+      console.error(`Error querying participants for challenge ${challengeId}:`, error);
+      return null; // Exit if we can't get participants
+    }
+
+    // --- Check if there are tokens to send to ---
+    if (eligibleTokens.length === 0) {
+      console.log(`No eligible participants with tokens found for challenge ${challengeId}. No notifications sent.`);
+      return null;
+    }
+
+    // --- Construct Notification Payload ---
+    const notificationPayload = {
+        title: `🔥 Challenge Activity!`, 
+        body: `${startingUsername} just started ${workoutTitle}! 💪`
+    };
+    const dataPayload = {
+        challengeId: challengeId,
+        workoutId: sessionId, // Or use after.workoutId if it exists
+        userId: userId,
+        username: startingUsername,
+        type: 'WORKOUT_STARTED',
+        timestamp: String(Math.floor(Date.now() / 1000))
+    };
+
+    const message = {
+        tokens: eligibleTokens,
+        notification: notificationPayload,
+        data: dataPayload,
+        apns: { // Basic APNS config
+            headers: { 'apns-priority': '5' }, // Lower priority than joins/status changes
+            payload: { aps: { sound: 'default', /* badge: 1 */ } }
+        },
+        android: { // Basic Android config
+            priority: 'normal',
+            notification: { sound: 'default', clickAction: 'FLUTTER_NOTIFICATION_CLICK' }
+        }
+    };
+
+    // --- Send Notifications ---
+    console.log(`Sending workout started notification to ${eligibleTokens.length} tokens.`);
+    try {
+        const response = await messaging.sendMulticast(message);
+        console.log(`Successfully sent workout started messages: ${response.successCount} of ${eligibleTokens.length}`);
+
+        if (response.failureCount > 0) {
+            console.warn(`Failed to send workout started message to ${response.failureCount} devices.`);
+            
+            // Log failures for debugging
+            response.responses.forEach((resp, idx) => {
+              if (!resp.success) {
+                console.error(`Error sending to token #${idx}: ${resp.error.message}`);
+                
+                // Handle invalid tokens
+                if (resp.error.code === 'messaging/registration-token-not-registered') {
+                  console.log(`Token is invalid and should be removed: ${eligibleTokens[idx].substring(0, 10)}...`);
+                  // Future enhancement: clean up invalid tokens
+                }
+              }
+            });
+        }
+    } catch (error) {
+        console.error("Error sending workout started FCM messages:", error);
+    }
+
+    return null; // Indicate completion
+}); 

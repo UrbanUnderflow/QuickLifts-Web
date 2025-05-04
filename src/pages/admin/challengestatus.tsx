@@ -864,6 +864,12 @@ const ChallengeStatusPage: React.FC = () => {
                                                     <div className="font-medium text-gray-200">{uc.username || 'N/A'}</div>
                                                     <div className="text-xs text-gray-400 mt-1 font-mono break-all">User ID: {uc.userId || 'N/A'}</div>
                                                     <div className="text-xs text-gray-500 mt-1 font-mono break-all">UC ID: {uc.id || 'N/A'}</div>
+                                                    {/* Add display for ignoreNotifications */}
+                                                    {uc.ignoreNotifications && uc.ignoreNotifications.length > 0 && (
+                                                      <div className="text-xs text-orange-400 mt-1 font-mono break-all">
+                                                        Ignoring: {uc.ignoreNotifications.join(', ')}
+                                                      </div>
+                                                    )}
                                                   </div>
                                                 </div>
                                                 {/* Add other details like progress, points, etc. */}

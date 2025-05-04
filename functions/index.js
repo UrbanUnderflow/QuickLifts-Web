@@ -17,6 +17,8 @@ exports.syncWorkoutSummaryToRoot = syncWorkoutSummaryToRoot;
 exports.manualSyncWorkoutSessions = manualSyncWorkoutSessions;
 exports.updateParticipantCounts = updateParticipantCounts;
 
-// Add any other function exports from other files here if needed 
+// Add any other function exports from other files here if needed
 exports.sendNewUserJoinedChallengeNotification = require("./challengeNotifications").sendNewUserJoinedChallengeNotification;
-exports.onChallengeStatusChange = require("./challengeNotifications").onChallengeStatusChange; 
+exports.onChallengeStatusChange = require("./challengeNotifications").onChallengeStatusChange;
+exports.sendWorkoutStartNotification = require("./challengeNotifications").sendWorkoutStartNotification;
+exports.sendDirectMessageNotification = require("./directMessageNotifications").sendDirectMessageNotification; 
