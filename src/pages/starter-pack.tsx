@@ -87,9 +87,9 @@ const CreatorChecklist = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const siteUrl = 'https://fitwithpulse.ai';
-  const pageUrl = `${siteUrl}/creator-checklist`;
-  const title = 'Creator Guide | Start Your Pulse Journey';
-  const description = 'Begin your creator journey with Pulse. Learn how to create content, build your community, and grow your fitness brand.';
+  const pageUrl = `${siteUrl}/starter-pack`;
+  const title = 'Trainer Pilot Starter Pack | Pulse';
+  const description = 'Join the Pulse Trainer Pilot Program! Complete the starter pack for lifetime free access to our platform and start building your fitness community.';
 
   return (
     <div className="min-h-screen bg-zinc-900">
@@ -123,14 +123,14 @@ const CreatorChecklist = () => {
           {/* App Introduction */}
           <div>
             <h2 className="text-[#E0FE10] uppercase tracking-wide font-semibold mb-4 relative inline-block hover:text-white transition-colors duration-300 group cursor-pointer">
-              Creator Guide
+              Trainer Pilot Starter Pack
               <span className="absolute -bottom-1 left-0 w-full h-0.5 bg-[#E0FE10] transition-all duration-300 transform scale-x-0 group-hover:scale-x-100 origin-left"></span>
             </h2>
             <h1 className="text-white text-5xl sm:text-7xl font-bold mb-8">
-              Welcome to <span className="text-[#E0FE10]">Pulse</span>
+              Join the <span className="text-[#E0FE10]">Pulse Pilot Program</span>
             </h1>
             <p className="text-zinc-400 text-xl leading-relaxed">
-              Join a community where fitness enthusiasts create, share, and grow together. Whether you're a certified trainer or passionate about fitness, you can build your following and earn from your impact.
+              Welcome, future Pulse trainer! This guide will walk you through setting up your account. Complete these steps as part of our exclusive pilot program and you'll be grandfathered into a <strong className="text-white">Lifetime Free Membership</strong> to the platform. Unlike traditional coaching platforms that charge per client, your access will remain free for the lifetime of the company. Start building your community and impact today!
             </p>
           </div>
 
