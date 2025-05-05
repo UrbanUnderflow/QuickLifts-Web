@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import Head from 'next/head';
+import Link from 'next/link';
 import { ArrowUpRight, Download, Search } from 'lucide-react';
-import { useScrollFade } from '../hooks/useScrollFade';
-import Header from '../components/Header';
-import Footer from '../components/Footer/Footer';
+import { useScrollFade } from '../../hooks/useScrollFade';
+import Header from '../../components/Header';
+import Footer from '../../components/Footer/Footer';
 
 const PressKit = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -416,10 +417,12 @@ const PressKit = () => {
               </div>
               <h3 className="text-white text-xl font-medium mb-2">Logos</h3>
               <p className="text-zinc-400 mb-4">Official Pulse brand logos in various formats and color schemes</p>
-              <a href="#" className="flex items-center text-[#E0FE10] hover:text-white group">
-                View all
-                <ArrowUpRight className="w-5 h-5 ml-2 transition-transform duration-300 group-hover:translate-x-1 group-hover:-translate-y-1" />
-              </a>
+              <Link href="/press/logos">
+                <span className="flex items-center text-[#E0FE10] hover:text-white group cursor-pointer">
+                  View all
+                  <ArrowUpRight className="w-5 h-5 ml-2 transition-transform duration-300 group-hover:translate-x-1 group-hover:-translate-y-1" />
+                </span>
+              </Link>
             </div>
             
             <div className="group">
@@ -438,10 +441,12 @@ const PressKit = () => {
               </div>
               <h3 className="text-white text-xl font-medium mb-2">App Screenshots</h3>
               <p className="text-zinc-400 mb-4">High-resolution images of all key app screens and features</p>
-              <a href="#" className="flex items-center text-[#E0FE10] hover:text-white group">
-                View all
-                <ArrowUpRight className="w-5 h-5 ml-2 transition-transform duration-300 group-hover:translate-x-1 group-hover:-translate-y-1" />
-              </a>
+              <Link href="/press/app-screenshots">
+                <span className="flex items-center text-[#E0FE10] hover:text-white group cursor-pointer">
+                  View all
+                  <ArrowUpRight className="w-5 h-5 ml-2 transition-transform duration-300 group-hover:translate-x-1 group-hover:-translate-y-1" />
+                </span>
+              </Link>
             </div>
             
             <div className="group">
@@ -482,10 +487,12 @@ const PressKit = () => {
               </div>
               <h3 className="text-white text-xl font-medium mb-2">B-Roll Video</h3>
               <p className="text-zinc-400 mb-4">Professional footage of Pulse in use, ideal for broadcast</p>
-              <a href="#" className="flex items-center text-[#E0FE10] hover:text-white group">
-                View all
-                <ArrowUpRight className="w-5 h-5 ml-2 transition-transform duration-300 group-hover:translate-x-1 group-hover:-translate-y-1" />
-              </a>
+              <Link href="/press/videos">
+                <span className="flex items-center text-[#E0FE10] hover:text-white group cursor-pointer">
+                  View all
+                  <ArrowUpRight className="w-5 h-5 ml-2 transition-transform duration-300 group-hover:translate-x-1 group-hover:-translate-y-1" />
+                </span>
+              </Link>
             </div>
             
             <div className="group">
@@ -504,10 +511,12 @@ const PressKit = () => {
               </div>
               <h3 className="text-white text-xl font-medium mb-2">Brand Guidelines</h3>
               <p className="text-zinc-400 mb-4">Comprehensive guide to Pulse's visual identity and brand usage</p>
-              <a href="#" className="flex items-center text-[#E0FE10] hover:text-white group">
-                View all
-                <ArrowUpRight className="w-5 h-5 ml-2 transition-transform duration-300 group-hover:translate-x-1 group-hover:-translate-y-1" />
-              </a>
+              <Link href="/press/brand-guidelines">
+                <span className="flex items-center text-[#E0FE10] hover:text-white group cursor-pointer">
+                  View all
+                  <ArrowUpRight className="w-5 h-5 ml-2 transition-transform duration-300 group-hover:translate-x-1 group-hover:-translate-y-1" />
+                </span>
+              </Link>
             </div>
             
             <div className="group">
@@ -526,10 +535,12 @@ const PressKit = () => {
               </div>
               <h3 className="text-white text-xl font-medium mb-2">Press Releases</h3>
               <p className="text-zinc-400 mb-4">Latest announcements including Morning Mobility Challenge launch</p>
-              <a href="#" className="flex items-center text-[#E0FE10] hover:text-white group">
-                View all
-                <ArrowUpRight className="w-5 h-5 ml-2 transition-transform duration-300 group-hover:translate-x-1 group-hover:-translate-y-1" />
-              </a>
+              <Link href="/press/press-releases">
+                <span className="flex items-center text-[#E0FE10] hover:text-white group cursor-pointer">
+                  View all
+                  <ArrowUpRight className="w-5 h-5 ml-2 transition-transform duration-300 group-hover:translate-x-1 group-hover:-translate-y-1" />
+                </span>
+              </Link>
             </div>
           </div>
         </div>

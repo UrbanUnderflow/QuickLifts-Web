@@ -23,6 +23,7 @@ exports.updateParticipantCounts = updateParticipantCounts;
 exports.sendNewUserJoinedChallengeNotification = require("./challengeNotifications").sendNewUserJoinedChallengeNotification;
 exports.onChallengeStatusChange = require("./challengeNotifications").onChallengeStatusChange;
 exports.sendWorkoutStartNotification = require("./challengeNotifications").sendWorkoutStartNotification;
+exports.onMainChallengeStatusChange = require("./challengeNotifications").onMainChallengeStatusChange;
 exports.sendDirectMessageNotification = require("./directMessageNotifications").sendDirectMessageNotification;
 
 // Export the new single notification function

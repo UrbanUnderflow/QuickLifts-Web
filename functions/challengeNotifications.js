@@ -124,9 +124,25 @@ exports.sendNewUserJoinedChallengeNotification = onDocumentCreated(`${userChalle
     }
 
 
-    // --- 2. Find Other Participants and Collect Tokens ---
-    const eligibleTokens = [];
+    // --- 2. Find Other Participants and Send Notifications --- 
+    // Removed eligibleTokens array, sending individually now
+    // const eligibleTokens = []; 
+    const eligibleTokens = []; // Re-introduce for sendEachForMulticast
     const skippedUserCount = { ignored: 0, missing: 0 };
+    let sentCount = 0;
+    let failedCount = 0;
+    
+    // Define the common payload components outside the loop
+    const title = `New Challenger! 🤺`; // Fixed title quoting
+    const body = `${newUsername} just joined "${challengeTitle}"! Let's welcome them in the chat! 🎉`; // Escape quotes
+    const dataPayload = {
+        challengeId: challengeId,
+        type: 'NEW_PARTICIPANT',
+        newUserId: newUserId,
+        newUsername: newUsername,
+        timestamp: String(Math.floor(Date.now() / 1000))
+    };
+
 
     try {
       const participantsSnapshot = await db.collection(userChallengeCollection)
@@ -152,92 +168,78 @@ exports.sendNewUserJoinedChallengeNotification = onDocumentCreated(`${userChalle
           continue;
         }
         
-        // This user is eligible to receive the notification (always, if not the sender and has token)
-        eligibleTokens.push(participantToken);
+        // --- 4. Construct Notification Payload (moved inside loop) --- 
+        /* // Payload definition moved outside loop
+        const title = `New Challenger! 🤺`; // Fixed title quoting
+        const body = `${newUsername} just joined "${challengeTitle}"! Let's welcome them in the chat! 🎉`; // Escape quotes
+        const dataPayload = {
+            challengeId: challengeId,
+            type: 'NEW_PARTICIPANT',
+            newUserId: newUserId,
+            newUsername: newUsername,
+            timestamp: String(Math.floor(Date.now() / 1000))
+        };
+        */
+
+        // --- 5. Send Notification (moved inside loop) ---
+        /* // Replaced with collecting tokens
+        try {
+            console.log(`Sending NEW_PARTICIPANT notification to user ${participantId} (${participantToken.substring(0,10)}...)`);
+            await sendNotification(participantToken, title, body, dataPayload);
+            sentCount++;
+        } catch (error) {
+            failedCount++;
+            console.error(`Error sending NEW_PARTICIPANT notification to ${participantId} (token: ${participantToken.substring(0,10)}...):`, error);
+            // Error already logged within sendNotification helper, don't need to re-log full details unless desired
+        }
+        */
+        eligibleTokens.push(participantToken); // Collect token
       }
 
-      console.log(`Found ${eligibleTokens.length} eligible participants for notifications (${skippedUserCount.missing} missing tokens).`);
-
-    } catch (error) {
-      console.error(`Error querying participants for challenge ${challengeId}:`, error);
-      return null; // Exit if we can't get participants
-    }
-
-    // --- 3. Check if there are tokens to send to ---
-    if (eligibleTokens.length === 0) {
-      console.log(`No eligible participants found for challenge ${challengeId}. No notifications sent.`);
-      return null;
-    }
-
-    // --- 4. Construct Notification Payload ---
-    const payload = {
-      notification: {
-        title: `"New Challenger!" 🤺`,
-        body: `${newUsername} just joined ${challengeTitle}! Let's welcome them in the chat! 🎉`,
-        sound: "default",
-      },
-      data: {
-        challengeId: challengeId,
-        type: 'NEW_PARTICIPANT',
-        newUserId: newUserId,
-        newUsername: newUsername,
-        timestamp: String(Math.floor(Date.now() / 1000))
-      },
-      apns: {
-        headers: {
-          'apns-priority': '10',
-        },
-        payload: {
-          aps: {
-            sound: 'default',
-            badge: 1
+      // --- Send using sendEachForMulticast ---
+      if (eligibleTokens.length > 0) {
+        const message = {
+          tokens: eligibleTokens,
+          notification: { title, body },
+          data: dataPayload,
+          apns: {
+            payload: {
+              aps: {
+                alert: { title, body },
+                badge: 1,
+                sound: 'default'
+              },
+            },
+          },
+          android: {
+            priority: 'high',
+            notification: { sound: 'default' }
           }
-        }
-      },
-      android: {
-        priority: 'high',
-        notification: {
-          sound: 'default',
-          clickAction: 'FLUTTER_NOTIFICATION_CLICK'
-        }
-      }
-    };
+        };
 
-    // --- 5. Send Notifications ---
-    console.log(`Sending notification to ${eligibleTokens.length} tokens.`);
-    try {
-      // Use send() which handles multicast when `tokens` array is present
-      const message = {
-        tokens: eligibleTokens,
-        notification: payload.notification,
-        data: payload.data,
-        apns: payload.apns,
-        android: payload.android
-      };
+        console.log(`Sending NEW_PARTICIPANT notification via sendEachForMulticast to ${eligibleTokens.length} tokens.`);
+        const response = await messaging.sendEachForMulticast(message);
+        sentCount = response.successCount;
+        failedCount = response.failureCount;
+        console.log(`Finished sending NEW_PARTICIPANT notifications. Sent: ${sentCount}, Failed: ${failedCount}, Missing tokens: ${skippedUserCount.missing}.`);
 
-      const response = await messaging.send(message);
-      console.log(`Successfully sent messages: ${response.successCount} of ${eligibleTokens.length}`);
-      
-      if (response.failureCount > 0) {
-        console.warn(`Failed to send message to ${response.failureCount} devices.`);
-        
-        // Log failures for debugging
-        response.responses.forEach((resp, idx) => {
-          if (!resp.success) {
-            console.error(`Error sending to token #${idx}: ${resp.error.message}`);
-            
-            // Handle invalid tokens
-            if (resp.error.code === 'messaging/registration-token-not-registered') {
-              console.log(`Token is invalid and should be removed: ${eligibleTokens[idx].substring(0, 10)}...`);
-              // Future enhancement: clean up invalid tokens
+        if (response.failureCount > 0) {
+          response.responses.forEach((resp, idx) => {
+            if (!resp.success) {
+              console.error(` - Failed sending to token [${idx}] (${eligibleTokens[idx].substring(0,10)}...): ${resp.error.code} - ${resp.error.message}`);
+              // TODO: Optionally handle removing invalid tokens based on error codes like 'messaging/registration-token-not-registered'
             }
-          }
-        });
+          });
+        }
+      } else {
+          console.log(`No eligible tokens found for NEW_PARTICIPANT notification. Sent: 0, Failed: 0, Missing tokens: ${skippedUserCount.missing}.`);
       }
+
+      // console.log(`Finished sending NEW_PARTICIPANT notifications. Sent: ${sentCount}, Failed: ${failedCount}, Missing tokens: ${skippedUserCount.missing}.`); // Moved logging inside the if/else block
+
     } catch (error) {
-      console.error("Error sending FCM messages:", error);
-      // Depending on the error, you might want the function to fail for retries
-      // throw error; // Uncomment if retry is desired for send errors
+      console.error(`Error querying participants or sending notifications for challenge ${challengeId}:`, error);
+      return null; // Exit if we can't get participants or encounter a major loop error
     }
 
     return null; // Indicate successful completion (or handled errors)
@@ -290,6 +292,7 @@ exports.onChallengeStatusChange = onDocumentUpdated(`${userChallengeCollection}/
     // --- Handle specific transitions --- 
 
     // 1. Draft -> Published (Waiting Room Notification) - SEND TO ALL
+    /* // REMOVED: Logic moved to onMainChallengeStatusChange
     if (oldStatus === 'draft' && newStatus === 'published') {
         console.log(`Challenge ${challengeId}: Status change ${oldStatus} -> ${newStatus}. Preparing multicast notification.`);
         notificationPayload = {
@@ -299,8 +302,10 @@ exports.onChallengeStatusChange = onDocumentUpdated(`${userChallengeCollection}/
         dataPayload.type = 'challenge_published';
         sendToIndividual = false;
     }
+    */
 
     // 2. Published -> Active (Challenge Started Notification) - SEND TO ALL
+    /* // REMOVED: Logic moved to onMainChallengeStatusChange
     else if (oldStatus === 'published' && newStatus === 'active') {
         console.log(`Challenge ${challengeId}: Status change ${oldStatus} -> ${newStatus}. Preparing multicast notification.`);
         notificationPayload = {
@@ -310,9 +315,11 @@ exports.onChallengeStatusChange = onDocumentUpdated(`${userChallengeCollection}/
         dataPayload.type = 'challenge_started';
         sendToIndividual = false;
     }
+    */
 
     // 3. Active -> Completed (Challenge Completed Notification) - SEND TO INDIVIDUAL
-    else if (newStatus === 'completed' && oldStatus !== 'completed') {
+    // Use if instead of else if now that preceding blocks are removed
+    if (newStatus === 'completed' && oldStatus !== 'completed') { 
         console.log(`User challenge ${userChallengeId}: Status change ${oldStatus} -> ${newStatus}. Preparing individual notification.`);
         sendToIndividual = true; // Set flag
 
@@ -355,55 +362,74 @@ exports.onChallengeStatusChange = onDocumentUpdated(`${userChallengeCollection}/
                 console.log(`Successfully sent individual notification to user ${userId}.`);
 
             } else {
-                // --- Send to ALL participants --- 
+                // --- Send to ALL participants by iterating --- 
+                // REMOVED: Logic moved to onMainChallengeStatusChange
+                /* 
                 console.log(`Querying participants for challenge ${challengeId} to send ${dataPayload.type} notification.`);
                 const participantsSnapshot = await db.collection(userChallengeCollection)
                     .where("challengeId", "==", challengeId)
                     .get();
 
-                const eligibleTokens = [];
+                const eligibleTokens = []; // Re-introduce for sendEachForMulticast
+                let sentCount = 0;
+                let failedCount = 0;
+                let missingTokenCount = 0;
+
                 if (!participantsSnapshot.empty) {
-                    participantsSnapshot.docs.forEach(doc => {
+                    for (const doc of participantsSnapshot.docs) {
                         const token = doc.data().fcmToken;
                         if (token) {
-                            eligibleTokens.push(token);
+                            eligibleTokens.push(token); // Collect token
                         } else {
+                            missingTokenCount++;
                             console.warn(`Participant ${doc.id} in challenge ${challengeId} is missing an FCM token.`);
                         }
-                    });
-                }
-
-                if (eligibleTokens.length === 0) {
-                    console.log(`No eligible tokens found for challenge ${challengeId}. No multicast notification sent.`);
-                    return null;
-                }
-
-                console.log(`Sending ${dataPayload.type} multicast notification to ${eligibleTokens.length} tokens for challenge ${challengeId}.`);
-                const message = {
-                    tokens: eligibleTokens,
-                    notification: notificationPayload,
-                    data: dataPayload,
-                    apns: { /* ... APNS config ... */ 
-                        headers: {'apns-priority': '10'},
-                        payload: { aps: { alert: notificationPayload, sound: 'default', badge: 1 } }
-                    },
-                    android: { /* ... Android config ... */ 
-                        priority: 'high',
-                        notification: { sound: 'default' }
                     }
-                };
-                const response = await messaging.send(message);
-                console.log(`Multicast send results for ${dataPayload.type}: ${response.successCount} success, ${response.failureCount} failure.`);
-                // Optionally log detailed failures
-                if (response.failureCount > 0) {
-                    response.responses.forEach((resp, idx) => {
-                      if (!resp.success) {
-                        console.error(` - Failed sending to token [${idx}] (${eligibleTokens[idx].substring(0,10)}...): ${resp.error.code} - ${resp.error.message}`);
-                      }
-                    });
-                  }
+                } else {
+                    console.log(`No participants found for challenge ${challengeId}. No ${dataPayload.type} notifications sent.`);
+                    return null; // Early exit if no participants
+                }
+                
+                // --- Send using sendEachForMulticast ---
+                if (eligibleTokens.length > 0) {
+                    const message = {
+                        tokens: eligibleTokens,
+                        notification: notificationPayload, // Uses title/body from outer scope
+                        data: dataPayload,
+                        apns: {
+                            payload: {
+                                aps: {
+                                    alert: notificationPayload, // Use the whole payload for alert
+                                    badge: 1,
+                                    sound: 'default'
+                                },
+                            },
+                        },
+                        android: {
+                            priority: 'high',
+                            notification: { sound: 'default' }
+                        }
+                    };
+                    console.log(`Sending ${dataPayload.type} notification via sendEachForMulticast to ${eligibleTokens.length} tokens.`);
+                    const response = await messaging.sendEachForMulticast(message);
+                    sentCount = response.successCount;
+                    failedCount = response.failureCount;
+                    console.log(`Finished sending ${dataPayload.type} notifications. Sent: ${sentCount}, Failed: ${failedCount}, Missing tokens: ${missingTokenCount}.`);
+
+                    if (response.failureCount > 0) {
+                        response.responses.forEach((resp, idx) => {
+                          if (!resp.success) {
+                            console.error(` - Failed sending to token [${idx}] (${eligibleTokens[idx].substring(0,10)}...): ${resp.error.code} - ${resp.error.message}`);
+                            // TODO: Optionally handle removing invalid tokens
+                          }
+                        });
+                    }
+                } else {
+                    console.log(`No eligible tokens found for ${dataPayload.type} notification. Sent: 0, Failed: 0, Missing tokens: ${missingTokenCount}.`);
+                }
+                */
             }
-            return true; // Indicate success
+            return true; // Indicate success (or handled errors)
 
         } catch (error) {
             console.error(`Error sending notification(s) for ${dataPayload.type} (Challenge: ${challengeId}, Trigger Doc: ${userChallengeId}):`, error);
@@ -552,9 +578,27 @@ exports.sendWorkoutStartNotification = onDocumentUpdated("users/{userId}/workout
         console.error(`Error fetching username for user ${userId} in challenge ${challengeId}:`, err);
     }
 
-    // --- Find Other Participants and Collect Tokens ---
-    const eligibleTokens = [];
+    // --- Find Other Participants and Send Notifications ---
+    // Removed eligibleTokens array
+    // const eligibleTokens = []; 
+    const eligibleTokens = []; // Re-introduce for sendEachForMulticast
     const skippedUserCount = { ignored: 0, missing: 0 };
+    let sentCount = 0;
+    let failedCount = 0;
+    
+    // Define common payload outside loop
+    const notificationPayload = {
+        title: `🔥 Challenge Activity!`,
+        body: `${startingUsername} just started "${workoutTitle}"! 💪` // Escape quotes
+    };
+    const dataPayload = {
+        challengeId: challengeId,
+        workoutId: sessionId, // Or use after.workoutId if it exists
+        userId: userId,
+        username: startingUsername,
+        type: 'WORKOUT_STARTED',
+        timestamp: String(Math.floor(Date.now() / 1000))
+    };
 
     try {
       const participantsSnapshot = await db.collection(userChallengeCollection)
@@ -590,26 +634,90 @@ exports.sendWorkoutStartNotification = onDocumentUpdated("users/{userId}/workout
           continue;
         }
         
+        // --- Construct Payload and Send (inside loop) ---
+        /* // Payload moved outside, remove individual send
+        const notificationPayload = {
+            title: `🔥 Challenge Activity!`,
+            body: `${startingUsername} just started "${workoutTitle}"! 💪` // Escape quotes
+        };
+        const dataPayload = {
+            challengeId: challengeId,
+            workoutId: sessionId, // Or use after.workoutId if it exists
+            userId: userId,
+            username: startingUsername,
+            type: 'WORKOUT_STARTED',
+            timestamp: String(Math.floor(Date.now() / 1000))
+        };
+
+        try {
+            console.log(`Sending WORKOUT_STARTED notification to user ${participantId} (${participantToken.substring(0,10)}...)`);
+            await sendNotification(participantToken, notificationPayload.title, notificationPayload.body, dataPayload);
+            sentCount++;
+        } catch (error) {
+            failedCount++;
+            console.error(`Error sending WORKOUT_STARTED notification to ${participantId} (token: ${participantToken.substring(0,10)}...):`, error);
+            // Error handled in helper
+        }
+        */
+        eligibleTokens.push(participantToken); // Collect token
+
+        // Removed: Old logic to push token
         // This user is eligible to receive the notification
-        eligibleTokens.push(participantToken);
+        // eligibleTokens.push(participantToken);
       }
 
-      console.log(`Found ${eligibleTokens.length} eligible participants for notifications (${skippedUserCount.ignored} ignored sender, ${skippedUserCount.missing} missing tokens).`);
+      // --- Send using sendEachForMulticast ---
+      if (eligibleTokens.length > 0) {
+          const message = {
+              tokens: eligibleTokens,
+              notification: notificationPayload, // Use payload defined outside
+              data: dataPayload,
+              apns: { // Basic APNS config
+                  headers: { 'apns-priority': '5' }, // Lower priority than joins/status changes
+                  payload: { aps: { sound: 'default', alert: notificationPayload } } // Include alert here
+              },
+              android: { // Basic Android config
+                  priority: 'normal',
+                  notification: { sound: 'default', clickAction: 'FLUTTER_NOTIFICATION_CLICK' } // Keep sound/click action
+              }
+          };
+
+          console.log(`Sending WORKOUT_STARTED notification via sendEachForMulticast to ${eligibleTokens.length} tokens.`);
+          const response = await messaging.sendEachForMulticast(message);
+          sentCount = response.successCount;
+          failedCount = response.failureCount;
+          console.log(`Finished sending WORKOUT_STARTED notifications. Sent: ${sentCount}, Failed: ${failedCount}, Ignored: ${skippedUserCount.ignored}, Missing tokens: ${skippedUserCount.missing}.`);
+
+          if (response.failureCount > 0) {
+              response.responses.forEach((resp, idx) => {
+                if (!resp.success) {
+                  console.error(` - Failed sending to token [${idx}] (${eligibleTokens[idx].substring(0,10)}...): ${resp.error.code} - ${resp.error.message}`);
+                  // TODO: Optionally handle removing invalid tokens
+                }
+              });
+          }
+      } else {
+          console.log(`No eligible tokens found for WORKOUT_STARTED notification. Sent: 0, Failed: 0, Ignored: ${skippedUserCount.ignored}, Missing tokens: ${skippedUserCount.missing}.`);
+      }
+
+      // console.log(`Finished sending WORKOUT_STARTED notifications. Sent: ${sentCount}, Failed: ${failedCount}, Ignored: ${skippedUserCount.ignored}, Missing tokens: ${skippedUserCount.missing}.`); // Moved into if/else block
 
     } catch (error) {
-      console.error(`Error querying participants for challenge ${challengeId}:`, error);
-      return null; // Exit if we can't get participants
+      console.error(`Error querying participants or sending notifications for challenge ${challengeId}:`, error);
+      return null; // Exit if we can't get participants or encounter major loop error
     }
-
-    // --- Check if there are tokens to send to ---
+    
+    // Remove old multicast sending logic
+    /*
+    // --- Check if there are tokens to send to --- 
     if (eligibleTokens.length === 0) {
       console.log(`No eligible participants with tokens found for challenge ${challengeId}. No notifications sent.`);
       return null;
     }
-
-    // --- Construct Notification Payload ---
+    
+    // --- Construct Notification Payload --- 
     const notificationPayload = {
-        title: `🔥 Challenge Activity!`, 
+        title: `🔥 Challenge Activity!`,
         body: `${startingUsername} just started ${workoutTitle}! 💪`
     };
     const dataPayload = {
@@ -620,22 +728,22 @@ exports.sendWorkoutStartNotification = onDocumentUpdated("users/{userId}/workout
         type: 'WORKOUT_STARTED',
         timestamp: String(Math.floor(Date.now() / 1000))
     };
-
+    
     const message = {
         tokens: eligibleTokens,
         notification: notificationPayload,
         data: dataPayload,
         apns: { // Basic APNS config
             headers: { 'apns-priority': '5' }, // Lower priority than joins/status changes
-            payload: { aps: { sound: 'default', /* badge: 1 */ } }
+            payload: { aps: { sound: 'default', // badge: 1  } } 
         },
         android: { // Basic Android config
             priority: 'normal',
             notification: { sound: 'default', clickAction: 'FLUTTER_NOTIFICATION_CLICK' }
         }
     };
-
-    // --- Send Notifications ---
+    
+    // --- Send Notifications --- 
     console.log(`Sending workout started notification to ${eligibleTokens.length} tokens.`);
     try {
         const response = await messaging.sendMulticast(message);
@@ -660,6 +768,145 @@ exports.sendWorkoutStartNotification = onDocumentUpdated("users/{userId}/workout
     } catch (error) {
         console.error("Error sending workout started FCM messages:", error);
     }
+    */
 
     return null; // Indicate completion
+}); 
+
+// --- NEW FUNCTION: Triggered on Main Challenge Update --- 
+/**
+ * Sends notifications when the main challenge status changes to published or active.
+ *
+ * Triggered when a document in the 'challenges' collection is updated.
+ * Triggered when a document in the 'sweatlist-collection' collection is updated, and its nested challenge status changes.
+ */
+exports.onMainChallengeStatusChange = onDocumentUpdated(`sweatlist-collection/{sweatlistId}`, async (event) => {
+    const change = event.data;
+    if (!change) {
+        console.log(`No change data associated with the event for challenge ${event.params.challengeId}. Exiting.`);
+        console.log(`No change data associated with the event for sweatlist ${event.params.sweatlistId}. Exiting.`);
+        return null;
+    }
+    const beforeData = change.before.data();
+    const afterData = change.after.data();
+    const sweatlistId = event.params.sweatlistId; // Use sweatlistId from params
+
+    // --- Essential checks for nested challenge status --- 
+    if (!beforeData?.challenge?.status || !afterData?.challenge?.status) {
+        console.log(`Challenge ${event.params.challengeId}: Skipping update, status missing in before or after state.`);
+        console.log(`Sweatlist ${sweatlistId}: Skipping update, challenge status missing in before or after state.`);
+        return null;
+    }
+    const oldStatus = beforeData.challenge.status;
+    const newStatus = afterData.challenge.status;
+
+    if (oldStatus === newStatus) {
+        return null; // Status didn't change
+    }
+
+    // --- Get common data --- 
+    const challengeTitle = afterData.challenge.title || 'Challenge';
+    const challengeId = afterData.challenge.id; // Get challenge ID from nested object
+
+    let notificationPayload = null;
+    let dataPayload = { challengeId: challengeId, timestamp: String(Math.floor(Date.now() / 1000)) };
+
+    // --- Handle specific transitions --- 
+
+    // 1. Draft -> Published (Waiting Room Notification)
+    if (oldStatus === 'draft' && newStatus === 'published') {
+        console.log(`Main Challenge ${challengeId}: Status change ${oldStatus} -> ${newStatus}. Preparing multicast notification.`);
+        console.log(`Sweatlist ${sweatlistId} (Challenge ${challengeId}): Status change ${oldStatus} -> ${newStatus}. Preparing multicast notification.`);
+        notificationPayload = {
+            title: '🎉 Released from the Waiting Room!',
+            body: `It's happening! The waiting room doors for "${challengeTitle}" are now open. Get ready – the challenge begins soon!`
+        };
+        dataPayload.type = 'challenge_published';
+    }
+
+    // 2. Published -> Active (Challenge Started Notification)
+    else if (oldStatus === 'published' && newStatus === 'active') {
+        console.log(`Main Challenge ${challengeId}: Status change ${oldStatus} -> ${newStatus}. Preparing multicast notification.`);
+        console.log(`Sweatlist ${sweatlistId} (Challenge ${challengeId}): Status change ${oldStatus} -> ${newStatus}. Preparing multicast notification.`);
+        notificationPayload = {
+            title: '🏃‍♂️ Challenge Started!',
+            body: `The challenge "${challengeTitle}" has begun! Get ready to compete!`
+        };
+        dataPayload.type = 'challenge_started';
+    }
+
+    // --- Send the notification if a relevant status change occurred --- 
+    if (notificationPayload) {
+        try {
+            // --- Send to ALL participants by querying user-challenge --- 
+            console.log(`Querying participants for challenge ${challengeId} to send ${dataPayload.type} notification.`);
+            const participantsSnapshot = await db.collection(userChallengeCollection)
+                .where("challengeId", "==", challengeId) // Use the extracted challengeId
+                .get();
+
+            const eligibleTokens = []; 
+            let sentCount = 0;
+            let failedCount = 0;
+            let missingTokenCount = 0;
+
+            if (!participantsSnapshot.empty) {
+                participantsSnapshot.docs.forEach(doc => { // Can use forEach here as no async inside
+                    const token = doc.data().fcmToken;
+                    if (token) {
+                        eligibleTokens.push(token);
+                    } else {
+                        missingTokenCount++;
+                        console.warn(`Participant ${doc.id} in challenge ${challengeId} is missing an FCM token.`);
+                    }
+                });
+            } else {
+                console.log(`No participants found for challenge ${challengeId}. No ${dataPayload.type} notifications sent.`);
+                return null; // Early exit if no participants
+            }
+            
+            // --- Send using sendEachForMulticast ---
+            if (eligibleTokens.length > 0) {
+                const message = {
+                    tokens: eligibleTokens,
+                    notification: notificationPayload, 
+                    data: dataPayload,
+                    apns: {
+                        payload: {
+                            aps: {
+                                alert: notificationPayload, 
+                                badge: 1,
+                                sound: 'default'
+                            },
+                        },
+                    },
+                    android: {
+                        priority: 'high',
+                        notification: { sound: 'default' }
+                    }
+                };
+                console.log(`Sending ${dataPayload.type} notification via sendEachForMulticast to ${eligibleTokens.length} tokens.`);
+                const response = await messaging.sendEachForMulticast(message);
+                sentCount = response.successCount;
+                failedCount = response.failureCount;
+                console.log(`Finished sending ${dataPayload.type} notifications. Sent: ${sentCount}, Failed: ${failedCount}, Missing tokens: ${missingTokenCount}.`);
+
+                if (response.failureCount > 0) {
+                    response.responses.forEach((resp, idx) => {
+                        if (!resp.success) {
+                        console.error(` - Failed sending to token [${idx}] (${eligibleTokens[idx].substring(0,10)}...): ${resp.error.code} - ${resp.error.message}`);
+                        // TODO: Optionally handle removing invalid tokens
+                        }
+                    });
+                }
+            } else {
+                console.log(`No eligible tokens found for ${dataPayload.type} notification. Sent: 0, Failed: 0, Missing tokens: ${missingTokenCount}.`);
+            }
+
+        } catch (error) {
+            console.error(`Error sending notification(s) for ${dataPayload.type} (Challenge: ${challengeId}):`, error);
+            console.error(`Error sending notification(s) for ${dataPayload.type} (Sweatlist: ${sweatlistId}, Challenge: ${challengeId}):`, error);
+        }
+    }
+
+    return null; // No relevant status change or error handled
 }); 
