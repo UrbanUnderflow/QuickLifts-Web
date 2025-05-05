@@ -44,9 +44,18 @@
   external_node_modules = ["stripe"]
   node_bundler = "esbuild"
 
-[functions."update-challenge-status"]
+# Schedule the update-challenge-status function to run daily
+[functions.update-challenge-status]
   schedule = "@daily"
 
 # Configure the specific function as background
-[functions."manual-sync-sessions"]
+[functions.manual-sync-sessions]
   is_background = true
+
+# Schedule the KPI snapshot function to run daily (before press release)
+[functions.generateKpiSnapshot]
+  schedule = "@daily"
+
+# Schedule the press release draft function to run weekly
+[functions.draftPress]
+  schedule = "@weekly"

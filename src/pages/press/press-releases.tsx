@@ -1,10 +1,14 @@
-import type { NextPage } from 'next';
+import type { NextPage, GetStaticProps } from 'next';
 import Head from 'next/head';
 import Link from 'next/link';
 import React, { useState } from 'react';
 import { Download, FileText, Calendar, ArrowLeft, Filter, ChevronDown, ExternalLink } from 'lucide-react';
 import Footer from '../../components/Footer/Footer';
 import { useScrollFade } from '../../hooks/useScrollFade';
+import fs from 'fs';
+import path from 'path';
+import matter from 'gray-matter';
+import { format, parseISO } from 'date-fns';
 
 interface PressRelease {
   id: string;
@@ -25,59 +29,41 @@ interface MediaStory {
   contactEmail: string;
 }
 
-const PressReleasesPage: NextPage = () => {
+// Define types for press releases coming from MDX files
+interface MdxPressRelease {
+  slug: string;
+  title: string;
+  date: string;
+  summary: string;
+  image: string;
+  tags: string[];
+}
+
+interface PressReleasesPageProps {
+  mdxReleases: MdxPressRelease[];
+}
+
+const PressReleases: NextPage<PressReleasesPageProps> = ({ mdxReleases }) => {
   const [activeTab, setActiveTab] = useState<'releases' | 'coverage' | 'story-ideas'>('releases');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [showFilters, setShowFilters] = useState(false);
 
-  // Sample press releases data
-  const pressReleases: PressRelease[] = [
-    {
-      id: 'pr-001',
-      title: 'Pulse Launches Morning Mobility Challenge, Engaging Over 2,500 Participants',
-      date: '2023-04-15',
-      summary: 'Fitness collective platform introduces 30-day community challenge, achieving 87% completion rate and establishing new benchmark for social fitness engagement.',
-      category: 'feature',
-      pdfUrl: '/press/releases/morning-mobility-launch.pdf',
-      coverImageUrl: '/press/releases/morning-mobility.jpg'
-    },
-    {
-      id: 'pr-002',
-      title: 'Pulse Hits 10,000 Active Users Milestone in First Quarter',
-      date: '2023-03-30',
-      summary: 'Community-driven fitness app reaches significant user milestone, with over 1,000 content creators joining the platform\'s founding class within first 45 days.',
-      category: 'milestone',
-      pdfUrl: '/press/releases/10k-milestone.pdf',
-      coverImageUrl: '/press/releases/10k-users.jpg'
-    },
-    {
-      id: 'pr-003',
-      title: 'Pulse Introduces Creator Economy for Fitness Enthusiasts',
-      date: '2023-02-15',
-      summary: 'Revolutionary fitness platform empowers everyday fitness enthusiasts to create, share and potentially monetize workout content, transforming passive consumers into active creators.',
-      category: 'product',
-      pdfUrl: '/press/releases/creator-economy.pdf',
-      coverImageUrl: '/press/releases/creators.jpg'
-    },
-    {
-      id: 'pr-004',
-      title: 'Pulse Launches iOS App with Unique Social Fitness Features',
-      date: '2023-01-10',
-      summary: 'Fitness startup unveils comprehensive mobile experience featuring innovative Moves, Stacks, and Rounds system that brings community connection to digital fitness.',
-      category: 'product',
-      pdfUrl: '/press/releases/app-launch.pdf',
-      coverImageUrl: '/press/releases/app-launch.jpg'
-    },
-    {
-      id: 'pr-005',
-      title: 'Tremaine Grant Founds Pulse to Transform Fitness into Social Experience',
-      date: '2022-12-01',
-      summary: 'Former tech engineer and collegiate athlete launches fitness technology startup aimed at democratizing content creation for fitness enthusiasts of all levels.',
-      category: 'company',
-      pdfUrl: '/press/releases/company-founding.pdf',
-      coverImageUrl: '/press/releases/tremaine-profile.jpg'
-    }
-  ];
+  // Replace the static pressReleases data with the dynamic mdxReleases
+  const pressReleases: PressRelease[] = mdxReleases.map(release => ({
+    id: release.slug,
+    title: release.title,
+    date: release.date,
+    summary: release.summary,
+    category: release.tags?.includes('feature') 
+      ? 'feature' 
+      : release.tags?.includes('milestone') 
+        ? 'milestone' 
+        : release.tags?.includes('company') 
+          ? 'company' 
+          : 'product',
+    pdfUrl: `/press/releases/${release.slug}.pdf`,
+    coverImageUrl: release.image
+  }));
 
   // Sample media stories/pitch ideas
   const mediaStories: MediaStory[] = [
@@ -277,52 +263,39 @@ const PressReleasesPage: NextPage = () => {
               {filteredReleases.map((release) => (
                 <div 
                   key={release.id} 
-                  className="bg-zinc-800 rounded-xl overflow-hidden flex flex-col md:flex-row hover:bg-zinc-700/80 transition-colors"
+                  className="bg-zinc-800 rounded-lg overflow-hidden transition-all duration-300 hover:shadow-lg hover:shadow-[#E0FE10]/10"
                 >
-                  <div className="md:w-1/3 aspect-video relative">
+                  <div className="aspect-video bg-zinc-700 relative overflow-hidden">
                     <img 
                       src={release.coverImageUrl} 
                       alt={release.title}
-                      className="w-full h-full object-cover" 
+                      className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
                     />
-                    <div className="absolute top-0 left-0 m-4">
-                      <span className={`
-                        px-3 py-1 text-xs font-medium rounded-full 
-                        ${release.category === 'product' ? 'bg-blue-500/20 text-blue-300' : ''}
-                        ${release.category === 'company' ? 'bg-purple-500/20 text-purple-300' : ''}
-                        ${release.category === 'milestone' ? 'bg-amber-500/20 text-amber-300' : ''}
-                        ${release.category === 'feature' ? 'bg-green-500/20 text-green-300' : ''}
-                      `}>
-                        {release.category === 'product' && 'Product Update'}
-                        {release.category === 'company' && 'Company News'}
-                        {release.category === 'milestone' && 'Milestone'}
-                        {release.category === 'feature' && 'Feature Launch'}
-                      </span>
-                    </div>
                   </div>
-                  <div className="p-6 md:w-2/3 flex flex-col justify-between">
-                    <div>
-                      <div className="flex items-center text-zinc-400 text-sm mb-2">
-                        <Calendar className="w-4 h-4 mr-2" />
-                        {formatDate(release.date)}
-                      </div>
-                      <h3 className="text-xl font-bold mb-3">{release.title}</h3>
-                      <p className="text-zinc-400 mb-4 line-clamp-3">{release.summary}</p>
+                  <div className="p-6">
+                    <div className="flex items-center text-zinc-400 text-sm mb-2">
+                      <Calendar className="w-4 h-4 mr-2" />
+                      {new Date(release.date).toLocaleDateString('en-US', { 
+                        year: 'numeric',
+                        month: 'long', 
+                        day: 'numeric'
+                      })}
                     </div>
-                    <div className="flex items-center space-x-4">
+                    <h3 className="text-white text-xl font-medium mb-2 line-clamp-2">{release.title}</h3>
+                    <p className="text-zinc-400 text-sm mb-4 line-clamp-3">{release.summary}</p>
+                    
+                    <div className="flex items-center justify-between mt-4">
+                      <Link href={`/press/${release.id}`} className="text-[#E0FE10] hover:text-white flex items-center">
+                        View
+                        <ExternalLink className="w-4 h-4 ml-2" />
+                      </Link>
                       <a 
-                        href={release.pdfUrl} 
-                        className="inline-flex items-center px-4 py-2 bg-[#E0FE10] text-black rounded-full text-sm font-medium hover:bg-[#c8e40d] transition-colors"
+                        href={release.pdfUrl}
                         download
+                        className="text-zinc-400 hover:text-white flex items-center"
                       >
-                        <Download className="w-4 h-4 mr-2" />
-                        Download PDF
-                      </a>
-                      <a 
-                        href={`#${release.id}`} 
-                        className="text-zinc-400 hover:text-[#E0FE10] text-sm"
-                      >
-                        Read more
+                        PDF
+                        <Download className="w-4 h-4 ml-2" />
                       </a>
                     </div>
                   </div>
@@ -528,4 +501,49 @@ const PressReleasesPage: NextPage = () => {
   );
 };
 
-export default PressReleasesPage; 
+export const getStaticProps: GetStaticProps = async () => {
+  const contentDirectory = path.join(process.cwd(), 'content/press/releases');
+  let mdxReleases: MdxPressRelease[] = [];
+
+  // Check if directory exists before trying to read it
+  if (fs.existsSync(contentDirectory)) {
+    try {
+      const filenames = fs.readdirSync(contentDirectory);
+      
+      // Get data from each MDX file
+      mdxReleases = filenames
+        .filter(filename => filename.endsWith('.mdx') || filename.endsWith('.md'))
+        .map(filename => {
+          const filePath = path.join(contentDirectory, filename);
+          const source = fs.readFileSync(filePath, 'utf8');
+          const { data } = matter(source);
+          
+          // Extract slug from filename (remove extension)
+          const slug = filename.replace(/\.mdx?$/, '');
+          
+          return {
+            slug,
+            title: data.title,
+            date: data.date,
+            summary: data.summary,
+            image: data.image,
+            tags: data.tags || [],
+          };
+        })
+        // Sort by date (newest first)
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    } catch (error) {
+      console.error('Error reading press release files:', error);
+    }
+  }
+
+  return {
+    props: {
+      mdxReleases,
+    },
+    // Re-generate at most once per hour
+    revalidate: 3600,
+  };
+};
+
+export default PressReleases; 

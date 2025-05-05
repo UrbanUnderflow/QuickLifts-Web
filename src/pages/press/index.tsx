@@ -534,7 +534,7 @@ const PressKit = () => {
                 </div>
               </div>
               <h3 className="text-white text-xl font-medium mb-2">Press Releases</h3>
-              <p className="text-zinc-400 mb-4">Latest announcements including Morning Mobility Challenge launch</p>
+              <p className="text-zinc-400 mb-4">Official announcements and news from the Pulse team</p>
               <Link href="/press/press-releases">
                 <span className="flex items-center text-[#E0FE10] hover:text-white group cursor-pointer">
                   View all

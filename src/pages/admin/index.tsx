@@ -78,6 +78,12 @@ const AdminHome: React.FC = () => {
       description: 'View key app metrics like moves, workouts, and rounds.',
       icon: 'fas fa-chart-line',
       link: '/admin/metrics'
+    },
+    {
+      title: 'Press Releases',
+      description: 'Manage and generate automated press releases',
+      icon: 'fas fa-newspaper',
+      link: '/admin/pressReleases'
     }
   ];
 
