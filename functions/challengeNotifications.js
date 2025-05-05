@@ -16,6 +16,59 @@ const messaging = admin.messaging();
 const userChallengeCollection = "user-challenge";
 const challengesCollection = "challenges"; // Assuming this is the name
 
+// --- COPIED HELPER FUNCTION --- 
+/**
+ * Sends a single push notification to a specific FCM token.
+ * (Copied from sendSingleNotification.js for reuse)
+ * @param {string} fcmToken The target device's FCM token.
+ * @param {string} title Notification title.
+ * @param {string} body Notification body.
+ * @param {object} customData Additional data to send with the notification.
+ * @returns {Promise<object>} Result object with success status and message.
+ */
+async function sendNotification(fcmToken, title, body, customData = {}) {
+  const message = {
+    token: fcmToken,
+    notification: {
+      title: title,
+      body: body,
+    },
+    data: customData,
+    apns: {
+      payload: {
+        aps: {
+          alert: {
+            title: title,
+            body: body,
+          },
+          badge: 1, // Consider if badge count should be dynamic
+          sound: 'default' // Ensure sound is configured correctly for your app
+        },
+      },
+    },
+    android: {
+      priority: 'high',
+      notification: {
+        sound: 'default' // Ensure sound is configured correctly for your app
+      }
+    }
+  };
+
+  try {
+    const response = await messaging.send(message);
+    console.log('Helper: Successfully sent notification:', response);
+    return { success: true, message: 'Notification sent successfully.' };
+  } catch (error) {
+    console.error('Helper: Error sending notification:', error);
+    if (error.code === 'messaging/registration-token-not-registered') {
+      console.log(`Helper: Invalid FCM token: ${fcmToken}. Consider removing it.`);
+    }
+    // Re-throw to be caught by caller
+    throw error;
+  }
+}
+// --- END HELPER FUNCTION ---
+
 /**
  * Sends a push notification to all participants of a challenge (except the new joiner)
  * when a new user joins the challenge.
@@ -153,7 +206,7 @@ exports.sendNewUserJoinedChallengeNotification = onDocumentCreated(`${userChalle
     // --- 5. Send Notifications ---
     console.log(`Sending notification to ${eligibleTokens.length} tokens.`);
     try {
-      // Use sendMulticast for more consistent approach with batch notifications
+      // Use send() which handles multicast when `tokens` array is present
       const message = {
         tokens: eligibleTokens,
         notification: payload.notification,
@@ -162,7 +215,7 @@ exports.sendNewUserJoinedChallengeNotification = onDocumentCreated(`${userChalle
         android: payload.android
       };
 
-      const response = await messaging.sendMulticast(message);
+      const response = await messaging.send(message);
       console.log(`Successfully sent messages: ${response.successCount} of ${eligibleTokens.length}`);
       
       if (response.failureCount > 0) {
@@ -205,7 +258,6 @@ exports.onChallengeStatusChange = onDocumentUpdated(`${userChallengeCollection}/
     }
     const before = change.before.data();
     const after = change.after.data();
-    const userChallengeRef = change.after.ref; // Reference to the document that was updated
     const userChallengeId = event.params.userChallengeId;
 
     // --- Essential checks --- 
@@ -217,59 +269,54 @@ exports.onChallengeStatusChange = onDocumentUpdated(`${userChallengeCollection}/
     const newStatus = after.challenge.status;
 
     if (oldStatus === newStatus) {
-        // console.log(`User challenge ${userChallengeId}: Status (${newStatus}) did not change. No notification needed.`);
         return null; // Status didn't change
     }
 
     // --- Get common data --- 
-    const userId = after.userId;
-    const fcmToken = after.fcmToken;
+    const userId = after.userId; // User whose doc triggered this instance
+    const fcmToken = after.fcmToken; // Specific user's token
     const challengeTitle = after.challenge.title || 'Challenge';
     const challengeId = after.challengeId;
 
-    if (!userId) {
-         console.error(`User challenge ${userChallengeId}: Missing userId in 'after' data. Cannot send notification.`);
-         return null;
-    }
-    if (!fcmToken) {
-        console.log(`User challenge ${userChallengeId} (User: ${userId}): No FCM token found. Skipping notification.`);
-        return null; // Skip if no token
+    if (!challengeId) {
+        console.error(`User challenge ${userChallengeId}: Missing challengeId in 'after' data. Cannot process status change.`);
+        return null;
     }
 
     let notificationPayload = null;
-    let dataPayload = { challengeId: challengeId || '', timestamp: String(Math.floor(Date.now() / 1000)) };
+    let dataPayload = { challengeId: challengeId, timestamp: String(Math.floor(Date.now() / 1000)) };
+    let sendToIndividual = false; // Flag to track if we send to one or many
 
     // --- Handle specific transitions --- 
 
-    // 1. Draft -> Published (Waiting Room Notification)
+    // 1. Draft -> Published (Waiting Room Notification) - SEND TO ALL
     if (oldStatus === 'draft' && newStatus === 'published') {
-        console.log(`User challenge ${userChallengeId}: Status change ${oldStatus} -> ${newStatus}. Sending waiting room notification.`);
+        console.log(`Challenge ${challengeId}: Status change ${oldStatus} -> ${newStatus}. Preparing multicast notification.`);
         notificationPayload = {
             title: '🎉 Released from the Waiting Room!',
             body: `It's happening! The waiting room doors for "${challengeTitle}" are now open. Get ready – the challenge begins soon!`
         };
         dataPayload.type = 'challenge_published';
+        sendToIndividual = false;
     }
 
-    // 2. Published -> Active (Challenge Started Notification)
+    // 2. Published -> Active (Challenge Started Notification) - SEND TO ALL
     else if (oldStatus === 'published' && newStatus === 'active') {
-        console.log(`User challenge ${userChallengeId}: Status change ${oldStatus} -> ${newStatus}. Sending challenge started notification.`);
+        console.log(`Challenge ${challengeId}: Status change ${oldStatus} -> ${newStatus}. Preparing multicast notification.`);
         notificationPayload = {
             title: '🏃‍♂️ Challenge Started!',
             body: `The challenge "${challengeTitle}" has begun! Get ready to compete!`
         };
         dataPayload.type = 'challenge_started';
+        sendToIndividual = false;
     }
 
-    // 3. Active -> Completed (Challenge Completed Notification)
-    // (Also handles other transitions TO completed, e.g., draft->completed, published->completed)
+    // 3. Active -> Completed (Challenge Completed Notification) - SEND TO INDIVIDUAL
     else if (newStatus === 'completed' && oldStatus !== 'completed') {
-        console.log(`User challenge ${userChallengeId}: Status change ${oldStatus} -> ${newStatus}. Sending challenge completed notification.`);
-        
-        // --- Calculate Winner --- 
-        // Note: calculateWinner might need adjustments based on how participants are stored 
-        // It currently expects participants data within the challenge object passed to it.
-        const winner = await calculateWinner(after.challenge); // Pass the challenge object from the updated data
+        console.log(`User challenge ${userChallengeId}: Status change ${oldStatus} -> ${newStatus}. Preparing individual notification.`);
+        sendToIndividual = true; // Set flag
+
+        const winner = await calculateWinner(after.challenge); 
         
         let title = '🎉 Challenge Complete!';
         let body = '';
@@ -286,22 +333,6 @@ exports.onChallengeStatusChange = onDocumentUpdated(`${userChallengeCollection}/
             dataPayload.winnerUsername = winner.username || '';
             dataPayload.winnerScore = String(Math.floor(winner.score));
             dataPayload.isWinner = String(isWinner);
-
-            // Update the user-challenge doc with winner info (only needed if not already done elsewhere)
-            // Consider if the Netlify function should still handle this DB update.
-            // If we do it here, it might run for *every* participant completion.
-            /* 
-            try {
-                 await userChallengeRef.update({
-                     'challenge.winner': winner,
-                     'challenge.finalScores': Math.floor(winner.score)
-                 });
-                 console.log(`User challenge ${userChallengeId}: Updated with winner info.`);
-            } catch (updateError) {
-                 console.error(`User challenge ${userChallengeId}: Failed to update with winner info:`, updateError);
-            }
-            */
-
         } else {
             body = `The challenge "${challengeTitle}" has ended! 🎯 What an amazing effort by everyone! Thanks for participating and keep crushing those workouts! 💪🔥`;
             dataPayload.noWinner = 'true';
@@ -312,49 +343,76 @@ exports.onChallengeStatusChange = onDocumentUpdated(`${userChallengeCollection}/
 
     // --- Send the notification if a payload was created --- 
     if (notificationPayload) {
-        const message = {
-            notification: notificationPayload,
-            data: dataPayload,
-            token: fcmToken,
-            apns: { /* ... APNS config ... */ 
-                 headers: {
-                    'apns-priority': '10',
-                },
-                payload: {
-                    aps: {
-                        alert: notificationPayload, // Use the same title/body
-                        sound: 'default',
-                        badge: 1
-                    }
-                }
-            },
-            android: { /* ... Android config ... */ 
-                priority: 'high',
-                notification: {
-                    sound: 'default',
-                }
-            }
-        };
-
         try {
-            console.log(`Sending ${dataPayload.type || 'notification'} to user ${userId} for user challenge ${userChallengeId}.`);
-            await messaging.send(message);
-            console.log(`Successfully sent notification to user ${userId}.`);
-            return true; // Indicate success
-        } catch (error) {
-            console.error(`Error sending notification to user ${userId} (UserChallenge: ${userChallengeId}):`, error);
-            if (error.code === 'messaging/registration-token-not-registered') {
-                 console.log(`FCM token for user ${userId} is invalid. Consider removing it.`);
-                // await db.collection('users').doc(userId).update({ fcmToken: FieldValue.delete() });
+            if (sendToIndividual) {
+                // --- Send to the specific user --- 
+                if (!fcmToken) {
+                    console.log(`User challenge ${userChallengeId} (User: ${userId}): No FCM token found for individual notification. Skipping.`);
+                    return null;
+                }
+                console.log(`Sending ${dataPayload.type || 'notification'} to individual user ${userId} for user challenge ${userChallengeId}.`);
+                await sendNotification(fcmToken, notificationPayload.title, notificationPayload.body, dataPayload);
+                console.log(`Successfully sent individual notification to user ${userId}.`);
+
+            } else {
+                // --- Send to ALL participants --- 
+                console.log(`Querying participants for challenge ${challengeId} to send ${dataPayload.type} notification.`);
+                const participantsSnapshot = await db.collection(userChallengeCollection)
+                    .where("challengeId", "==", challengeId)
+                    .get();
+
+                const eligibleTokens = [];
+                if (!participantsSnapshot.empty) {
+                    participantsSnapshot.docs.forEach(doc => {
+                        const token = doc.data().fcmToken;
+                        if (token) {
+                            eligibleTokens.push(token);
+                        } else {
+                            console.warn(`Participant ${doc.id} in challenge ${challengeId} is missing an FCM token.`);
+                        }
+                    });
+                }
+
+                if (eligibleTokens.length === 0) {
+                    console.log(`No eligible tokens found for challenge ${challengeId}. No multicast notification sent.`);
+                    return null;
+                }
+
+                console.log(`Sending ${dataPayload.type} multicast notification to ${eligibleTokens.length} tokens for challenge ${challengeId}.`);
+                const message = {
+                    tokens: eligibleTokens,
+                    notification: notificationPayload,
+                    data: dataPayload,
+                    apns: { /* ... APNS config ... */ 
+                        headers: {'apns-priority': '10'},
+                        payload: { aps: { alert: notificationPayload, sound: 'default', badge: 1 } }
+                    },
+                    android: { /* ... Android config ... */ 
+                        priority: 'high',
+                        notification: { sound: 'default' }
+                    }
+                };
+                const response = await messaging.send(message);
+                console.log(`Multicast send results for ${dataPayload.type}: ${response.successCount} success, ${response.failureCount} failure.`);
+                // Optionally log detailed failures
+                if (response.failureCount > 0) {
+                    response.responses.forEach((resp, idx) => {
+                      if (!resp.success) {
+                        console.error(` - Failed sending to token [${idx}] (${eligibleTokens[idx].substring(0,10)}...): ${resp.error.code} - ${resp.error.message}`);
+                      }
+                    });
+                  }
             }
-            return false; // Indicate failure
+            return true; // Indicate success
+
+        } catch (error) {
+            console.error(`Error sending notification(s) for ${dataPayload.type} (Challenge: ${challengeId}, Trigger Doc: ${userChallengeId}):`, error);
+            // Don't return false here unless you want Firebase to potentially retry the *entire* trigger
+            // Logging the error is usually sufficient.
         }
-    } else {
-        // Log if status changed but wasn't one we handle notifications for
-        // console.log(`User challenge ${userChallengeId}: Status change from ${oldStatus} to ${newStatus} - no specific notification defined.`);
     }
 
-    return null; // No notification sent for this specific change
+    return null; // No notification sent or error handled
 });
 
 // --- Add calculateWinner function (adapted from Netlify function) ---

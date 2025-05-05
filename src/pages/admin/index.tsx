@@ -65,7 +65,7 @@ const AdminHome: React.FC = () => {
       title: 'Send Notifications',
       description: 'Send push notifications to users',
       icon: 'fas fa-bell',
-      link: '/SendNotification'
+      link: '/admin/SendNotification'
     },
     {
       title: 'User Management',
