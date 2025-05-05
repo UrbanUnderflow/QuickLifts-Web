@@ -266,10 +266,11 @@ const PressReleasesAdmin: React.FC = () => {
     setError(null); // Reset general error
 
     try {
-      console.log("Attempting to call /generateKpiSnapshot...");
-      const response = await axios.post('/.netlify/functions/generateKpiSnapshot');
+      console.log("Attempting to call /triggerGenerateKpiSnapshot...");
+      // Call the NEW trigger function endpoint
+      const response = await axios.post('/.netlify/functions/triggerGenerateKpiSnapshot');
       
-      console.log("generateKpiSnapshot response:", response.data);
+      console.log("triggerGenerateKpiSnapshot response:", response.data);
 
       if (response.data.success) {
         setKpiStatusMessage(response.data.message || "KPI snapshot generated successfully!");
