@@ -2161,6 +2161,80 @@ async deleteWorkoutSession(workoutId: string | null): Promise<void> {
     }
   }
   // --- End Batch Update User Challenge Status ---
+
+  /**
+   * Creates a test workout session for a specific user
+   * This is used exclusively for testing workout start notifications in the admin panel
+   * 
+   * @param userId The ID of the user to create the test session for
+   * @param sessionData The workout session data to use
+   * @returns The ID of the created session
+   */
+  async createTestWorkoutSession(userId: string, sessionData: any): Promise<string> {
+    try {
+      if (!userId) {
+        throw new Error('User ID is required');
+      }
+
+      // Generate a unique ID for the workout session
+      const sessionId = doc(collection(db, 'workout-sessions')).id;
+      
+      // Prepare the data with the status that will trigger the notification
+      const testData = {
+        ...sessionData,
+        id: sessionId,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      };
+
+      // Create a session doc in both the user's subcollection and the root collection
+      // 1. First in user's subcollection
+      const userSessionRef = doc(db, 'users', userId, 'workoutSessions', sessionId);
+      await setDoc(userSessionRef, testData);
+      
+      // 2. Also create in the root collection (this normally happens via Cloud Function)
+      // But we'll do it directly to ensure it's available immediately
+      const rootSessionRef = doc(db, 'workout-sessions', sessionId);
+      await setDoc(rootSessionRef, {
+        ...testData,
+        userId // Make sure userId is included in the root collection
+      });
+
+      console.log(`Created test workout session with ID ${sessionId} for user ${userId}`);
+      return sessionId;
+    } catch (error) {
+      console.error('Error creating test workout session:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Deletes a test workout session
+   * This is used to clean up after testing workout start notifications
+   * 
+   * @param userId The ID of the user who owns the session
+   * @param sessionId The ID of the session to delete
+   */
+  async deleteTestWorkoutSession(userId: string, sessionId: string): Promise<void> {
+    try {
+      if (!userId || !sessionId) {
+        throw new Error('User ID and Session ID are required');
+      }
+
+      // Delete from user's subcollection
+      const userSessionRef = doc(db, 'users', userId, 'workoutSessions', sessionId);
+      await deleteDoc(userSessionRef);
+      
+      // Delete from root collection
+      const rootSessionRef = doc(db, 'workout-sessions', sessionId);
+      await deleteDoc(rootSessionRef);
+
+      console.log(`Deleted test workout session ${sessionId} for user ${userId}`);
+    } catch (error) {
+      console.error('Error deleting test workout session:', error);
+      throw error;
+    }
+  }
 }
 
 export const workoutService = new WorkoutService();

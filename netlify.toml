@@ -59,3 +59,10 @@
 # Schedule the press release draft function to run weekly
 [functions.draftPress]
   schedule = "@weekly"
+
+# Mark trigger functions as background functions without schedules
+[functions.triggerDraftPress]
+  is_background = true
+
+[functions.triggerGenerateKpiSnapshot]
+  is_background = true

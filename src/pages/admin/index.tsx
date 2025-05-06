@@ -56,6 +56,12 @@ const AdminHome: React.FC = () => {
       link: '/admin/challengestatus'
     },
     {
+      title: 'Add Points',
+      description: 'Reward users with points for social sharing',
+      icon: 'fas fa-coins',
+      link: '/admin/addpoints'
+    },
+    {
       title: 'Inactivity Check',
       description: 'Monitor and trigger workout inactivity notifications',
       icon: 'fas fa-clock',

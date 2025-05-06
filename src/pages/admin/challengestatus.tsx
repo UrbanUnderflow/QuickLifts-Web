@@ -62,6 +62,13 @@ const ChallengeStatusPage: React.FC = () => {
   const [userChallengesError, setUserChallengesError] = useState<string | null>(null);
   const [clearingAllStacks, setClearingAllStacks] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  
+  // New state variables for workout testing
+  const [testingWorkout, setTestingWorkout] = useState<{ [key: string]: boolean }>({});
+  const [showTestModal, setShowTestModal] = useState(false);
+  const [selectedSweatlist, setSelectedSweatlist] = useState<{id: string, sweatlistName: string, index: number} | null>(null);
+  const [selectedParticipant, setSelectedParticipant] = useState<string>('');
+  const [testingResult, setTestingResult] = useState<{success: boolean, message: string} | null>(null);
 
   useEffect(() => {
     const fetchAdminChallenges = async () => {
@@ -362,6 +369,84 @@ const ChallengeStatusPage: React.FC = () => {
       alert(`Error removing Sweatlist: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setDeletingSweatlist(prev => ({ ...prev, [loadingKey]: false }));
+    }
+  };
+
+  // Add function to handle starting a test workout
+  const handleTestWorkoutStart = (collectionId: string, sweatlist: { id: string; sweatlistName: string }, index: number) => {
+    setSelectedSweatlist({...sweatlist, index});
+    setSelectedParticipant('');
+    setTestingResult(null);
+    setShowTestModal(true);
+  };
+
+  // Function to create and then auto-delete a test workout session
+  const testStartWorkout = async () => {
+    if (!selectedChallenge || !selectedSweatlist || !selectedParticipant) {
+      setTestingResult({
+        success: false,
+        message: "Missing required data to start test workout."
+      });
+      return;
+    }
+    
+    const loadingKey = `${selectedChallenge.id}-${selectedSweatlist.id}-${selectedSweatlist.index}`;
+    setTestingWorkout(prev => ({ ...prev, [loadingKey]: true }));
+    
+    try {
+      // Get participant details
+      const participant = userChallenges.find(uc => uc.userId === selectedParticipant);
+      
+      if (!participant) {
+        throw new Error("Selected participant not found in challenge participants");
+      }
+      
+      // Create the workout session
+      const sessionData = {
+        workoutStatus: "inProgress", // This is the key status that triggers the notification
+        challengeId: selectedChallenge.id,
+        title: selectedSweatlist.sweatlistName || "Test Workout",
+        sweatlistId: selectedSweatlist.id,
+        timestamp: new Date(),
+        notes: "This is a test workout session created from admin panel"
+      };
+      
+      // Call the Firebase function to create a workout session
+      console.log(`Creating test workout session for user ${participant.userId} in challenge ${selectedChallenge.id}`);
+      const sessionId = await workoutService.createTestWorkoutSession(participant.userId, sessionData);
+      
+      setTestingResult({
+        success: true,
+        message: `Test workout started! Session ID: ${sessionId}`
+      });
+      
+      // Set a timeout to delete the workout session after 10 seconds
+      setTimeout(async () => {
+        try {
+          console.log(`Auto-deleting test workout session ${sessionId} for user ${participant.userId}`);
+          await workoutService.deleteTestWorkoutSession(participant.userId, sessionId);
+          setTestingResult({
+            success: true,
+            message: `Test completed and workout session deleted (ID: ${sessionId})`
+          });
+        } catch (cleanupError) {
+          console.error("Error during test workout cleanup:", cleanupError);
+          setTestingResult({
+            success: false,
+            message: `Test ran but cleanup failed: ${cleanupError instanceof Error ? cleanupError.message : 'Unknown error'}`
+          });
+        } finally {
+          setTestingWorkout(prev => ({ ...prev, [loadingKey]: false }));
+        }
+      }, 10000); // 10 seconds
+      
+    } catch (error) {
+      console.error("Error starting test workout:", error);
+      setTestingResult({
+        success: false,
+        message: `Failed to start test workout: ${error instanceof Error ? error.message : 'Unknown error'}`
+      });
+      setTestingWorkout(prev => ({ ...prev, [loadingKey]: false }));
     }
   };
 
@@ -801,24 +886,45 @@ const ChallengeStatusPage: React.FC = () => {
                                                 </div>
                                               </div>
                                             </div>
-                                            {/* Delete Button */}
-                                            <button
-                                              onClick={() => handleDeleteSweatlist(selectedChallenge.id, sweatlist.id, index)}
-                                              className={`ml-2 p-1 rounded text-red-500 hover:bg-red-900/50 flex-shrink-0 ${deletingSweatlist[`${selectedChallenge.id}-${sweatlist.id}-${index}`] ? 'opacity-50 cursor-wait' : ''}`}
-                                              title="Remove Sweatlist"
-                                              disabled={deletingSweatlist[`${selectedChallenge.id}-${sweatlist.id}-${index}`]}
-                                            >
-                                              {deletingSweatlist[`${selectedChallenge.id}-${sweatlist.id}-${index}`] ? (
-                                                <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                            {/* Action Buttons */}
+                                            <div className="flex items-center ml-2">
+                                              {/* Test Workout Start Button */}
+                                              <button
+                                                onClick={() => handleTestWorkoutStart(selectedChallenge.id, sweatlist, index)}
+                                                className={`p-1 rounded text-blue-500 hover:bg-blue-900/50 flex-shrink-0 mr-1 ${testingWorkout[`${selectedChallenge.id}-${sweatlist.id}-${index}`] ? 'opacity-50 cursor-wait' : ''}`}
+                                                title="Test Start Workout Notification"
+                                                disabled={testingWorkout[`${selectedChallenge.id}-${sweatlist.id}-${index}`]}
+                                              >
+                                                {testingWorkout[`${selectedChallenge.id}-${sweatlist.id}-${index}`] ? (
+                                                  <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                    </svg>
+                                                ) : (
+                                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
                                                   </svg>
-                                              ) : (
-                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                                                  <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-                                                </svg>
-                                              )}
-                                            </button>
+                                                )}
+                                              </button>
+                                              {/* Delete Button */}
+                                              <button
+                                                onClick={() => handleDeleteSweatlist(selectedChallenge.id, sweatlist.id, index)}
+                                                className={`p-1 rounded text-red-500 hover:bg-red-900/50 flex-shrink-0 ${deletingSweatlist[`${selectedChallenge.id}-${sweatlist.id}-${index}`] ? 'opacity-50 cursor-wait' : ''}`}
+                                                title="Remove Sweatlist"
+                                                disabled={deletingSweatlist[`${selectedChallenge.id}-${sweatlist.id}-${index}`]}
+                                              >
+                                                {deletingSweatlist[`${selectedChallenge.id}-${sweatlist.id}-${index}`] ? (
+                                                  <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                    </svg>
+                                                ) : (
+                                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                                    <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                                                  </svg>
+                                                )}
+                                              </button>
+                                            </div>
                                           </div>
                                         ))}
                                       </div>
@@ -915,6 +1021,100 @@ const ChallengeStatusPage: React.FC = () => {
             <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
           </svg>
           <span>ID <span className="font-mono">{copiedId.substring(0, 8)}...</span> copied to clipboard</span>
+        </div>
+      )}
+
+      {/* Test Workout Modal */}
+      {showTestModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-[#1a1e24] rounded-xl max-w-md w-full p-6 shadow-2xl relative animate-fade-in-up">
+            <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-blue-500 via-purple-500 to-[#d7ff00]"></div>
+            <div className="absolute top-0 left-0 bottom-0 w-[2px] bg-gradient-to-b from-blue-500 via-purple-500 to-[#d7ff00]"></div>
+            
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-medium text-white">Test Workout Start Notification</h3>
+              <button 
+                onClick={() => setShowTestModal(false)}
+                className="text-gray-400 hover:text-white"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+              </button>
+            </div>
+            
+            {testingResult ? (
+              <div className={`mb-4 p-3 rounded-lg ${testingResult.success ? 'bg-green-900/30 text-green-400 border border-green-900' : 'bg-red-900/30 text-red-400 border border-red-900'}`}>
+                <div className="flex items-center gap-2">
+                  {testingResult.success ? (
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                  ) : (
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                    </svg>
+                  )}
+                  <span>{testingResult.message}</span>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="mb-4">
+                  <p className="text-gray-300 text-sm mb-2">
+                    This will create a temporary workout session for the selected participant with the stack &quot;{selectedSweatlist?.sweatlistName || 'Unknown'}&quot;. 
+                    The session will auto-delete after 10 seconds.
+                  </p>
+                  
+                  <div className="mt-4">
+                    <label className="block text-gray-300 mb-2 text-sm font-medium">Select Participant</label>
+                    <select 
+                      value={selectedParticipant} 
+                      onChange={(e) => setSelectedParticipant(e.target.value)}
+                      className="w-full bg-[#262a30] border border-gray-700 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#d7ff00] transition text-white"
+                    >
+                      <option value="">-- Select a participant --</option>
+                      {userChallenges.map(uc => (
+                        <option key={uc.userId} value={uc.userId}>
+                          {uc.username || 'Unknown'} ({uc.userId.substring(0, 8)}...)
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                
+                <div className="flex justify-end gap-3 mt-6">
+                  <button
+                    onClick={() => setShowTestModal(false)}
+                    className="px-4 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={testStartWorkout}
+                    disabled={!selectedParticipant || Object.values(testingWorkout).some(v => v)}
+                    className={`px-4 py-2 rounded-lg font-medium ${
+                      !selectedParticipant || Object.values(testingWorkout).some(v => v)
+                        ? 'bg-gray-700 text-gray-500 cursor-not-allowed' 
+                        : 'bg-[#1d2b3a] text-[#d7ff00] border border-[#616e00] hover:bg-[#2a3b4a]'
+                    } transition flex items-center justify-center`}
+                  >
+                    {Object.values(testingWorkout).some(v => v) ? (
+                      <>
+                        <svg className="animate-spin h-4 w-4 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Testing...
+                      </>
+                    ) : (
+                      'Start Test Workout'
+                    )}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       )}
 
