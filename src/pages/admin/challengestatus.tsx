@@ -70,6 +70,10 @@ const ChallengeStatusPage: React.FC = () => {
   const [selectedParticipant, setSelectedParticipant] = useState<string>('');
   const [testingResult, setTestingResult] = useState<{success: boolean, message: string} | null>(null);
 
+  // New state for viewing participant details
+  const [selectedUserChallengeDetails, setSelectedUserChallengeDetails] = useState<UserChallenge | null>(null);
+  const [showParticipantDetailsModal, setShowParticipantDetailsModal] = useState(false);
+
   useEffect(() => {
     const fetchAdminChallenges = async () => {
       try {
@@ -321,6 +325,12 @@ const ChallengeStatusPage: React.FC = () => {
     } finally {
       setIsUpdatingStatus(false);
     }
+  };
+
+  // --- Handler for viewing participant details ---
+  const handleViewParticipantDetails = (userChallenge: UserChallenge) => {
+    setSelectedUserChallengeDetails(userChallenge);
+    setShowParticipantDetailsModal(true);
   };
 
   // Placeholder function for deleting a sweatlist
@@ -868,7 +878,7 @@ const ChallengeStatusPage: React.FC = () => {
                                     )}
                                     {selectedChallenge.sweatlistIds && selectedChallenge.sweatlistIds.length > 0 ? (
                                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                                        {selectedChallenge.sweatlistIds.map((sweatlist: { id: string; sweatlistName: string }, index: number) => (
+                                        {selectedChallenge.sweatlistIds.map((sweatlist: { id: string; sweatlistName: string; order?: number }, index: number) => (
                                           <div
                                             key={`${sweatlist.id}-${index}`}
                                             className="p-3 rounded-lg border bg-[#262a30] border-gray-700 flex items-center justify-between"
@@ -884,6 +894,11 @@ const ChallengeStatusPage: React.FC = () => {
                                                 <div className="text-xs text-gray-400 mt-1 font-mono break-all">
                                                   ID: {sweatlist.id || 'N/A'}-{index}
                                                 </div>
+                                                {typeof sweatlist.order === 'number' && (
+                                                  <div className="text-xs text-gray-400 mt-1 font-mono break-all">
+                                                    Order: {sweatlist.order}
+                                                  </div>
+                                                )}
                                               </div>
                                             </div>
                                             {/* Action Buttons */}
@@ -983,6 +998,17 @@ const ChallengeStatusPage: React.FC = () => {
                                                   <div className="text-gray-300">Points: {uc.pulsePoints?.totalPoints ?? 0}</div>
                                                   <div className="text-xs text-gray-400 mt-1">Joined: {formatDate(uc.joinDate)}</div>
                                                   {/* Consider adding progress: Math.round(uc.progress * 100) + '%' */}
+                                                  <button
+                                                    onClick={() => handleViewParticipantDetails(uc)}
+                                                    className="mt-2 px-2 py-1 bg-blue-900/30 text-blue-400 rounded-lg text-xs font-medium border border-blue-900 hover:bg-blue-800/40 transition-colors flex items-center"
+                                                    title="View participant details"
+                                                  >
+                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                                                      <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+                                                      <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
+                                                    </svg>
+                                                    View Details
+                                                  </button>
                                                 </div>
                                               </div>
                                             </li>
@@ -1114,6 +1140,106 @@ const ChallengeStatusPage: React.FC = () => {
                 </div>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Participant Details Modal */}
+      {showParticipantDetailsModal && selectedUserChallengeDetails && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 animate-fade-in-up">
+          <div className="bg-[#1a1e24] rounded-xl max-w-2xl w-full p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+            <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-blue-500 via-purple-500 to-[#d7ff00]"></div>
+            <div className="absolute top-0 left-0 bottom-0 w-[2px] bg-gradient-to-b from-blue-500 via-purple-500 to-[#d7ff00]"></div>
+            
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-medium text-white">
+                Participant Details: {selectedUserChallengeDetails.username || 'N/A'}
+              </h3>
+              <button 
+                onClick={() => setShowParticipantDetailsModal(false)}
+                className="text-gray-400 hover:text-white"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm mb-4">
+              <div>
+                <p className="text-gray-400">User ID:</p>
+                <p className="text-gray-200 font-mono break-all">{selectedUserChallengeDetails.userId}</p>
+              </div>
+              <div>
+                <p className="text-gray-400">User Challenge ID:</p>
+                <p className="text-gray-200 font-mono break-all">{selectedUserChallengeDetails.id}</p>
+              </div>
+              <div>
+                <p className="text-gray-400">Challenge ID:</p>
+                <p className="text-gray-200 font-mono break-all">{selectedUserChallengeDetails.challengeId}</p>
+              </div>
+              <div>
+                <p className="text-gray-400">Joined Date:</p>
+                <p className="text-gray-200">{formatDate(selectedUserChallengeDetails.joinDate)}</p>
+              </div>
+              <div>
+                <p className="text-gray-400">Progress:</p>
+                <p className="text-gray-200">{(selectedUserChallengeDetails.progress * 100).toFixed(2)}%</p>
+              </div>
+              <div>
+                <p className="text-gray-400">Total Points:</p>
+                <p className="text-gray-200">{selectedUserChallengeDetails.pulsePoints?.totalPoints ?? 0}</p>
+              </div>
+               {selectedUserChallengeDetails.ignoreNotifications && selectedUserChallengeDetails.ignoreNotifications.length > 0 && (
+                <div className="md:col-span-2">
+                  <p className="text-gray-400">Ignoring Notifications For:</p>
+                  <p className="text-orange-400 font-mono break-all">{selectedUserChallengeDetails.ignoreNotifications.join(', ')}</p>
+                </div>
+              )}
+            </div>
+
+            <h4 className="text-gray-300 font-medium mb-2 mt-6 border-b border-gray-700 pb-1">Completed Workouts ({selectedUserChallengeDetails.completedWorkouts?.length || 0})</h4>
+            {selectedUserChallengeDetails.completedWorkouts && selectedUserChallengeDetails.completedWorkouts.length > 0 ? (
+              <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
+                {selectedUserChallengeDetails.completedWorkouts.map((workout, index) => (
+                  <div key={workout.id || index} className="p-3 rounded-lg border bg-[#262a30] border-gray-700">
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <p className="text-gray-200 font-medium">Workout ID: {workout.workoutId || 'N/A'}</p>
+                            <p className="text-xs text-gray-400 mt-1 font-mono break-all">Completed Entry ID: {workout.id || 'N/A'}</p>
+                        </div>
+                        <div className="text-right text-xs">
+                            <p className="text-gray-300">Completed: {formatDate(workout.completedAt)}</p>
+                            {/* Points awarded and notes are not directly available here */}
+                            {/* <p className="text-gray-400">Points: {workout.pointsAwarded ?? 'N/A'}</p> */}
+                        </div>
+                    </div>
+                    {/* {workout.notes && ( // Notes are not directly available
+                        <div className="mt-2 pt-2 border-t border-gray-700/50">
+                            <p className="text-xs text-gray-400">Notes:</p>
+                            <p className="text-xs text-gray-300 whitespace-pre-wrap">{workout.notes}</p>
+                        </div>
+                    )} */}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 text-gray-400 mt-2 p-3 bg-gray-800/30 rounded-lg text-sm">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                </svg>
+                <span>No completed workouts recorded for this participant in this challenge.</span>
+              </div>
+            )}
+
+            <div className="flex justify-end mt-6">
+              <button
+                onClick={() => setShowParticipantDetailsModal(false)}
+                className="px-4 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

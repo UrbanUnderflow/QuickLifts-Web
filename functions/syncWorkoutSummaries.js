@@ -20,7 +20,7 @@ const rootSummariesCollection = "workout-summaries"; // The name of the new root
  * Triggered on any write (create, update, delete) to a user's workout summary.
  */
 exports.syncWorkoutSummaryToRoot = onDocumentWritten(
-  "users/{userId}/workoutSummaries/{summaryId}", // Document path pattern
+  "users/{userId}/workoutSummary/{summaryId}", // Document path pattern
   async (event) => {                           // Event handler (uses event object)
     // The event object contains change (before/after data) and params
     const change = event.data;
@@ -37,7 +37,7 @@ exports.syncWorkoutSummaryToRoot = onDocumentWritten(
     // Check if the document was deleted (after snapshot doesn't exist)
     if (!change.after.exists) {
       console.log(
-        `User summary deleted: users/${userId}/workoutSummaries/${summaryId}. Removing from root collection.`
+        `User summary deleted: users/${userId}/workoutSummary/${summaryId}. Removing from root collection.`
       );
       try {
         await rootSummaryRef.delete();
@@ -56,12 +56,12 @@ exports.syncWorkoutSummaryToRoot = onDocumentWritten(
     // Document was created or updated
     const summaryData = change.after.data();
     if (!summaryData) {
-      console.log(`No data found for summary users/${userId}/workoutSummaries/${summaryId} after write. Skipping sync.`);
+      console.log(`No data found for summary users/${userId}/workoutSummary/${summaryId} after write. Skipping sync.`);
       return;
     }
 
     console.log(
-      `User summary created/updated: users/${userId}/workoutSummaries/${summaryId}. Syncing to root collection.`
+      `User summary created/updated: users/${userId}/workoutSummary/${summaryId}. Syncing to root collection.`
     );
 
     // Add the userId to the data being written to the root collection

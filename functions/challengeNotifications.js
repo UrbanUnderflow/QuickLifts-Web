@@ -1,7 +1,7 @@
 // --- Imports for newer SDK ---
 // Use v2 for HTTPS and Firestore triggers as recommended for newer projects
 // const {onRequest} = require("firebase-functions/v2/https"); // Example for HTTPS
-const {onDocumentCreated, onDocumentUpdated} = require("firebase-functions/v2/firestore");
+const {onDocumentCreated, onDocumentUpdated, onDocumentWritten} = require("firebase-functions/v2/firestore");
 // Keep admin SDK import
 const admin = require("firebase-admin");
 const { FieldValue } = require("firebase-admin/firestore"); // Used for potential timestamp updates
@@ -530,44 +530,60 @@ async function calculateWinner(challenge) {
  * Sends notifications to challenge participants when a user starts a workout
  * associated with that challenge.
  *
- * Triggered when a document in 'users/{userId}/workoutSessions/{sessionId}' transitions
+ * Triggered when a document in 'users/{userId}/workoutSessions/{sessionId}' is created or updated
  * to 'inProgress' status and has a challengeId.
  */
-exports.sendWorkoutStartNotification = onDocumentUpdated("users/{userId}/workoutSessions/{sessionId}", async (event) => {
+exports.sendWorkoutStartNotification = onDocumentWritten("users/{userId}/workoutSessions/{sessionId}", async (event) => {
+    const userId = event.params.userId; // Get userId from path params
+    const sessionId = event.params.sessionId;
+    console.log(`sendWorkoutStartNotification (onWrite, user subcollection) triggered for session: ${sessionId}, user: ${userId}`);
+    
     const change = event.data;
     if (!change) {
-        console.log(`No change data associated with the event for workout session ${event.params.sessionId}. Exiting.`);
-        return null;
-    }
-    const before = change.before.data();
-    const after = change.after.data();
-    const userId = event.params.userId; // User who started the workout
-    const sessionId = event.params.sessionId;
-
-    // --- Essential checks --- 
-    // Check if status changed to 'inProgress'
-    if (before?.workoutStatus === 'inProgress' || after?.workoutStatus !== 'inProgress') {
-        // console.log(`Workout session ${sessionId}: Status did not transition to inProgress. No notification needed.`);
+        console.log(`[DEBUG onWriteUser] No change data (event.data is falsy) for session: ${sessionId}. Exiting.`);
         return null;
     }
 
-    // Check if it's part of a challenge
-    const challengeId = after.challengeId || after.collectionId; // Use collectionId as fallback if needed
+    const beforeSnap = change.before;
+    const afterSnap = change.after;
+
+    if (!afterSnap.exists) {
+        console.log(`[DEBUG onWriteUser] Session ${sessionId} was deleted. No notification needed.`);
+        return null;
+    }
+
+    const afterData = afterSnap.data();
+    const beforeData = beforeSnap.exists ? beforeSnap.data() : null;
+
+    // No need to check for userId in afterData, we get it from params
+    console.log(`[DEBUG onWriteUser] Session ${sessionId} for User ${userId} - Before status: ${beforeData?.workoutStatus}, After status: ${afterData?.workoutStatus}`);
+
+    if (afterData?.workoutStatus !== 'inProgress') {
+        console.log(`[DEBUG onWriteUser] Session ${sessionId}: After status is not 'inProgress' (Is: ${afterData?.workoutStatus}). No notification needed.`);
+        return null;
+    }
+
+    if (beforeSnap.exists && beforeData?.workoutStatus === 'inProgress' && afterData?.workoutStatus === 'inProgress') {
+        console.log(`[DEBUG onWriteUser] Session ${sessionId}: Status was already 'inProgress' and remained 'inProgress'. No notification needed.`);
+        return null;
+    }
+
+    const challengeId = afterData.challengeId || afterData.collectionId;
+    console.log(`[DEBUG onWriteUser] Session ${sessionId} - Extracted challengeId: ${challengeId}`);
     if (!challengeId) {
-        console.log(`Workout session ${sessionId} is not part of a challenge. Skipping notification.`);
+        console.log(`[DEBUG onWriteUser] Session ${sessionId} is not part of a challenge (challengeId is falsy: ${challengeId}). Skipping notification.`);
         return null;
     }
 
-    console.log(`User ${userId} started workout session ${sessionId} for challenge ${challengeId}. Preparing notifications.`);
+    console.log(`User ${userId} started workout session ${sessionId} for challenge ${challengeId} (onWriteUser). Preparing notifications.`);
 
-    // --- Get common data --- 
-    const workoutTitle = after.title || 'Workout';
+    const workoutTitle = afterData.title || 'Workout';
     let startingUsername = 'Someone';
 
-    // Fetch the username of the user starting the workout
+    // Fetch the username of the user starting the workout (using userId from params)
     try {
         const userChallengeDoc = await db.collection(userChallengeCollection)
-                                       .where('userId', '==', userId)
+                                       .where('userId', '==', userId) // userId from params
                                        .where('challengeId', '==', challengeId)
                                        .limit(1)
                                        .get();
@@ -579,22 +595,19 @@ exports.sendWorkoutStartNotification = onDocumentUpdated("users/{userId}/workout
     }
 
     // --- Find Other Participants and Send Notifications ---
-    // Removed eligibleTokens array
-    // const eligibleTokens = []; 
-    const eligibleTokens = []; // Re-introduce for sendEachForMulticast
+    const eligibleTokens = [];
     const skippedUserCount = { ignored: 0, missing: 0 };
     let sentCount = 0;
     let failedCount = 0;
     
-    // Define common payload outside loop
     const notificationPayload = {
         title: `🔥 Challenge Activity!`,
-        body: `${startingUsername} just started "${workoutTitle}"! 💪` // Escape quotes
+        body: `${startingUsername} just started "${workoutTitle}"! 💪`
     };
     const dataPayload = {
         challengeId: challengeId,
-        workoutId: sessionId, // Or use after.workoutId if it exists
-        userId: userId,
+        workoutId: sessionId,
+        userId: userId, // userId from params
         username: startingUsername,
         type: 'WORKOUT_STARTED',
         timestamp: String(Math.floor(Date.now() / 1000))
@@ -615,16 +628,15 @@ exports.sendWorkoutStartNotification = onDocumentUpdated("users/{userId}/workout
         const participantId = participantData.userId;
         const participantToken = participantData.fcmToken;
         
-        // Skip if this is the user who started the workout
+        // Skip if this is the user who started the workout (compare participantId with userId from params)
         if (participantId === userId) continue;
         
-        // Skip if no FCM token
         if (!participantToken) {
           skippedUserCount.missing++;
           continue;
         }
         
-        // Check if this user has ignored notifications from the workout starter
+        // Check if this user has ignored notifications from the workout starter (use userId from params as the senderId)
         const hasIgnoredSender = Array.isArray(participantData.ignoreNotifications) && 
                                  participantData.ignoreNotifications.includes(userId);
         
@@ -634,51 +646,22 @@ exports.sendWorkoutStartNotification = onDocumentUpdated("users/{userId}/workout
           continue;
         }
         
-        // --- Construct Payload and Send (inside loop) ---
-        /* // Payload moved outside, remove individual send
-        const notificationPayload = {
-            title: `🔥 Challenge Activity!`,
-            body: `${startingUsername} just started "${workoutTitle}"! 💪` // Escape quotes
-        };
-        const dataPayload = {
-            challengeId: challengeId,
-            workoutId: sessionId, // Or use after.workoutId if it exists
-            userId: userId,
-            username: startingUsername,
-            type: 'WORKOUT_STARTED',
-            timestamp: String(Math.floor(Date.now() / 1000))
-        };
-
-        try {
-            console.log(`Sending WORKOUT_STARTED notification to user ${participantId} (${participantToken.substring(0,10)}...)`);
-            await sendNotification(participantToken, notificationPayload.title, notificationPayload.body, dataPayload);
-            sentCount++;
-        } catch (error) {
-            failedCount++;
-            console.error(`Error sending WORKOUT_STARTED notification to ${participantId} (token: ${participantToken.substring(0,10)}...):`, error);
-            // Error handled in helper
-        }
-        */
         eligibleTokens.push(participantToken); // Collect token
-
-        // Removed: Old logic to push token
-        // This user is eligible to receive the notification
-        // eligibleTokens.push(participantToken);
       }
 
       // --- Send using sendEachForMulticast ---
       if (eligibleTokens.length > 0) {
           const message = {
               tokens: eligibleTokens,
-              notification: notificationPayload, // Use payload defined outside
+              notification: notificationPayload,
               data: dataPayload,
-              apns: { // Basic APNS config
-                  headers: { 'apns-priority': '5' }, // Lower priority than joins/status changes
-                  payload: { aps: { sound: 'default', alert: notificationPayload } } // Include alert here
+              apns: { 
+                  headers: { 'apns-priority': '5' }, 
+                  payload: { aps: { sound: 'default', alert: notificationPayload } } 
               },
-              android: { // Basic Android config
+              android: { 
                   priority: 'normal',
-                  notification: { sound: 'default', clickAction: 'FLUTTER_NOTIFICATION_CLICK' } // Keep sound/click action
+                  notification: { sound: 'default', clickAction: 'FLUTTER_NOTIFICATION_CLICK' } 
               }
           };
 
@@ -700,76 +683,11 @@ exports.sendWorkoutStartNotification = onDocumentUpdated("users/{userId}/workout
           console.log(`No eligible tokens found for WORKOUT_STARTED notification. Sent: 0, Failed: 0, Ignored: ${skippedUserCount.ignored}, Missing tokens: ${skippedUserCount.missing}.`);
       }
 
-      // console.log(`Finished sending WORKOUT_STARTED notifications. Sent: ${sentCount}, Failed: ${failedCount}, Ignored: ${skippedUserCount.ignored}, Missing tokens: ${skippedUserCount.missing}.`); // Moved into if/else block
-
     } catch (error) {
       console.error(`Error querying participants or sending notifications for challenge ${challengeId}:`, error);
-      return null; // Exit if we can't get participants or encounter major loop error
+      return null; 
     }
     
-    // Remove old multicast sending logic
-    /*
-    // --- Check if there are tokens to send to --- 
-    if (eligibleTokens.length === 0) {
-      console.log(`No eligible participants with tokens found for challenge ${challengeId}. No notifications sent.`);
-      return null;
-    }
-    
-    // --- Construct Notification Payload --- 
-    const notificationPayload = {
-        title: `🔥 Challenge Activity!`,
-        body: `${startingUsername} just started ${workoutTitle}! 💪`
-    };
-    const dataPayload = {
-        challengeId: challengeId,
-        workoutId: sessionId, // Or use after.workoutId if it exists
-        userId: userId,
-        username: startingUsername,
-        type: 'WORKOUT_STARTED',
-        timestamp: String(Math.floor(Date.now() / 1000))
-    };
-    
-    const message = {
-        tokens: eligibleTokens,
-        notification: notificationPayload,
-        data: dataPayload,
-        apns: { // Basic APNS config
-            headers: { 'apns-priority': '5' }, // Lower priority than joins/status changes
-            payload: { aps: { sound: 'default', // badge: 1  } } 
-        },
-        android: { // Basic Android config
-            priority: 'normal',
-            notification: { sound: 'default', clickAction: 'FLUTTER_NOTIFICATION_CLICK' }
-        }
-    };
-    
-    // --- Send Notifications --- 
-    console.log(`Sending workout started notification to ${eligibleTokens.length} tokens.`);
-    try {
-        const response = await messaging.sendMulticast(message);
-        console.log(`Successfully sent workout started messages: ${response.successCount} of ${eligibleTokens.length}`);
-
-        if (response.failureCount > 0) {
-            console.warn(`Failed to send workout started message to ${response.failureCount} devices.`);
-            
-            // Log failures for debugging
-            response.responses.forEach((resp, idx) => {
-              if (!resp.success) {
-                console.error(`Error sending to token #${idx}: ${resp.error.message}`);
-                
-                // Handle invalid tokens
-                if (resp.error.code === 'messaging/registration-token-not-registered') {
-                  console.log(`Token is invalid and should be removed: ${eligibleTokens[idx].substring(0, 10)}...`);
-                  // Future enhancement: clean up invalid tokens
-                }
-              }
-            });
-        }
-    } catch (error) {
-        console.error("Error sending workout started FCM messages:", error);
-    }
-    */
-
     return null; // Indicate completion
 }); 
 
