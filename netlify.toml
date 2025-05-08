@@ -7,7 +7,6 @@
 [build]
   command = "next build"
   publish = ".next"
-  functions = "netlify/functions"
 
 # Environment variables should be set in Netlify UI, not in the toml file
 [context.production]
