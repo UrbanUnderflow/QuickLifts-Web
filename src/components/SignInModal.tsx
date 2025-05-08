@@ -200,9 +200,19 @@ const SignInModal: React.FC<SignInModalProps> = ({
         // Potentially add logic here if needed when onboarding IS complete upon check
       }
     } else {
-      console.log('[SignInModal Onboarding Check Effect] Running. No currentUser.');
+      // User signed out, reset form fields
+      console.log('[SignInModal] User signed out, resetting form state.');
+      setEmail("");
+      setPassword("");
+      setConfirmPassword("");
+      setError(null);
+      setErrors({});
+      setIsSignUp(false); // Reset to sign-in view
+      setSignUpStep('initial'); // Reset step
+      setIsForgotPassword(false); // Reset forgot password state
+      setResetEmailSent(false);
     }
-  }, [currentUser, isVisible, onClose, signUpStep]);
+  }, [currentUser]); // Dependency is currentUser
 
   // Password validation states
   const hasUppercase = /[A-Z]/.test(password);
@@ -1099,7 +1109,61 @@ const SignInModal: React.FC<SignInModalProps> = ({
           Take the Quiz
         </button>
         <button
-          onClick={() => onQuizSkipped?.()}
+          onClick={async () => {
+            try {
+              setIsLoading(true);
+              setError(null);
+              
+              // Call the callback provided by parent
+              onQuizSkipped?.();
+              
+              const userId = auth.currentUser?.uid;
+              if (!userId) throw new Error("No user found");
+              
+              // Fetch latest user data
+              const refreshedUser = await userService.fetchUserFromFirestore(userId);
+              
+              if (!refreshedUser) {
+                throw new Error("User data missing after skipping quiz.");
+              }
+              
+              // Enhanced verification - explicitly check for username
+              if (!refreshedUser.username) {
+                console.log('[SignInModal] onQuizSkipped: Username is missing. Forcing profile step.');
+                setIsSignUp(true);
+                setSignUpStep('profile');
+                setIsLoading(false);
+                return;
+              }
+              
+              // Handle auto-join challenge if needed
+              if (roundIdRedirect) {
+                if (refreshedUser.subscriptionType !== SubscriptionType.unsubscribed) {
+                  console.log(`[SignInModal] onQuizSkipped: User is subscribed and has username. Attempting auto-join for round: ${roundIdRedirect}`);
+                  await autoJoinChallenge(roundIdRedirect);
+                  dispatch(clearRoundIdRedirect());
+                } else {
+                  console.log(`[SignInModal] onQuizSkipped: User is unsubscribed. Deferring auto-join for round: ${roundIdRedirect}`);
+                }
+              }
+              
+              // Handle next step based on subscription status
+              if (refreshedUser.subscriptionType === SubscriptionType.unsubscribed) {
+                console.log('[SignInModal] Quiz skipped. Unsubscribed. Redirecting to /subscribe');
+                router.push('/subscribe');
+              } else {
+                console.log('[SignInModal] Quiz skipped. Closing modal.');
+                onClose?.();
+              }
+              
+            } catch (err) {
+              const error = err as Error;
+              console.error("Error handling quiz skip:", error);
+              setError(error.message);
+            } finally {
+              setIsLoading(false);
+            }
+          }}
           className="w-full bg-zinc-800 text-white font-semibold py-3 px-4 rounded-lg hover:bg-zinc-700 transition-colors font-['HK Grotesk']"
         >
           Skip for Now

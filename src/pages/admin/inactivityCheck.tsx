@@ -38,6 +38,7 @@ interface InactivityCheckResult {
       challengeId: string;
       challengeTitle?: string;
       lastActive?: Date | null;
+      isCurrentlyActive?: boolean;
       id?: string;
     }[];
   };
@@ -507,6 +508,7 @@ const InactivityCheckPage: React.FC = () => {
                           <tr className="text-left text-gray-400 border-b border-gray-700">
                             <th className="py-2 px-3 sticky top-0 bg-[#1f2328]">Username</th>
                             <th className="py-2 px-3 sticky top-0 bg-[#1f2328]">Challenge</th>
+                            <th className="py-2 px-3 sticky top-0 bg-[#1f2328]">Is Currently Active?</th>
                             <th className="py-2 px-3 sticky top-0 bg-[#1f2328]">Last Active</th>
                             <th className="py-2 px-3 sticky top-0 bg-[#1f2328]">ID</th>
                             <th className="py-2 px-3 sticky top-0 bg-[#1f2328]">Action</th>
@@ -517,6 +519,7 @@ const InactivityCheckPage: React.FC = () => {
                             <tr key={index} className={`border-b border-gray-800 hover:bg-[#262a30] transition-colors ${selectedRecord?.challengeId === update.challengeId ? 'bg-[#1d2b3a]' : ''}`}>
                               <td className="py-2 px-3 text-blue-400">{update.username || 'Unknown'}</td>
                               <td className="py-2 px-3 text-gray-300">{update.challengeTitle || update.challengeId}</td>
+                              <td className="py-2 px-3 text-blue-400">{update.isCurrentlyActive == true ? "Active" : 'Not Active'}</td>
                               <td className="py-2 px-3 text-gray-300">
                                 {update.lastActive ? formatDate(update.lastActive) : 
                                 <span className="px-2 py-1 bg-red-900/30 text-red-400 rounded-full text-xs font-medium border border-red-900">

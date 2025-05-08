@@ -536,6 +536,8 @@ async function calculateWinner(challenge) {
 exports.sendWorkoutStartNotification = onDocumentWritten("users/{userId}/workoutSessions/{sessionId}", async (event) => {
     const userId = event.params.userId; // Get userId from path params
     const sessionId = event.params.sessionId;
+    const workoutRoundId = event.params.workoutRoundId;
+
     console.log(`sendWorkoutStartNotification (onWrite, user subcollection) triggered for session: ${sessionId}, user: ${userId}`);
     
     const change = event.data;
@@ -608,6 +610,7 @@ exports.sendWorkoutStartNotification = onDocumentWritten("users/{userId}/workout
         challengeId: challengeId,
         workoutId: sessionId,
         userId: userId, // userId from params
+        workoutRoundId: workoutRoundId,
         username: startingUsername,
         type: 'WORKOUT_STARTED',
         timestamp: String(Math.floor(Date.now() / 1000))

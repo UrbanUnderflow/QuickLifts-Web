@@ -1,13 +1,59 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
-import { ArrowUpRight, Download, Search } from 'lucide-react';
+import { ArrowUpRight, Download, Search, Loader2, AlertTriangle } from 'lucide-react';
 import { useScrollFade } from '../../hooks/useScrollFade';
 import Header from '../../components/Header';
 import Footer from '../../components/Footer/Footer';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../../api/firebase/config';
+
+interface PressKitAssets {
+  overviewPdf?: string;
+  founderLandscape?: string;
+  founderPortrait1?: string;
+  founderPortrait2?: string;
+  founderBioPdf?: string;
+  productOnePagerPdf?: string;
+  factCheckSheetPdf?: string;
+  talkingPointsFaqsPdf?: string;
+  completeKitZip?: string;
+  logoSigSvg?: string;
+  logoSigPng?: string;
+}
 
 const PressKit = () => {
   const [searchQuery, setSearchQuery] = useState('');
+  const [pressKitAssets, setPressKitAssets] = useState<PressKitAssets | null>(null);
+  const [isLoadingAssets, setIsLoadingAssets] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchPressKitAssets = async () => {
+      setIsLoadingAssets(true);
+      setFetchError(null);
+      try {
+        const docRef = doc(db, "pressKitData", "liveAssets");
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          setPressKitAssets(docSnap.data() as PressKitAssets);
+          console.log("Press kit assets loaded:", docSnap.data());
+        } else {
+          console.log("No live press kit assets document found!");
+          setFetchError("Press kit assets are not available at the moment.");
+          setPressKitAssets({});
+        }
+      } catch (error) {
+        console.error("Error fetching press kit assets:", error);
+        setFetchError("Failed to load press kit assets. Please try again later.");
+        setPressKitAssets({});
+      } finally {
+        setIsLoadingAssets(false);
+      }
+    };
+
+    fetchPressKitAssets();
+  }, []);
 
   const sections = [
     {
@@ -116,7 +162,15 @@ const PressKit = () => {
                   With over 1,000 creators joining our founding class within 45 days of launch, Pulse is proving that fitness-minded individuals are hungry for a platform where they can not only consume but actively contribute to the collective fitness experience.
                 </p>
                 
-                <a href="#" className="mt-8 inline-flex items-center text-[#E0FE10] hover:text-white">
+                <a 
+                  href={pressKitAssets?.overviewPdf || '#'} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className={`mt-8 inline-flex items-center text-[#E0FE10] hover:text-white ${
+                    !pressKitAssets?.overviewPdf ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
+                  onClick={(e) => !pressKitAssets?.overviewPdf && e.preventDefault()}
+                >
                   <Download className="mr-2 h-5 w-5" />
                   Download full Overview PDF
                 </a>
@@ -205,7 +259,15 @@ const PressKit = () => {
                   </ul>
                 </div>
                 
-                <a href="#" className="mt-8 inline-flex items-center text-[#E0FE10] hover:text-white">
+                <a 
+                  href={pressKitAssets?.founderBioPdf || '#'} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className={`mt-8 inline-flex items-center text-[#E0FE10] hover:text-white ${
+                    !pressKitAssets?.founderBioPdf ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
+                  onClick={(e) => !pressKitAssets?.founderBioPdf && e.preventDefault()}
+                >
                   <Download className="mr-2 h-5 w-5" />
                   Download full bio and photos
                 </a>
@@ -216,7 +278,7 @@ const PressKit = () => {
               <div className="grid grid-cols-2 gap-6">
                 <div className="col-span-2 aspect-[4/3] bg-zinc-800 rounded-xl overflow-hidden relative group">
                   <img 
-                    src="/founder-landscape.jpg" 
+                    src={pressKitAssets?.founderLandscape || "/founder-landscape.jpg"} 
                     alt="Tremaine Grant - Landscape" 
                     className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                   />
@@ -229,7 +291,7 @@ const PressKit = () => {
                 </div>
                 <div className="aspect-[3/4] bg-zinc-800 rounded-xl overflow-hidden relative group">
                   <img 
-                    src="/founder-portrait-1.jpg" 
+                    src={pressKitAssets?.founderPortrait1 || "/founder-portrait-1.jpg"} 
                     alt="Tremaine Grant - Portrait 1" 
                     className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                   />
@@ -242,7 +304,7 @@ const PressKit = () => {
                 </div>
                 <div className="aspect-[3/4] bg-zinc-800 rounded-xl overflow-hidden relative group">
                   <img 
-                    src="/founder-portrait-2.jpg" 
+                    src={pressKitAssets?.founderPortrait2 || "/founder-portrait-2.jpg"} 
                     alt="Tremaine Grant - Portrait 2" 
                     className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                   />
@@ -300,7 +362,15 @@ const PressKit = () => {
                   </div>
                 </div>
                 
-                <a href="#" className="mt-8 inline-flex items-center text-[#E0FE10] hover:text-white">
+                <a 
+                  href={pressKitAssets?.productOnePagerPdf || '#'} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className={`mt-8 inline-flex items-center text-[#E0FE10] hover:text-white ${
+                    !pressKitAssets?.productOnePagerPdf ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
+                  onClick={(e) => !pressKitAssets?.productOnePagerPdf && e.preventDefault()}
+                >
                   <Download className="mr-2 h-5 w-5" />
                   Download full product overview
                 </a>
@@ -402,11 +472,11 @@ const PressKit = () => {
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             <div className="group">
-              <div className="aspect-video bg-zinc-800 rounded-xl overflow-hidden mb-4 relative">
+              <div className="aspect-video bg-white rounded-xl overflow-hidden mb-4 relative">
                 <img 
-                  src="/media-assets/logos-thumbnail.jpg" 
-                  alt="Pulse Logos" 
-                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                  src={pressKitAssets?.logoSigPng || pressKitAssets?.logoSigPng || "/media-assets/logos-thumbnail.jpg"} 
+                  alt="Pulse Logos Preview" 
+                  className="w-full h-full object-contain transition-transform duration-500 group-hover:scale-105 p-4"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end">
                   <div className="p-6">
@@ -621,7 +691,15 @@ const PressKit = () => {
           </div>
           
           <div className="mt-8 text-center">
-            <a href="#" className="inline-flex items-center text-[#E0FE10] hover:text-white">
+            <a 
+              href={pressKitAssets?.factCheckSheetPdf || '#'} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className={`inline-flex items-center text-[#E0FE10] hover:text-white ${
+                !pressKitAssets?.factCheckSheetPdf ? 'opacity-50 cursor-not-allowed' : ''
+              }`}
+              onClick={(e) => !pressKitAssets?.factCheckSheetPdf && e.preventDefault()}
+            >
               <Download className="mr-2 h-5 w-5" />
               Download complete fact-check sheet
             </a>
@@ -739,7 +817,15 @@ const PressKit = () => {
                 </div>
               </div>
               
-              <a href="#" className="mt-8 inline-flex items-center text-[#E0FE10] hover:text-white">
+              <a 
+                href={pressKitAssets?.talkingPointsFaqsPdf || '#'} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className={`mt-8 inline-flex items-center text-[#E0FE10] hover:text-white ${
+                  !pressKitAssets?.talkingPointsFaqsPdf ? 'opacity-50 cursor-not-allowed' : ''
+                }`}
+                onClick={(e) => !pressKitAssets?.talkingPointsFaqsPdf && e.preventDefault()}
+              >
                 <Download className="mr-2 h-5 w-5" />
                 Download complete talking points and FAQs
               </a>
@@ -878,8 +964,16 @@ const PressKit = () => {
                     </div>
                   </div>
                   
-                  <a href="#" className="block w-full bg-[#E0FE10] hover:bg-[#c8e40d] text-black font-medium py-3 px-6 rounded-lg text-center transition-colors">
-                    Download Complete Kit (42MB)
+                  <a 
+                    href={pressKitAssets?.completeKitZip || '#'} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className={`block w-full bg-[#E0FE10] hover:bg-[#c8e40d] text-black font-medium py-3 px-6 rounded-lg text-center transition-colors ${
+                      !pressKitAssets?.completeKitZip ? 'opacity-50 cursor-not-allowed' : ''
+                    }`}
+                    onClick={(e) => !pressKitAssets?.completeKitZip && e.preventDefault()}
+                  >
+                    Download Complete Kit ({(isLoadingAssets || !pressKitAssets) ? 'Calculating...' : '42MB'})
                   </a>
                 </div>
               </div>

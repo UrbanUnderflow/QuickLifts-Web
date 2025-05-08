@@ -1,33 +1,122 @@
 const Stripe = require('stripe');
-const { db } = require('./config/firebase'); // Assuming firebase config is in netlify/functions/config
-const { SubscriptionPlatform, SubscriptionType } = require('./models/Subscription'); // Assuming models are defined/required separately
-const { dateToUnixTimestamp } = require('./utils/formatDate'); // Assuming utils are defined/required separately
+const { db, isDevMode, initializeFirebaseAdmin } = require('./config/firebase'); // Import Firebase helpers
+const { SubscriptionPlatform, SubscriptionType } = require('./models/Subscription');
+const { dateToUnixTimestamp } = require('./utils/formatDate');
 
-// Initialize Stripe with your secret key
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+// Helper to determine if the request is from localhost
+const isLocalhostRequest = (event) => {
+  const referer = event.headers.referer || event.headers.origin || '';
+  return referer.includes('localhost') || referer.includes('127.0.0.1');
+};
+
+// Helper function to fix private key format issues
+const fixPrivateKey = (key) => {
+  // If there's no private key, return an empty string
+  if (!key) return '';
+  
+  // If the key has literal \n characters, replace them with actual newlines
+  if (key.includes('\\n')) {
+    return key.replace(/\\n/g, '\n');
+  }
+  
+  // If the key is already formatted properly, return it
+  if (key.includes('-----BEGIN PRIVATE KEY-----') && key.includes('-----END PRIVATE KEY-----')) {
+    return key;
+  }
+  
+  // If it's just the key material without markers, add them
+  return `-----BEGIN PRIVATE KEY-----\n${key}\n-----END PRIVATE KEY-----`;
+};
+
+// Initialize Stripe with the appropriate key based on environment
+const getStripeInstance = (event) => {
+  // Use test API key for localhost requests
+  if (isLocalhostRequest(event)) {
+    console.log('[VerifySubscription] Request from localhost, using TEST mode');
+    return new Stripe(process.env.STRIPE_TEST_SECRET_KEY);
+  }
+  
+  // Use live API key for production requests
+  console.log('[VerifySubscription] Request from production, using LIVE mode');
+  return new Stripe(process.env.STRIPE_SECRET_KEY);
+};
 
 // Helper to map Stripe Price ID to your SubscriptionType enum
-const getSubscriptionTypeFromPriceId = (priceId) => {
+const getSubscriptionTypeFromPriceId = (priceId, isTestMode) => {
     // --- IMPORTANT: Replace these with your ACTUAL Stripe Price IDs ---
-    const monthlyPriceId = 'price_1PDq26RobSf56MUOucDIKLhd';
-    const annualPriceId = 'price_1PDq3LRobSf56MUOng0UxhCC';
-    // Add more price IDs if needed
-    // --- ---
+    // Production price IDs
+    const LIVE_MONTHLY_PRICE_ID = 'price_1PDq26RobSf56MUOucDIKLhd';
+    const LIVE_ANNUAL_PRICE_ID = 'price_1PDq3LRobSf56MUOng0UxhCC';
+    
+    // Test price IDs
+    const TEST_MONTHLY_PRICE_ID = 'price_1RMIUNRobSf56MUOfeB4gIot';
+    const TEST_ANNUAL_PRICE_ID = 'price_1RMISFRobSf56MUOpcSoohjP';
 
+    console.log(`[VerifySubscription] Mapping price ID: ${priceId}, isTestMode: ${isTestMode}`);
+    
+    // Check if we're in test mode
+    if (isTestMode) {
+        switch (priceId) {
+            case TEST_MONTHLY_PRICE_ID:
+                return SubscriptionType.monthly;
+            case TEST_ANNUAL_PRICE_ID:
+                return SubscriptionType.annual;
+            default:
+                console.warn(`[VerifySubscription] Unknown TEST Price ID encountered: ${priceId}`);
+                // In test mode, be more lenient - assume it's a valid test price
+                if (priceId.startsWith('price_')) {
+                    console.log('[VerifySubscription] Assuming valid test price, defaulting to monthly');
+                    return SubscriptionType.monthly;
+                }
+                return SubscriptionType.unsubscribed;
+        }
+    }
+
+    // Production mode logic
     switch (priceId) {
-        case monthlyPriceId:
+        case LIVE_MONTHLY_PRICE_ID:
             return SubscriptionType.monthly;
-        case annualPriceId:
+        case LIVE_ANNUAL_PRICE_ID:
             return SubscriptionType.annual;
-        // Add more cases as needed
         default:
-            console.warn(`[VerifySubscription] Unknown Stripe Price ID encountered: ${priceId}`);
-            return SubscriptionType.unsubscribed; // Or handle as an error
+            console.warn(`[VerifySubscription] Unknown LIVE Price ID encountered: ${priceId}`);
+            return SubscriptionType.unsubscribed;
     }
 };
 
 const handler = async (event) => {
   console.log(`[VerifySubscription] Received ${event.httpMethod} request.`);
+  
+  // Check if we're in development mode (localhost)
+  const isDevRequest = isLocalhostRequest(event);
+  console.log(`[VerifySubscription] Environment: ${isDevRequest ? 'DEVELOPMENT' : 'PRODUCTION'}`);
+  
+  // Fix environment variables for private keys
+  if (isDevRequest && process.env.DEV_FIREBASE_SECRET_KEY) {
+    process.env.DEV_FIREBASE_SECRET_KEY = fixPrivateKey(process.env.DEV_FIREBASE_SECRET_KEY);
+    console.log('[VerifySubscription] Fixed DEV_FIREBASE_SECRET_KEY format');
+  }
+  
+  if (process.env.FIREBASE_SECRET_KEY) {
+    process.env.FIREBASE_SECRET_KEY = fixPrivateKey(process.env.FIREBASE_SECRET_KEY);
+    console.log('[VerifySubscription] Fixed FIREBASE_SECRET_KEY format');
+  }
+  
+  let admin;
+  let dynamicDb;
+  
+  try {
+    // Initialize Firebase with the appropriate project based on the request
+    admin = initializeFirebaseAdmin(event);
+    dynamicDb = admin.firestore();
+    console.log('[VerifySubscription] Firebase initialized for request');
+  } catch (error) {
+    console.error('[VerifySubscription] Error initializing Firebase:', error);
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ message: error.message || 'An unexpected error occurred.' }),
+    };
+  }
 
   if (event.httpMethod !== 'POST') {
     return {
@@ -57,6 +146,7 @@ const handler = async (event) => {
   try {
     // 1. Retrieve the session from Stripe
     console.log('[VerifySubscription] Retrieving session from Stripe...');
+    const stripe = getStripeInstance(event);
     const session = await stripe.checkout.sessions.retrieve(sessionId, {
       expand: ['subscription', 'customer', 'line_items.data.price.product'],
     });
@@ -89,7 +179,8 @@ const handler = async (event) => {
         return { statusCode: 500, body: JSON.stringify({ message: 'Could not retrieve necessary subscription details from Stripe.' }) };
     }
 
-    const subscriptionType = getSubscriptionTypeFromPriceId(priceId);
+    const isTestMode = isLocalhostRequest(event);
+    const subscriptionType = getSubscriptionTypeFromPriceId(priceId, isTestMode);
     if (subscriptionType === SubscriptionType.unsubscribed) {
         console.error(`[VerifySubscription] Could not map Price ID ${priceId} to SubscriptionType.`);
         return { statusCode: 500, body: JSON.stringify({ message: 'Internal error: Unknown subscription plan.' }) };
@@ -98,13 +189,13 @@ const handler = async (event) => {
 
     // 5. Update Firestore
     console.log('[VerifySubscription] Preparing Firestore updates...');
-    const batch = db.batch();
+    const batch = dynamicDb.batch();
     const now = new Date();
     // Note: Firestore Admin SDK usually handles Date objects directly, no need for manual conversion to timestamp usually
     // const nowTimestamp = dateToUnixTimestamp(now); // Use if your types/logic require it
 
     // 5a. Subscription record
-    const subscriptionRef = db.collection('subscriptions').doc(stripeSubscriptionId);
+    const subscriptionRef = dynamicDb.collection('subscriptions').doc(stripeSubscriptionId);
     const subscriptionData = {
         userId: userId,
         subscriptionType: subscriptionType, // Use the mapped enum value
@@ -117,8 +208,23 @@ const handler = async (event) => {
     batch.set(subscriptionRef, subscriptionData, { merge: true });
     console.log(`[VerifySubscription] Setting subscription doc: ${subscriptionRef.path}`);
 
-    // 5b. User record
-    const userRef = db.collection('users').doc(userId);
+    // 5b. User record - First check if user exists
+    const userRef = dynamicDb.collection('users').doc(userId);
+    const userDoc = await userRef.get();
+    
+    if (!userDoc.exists) {
+      console.error(`[VerifySubscription] User document not found: ${userRef.path}`);
+      return {
+        statusCode: 404,
+        body: JSON.stringify({
+          message: 'User document not found. If you are in development mode, please ensure you have created a user account first.',
+          error: 'NOT_FOUND',
+          details: 'The subscription was created in Stripe but could not be attached to your user account.'
+        })
+      };
+    }
+    
+    // User exists, proceed with update
     const userUpdateData = {
         subscriptionType: subscriptionType, // Use the mapped enum value
         subscriptionPlatform: SubscriptionPlatform.Web, // Use the enum value

@@ -8,10 +8,12 @@ import { useUser } from '../hooks/useUser'; // Import useUser to get the userId
 import authService from '../api/firebase/auth'; // Import authService
 import { signOut } from 'firebase/auth'; // Import signOut
 import { auth } from '../api/firebase/config'; // Import auth instance
+import { getStripePublishableKey, isLocalhost } from '../utils/stripeKey'; // Import our utility functions
+import SignInModal from '../components/SignInModal'; // Import SignInModal
 
 // Load Stripe outside of component render to avoid recreating on every render
-// Use NEXT_PUBLIC_ prefix for client-side environment variables
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '');
+// Use our utility function to automatically get the correct key based on environment
+const stripePromise = loadStripe(getStripePublishableKey());
 
 const Subscribe: React.FC = () => {
   const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'yearly'>('yearly');
@@ -20,29 +22,46 @@ const Subscribe: React.FC = () => {
   const currentUser = useUser(); // Get current user
   const [isMenuOpen, setIsMenuOpen] = useState(false); // State for dropdown menu
   const menuRef = useRef<HTMLDivElement>(null); // Ref for dropdown menu
+  const [isLocal, setIsLocal] = useState(false); // Track if running on localhost
+  const [isSignInModalOpen, setIsSignInModalOpen] = useState(false); // Control SignInModal visibility
 
-  // --- IMPORTANT: Replace with your ACTUAL Stripe Price IDs ---
-  const monthlyPriceId = 'price_1PDq26RobSf56MUOucDIKLhd';
-  const annualPriceId = 'price_1PDq3LRobSf56MUOng0UxhCC';
-  // --- ---
+  useEffect(() => {
+    setIsLocal(isLocalhost());
+  }, []);
+
+  // --- Live Stripe Price IDs ---
+  const LIVE_MONTHLY_PRICE_ID = 'price_1PDq26RobSf56MUOucDIKLhd';
+  const LIVE_ANNUAL_PRICE_ID = 'price_1PDq3LRobSf56MUOng0UxhCC';
+  
+  // --- Test Stripe Price IDs ---
+  // Using test price IDs that work in the Stripe test environment
+  const TEST_MONTHLY_PRICE_ID = 'price_1RMIUNRobSf56MUOfeB4gIot'; // Standard test price ID for monthly
+  const TEST_ANNUAL_PRICE_ID = 'price_1RMISFRobSf56MUOpcSoohjP'; // Standard test price ID for annual
+  
+  // Dynamically select the right price ID based on environment
+  const monthlyPriceId = isLocal ? TEST_MONTHLY_PRICE_ID : LIVE_MONTHLY_PRICE_ID;
+  const annualPriceId = isLocal ? TEST_ANNUAL_PRICE_ID : LIVE_ANNUAL_PRICE_ID;
 
   const handleSubscribeClick = async (planType: 'monthly' | 'yearly') => {
-    setIsLoading(true);
-    setError(null);
-
+    // Check if user is logged in first
     if (!currentUser) {
-      setError('Please sign in or sign up to subscribe.');
-      setIsLoading(false);
-      // Optionally, trigger sign-in modal here
-      console.error('[Subscribe] User not logged in.');
+      console.log('[Subscribe] User not logged in, showing sign-in modal');
+      setIsSignInModalOpen(true); // Show sign-in modal
       return;
     }
+
+    setIsLoading(true);
+    setError(null);
 
     const priceId = planType === 'monthly' ? monthlyPriceId : annualPriceId;
 
     try {
       // 1. Call your Netlify Function to create a Checkout Session
-      console.log('[Subscribe] Creating checkout session for:', { userId: currentUser.id, priceId });
+      console.log('[Subscribe] Creating checkout session for:', { 
+        userId: currentUser.id, 
+        priceId,
+        isTestMode: isLocal
+      });
       const response = await fetch('/.netlify/functions/create-checkout-session', {
         method: 'POST',
         headers: {
@@ -94,6 +113,12 @@ const Subscribe: React.FC = () => {
     } catch (error) {
       console.error("Error signing out:", error);
     }
+  };
+
+  // Handle sign in success
+  const handleSignInSuccess = (user: any) => {
+    console.log('[Subscribe] Sign in successful, closing modal');
+    setIsSignInModalOpen(false);
   };
 
   // Close dropdown when clicking outside
@@ -198,22 +223,41 @@ const Subscribe: React.FC = () => {
     <div className="min-h-screen bg-black">
       {/* Background gradient effects */}
       <div className="fixed inset-0 z-0 pointer-events-none">
-        <div className="absolute top-0 left-1/4 w-1/2 h-1/2 bg-[#E0FE10]/20 rounded-full blur-[150px] transform -translate-x-1/2 -translate-y-1/2"></div>
-        <div className="absolute bottom-0 right-1/4 w-1/2 h-1/2 bg-purple-600/20 rounded-full blur-[150px] transform translate-x-1/2 translate-y-1/2"></div>
-        <div className="absolute top-1/2 left-1/2 w-1/2 h-1/2 bg-blue-600/10 rounded-full blur-[150px] transform -translate-x-1/2 -translate-y-1/2"></div>
+        <div className="absolute top-0 left-1/4 w-1/2 h-1/2 bg-[#E0FE10]/10 blur-[150px] rounded-full transform -translate-y-1/2"></div>
+        <div className="absolute bottom-0 right-1/4 w-1/2 h-1/2 bg-[#E0FE10]/10 blur-[150px] rounded-full transform translate-y-1/2"></div>
       </div>
-
-      <div className="relative z-10">
-        {/* User Dropdown Menu */} 
-        {currentUser && (
-          <div className="absolute top-6 right-6 z-50">
+      
+      {/* Test Mode Indicator */}
+      {isLocal && (
+        <div className="fixed top-0 left-0 right-0 bg-yellow-500/90 text-black py-1 px-4 text-center text-sm z-50">
+          <strong>Test Mode:</strong> Using Stripe Test Environment - Payments won't be charged
+        </div>
+      )}
+      
+      {/* Sign In Modal */}
+      <SignInModal 
+        isVisible={isSignInModalOpen}
+        onClose={() => setIsSignInModalOpen(false)}
+        onSignInSuccess={handleSignInSuccess}
+        onSignUpSuccess={handleSignInSuccess}
+      />
+      
+      <div className={`flex min-h-screen flex-col items-center ${isLocal ? 'pt-8' : ''}`}>
+        
+        {/* Navigation */}
+        <nav className="w-full py-6 px-4 flex justify-between items-center max-w-7xl mx-auto">
+          {/* Logo */}
+          <a href="/" className="flex items-center gap-2">
+            <img src="/pulse-logo.svg" alt="Pulse Logo" className="h-8 w-auto" />
+          </a>
+          
+          {/* User Menu - Only show if logged in */}
+          {currentUser ? (
             <div className="relative" ref={menuRef}>
               <div 
                 className="inline-flex items-center gap-1.5 bg-zinc-800/80 backdrop-blur-sm rounded-full px-2 py-1 cursor-pointer hover:bg-zinc-700/80 transition-colors"
                 onClick={() => setIsMenuOpen(!isMenuOpen)}
                 role="button"
-                aria-haspopup="true"
-                aria-expanded={isMenuOpen}
                 aria-label={`User menu for ${currentUser.username}`}
               >
                 {currentUser.profileImage?.profileImageURL ? (
@@ -234,315 +278,325 @@ const Subscribe: React.FC = () => {
                   }`} 
                 />
               </div>
-              {/* Dropdown Content */} 
+              
               {isMenuOpen && (
-                <div className="absolute right-0 mt-2 w-48 bg-zinc-900 border border-zinc-700 rounded-lg shadow-lg py-1 z-50">
-                  <button
+                <div className="absolute right-0 mt-2 w-48 bg-zinc-800 rounded-lg shadow-xl z-10 overflow-hidden">
+                  <button 
                     onClick={handleSignOut}
-                    className="flex items-center w-full px-4 py-2 text-sm text-red-400 hover:bg-zinc-800 transition-colors"
+                    className="flex w-full items-center gap-2 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-700 hover:text-white transition-all"
                   >
-                    <LogOut size={14} className="mr-2" />
-                    Sign Out
+                    <LogOut size={16} />
+                    <span>Sign Out</span>
                   </button>
                 </div>
               )}
             </div>
-          </div>
-        )}
-
-        {/* Hero Section - Glassmorphic style */}
-        <section className="max-w-[1052.76px] mx-auto text-center pt-24 pb-16 px-4" ref={useScrollFade()}>
-          <h1 className={`${gradientText} text-6xl sm:text-7xl font-bold mb-6 tracking-tight`}>
-            Transform Your Fitness Journey
-          </h1>
-          <p className="text-white text-xl max-w-2xl mx-auto mb-6 leading-relaxed">
-            Join thousands of members who have elevated their workout experience with Pulse
-          </p>
-          <div className="flex items-center justify-center space-x-2 text-zinc-400">
-            <div className="flex">
-              {[1, 2, 3, 4, 5].map((star) => (
-                <Star key={star} fill="#E0FE10" color="#E0FE10" size={20} />
-              ))}
-            </div>
-            <span>4.9/5 from 2,000+ reviews</span>
-          </div>
-        </section>
-
-        {/* Limited Time Offer Banner */}
-        <div className={`${glassPrimary} py-3 text-center mb-16 mx-4 sm:mx-auto max-w-3xl rounded-full`}>
-          <p className="text-black font-bold text-lg flex items-center justify-center">
-            <Clock size={18} className="mr-2" />
-            Limited Time Offer: First month FREE + 33% saved annually
-          </p>
-        </div>
-
-        {/* Subscription Cards - Glassmorphic and with clear comparison */}
-        <section className="max-w-[1052.76px] mx-auto px-4 mb-24" ref={useScrollFade()}>
-          <div className="mb-12 text-center">
-            <h2 className="text-white text-3xl sm:text-4xl font-bold mb-4">
-              Choose Your <span className={gradientText}>Membership Plan</span>
-            </h2>
-            <p className="text-zinc-400">
-              All plans include full access to all features. Cancel anytime.
-            </p>
-          </div>
-
-          {/* Toggle between plans */}
-          <div className="flex justify-center mb-10">
-            <div className={`${glassBg} p-1 rounded-full inline-flex`}>
-              <button
-                className={`px-6 py-2 rounded-full text-sm font-medium transition-all duration-300 ${
-                  selectedPlan === 'monthly' 
-                    ? 'bg-white/10 text-white' 
-                    : 'bg-transparent text-zinc-400 hover:text-white'
-                }`}
-                onClick={() => setSelectedPlan('monthly')}
-              >
-                Monthly
-              </button>
-              <button
-                className={`px-6 py-2 rounded-full text-sm font-medium transition-all duration-300 ${
-                  selectedPlan === 'yearly' 
-                    ? 'bg-white/10 text-white' 
-                    : 'bg-transparent text-zinc-400 hover:text-white'
-                }`}
-                onClick={() => setSelectedPlan('yearly')}
-              >
-                Yearly <span className="text-[#E0FE10]">Save 33%</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Error Display */}
-          {error && (
-            <div className="my-4 p-4 bg-red-900 border border-red-700 text-red-200 rounded-lg text-center max-w-md mx-auto">
-              Error: {error}
-            </div>
-          )}
-
-          <div className="flex flex-col sm:flex-row justify-center items-stretch gap-8 max-w-4xl mx-auto">
-            {/* Monthly Plan */}
-            <div 
-              className={`${glassCard} relative flex-1 rounded-2xl overflow-hidden transition-all duration-500 ${
-                selectedPlan === 'monthly' 
-                  ? 'border-[#E0FE10]/30 scale-100 opacity-100 z-10' 
-                  : 'border-transparent scale-95 opacity-70'
-              }`}
-              style={{display: selectedPlan === 'monthly' ? 'block' : selectedPlan === 'yearly' ? 'none' : 'block'}}
-            >
-              <div className="p-8">
-                <div className="text-white text-2xl font-bold mb-2">Monthly Plan</div>
-                <div className="flex items-end mb-6">
-                  <span className="text-5xl font-bold text-white">$4.99</span>
-                  <span className="text-zinc-400 ml-2">/month</span>
-                </div>
-                
-                <ul className="space-y-4 mb-8">
-                  <li className="flex items-start">
-                    <CheckCircle className="text-[#E0FE10] mr-3 mt-1 flex-shrink-0" size={20} />
-                    <span className="text-zinc-300">Full access to all Pulse features</span>
-                  </li>
-                  <li className="flex items-start">
-                    <CheckCircle className="text-[#E0FE10] mr-3 mt-1 flex-shrink-0" size={20} />
-                    <span className="text-zinc-300">Access to new exercises added daily</span>
-                  </li>
-                  <li className="flex items-start">
-                    <CheckCircle className="text-[#E0FE10] mr-3 mt-1 flex-shrink-0" size={20} />
-                    <span className="text-zinc-300">Cancel anytime</span>
-                  </li>
-                </ul>
-                
-                <button
-                  onClick={() => handleSubscribeClick('monthly')}
-                  disabled={isLoading}
-                  className={`w-full py-4 rounded-full text-lg font-semibold transition-all ${glassSecondary} ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                >
-                  {isLoading ? 'Processing...' : 'Start Monthly Plan'}
-                </button>
-              </div>
-            </div>
-            
-            {/* Yearly Plan - Featured plan */}
-            <div 
-              className={`${glassCard} relative flex-1 rounded-2xl overflow-hidden transition-all duration-500 ${
-                selectedPlan === 'yearly' 
-                  ? 'border-[#E0FE10]/30 scale-100 opacity-100 z-10' 
-                  : 'border-transparent scale-95 opacity-70'
-              }`}
-              style={{display: selectedPlan === 'yearly' ? 'block' : selectedPlan === 'monthly' ? 'none' : 'block'}}
-            >
-              <div className="absolute top-0 w-full bg-[#E0FE10]/90 backdrop-blur-sm text-black py-1 text-center font-semibold">
-                MOST POPULAR — SAVE 33%
-              </div>
-              <div className="p-8 pt-12">
-                <div className="text-white text-2xl font-bold mb-2">Annual Plan</div>
-                <div className="flex items-end mb-2">
-                  <span className="text-5xl font-bold text-white">$39.99</span>
-                  <span className="text-zinc-400 ml-2">/year</span>
-                </div>
-                <div className="text-zinc-400 mb-6">Just $3.33/month</div>
-                
-                <ul className="space-y-4 mb-8">
-                  <li className="flex items-start">
-                    <CheckCircle className="text-[#E0FE10] mr-3 mt-1 flex-shrink-0" size={20} />
-                    <span className="text-zinc-300">All Monthly Plan features</span>
-                  </li>
-                  <li className="flex items-start">
-                    <CheckCircle className="text-[#E0FE10] mr-3 mt-1 flex-shrink-0" size={20} />
-                    <span className="text-zinc-300"><strong>33% savings</strong> vs monthly plan</span>
-                  </li>
-                  <li className="flex items-start">
-                    <CheckCircle className="text-[#E0FE10] mr-3 mt-1 flex-shrink-0" size={20} />
-                    <span className="text-zinc-300">Priority customer support</span>
-                  </li>
-                  <li className="flex items-start">
-                    <CheckCircle className="text-[#E0FE10] mr-3 mt-1 flex-shrink-0" size={20} />
-                    <span className="text-zinc-300">Early access to new features</span>
-                  </li>
-                </ul>
-                
-                <button
-                  onClick={() => handleSubscribeClick('yearly')}
-                  disabled={isLoading}
-                  className={`w-full py-4 rounded-full text-lg font-semibold transition-all ${glassPrimary} ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                >
-                  {isLoading ? 'Processing...' : 'Get Started — First Month Free'}
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Guarantee and Trust Elements */}
-          <div className={`${glassBg} flex flex-col sm:flex-row justify-center items-center gap-6 mt-10 text-center rounded-2xl p-4`}>
-            <div className="flex items-center text-zinc-300">
-              <Shield size={20} className="mr-2 text-[#E0FE10]" />
-              <span>Secure payment</span>
-            </div>
-            <div className="flex items-center text-zinc-300">
-              <Clock size={20} className="mr-2 text-[#E0FE10]" />
-              <span>Cancel anytime</span>
-            </div>
-          </div>
-        </section>
-
-        {/* Social Proof Section */}
-        <section className={`w-full ${glassBg} py-20 mb-24 relative overflow-hidden`} ref={useScrollFade()}>
-          {/* Background decoration */}
-          <div className="absolute -top-24 -left-24 w-48 h-48 bg-[#E0FE10]/10 rounded-full blur-[100px]"></div>
-          <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-[#E0FE10]/10 rounded-full blur-[100px]"></div>
-          
-          <div className="max-w-[1052.76px] mx-auto px-4 relative z-10">
-            <h2 className="text-white text-3xl sm:text-4xl font-bold mb-16 text-center">
-              Join <span className={gradientText}>100,000+ members</span> transforming their fitness journey
-            </h2>
-            
-            <div className="flex flex-wrap justify-center gap-8">
-              {testimonials.map((testimonial, index) => (
-                <div key={index} className={`${glassCard} rounded-2xl p-6 max-w-sm`}>
-                  <div className="flex mb-4">
-                    {[1, 2, 3, 4, 5].map((star) => (
-                      <Star 
-                        key={star} 
-                        fill={star <= testimonial.rating ? "#E0FE10" : "transparent"} 
-                        color="#E0FE10" 
-                        size={18} 
-                      />
-                    ))}
-                  </div>
-                  <p className="text-zinc-300 mb-6 line-clamp-6">"{testimonial.text}"</p>
-                  <div className="flex items-center">
-                    <span className="text-white font-medium">- {testimonial.name}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* Features Grid Section */}
-        <section className="max-w-[1052.76px] mx-auto px-4 py-24 relative" ref={useScrollFade()}>
-          {/* Background decoration */}
-          <div className="absolute -top-48 left-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-[120px]"></div>
-          <div className="absolute -bottom-48 right-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-[120px]"></div>
-
-          <div className="relative z-10 mb-16 text-center">
-            <h2 className="text-white text-3xl sm:text-4xl font-bold mb-4">
-              Everything you need for <span className={gradientText}>fitness success</span>
-            </h2>
-            <p className="text-zinc-400 max-w-2xl mx-auto">
-              Unlock all these features and more with your Pulse subscription
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 relative z-10">
-            {/* Feature cards */}
-            <div className={`${glassCard} rounded-2xl p-6 flex flex-col h-full hover:translate-y-[-8px]`}>
-              <div className="aspect-video bg-black/50 rounded-xl overflow-hidden mb-6">
-                <img src="/choose-body-parts-phone.png" alt="Body Part Selection" className="w-full h-full object-cover" />
-              </div>
-              <div className="text-white text-2xl font-bold mb-3">Body Part Selection</div>
-              <div className="text-zinc-400 text-base flex-grow">
-                Select exactly which body parts you want to workout, with instant access to complementary exercises.
-              </div>
-            </div>
-
-            <div className={`${glassCard} rounded-2xl p-6 flex flex-col h-full hover:translate-y-[-8px]`}>
-              <div className="aspect-video bg-black/50 rounded-xl overflow-hidden mb-6">
-                <img src="/discover-exercise-phone.png" alt="Exercise Discovery" className="w-full h-full object-cover" />
-              </div>
-              <div className="text-white text-2xl font-bold mb-3">Exercise Discovery</div>
-              <div className="text-zinc-400 text-base flex-grow">
-                Find your exercise, and create workouts that complement each other based off of cool exercise that you discover.
-              </div>
-            </div>
-
-            <div className={`${glassCard} rounded-2xl p-6 flex flex-col h-full hover:translate-y-[-8px]`}>
-              <div className="aspect-video bg-black/50 rounded-xl overflow-hidden mb-6">
-                <img src="/progress-log.png" alt="Progress Logs" className="w-full h-full object-cover" />
-              </div>
-              <div className="text-white text-2xl font-bold mb-3">Progress Logs</div>
-              <div className="text-zinc-400 text-base flex-grow">
-                Logging reps, sets, and weight allows you to view your history of every workout.
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-16 text-center relative z-10">
+          ) : (
             <button 
-              onClick={() => {
-                const element = document.getElementById('subscription-section');
-                element?.scrollIntoView({ behavior: 'smooth' });
-              }}
-              className={`${glassPrimary} px-10 py-4 rounded-full text-lg font-semibold`}
+              onClick={() => setIsSignInModalOpen(true)} 
+              className="text-white bg-white/10 rounded-full py-2 px-4 hover:bg-white/20 transition-all"
             >
-              Get Started Today
+              Sign In
             </button>
-          </div>
-        </section>
+          )}
+        </nav>
 
-        {/* FAQ Section - Glassmorphic */}
-        <section className={`${glassBg} py-24 relative overflow-hidden`} ref={useScrollFade()}>
-          {/* Background decoration */}
-          <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-[#E0FE10]/5 to-transparent"></div>
-
-          <div className="max-w-[1052.76px] mx-auto px-4 relative z-10">
-            <h2 className="text-white text-3xl sm:text-4xl font-bold mb-16 text-center">
-              Frequently Asked <span className={gradientText}>Questions</span>
-            </h2>
-
-            <div className="max-w-3xl mx-auto">
-              {faqData.map((item, index) => (
-                <div key={index} className={`${glassCard} mb-6 rounded-2xl p-6`}>
-                  <h3 className="text-white text-xl font-medium mb-3">{item.question}</h3>
-                  <p className="text-zinc-400">{item.answer}</p>
-                </div>
-              ))}
+        {/* Page Content */}
+        <main className="flex-1 w-full max-w-7xl mx-auto px-4 py-12">
+          {/* Hero Section - Glassmorphic style */}
+          <section className="max-w-[1052.76px] mx-auto text-center pt-24 pb-16 px-4" ref={useScrollFade()}>
+            <h1 className={`${gradientText} text-6xl sm:text-7xl font-bold mb-6 tracking-tight`}>
+              Transform Your Fitness Journey
+            </h1>
+            <p className="text-white text-xl max-w-2xl mx-auto mb-6 leading-relaxed">
+              Join thousands of members who have elevated their workout experience with Pulse
+            </p>
+            <div className="flex items-center justify-center space-x-2 text-zinc-400">
+              <div className="flex">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <Star key={star} fill="#E0FE10" color="#E0FE10" size={20} />
+                ))}
+              </div>
+              <span>4.9/5 from 2,000+ reviews</span>
             </div>
-          </div>
-        </section>
+          </section>
 
-        {/* Final CTA Section */}
-        {/* ... (existing final CTA section code) ... */}
+          {/* Limited Time Offer Banner */}
+          <div className={`${glassPrimary} py-3 text-center mb-16 mx-4 sm:mx-auto max-w-3xl rounded-full`}>
+            <p className="text-black font-bold text-lg flex items-center justify-center">
+              <Clock size={18} className="mr-2" />
+              Limited Time Offer: First month FREE + 33% saved annually
+            </p>
+          </div>
+
+          {/* Subscription Cards - Glassmorphic and with clear comparison */}
+          <section className="max-w-[1052.76px] mx-auto px-4 mb-24" ref={useScrollFade()}>
+            <div className="mb-12 text-center">
+              <h2 className="text-white text-3xl sm:text-4xl font-bold mb-4">
+                Choose Your <span className={gradientText}>Membership Plan</span>
+              </h2>
+              <p className="text-zinc-400">
+                All plans include full access to all features. Cancel anytime.
+              </p>
+            </div>
+
+            {/* Toggle between plans */}
+            <div className="flex justify-center mb-10">
+              <div className={`${glassBg} p-1 rounded-full inline-flex`}>
+                <button
+                  className={`px-6 py-2 rounded-full text-sm font-medium transition-all duration-300 ${
+                    selectedPlan === 'monthly' 
+                      ? 'bg-white/10 text-white' 
+                      : 'bg-transparent text-zinc-400 hover:text-white'
+                  }`}
+                  onClick={() => setSelectedPlan('monthly')}
+                >
+                  Monthly
+                </button>
+                <button
+                  className={`px-6 py-2 rounded-full text-sm font-medium transition-all duration-300 ${
+                    selectedPlan === 'yearly' 
+                      ? 'bg-white/10 text-white' 
+                      : 'bg-transparent text-zinc-400 hover:text-white'
+                  }`}
+                  onClick={() => setSelectedPlan('yearly')}
+                >
+                  Yearly <span className="text-[#E0FE10]">Save 33%</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Error Display */}
+            {error && (
+              <div className="my-4 p-4 bg-red-900 border border-red-700 text-red-200 rounded-lg text-center max-w-md mx-auto">
+                Error: {error}
+              </div>
+            )}
+
+            <div className="flex flex-col sm:flex-row justify-center items-stretch gap-8 max-w-4xl mx-auto">
+              {/* Monthly Plan */}
+              <div 
+                className={`${glassCard} relative flex-1 rounded-2xl overflow-hidden transition-all duration-500 ${
+                  selectedPlan === 'monthly' 
+                    ? 'border-[#E0FE10]/30 scale-100 opacity-100 z-10' 
+                    : 'border-transparent scale-95 opacity-70'
+                }`}
+                style={{display: selectedPlan === 'monthly' ? 'block' : selectedPlan === 'yearly' ? 'none' : 'block'}}
+              >
+                <div className="p-8">
+                  <div className="text-white text-2xl font-bold mb-2">Monthly Plan</div>
+                  <div className="flex items-end mb-6">
+                    <span className="text-5xl font-bold text-white">$4.99</span>
+                    <span className="text-zinc-400 ml-2">/month</span>
+                  </div>
+                  
+                  <ul className="space-y-4 mb-8">
+                    <li className="flex items-start">
+                      <CheckCircle className="text-[#E0FE10] mr-3 mt-1 flex-shrink-0" size={20} />
+                      <span className="text-zinc-300">Full access to all Pulse features</span>
+                    </li>
+                    <li className="flex items-start">
+                      <CheckCircle className="text-[#E0FE10] mr-3 mt-1 flex-shrink-0" size={20} />
+                      <span className="text-zinc-300">Access to new exercises added daily</span>
+                    </li>
+                    <li className="flex items-start">
+                      <CheckCircle className="text-[#E0FE10] mr-3 mt-1 flex-shrink-0" size={20} />
+                      <span className="text-zinc-300">Cancel anytime</span>
+                    </li>
+                  </ul>
+                  
+                  <button
+                    onClick={() => handleSubscribeClick('monthly')}
+                    disabled={isLoading}
+                    className={`w-full py-4 rounded-full text-lg font-semibold transition-all ${glassSecondary} ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    {isLoading ? 'Processing...' : 'Start Monthly Plan'}
+                  </button>
+                </div>
+              </div>
+              
+              {/* Yearly Plan - Featured plan */}
+              <div 
+                className={`${glassCard} relative flex-1 rounded-2xl overflow-hidden transition-all duration-500 ${
+                  selectedPlan === 'yearly' 
+                    ? 'border-[#E0FE10]/30 scale-100 opacity-100 z-10' 
+                    : 'border-transparent scale-95 opacity-70'
+                }`}
+                style={{display: selectedPlan === 'yearly' ? 'block' : selectedPlan === 'monthly' ? 'none' : 'block'}}
+              >
+                <div className="absolute top-0 w-full bg-[#E0FE10]/90 backdrop-blur-sm text-black py-1 text-center font-semibold">
+                  MOST POPULAR — SAVE 33%
+                </div>
+                <div className="p-8 pt-12">
+                  <div className="text-white text-2xl font-bold mb-2">Annual Plan</div>
+                  <div className="flex items-end mb-2">
+                    <span className="text-5xl font-bold text-white">$39.99</span>
+                    <span className="text-zinc-400 ml-2">/year</span>
+                  </div>
+                  <div className="text-zinc-400 mb-6">Just $3.33/month</div>
+                  
+                  <ul className="space-y-4 mb-8">
+                    <li className="flex items-start">
+                      <CheckCircle className="text-[#E0FE10] mr-3 mt-1 flex-shrink-0" size={20} />
+                      <span className="text-zinc-300">All Monthly Plan features</span>
+                    </li>
+                    <li className="flex items-start">
+                      <CheckCircle className="text-[#E0FE10] mr-3 mt-1 flex-shrink-0" size={20} />
+                      <span className="text-zinc-300"><strong>33% savings</strong> vs monthly plan</span>
+                    </li>
+                    <li className="flex items-start">
+                      <CheckCircle className="text-[#E0FE10] mr-3 mt-1 flex-shrink-0" size={20} />
+                      <span className="text-zinc-300">Priority customer support</span>
+                    </li>
+                    <li className="flex items-start">
+                      <CheckCircle className="text-[#E0FE10] mr-3 mt-1 flex-shrink-0" size={20} />
+                      <span className="text-zinc-300">Early access to new features</span>
+                    </li>
+                  </ul>
+                  
+                  <button
+                    onClick={() => handleSubscribeClick('yearly')}
+                    disabled={isLoading}
+                    className={`w-full py-4 rounded-full text-lg font-semibold transition-all ${glassPrimary} ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    {isLoading ? 'Processing...' : 'Get Started — First Month Free'}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Guarantee and Trust Elements */}
+            <div className={`${glassBg} flex flex-col sm:flex-row justify-center items-center gap-6 mt-10 text-center rounded-2xl p-4`}>
+              <div className="flex items-center text-zinc-300">
+                <Shield size={20} className="mr-2 text-[#E0FE10]" />
+                <span>Secure payment</span>
+              </div>
+              <div className="flex items-center text-zinc-300">
+                <Clock size={20} className="mr-2 text-[#E0FE10]" />
+                <span>Cancel anytime</span>
+              </div>
+            </div>
+          </section>
+
+          {/* Social Proof Section */}
+          <section className={`w-full ${glassBg} py-20 mb-24 relative overflow-hidden`} ref={useScrollFade()}>
+            {/* Background decoration */}
+            <div className="absolute -top-24 -left-24 w-48 h-48 bg-[#E0FE10]/10 rounded-full blur-[100px]"></div>
+            <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-[#E0FE10]/10 rounded-full blur-[100px]"></div>
+            
+            <div className="max-w-[1052.76px] mx-auto px-4 relative z-10">
+              <h2 className="text-white text-3xl sm:text-4xl font-bold mb-16 text-center">
+                Join <span className={gradientText}>100,000+ members</span> transforming their fitness journey
+              </h2>
+              
+              <div className="flex flex-wrap justify-center gap-8">
+                {testimonials.map((testimonial, index) => (
+                  <div key={index} className={`${glassCard} rounded-2xl p-6 max-w-sm`}>
+                    <div className="flex mb-4">
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <Star 
+                          key={star} 
+                          fill={star <= testimonial.rating ? "#E0FE10" : "transparent"} 
+                          color="#E0FE10" 
+                          size={18} 
+                        />
+                      ))}
+                    </div>
+                    <p className="text-zinc-300 mb-6 line-clamp-6">"{testimonial.text}"</p>
+                    <div className="flex items-center">
+                      <span className="text-white font-medium">- {testimonial.name}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          {/* Features Grid Section */}
+          <section className="max-w-[1052.76px] mx-auto px-4 py-24 relative" ref={useScrollFade()}>
+            {/* Background decoration */}
+            <div className="absolute -top-48 left-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-[120px]"></div>
+            <div className="absolute -bottom-48 right-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-[120px]"></div>
+
+            <div className="relative z-10 mb-16 text-center">
+              <h2 className="text-white text-3xl sm:text-4xl font-bold mb-4">
+                Everything you need for <span className={gradientText}>fitness success</span>
+              </h2>
+              <p className="text-zinc-400 max-w-2xl mx-auto">
+                Unlock all these features and more with your Pulse subscription
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 relative z-10">
+              {/* Feature cards */}
+              <div className={`${glassCard} rounded-2xl p-6 flex flex-col h-full hover:translate-y-[-8px]`}>
+                <div className="aspect-video bg-black/50 rounded-xl overflow-hidden mb-6">
+                  <img src="/choose-body-parts-phone.png" alt="Body Part Selection" className="w-full h-full object-cover" />
+                </div>
+                <div className="text-white text-2xl font-bold mb-3">Body Part Selection</div>
+                <div className="text-zinc-400 text-base flex-grow">
+                  Select exactly which body parts you want to workout, with instant access to complementary exercises.
+                </div>
+              </div>
+
+              <div className={`${glassCard} rounded-2xl p-6 flex flex-col h-full hover:translate-y-[-8px]`}>
+                <div className="aspect-video bg-black/50 rounded-xl overflow-hidden mb-6">
+                  <img src="/discover-exercise-phone.png" alt="Exercise Discovery" className="w-full h-full object-cover" />
+                </div>
+                <div className="text-white text-2xl font-bold mb-3">Exercise Discovery</div>
+                <div className="text-zinc-400 text-base flex-grow">
+                  Find your exercise, and create workouts that complement each other based off of cool exercise that you discover.
+                </div>
+              </div>
+
+              <div className={`${glassCard} rounded-2xl p-6 flex flex-col h-full hover:translate-y-[-8px]`}>
+                <div className="aspect-video bg-black/50 rounded-xl overflow-hidden mb-6">
+                  <img src="/progress-log.png" alt="Progress Logs" className="w-full h-full object-cover" />
+                </div>
+                <div className="text-white text-2xl font-bold mb-3">Progress Logs</div>
+                <div className="text-zinc-400 text-base flex-grow">
+                  Logging reps, sets, and weight allows you to view your history of every workout.
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-16 text-center relative z-10">
+              <button 
+                onClick={() => {
+                  const element = document.getElementById('subscription-section');
+                  element?.scrollIntoView({ behavior: 'smooth' });
+                }}
+                className={`${glassPrimary} px-10 py-4 rounded-full text-lg font-semibold`}
+              >
+                Get Started Today
+              </button>
+            </div>
+          </section>
+
+          {/* FAQ Section - Glassmorphic */}
+          <section className={`${glassBg} py-24 relative overflow-hidden`} ref={useScrollFade()}>
+            {/* Background decoration */}
+            <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-[#E0FE10]/5 to-transparent"></div>
+
+            <div className="max-w-[1052.76px] mx-auto px-4 relative z-10">
+              <h2 className="text-white text-3xl sm:text-4xl font-bold mb-16 text-center">
+                Frequently Asked <span className={gradientText}>Questions</span>
+              </h2>
+
+              <div className="max-w-3xl mx-auto">
+                {faqData.map((item, index) => (
+                  <div key={index} className={`${glassCard} mb-6 rounded-2xl p-6`}>
+                    <h3 className="text-white text-xl font-medium mb-3">{item.question}</h3>
+                    <p className="text-zinc-400">{item.answer}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          {/* Final CTA Section */}
+          {/* ... (existing final CTA section code) ... */}
+        </main>
       </div>
     </div>
   );

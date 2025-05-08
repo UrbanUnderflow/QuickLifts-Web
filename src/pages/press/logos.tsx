@@ -3,24 +3,36 @@ import Head from 'next/head';
 import React, { useState, useEffect } from 'react';
 // Remove Firebase imports if only displaying data fetched elsewhere
 // import { firebaseStorageService, UploadResult } from '../../api/firebase/storage/service'; 
-import { Download, FileImage, X } from 'lucide-react'; // Removed Upload, Trash2, Added X
+import { Download, FileImage, X, Loader2 } from 'lucide-react'; // Removed Upload, Trash2, Added X and Loader2
 import Footer from '../../components/Footer/Footer';
 // import Header from '../../components/Header'; // Optional: Add header if needed
+import { doc, getDoc } from 'firebase/firestore'; // Added Firestore imports
+import { db } from '../../api/firebase/config'; // Added db import
 
-// Define structure for logo data
-interface LogoAsset {
-  id: string; // Unique ID (e.g., Firestore doc ID or filename)
-  name: string;
+// Define structure for logo data to be displayed
+interface DisplayLogoAsset {
+  id: string; // e.g., 'logoSigSvg'
+  name: string; // e.g., 'Pulse Signature.svg'
   url: string;
   fileType: string; // e.g., 'image/svg+xml', 'image/png'
 }
 
-// Remove storage path if not uploading from this page
-// const LOGO_STORAGE_PATH = 'press_assets/logos';
+// Expected structure from Firestore (matches AssetType keys for logos)
+interface PressKitLogoAssets {
+  logoSigSvg?: string;
+  logoSigPng?: string;
+  logoWhiteSvg?: string;
+  logoWhitePng?: string;
+  logoBlackSvg?: string;
+  logoBlackPng?: string;
+  logoGreenSvg?: string;
+  logoGreenPng?: string;
+  // Potentially other non-logo assets might be in the document, but we'll filter
+}
 
 const PressLogosPage: NextPage = () => {
   // State to hold logos fetched from backend
-  const [logos, setLogos] = useState<LogoAsset[]>([]);
+  const [logos, setLogos] = useState<DisplayLogoAsset[]>([]);
   const [isLoading, setIsLoading] = useState(true); // State to track loading
   const [fetchError, setFetchError] = useState<string | null>(null);
 
@@ -30,30 +42,46 @@ const PressLogosPage: NextPage = () => {
       setIsLoading(true);
       setFetchError(null);
       try {
-        // --- TODO: Implement actual fetching logic here ---
-        console.log('Simulating fetching logos...');
-        await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate network delay
-        // Example simulated data:
-        const fetchedLogos: LogoAsset[] = [
-          // Pulse Signature
-          { id: 'sig-svg', name: 'Pulse Signature.svg', url: '/placeholder/signature.svg', fileType: 'image/svg+xml' },
-          { id: 'sig-png', name: 'Pulse Signature.png', url: '/placeholder/signature.png', fileType: 'image/png' },
-          // Pulse White
-          { id: 'white-svg', name: 'Pulse White.svg', url: '/placeholder/logo_light.svg', fileType: 'image/svg+xml' }, // Assuming light is white
-          { id: 'white-png', name: 'Pulse White.png', url: '/placeholder/logo_light.png', fileType: 'image/png' }, // Assuming light is white
-          // Pulse Black
-          { id: 'black-svg', name: 'Pulse Black.svg', url: '/placeholder/logo_dark.svg', fileType: 'image/svg+xml' }, // Assuming dark is black
-          { id: 'black-png', name: 'Pulse Black.png', url: '/placeholder/logo_dark.png', fileType: 'image/png' }, // Assuming dark is black
-          // Pulse Green (Assuming a specific green logo exists)
-          { id: 'green-svg', name: 'Pulse Green.svg', url: '/placeholder/logo_green.svg', fileType: 'image/svg+xml' },
-          { id: 'green-png', name: 'Pulse Green.png', url: '/placeholder/logo_green.png', fileType: 'image/png' },
-          // Pulse Icon (Keeping existing icons for variety)
-          { id: 'icon-dark-svg', name: 'Pulse Icon Dark.svg', url: '/placeholder/icon_dark.svg', fileType: 'image/svg+xml' },
-          { id: 'icon-light-svg', name: 'Pulse Icon Light.svg', url: '/placeholder/icon_light.svg', fileType: 'image/svg+xml' },
-        ];
-        // --- End of TODO ---
+        const docRef = doc(db, "pressKitData", "liveAssets");
+        const docSnap = await getDoc(docRef);
 
-        setLogos(fetchedLogos);
+        if (docSnap.exists()) {
+          const allAssets = docSnap.data() as PressKitLogoAssets;
+          const fetchedLogos: DisplayLogoAsset[] = [];
+
+          // Manually map known logo keys from allAssets to DisplayLogoAsset structure
+          // This ensures we only pick up logo-related URLs
+          const logoMappings: { key: keyof PressKitLogoAssets; name: string; type: string }[] = [
+            { key: 'logoSigSvg', name: 'Pulse Signature.svg', type: 'image/svg+xml' },
+            { key: 'logoSigPng', name: 'Pulse Signature.png', type: 'image/png' },
+            { key: 'logoWhiteSvg', name: 'Pulse White.svg', type: 'image/svg+xml' },
+            { key: 'logoWhitePng', name: 'Pulse White.png', type: 'image/png' },
+            { key: 'logoBlackSvg', name: 'Pulse Black.svg', type: 'image/svg+xml' },
+            { key: 'logoBlackPng', name: 'Pulse Black.png', type: 'image/png' },
+            { key: 'logoGreenSvg', name: 'Pulse Green.svg', type: 'image/svg+xml' },
+            { key: 'logoGreenPng', name: 'Pulse Green.png', type: 'image/png' },
+          ];
+
+          logoMappings.forEach(mapping => {
+            if (allAssets[mapping.key]) {
+              fetchedLogos.push({
+                id: mapping.key,
+                name: mapping.name,
+                url: allAssets[mapping.key]!,
+                fileType: mapping.type,
+              });
+            }
+          });
+          
+          setLogos(fetchedLogos);
+          if (fetchedLogos.length === 0) {
+            console.log("Live assets document exists, but no recognizable logo URLs found.");
+            // setFetchError("No logos are currently available."); // Or just show empty state
+          }
+        } else {
+          console.log("No live press kit assets document found!");
+          setFetchError("Logo assets are not available at the moment.");
+        }
       } catch (error) {
         console.error("Failed to fetch logos:", error);
         setFetchError("Failed to load logos. Please try again later.");
@@ -116,30 +144,46 @@ const PressLogosPage: NextPage = () => {
         {/* Logo Grid */} 
         {!isLoading && !fetchError && logos.length > 0 && (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {logos.map((logo) => (
-              <div key={logo.id} className="group relative bg-zinc-800 rounded-xl p-4 aspect-video flex items-center justify-center overflow-hidden">
-                <img 
-                  src={logo.url} 
-                  alt={logo.name} 
-                  className="max-w-full max-h-24 object-contain transition-transform duration-300 group-hover:scale-105"
-                />
-                {/* Overlay */} 
-                <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center p-4 text-center">
-                  <p className="text-white text-sm font-medium mb-2 truncate w-full" title={logo.name}>{logo.name}</p>
-                  <a 
-                    href={logo.url} 
-                    download={logo.name} // Use the name for the downloaded file
-                    target="_blank" // Good practice for downloads
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center px-4 py-2 bg-[#E0FE10] text-black rounded-full text-xs font-medium hover:bg-[#c8e40d] transition-colors"
-                    aria-label={`Download ${logo.name}`}
-                  >
-                    <Download className="w-3 h-3 mr-1.5" />
-                    Download
-                  </a>
+            {logos.map((logo) => {
+              console.log("LOGOS_PAGE - Rendering logo:", logo.name, "URL:", logo.url, "Type:", logo.fileType);
+              const isSignatureLogo = logo.id === 'logoSigSvg' || logo.id === 'logoSigPng';
+              const isBlackLogo = logo.id === 'logoBlackSvg' || logo.id === 'logoBlackPng';
+              // Card background should be white if it's a signature logo OR a black logo
+              const cardBgClass = (isSignatureLogo || isBlackLogo) ? 'bg-white' : 'bg-zinc-800';
+
+              return (
+                <div 
+                  key={logo.id} 
+                  className={`group relative ${cardBgClass} rounded-xl p-4 aspect-video flex items-center justify-center overflow-hidden`}
+                >
+                  <img 
+                    src={logo.url} 
+                    alt={logo.name} 
+                    className="max-w-full max-h-24 object-contain transition-transform duration-300 group-hover:scale-105"
+                  />
+                  {/* Restore Overlay and complex download button */}
+                  <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center p-4 text-center">
+                    <p 
+                      className={`text-sm font-medium mb-2 truncate w-full text-[#E0FE10]`}
+                      title={logo.name}
+                    >
+                      {logo.name}
+                    </p>
+                    <a 
+                      href={logo.url} 
+                      download={logo.name} // Use the name for the downloaded file
+                      target="_blank" // Good practice for downloads
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center px-4 py-2 bg-[#E0FE10] text-black rounded-full text-xs font-medium hover:bg-[#c8e40d] transition-colors"
+                      aria-label={`Download ${logo.name}`}
+                    >
+                      <Download className="w-3 h-3 mr-1.5" />
+                      Download
+                    </a>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 

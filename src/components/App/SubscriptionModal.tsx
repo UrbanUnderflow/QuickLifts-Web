@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
+import { isLocalhost } from '../../utils/stripeKey';
 
 interface SubscriptionModalProps {
     isVisible: boolean;  // Changed from isOpen to isVisible
@@ -8,9 +9,30 @@ interface SubscriptionModalProps {
 
 const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ isVisible, onClose }) => {
   if (!isVisible) return null;
+  
+  const [isLocal, setIsLocal] = useState(false);
+  
+  useEffect(() => {
+    setIsLocal(isLocalhost());
+  }, []);
 
   const openPaymentLink = (url: string) => {
-    window.open(url, '_blank');
+    // If on localhost, use test payment links
+    if (isLocal) {
+      // These should be your test payment links from Stripe dashboard
+      // REPLACE THESE WITH YOUR ACTUAL TEST PAYMENT LINKS FROM STRIPE DASHBOARD
+      const testLinks: {[key: string]: string} = {
+        'https://buy.stripe.com/9AQaFieX9bv26fSfYY': 'https://buy.stripe.com/test_dR6dTxeUFgDwbJueUV', // Test Monthly Link
+        'https://buy.stripe.com/28obJm2an8iQdIk289': 'https://buy.stripe.com/test_fZe9Dh7sdaf86pafYY', // Test Annual Link
+      };
+      
+      const testUrl = testLinks[url] || url;
+      console.log(`[SubscriptionModal] Running on localhost, redirecting to test payment link: ${testUrl}`);
+      window.open(testUrl, '_blank');
+    } else {
+      // In production, use the regular payment links
+      window.open(url, '_blank');
+    }
   };
 
   return (
@@ -30,6 +52,25 @@ const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ isVisible, onClos
             Join The Fitness Collective
           </h2>
           <p className="text-zinc-400">First month on us!</p>
+          {isLocal && (
+            <div className="mt-2 px-3 py-1 bg-yellow-500/20 text-yellow-300 text-xs rounded-full inline-block">
+              Test Mode: Using Stripe Test Environment
+            </div>
+          )}
+          
+          {isLocal && (
+            <div className="mt-4 p-4 bg-yellow-500/10 text-yellow-300 text-sm rounded-lg border border-yellow-500/20">
+              <p className="font-semibold mb-2">⚠️ Test mode detected</p>
+              <p className="mb-2">You need to create test price IDs in your Stripe Dashboard to properly test subscriptions on localhost.</p>
+              <ol className="list-decimal list-inside space-y-1 text-xs">
+                <li>Go to the Stripe Dashboard in test mode</li>
+                <li>Navigate to Products &gt; Add Product</li>
+                <li>Create the same products with the same prices as your live mode</li>
+                <li>Copy the test price IDs and update the test links in this component</li>
+                <li>Copy the test price IDs to your subscribe.tsx file</li>
+              </ol>
+            </div>
+          )}
         </div>
 
         {/* Features List */}

@@ -5,66 +5,96 @@
  * It doesn't try to load Firebase or any other libraries to avoid initialization errors.
  */
 
-exports.handler = async (event) => {
-  const headers = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
-    'Access-Control-Allow-Methods': 'GET, OPTIONS',
-    'Content-Type': 'application/json'
-  };
-
-  // Handle OPTIONS request for CORS
-  if (event.httpMethod === 'OPTIONS') {
+const handler = async (event) => {
+  try {
+    const isLocalhost = event.headers.referer?.includes('localhost') || event.headers.origin?.includes('localhost');
+    
+    // Define required environment variables
+    const requiredVars = {
+      common: [
+        'FIREBASE_SECRET_KEY',
+        'FIREBASE_PRIVATE_KEY',
+        'STRIPE_SECRET_KEY',
+        'STRIPE_TEST_SECRET_KEY',
+      ],
+      production: [
+        'FIREBASE_PROJECT_ID',
+        'FIREBASE_CLIENT_EMAIL',
+      ],
+      development: [
+        'DEV_FIREBASE_PROJECT_ID',
+        'DEV_FIREBASE_CLIENT_EMAIL',
+      ]
+    };
+    
+    // Check environment variables
+    const results = {
+      environment: isLocalhost ? 'development' : 'production',
+      timestamp: new Date().toISOString(),
+      variables: {}
+    };
+    
+    // Check common variables
+    requiredVars.common.forEach(varName => {
+      results.variables[varName] = process.env[varName] ? 'PRESENT' : 'MISSING';
+    });
+    
+    // Check environment-specific variables
+    const envVars = isLocalhost ? requiredVars.development : requiredVars.production;
+    envVars.forEach(varName => {
+      results.variables[varName] = process.env[varName] ? 'PRESENT' : 'MISSING';
+    });
+    
+    // Add Firebase project details
+    if (isLocalhost) {
+      results.firebaseProject = {
+        id: process.env.DEV_FIREBASE_PROJECT_ID || 'Not set',
+        clientEmail: process.env.DEV_FIREBASE_CLIENT_EMAIL 
+          ? process.env.DEV_FIREBASE_CLIENT_EMAIL.substring(0, 5) + '...' 
+          : 'Not set'
+      };
+    } else {
+      results.firebaseProject = {
+        id: process.env.FIREBASE_PROJECT_ID || 'Not set',
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL 
+          ? process.env.FIREBASE_CLIENT_EMAIL.substring(0, 5) + '...' 
+          : 'Not set'
+      };
+    }
+    
+    // Add Stripe details (don't expose keys)
+    results.stripe = {
+      liveKeyPresent: !!process.env.STRIPE_SECRET_KEY,
+      testKeyPresent: !!process.env.STRIPE_TEST_SECRET_KEY
+    };
+    
     return {
       statusCode: 200,
-      headers,
-      body: ''
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*'
+      },
+      body: JSON.stringify({
+        success: true,
+        message: 'Environment check completed',
+        data: results
+      })
+    };
+  } catch (error) {
+    console.error('[check-env] Error:', error);
+    return {
+      statusCode: 500,
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*'
+      },
+      body: JSON.stringify({
+        success: false,
+        message: 'Error checking environment variables',
+        error: error.message
+      })
     };
   }
+};
 
-  // Environment variables to check (doesn't show actual values for security)
-  const envVarStatus = {
-    // Firebase variables
-    FIREBASE_SECRET_KEY: !!process.env.FIREBASE_SECRET_KEY,
-    FIREBASE_PRIVATE_KEY: !!process.env.FIREBASE_PRIVATE_KEY,
-    FIREBASE_PRIVATE_KEY_ALT: !!process.env.FIREBASE_PRIVATE_KEY_ALT,
-    FIREBASE_SECRET_KEY_ALT: !!process.env.FIREBASE_SECRET_KEY_ALT,
-    
-    // Stripe variables 
-    STRIPE_SECRET_KEY: !!process.env.STRIPE_SECRET_KEY,
-    STRIPE_PUBLISHABLE_KEY: !!process.env.STRIPE_PUBLISHABLE_KEY,
-    STRIPE_ENDPOINT_SECRET: !!process.env.STRIPE_ENDPOINT_SECRET,
-    
-    // Next.js public values
-    NEXT_PUBLIC_FIREBASE_API_KEY: !!process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: !!process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-    NEXT_PUBLIC_FIREBASE_PROJECT_ID: !!process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  };
-
-  // Count how many are missing
-  const missingVars = Object.entries(envVarStatus)
-    .filter(([_, isSet]) => !isSet)
-    .map(([name]) => name);
-
-  // Environment info
-  const environment = {
-    nodeEnv: process.env.NODE_ENV || 'not set',
-    isNetlify: !!process.env.NETLIFY,
-    netlifyContext: process.env.CONTEXT || 'not set', // production, deploy-preview, branch-deploy
-    nodeVersion: process.version,
-    functionDirectory: process.env.LAMBDA_TASK_ROOT || 'not available'
-  };
-
-  return {
-    statusCode: 200,
-    headers,
-    body: JSON.stringify({
-      timestamp: new Date().toISOString(),
-      allVarsSet: missingVars.length === 0,
-      missingVarsCount: missingVars.length,
-      missingVars: missingVars.length > 0 ? missingVars : [],
-      environment,
-      envVarStatus
-    })
-  };
-}; 
+module.exports = { handler }; 

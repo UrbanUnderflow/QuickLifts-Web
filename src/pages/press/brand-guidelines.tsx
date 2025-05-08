@@ -1,10 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
-import { ArrowUpRight, Download, Copy, Check, ChevronRight, ArrowLeft } from 'lucide-react';
+import { ArrowUpRight, Download, Copy, Check, ChevronRight, ArrowLeft, Dumbbell, Plus, Circle } from 'lucide-react';
 import { useScrollFade } from '../../hooks/useScrollFade';
 import Header from '../../components/Header';
 import Footer from '../../components/Footer/Footer';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../../api/firebase/config';
 
 // Define types for our refs and state
 type SectionRefs = {
@@ -14,6 +16,35 @@ type SectionRefs = {
 type CopiedState = {
   [key: string]: boolean;
 };
+
+// Structure for individual processed logo assets
+interface DisplayLogoAsset {
+  id: string;
+  name: string;
+  url: string;
+  fileType: string;
+}
+
+// Interface for the raw assets we expect from Firestore
+interface PressKitAssets {
+  logoSigSvg?: string;
+  logoSigPng?: string;
+  logoWhiteSvg?: string;
+  logoWhitePng?: string;
+  logoBlackSvg?: string;
+  logoBlackPng?: string;
+  logoGreenSvg?: string;
+  logoGreenPng?: string;
+  logoWordmarkSvg?: string;
+  logoWordmarkPng?: string;
+  logoApparelSvg?: string;
+  logoApparelPng?: string;
+  logoApparelGreenSvg?: string;
+  logoApparelGreenPng?: string;
+  logoApparelWhiteSvg?: string;
+  logoApparelWhitePng?: string;
+  // Add other asset keys as needed from your 'liveAssets' document
+}
 
 const BrandGuidelines = () => {
   const [activeSection, setActiveSection] = useState<string>('overview');
@@ -38,10 +69,17 @@ const BrandGuidelines = () => {
     typography: null,
     colors: null,
     usage: null,
+    logomarkConstruction: null, // Added for Logomark Construction section
     iconography: null,
     voice: null,
-    photography: null
+    photography: null,
+    apparelLogos: null, // Added for Apparel Logos section
   });
+
+  const [pressKitAssets, setPressKitAssets] = useState<PressKitAssets | null>(null); // Raw from Firestore
+  const [processedLogos, setProcessedLogos] = useState<Record<string, DisplayLogoAsset>>({}); // Keyed by asset ID
+  const [isLoadingAssets, setIsLoadingAssets] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   const handleCopy = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
@@ -85,6 +123,77 @@ const BrandGuidelines = () => {
     
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  useEffect(() => {
+    const fetchAssets = async () => {
+      setIsLoadingAssets(true);
+      setFetchError(null);
+      try {
+        const docRef = doc(db, "pressKitData", "liveAssets");
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          const allAssets = docSnap.data() as PressKitAssets;
+          setPressKitAssets(allAssets); // Store raw assets
+          console.log("Brand Guidelines - Raw press kit assets loaded:", allAssets);
+
+          const localLogoMappings: { key: keyof PressKitAssets; name: string; type: string; id: string }[] = [
+            // Primary & Signature Logos (assuming sig can be black)
+            { id: 'logoSigSvg', key: 'logoSigSvg', name: 'Pulse Signature.svg', type: 'image/svg+xml' },
+            { id: 'logoSigPng', key: 'logoSigPng', name: 'Pulse Signature.png', type: 'image/png' },
+            { id: 'logoBlackSvg', key: 'logoBlackSvg', name: 'Pulse Black.svg', type: 'image/svg+xml' }, // For explicit black logo
+            { id: 'logoBlackPng', key: 'logoBlackPng', name: 'Pulse Black.png', type: 'image/png' },
+            { id: 'logoWhiteSvg', key: 'logoWhiteSvg', name: 'Pulse White.svg', type: 'image/svg+xml' },
+            { id: 'logoWhitePng', key: 'logoWhitePng', name: 'Pulse White.png', type: 'image/png' },
+            { id: 'logoGreenSvg', key: 'logoGreenSvg', name: 'Pulse Green.svg', type: 'image/svg+xml' },
+            { id: 'logoGreenPng', key: 'logoGreenPng', name: 'Pulse Green.png', type: 'image/png' },
+            // Wordmark
+            { id: 'logoWordmarkSvg', key: 'logoWordmarkSvg', name: 'Pulse Wordmark.svg', type: 'image/svg+xml' },
+            { id: 'logoWordmarkPng', key: 'logoWordmarkPng', name: 'Pulse Wordmark.png', type: 'image/png' },
+            // Apparel Logos
+            { id: 'logoApparelSvg', key: 'logoApparelSvg', name: 'Pulse Apparel.svg', type: 'image/svg+xml' },
+            { id: 'logoApparelPng', key: 'logoApparelPng', name: 'Pulse Apparel.png', type: 'image/png' },
+            { id: 'logoApparelGreenSvg', key: 'logoApparelGreenSvg', name: 'Pulse Apparel Green.svg', type: 'image/svg+xml' },
+            { id: 'logoApparelGreenPng', key: 'logoApparelGreenPng', name: 'Pulse Apparel Green.png', type: 'image/png' },
+            { id: 'logoApparelWhiteSvg', key: 'logoApparelWhiteSvg', name: 'Pulse Apparel White.svg', type: 'image/svg+xml' },
+            { id: 'logoApparelWhitePng', key: 'logoApparelWhitePng', name: 'Pulse Apparel White.png', type: 'image/png' },
+          ];
+
+          const fetchedLogos: Record<string, DisplayLogoAsset> = {};
+          localLogoMappings.forEach(mapping => {
+            if (allAssets[mapping.key]) {
+              fetchedLogos[mapping.id] = {
+                id: mapping.id,
+                name: mapping.name,
+                url: allAssets[mapping.key]!,
+                fileType: mapping.type,
+              };
+            }
+          });
+          setProcessedLogos(fetchedLogos);
+          console.log("Brand Guidelines - Processed logos:", fetchedLogos);
+
+          if (Object.keys(fetchedLogos).length === 0) {
+            console.log("Brand Guidelines - Live assets document exists, but no recognizable mapped logo URLs found.");
+          }
+
+        } else {
+          console.log("Brand Guidelines - No live press kit assets document found!");
+          setFetchError("Brand assets are not available at the moment.");
+          setPressKitAssets({}); // Set to empty object to avoid null issues
+          setProcessedLogos({});
+        }
+      } catch (error) {
+        console.error("Brand Guidelines - Error fetching press kit assets:", error);
+        setFetchError("Failed to load brand assets. Please try again later.");
+        setPressKitAssets({}); // Set to empty object
+        setProcessedLogos({});
+      } finally {
+        setIsLoadingAssets(false);
+      }
+    };
+
+    fetchAssets();
   }, []);
 
   return (
@@ -144,14 +253,16 @@ const BrandGuidelines = () => {
                 <h3 className="text-white text-lg font-medium mb-6">Brand Guidelines</h3>
                 <nav className="space-y-1">
                   {[
-                    { id: 'overview', label: 'Brand Overview' },
-                    { id: 'logo', label: 'Logo System' },
-                    { id: 'typography', label: 'Typography' },
-                    { id: 'colors', label: 'Color Palette' },
-                    { id: 'usage', label: 'Logo Usage' },
-                    { id: 'iconography', label: 'Iconography' },
-                    { id: 'voice', label: 'Brand Voice' },
-                    { id: 'photography', label: 'Photography' }
+                    { id: 'overview', label: 'Brand Overview', number: 1 },
+                    { id: 'logo', label: 'Logo System', number: 2 },
+                    { id: 'typography', label: 'Typography', number: 3 },
+                    { id: 'colors', label: 'Color Palette', number: 4 },
+                    { id: 'usage', label: 'Logo Usage', number: 5 },
+                    { id: 'logomarkConstruction', label: 'Logomark Construction', number: 6 }, // New section
+                    { id: 'iconography', label: 'Iconography', number: 7 }, // Renumbered
+                    { id: 'voice', label: 'Brand Voice', number: 8 }, // Renumbered
+                    { id: 'photography', label: 'Photography', number: 9 }, // Renumbered
+                    { id: 'apparelLogos', label: 'Apparel Logos', number: 10 } // Renumbered
                   ].map((item) => (
                     <button
                       key={item.id}
@@ -246,101 +357,126 @@ const BrandGuidelines = () => {
                   </div>
                   <h2 className="text-white text-3xl font-bold">Logo System</h2>
                 </div>
-                
-                <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8 mb-10">
-                  <h3 className="text-white text-xl font-semibold mb-6">Primary Logo</h3>
-                  
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-                    <div className="flex items-center justify-center bg-white p-12 rounded-lg">
-                      <img 
-                        src="/brand/pulse-logo-black.svg" 
-                        alt="Pulse logo (black)" 
-                        className="max-w-full h-auto"
-                      />
+
+                {isLoadingAssets && <p className="text-zinc-400">Loading logo assets...</p>}
+                {fetchError && <p className="text-red-400">Error loading assets: {fetchError}</p>}
+
+                {!isLoadingAssets && !fetchError && Object.keys(processedLogos).length > 0 && (
+                  // Log first, then return the JSX block
+                  (console.log("Rendering Logo System with processedLogos:", processedLogos), (
+                  <>
+                    <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8 mb-10">
+                      <h3 className="text-white text-xl font-semibold mb-6">Primary Logo</h3>
+                      
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                        <div className="flex items-center justify-center bg-white p-12 rounded-lg">
+                          <img 
+                            src={processedLogos['logoBlackSvg']?.url || processedLogos['logoSigSvg']?.url || "/brand/pulse-logo-black.svg"} 
+                            alt={processedLogos['logoBlackSvg']?.name || processedLogos['logoSigSvg']?.name || "Pulse logo (black)"} 
+                            className="max-w-full h-auto"
+                          />
+                        </div>
+                        <div className="flex items-center justify-center bg-black p-12 rounded-lg">
+                          <img 
+                            src={processedLogos['logoWhiteSvg']?.url || "/brand/pulse-logo-white.svg"} 
+                            alt={processedLogos['logoWhiteSvg']?.name || "Pulse logo (white)"} 
+                            className="max-w-full h-auto"
+                          />
+                        </div>
+                      </div>
+                      
+                      <p className="text-zinc-400 text-lg mb-6">
+                        Our primary logo features a distinctive circular icon with a waveform that represents the pulse of activity, 
+                        paired with our wordmark in a bold, modern typeface. The logo is available in black and white variations for 
+                        use on different backgrounds.
+                      </p>
+                      
+                      <div className="flex flex-wrap gap-4 mt-6">
+                        <a href={processedLogos['logoSigSvg']?.url || '#'} download={processedLogos['logoSigSvg']?.name} className="inline-flex items-center text-[#E0FE10] hover:text-white group">
+                          <Download className="mr-2 h-5 w-5" />
+                          Download SVG (Signature)
+                        </a>
+                        <a href={processedLogos['logoWhiteSvg']?.url || '#'} download={processedLogos['logoWhiteSvg']?.name} className="inline-flex items-center text-[#E0FE10] hover:text-white group">
+                          <Download className="mr-2 h-5 w-5" />
+                          Download SVG (White)
+                        </a>
+                      </div>
                     </div>
-                    <div className="flex items-center justify-center bg-black p-12 rounded-lg">
-                      <img 
-                        src="/brand/pulse-logo-white.svg" 
-                        alt="Pulse logo (white)" 
-                        className="max-w-full h-auto"
-                      />
+                    
+                    <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8 mb-10">
+                      <h3 className="text-white text-xl font-semibold mb-6">Logo Mark Only</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                        <div className="flex items-center justify-center bg-white p-8 rounded-lg aspect-square">
+                          <img 
+                            src={processedLogos['logoBlackSvg']?.url || processedLogos['logoSigSvg']?.url || "/brand/pulse-icon-black.svg"} 
+                            alt={processedLogos['logoBlackSvg']?.name || processedLogos['logoSigSvg']?.name || "Pulse icon (black)"} 
+                            className="w-24 h-24 object-contain"
+                          />
+                        </div>
+                        <div className="flex items-center justify-center bg-black p-8 rounded-lg aspect-square">
+                          <img 
+                            src={processedLogos['logoWhiteSvg']?.url || "/brand/pulse-icon-white.svg"} 
+                            alt={processedLogos['logoWhiteSvg']?.name || "Pulse icon (white)"} 
+                            className="w-24 h-24 object-contain"
+                          />
+                        </div>
+                        <div className="flex items-center justify-center bg-black p-8 rounded-lg aspect-square">
+                          <img 
+                            src={processedLogos['logoGreenSvg']?.url || "/brand/pulse-icon-neon.svg"} 
+                            alt={processedLogos['logoGreenSvg']?.name || "Pulse icon (neon)"} 
+                            className="w-24 h-24 object-contain"
+                          />
+                        </div>
+                      </div>
+                      
+                      <p className="text-zinc-400 text-lg">
+                        The Pulse logomark can be used independently in contexts where space is limited or for brand recognition 
+                        in social media profiles, app icons, or favicons. It's available in black, white, and our signature neon green.
+                      </p>
+                       {/* TODO: Add specific icon download links if available */}
                     </div>
-                  </div>
-                  
-                  <p className="text-zinc-400 text-lg mb-6">
-                    Our primary logo features a distinctive circular icon with a waveform that represents the pulse of activity, 
-                    paired with our wordmark in a bold, modern typeface. The logo is available in black and white variations for 
-                    use on different backgrounds.
-                  </p>
-                  
-                  <div className="flex flex-wrap gap-4 mt-6">
-                    <a href="#" className="inline-flex items-center text-[#E0FE10] hover:text-white group">
-                      <Download className="mr-2 h-5 w-5" />
-                      Download SVG
-                    </a>
-                    <a href="#" className="inline-flex items-center text-[#E0FE10] hover:text-white group">
-                      <Download className="mr-2 h-5 w-5" />
-                      Download PNG
-                    </a>
-                  </div>
-                </div>
-                
-                <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8 mb-10">
-                  <h3 className="text-white text-xl font-semibold mb-6">Logo Mark Only</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                    <div className="flex items-center justify-center bg-white p-8 rounded-lg">
-                      <img 
-                        src="/brand/pulse-icon-black.svg" 
-                        alt="Pulse icon (black)" 
-                        className="w-24 h-24"
-                      />
+                    
+                    <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8">
+                      <h3 className="text-white text-xl font-semibold mb-6">Wordmark Only</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                        <div className="flex items-center justify-center bg-white p-8 rounded-lg">
+                          <img 
+                            src={processedLogos['logoWordmarkSvg']?.url || "/brand/pulse-wordmark-black.svg"} 
+                            alt={processedLogos['logoWordmarkSvg']?.name || "Pulse wordmark (black)"} 
+                            className="max-w-xs h-auto object-contain"
+                          />
+                        </div>
+                        <div className="flex items-center justify-center bg-black p-8 rounded-lg">
+                          <img 
+                            src={processedLogos['logoWordmarkSvg']?.url || "/brand/pulse-wordmark-white.svg"} // Assuming wordmark SVG is adaptable or light
+                            alt={processedLogos['logoWordmarkSvg']?.name || "Pulse wordmark (white)"} 
+                            className="max-w-xs h-auto object-contain filter-white-if-needed-on-black-bg" // Placeholder for potential class if SVG needs explicit styling for white on black
+                          />
+                        </div>
+                      </div>
+                      
+                      <p className="text-zinc-400 text-lg">
+                        The wordmark can be used independently when the logo is already established in context or when a more 
+                        subtle branded element is required. Like our primary logo, it's available in black and white.
+                      </p>
+                      <div className="flex flex-wrap gap-4 mt-6">
+                        <a href={processedLogos['logoWordmarkSvg']?.url || '#'} download={processedLogos['logoWordmarkSvg']?.name} className="inline-flex items-center text-[#E0FE10] hover:text-white group">
+                          <Download className="mr-2 h-5 w-5" />
+                          Download Wordmark SVG
+                        </a>
+                        <a href={processedLogos['logoWordmarkPng']?.url || '#'} download={processedLogos['logoWordmarkPng']?.name} className="inline-flex items-center text-[#E0FE10] hover:text-white group">
+                          <Download className="mr-2 h-5 w-5" />
+                          Download Wordmark PNG
+                        </a>
+                      </div>
                     </div>
-                    <div className="flex items-center justify-center bg-black p-8 rounded-lg">
-                      <img 
-                        src="/brand/pulse-icon-white.svg" 
-                        alt="Pulse icon (white)" 
-                        className="w-24 h-24"
-                      />
-                    </div>
-                    <div className="flex items-center justify-center bg-black p-8 rounded-lg">
-                      <img 
-                        src="/brand/pulse-icon-neon.svg" 
-                        alt="Pulse icon (neon)" 
-                        className="w-24 h-24"
-                      />
-                    </div>
-                  </div>
-                  
-                  <p className="text-zinc-400 text-lg">
-                    The Pulse logomark can be used independently in contexts where space is limited or for brand recognition 
-                    in social media profiles, app icons, or favicons. It's available in black, white, and our signature neon green.
-                  </p>
-                </div>
-                
-                <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8">
-                  <h3 className="text-white text-xl font-semibold mb-6">Wordmark Only</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                    <div className="flex items-center justify-center bg-white p-8 rounded-lg">
-                      <img 
-                        src="/brand/pulse-wordmark-black.svg" 
-                        alt="Pulse wordmark (black)" 
-                        className="max-w-full h-auto"
-                      />
-                    </div>
-                    <div className="flex items-center justify-center bg-black p-8 rounded-lg">
-                      <img 
-                        src="/brand/pulse-wordmark-white.svg" 
-                        alt="Pulse wordmark (white)" 
-                        className="max-w-full h-auto"
-                      />
-                    </div>
-                  </div>
-                  
-                  <p className="text-zinc-400 text-lg">
-                    The wordmark can be used independently when the logo is already established in context or when a more 
-                    subtle branded element is required. Like our primary logo, it's available in black and white.
-                  </p>
-                </div>
+                  </>
+                  ))
+                )}
+                 {/* Show this if loading is done, no error, but no logos were processed */}
+                {!isLoadingAssets && !fetchError && Object.keys(processedLogos).length === 0 && (
+                  <p className="text-zinc-400 p-8 text-center">No mapped logo assets are currently available. Please check the upload page.</p>
+                )}
               </section>
               
               {/* Typography */}
@@ -891,6 +1027,71 @@ const BrandGuidelines = () => {
                 </div>
               </section>
               
+              {/* Logomark Construction - NEW SECTION CONTENT */}
+              <section 
+                id="logomarkConstruction" 
+                ref={(el) => { sectionsRef.current.logomarkConstruction = el; }}
+                className="mb-20"
+              >
+                <div className="flex items-center mb-6">
+                  <div className="w-10 h-10 rounded-full bg-[#E0FE10] flex items-center justify-center mr-4">
+                    <span className="font-bold text-black">6</span>
+                  </div>
+                  <h2 className="text-white text-3xl font-bold">Logomark Construction</h2>
+                </div>
+                
+                <div className="bg-white border border-zinc-200 rounded-xl p-8">
+                  <p className="text-zinc-700 text-lg mb-4">
+                    The logo mark is our identifying mark or symbol that doesn't contain our business name and represents our identity.
+                  </p>
+                  <p className="text-zinc-700 text-lg mb-10">
+                    Our logo mark is constructed from dumbbells.
+                  </p>
+
+                  <div className="flex flex-col items-center space-y-10">
+                    {/* Equation Part */}
+                    <div className="flex items-center justify-center space-x-6 md:space-x-10">
+                      <div className="text-center">
+                        {/* <Dumbbell className="w-20 h-20 md:w-28 md:h-28 text-zinc-300 mx-auto" strokeWidth={1.5} /> */}
+                        <img src="/logo_dumbbell.png" alt="Dumbbell Component" className="w-20 h-20 md:w-28 md:h-28 object-contain mx-auto" />
+                        <p className="text-zinc-600 mt-2 text-sm">Dumbbell Shape</p>
+                      </div>
+                      <Plus className="w-10 h-10 md:w-12 md:h-12 text-zinc-500" strokeWidth={1.5}/>
+                      <div className="text-center">
+                        {/* For a black circle on a white background, we can use a div with border or a solid fill */}
+                        <div className="w-20 h-20 md:w-28 md:h-28 bg-black rounded-full mx-auto"></div>
+                        {/* <Circle className="w-20 h-20 md:w-28 md:h-28 text-black mx-auto" strokeWidth={1.5} fill="black"/> You could use fill if the icon supports it directly and you want the Lucide icon */}
+                        <p className="text-zinc-600 mt-2 text-sm">Containing Circle</p>
+                      </div>
+                    </div>
+
+                    {/* Result Part with Construction Lines */}
+                    <div className="text-center mt-10">
+                        <p className="text-black text-3xl mb-6 font-semibold">=</p>
+                        <div className="relative w-48 h-48 md:w-64 md:h-64 mx-auto flex items-center justify-center">
+                            {/* Stylized Construction Lines (Simplified) - will be dark on white bg */}
+                            <div className="absolute inset-0 flex items-center justify-center opacity-30">
+                                <div className="w-full h-[1px] bg-zinc-400"></div>
+                                <div className="w-[1px] h-full bg-zinc-400 absolute top-0 left-1/2 -translate-x-1/2"></div>
+                                <div className="w-full h-[1px] bg-zinc-400 origin-center transform rotate-45 absolute"></div>
+                                <div className="w-full h-[1px] bg-zinc-400 origin-center transform -rotate-45 absolute"></div>
+                                <div className="w-[80%] h-[80%] border border-zinc-400 rounded-full absolute"></div>
+                            </div>
+                            
+                            {/* Actual Logomark Image */}
+                            <img 
+                                src={processedLogos['logoSigSvg']?.url || processedLogos['logoBlackSvg']?.url || '/brand/pulse-icon-black.svg'} 
+                                alt="Pulse Logomark"
+                                className="w-32 h-32 md:w-40 md:h-40 object-contain z-10 relative"
+                            />
+                        </div>
+                        <p className="text-black mt-4 text-lg font-medium">Pulse Logomark</p>
+                    </div>
+                  </div>
+
+                </div>
+              </section>
+              
               {/* Iconography */}
               <section 
                 id="iconography" 
@@ -899,7 +1100,7 @@ const BrandGuidelines = () => {
               >
                 <div className="flex items-center mb-6">
                   <div className="w-10 h-10 rounded-full bg-[#E0FE10] flex items-center justify-center mr-4">
-                    <span className="font-bold text-black">6</span>
+                    <span className="font-bold text-black">7</span>
                   </div>
                   <h2 className="text-white text-3xl font-bold">Iconography</h2>
                 </div>
@@ -1030,7 +1231,7 @@ const BrandGuidelines = () => {
               >
                 <div className="flex items-center mb-6">
                   <div className="w-10 h-10 rounded-full bg-[#E0FE10] flex items-center justify-center mr-4">
-                    <span className="font-bold text-black">7</span>
+                    <span className="font-bold text-black">8</span>
                   </div>
                   <h2 className="text-white text-3xl font-bold">Brand Voice</h2>
                 </div>
@@ -1197,7 +1398,7 @@ const BrandGuidelines = () => {
               >
                 <div className="flex items-center mb-6">
                   <div className="w-10 h-10 rounded-full bg-[#E0FE10] flex items-center justify-center mr-4">
-                    <span className="font-bold text-black">8</span>
+                    <span className="font-bold text-black">9</span>
                   </div>
                   <h2 className="text-white text-3xl font-bold">Photography</h2>
                 </div>
@@ -1277,6 +1478,122 @@ const BrandGuidelines = () => {
                     </div>
                   </div>
                 </div>
+              </section>
+              
+              {/* Apparel Logos Section - New */}
+              <section 
+                id="apparelLogos" 
+                ref={(el) => { sectionsRef.current.apparelLogos = el; }}
+                className="mb-20"
+              >
+                <div className="flex items-center mb-6">
+                  <div className="w-10 h-10 rounded-full bg-[#E0FE10] flex items-center justify-center mr-4">
+                    {/* Choose an appropriate number, e.g., 9 if it's the next section */}
+                    <span className="font-bold text-black">10</span> 
+                  </div>
+                  <h2 className="text-white text-3xl font-bold">Apparel Logos</h2>
+                </div>
+
+                {isLoadingAssets && <p className="text-zinc-400">Loading apparel logo assets...</p>}
+                {fetchError && <p className="text-red-400">Error loading assets: {fetchError}</p>}
+
+                {!isLoadingAssets && !fetchError && Object.keys(processedLogos).length > 0 && (
+                  // Log first, then return the JSX block
+                  (console.log("Rendering Apparel Logos with processedLogos:", processedLogos), (
+                  <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8">
+                    <h3 className="text-white text-xl font-semibold mb-6">Primary Apparel Logos</h3>
+                    <p className="text-zinc-400 text-lg mb-8">
+                      These logos are specifically designed or selected for use on apparel and merchandise. 
+                      Consider the fabric color and printing method when choosing the appropriate version.
+                    </p>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-10">
+                      {/* Default Apparel Logo (likely dark, on white background for preview) */}
+                      <div>
+                        <h4 className="text-white text-md font-semibold mb-3 text-center">Apparel Logo (Default)</h4>
+                        <div className="flex items-center justify-center bg-white p-8 rounded-lg aspect-square mb-3">
+                          <img 
+                            src={processedLogos['logoApparelSvg']?.url || "/brand/pulse-apparel-default.svg"} 
+                            alt={processedLogos['logoApparelSvg']?.name || "Pulse Apparel Logo SVG (Default)"} 
+                            className="max-w-full h-24 object-contain"
+                          />
+                        </div>
+                        <div className="flex items-center justify-center bg-white p-8 rounded-lg aspect-square">
+                          <img 
+                            src={processedLogos['logoApparelPng']?.url || "/brand/pulse-apparel-default.png"} 
+                            alt={processedLogos['logoApparelPng']?.name || "Pulse Apparel Logo PNG (Default)"} 
+                            className="max-w-full h-24 object-contain"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Green Apparel Logo */}
+                      <div>
+                        <h4 className="text-white text-md font-semibold mb-3 text-center">Apparel Logo (Green)</h4>
+                        <div className="flex items-center justify-center bg-black p-8 rounded-lg aspect-square mb-3">
+                          <img 
+                            src={processedLogos['logoApparelGreenSvg']?.url || "/brand/pulse-apparel-green.svg"} 
+                            alt={processedLogos['logoApparelGreenSvg']?.name || "Pulse Apparel Logo SVG (Green)"} 
+                            className="max-w-full h-24 object-contain"
+                          />
+                        </div>
+                        <div className="flex items-center justify-center bg-black p-8 rounded-lg aspect-square">
+                          <img 
+                            src={processedLogos['logoApparelGreenPng']?.url || "/brand/pulse-apparel-green.png"} 
+                            alt={processedLogos['logoApparelGreenPng']?.name || "Pulse Apparel Logo PNG (Green)"} 
+                            className="max-w-full h-24 object-contain"
+                          />
+                        </div>
+                      </div>
+
+                      {/* White Apparel Logo */}
+                      <div>
+                        <h4 className="text-white text-md font-semibold mb-3 text-center">Apparel Logo (White)</h4>
+                        <div className="flex items-center justify-center bg-black p-8 rounded-lg aspect-square mb-3">
+                          <img 
+                            src={processedLogos['logoApparelWhiteSvg']?.url || "/brand/pulse-apparel-white.svg"} 
+                            alt={processedLogos['logoApparelWhiteSvg']?.name || "Pulse Apparel Logo SVG (White)"} 
+                            className="max-w-full h-24 object-contain"
+                          />
+                        </div>
+                        <div className="flex items-center justify-center bg-black p-8 rounded-lg aspect-square">
+                          <img 
+                            src={processedLogos['logoApparelWhitePng']?.url || "/brand/pulse-apparel-white.png"} 
+                            alt={processedLogos['logoApparelWhitePng']?.name || "Pulse Apparel Logo PNG (White)"} 
+                            className="max-w-full h-24 object-contain"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <h4 className="text-white text-lg font-semibold mb-4">Download Apparel Logos</h4>
+                    <div className="flex flex-wrap gap-4">
+                      <a href={processedLogos['logoApparelSvg']?.url || '#'} download={processedLogos['logoApparelSvg']?.name} className="inline-flex items-center text-[#E0FE10] hover:text-white group">
+                        <Download className="mr-2 h-5 w-5" /> SVG (Default)
+                      </a>
+                      <a href={processedLogos['logoApparelPng']?.url || '#'} download={processedLogos['logoApparelPng']?.name} className="inline-flex items-center text-[#E0FE10] hover:text-white group">
+                        <Download className="mr-2 h-5 w-5" /> PNG (Default)
+                      </a>
+                      <a href={processedLogos['logoApparelGreenSvg']?.url || '#'} download={processedLogos['logoApparelGreenSvg']?.name} className="inline-flex items-center text-[#E0FE10] hover:text-white group">
+                        <Download className="mr-2 h-5 w-5" /> SVG (Green)
+                      </a>
+                      <a href={processedLogos['logoApparelGreenPng']?.url || '#'} download={processedLogos['logoApparelGreenPng']?.name} className="inline-flex items-center text-[#E0FE10] hover:text-white group">
+                        <Download className="mr-2 h-5 w-5" /> PNG (Green)
+                      </a>
+                      <a href={processedLogos['logoApparelWhiteSvg']?.url || '#'} download={processedLogos['logoApparelWhiteSvg']?.name} className="inline-flex items-center text-[#E0FE10] hover:text-white group">
+                        <Download className="mr-2 h-5 w-5" /> SVG (White)
+                      </a>
+                      <a href={processedLogos['logoApparelWhitePng']?.url || '#'} download={processedLogos['logoApparelWhitePng']?.name} className="inline-flex items-center text-[#E0FE10] hover:text-white group">
+                        <Download className="mr-2 h-5 w-5" /> PNG (White)
+                      </a>
+                    </div>
+                  </div>
+                  ))
+                )}
+                 {/* Show this if loading is done, no error, but no apparel logos were processed */}
+                {!isLoadingAssets && !fetchError && Object.keys(processedLogos).filter(k => k.startsWith('logoApparel')).length === 0 && (
+                    <p className="text-zinc-400 p-8 text-center">No mapped apparel logo assets are currently available. Please check the upload page.</p>
+                )}
               </section>
               
               {/* Download Section */}

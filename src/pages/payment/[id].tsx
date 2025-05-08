@@ -7,11 +7,7 @@ import { userService } from '../../api/firebase/user/service';
 import Link from 'next/link';
 import { ArrowRight, Globe } from 'lucide-react';
 import ChallengeCTA from '../../components/ChallengeCTA';
-
-// Helper function to check if we're in localhost
-const isLocalhost = typeof window !== 'undefined' && 
-  (window.location.hostname === 'localhost' || 
-   window.location.hostname === '127.0.0.1');
+import { isLocalhost, getStripePublishableKey } from '../../utils/stripeKey';
 
 // Helper function to detect iOS devices
 const isIOS = () => {
@@ -31,20 +27,6 @@ const openIOSApp = (challengeId: string) => {
   const deepLinkUrl = `https://quicklifts.page.link/?link=${encodedBaseUrl}&apn=com.pulse.fitnessapp&ibi=Tremaine.QuickLifts&isi=6451497729`;
   
   window.location.href = deepLinkUrl;
-};
-
-// Initialize Stripe with the appropriate key based on environment
-const getStripeKey = () => {
-  if (isLocalhost) {
-    // In localhost, check localStorage for test mode preference
-    const isTestMode = localStorage.getItem('stripeTestMode') === 'true';
-    return isTestMode 
-      ? process.env.NEXT_PUBLIC_TEST_STRIPE_PUBLISHABLE_KEY
-      : process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
-  }
-  
-  // In production, always use live mode
-  return process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
 };
 
 // Initialize Stripe promise as null
@@ -113,7 +95,24 @@ const PaymentPage = ({ challengeData }: PaymentPageProps) => {
     // Initialize Stripe
     const initStripe = async () => {
       console.log('Initializing Stripe...');
-      const key = getStripeKey();
+      
+      // On localhost, check localStorage for test mode preference
+      // Otherwise, automatically use the appropriate key based on environment
+      let key;
+      if (isLocalhost()) {
+        const savedTestMode = localStorage.getItem('stripeTestMode');
+        const shouldUseTestMode = savedTestMode === 'true'; 
+        setIsTestMode(shouldUseTestMode);
+        
+        // Automatically use test mode on localhost if not explicitly set to false
+        key = shouldUseTestMode || savedTestMode === null
+          ? process.env.NEXT_PUBLIC_TEST_STRIPE_PUBLISHABLE_KEY
+          : process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+      } else {
+        // In production, always use live mode
+        key = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+      }
+      
       console.log('Got Stripe key:', key ? 'Key present' : 'No key found');
       
       // Get the global promise or create a new one
@@ -138,9 +137,15 @@ const PaymentPage = ({ challengeData }: PaymentPageProps) => {
     
     // Initialize local storage test mode state
     const initTestMode = () => {
-      if (isLocalhost) {
+      if (isLocalhost()) {
         const savedTestMode = localStorage.getItem('stripeTestMode');
-        setIsTestMode(savedTestMode === 'true');
+        // Default to test mode on localhost if not explicitly set
+        setIsTestMode(savedTestMode !== 'false');
+        
+        // Store the default if nothing is set
+        if (savedTestMode === null) {
+          localStorage.setItem('stripeTestMode', 'true');
+        }
       }
     };
 
@@ -452,7 +457,7 @@ const PaymentPage = ({ challengeData }: PaymentPageProps) => {
   return (
     <div className="min-h-screen bg-zinc-950 text-white py-10">
       <div className="max-w-md mx-auto px-6">
-        {(isLocalhost || userService.nonUICurrentUser?.email === "tremaine.grant@gmail.com") && (
+        {(isLocalhost() || userService.nonUICurrentUser?.email === "tremaine.grant@gmail.com") && (
           <div className="mb-6 p-4 bg-zinc-900 rounded-lg space-y-4">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium">Test Mode</span>

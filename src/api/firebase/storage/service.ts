@@ -297,6 +297,83 @@ export class FirebaseStorageService {
       throw error;
     }
   }
+
+  async uploadFileToStorage(
+    file: File,
+    storagePath: string,
+    onProgress?: (progress: number) => void
+  ): Promise<UploadResult> {
+    console.log('[DEBUG-STORAGE] Starting uploadFileToStorage method', {
+      fileName: file.name,
+      fileType: file.type,
+      fileSize: file.size,
+      storagePath,
+    });
+
+    const user = auth.currentUser;
+    if (!user) {
+      console.error('[DEBUG-STORAGE] Authentication error: No current user for uploadFileToStorage');
+      // Depending on requirements, you might allow uploads for certain public paths without auth,
+      // but for now, let's keep it consistent with other upload methods.
+      throw new Error("User must be authenticated to upload file");
+    }
+
+    console.log('[DEBUG-STORAGE] User authenticated for uploadFileToStorage', {
+      uid: user.uid,
+    });
+
+    // Basic file validation (can be expanded)
+    if (!file) {
+      console.error('[DEBUG-STORAGE] File validation error: No file provided');
+      throw new Error("No file provided for upload.");
+    }
+
+    const storageRef = ref(this.storage, storagePath);
+    console.log('[DEBUG-STORAGE] Created storage reference for uploadFileToStorage');
+
+    try {
+      console.log('[DEBUG-STORAGE] Creating upload task for uploadFileToStorage');
+      const uploadTask = uploadBytesResumable(storageRef, file);
+      console.log('[DEBUG-STORAGE] Upload task created for uploadFileToStorage');
+
+      if (onProgress) {
+        console.log('[DEBUG-STORAGE] Adding progress listener for uploadFileToStorage');
+        uploadTask.on('state_changed',
+          (snapshot) => {
+            const progress = (snapshot.bytesTransferred / snapshot.totalBytes);
+            // console.log(`[DEBUG-STORAGE] Upload progress for ${storagePath}: ${Math.round(progress * 100)}%`);
+            onProgress(progress);
+          },
+          (error) => {
+            console.error(`[DEBUG-STORAGE] Upload state error for ${storagePath}:`, error);
+          }
+        );
+      }
+
+      console.log('[DEBUG-STORAGE] Waiting for upload to complete for uploadFileToStorage', storagePath);
+      const snapshot = await uploadTask;
+      console.log('[DEBUG-STORAGE] Upload completed for uploadFileToStorage', snapshot);
+
+      console.log('[DEBUG-STORAGE] Getting download URL for uploadFileToStorage', storagePath);
+      const downloadURL = await getDownloadURL(snapshot.ref);
+      console.log('[DEBUG-STORAGE] Got download URL for uploadFileToStorage:', downloadURL);
+
+      const gsURL = `gs://${snapshot.ref.bucket}/${snapshot.ref.fullPath}`;
+      console.log('[DEBUG-STORAGE] Complete upload result for uploadFileToStorage', { gsURL, downloadURL });
+
+      return { gsURL, downloadURL };
+    } catch (error) {
+      console.error(`[DEBUG-STORAGE] File upload failed for ${storagePath}`, error);
+      if (error instanceof Error) {
+        console.error('[DEBUG-STORAGE] Error details:', {
+          message: error.message,
+          name: error.name,
+          stack: error.stack,
+        });
+      }
+      throw error;
+    }
+  }
 }
 
 

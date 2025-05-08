@@ -1,11 +1,30 @@
 const Stripe = require('stripe');
 const { db } = require('./config/firebase'); // Assuming firebase config is in netlify/functions/config
 
-// Initialize Stripe with your secret key
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+// Helper to determine if the request is from localhost
+const isLocalhostRequest = (event) => {
+  const referer = event.headers.referer || event.headers.origin || '';
+  return referer.includes('localhost') || referer.includes('127.0.0.1');
+};
+
+// Initialize Stripe with the appropriate key based on environment
+const getStripeInstance = (event) => {
+  // Use test API key for localhost requests
+  if (isLocalhostRequest(event)) {
+    console.log('[CreateCheckoutSession] Request from localhost, using TEST mode');
+    return new Stripe(process.env.STRIPE_TEST_SECRET_KEY);
+  }
+  
+  // Use live API key for production requests
+  console.log('[CreateCheckoutSession] Request from production, using LIVE mode');
+  return new Stripe(process.env.STRIPE_SECRET_KEY);
+};
 
 const handler = async (event) => {
   console.log(`[CreateCheckoutSession] Received ${event.httpMethod} request.`);
+
+  // Initialize Stripe with the appropriate key based on origin
+  const stripe = getStripeInstance(event);
 
   if (event.httpMethod !== 'POST') {
     return {
@@ -36,6 +55,14 @@ const handler = async (event) => {
   console.log(`[CreateCheckoutSession] Creating session for user: ${userId}, price: ${priceId}`);
 
   try {
+    // Determine the base URL for success and cancel redirects
+    const isLocalhost = isLocalhostRequest(event);
+    const baseUrl = isLocalhost ? 
+      (event.headers.origin || 'http://localhost:8888') : // Use the origin or default to localhost:8888
+      siteUrl; // Use the site URL for production
+    
+    console.log(`[CreateCheckoutSession] Using baseUrl for redirects: ${baseUrl}, isLocalhost: ${isLocalhost}`);
+    
     // Create a Checkout Session
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
@@ -47,8 +74,8 @@ const handler = async (event) => {
       ],
       mode: 'subscription', // Important for recurring payments
       client_reference_id: userId, // Link the session to your internal user ID
-      success_url: `${siteUrl}/subscription-success?session_id={CHECKOUT_SESSION_ID}`, // Redirect URL on success
-      cancel_url: `${siteUrl}/subscribe`, // Redirect URL on cancellation
+      success_url: `${baseUrl}/subscription-success?session_id={CHECKOUT_SESSION_ID}`, // Redirect URL on success
+      cancel_url: `${baseUrl}/subscribe`, // Redirect URL on cancellation
       // Optional: Add metadata if needed beyond client_reference_id
       // metadata: {
       //   userId: userId,
