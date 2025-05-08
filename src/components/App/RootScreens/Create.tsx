@@ -43,7 +43,9 @@ const Create: React.FC = () => {
 
   // Drag and video state
   const [isDragOver, setIsDragOver] = useState(false);
-  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [originalVideoFile, setOriginalVideoFile] = useState<File | null>(null);
+  const [trimStartTime, setTrimStartTime] = useState<number | null>(null);
+  const [trimEndTime, setTrimEndTime] = useState<number | null>(null);
   const [videoPreview, setVideoPreview] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -170,8 +172,18 @@ const Create: React.FC = () => {
             durationCheck.src = objectUrl;
             
             // Update component state
-            setVideoFile(trimmedFile);
+            setOriginalVideoFile(trimmedFile);
             setVideoPreview(objectUrl);
+            
+            // If videoData contains trimStart/trimEnd, set them here (though this flow might be deprecated)
+            if (videoData.trimStart !== undefined && videoData.trimEnd !== undefined) {
+              setTrimStartTime(videoData.trimStart);
+              setTrimEndTime(videoData.trimEnd);
+              console.log('[DEBUG] Trim times set from sessionStorage data:', {
+                start: videoData.trimStart,
+                end: videoData.trimEnd,
+              });
+            }
             
             console.log('[DEBUG] Video state updated successfully');
             
@@ -274,12 +286,25 @@ const Create: React.FC = () => {
 
   const handleTrimComplete = (trimmedFile: File) => {
     console.log('[DEBUG] Trim complete, setting video file');
-    setVideoFile(trimmedFile);
+    setOriginalVideoFile(trimmedFile);
     setShowTrimmer(false);
     
     // Create preview URL for the trimmed video
     const previewUrl = URL.createObjectURL(trimmedFile);
     setVideoPreview(previewUrl);
+  };
+
+  // NEW: Handler for when SimpleVideoTrimmer provides startTime and endTime
+  const handleTrimSelection = (params: { startTime: number; endTime: number }) => {
+    console.log('[DEBUG] Trim selection made:', params);
+    if (selectedFile) { // selectedFile should be the original file shown in the trimmer
+      setOriginalVideoFile(selectedFile); // Ensure originalVideoFile is the one from the trimmer
+      const previewUrl = URL.createObjectURL(selectedFile);
+      setVideoPreview(previewUrl); // Show preview of the original file
+    }
+    setTrimStartTime(params.startTime);
+    setTrimEndTime(params.endTime);
+    setShowTrimmer(false); // Close trimmer after selection
   };
 
   // Function to attempt video conversion if needed
@@ -363,8 +388,11 @@ const Create: React.FC = () => {
   };
 
   const clearVideo = () => {
-    setVideoFile(null);
+    setOriginalVideoFile(null);
     setVideoPreview(null);
+    setTrimStartTime(null);
+    setTrimEndTime(null);
+    setSelectedFile(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -420,54 +448,36 @@ const Create: React.FC = () => {
 
   // Upload video function with progress callback
   const uploadVideo = async (existingExercise?: Exercise) => {
-    if (!videoFile) {
-      console.error('[DEBUG] No video file to upload');
+    if (!originalVideoFile || trimStartTime === null || trimEndTime === null) {
+      console.error('[DEBUG] No original video file to upload or trim times not set');
+      alert('Please select a video and define trim points.');
       return;
     }
     
     try {
-      console.log('[DEBUG] Starting upload process');
-      console.log('[DEBUG] Video details before processing:', {
-        name: videoFile.name,
-        size: videoFile.size,
-        type: videoFile.type
+      console.log('[DEBUG] Starting upload process with server-side trim plan');
+      console.log('[DEBUG] Original video details:', {
+        name: originalVideoFile.name,
+        size: originalVideoFile.size,
+        type: originalVideoFile.type,
+        trimStart: trimStartTime,
+        trimEnd: trimEndTime,
       });
-      
-      // Check if video has trim metadata
-      const hasTrimMetadata = !!(
-        (videoFile as any).trimStart !== undefined && 
-        (videoFile as any).trimEnd !== undefined
-      );
-      
-      if (hasTrimMetadata) {
-        console.log('[DEBUG] Video has trim metadata:', {
-          trimStart: (videoFile as any).trimStart,
-          trimEnd: (videoFile as any).trimEnd
-        });
-      }
       
       // Make sure the file type is compatible with Firebase Storage
       const ALLOWED_TYPES = ['video/mp4', 'video/quicktime', 'video/x-msvideo'];
-      let fileToUpload = videoFile;
+      let fileToUpload = originalVideoFile;
       
-      if (!ALLOWED_TYPES.includes(videoFile.type)) {
-        console.log('[DEBUG] Converting video to compatible format before upload');
+      if (!ALLOWED_TYPES.includes(originalVideoFile.type)) {
+        console.log('[DEBUG] Converting original video to compatible format before upload');
         try {
-          // Default to MP4 format which is widely supported
-          const newFileName = videoFile.name.replace(/\.[^/.]+$/, '.mp4');
-          fileToUpload = new File([videoFile], newFileName, { type: 'video/mp4' });
-          
+          const newFileName = originalVideoFile.name.replace(/\\.[^/.]+$/, '.mp4');
+          fileToUpload = new File([originalVideoFile], newFileName, { type: 'video/mp4' });
           console.log('[DEBUG] Created compatible file for upload:', {
             name: fileToUpload.name,
             type: fileToUpload.type,
             size: fileToUpload.size
           });
-          
-          // Copy trim metadata if present
-          if (hasTrimMetadata) {
-            (fileToUpload as any).trimStart = (videoFile as any).trimStart;
-            (fileToUpload as any).trimEnd = (videoFile as any).trimEnd;
-          }
         } catch (conversionError) {
           console.error('[DEBUG] Error converting video format:', conversionError);
           throw new Error('Could not convert video to a compatible format. Please upload an MP4 video.');
@@ -500,30 +510,27 @@ const Create: React.FC = () => {
       setIsUploading(true);
       setUploadProgress(0);
       
-      // 1. Upload the video to Firebase Storage - this will account for 70% of the total progress
-      console.log('[DEBUG] Starting Firebase Storage upload with file:', {
+      // 1. Upload the ORIGINAL video to Firebase Storage
+      // Progress: 0% -> 50%
+      console.log('[DEBUG] Starting Firebase Storage upload of ORIGINAL video:', {
         name: fileToUpload.name,
         type: fileToUpload.type,
         size: fileToUpload.size
       });
       
       const uploadResult = await firebaseStorageService.uploadVideo(
-        fileToUpload,
-        VideoType.Exercise,
+        fileToUpload, // Uploading the original (or container-converted) file
+        VideoType.Exercise, // Consider a temporary location if originals aren't kept long-term
         (progress) => {
-          // Scale progress to be 70% of the total workflow
-          const scaledProgress = progress * 0.7;
-          console.log(`[DEBUG] Upload progress: ${Math.round(progress * 100)}%, Scaled: ${Math.round(scaledProgress * 100)}%`);
+          const scaledProgress = progress * 0.5; // Uploading original is 50% of this stage
+          console.log(`[DEBUG] Original video upload progress: ${Math.round(progress * 100)}%, Scaled: ${Math.round(scaledProgress * 100)}%`);
           setUploadProgress(scaledProgress);
         },
-        // Pass the exercise name for the storage path
-        existingExercise ? existingExercise.name : formattedExerciseName
+        existingExercise ? existingExercise.name : formattedExerciseName // Path for original
       );
       
-      console.log('[DEBUG] Video uploaded successfully to Firebase Storage:', uploadResult);
-      
-      // Update progress to 70% after successful upload
-      setUploadProgress(0.7);
+      console.log('[DEBUG] Original video uploaded successfully to Firebase Storage:', uploadResult);
+      setUploadProgress(0.5); // Mark original upload as 50% complete
       
       // 2. Get the current user 
       console.log('[DEBUG] Getting current user');
@@ -564,9 +571,15 @@ const Create: React.FC = () => {
         exercise: formattedExerciseName,
         username: username,
         userId: userId,
-        videoURL: uploadResult.downloadURL,
+        originalVideoStoragePath: uploadResult.gsURL, 
+        originalVideoUrl: uploadResult.downloadURL, 
+        videoURL: '', 
+        gifURL: '', 
+        trimStatus: 'pending', 
+        trimStartTime: trimStartTime!, // Assert non-null as checked in uploadVideo start
+        trimEndTime: trimEndTime!,   // Assert non-null
         fileName: uploadResult.gsURL.split('/').pop() || 'unknown',
-        storagePath: uploadResult.gsURL,
+        storagePath: '', 
         profileImage: new ProfileImage({
           profileImageURL: completeUserData.profileImage?.profileImageURL || '',
           imageOffsetWidth: 0,
@@ -580,18 +593,11 @@ const Create: React.FC = () => {
         totalAccountUsage: 0,
         isApproved: false,
         createdAt: new Date(),
-        updatedAt: new Date(),
-        // Include trim metadata if available
-        ...(hasTrimMetadata && {
-          trimMetadata: {
-            trimStart: (videoFile as any).trimStart,
-            trimEnd: (videoFile as any).trimEnd,
-            duration: (videoFile as any).trimEnd - (videoFile as any).trimStart
-          }
-        })
+        updatedAt: new Date()
+        // Old client-side trim metadata removed, new structure handles it
       });
       
-      console.log('[DEBUG] Exercise video data prepared:', exerciseVideoData);
+      console.log('[DEBUG] Exercise video data prepared (for server-side trim):', exerciseVideoData);
       
       // 6. Create the exercise video using the service
       console.log('[DEBUG] Creating exercise video document in Firestore');
@@ -599,14 +605,12 @@ const Create: React.FC = () => {
         // Convert to plain object before saving to Firestore
         const exerciseVideoPlainObject = exerciseVideoData.toDictionary();
         
-        // Add the trim metadata back if it exists (it may not be in the toDictionary output)
-        if (hasTrimMetadata) {
-          exerciseVideoPlainObject.trimMetadata = {
-            trimStart: (videoFile as any).trimStart,
-            trimEnd: (videoFile as any).trimEnd,
-            duration: (videoFile as any).trimEnd - (videoFile as any).trimStart
-          };
-        }
+        // Add server-side trim specific fields explicitly if not already in toDictionary 
+        // (depending on ExerciseVideo class implementation)
+        exerciseVideoPlainObject.trimStartTime = trimStartTime!;
+        exerciseVideoPlainObject.trimEndTime = trimEndTime!;
+        exerciseVideoPlainObject.originalVideoStoragePath = uploadResult.gsURL;
+        exerciseVideoPlainObject.trimStatus = 'pending';
         
         await exerciseService.createExerciseVideo(exerciseVideoPlainObject);
         console.log('[DEBUG] Exercise video document created successfully with ID:', videoId);
@@ -672,144 +676,76 @@ const Create: React.FC = () => {
       console.log('[DEBUG] Setting uploaded exercise ID:', exerciseId);
       setUploadedExerciseId(exerciseId);
       
-      // 10. Generate GIF for the uploaded video - CLIENT SIDE VERSION
+      // 10. Trigger Firebase Cloud Function for trimming
+      // Progress: 85% -> 95% (representing triggering and server processing)
+      console.log('[DEBUG] Preparing to trigger Firebase Cloud Function for video trimming.');
+      setUploadProgress(0.87); // Indicate triggering has started
+
+      // TODO: Implement the actual call to your Firebase Cloud Function here
+      // Example parameters for the cloud function:
+      const cloudFunctionParams = {
+        originalVideoStoragePath: uploadResult.gsURL, // gs:// path
+        targetExerciseId: exerciseId,
+        targetVideoId: videoId,
+        trimStartTime: trimStartTime,
+        trimEndTime: trimEndTime,
+        outputFileName: `${formattedExerciseName}-${videoId}-trimmed.mp4` // Suggested name for trimmed video
+      };
+      console.log('[DEBUG] Cloud Function parameters:', cloudFunctionParams);
+      console.log(`[DEBUG] NEXT STEP: Call a Firebase Cloud Function (e.g., via HTTPS callable or other trigger) with these params.`);
+      
+      // Simulate server processing time for UI feedback
+      // In a real scenario, you'd listen for Firestore updates or get a response from the callable function.
+      // For now, we'll just advance the progress bar.
+      // The actual videoURL and gifURL will be updated in Firestore by the cloud function.
+      
+      // Commenting out client-side GIF generation as it should happen on the server after trimming
+      /*
       console.log('[DEBUG] Starting client-side GIF generation for video', videoId);
-
       try {
-        console.log('[DEBUG] Using client-side gifGenerator');
-        
-        // Calculate actual video duration
-        let videoDuration = 5; // default fallback
-        if ((videoFile as any).trimEnd !== undefined && (videoFile as any).trimStart !== undefined) {
-          videoDuration = (videoFile as any).trimEnd - (videoFile as any).trimStart;
-        }
-        
-        // Calculate optimal number of frames based on duration
-        // Reduce to 15fps for smoother processing while maintaining decent animation
-        const framesPerSecond = 60;
-        const totalFrames = Math.ceil(videoDuration * framesPerSecond);
-        
-        console.log('[DEBUG] GIF Generation settings:', {
-          videoDuration,
-          framesPerSecond,
-          totalFrames,
-          delay: Math.ceil(1000 / framesPerSecond) // ms between frames
-        });
-        
-        // Listen for GIF encoding progress updates from the gifGenerator
-        const encodingProgressListener = (progress: number) => {
-          // Scale encoding progress from 87% to 92%
-          const scaledProgress = 0.87 + (progress * 0.05);
-          setUploadProgress(scaledProgress);
-        };
-        
-        // Listen for frame capture progress
-        const frameCaptureListener = (e: any) => {
-          if (e.detail && typeof e.detail.progress === 'number') {
-            // Scale frame capture progress from 85% to 87%
-            const scaledProgress = 0.85 + (e.detail.progress * 0.02);
-            setUploadProgress(scaledProgress);
-          }
-        };
-        
-        // Add event listeners
-        window.addEventListener('gif-encoding-progress', (e: any) => {
-          if (e.detail && typeof e.detail.progress === 'number') {
-            encodingProgressListener(e.detail.progress);
-          }
-        });
-        
-        window.addEventListener('gif-frame-capture-progress', frameCaptureListener);
-
-        const gifUrl = await gifGenerator.generateAndUploadGif(
-          { file: videoFile },
-          formattedExerciseName,
-          videoId,
-          {
-            width: 288,
-            height: 512,
-            numFrames: totalFrames,
-            quality: 10,        // Reduced quality to improve processing
-            delay: Math.ceil(1000 / framesPerSecond),
-            dither: true,     // Disabled dithering to reduce processing
-            workers: 2,        // Reduced workers to prevent memory overload
-            maxDuration: videoDuration
-          }
-        );
-        
-        if (gifUrl) {
-          console.log('[DEBUG] Client-side GIF generation successful:', gifUrl);
-          
-          // GIF has been generated and uploaded, update to 92%
-          setUploadProgress(0.92);
-          
-          // Update the video document with the GIF URL
-          console.log('[DEBUG] Updating Firestore document with GIF URL');
-          const videoRef = doc(db, 'exerciseVideos', videoId);
-          
-          // Create a progress interval for Firestore update
-          let firestoreProgress = 0;
-          const firestoreUpdateInterval = setInterval(() => {
-            // Increment progress from 92% to 95%
-            firestoreProgress += 0.003;
-            const newProgress = Math.min(0.95, 0.92 + firestoreProgress);
-            setUploadProgress(newProgress);
-          }, 100);
-          
-          await updateDoc(videoRef, {
-            gifURL: gifUrl,
-            updatedAt: new Date()
-          });
-          
-          // Clear the Firestore update interval
-          clearInterval(firestoreUpdateInterval);
-          
-          console.log('[DEBUG] Updated video document with GIF URL');
-          
-          // Remove the event listeners
-          window.removeEventListener('gif-encoding-progress', (e: any) => {
-            if (e.detail && typeof e.detail.progress === 'number') {
-              encodingProgressListener(e.detail.progress);
-            }
-          });
-          window.removeEventListener('gif-frame-capture-progress', frameCaptureListener);
-          
-          // Show success modal after everything is complete
-          setShowSuccessModal(true);
-          
-          return true;
-        } else {
-          console.warn('[DEBUG] GIF generation attempt failed (no URL returned), retrying...');
-          // Even if GIF fails, we should still show success modal since video was uploaded
-          setShowSuccessModal(true);
-        }
+        // ... (original client-side GIF generation code) ...
+        // This section needs to be moved to the cloud function or triggered after server trim.
       } catch (gifError) {
         console.error('[DEBUG] Error starting GIF generation:', gifError);
-        // Still complete the progress bar and show success modal even if GIF generation fails
-        setUploadProgress(1.0);
-        setShowSuccessModal(true);
       }
+      */
       
-      // 11. Log a summary of the upload, including trim metadata if present
-      console.log('[DEBUG] Upload process completed successfully', {
+      console.log('[DEBUG] Client-side processing complete. Waiting for server to trim and update URLs.');
+      // The UI should now wait for the Firestore document to be updated by the cloud function.
+      // For demo, we'll just complete the progress bar.
+      // The SuccessModal will be shown, but URLs might not be final yet.
+
+      // A listener on the exerciseVideo document (videoId) should eventually trigger setShowSuccessModal
+      // when `trimStatus` becomes 'completed' and `videoURL` is populated.
+      // For now, let's assume the call is made and we show success.
+      // This part needs to be more robust with actual server feedback.
+      
+      // Progress: 87% -> 100% (simulating call and server work for now)
+      // A more realistic progress update would come from observing the Cloud Function's progress
+      // (e.g., by listening to Firestore updates on the video document).
+      let simulatedServerProgress = 0;
+      const serverProgressInterval = setInterval(() => {
+        simulatedServerProgress += 0.02; // Increment progress
+        const currentSimulatedProgress = Math.min(0.13, simulatedServerProgress); // Cap at 0.13 (for 87% to 100%)
+        setUploadProgress(0.87 + currentSimulatedProgress);
+        if (0.87 + currentSimulatedProgress >= 1.0) {
+          clearInterval(serverProgressInterval);
+          console.log('[DEBUG] Simulated server processing complete.');
+          // In a real app, this would be triggered by the cloud function finishing
+          // and updating the Firestore document, which the client would listen to.
+          setShowSuccessModal(true); 
+        }
+      }, 300);
+
+      // 11. Log a summary (trim data is now from state)
+      console.log('[DEBUG] Upload process initiated for server-side trim:', {
         exerciseId,
         videoId,
-        hasTrimData: !!(videoFile as any).trimStart !== undefined,
-        ...(hasTrimMetadata && {
-          trimStart: (videoFile as any).trimStart,
-          trimEnd: (videoFile as any).trimEnd,
-          duration: (videoFile as any).trimEnd - (videoFile as any).trimStart
-        })
+        originalVideoPath: uploadResult.gsURL,
+        trimStartTime: trimStartTime,
+        trimEndTime: trimEndTime,
       });
       
-      console.log('[DEBUG] ⚠️ IMPORTANT: Server-side processing needed for video trimming!');
-      if (hasTrimMetadata) {
-        console.log('[DEBUG] This video has trim metadata and requires server-side processing:');
-        console.log('[DEBUG] 1. The full video was uploaded to Firebase Storage');
-        console.log('[DEBUG] 2. Trim metadata was added to the Firestore document');
-        console.log('[DEBUG] 3. A Cloud Function should process this video with FFmpeg');
-        console.log(`[DEBUG] 4. Trim points: ${(videoFile as any).trimStart.toFixed(2)}s to ${(videoFile as any).trimEnd.toFixed(2)}s`);
-      }
     } catch (error) {
       console.error('[DEBUG] Upload failed - Full error:', error);
       console.error('[DEBUG] Error stack:', error instanceof Error ? error.stack : 'No stack trace');
@@ -827,8 +763,15 @@ const Create: React.FC = () => {
   const handleSubmit = async () => {
     console.log('[DEBUG] Submit button clicked');
     
-    if (!videoFile) {
-      console.error('[DEBUG] No video file selected');
+    if (!originalVideoFile) {
+      console.error('[DEBUG] No original video file selected');
+      alert('Please select a video file.');
+      return;
+    }
+
+    if (trimStartTime === null || trimEndTime === null) {
+      console.error('[DEBUG] Trim times not set');
+      alert('Please select trim points for your video using the trimmer.');
       return;
     }
     
@@ -1166,13 +1109,10 @@ const Create: React.FC = () => {
               <ProgressBar 
                 progress={uploadProgress} 
                 label={
-                  uploadProgress < 0.7 ? "Uploading video..." :
-                  uploadProgress < 0.8 ? "Creating exercise..." :
-                  uploadProgress < 0.85 ? "Preparing files..." :
-                  uploadProgress < 0.87 ? "Generating preview..." :
-                  uploadProgress < 0.92 ? "Encoding preview..." :
-                  uploadProgress < 0.95 ? "Storing preview..." :
-                  uploadProgress < 1.0 ? "Finalizing..." :
+                  uploadProgress < 0.5 ? "Uploading original video..." :
+                  uploadProgress < 0.8 ? "Creating exercise entry..." :
+                  uploadProgress < 0.87 ? "Requesting server trim..." :
+                  uploadProgress < 1.0 ? "Server processing video..." :
                   "Complete!"
                 }
               />
@@ -1246,7 +1186,7 @@ const Create: React.FC = () => {
         isOpen={showTrimmer}
         file={selectedFile}
         onClose={() => setShowTrimmer(false)}
-        onTrimComplete={handleTrimComplete}
+        onTrimComplete={handleTrimSelection as any} // Use the new handler, cast for now
       />
     </div>
   );

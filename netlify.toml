@@ -17,12 +17,6 @@
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
-# Add FFmpeg to Netlify Functions
-[[plugins]]
-  package = "netlify-plugin-inline-functions-env"
-  [plugins.inputs]
-    include = ["ffmpeg"]
-
 [[redirects]]
   from = "/profile/*"
   to = "/"
