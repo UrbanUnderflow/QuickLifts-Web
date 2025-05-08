@@ -13,6 +13,7 @@ import { RootState } from '../redux/store';
 import AuthWrapper from '../components/AuthWrapper';
 import Toast from '../components/common/Toast';
 import GlobalLoader from '../components/common/GlobalLoader';
+import ErrorBoundary from '../components/ErrorBoundary';
 
 // Only import in development mode
 const isDev = process.env.NODE_ENV === 'development';
@@ -87,14 +88,26 @@ const MyApp: React.FC<AppProps> = ({ Component, pageProps }) => {
       {/* TikTok Pixel Code End (Global) */}
       {/* Redux Provider and App Content */}
       <Provider store={store}>
-        <PersistGate loading={null} persistor={persistor}>
-          <MixpanelInitializer />
-          <AuthWrapper>
-            <Component {...pageProps} />
-          </AuthWrapper>
-          <Toast />
-          <GlobalLoader />
-        </PersistGate>
+        <ErrorBoundary fallbackRender={(error) => (
+          <div style={{ padding: '20px', textAlign: 'center', color: 'white', backgroundColor: 'black', minHeight: '100vh' }}>
+            <h1>Application Error</h1>
+            <p>We've encountered an unexpected issue. Please try again later.</p>
+            {process.env.NODE_ENV === 'development' && error && (
+              <pre style={{ marginTop: '20px', textAlign: 'left', background: '#333', padding: '10px', borderRadius: '5px', color: '#ffcccc' }}>
+                {error.toString()}
+              </pre>
+            )}
+          </div>
+        )}>
+          <PersistGate loading={null} persistor={persistor}>
+            <MixpanelInitializer />
+            <AuthWrapper>
+              <Component {...pageProps} />
+            </AuthWrapper>
+            <Toast />
+            <GlobalLoader />
+          </PersistGate>
+        </ErrorBoundary>
       </Provider>
     </>
   );
