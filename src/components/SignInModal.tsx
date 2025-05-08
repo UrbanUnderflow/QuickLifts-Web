@@ -1783,61 +1783,65 @@ const SignInModal: React.FC<SignInModalProps> = ({
 
       <div className="space-y-6">
         {/* Password Input */}
-        <div className="relative">
+        <div> {/* Changed: Outer div for label + input group */}
           <label className="block text-sm font-medium text-zinc-300 mb-2 font-['HK Grotesk']">
             Password
           </label>
-          <input
-            type={showPassword ? "text" : "password"}
-            value={password}
-            onChange={(e) => {
-              setPassword(e.target.value);
-              setShowError(false);
-            }}
-            className="w-full bg-zinc-800 border border-zinc-600 rounded-lg p-3 pr-10 text-white placeholder-zinc-400 focus:outline-none focus:border-[#E0FE10] focus:ring-1 focus:ring-[#E0FE10] transition-colors"
-            placeholder="Create password"
-          />
-          <button
-            type="button"
-            onClick={() => setShowPassword(!showPassword)}
-            className="absolute inset-y-0 right-0 top-7 pr-3 flex items-center text-sm leading-5"
-            aria-label={showPassword ? "Hide password" : "Show password"}
-          >
-            {showPassword ? (
-              <EyeOff className="h-5 w-5 text-zinc-400" />
-            ) : (
-              <Eye className="h-5 w-5 text-zinc-400" />
-            )}
-          </button>
+          <div className="relative"> {/* Added: Relative container for input and button */}
+            <input
+              type={showPassword ? "text" : "password"}
+              value={password}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                setShowError(false);
+              }}
+              className="w-full bg-zinc-800 border border-zinc-600 rounded-lg p-3 pr-10 text-white placeholder-zinc-400 focus:outline-none focus:border-[#E0FE10] focus:ring-1 focus:ring-[#E0FE10] transition-colors"
+              placeholder="Create password"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute inset-y-0 right-0 pr-3 flex items-center text-sm leading-5" // Removed top-7
+              aria-label={showPassword ? "Hide password" : "Show password"}
+            >
+              {showPassword ? (
+                <EyeOff className="h-5 w-5 text-zinc-400" />
+              ) : (
+                <Eye className="h-5 w-5 text-zinc-400" />
+              )}
+            </button>
+          </div>
         </div>
 
         {/* Confirm Password Input */}
-        <div className="relative">
+        <div> {/* Changed: Outer div for label + input group */}
           <label className="block text-sm font-medium text-zinc-300 mb-2 font-['HK Grotesk']">
             Confirm Password
           </label>
-          <input
-            type={showConfirmPassword ? "text" : "password"}
-            value={confirmPassword}
-            onChange={(e) => {
-              setConfirmPassword(e.target.value);
-              setShowError(false);
-            }}
-            className="w-full bg-zinc-800 border border-zinc-600 rounded-lg p-3 pr-10 text-white placeholder-zinc-400 focus:outline-none focus:border-[#E0FE10] focus:ring-1 focus:ring-[#E0FE10] transition-colors"
-            placeholder="Confirm password"
-          />
-          <button
-            type="button"
-            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-            className="absolute inset-y-0 right-0 top-7 pr-3 flex items-center text-sm leading-5"
-            aria-label={showConfirmPassword ? "Hide password" : "Show password"}
-          >
-            {showConfirmPassword ? (
-              <EyeOff className="h-5 w-5 text-zinc-400" />
-            ) : (
-              <Eye className="h-5 w-5 text-zinc-400" />
-            )}
-          </button>
+          <div className="relative"> {/* Added: Relative container for input and button */}
+            <input
+              type={showConfirmPassword ? "text" : "password"}
+              value={confirmPassword}
+              onChange={(e) => {
+                setConfirmPassword(e.target.value);
+                setShowError(false);
+              }}
+              className="w-full bg-zinc-800 border border-zinc-600 rounded-lg p-3 pr-10 text-white placeholder-zinc-400 focus:outline-none focus:border-[#E0FE10] focus:ring-1 focus:ring-[#E0FE10] transition-colors"
+              placeholder="Confirm password"
+            />
+            <button
+              type="button"
+              onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+              className="absolute inset-y-0 right-0 pr-3 flex items-center text-sm leading-5" // Removed top-7
+              aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+            >
+              {showConfirmPassword ? (
+                <EyeOff className="h-5 w-5 text-zinc-400" />
+              ) : (
+                <Eye className="h-5 w-5 text-zinc-400" />
+              )}
+            </button>
+          </div>
         </div>
 
         <div className="space-y-2">
@@ -2103,30 +2107,30 @@ const SignInModal: React.FC<SignInModalProps> = ({
                 Forgot your password?
               </button>
             </div>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => {
-                setPassword(e.target.value);
-                setShowError(false);
-              }}
-              className="w-full bg-zinc-800 border border-zinc-600 rounded-lg p-3 text-white placeholder-zinc-400 focus:outline-none focus:border-[#E0FE10] focus:ring-1 focus:ring-[#E0FE10] transition-colors"
-              placeholder="Enter your password"
-            />
-            {/* Add visibility toggle for sign-in password field */}
-             <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className="absolute inset-y-0 right-0 pr-3 flex items-center text-sm leading-5"
-              style={{ top: '2.6rem' }} // Adjust positioning as needed
-              aria-label={showPassword ? "Hide password" : "Show password"}
-            >
-              {showPassword ? (
-                <EyeOff className="h-5 w-5 text-zinc-400" />
-              ) : (
-                <Eye className="h-5 w-5 text-zinc-400" />
-              )}
-            </button>
+            <div className="relative"> {/* Added: Relative container for input and button */}
+              <input
+                type={showPassword ? "text" : "password"} // Changed to use showPassword state
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  setShowError(false);
+                }}
+                className="w-full bg-zinc-800 border border-zinc-600 rounded-lg p-3 pr-10 text-white placeholder-zinc-400 focus:outline-none focus:border-[#E0FE10] focus:ring-1 focus:ring-[#E0FE10] transition-colors" // Added pr-10
+                placeholder="Enter your password"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute inset-y-0 right-0 pr-3 flex items-center text-sm leading-5" // Removed inline style
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? (
+                  <EyeOff className="h-5 w-5 text-zinc-400" />
+                ) : (
+                  <Eye className="h-5 w-5 text-zinc-400" />
+                )}
+              </button>
+            </div>
           </div>
         )}
       </div>
