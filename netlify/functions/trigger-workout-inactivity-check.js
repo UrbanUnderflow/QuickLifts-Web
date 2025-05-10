@@ -1,8 +1,11 @@
 const { admin, db, headers } = require('./config/firebase');
 
 // Configuration
-const INACTIVITY_THRESHOLD_DAYS = 3; // Number of days before a user is considered inactive
-const INACTIVITY_THRESHOLD_MS = INACTIVITY_THRESHOLD_DAYS * 24 * 60 * 60 * 1000;
+const INACTIVITY_REMINDER_THRESHOLD_HOURS = 4; // Hours before a reminder is sent
+const AUTO_STOP_WORKOUT_THRESHOLD_HOURS = 12; // Hours before workout is auto-stopped
+
+const INACTIVITY_REMINDER_THRESHOLD_MS = INACTIVITY_REMINDER_THRESHOLD_HOURS * 60 * 60 * 1000;
+const AUTO_STOP_WORKOUT_THRESHOLD_MS = AUTO_STOP_WORKOUT_THRESHOLD_HOURS * 60 * 60 * 1000;
 
 /**
  * Sends a push notification using Firebase Admin SDK.
@@ -121,16 +124,17 @@ exports.handler = async (event, context) => {
     const simulationMode = !!requestBody.simulationMode;
 
     console.log(`Starting workout inactivity check... Test Mode: ${testMode}, Simulation Mode: ${simulationMode}`);
+    console.log(`Reminder threshold: ${INACTIVITY_REMINDER_THRESHOLD_HOURS} hours. Auto-stop threshold: ${AUTO_STOP_WORKOUT_THRESHOLD_HOURS} hours.`);
 
     const now = Date.now();
-    const cutoffTime = now - INACTIVITY_THRESHOLD_MS;
     let userChallengesProcessed = 0;
-    let inactiveUsersFound = 0;
-    let notificationsTriggered = 0;
+    let inactiveUsersFound = 0; // This will now count users triggering any action (4h or 12h)
+    let remindersSent = 0;
+    let autoStopsProcessed = 0;
     let simulatedUpdates = [];
 
-    const batch = db.batch();
-    const updatesToCommit = []; // Track refs to update
+    const batchUserChallenge = db.batch(); // Batch for UserChallenge updates
+    const userChallengesToMarkInactiveRefs = []; // Refs for UserChallenges to set isCurrentlyActive = false (12h)
 
     try {
         // Query for active user challenges
@@ -149,7 +153,8 @@ exports.handler = async (event, context) => {
                     results: {
                         userChallengesProcessed: 0,
                         inactiveUsersFound: 0,
-                        notificationsTriggered: 0,
+                        remindersSent: 0,
+                        autoStopsProcessed: 0,
                         timestamp: now,
                         testMode,
                         simulationMode,
@@ -164,86 +169,178 @@ exports.handler = async (event, context) => {
 
         for (const doc of snapshot.docs) {
             const challengeData = doc.data();
-            const docId = doc.id;
+            const docId = doc.id; // This is the UserChallenge document ID
             const userId = challengeData.userId;
             const username = challengeData.username || 'User';
-            const challengeId = challengeData.challengeId || '';
+            const challengeId = challengeData.challengeId || ''; // Actual Challenge ID
             const challengeTitle = challengeData.challenge?.title || '';
+            const lastActiveRoundWorkoutId = challengeData.lastActiveRoundWorkoutId; // New field
 
             if (!userId) {
-                console.warn(`Skipping challenge ${docId}: Missing userId.`);
+                console.warn(`Skipping UserChallenge ${docId}: Missing userId.`);
                 continue;
             }
 
-            // Format lastActive timestamp to Date object
             const lastActiveDate = formatTimestamp(challengeData.lastActive);
             const lastActiveTime = lastActiveDate ? lastActiveDate.getTime() : null;
 
-            // Check if lastActive exists and is older than the threshold
-            if ((lastActiveTime && lastActiveTime < cutoffTime) || !lastActiveTime) {
-                inactiveUsersFound++;
-                console.log(`User challenge ${docId} (User: ${userId}) is inactive. Last active: ${lastActiveDate ? lastActiveDate.toISOString() : 'Never'}`);
+            if (!lastActiveTime) {
+                console.log(`UserChallenge ${docId} (User: ${userId}) has no lastActive time. Skipping inactivity checks for this entry.`);
+                continue;
+            }
 
-                // In simulation mode, just collect information but don't update or send notifications
+            const timeSinceLastActive = now - lastActiveTime;
+
+            // Check for 12+ hour inactivity first (auto-stop)
+            if (timeSinceLastActive > AUTO_STOP_WORKOUT_THRESHOLD_MS) {
+                inactiveUsersFound++;
+                console.log(`UserChallenge ${docId} (User: ${userId}) inactive for >${AUTO_STOP_WORKOUT_THRESHOLD_HOURS} hours. Last active: ${lastActiveDate.toISOString()}. Auto-stopping.`);
+
                 if (simulationMode) {
                     simulatedUpdates.push({
                         userId,
                         username,
+                        userChallengeId: docId,
                         challengeId,
                         challengeTitle,
-                        lastActive: lastActiveDate
+                        lastActive: lastActiveDate,
+                        lastActiveRoundWorkoutId,
+                        action: 'auto_stop_12h',
+                        currentIsActive: challengeData.isCurrentlyActive,
+                        timeSinceLastActiveHours: (timeSinceLastActive / (1000 * 60 * 60)).toFixed(2)
                     });
                     continue;
                 }
 
-                // Mark for update in the batch (if not in test or simulation mode)
                 if (!testMode) {
-                    updatesToCommit.push(doc.ref);
-                }
+                    // 1. Mark UserChallenge as inactive
+                    userChallengesToMarkInactiveRefs.push(doc.ref);
 
-                // Prepare and send notification (if not in simulation mode)
-                const fcmToken = challengeData.fcmToken;
+                    // 2. Update WorkoutSession
+                    if (lastActiveRoundWorkoutId && userId) {
+                        const workoutSessionQuery = await db.collection('users').doc(userId).collection('workoutSessions')
+                            .where('roundWorkoutId', '==', lastActiveRoundWorkoutId)
+                            // .where('status', '!=', 'completed') // Ensure we only stop ongoing ones
+                            .limit(1)
+                            .get();
 
-                if (fcmToken && !testMode) {
-                    console.log(`Attempting to send inactivity notification to User: ${userId}`);
-                    const notificationResult = await sendNotification(
-                        fcmToken,
-                        'Pulse Challenge Check-in',
-                        `Hey ${username}, it's been a while since your last workout. Keep up your progress by doing a workout today!`,
-                        {
-                            type: 'challenge_inactivity_reminder',
-                            userId,
-                            challengeId
+                        if (!workoutSessionQuery.empty) {
+                            const workoutSessionDoc = workoutSessionQuery.docs[0];
+                            if (workoutSessionDoc.data().status !== 'completed') {
+                                console.log(`User: ${userId}, Auto-stopping WorkoutSession ${workoutSessionDoc.id} (located in user's subcollection) (RoundWorkoutId: ${lastActiveRoundWorkoutId})`);
+                                await workoutSessionDoc.ref.update({
+                                    endTime: admin.firestore.Timestamp.now(),
+                                    status: 'completed',
+                                    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                                });
+                                console.log(`User: ${userId}, WorkoutSession ${workoutSessionDoc.id} in subcollection updated.`);
+                            } else {
+                                console.log(`User: ${userId}, WorkoutSession ${workoutSessionDoc.id} (RoundWorkoutId: ${lastActiveRoundWorkoutId}) in subcollection already completed.`);
+                            }
+                        } else {
+                            console.warn(`User: ${userId}, No matching active WorkoutSession found in subcollection for RoundWorkoutId: ${lastActiveRoundWorkoutId} to auto-stop.`);
                         }
-                    );
-                    if (notificationResult.success) {
-                        notificationsTriggered++;
+                    } else {
+                        console.warn(`User: ${userId}, Cannot auto-stop workout session: missing lastActiveRoundWorkoutId or userId for UserChallenge ${docId}.`);
                     }
-                } else if (!fcmToken) {
-                    console.warn(`User challenge ${docId} (User: ${userId}) is inactive but has no FCM token. Skipping notification.`);
+
+                    // 3. Send Notification
+                    const fcmToken = challengeData.fcmToken;
+                    if (fcmToken) {
+                        console.log(`Attempting to send 12h auto-stop notification to User: ${userId}`);
+                        const notificationResult = await sendNotification(
+                            fcmToken,
+                            'Workout Auto-Stopped',
+                            `Hey ${username}, your workout was automatically stopped after ${AUTO_STOP_WORKOUT_THRESHOLD_HOURS} hours of inactivity.`,
+                            {
+                                type: 'INACTIVITY_AUTO_STOP_12H',
+                                userId,
+                                userChallengeId: docId,
+                                challengeId,
+                                roundWorkoutId: lastActiveRoundWorkoutId || ''
+                            }
+                        );
+                        if (notificationResult.success) {
+                            autoStopsProcessed++; // Counts successful notifications for auto-stops
+                        }
+                    } else {
+                        console.warn(`UserChallenge ${docId} (User: ${userId}) inactive >12h but no FCM token. Skipping auto-stop notification.`);
+                    }
+                } else {
+                     console.log(`TEST MODE: Would auto-stop for User: ${userId} (UserChallenge ${docId}) and send notification.`);
                 }
+
+            } else if (timeSinceLastActive > INACTIVITY_REMINDER_THRESHOLD_MS) {
+                inactiveUsersFound++;
+                console.log(`UserChallenge ${docId} (User: ${userId}) inactive for >${INACTIVITY_REMINDER_THRESHOLD_HOURS} hours. Last active: ${lastActiveDate.toISOString()}. Sending reminder.`);
+
+                if (simulationMode) {
+                    simulatedUpdates.push({
+                        userId,
+                        username,
+                        userChallengeId: docId,
+                        challengeId,
+                        challengeTitle,
+                        lastActive: lastActiveDate,
+                        lastActiveRoundWorkoutId,
+                        action: 'reminder_4h',
+                        currentIsActive: challengeData.isCurrentlyActive,
+                        timeSinceLastActiveHours: (timeSinceLastActive / (1000 * 60 * 60)).toFixed(2)
+                    });
+                    continue;
+                }
+                
+                // IMPORTANT: Do NOT set isCurrentlyActive to false for a 4-hour reminder.
+
+                if (!testMode) {
+                    // Send Notification
+                    const fcmToken = challengeData.fcmToken;
+                    if (fcmToken) {
+                        console.log(`Attempting to send 4h reminder notification to User: ${userId}`);
+                        const notificationResult = await sendNotification(
+                            fcmToken,
+                            'Active Workout Reminder',
+                            `Hey ${username}, you have an active workout in progress. Tap to resume or stop it.`,
+                            {
+                                type: 'INACTIVITY_REMINDER_4H',
+                                userId,
+                                userChallengeId: docId,
+                                challengeId,
+                                roundWorkoutId: lastActiveRoundWorkoutId || ''
+                            }
+                        );
+                        if (notificationResult.success) {
+                            remindersSent++;
+                        }
+                    } else {
+                        console.warn(`UserChallenge ${docId} (User: ${userId}) inactive >4h but no FCM token. Skipping reminder notification.`);
+                    }
+                } else {
+                    console.log(`TEST MODE: Would send 4h reminder for User: ${userId} (UserChallenge ${docId}).`);
+                }
+
             } else {
-                // User is still active - within the threshold
-                console.log(`User challenge ${docId} (User: ${userId}) is still active. Last active: ${lastActiveDate ? lastActiveDate.toISOString() : 'Unknown'}`);
+                // User is still active - within the 4-hour threshold
+                console.log(`UserChallenge ${docId} (User: ${userId}) is still active. Last active: ${lastActiveDate.toISOString()}`);
             }
         }
 
-        // Commit the batch update if there are users to mark as inactive and not in test or simulation mode
-        if (!testMode && !simulationMode && updatesToCommit.length > 0) {
-            console.log(`Marking ${updatesToCommit.length} user challenges as inactive.`);
-            updatesToCommit.forEach(ref => {
-                batch.update(ref, {
+        // Commit the batch update for UserChallenges that need isCurrentlyActive set to false (12h+ users)
+        if (!testMode && !simulationMode && userChallengesToMarkInactiveRefs.length > 0) {
+            console.log(`Marking ${userChallengesToMarkInactiveRefs.length} user challenges as inactive (due to 12h+ inactivity).`);
+            userChallengesToMarkInactiveRefs.forEach(ref => {
+                batchUserChallenge.update(ref, {
                     isCurrentlyActive: false,
                     updatedAt: admin.firestore.FieldValue.serverTimestamp()
                 });
             });
-            await batch.commit();
-            console.log('Batch update successful.');
+            await batchUserChallenge.commit();
+            console.log('UserChallenge batch update successful for 12h+ inactive users.');
         } else {
-            console.log(`${testMode ? 'Test mode: ' : simulationMode ? 'Simulation mode: ' : ''}No user challenges updated.`);
+            console.log(`${testMode ? 'Test mode: ' : simulationMode ? 'Simulation mode: ' : ''}No UserChallenges updated via batch for 12h+ inactivity.`);
         }
 
-        const summaryMessage = `Check complete. Processed ${userChallengesProcessed} challenges, found ${inactiveUsersFound} inactive users.${!simulationMode ? ` Sent ${notificationsTriggered} notifications.` : ''} ${!testMode && !simulationMode ? `Updated ${updatesToCommit.length} records.` : ''}`;
+        const summaryMessage = `Check complete. Processed ${userChallengesProcessed} challenges. Found ${inactiveUsersFound} users needing attention (4h or 12h). Reminders sent: ${remindersSent}. Workouts auto-stopped: ${autoStopsProcessed}.`;
         console.log(summaryMessage);
 
         return {
@@ -254,8 +351,10 @@ exports.handler = async (event, context) => {
                 message: summaryMessage,
                 results: {
                     userChallengesProcessed,
-                    inactiveUsersFound,
-                    notificationsTriggered,
+                    inactiveUsersFound, // Total users past either threshold
+                    remindersSent,      // Specifically 4h reminders
+                    autoStopsProcessed, // Specifically 12h auto-stops (notifications/DB updates)
+                    userChallengesMarkedInactive: userChallengesToMarkInactiveRefs.length, // UC records updated
                     timestamp: now,
                     testMode,
                     simulationMode,
@@ -275,7 +374,8 @@ exports.handler = async (event, context) => {
                 results: {
                     userChallengesProcessed,
                     inactiveUsersFound,
-                    notificationsTriggered,
+                    remindersSent,
+                    autoStopsProcessed,
                     timestamp: now,
                     testMode,
                     simulationMode

@@ -126,6 +126,7 @@ const InactivityCheckPage: React.FC = () => {
 
       
       console.log(`Loaded ${allUserChallenges.length} user challenges`);
+      console.log('allUserChallenges:', allUserChallenges);
       
       setUserChallenges(allUserChallenges);
       setFilteredChallenges(allUserChallenges);
@@ -630,6 +631,22 @@ const InactivityCheckPage: React.FC = () => {
                                   title="Copy challenge ID"
                                 >
                                   {selectedRecord.challengeId}
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" viewBox="0 0 20 20" fill="currentColor">
+                                    <path d="M8 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" />
+                                    <path d="M6 3a2 2 0 00-2 2v11a2 2 0 002 2h8a2 2 0 002-2V5a2 2 0 00-2-2 3 3 0 01-3 3H9a3 3 0 01-3-3z" />
+                                  </svg>
+                                </button>
+                              </div>
+                            </div>
+                            <div>
+                              <div className="text-gray-400 text-xs">UserChallenge ID</div>
+                              <div className="text-gray-300 font-mono text-sm">
+                                <button 
+                                  onClick={() => copyToClipboard(selectedRecord.id || '')} 
+                                  className="hover:text-blue-400 flex items-center"
+                                  title="Copy UserChallenge ID"
+                                >
+                                  {selectedRecord.id}
                                   <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" viewBox="0 0 20 20" fill="currentColor">
                                     <path d="M8 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" />
                                     <path d="M6 3a2 2 0 00-2 2v11a2 2 0 002 2h8a2 2 0 002-2V5a2 2 0 00-2-2 3 3 0 01-3 3H9a3 3 0 01-3-3z" />

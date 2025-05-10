@@ -741,14 +741,14 @@ const MorningMobilityChallengePage: NextPage = () => {
             Join Now
           </a>
           <a 
-            href="https://apps.apple.com/us/app/pulse-fitness"
+            href="https://apps.apple.com/ag/app/pulse-community-fitness/id6451497729"
             className="bg-zinc-700 text-white px-5 py-3 rounded-full font-semibold hover:bg-zinc-600 transition-colors flex items-center justify-center"
             onClick={() => {
               // Track "Download App" click (Sticky Bar)
               const distinctId = mixpanel.get_distinct_id();
               trackEvent(distinctId, 'Click - Download App', {
                 location: 'sticky_bar',
-                target_url: 'https://apps.apple.com/us/app/pulse-fitness',
+                target_url: 'https://apps.apple.com/ag/app/pulse-community-fitness/id6451497729',
               });
             }}
           >

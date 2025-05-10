@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Head from 'next/head';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import { workoutService } from '../../api/firebase/workout/service';
-import { SweatlistCollection, UserChallenge, Challenge, ChallengeStatus } from '../../api/firebase/workout/types';
+import { SweatlistCollection, UserChallenge, Challenge, ChallengeStatus, WorkoutStatus } from '../../api/firebase/workout/types';
 import debounce from 'lodash.debounce';
+import { Workout, SweatlistIdentifiers } from '../../api/firebase/workout/types'; // Added SweatlistIdentifiers
 
 // CSS for toast animation (copied from inactivityCheck)
 const toastAnimation = `
@@ -222,6 +223,7 @@ const ChallengeStatusPage: React.FC = () => {
       try {
         // Use the existing service function to fetch by challenge ID (which is collection.id)
         const fetchedChallenges = await workoutService.fetchUserChallengesByChallengeId(collection.id);
+        console.log('[ChallengeStatusPage] Fetched UserChallenges:', JSON.stringify(fetchedChallenges.map(uc => ({ id: uc.id, userId: uc.userId, challengeId: uc.challengeId })), null, 2)); // DEBUG LOG
         setUserChallenges(fetchedChallenges);
       } catch (error) {
         console.error('Error fetching user challenges:', error);
@@ -383,79 +385,154 @@ const ChallengeStatusPage: React.FC = () => {
   };
 
   // Add function to handle starting a test workout
-  const handleTestWorkoutStart = (collectionId: string, sweatlist: { id: string; sweatlistName: string }, index: number) => {
-    setSelectedSweatlist({...sweatlist, index});
-    setSelectedParticipant('');
-    setTestingResult(null);
+  const handleTestWorkoutStart = (collectionId: string, sweatlist: SweatlistIdentifiers, index: number) => { // Modified sweatlist type
+    if (!selectedChallenge || !userChallenges.length) {
+      alert("Please select a challenge and ensure there are participants.");
+      return;
+    }
+    // Find the first participant to act as the test user
+    // In a real scenario, you might want to select a specific test user
+    const firstParticipant = userChallenges[0];
+    if (!firstParticipant) {
+      alert("No participants found in this challenge to initiate a test workout.");
+      return;
+    }
+    setSelectedParticipant(firstParticipant.userId);
+    setSelectedSweatlist({...sweatlist, index}); // sweatlist already contains sweatlistAuthorId
     setShowTestModal(true);
+    setTestingResult(null); // Reset previous results
   };
 
-  // Function to create and then auto-delete a test workout session
   const testStartWorkout = async () => {
-    if (!selectedChallenge || !selectedSweatlist || !selectedParticipant) {
+    if (!selectedChallenge || 
+        !selectedParticipant || 
+        !selectedSweatlist || 
+        !selectedSweatlist.id || 
+        !(selectedSweatlist as any).sweatlistAuthorId) { // Cast to any for the check
       setTestingResult({
         success: false,
-        message: "Missing required data to start test workout."
+        message: "Missing critical data: challenge, participant, or sweatlist details (ID or Author ID)."
       });
       return;
     }
-    
+
     const loadingKey = `${selectedChallenge.id}-${selectedSweatlist.id}-${selectedSweatlist.index}`;
     setTestingWorkout(prev => ({ ...prev, [loadingKey]: true }));
-    
+    setTestingResult({ success: true, message: "Initiating test workout simulation..." });
+
+    let sessionId: string | null = null;
+
     try {
-      // Get participant details
-      const participant = userChallenges.find(uc => uc.userId === selectedParticipant);
-      
-      if (!participant) {
-        throw new Error("Selected participant not found in challenge participants");
+      setTestingResult({ success: true, message: "Fetching workout template..." });
+      const [workoutTemplate, templateLogs] = await workoutService.fetchSavedWorkout(
+        (selectedSweatlist as any).sweatlistAuthorId, // Cast to any for usage
+        selectedSweatlist.id
+      );
+
+      if (!workoutTemplate || !templateLogs) {
+        throw new Error("Failed to fetch workout template or its logs.");
       }
-      
-      // Create the workout session
-      const sessionData = {
-        workoutStatus: "inProgress", // This is the key status that triggers the notification
-        challengeId: selectedChallenge.id,
-        title: selectedSweatlist.sweatlistName || "Test Workout",
-        sweatlistId: selectedSweatlist.id,
-        timestamp: new Date(),
-        notes: "This is a test workout session created from admin panel"
-      };
-      
-      // Call the Firebase function to create a workout session
-      console.log(`Creating test workout session for user ${participant.userId} in challenge ${selectedChallenge.id}`);
-      const sessionId = await workoutService.createTestWorkoutSession(participant.userId, sessionData);
-      
+      setTestingResult({ success: true, message: `Template '${workoutTemplate.title}' fetched. Creating test session...` });
+
+      const { sessionId: newSessionId, createdLogObjects } = await workoutService.createFullTestWorkoutSession(
+        selectedParticipant, // This is the userId of the participant
+        workoutTemplate,
+        templateLogs,
+        selectedChallenge.id,
+        selectedSweatlist.id
+      );
+      sessionId = newSessionId; // Store session ID for cleanup
+      setTestingResult({ success: true, message: `Test session ${sessionId} created with ${createdLogObjects.length} exercises. Simulating completion...` });
+
+      // Simulate completing each exercise log
+      for (let i = 0; i < createdLogObjects.length; i++) {
+        const logToComplete = createdLogObjects[i];
+        await new Promise(resolve => setTimeout(resolve, 2000)); // 2-second delay
+        
+        setTestingResult({ 
+          success: true, 
+          message: `Simulating completion of exercise ${i + 1}/${createdLogObjects.length}: '${logToComplete.exercise?.name || 'Unknown Exercise'}'...` 
+        });
+
+        await workoutService.simulateUpdateExerciseLog(
+          selectedParticipant,
+          sessionId,
+          logToComplete.id,
+          {
+            logSubmitted: true,
+            isCompleted: true,
+            completedAt: new Date(),
+            updatedAt: new Date()
+          }
+        );
+      }
+
+      setTestingResult({ success: true, message: "All exercises simulated. Completing workout session..." });
+      await new Promise(resolve => setTimeout(resolve, 1000)); // Short delay
+
+      await workoutService.simulateUpdateWorkoutSession(
+        selectedParticipant,
+        sessionId,
+        {
+          workoutStatus: WorkoutStatus.Complete,
+          isCompleted: true,
+          endTime: new Date(), // Keep endTime here
+          updatedAt: new Date()
+        } as Partial<Workout> & { endTime?: Date } // Cast the entire update object
+      );
+
       setTestingResult({
         success: true,
-        message: `Test workout started! Session ID: ${sessionId}`
+        message: `Workout session ${sessionId} simulation complete! Cleaning up in 15 seconds...`
       });
-      
-      // Set a timeout to delete the workout session after 10 seconds
+
+      // Cleanup after 15 seconds
       setTimeout(async () => {
+        if (!sessionId) return;
         try {
-          console.log(`Auto-deleting test workout session ${sessionId} for user ${participant.userId}`);
-          await workoutService.deleteTestWorkoutSession(participant.userId, sessionId);
+          setTestingResult({ success: true, message: `Cleaning up test session ${sessionId}...` });
+          console.log(`Auto-deleting test workout session ${sessionId} for user ${selectedParticipant}`);
+          await workoutService.deleteTestWorkoutSession(selectedParticipant, sessionId);
           setTestingResult({
             success: true,
-            message: `Test completed and workout session deleted (ID: ${sessionId})`
+            message: `Test simulation finished and session ${sessionId} cleaned up.`
           });
         } catch (cleanupError) {
           console.error("Error during test workout cleanup:", cleanupError);
           setTestingResult({
             success: false,
-            message: `Test ran but cleanup failed: ${cleanupError instanceof Error ? cleanupError.message : 'Unknown error'}`
+            message: `Simulation ran but cleanup failed for session ${sessionId}: ${cleanupError instanceof Error ? cleanupError.message : 'Unknown error'}`
           });
         } finally {
           setTestingWorkout(prev => ({ ...prev, [loadingKey]: false }));
         }
-      }, 10000); // 10 seconds
-      
+      }, 15000); // 15 seconds
+
     } catch (error) {
-      console.error("Error starting test workout:", error);
+      console.error("Error during test workout simulation:", error);
       setTestingResult({
         success: false,
-        message: `Failed to start test workout: ${error instanceof Error ? error.message : 'Unknown error'}`
+        message: `Simulation error: ${error instanceof Error ? error.message : 'Unknown error'}`
       });
+      // If session was created before error, try to clean it up immediately if possible
+      if (sessionId) {
+        setTestingResult({
+          success: false,
+          message: `Simulation error. Attempting immediate cleanup of session ${sessionId}... Error: ${error instanceof Error ? error.message : 'Unknown error'}`
+        });
+        try {
+          await workoutService.deleteTestWorkoutSession(selectedParticipant, sessionId);
+          setTestingResult({
+            success: false,
+            message: `Simulation error. Session ${sessionId} cleaned up. Original Error: ${error instanceof Error ? error.message : 'Unknown error'}`
+          });
+        } catch (immediateCleanupError) {
+           setTestingResult({
+            success: false,
+            message: `Simulation error AND cleanup failed for session ${sessionId}. Original Error: ${error instanceof Error ? error.message : 'Unknown error'}. Cleanup Error: ${immediateCleanupError instanceof Error ? immediateCleanupError.message : 'Unknown error'}`
+          });
+        }
+      }
       setTestingWorkout(prev => ({ ...prev, [loadingKey]: false }));
     }
   };
@@ -613,7 +690,7 @@ const ChallengeStatusPage: React.FC = () => {
               <h2 className="text-xl font-medium mb-4 text-white flex items-center">
                 <span className="text-[#d7ff00] mr-2 text-sm">
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
-                    <path fillRule="evenodd" d="M8.603 3.799A4.49 4.49 0 0112 2.25c1.357 0 2.573.6 3.397 1.549a4.49 4.49 0 013.498 1.307 4.491 4.491 0 011.307 3.497A4.49 4.49 0 0121.75 12a4.49 4.49 0 01-1.549 3.397 4.491 4.491 0 01-1.307 3.497 4.491 4.491 0 01-3.497 1.307A4.49 4.49 0 0112 21.75a4.49 4.49 0 01-3.397-1.549 4.49 4.49 0 01-3.498-1.306 4.491 4.491 0 01-1.307-3.498A4.49 4.49 0 012.25 12c0-1.357.6-2.573 1.549-3.397a4.49 4.49 0 011.307-3.497 4.49 4.49 0 013.497-1.307zm7.007 6.387a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clipRule="evenodd" />
+                    <path fillRule="evenodd" d="M8.603 3.799A4.49 4.49 0 0112 2.25c1.357 0 2.573.6 3.397 1.549a4.49 4.49 0 013.498 1.307 4.491 4.491 0 011.307 3.497A4.49 4.49 0 0121.75 12a4.49 4.49 0 01-1.549 3.397 4.491 4.491 0 01-1.307 3.497 4.491 4.491 0 01-3.497 1.307A4.49 4.49 0 0112 21.75a4.49 4.49 0 01-3.397-1.549 4.491 4.491 0 01-1.307-3.498A4.49 4.49 0 012.25 12c0-1.357.6-2.573 1.549-3.397a4.49 4.49 0 011.307-3.497 4.49 4.49 0 013.497-1.307zm7.007 6.387a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clipRule="evenodd" />
                   </svg>
                 </span>
                 Sweatlist Challenges
@@ -878,7 +955,7 @@ const ChallengeStatusPage: React.FC = () => {
                                     )}
                                     {selectedChallenge.sweatlistIds && selectedChallenge.sweatlistIds.length > 0 ? (
                                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                                        {selectedChallenge.sweatlistIds.map((sweatlist: { id: string; sweatlistName: string; order?: number }, index: number) => (
+                                        {selectedChallenge.sweatlistIds.map((sweatlist: SweatlistIdentifiers, index: number) => ( // Modified sweatlist type
                                           <div
                                             key={`${sweatlist.id}-${index}`}
                                             className="p-3 rounded-lg border bg-[#262a30] border-gray-700 flex items-center justify-between"
@@ -1176,7 +1253,7 @@ const ChallengeStatusPage: React.FC = () => {
               </div>
               <div>
                 <p className="text-gray-400">Challenge ID:</p>
-                <p className="text-gray-200 font-mono break-all">{selectedUserChallengeDetails.challengeId}</p>
+                <p className="text-gray-200 font-mono break-all">{selectedUserChallengeDetails.id}</p>
               </div>
               <div>
                 <p className="text-gray-400">Joined Date:</p>

@@ -837,7 +837,7 @@ async fetchUserChallengesByChallengeId(challengeId: string): Promise<UserChallen
       // --- End Instantiation ---
     });
 
-    // console.log('All user challenges after processing:', JSON.stringify(userChallenges, null, 2));
+    console.log('All user challenges after processing:', JSON.stringify(userChallenges, null, 2));
 
     return userChallenges;
   } catch (error) {
@@ -2221,13 +2221,26 @@ async deleteWorkoutSession(workoutId: string | null): Promise<void> {
         throw new Error('User ID and Session ID are required');
       }
 
-      // Delete from user's subcollection
       const userSessionRef = doc(db, 'users', userId, 'workoutSessions', sessionId);
+      const logsRef = collection(userSessionRef, 'logs');
+
+      // Delete all logs in the subcollection
+      const logsSnapshot = await getDocs(logsRef);
+      const batch = writeBatch(db);
+      logsSnapshot.docs.forEach((logDoc) => {
+        batch.delete(logDoc.ref);
+      });
+      await batch.commit(); // Commit deletion of logs first
+
+      // Then delete the main session document from user's subcollection
       await deleteDoc(userSessionRef);
       
-      // Delete from root collection
+      // And delete from root collection if it exists there
       const rootSessionRef = doc(db, 'workout-sessions', sessionId);
-      await deleteDoc(rootSessionRef);
+      const rootSessionSnap = await getDoc(rootSessionRef);
+      if (rootSessionSnap.exists()) {
+        await deleteDoc(rootSessionRef);
+      }
 
       console.log(`Deleted test workout session ${sessionId} for user ${userId}`);
     } catch (error) {
@@ -2235,6 +2248,196 @@ async deleteWorkoutSession(workoutId: string | null): Promise<void> {
       throw error;
     }
   }
+
+  /**
+   * Creates a full test workout session including its exercise logs.
+   * @param userId The ID of the user (participant).
+   * @param workoutTemplate The Workout object to use as a template.
+   * @param templateLogs The array of ExerciseLog objects from the template.
+   * @param challengeId The ID of the challenge this test session is associated with (optional).
+   * @param sweatlistId The ID of the sweatlist (workout template) this session is based on (optional).
+   * @returns The ID of the created session and the created ExerciseLog objects.
+   */
+  async createFullTestWorkoutSession(
+    userId: string,
+    workoutTemplate: Workout,
+    templateLogs: ExerciseLog[],
+    challengeId: string | null,
+    sweatlistId: string | null
+  ): Promise<{ sessionId: string; createdLogObjects: ExerciseLog[] }> {
+    if (!userId) throw new Error('User ID is required for creating a test session.');
+    if (!workoutTemplate) throw new Error('Workout template is required.');
+
+    const sessionsRef = collection(db, 'users', userId, 'workoutSessions');
+    const newSessionId = doc(sessionsRef).id; // Generate ID for the new session
+
+    const now = new Date();
+
+    const sessionData = new Workout({
+      id: newSessionId,
+      roundWorkoutId: `${workoutTemplate.id}-${now.getTime()}`, // Based on template's ID
+      exercises: workoutTemplate.exercises, // From template
+      title: workoutTemplate.title || 'Test Simulation Workout',
+      description: workoutTemplate.description,
+      duration: workoutTemplate.duration,
+      workoutRating: workoutTemplate.workoutRating,
+      useAuthorContent: workoutTemplate.useAuthorContent,
+      isCompleted: false,
+      workoutStatus: WorkoutStatus.InProgress, // Start as InProgress for simulation
+      author: workoutTemplate.author, // Template author
+      createdAt: now,
+      updatedAt: now,
+      startTime: now,
+      collectionId: challengeId, // Link to the challenge/collection if provided
+      challenge: null, // Or fetch/construct if needed, simplified for test
+      logs: [], // Logs will be in subcollection
+      order: workoutTemplate.order,
+      zone: workoutTemplate.zone,
+      // Add sweatlistId if you have it on Workout model, or handle as needed
+      // sweatlistId: sweatlistId 
+    });
+
+    const workoutSessionRef = doc(db, 'users', userId, 'workoutSessions', newSessionId);
+    await setDoc(workoutSessionRef, sessionData.toDictionary());
+
+    // Also create in root `workout-sessions` for consistency if your functions expect it
+    const rootSessionRef = doc(db, 'workout-sessions', newSessionId);
+    await setDoc(rootSessionRef, { ...sessionData.toDictionary(), userId });
+
+
+    const logsSubcollectionRef = collection(workoutSessionRef, 'logs');
+    const createdLogObjects: ExerciseLog[] = [];
+    const logBatch = writeBatch(db);
+
+    for (let i = 0; i < templateLogs.length; i++) {
+      const templateLog = templateLogs[i];
+      const newLogDocRef = doc(logsSubcollectionRef); // Auto-generate ID for each log
+      
+      const newLog = new ExerciseLog({
+        ...templateLog, // Spread fields from template log
+        id: newLogDocRef.id, // Assign new Firestore-generated ID
+        workoutId: newSessionId, // Link to the new session
+        userId: userId, // Participant's ID
+        logSubmitted: false,
+        isCompleted: false,
+        completedAt: null, // Not completed yet
+        createdAt: now,
+        updatedAt: now,
+        order: templateLog.order !== undefined && templateLog.order !== null ? templateLog.order : i, // Ensure order
+      });
+      
+      logBatch.set(newLogDocRef, newLog.toDictionary());
+      createdLogObjects.push(newLog);
+    }
+
+    await logBatch.commit();
+
+    console.log(`Created full test workout session ${newSessionId} for user ${userId} with ${createdLogObjects.length} logs.`);
+    return { sessionId: newSessionId, createdLogObjects };
+  }
+
+  /**
+   * Simulates updating an exercise log, e.g., marking it as complete.
+   * @param userId The ID of the user.
+   * @param sessionId The ID of the workout session.
+   * @param logId The ID of the exercise log to update.
+   * @param updates A partial ExerciseLog object with fields to update.
+   */
+  async simulateUpdateExerciseLog(
+    userId: string,
+    sessionId: string,
+    logId: string,
+    updates: Partial<ExerciseLog> // Allow updating specific fields
+  ): Promise<void> {
+    if (!userId || !sessionId || !logId) {
+      throw new Error('User ID, Session ID, and Log ID are required.');
+    }
+    const logRef = doc(db, 'users', userId, 'workoutSessions', sessionId, 'logs', logId);
+    
+    // Ensure dates are converted correctly if present in updates
+    const firestoreUpdates: any = { ...updates };
+    if (updates.completedAt) {
+      firestoreUpdates.completedAt = dateToUnixTimestamp(updates.completedAt as Date);
+    }
+    if (updates.updatedAt) {
+      firestoreUpdates.updatedAt = dateToUnixTimestamp(updates.updatedAt as Date);
+    }
+     if (updates.createdAt && !(updates.createdAt instanceof Date)) {
+      // This case should ideally not happen if updates.createdAt is always a Date
+      firestoreUpdates.createdAt = dateToUnixTimestamp(new Date(updates.createdAt as any));
+    } else if (updates.createdAt) {
+       firestoreUpdates.createdAt = dateToUnixTimestamp(updates.createdAt as Date);
+    }
+
+
+    // We don't want to update the exercise object itself, only log properties
+    if (firestoreUpdates.exercise) {
+      delete firestoreUpdates.exercise;
+    }
+    // We don't want to update the logs array (RepsAndWeightLog) itself, only log properties
+    if (firestoreUpdates.logs) {
+        delete firestoreUpdates.logs;
+    }
+
+
+    await updateDoc(logRef, firestoreUpdates);
+    console.log(`Simulated update for log ${logId} in session ${sessionId}.`);
+  }
+
+  /**
+   * Simulates updating a workout session, e.g., marking it as complete.
+   * @param userId The ID of the user.
+   * @param sessionId The ID of the workout session to update.
+   * @param updates A partial Workout object with fields to update.
+   */
+  async simulateUpdateWorkoutSession(
+    userId: string,
+    sessionId: string,
+    updates: Partial<Workout> // Allow updating specific fields
+  ): Promise<void> {
+    if (!userId || !sessionId) {
+      throw new Error('User ID and Session ID are required.');
+    }
+    const sessionRef = doc(db, 'users', userId, 'workoutSessions', sessionId);
+    
+    const firestoreUpdates: any = { ...updates };
+    // Convert dates if they are present
+    if (updates.startTime) {
+      firestoreUpdates.startTime = dateToUnixTimestamp(updates.startTime as Date);
+    }
+    if ((updates as any).endTime) { // Linter fix: Cast to any for endTime
+      firestoreUpdates.endTime = dateToUnixTimestamp((updates as any).endTime as Date); // Linter fix
+    }
+    if (updates.updatedAt) {
+      firestoreUpdates.updatedAt = dateToUnixTimestamp(updates.updatedAt as Date);
+    }
+    if (updates.createdAt && !(updates.createdAt instanceof Date)) {
+        firestoreUpdates.createdAt = dateToUnixTimestamp(new Date(updates.createdAt as any));
+    } else if (updates.createdAt) {
+        firestoreUpdates.createdAt = dateToUnixTimestamp(updates.createdAt as Date);
+    }
+
+
+    // Avoid overwriting entire nested objects if only partial updates are intended
+    // For simplicity here, we assume direct field updates are fine.
+    // If 'exercises' or 'logs' (the subcollection placeholder on Workout model) are in updates, remove them
+    // as they are handled differently or are part of the template.
+    if (firestoreUpdates.exercises) delete firestoreUpdates.exercises;
+    if (firestoreUpdates.logs) delete firestoreUpdates.logs;
+
+
+    await updateDoc(sessionRef, firestoreUpdates);
+
+    // Also update the root collection document if it exists
+     const rootSessionRef = doc(db, 'workout-sessions', sessionId);
+     const rootSessionSnap = await getDoc(rootSessionRef);
+     if (rootSessionSnap.exists()) {
+       await updateDoc(rootSessionRef, firestoreUpdates);
+     }
+
+    console.log(`Simulated update for workout session ${sessionId}.`);
+  }
+
 }
 
 export const workoutService = new WorkoutService();
