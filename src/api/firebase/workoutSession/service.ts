@@ -343,7 +343,7 @@ export class WorkoutSessionService {
         const finalSummary = await this.finalizeWorkoutSummary(
           workoutSummary,
           userChallenge,
-          this.currentWorkout.roundWorkoutId,
+          this.currentWorkout.roundWorkoutId || '',
           caloriesBurned,
           startTime,
           endTime
