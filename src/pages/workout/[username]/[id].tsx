@@ -152,7 +152,7 @@ const WorkoutPreviewer: React.FC = () => {
   console.log("[VideoURLs] Final video URLs for SequentialVideoPlayerView:", videoURLs);
 
   console.log("preview logs:", logs);
-  const duration = Workout.estimatedDuration(logs);
+  const duration = Workout.estimatedDuration(workout.exercises);
 
   return (
     <div className="relative h-screen bg-black">

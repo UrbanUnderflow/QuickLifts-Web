@@ -20,7 +20,7 @@ export const ChallengesTab: React.FC<ChallengesTabProps> = ({
     const currentUser = useUser();
     const currentUserId = currentUser?.id || '';
 
-    const filteredChallenges = filterChallenges(activeChallenges, selectedTab, currentUserId);
+    const filteredChallenges = filterChallenges(activeChallenges, selectedTab);
 
     if (filteredChallenges.length === 0) {
       return (

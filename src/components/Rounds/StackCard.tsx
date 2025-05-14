@@ -241,7 +241,7 @@ export const StackCard: React.FC<{
   };
 
   // *** FIX: Calculate estimated duration correctly ***
-  const estimatedDuration = Workout.estimatedDuration(workout.logs || []);
+  const estimatedDuration = Workout.estimatedDuration(workout.exercises || []);
 
   return (
     <div 

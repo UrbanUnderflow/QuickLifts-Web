@@ -49,11 +49,6 @@ const AboutPage: NextPage = () => {
     }
   ];
 
-  const handleSectionChange = (section: Section) => {
-    setCurrentSection(section);
-    setIsMobileMenuOpen(false);
-  };
-
   return (
     <div className="min-h-screen bg-zinc-900">
       <Head>

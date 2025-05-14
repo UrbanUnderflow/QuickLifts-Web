@@ -5,6 +5,7 @@ import { Clock } from 'lucide-react';
 interface SweatListCardViewProps {
   key: string;
   log: ExerciseLog;
+  gifUrls?: string[]; // Added gifUrls as an optional prop
 }
 
 const SweatListCardView: React.FC<SweatListCardViewProps> = ({ log }) => {

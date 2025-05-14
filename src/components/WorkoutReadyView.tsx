@@ -96,7 +96,7 @@ const WorkoutReadyView: React.FC<WorkoutReadyViewProps> = ({
           <InfoCard
             icon={Clock}
             title="Estimated Duration"
-            value={`${Workout.estimatedDuration(exerciseLogs)} min`}
+            value={`${Workout.estimatedDuration(workout.exercises)} min`}
           />
 
           {/* Exercises Collapsible */}
