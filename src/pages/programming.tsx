@@ -2542,25 +2542,20 @@ const PulseProgrammingPage: React.FC = () => {
   return (
     <>
       <Head>
-  <title>Programming - The Chat GPT For Personal Trainers</title>
-  <meta name="description" content="Create personalized training programs with AI assistance. Design structured workout rounds for your community." />
+        <title>Morning Mobility Challenge – Win $1,000 | Pulse Fitness</title>
+        <meta 
+          name="description" 
+          content="90-day mobility challenge by Pulse. Improve flexibility in 10 min/day and compete for a $1,000 cash prize." 
+        />
+        <meta property="og:title" content="Morning Mobility Challenge – Win $1,000 | Pulse Fitness" />
+        <meta 
+          property="og:description" 
+          content="90-day mobility challenge by Pulse. Improve flexibility in 10 min/day and compete for a $1,000 cash prize." 
+        />
+        <meta property="og:type" content="website" />
+        <meta property="og:image" content="/MorningMobilityChallenge.png" />
+      </Head>
   
-  {/* Open Graph / Facebook */}
-  <meta property="og:type" content="website" />
-  <meta property="og:url" content="https://fitwithpulse.ai/programming" />
-  <meta property="og:title" content="Programming - The Chat GPT For Personal Trainers" />
-  <meta property="og:description" content="Create personalized training programs with AI assistance. Design structured workout rounds for your community." />
-  <meta property="og:image" content="https://fitwithpulse.ai/PulseProgrammingPreview.jpg" />
-  <meta property="og:image:width" content="1200" />
-  <meta property="og:image:height" content="630" />
-  
-  {/* Twitter */}
-  <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:url" content="https://fitwithpulse.ai/programming" />
-  <meta name="twitter:title" content="Programming - The Chat GPT For Personal Trainers" />
-  <meta name="twitter:description" content="Create personalized training programs with AI assistance. Design structured workout rounds for your community." />
-  <meta name="twitter:image" content="https://fitwithpulse.ai/PulseProgrammingPreview.jpg" />
-</Head>
 
       
       {/* Show the landing page by default */}
