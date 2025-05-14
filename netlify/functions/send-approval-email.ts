@@ -1,6 +1,6 @@
 import type { Handler, HandlerEvent, HandlerContext } from "@netlify/functions";
 
-const BREVO_API_KEY = process.env.BREVO_API_KEY;
+const BREVO_API_KEY = process.env.BREVO_MARKETING_KEY;
 const SENDER_EMAIL = process.env.BREVO_SENDER_EMAIL || "team@fitwithpulse.ai";
 const SENDER_NAME = process.env.BREVO_SENDER_NAME || "The Pulse Team";
 
@@ -10,7 +10,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
   }
 
   if (!BREVO_API_KEY) {
-    console.error("Brevo API key is not set.");
+    console.error("Brevo API key (BREVO_MARKETING_KEY) is not set.");
     return { statusCode: 500, body: JSON.stringify({ message: "Email service configuration error." }) };
   }
 
