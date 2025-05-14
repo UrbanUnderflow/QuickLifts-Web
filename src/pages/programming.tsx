@@ -17,8 +17,19 @@ import {
     Lightbulb,
     Video,
     XCircle,
+    Check,
+    Send,
+    Loader2,
+    Code,
+    Shuffle,
+    Calendar,
+    Sliders,
+    Clock,
+    Share2,
+    ArrowRight,
 } from 'lucide-react';
 import { Switch } from '@headlessui/react';
+import { useScrollFade } from '../hooks/useScrollFade';
 
 import { userService } from '../api/firebase/user';
 import { workoutService } from '../api/firebase/workout/service';
@@ -30,6 +41,680 @@ import { ExerciseGrid } from '../components/App/ExerciseGrid/ExerciseGrid';
 import { MultiUserSelector } from '../components/App/MultiSelectUser/MultiSelectUser';
 import { generateId } from '../utils/generateId';
 import { useUser } from '../hooks/useUser';
+
+// Landing Page Components
+const LandingPage = ({ hasAccess, setShowEarlyAccessForm }: { hasAccess: boolean, setShowEarlyAccessForm: (show: boolean) => void }) => {
+  return (
+    <div className="min-h-screen bg-zinc-900">
+      {/* Hero Section */}
+      <main ref={useScrollFade()} className="min-h-screen flex flex-col lg:flex-row items-center justify-center gap-20 p-8">
+        {/* Video Container */}
+        <div className="relative w-[300px] sm:w-[380px]">
+          <div className="relative aspect-[9/19.5] rounded-[3rem] p-[2px]">
+            <div className="absolute inset-0 rounded-[3rem] border-2 border-[#E0FE10]" />
+            <div className="relative h-full w-full rounded-[3rem] overflow-hidden bg-zinc-900 flex items-center justify-center">
+              {/* Placeholder for video - replace with actual video when available */}
+              <div className="absolute inset-0 bg-gradient-to-br from-[#1a1e24] to-zinc-900 opacity-80"></div>
+              <div className="relative z-10 flex flex-col items-center">
+                <div className="w-16 h-16 bg-[#E0FE10] rounded-full flex items-center justify-center mb-4">
+                  <Sparkles className="h-8 w-8 text-black" />
+                </div>
+                <p className="text-white text-sm text-center max-w-[200px]">
+                  Video demo coming soon
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Text Content */}
+        <div className="max-w-xl">
+          <h2 className="text-[#E0FE10] uppercase tracking-wide font-semibold mb-4">
+            Introducing Pulse Programming
+          </h2>
+          <h1 className="text-white text-5xl sm:text-6xl font-bold mb-6">
+            The Chat GPT For Personal Trainers
+          </h1>
+          <p className="text-zinc-400 text-lg leading-relaxed">
+            Create personalized training programs in seconds with AI. Design structured workout rounds for your community, customize training cycles, and deliver professional-quality programs to your clients with unprecedented ease.
+          </p>
+          <div className="mt-8">
+            <button
+              onClick={() => setShowEarlyAccessForm(true)}
+              className="bg-[#E0FE10] text-black px-8 py-4 rounded-lg font-semibold hover:bg-[#c5df0e] transition-colors inline-flex items-center"
+            >
+              {hasAccess ? "Get Started" : "Request Access"} 
+              <ArrowRight className="ml-2 h-5 w-5" />
+            </button>
+          </div>
+        </div>
+      </main>
+
+      {/* AI Program Generation Section */}
+      <section ref={useScrollFade()} className="min-h-screen bg-black flex flex-col lg:flex-row items-center justify-center gap-20 p-8">
+        <div className="max-w-xl">
+          <h2 className="text-[#E0FE10] uppercase tracking-wide font-semibold mb-4">
+            AI-Powered Program Design
+          </h2>
+          <h1 className="text-white text-4xl sm:text-5xl font-bold mb-6">
+            Create professional training programs in seconds
+          </h1>
+          <p className="text-zinc-400 text-lg leading-relaxed">
+            Simply describe your training goals, preferred exercise types, and target audience. Our AI will generate complete, progressive training programs with perfect form and balanced workouts. Customize every aspect or let the AI handle the details.
+          </p>
+        </div>
+
+        {/* Interactive AI Code Demo */}
+        <div className="w-full max-w-md bg-zinc-800 rounded-xl overflow-hidden shadow-xl">
+          <div className="bg-zinc-900 p-4 flex items-center justify-between">
+            <div className="flex items-center">
+              <Code className="w-5 h-5 text-[#E0FE10] mr-2" />
+              <span className="text-white font-medium">AI Program Generator</span>
+            </div>
+            <div className="flex space-x-1">
+              <div className="w-3 h-3 rounded-full bg-red-500"></div>
+              <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+              <div className="w-3 h-3 rounded-full bg-green-500"></div>
+            </div>
+          </div>
+          <div className="p-5 bg-zinc-900/50 h-96 overflow-y-auto font-mono text-sm">
+            <div className="text-green-400 mb-4"># Program request</div>
+            <div className="text-white mb-6">Create a 4-week strength program focused on building upper body strength with progressive overload. Include compound movements and accessory work. Target audience is intermediate lifters with access to a full gym.</div>
+            
+            <div className="text-green-400 mb-4"># AI response</div>
+            <div className="text-[#E0FE10] mb-2">Generating 4-week upper body strength program...</div>
+            
+            <div className="text-white mb-3 opacity-0 animate-[fadeIn_2s_0.5s_forwards]">✓ Analyzing optimal exercise selection</div>
+            <div className="text-white mb-3 opacity-0 animate-[fadeIn_2s_1s_forwards]">✓ Calculating progressive overload parameters</div>
+            <div className="text-white mb-3 opacity-0 animate-[fadeIn_2s_1.5s_forwards]">✓ Structuring training splits</div>
+            <div className="text-white mb-3 opacity-0 animate-[fadeIn_2s_2s_forwards]">✓ Balancing volume and intensity</div>
+            <div className="text-white mb-6 opacity-0 animate-[fadeIn_2s_2.5s_forwards]">✓ Finalizing program design</div>
+            
+            <div className="text-[#E0FE10] mb-4 opacity-0 animate-[fadeIn_2s_3s_forwards]">Program generated successfully! 16 workouts created.</div>
+            
+            <div className="bg-zinc-800 p-4 rounded-lg opacity-0 animate-[fadeIn_2s_3.5s_forwards]">
+              <div className="text-white font-medium mb-2">Upper Body Power Program</div>
+              <div className="text-zinc-400 text-xs mb-4">4 weeks • Progressive overload • 4 workouts/week</div>
+              
+              <div className="space-y-3">
+                <div className="bg-zinc-700/30 p-3 rounded-lg">
+                  <div className="text-[#E0FE10] text-xs mb-1">WEEK 1 • DAY 1</div>
+                  <div className="text-white">Chest & Triceps</div>
+                  <div className="text-zinc-400 text-xs">8 exercises • 45-60 min</div>
+                </div>
+                
+                <div className="bg-zinc-700/30 p-3 rounded-lg">
+                  <div className="text-[#E0FE10] text-xs mb-1">WEEK 1 • DAY 2</div>
+                  <div className="text-white">Back & Biceps</div>
+                  <div className="text-zinc-400 text-xs">7 exercises • 45-60 min</div>
+                </div>
+                
+                <div className="bg-zinc-700/30 p-3 rounded-lg">
+                  <div className="text-[#E0FE10] text-xs mb-1">WEEK 1 • DAY 3</div>
+                  <div className="text-white">Rest Day</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Features Grid */}
+      <section ref={useScrollFade()} className="py-20 px-8 bg-zinc-900">
+        <div className="max-w-6xl mx-auto">
+          <h2 className="text-white text-4xl font-bold text-center mb-16">
+            Everything trainers need to create perfect programs
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {/* Feature 1 */}
+            <div className="bg-zinc-800 rounded-xl p-6 hover:bg-zinc-800/80 transition-colors border border-zinc-700/50 hover:border-[#E0FE10]/20">
+              <div className="bg-[#E0FE10]/10 w-12 h-12 rounded-lg flex items-center justify-center mb-4">
+                <Shuffle className="h-6 w-6 text-[#E0FE10]" />
+              </div>
+              <h3 className="text-white text-xl font-semibold mb-2">Smart Exercise Selection</h3>
+              <p className="text-zinc-400">
+                AI selects the optimal exercises based on your goals, available equipment, and client needs
+              </p>
+            </div>
+
+            {/* Feature 2 */}
+            <div className="bg-zinc-800 rounded-xl p-6 hover:bg-zinc-800/80 transition-colors border border-zinc-700/50 hover:border-[#E0FE10]/20">
+              <div className="bg-[#E0FE10]/10 w-12 h-12 rounded-lg flex items-center justify-center mb-4">
+                <Calendar className="h-6 w-6 text-[#E0FE10]" />
+              </div>
+              <h3 className="text-white text-xl font-semibold mb-2">Periodization</h3>
+              <p className="text-zinc-400">
+                Create structured programs with intelligent loading patterns across multiple weeks
+              </p>
+            </div>
+
+            {/* Feature 3 */}
+            <div className="bg-zinc-800 rounded-xl p-6 hover:bg-zinc-800/80 transition-colors border border-zinc-700/50 hover:border-[#E0FE10]/20">
+              <div className="bg-[#E0FE10]/10 w-12 h-12 rounded-lg flex items-center justify-center mb-4">
+                <Sliders className="h-6 w-6 text-[#E0FE10]" />
+              </div>
+              <h3 className="text-white text-xl font-semibold mb-2">Full Customization</h3>
+              <p className="text-zinc-400">
+                Adjust every aspect of your program - from exercise selection to sets, reps, and rest periods
+              </p>
+            </div>
+
+            {/* Feature 4 */}
+            <div className="bg-zinc-800 rounded-xl p-6 hover:bg-zinc-800/80 transition-colors border border-zinc-700/50 hover:border-[#E0FE10]/20">
+              <div className="bg-[#E0FE10]/10 w-12 h-12 rounded-lg flex items-center justify-center mb-4">
+                <Clock className="h-6 w-6 text-[#E0FE10]" />
+              </div>
+              <h3 className="text-white text-xl font-semibold mb-2">Time Efficiency</h3>
+              <p className="text-zinc-400">
+                Create weeks of programming in seconds instead of hours, giving you more time with clients
+              </p>
+            </div>
+
+            {/* Feature 5 */}
+            <div className="bg-zinc-800 rounded-xl p-6 hover:bg-zinc-800/80 transition-colors border border-zinc-700/50 hover:border-[#E0FE10]/20">
+              <div className="bg-[#E0FE10]/10 w-12 h-12 rounded-lg flex items-center justify-center mb-4">
+                <Users className="h-6 w-6 text-[#E0FE10]" />
+              </div>
+              <h3 className="text-white text-xl font-semibold mb-2">Client Management</h3>
+              <p className="text-zinc-400">
+                Create and manage programs for multiple clients with personalized approaches
+              </p>
+            </div>
+
+            {/* Feature 6 */}
+            <div className="bg-zinc-800 rounded-xl p-6 hover:bg-zinc-800/80 transition-colors border border-zinc-700/50 hover:border-[#E0FE10]/20">
+              <div className="bg-[#E0FE10]/10 w-12 h-12 rounded-lg flex items-center justify-center mb-4">
+                <Share2 className="h-6 w-6 text-[#E0FE10]" />
+              </div>
+              <h3 className="text-white text-xl font-semibold mb-2">Easy Sharing</h3>
+              <p className="text-zinc-400">
+                Share programs with clients or your community with a simple link or in-app invitation
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Interactive Demo */}
+      <section ref={useScrollFade()} className="py-20 px-8 bg-black">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center mb-16">
+            <h2 className="text-[#E0FE10] uppercase tracking-wide font-semibold mb-4">
+              See it in action
+            </h2>
+            <h1 className="text-white text-4xl sm:text-5xl font-bold mb-6">
+              Program design made simple
+            </h1>
+            <p className="text-zinc-400 text-lg max-w-2xl mx-auto">
+              Watch how Pulse Programming helps you create, manage and share professional workout programs in minutes.
+            </p>
+          </div>
+          
+          {/* Video Placeholder */}
+          <div className="aspect-video rounded-xl overflow-hidden bg-zinc-800 relative max-w-4xl mx-auto">
+            <div className="absolute inset-0 bg-gradient-to-br from-[#1a1e24] to-zinc-900 opacity-80"></div>
+            <div className="absolute inset-0 flex items-center justify-center">
+              <button className="w-20 h-20 rounded-full bg-[#E0FE10] flex items-center justify-center">
+                <div className="w-0 h-0 border-t-[10px] border-t-transparent border-l-[18px] border-l-black border-b-[10px] border-b-transparent ml-1"></div>
+              </button>
+            </div>
+            <div className="absolute bottom-8 left-0 right-0 text-center">
+              <p className="text-white text-lg font-semibold">Pulse Programming Demo</p>
+              <p className="text-zinc-400">See how to create your first AI-powered training program</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Testimonials Section */}
+      <section ref={useScrollFade()} className="py-20 px-8 bg-zinc-900">
+        <div className="max-w-6xl mx-auto">
+          <h2 className="text-white text-4xl font-bold text-center mb-16">
+            Trusted by fitness professionals
+          </h2>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {/* Testimonial 1 */}
+            <div className="bg-zinc-800 rounded-xl p-8 border border-zinc-700/50">
+              <div className="flex items-center mb-6">
+                <div className="w-12 h-12 rounded-full bg-zinc-700 flex items-center justify-center mr-4">
+                  <Users className="w-6 h-6 text-zinc-400" />
+                </div>
+                <div>
+                  <h3 className="text-white font-semibold">Sarah J.</h3>
+                  <p className="text-zinc-400 text-sm">Personal Trainer, 5+ years</p>
+                </div>
+              </div>
+              <p className="text-zinc-300">
+                "Pulse Programming has completely transformed how I create workout plans for my clients. What used to take me hours now takes minutes, and the quality is even better!"
+              </p>
+            </div>
+            
+            {/* Testimonial 2 */}
+            <div className="bg-zinc-800 rounded-xl p-8 border border-zinc-700/50">
+              <div className="flex items-center mb-6">
+                <div className="w-12 h-12 rounded-full bg-zinc-700 flex items-center justify-center mr-4">
+                  <Users className="w-6 h-6 text-zinc-400" />
+                </div>
+                <div>
+                  <h3 className="text-white font-semibold">Marcus T.</h3>
+                  <p className="text-zinc-400 text-sm">Fitness Coach, 8+ years</p>
+                </div>
+              </div>
+              <p className="text-zinc-300">
+                "The AI understands training principles better than many coaches I've met. It creates perfectly balanced programs with smart progression that my clients love."
+              </p>
+            </div>
+            
+            {/* Testimonial 3 */}
+            <div className="bg-zinc-800 rounded-xl p-8 border border-zinc-700/50">
+              <div className="flex items-center mb-6">
+                <div className="w-12 h-12 rounded-full bg-zinc-700 flex items-center justify-center mr-4">
+                  <Users className="w-6 h-6 text-zinc-400" />
+                </div>
+                <div>
+                  <h3 className="text-white font-semibold">Alex D.</h3>
+                  <p className="text-zinc-400 text-sm">Gym Owner, 10+ years</p>
+                </div>
+              </div>
+              <p className="text-zinc-300">
+                "My entire staff now uses Pulse Programming. It's increased our programming quality while freeing up time to focus on what matters most - working directly with our members."
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Call to Action */}
+      <section ref={useScrollFade()} className="min-h-[50vh] bg-black flex flex-col items-center justify-center text-center p-8">
+        <h2 className="text-white text-5xl sm:text-6xl font-bold mb-6">
+          Ready to transform your training?
+        </h2>
+        <p className="text-zinc-400 text-xl max-w-2xl mb-10">
+          Join the waitlist for Pulse Programming and be among the first to experience the future of fitness program design.
+        </p>
+        <button
+          onClick={() => setShowEarlyAccessForm(true)}
+          className="bg-[#E0FE10] text-black px-12 py-4 rounded-xl text-lg font-semibold hover:bg-[#c5df0e] transition-colors flex items-center"
+        >
+          {hasAccess ? "Get Started" : "Request Access"} 
+          <ArrowRight className="ml-2 h-5 w-5" />
+        </button>
+      </section>
+    </div>
+  );
+};
+
+// Early Access Form Component
+const EarlyAccessForm = () => {
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    role: {
+      trainer: false,
+      enthusiast: false,
+      coach: false,
+      fitnessInstructor: false
+    },
+    primaryUse: '',
+    useCases: {
+      oneOnOneCoaching: false,
+      communityRounds: false,
+      personalPrograms: false
+    },
+    clientCount: '',
+    yearsExperience: '',
+    longTermGoal: '',
+    isCertified: false
+  });
+  
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+  
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+  
+  const handleCheckboxChange = (category: 'role' | 'useCases', name: string) => {
+    setFormData(prev => {
+      if (category === 'role') {
+        return {
+          ...prev,
+          role: {
+            ...prev.role,
+            [name]: !prev.role[name as keyof typeof prev.role]
+          }
+        };
+      } else {
+        return {
+          ...prev,
+          useCases: {
+            ...prev.useCases,
+            [name]: !prev.useCases[name as keyof typeof prev.useCases]
+          }
+        };
+      }
+    });
+  };
+  
+  const handleRadioChange = (name: string, value: boolean) => {
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+  
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    setSubmitError('');
+    
+    try {
+      // Validate form
+      if (!formData.name || !formData.email) {
+        throw new Error('Name and email are required');
+      }
+      
+      if (!formData.email.includes('@')) {
+        throw new Error('Please enter a valid email address');
+      }
+      
+      // Roles validation - at least one role should be selected
+      const hasRole = Object.values(formData.role).some(val => val);
+      if (!hasRole) {
+        throw new Error('Please select at least one role');
+      }
+      
+      // You would normally send this data to your backend
+      // For now, we'll simulate a successful submission
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      // Success!
+      setSubmitSuccess(true);
+      
+      // In a real implementation, you would send the form data to your backend
+      console.log('Form submitted:', formData);
+      
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : 'An error occurred. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+  
+  if (submitSuccess) {
+    return (
+      <div className="flex flex-col items-center justify-center p-6 text-center">
+        <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center mb-6">
+          <Check className="w-8 h-8 text-white" />
+        </div>
+        <h2 className="text-2xl font-bold text-white mb-2">Request Submitted!</h2>
+        <p className="text-zinc-400 mb-8 max-w-md">
+          Thank you for your interest in Pulse Programming. We'll review your application and get back to you shortly with access details.
+        </p>
+        <img 
+          src="/PulseProgrammingLogoWhite.png" 
+          alt="Pulse Programming Logo" 
+          className="w-48 opacity-50"
+        />
+      </div>
+    );
+  }
+  
+  return (
+    <div className="w-full max-w-2xl mx-auto p-6">
+      <div className="flex flex-col items-center mb-8">
+        <img 
+          src="/PulseProgrammingLogoWhite.png" 
+          alt="Pulse Programming Logo" 
+          className="w-56 mb-6"
+        />
+        <h1 className="text-2xl md:text-3xl font-bold text-white text-center">Request Early Access</h1>
+        <p className="text-zinc-400 text-center mt-2">
+          Pulse Programming is currently in early access. Fill out this form to request access to our AI-powered fitness programming platform.
+        </p>
+      </div>
+      
+      {submitError && (
+        <div className="bg-red-500/10 border border-red-500/50 text-red-500 p-4 rounded-lg mb-6">
+          {submitError}
+        </div>
+      )}
+      
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Basic Information */}
+        <div className="space-y-4">
+          <h2 className="text-lg font-semibold text-white border-b border-zinc-800 pb-2">Basic Information</h2>
+          
+          <div>
+            <label htmlFor="name" className="block text-sm font-medium text-zinc-400 mb-1">Full Name *</label>
+            <input
+              type="text"
+              id="name"
+              name="name"
+              value={formData.name}
+              onChange={handleInputChange}
+              required
+              className="w-full p-3 bg-[#262a30] rounded-lg border border-zinc-700 text-white placeholder:text-zinc-500 focus:border-[#E0FE10] focus:outline-none transition-all"
+              placeholder="Your name"
+            />
+          </div>
+          
+          <div>
+            <label htmlFor="email" className="block text-sm font-medium text-zinc-400 mb-1">Email Address *</label>
+            <input
+              type="email"
+              id="email"
+              name="email"
+              value={formData.email}
+              onChange={handleInputChange}
+              required
+              className="w-full p-3 bg-[#262a30] rounded-lg border border-zinc-700 text-white placeholder:text-zinc-500 focus:border-[#E0FE10] focus:outline-none transition-all"
+              placeholder="you@example.com"
+            />
+          </div>
+        </div>
+        
+        {/* Role & Use Case */}
+        <div className="space-y-4">
+          <h2 className="text-lg font-semibold text-white border-b border-zinc-800 pb-2">Your Role & Use Case</h2>
+          
+          <div>
+            <label className="block text-sm font-medium text-zinc-400 mb-2">Which best describes you? (Select all that apply)</label>
+            <div className="grid grid-cols-2 gap-2">
+              <label className="flex items-center bg-[#262a30] p-3 rounded-lg cursor-pointer hover:bg-zinc-700/50 transition-colors border border-zinc-700">
+                <input 
+                  type="checkbox" 
+                  checked={formData.role.trainer}
+                  onChange={() => handleCheckboxChange('role', 'trainer')}
+                  className="form-checkbox h-5 w-5 text-[#E0FE10] bg-zinc-700 border-zinc-600 rounded"
+                />
+                <span className="ml-3 text-white">Personal Trainer</span>
+              </label>
+              
+              <label className="flex items-center bg-[#262a30] p-3 rounded-lg cursor-pointer hover:bg-zinc-700/50 transition-colors border border-zinc-700">
+                <input 
+                  type="checkbox" 
+                  checked={formData.role.enthusiast}
+                  onChange={() => handleCheckboxChange('role', 'enthusiast')}
+                  className="form-checkbox h-5 w-5 text-[#E0FE10] bg-zinc-700 border-zinc-600 rounded"
+                />
+                <span className="ml-3 text-white">Fitness Enthusiast</span>
+              </label>
+              
+              <label className="flex items-center bg-[#262a30] p-3 rounded-lg cursor-pointer hover:bg-zinc-700/50 transition-colors border border-zinc-700">
+                <input 
+                  type="checkbox" 
+                  checked={formData.role.coach}
+                  onChange={() => handleCheckboxChange('role', 'coach')}
+                  className="form-checkbox h-5 w-5 text-[#E0FE10] bg-zinc-700 border-zinc-600 rounded"
+                />
+                <span className="ml-3 text-white">Coach</span>
+              </label>
+              
+              <label className="flex items-center bg-[#262a30] p-3 rounded-lg cursor-pointer hover:bg-zinc-700/50 transition-colors border border-zinc-700">
+                <input 
+                  type="checkbox" 
+                  checked={formData.role.fitnessInstructor}
+                  onChange={() => handleCheckboxChange('role', 'fitnessInstructor')}
+                  className="form-checkbox h-5 w-5 text-[#E0FE10] bg-zinc-700 border-zinc-600 rounded"
+                />
+                <span className="ml-3 text-white">Fitness Instructor</span>
+              </label>
+            </div>
+          </div>
+          
+          <div>
+            <label htmlFor="primaryUse" className="block text-sm font-medium text-zinc-400 mb-1">What will you primarily use Pulse Programming for?</label>
+            <textarea
+              id="primaryUse"
+              name="primaryUse"
+              value={formData.primaryUse}
+              onChange={handleInputChange}
+              rows={3}
+              className="w-full p-3 bg-[#262a30] rounded-lg border border-zinc-700 text-white placeholder:text-zinc-500 focus:border-[#E0FE10] focus:outline-none transition-all resize-none"
+              placeholder="Describe how you plan to use our platform..."
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-zinc-400 mb-2">Common use cases (Select all that apply)</label>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <label className="flex items-center bg-[#262a30] p-3 rounded-lg cursor-pointer hover:bg-zinc-700/50 transition-colors border border-zinc-700">
+                <input 
+                  type="checkbox" 
+                  checked={formData.useCases.oneOnOneCoaching}
+                  onChange={() => handleCheckboxChange('useCases', 'oneOnOneCoaching')}
+                  className="form-checkbox h-5 w-5 text-[#E0FE10] bg-zinc-700 border-zinc-600 rounded"
+                />
+                <span className="ml-3 text-white">One-on-one coaching</span>
+              </label>
+              
+              <label className="flex items-center bg-[#262a30] p-3 rounded-lg cursor-pointer hover:bg-zinc-700/50 transition-colors border border-zinc-700">
+                <input 
+                  type="checkbox" 
+                  checked={formData.useCases.communityRounds}
+                  onChange={() => handleCheckboxChange('useCases', 'communityRounds')}
+                  className="form-checkbox h-5 w-5 text-[#E0FE10] bg-zinc-700 border-zinc-600 rounded"
+                />
+                <span className="ml-3 text-white">Community Rounds</span>
+              </label>
+              
+              <label className="flex items-center bg-[#262a30] p-3 rounded-lg cursor-pointer hover:bg-zinc-700/50 transition-colors border border-zinc-700">
+                <input 
+                  type="checkbox" 
+                  checked={formData.useCases.personalPrograms}
+                  onChange={() => handleCheckboxChange('useCases', 'personalPrograms')}
+                  className="form-checkbox h-5 w-5 text-[#E0FE10] bg-zinc-700 border-zinc-600 rounded"
+                />
+                <span className="ml-3 text-white">Personal programs</span>
+              </label>
+            </div>
+          </div>
+        </div>
+        
+        {/* Professional Information */}
+        <div className="space-y-4">
+          <h2 className="text-lg font-semibold text-white border-b border-zinc-800 pb-2">Professional Information</h2>
+          
+          <div>
+            <label htmlFor="clientCount" className="block text-sm font-medium text-zinc-400 mb-1">How many clients do you currently have?</label>
+            <select
+              id="clientCount"
+              name="clientCount"
+              value={formData.clientCount}
+              onChange={handleInputChange}
+              className="w-full p-3 bg-[#262a30] rounded-lg border border-zinc-700 text-white focus:border-[#E0FE10] focus:outline-none transition-all"
+            >
+              <option value="">Select an option</option>
+              <option value="0">0 (None yet)</option>
+              <option value="1-5">1-5 clients</option>
+              <option value="6-10">6-10 clients</option>
+              <option value="11-20">11-20 clients</option>
+              <option value="21-50">21-50 clients</option>
+              <option value="50+">More than 50 clients</option>
+            </select>
+          </div>
+          
+          <div>
+            <label htmlFor="yearsExperience" className="block text-sm font-medium text-zinc-400 mb-1">How many years of training experience do you have?</label>
+            <select
+              id="yearsExperience"
+              name="yearsExperience"
+              value={formData.yearsExperience}
+              onChange={handleInputChange}
+              className="w-full p-3 bg-[#262a30] rounded-lg border border-zinc-700 text-white focus:border-[#E0FE10] focus:outline-none transition-all"
+            >
+              <option value="">Select an option</option>
+              <option value="<1">Less than 1 year</option>
+              <option value="1-2">1-2 years</option>
+              <option value="3-5">3-5 years</option>
+              <option value="6-10">6-10 years</option>
+              <option value="10+">More than 10 years</option>
+            </select>
+          </div>
+          
+          <div>
+            <label htmlFor="longTermGoal" className="block text-sm font-medium text-zinc-400 mb-1">What is your long-term goal with personal training?</label>
+            <textarea
+              id="longTermGoal"
+              name="longTermGoal"
+              value={formData.longTermGoal}
+              onChange={handleInputChange}
+              rows={3}
+              className="w-full p-3 bg-[#262a30] rounded-lg border border-zinc-700 text-white placeholder:text-zinc-500 focus:border-[#E0FE10] focus:outline-none transition-all resize-none"
+              placeholder="Describe your long-term professional goals..."
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-zinc-400 mb-2">Are you certified?</label>
+            <div className="flex space-x-4">
+              <label className="flex items-center">
+                <input 
+                  type="radio" 
+                  checked={formData.isCertified === true}
+                  onChange={() => handleRadioChange('isCertified', true)}
+                  className="form-radio h-5 w-5 text-[#E0FE10]"
+                />
+                <span className="ml-2 text-white">Yes</span>
+              </label>
+              
+              <label className="flex items-center">
+                <input 
+                  type="radio" 
+                  checked={formData.isCertified === false}
+                  onChange={() => handleRadioChange('isCertified', false)}
+                  className="form-radio h-5 w-5 text-[#E0FE10]"
+                />
+                <span className="ml-2 text-white">No</span>
+              </label>
+            </div>
+          </div>
+        </div>
+        
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          className={`w-full py-4 flex items-center justify-center gap-2 ${
+            isSubmitting ? 'bg-zinc-600' : 'bg-[#E0FE10] hover:bg-[#c5df0e] active:bg-[#a8be0c]'
+          } text-black rounded-lg font-semibold transition-colors`}
+        >
+          {isSubmitting ? (
+            <>
+              <Loader2 className="w-5 h-5 animate-spin" />
+              <span>Submitting...</span>
+            </>
+          ) : (
+            <>
+              <Send className="w-5 h-5" />
+              <span>Request Access</span>
+            </>
+          )}
+        </button>
+      </form>
+    </div>
+  );
+};
 
 // Local class extending Workout to handle roundWorkoutId for UI purposes
 class WorkoutWithRoundId extends Workout {
@@ -1743,7 +2428,12 @@ const PulseProgrammingPage: React.FC = () => {
   
   // New state for tutorial modal
   const [showTutorialModal, setShowTutorialModal] = useState(false);
-  // Modify this initial value later to true once we integrate isAIMode as the default
+  
+  // New state for early access - set to false to test the actual app
+  const [hasAccess, setHasAccess] = useState(false);
+  
+  // State to control showing the early access form directly
+  const [showEarlyAccessForm, setShowEarlyAccessForm] = useState(false);
 
   // Check localStorage on mount to determine if tutorial should be shown
   useEffect(() => {
@@ -1751,6 +2441,11 @@ const PulseProgrammingPage: React.FC = () => {
     if (!hasSeenTutorial) {
       setShowTutorialModal(true);
     }
+    
+    // You would check if the user has access here
+    // For now, we'll assume they don't have access
+    // In a real implementation, you might check with your backend
+    // setHasAccess(checkUserAccess());
   }, []);
 
   // Function to close tutorial and mark as seen
@@ -1785,106 +2480,120 @@ const PulseProgrammingPage: React.FC = () => {
   return (
     <>
       <Head>
-        <title>Programming - The GPT For Personal Trainers</title>
+        <title>Programming - The Chat GPT For Personal Trainers</title>
         <meta name="description" content="Create personalized training programs with AI assistance. Design structured workout rounds for your community." />
-        <meta property="og:title" content="Programming - The GPT For Personal Trainers" />
+        <meta property="og:title" content="Programming - The Chat GPT For Personal Trainers" />
         <meta property="og:description" content="Create personalized training programs with AI assistance. Design structured workout rounds for your community." />
         <meta property="og:image" content="/PulseProgrammingPreview.jpg" />
         <meta property="og:url" content="https://fitwithpulse.ai/programming" />
         <meta property="og:type" content="website" />
         <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content="Programming - The GPT For Personal Trainers" />
+        <meta name="twitter:title" content="Programming - The Chat GPT For Personal Trainers" />
         <meta name="twitter:description" content="Create personalized training programs with AI assistance. Design structured workout rounds for your community." />
         <meta name="twitter:image" content="/PulseProgrammingPreview.jpg" />
       </Head>
       
-      {/* Tutorial Modal */}
-      <TutorialModal 
-        isOpen={showTutorialModal} 
-        onClose={handleCloseTutorial} 
-      />
+      {/* Show the landing page by default */}
+      {!showEarlyAccessForm && !hasAccess && (
+        <LandingPage 
+          hasAccess={hasAccess} 
+          setShowEarlyAccessForm={setShowEarlyAccessForm} 
+        />
+      )}
       
-      {/* Mobile view */}
-      <div className="block lg:hidden bg-[#111417] min-h-screen">
-        <div className="w-full max-w-[500px] mx-auto bg-[#1a1e24] rounded-t-xl relative flex flex-col min-h-screen">
-          <div className="flex justify-center pt-6">
-            <div className="w-40 h-20 flex items-center justify-center">
-              <img 
-                src="/PulseProgrammingLogoWhite.png" 
-                alt="Pulse Programming Logo" 
-                className="object-contain max-h-full max-w-full"
-              />
+      {/* Early Access Form - Show if user doesn't have access and clicked to show the form */}
+      {!hasAccess && showEarlyAccessForm && (
+        <div className="min-h-screen bg-[#111417] text-white flex items-center justify-center">
+          <div className="min-h-screen w-full bg-[#111417] flex items-center justify-center py-12">
+            <EarlyAccessForm />
+          </div>
+        </div>
+      )}
+      
+      {/* Only show the actual app if the user has access */}
+      {hasAccess && (
+        <>
+          {/* Tutorial Modal */}
+          <TutorialModal 
+            isOpen={showTutorialModal} 
+            onClose={handleCloseTutorial} 
+          />
+          
+          {/* Mobile view */}
+          <div className="block lg:hidden bg-[#111417] min-h-screen">
+            <div className="w-full max-w-[500px] mx-auto bg-[#1a1e24] rounded-t-xl relative flex flex-col min-h-screen">
+              <div className="flex justify-center pt-6">
+                <div className="w-40 h-20 flex items-center justify-center">
+                  <img 
+                    src="/PulseProgrammingLogoWhite.png" 
+                    alt="Pulse Programming Logo" 
+                    className="object-contain max-h-full max-w-full"
+                  />
+                </div>
+              </div>
+              <div className="flex-grow overflow-y-auto p-6 scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-zinc-800 hover:scrollbar-thumb-zinc-600 pb-24">
+                <MobileChallengeSetupView
+                  setChallengeData={updateChallengeDataState}
+                  currentChallengeData={challengeData}
+                  selectedStacks={selectedStacks}
+                  setSelectedStacks={setSelectedStacks}
+                  onRemoveStack={handleRemoveStackForMobile} // Use specific remover if logic differs slightly or for clarity
+                  viewModel={mockViewModel}
+                />
+              </div>
+              
+              <div className="fixed bottom-0 left-0 right-0 w-full max-w-[500px] mx-auto p-4 bg-[#1a1e24] border-t border-zinc-700">
+                <button
+                  className="w-full py-3 bg-[#E0FE10] text-black rounded-lg font-semibold hover:opacity-90 transition-opacity"
+                  onClick={() => {
+                    if (mockViewModel.validateChallengeInput(
+                      challengeData.startDate,
+                      challengeData.endDate,
+                      challengeData.challengeName,
+                      challengeData.challengeDesc,
+                      challengeData.roundType,
+                      challengeData.pinCode
+                    )) {
+                      mockViewModel.setChallenge(
+                        challengeData.startDate,
+                        challengeData.endDate,
+                        challengeData.challengeName,
+                        challengeData.challengeDesc,
+                        challengeData.roundType,
+                        challengeData.pinCode,
+                        challengeData.restDayPreferences // Pass the entire object
+                      );
+                      mockViewModel.appCoordinator.closeModals();
+                    }
+                  }}
+                  disabled={selectedStacks.length === 0} // Basic validation for mobile button
+                >
+                  Create Round
+                </button>
+              </div>
             </div>
           </div>
-          <div className="flex-grow overflow-y-auto p-6 scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-zinc-800 hover:scrollbar-thumb-zinc-600 pb-24">
-            <MobileChallengeSetupView
+      
+          {/* Desktop view */}
+          <div className="hidden lg:block bg-[#111417]">
+            <DesktopChallengeSetupView
+              challengeData={challengeData}
               setChallengeData={updateChallengeDataState}
-              currentChallengeData={challengeData}
-              selectedStacks={selectedStacks}
-              setSelectedStacks={setSelectedStacks}
-              onRemoveStack={handleRemoveStackForMobile} // Use specific remover if logic differs slightly or for clarity
               viewModel={mockViewModel}
             />
           </div>
-          
-          <div className="fixed bottom-0 left-0 right-0 w-full max-w-[500px] mx-auto p-4 bg-[#1a1e24] border-t border-zinc-700">
-            <button
-              className="w-full py-3 bg-[#E0FE10] text-black rounded-lg font-semibold hover:opacity-90 transition-opacity"
-              onClick={() => {
-                if (mockViewModel.validateChallengeInput(
-                  challengeData.startDate,
-                  challengeData.endDate,
-                  challengeData.challengeName,
-                  challengeData.challengeDesc,
-                  challengeData.roundType,
-                  challengeData.pinCode
-                )) {
-                  mockViewModel.setChallenge(
-                    challengeData.startDate,
-                    challengeData.endDate,
-                    challengeData.challengeName,
-                    challengeData.challengeDesc,
-                    challengeData.roundType,
-                    challengeData.pinCode,
-                    challengeData.restDayPreferences // Pass the entire object
-                  );
-                  mockViewModel.appCoordinator.closeModals();
-                }
-              }}
-              disabled={selectedStacks.length === 0} // Basic validation for mobile button
-            >
-              Create Round
-            </button>
-          </div>
-        </div>
-      </div>
-  
-      {/* Desktop view */}
-      <div className="hidden lg:block bg-[#111417]">
-        <DesktopChallengeSetupView
-          challengeData={challengeData}
-          setChallengeData={updateChallengeDataState}
-          viewModel={mockViewModel}
-        />
-      </div>
+        </>
+      )}
     </>
   );
 };
 
-// Export types and components
-export type {
-  // Workout, // Workout is imported from types
-  ViewModel,
-  ChallengeData,
-  MobileChallengeSetupProps,
-  DesktopChallengeSetupProps,
-  // WorkoutWithRoundId, // Class, not a type for this kind of export
-};
-
-export {
-  MobileChallengeSetupView,
-  DesktopChallengeSetupView,
-  WorkoutWithRoundId, // Export the class if it's to be used externally
-};
+// Add the fadeIn animation to global styles
+const globalStyles = `
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+`;
 
 export default PulseProgrammingPage;
