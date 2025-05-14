@@ -61,13 +61,13 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
 
   // Add subscription routes to public routes
   const publicRoutes = [
-    '/about', '/creator', '/rounds', '/privacyPolicy', 
+    '/about', '/creator', '/rounds', '/privacyPolicy', '/programming', 
     '/starter-pack', '/stacks', '/moves', '/terms',
     '/subscribe', '/download', '/morning-mobility-challenge', 'review' // Add subscription page
   ].map(route => route?.toLowerCase());
  
   const publicPathPatterns = [
-    '/round-invitation', '/profile', '/challenge', '/review'
+    '/round-invitation', '/profile', '/challenge', '/review', '/programming'
   ].map(pattern => pattern.toLowerCase());
  
   const isPublicRoute = (path: string) => {
