@@ -2542,18 +2542,18 @@ const PulseProgrammingPage: React.FC = () => {
   return (
     <>
       <Head>
-        <title>Morning Mobility Challenge – Win $1,000 | Pulse Fitness</title>
+        <title>Introducing Programming</title>
         <meta 
           name="description" 
-          content="90-day mobility challenge by Pulse. Improve flexibility in 10 min/day and compete for a $1,000 cash prize." 
+          content="The Chat GPT for Personal Trainers" 
         />
         <meta property="og:title" content="Morning Mobility Challenge – Win $1,000 | Pulse Fitness" />
         <meta 
           property="og:description" 
-          content="90-day mobility challenge by Pulse. Improve flexibility in 10 min/day and compete for a $1,000 cash prize." 
+          content="The Chat GPT For Personal Trainers" 
         />
         <meta property="og:type" content="website" />
-        <meta property="og:image" content="/MorningMobilityChallenge.png" />
+        <meta property="og:image" content="/PulseProgrammingPreview.jpg" />
       </Head>
   
 
