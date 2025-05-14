@@ -1,14 +1,13 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { ExerciseLog } from '../api/firebase/exercise/types';
 import { Clock } from 'lucide-react';
 
 interface SweatListCardViewProps {
   key: string;
   log: ExerciseLog;
-  gifUrls?: string[];
 }
 
-const SweatListCardView: React.FC<SweatListCardViewProps> = ({ log, gifUrls = [] }) => {
+const SweatListCardView: React.FC<SweatListCardViewProps> = ({ log }) => {
   const videoUrl = log.exercise?.videos && log.exercise.videos.length > 0
     ? log.exercise.videos[log.exercise.currentVideoPosition || 0]?.videoURL
     : undefined;

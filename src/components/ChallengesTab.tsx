@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Challenge } from '../api/firebase/workout/types';
 import RoundsFilter, { RoundTab, filterChallenges } from './RoundsFilter';
-import { userService } from '../api/firebase/user';
 import { ChallengeCard } from './ChallengeCard';
 import { StarIcon } from '@heroicons/react/24/outline';
 import { useUser } from '../hooks/useUser';
@@ -20,8 +19,6 @@ export const ChallengesTab: React.FC<ChallengesTabProps> = ({
     const [isAdminView, setIsAdminView] = useState(false);
     const currentUser = useUser();
     const currentUserId = currentUser?.id || '';
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
 
     const filteredChallenges = filterChallenges(activeChallenges, selectedTab, currentUserId);
 

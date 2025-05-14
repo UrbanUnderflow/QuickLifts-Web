@@ -1,7 +1,6 @@
 import type { NextPage } from 'next';
 import Head from 'next/head';
-import React, { useState, useEffect, useRef } from 'react';
-import { Section } from '../components/Header';
+import React, { useState, useEffect } from 'react';
 import { useScrollFade } from '../hooks/useScrollFade';
 // Import Swiper for testimonials
 import { Swiper, SwiperSlide } from 'swiper/react';
@@ -150,7 +149,7 @@ const MorningMobilityChallengePage: NextPage = () => {
         <div className="max-w-xl">
           {/* Added countdown ribbon */}
           <div className="bg-[#FF6B35] text-white px-5 py-2 rounded-lg inline-block mb-6 transform -rotate-2 font-bold">
-            Challenge starts in {daysLeft} days!
+            {daysLeft > 0 ? `Challenge starts in ${daysLeft} days!` : "Challenge is live!"}
           </div>
           
           <div className="flex items-center gap-2 mb-4">

@@ -175,7 +175,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     }
   }, [auth, dispatch, router.pathname, router]);
 
- const handleSignInSuccess = (user: any) => {
+ const handleSignInSuccess = () => {
    // Modal will auto-close based on Redux state
  };
 

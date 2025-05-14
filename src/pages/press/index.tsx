@@ -172,7 +172,7 @@ const PressKit = () => {
                   onClick={(e) => !pressKitAssets?.overviewPdf && e.preventDefault()}
                 >
                   <Download className="mr-2 h-5 w-5" />
-                  Download full Overview PDF
+                  Download Full Overview PDF
                 </a>
               </div>
             </div>
@@ -191,12 +191,12 @@ const PressKit = () => {
                     <p className="text-white text-xl">Atlanta, GA</p>
                   </div>
                   <div>
-                    <p className="text-zinc-500 text-sm mb-1">USERS</p>
-                    <p className="text-white text-xl">10,000+</p>
+                    <p className="text-zinc-500 text-sm mb-1">UNIQUE MOVES</p>
+                    <p className="text-white text-xl">500+</p>
                   </div>
                   <div>
-                    <p className="text-zinc-500 text-sm mb-1">CREATORS</p>
-                    <p className="text-white text-xl">1,000+</p>
+                    <p className="text-zinc-500 text-sm mb-1">WORKOUTS COMPLETED</p>
+                    <p className="text-white text-xl">1,500+</p>
                   </div>
                   <div>
                     <p className="text-zinc-500 text-sm mb-1">WORKOUTS SHARED</p>

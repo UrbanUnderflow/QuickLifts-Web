@@ -1,14 +1,11 @@
 import type { NextPage } from 'next';
 import Head from 'next/head';
-import React, { useState } from 'react';
-import Header, { Section } from '../components/Header';
+import React from 'react';
 import Footer from '../components/Footer/Footer';
 import FAQ from '../components/FAQ';
 import { useScrollFade } from '../hooks/useScrollFade';
 
 const AboutPage: NextPage = () => {
-  const [currentSection, setCurrentSection] = useState<Section>('home');
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const scrollToElement = (id: string) => {
     const element = document.getElementById(id);

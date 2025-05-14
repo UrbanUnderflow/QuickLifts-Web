@@ -1,25 +1,17 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/router';
 
-import { CheckCircle, Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
 import {
   Exercise,
-  ExerciseLog,
   ExerciseDetail,
   WeightTrainingExercise,
   CardioExercise,
-  ExerciseReference,
 } from '../api/firebase/exercise/types';
 import { exerciseService } from '../api/firebase/exercise/service';
 import { workoutService } from '../api/firebase/workout';
-import { userService, User } from '../api/firebase/user';
-import {
-  WorkoutStatus,
-  Workout,
-  WorkoutRating,
-  BodyZone,
-  RepsAndWeightLog,
-} from '../api/firebase/workout';
+import { userService } from '../api/firebase/user';
+
 import { ExerciseVideo } from '../api/firebase/exercise/types';
 import { UserFilter } from '../components/App/UserFilter/UserFilter';
 import { ExerciseGrid } from '../components/App/ExerciseGrid/ExerciseGrid';

@@ -123,54 +123,48 @@ export class RepsAndWeightLog {
   }
 }
 
-// WorkoutClass.ts
-
+// Workout TEMPLATE Class (Refactored)
 export class Workout {
-  id: string;
-  collectionId?: string[] | null;
-  roundWorkoutId: string;
+  id: string; // Template ID
+  collectionId?: string[] | null; // Which collections/rounds this template can be part of
   exercises: ExerciseReference[];
   logs?: ExerciseLog[] | null;
   title: string;
   description: string;
-  duration: number;
-  workoutRating?: WorkoutRating | null;
+  duration: number; // Estimated duration of the template
+  workoutRating?: WorkoutRating | null; // Default rating/difficulty of the template
   useAuthorContent: boolean;
-  isCompleted: boolean;
-  workoutStatus: WorkoutStatus;
-  startTime?: Date | null;
-  order?: number | null;
-  author: string;
-  assignedDate?: Date | null;
-  createdAt: Date;
-  updatedAt: Date;
+  order?: number | null; // Order within a collection if part of a sequence
+  author: string; // Author of the template (userId)
+  assignedDate?: Date | null; 
+  createdAt: Date; // Template creation date
+  updatedAt: Date; // Template last update date
   zone: BodyZone;
   estimatedDuration: number;
- 
+
   constructor(data: any) {
-    // For string fields, default to empty string if not provided.
-    this.id = data.id !== undefined ? data.id : '';
-    this.roundWorkoutId = data.roundWorkoutId !== undefined ? data.roundWorkoutId : '';
-    this.title = data.title !== undefined ? data.title : '';
-    this.description = data.description !== undefined ? data.description : '';
-    this.duration = data.duration !== undefined ? data.duration : 0;
-    this.useAuthorContent = data.useAuthorContent !== undefined ? data.useAuthorContent : false;
-    this.isCompleted = data.isCompleted !== undefined ? data.isCompleted : false;
-    this.workoutStatus = data.workoutStatus !== undefined ? data.workoutStatus : WorkoutStatus.Archived;
-    this.workoutRating = data.workoutRating !== undefined ? data.workoutRating : null;
+    this.id = data.id || '';
+    this.collectionId = data.collectionId || null;
+    this.title = data.title || '';
+    this.description = data.description || '';
+    this.duration = data.duration || 0;
+    this.useAuthorContent = data.useAuthorContent || false;
+    this.workoutRating = data.workoutRating || null;
     
-    // Use constructors for nested objects
-    this.exercises = Array.isArray(data?.exercises) 
-      ? data.exercises.map((exercise: any) => {
-          if (!exercise?.exercise) return null;
-          return new ExerciseReference({
-            exercise: new Exercise(exercise.exercise),
-            groupId: exercise.groupId
-          });
-        }).filter(Boolean)
+    this.exercises = Array.isArray(data.exercises)
+      ? data.exercises.map((exRefData: any) => {
+          // Ensure exRefData and exRefData.exercise are not null before creating instances
+          if (exRefData && exRefData.exercise) {
+            return new ExerciseReference({
+              exercise: new Exercise(exRefData.exercise),
+              groupId: exRefData.groupId,
+              isCompleted: exRefData.isCompleted || false,
+            });
+          }
+          return null; // Or handle error appropriately
+        }).filter((ref: ExerciseReference | null): ref is ExerciseReference => ref !== null)
       : [];
-        
-    this.logs = Array.isArray(data?.logs)
+      this.logs = Array.isArray(data?.logs)
       ? data.logs.map((log: any) => {
           if (!log?.exercise || !Array.isArray(log?.sets)) return null;
           return new ExerciseLog({
@@ -179,103 +173,57 @@ export class Workout {
           });
         }).filter(Boolean)
       : [];
+
+    this.order = data.order !== undefined ? data.order : null;
     
-    // Date handling
-    this.startTime = data.startTime ? convertFirestoreTimestamp(data.startTime) : null;
+    // Simplified author handling for template
+    this.author = typeof data.author === 'string' ? data.author : (data.author?.userId || '');
+
     this.assignedDate = data.assignedDate ? convertFirestoreTimestamp(data.assignedDate) : null;
     this.createdAt = data.createdAt ? convertFirestoreTimestamp(data.createdAt) : new Date();
     this.updatedAt = data.updatedAt ? convertFirestoreTimestamp(data.updatedAt) : new Date();
     
-    this.order = data.order !== undefined ? data.order : null;
-
-    // Author handling
-    if (data.author?.username) {
-      this.author = data.author.userId;
-      workoutService.revertAuthorFormat(this.id, this.author);
-    } else {
-      this.author = data.author;
-    }
-    
-    this.zone = data.zone !== undefined ? data.zone : BodyZone.FullBody;
-    this.estimatedDuration = data.estimatedDuration || 45; // Default to 45 minutes
+    this.zone = data.zone || Workout.determineWorkoutZone(this.exercises) || BodyZone.FullBody;
+    this.estimatedDuration = data.estimatedDuration || Workout.estimatedDuration(this.exercises);
   }
 
-  get isTimedWorkout(): boolean {
-    if (!this.logs) return false;
-    return this.logs.some(log => {
-      if (log.exercise.category.type === 'weight-training') {
-        return log.exercise.category.details?.screenTime !== 0;
-      } else if (log.exercise.category.type === 'cardio') {
-        return log.exercise.category.details?.screenTime !== 0;
-      }
-      return false;
-    });
-  }
-
-  /**
-   * Returns primary body parts used in this workout
-   * 
-   * NOTE: Using 'any' type assertion to fix build error.
-   * The actual data type from Exercise.primaryBodyParts is string[],
-   * but the WorkoutSummary expects BodyPart[] enum values.
-   * This is a temporary solution to make the build pass.
-   */
-  fetchPrimaryBodyParts(): BodyPart[] {
-    return this.exercises.flatMap(exerciseRef => 
-      exerciseRef.exercise.primaryBodyParts.map(part => part as any as BodyPart)
-    );
-  }
-
-  /**
-   * Returns secondary body parts used in this workout
-   * 
-   * NOTE: Using 'any' type assertion to fix build error.
-   * The actual data type from Exercise.secondaryBodyParts is string[],
-   * but the WorkoutSummary expects BodyPart[] enum values.
-   * This is a temporary solution to make the build pass.
-   */
-  fetchSecondaryBodyParts(): BodyPart[] {
-    return this.exercises.flatMap(exerciseRef => 
-      exerciseRef.exercise.secondaryBodyParts.map(part => part as any as BodyPart)
-    );
-  }
-
-  static estimatedDuration(exercises: ExerciseLog[]): number {
+  // Static methods like estimatedDuration and determineWorkoutZone remain largely the same,
+  // but would operate on ExerciseReference[] from the template.
+  static estimatedDuration(exercises: ExerciseReference[]): number {
     let totalTimeSeconds = 0;
     let restTimeSeconds = 0;
     let hasScreenTimeExercises = false;
 
-    for (const exerciseLog of exercises) {   
-      const exercise = exerciseLog.exercise;
-      const screenTime = exercise?.category?.details?.screenTime;
+    for (const exerciseRef of exercises) {
+      const exercise = exerciseRef.exercise;
+      const categoryDetails = exercise?.category?.details;
+      const screenTime = categoryDetails?.screenTime;
 
       if (screenTime && screenTime > 0) {
         totalTimeSeconds += screenTime;
         hasScreenTimeExercises = true;
       } else if (exercise?.category?.type === 'cardio') {
-        const duration = exercise.category.details?.duration || 0;
+        const duration = (categoryDetails as any)?.duration || 0; // Cast for cardio details
         totalTimeSeconds += duration * 60;
       } else {
-        totalTimeSeconds += 8 * 60; // 8 minutes
-        restTimeSeconds += 60;      // 1 minute rest
+        // Default for weight training without specific screen time
+        const sets = (categoryDetails as any)?.sets || 3; // Default sets
+        totalTimeSeconds += sets * (45 + 60); // 45s per set + 60s rest
+        restTimeSeconds += sets * 60;
       }
     }
 
-    // Only add warmup/cooldown for non-screenTime exercises
-    if (!hasScreenTimeExercises) {
+    if (!hasScreenTimeExercises && exercises.length > 0) { // Add warmup/cooldown if not purely timed and has exercises
       totalTimeSeconds += 10 * 60; // 10 minutes warmup/cooldown
     }
-
-    const totalSeconds = totalTimeSeconds + restTimeSeconds;
     
-    // For screenTime exercises, convert to minutes with one decimal place
+    const totalSeconds = totalTimeSeconds; // Simplified, rest time already incorporated above for non-screentime
+
     if (hasScreenTimeExercises) {
       const minutes = totalSeconds / 60;
-      console.log('Final duration in minutes:', minutes);
-      return Math.ceil(minutes * 10) / 10; // Round to 1 decimal place
+      return Math.ceil(minutes * 10) / 10; 
     }
     
-    // For non-screenTime exercises, round to nearest 5
     const totalMinutes = Math.round(totalSeconds / 60);
     return Math.round(totalMinutes / 5) * 5;
   }
@@ -284,28 +232,16 @@ export class Workout {
     const bodyPartsInvolved = new Set<BodyPart>();
 
     for (const exerciseRef of exercises) {
-      for (const bodyPart of exerciseRef.exercise.primaryBodyParts || [exerciseRef.exercise.primaryBodyParts]) {
-        bodyPartsInvolved.add(stringToBodyPart(bodyPart));
+      // Ensure exercise and primaryBodyParts exist
+      if (exerciseRef?.exercise?.primaryBodyParts) {
+        for (const bodyPartStr of exerciseRef.exercise.primaryBodyParts) {
+           if(bodyPartStr) bodyPartsInvolved.add(stringToBodyPart(bodyPartStr));
+        }
       }
     }
 
-    const upperBodyParts = new Set([
-      BodyPart.Chest,
-      BodyPart.Shoulders,
-      BodyPart.Biceps,
-      BodyPart.Triceps,
-      BodyPart.Traps,
-      BodyPart.Lats,
-      BodyPart.Forearms,
-    ]);
-
-    const lowerBodyParts = new Set([
-      BodyPart.Hamstrings,
-      BodyPart.Glutes,
-      BodyPart.Quadriceps,
-      BodyPart.Calves,
-    ]);
-
+    const upperBodyParts = new Set([BodyPart.Chest, BodyPart.Shoulders, BodyPart.Biceps, BodyPart.Triceps, BodyPart.Traps, BodyPart.Lats, BodyPart.Forearms, BodyPart.Back, BodyPart.Deltoids, BodyPart.Rhomboids]);
+    const lowerBodyParts = new Set([BodyPart.Hamstrings, BodyPart.Glutes, BodyPart.Quadriceps, BodyPart.Calves]);
     const coreParts = new Set([BodyPart.Abs, BodyPart.Lowerback]);
 
     const hasCommonElements = (set1: Set<BodyPart>, set2: Set<BodyPart>): boolean => {
@@ -325,90 +261,118 @@ export class Workout {
     } else if (hasCore) {
       return BodyZone.Core;
     } else {
-      return BodyZone.FullBody;
+      return BodyZone.FullBody; // Default if no specific zone identified
     }
   }
-
-  private findUndefinedValues(obj: any, path: string = ''): string[] {
-    const undefinedPaths: string[] = [];
-
-    function recursiveCheck(current: any, currentPath: string) {
-      if (current === undefined) {
-        undefinedPaths.push(currentPath);
-        return;
+  
+  get isTimedWorkout(): boolean {
+    if (!this.exercises) return false;
+    return this.exercises.some(exRef => {
+      const details = exRef.exercise?.category?.details;
+      if (details && 'screenTime' in details) {
+        return (details as any).screenTime > 0;
       }
-
-      if (current === null || typeof current !== 'object') {
-        return;
-      }
-
-      if (Array.isArray(current)) {
-        current.forEach((item, index) => {
-          recursiveCheck(item, `${currentPath}[${index}]`);
-        });
-        return;
-      }
-
-      Object.entries(current).forEach(([key, value]) => {
-        const newPath = currentPath ? `${currentPath}.${key}` : key;
-        if (value === undefined) {
-          undefinedPaths.push(newPath);
-        } else {
-          recursiveCheck(value, newPath);
-        }
-      });
-    }
-
-    recursiveCheck(obj, path);
-    return undefinedPaths;
-  }
-
-  private checkForUndefined(data: any, label: string = 'Data'): boolean {
-    const undefinedPaths = this.findUndefinedValues(data);
-    if (undefinedPaths.length > 0) {
-      console.error(`🚨 Found undefined values in ${label}:`);
-      undefinedPaths.forEach(path => {
-        console.error(`  - ${path}`);
-      });
       return false;
-    }
-    return true;
+    });
+  }
+
+  fetchPrimaryBodyParts(): BodyPart[] {
+    if (!this.exercises) return [];
+    return this.exercises.flatMap(exerciseRef => 
+      exerciseRef.exercise?.primaryBodyParts?.map(part => stringToBodyPart(part as string)) || []
+    ).filter(bp => bp !== undefined); // Filter out undefined if stringToBodyPart defaults
+  }
+
+  fetchSecondaryBodyParts(): BodyPart[] {
+    if (!this.exercises) return [];
+    return this.exercises.flatMap(exerciseRef => 
+      exerciseRef.exercise?.secondaryBodyParts?.map(part => stringToBodyPart(part as string)) || []
+    ).filter(bp => bp !== undefined);
   }
 
   toDictionary(): { [key: string]: any } {
-    const data: { [key: string]: any } = {
+    const dict: { [key: string]: any } = {
       id: this.id,
-      exercises: this.exercises.map(ex => ({
-        exercise: ex.exercise.toDictionary(),
-        groupId: ex.groupId
-      })),
-      logs: this.logs ? this.logs.map(log => log.toDictionary()) : [],
+      exercises: this.exercises.map(exRef => exRef.toDictionary()),
       title: this.title,
       description: this.description,
-      zone: this.zone,
       duration: this.duration,
-      workoutRating: this.workoutRating,
       useAuthorContent: this.useAuthorContent,
-      isCompleted: this.isCompleted,
-      workoutStatus: this.workoutStatus,
-      author: this.author, // Just save the ID
+      author: this.author,
+      zone: this.zone,
+      estimatedDuration: this.estimatedDuration,
       createdAt: dateToUnixTimestamp(this.createdAt),
       updatedAt: dateToUnixTimestamp(this.updatedAt),
-      assignedDate: this.assignedDate ? dateToUnixTimestamp(this.assignedDate) : null,
-      startTime: this.startTime ? dateToUnixTimestamp(this.startTime) : null,
-      order: this.order || null,
-      collectionId: this.collectionId || null,
     };
-
-    // Validate data before returning
-    if (!this.checkForUndefined(data, 'Workout Dictionary')) {
-      throw new Error('Workout contains undefined values');
-    }
-
-    return data;
+    if (this.collectionId && this.collectionId.length > 0) dict.collectionId = this.collectionId;
+    if (this.workoutRating) dict.workoutRating = this.workoutRating;
+    if (this.order !== null && this.order !== undefined) dict.order = this.order;
+    if (this.assignedDate) dict.assignedDate = dateToUnixTimestamp(this.assignedDate);
+    return dict;
   }
 }
 
+// New WorkoutSession Class
+export class WorkoutSession {
+  id: string; // Session ID
+  userId: string;
+  workoutTemplateId: string; // ID of the Workout (template) this session is an instance of
+  challengeId?: string | null; // Singular challenge ID this session pertains to
+  roundWorkoutId: string; // e.g., templateId-timestamp
+  title: string; // Can be copied from template
+  description?: string; // Can be copied from template
+  author?: string; // ID of the author of the workout template
+  // Exercises are part of the template, not directly on session. Logs will refer to template's exercises.
+  // logs are stored in a subcollection, so not directly on this object for Firestore.
+  // However, we might load them into an instance property for runtime use.
+  logs?: ExerciseLog[]; 
+  workoutStatus: WorkoutStatus;
+  startTime?: Date | null;
+  endTime?: Date | null;
+  isCompleted: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+  // Session specific derived properties (can be added if needed, e.g. actual duration)
+
+  constructor(data: Partial<WorkoutSession>) {
+    this.id = data.id || '';
+    this.userId = data.userId || '';
+    this.workoutTemplateId = data.workoutTemplateId || '';
+    this.challengeId = data.challengeId !== undefined ? data.challengeId : null;
+    this.roundWorkoutId = data.roundWorkoutId || '';
+    this.title = data.title || '';
+    this.description = data.description;
+    this.author = data.author; // author is optional
+    this.logs = data.logs || [];
+    this.workoutStatus = data.workoutStatus || WorkoutStatus.QueuedUp;
+    this.startTime = data.startTime instanceof Date ? data.startTime : data.startTime ? new Date(data.startTime) : null;
+    this.endTime = data.endTime instanceof Date ? data.endTime : data.endTime ? new Date(data.endTime) : null;
+    this.isCompleted = data.isCompleted || false;
+    this.createdAt = data.createdAt instanceof Date ? data.createdAt : data.createdAt ? new Date(data.createdAt) : new Date();
+    this.updatedAt = data.updatedAt instanceof Date ? data.updatedAt : data.updatedAt ? new Date(data.updatedAt) : new Date();
+  }
+
+  toDictionary(): Omit<WorkoutSession, 'toDictionary' | 'logs' | 'constructor'> {
+    const dict: Omit<WorkoutSession, 'toDictionary' | 'logs' | 'constructor'> = {
+      id: this.id,
+      userId: this.userId,
+      workoutTemplateId: this.workoutTemplateId,
+      challengeId: this.challengeId,
+      roundWorkoutId: this.roundWorkoutId,
+      title: this.title,
+      // Optional fields are handled by their presence or absence
+      ...(this.description && { description: this.description }),
+      ...(this.author && { author: this.author }),
+      workoutStatus: this.workoutStatus,
+      startTime: this.startTime,
+      endTime: this.endTime,
+      isCompleted: this.isCompleted,
+      createdAt: this.createdAt,
+      updatedAt: this.updatedAt,
+    };
+    return dict;
+  }
+}
 
 export class WorkoutSummary {
   id: string;

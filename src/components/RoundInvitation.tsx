@@ -266,7 +266,11 @@ const UserBadge: React.FC = () => {
   );
 };
 
-const RoundInvitation: React.FC<ChallengeInvitationProps> = ({ challenge, onClose, onJoinChallenge, ttclid }) => {
+const RoundInvitation: React.FC<ChallengeInvitationProps> = ({ challenge, ttclid }) => {
+  const router = useRouter();
+  const currentUser = useUser();
+  const [hostId, setHostId] = useState<string>('');
+
   console.log("RoundInvitation Render:", {
     hasPricingInfo: !!challenge.pricingInfo,
     pricingInfo: challenge.pricingInfo,
@@ -276,8 +280,6 @@ const RoundInvitation: React.FC<ChallengeInvitationProps> = ({ challenge, onClos
   // Ensure we have valid Date objects
   const startDate = new Date(challenge.startDate);
   const endDate = new Date(challenge.endDate);
-  const [hostId, setHostId] = useState<string>('');
-
   
   // Ensure participants is always an array
   const participantsCount = challenge.participants?.length ?? 0;

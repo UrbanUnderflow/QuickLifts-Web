@@ -2,9 +2,9 @@ import React, { useState, useEffect, useCallback } from 'react';
 import Head from 'next/head';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import { workoutService } from '../../api/firebase/workout/service';
-import { SweatlistCollection, UserChallenge, Challenge, ChallengeStatus, WorkoutStatus } from '../../api/firebase/workout/types';
+import { SweatlistCollection, UserChallenge, Challenge, ChallengeStatus, WorkoutStatus, WorkoutSession } from '../../api/firebase/workout/types';
 import debounce from 'lodash.debounce';
-import { Workout, SweatlistIdentifiers } from '../../api/firebase/workout/types'; // Added SweatlistIdentifiers
+import { SweatlistIdentifiers } from '../../api/firebase/workout/types'; // Added SweatlistIdentifiers
 
 // CSS for toast animation (copied from inactivityCheck)
 const toastAnimation = `
@@ -421,8 +421,31 @@ const ChallengeStatusPage: React.FC = () => {
     setTestingResult({ success: true, message: "Initiating test workout simulation..." });
 
     let sessionId: string | null = null;
+    let originalUserChallengeState: { isActive: boolean | undefined, lastActive: Date | null | undefined } | null = null; // Changed updatedAt to lastActive
+    let currentUserChallenge: UserChallenge | undefined = undefined; 
 
     try {
+      // --- Fetch and update UserChallenge for active state ---
+      setTestingResult({ success: true, message: "Setting participant to active..." });
+      const userChallenges = await workoutService.fetchUserChallengesByChallengeId(selectedChallenge.id);
+      currentUserChallenge = userChallenges.find(uc => uc.userId === selectedParticipant); 
+
+      if (currentUserChallenge) {
+        originalUserChallengeState = {
+          isActive: currentUserChallenge.isCurrentlyActive,
+          lastActive: currentUserChallenge.lastActive // Store original lastActive
+        };
+        currentUserChallenge.isCurrentlyActive = true;
+        currentUserChallenge.lastActive = new Date(); // Set lastActive to now for the simulation
+        await workoutService.updateUserChallenge(currentUserChallenge);
+        setTestingResult({ success: true, message: "Participant set to active. Fetching workout template..." });
+      } else {
+        console.warn(`[AdminChallengeStatus] Could not find UserChallenge for participant ${selectedParticipant} in challenge ${selectedChallenge.id} to set active state.`);
+        // Proceed without setting active state if not found, or throw error
+      }
+      // --- End UserChallenge update ---
+
+
       setTestingResult({ success: true, message: "Fetching workout template..." });
       const [workoutTemplate, templateLogs] = await workoutService.fetchSavedWorkout(
         (selectedSweatlist as any).sweatlistAuthorId, // Cast to any for usage
@@ -433,6 +456,8 @@ const ChallengeStatusPage: React.FC = () => {
         throw new Error("Failed to fetch workout template or its logs.");
       }
       setTestingResult({ success: true, message: `Template '${workoutTemplate.title}' fetched. Creating test session...` });
+
+      console.log('[AdminChallengeStatus] About to create test session. Challenge ID:', selectedChallenge.id, 'Challenge Title:', selectedChallenge.title, 'Sweatlist ID:', selectedSweatlist.id, 'Sweatlist Name:', (selectedSweatlist as any).sweatlistName); // DEBUG LOG
 
       const { sessionId: newSessionId, createdLogObjects } = await workoutService.createFullTestWorkoutSession(
         selectedParticipant, // This is the userId of the participant
@@ -447,7 +472,7 @@ const ChallengeStatusPage: React.FC = () => {
       // Simulate completing each exercise log
       for (let i = 0; i < createdLogObjects.length; i++) {
         const logToComplete = createdLogObjects[i];
-        await new Promise(resolve => setTimeout(resolve, 2000)); // 2-second delay
+        await new Promise(resolve => setTimeout(resolve, 6000)); // 6-second delay
         
         setTestingResult({ 
           success: true, 
@@ -476,9 +501,9 @@ const ChallengeStatusPage: React.FC = () => {
         {
           workoutStatus: WorkoutStatus.Complete,
           isCompleted: true,
-          endTime: new Date(), // Keep endTime here
+          endTime: new Date(),
           updatedAt: new Date()
-        } as Partial<Workout> & { endTime?: Date } // Cast the entire update object
+        } as Partial<WorkoutSession> // Corrected cast
       );
 
       setTestingResult({
@@ -493,10 +518,25 @@ const ChallengeStatusPage: React.FC = () => {
           setTestingResult({ success: true, message: `Cleaning up test session ${sessionId}...` });
           console.log(`Auto-deleting test workout session ${sessionId} for user ${selectedParticipant}`);
           await workoutService.deleteTestWorkoutSession(selectedParticipant, sessionId);
-          setTestingResult({
-            success: true,
-            message: `Test simulation finished and session ${sessionId} cleaned up.`
-          });
+          
+          // --- Restore UserChallenge state ---
+          if (currentUserChallenge && originalUserChallengeState) {
+            setTestingResult({ success: true, message: `Restoring participant's original active status...` });
+            currentUserChallenge.isCurrentlyActive = originalUserChallengeState.isActive ?? false; 
+            currentUserChallenge.lastActive = originalUserChallengeState.lastActive ?? null; // Restore original lastActive, default to null
+            await workoutService.updateUserChallenge(currentUserChallenge); 
+            setTestingResult({
+              success: true,
+              message: `Test simulation finished, session ${sessionId} cleaned up, and participant status restored.`
+            });
+          } else {
+            setTestingResult({
+              success: true,
+              message: `Test simulation finished and session ${sessionId} cleaned up.`
+            });
+          }
+          // --- End UserChallenge restoration ---
+
         } catch (cleanupError) {
           console.error("Error during test workout cleanup:", cleanupError);
           setTestingResult({
@@ -506,7 +546,7 @@ const ChallengeStatusPage: React.FC = () => {
         } finally {
           setTestingWorkout(prev => ({ ...prev, [loadingKey]: false }));
         }
-      }, 15000); // 15 seconds
+      }, 25000); // 25 seconds (15 + 10)
 
     } catch (error) {
       console.error("Error during test workout simulation:", error);
@@ -522,10 +562,20 @@ const ChallengeStatusPage: React.FC = () => {
         });
         try {
           await workoutService.deleteTestWorkoutSession(selectedParticipant, sessionId);
-          setTestingResult({
-            success: false,
-            message: `Simulation error. Session ${sessionId} cleaned up. Original Error: ${error instanceof Error ? error.message : 'Unknown error'}`
-          });
+          // --- Restore UserChallenge state on error ---
+          if (currentUserChallenge && originalUserChallengeState) {
+             setTestingResult({ success: false, message: `Simulation error. Session cleaned up. Restoring participant status... Error: ${error instanceof Error ? error.message : 'Unknown error'}`});
+            currentUserChallenge.isCurrentlyActive = originalUserChallengeState.isActive ?? false; 
+            currentUserChallenge.lastActive = originalUserChallengeState.lastActive ?? null; // Restore original lastActive, default to null
+            await workoutService.updateUserChallenge(currentUserChallenge);
+            setTestingResult({ success: false, message: `Simulation error. Session ${sessionId} cleaned up and participant status restored. Original Error: ${error instanceof Error ? error.message : 'Unknown error'}`});
+          } else {
+            setTestingResult({
+              success: false,
+              message: `Simulation error. Session ${sessionId} cleaned up. Original Error: ${error instanceof Error ? error.message : 'Unknown error'}`
+            });
+          }
+          // --- End UserChallenge restoration on error ---
         } catch (immediateCleanupError) {
            setTestingResult({
             success: false,

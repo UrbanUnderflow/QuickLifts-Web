@@ -31,9 +31,19 @@ export class ExerciseReference {
   constructor(data: {
     exercise: Exercise;
     groupId?: number;
+    isCompleted?: boolean;
   }) {
     this.exercise = data.exercise;
     this.groupId = data.groupId || 0;
+    this.isCompleted = data.isCompleted || false;
+  }
+
+  toDictionary(): { [key: string]: any } {
+    return {
+      exercise: this.exercise.toDictionary(),
+      groupId: this.groupId,
+      isCompleted: this.isCompleted
+    };
   }
 }
 

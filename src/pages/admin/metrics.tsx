@@ -55,6 +55,18 @@ interface WorkoutSummaryDisplay {
   exercises?: number;
   createdAt?: Date | Timestamp;
   updatedAt?: Date | Timestamp;
+  // Add potential nested object fields that we'll convert to strings
+  exercise?: string;
+  recommendedWeightInfo?: string;
+  feedback?: string;
+  note?: string;
+  log?: string;
+  logIsEditing?: boolean;
+  logSubmitted?: boolean;
+  isSplit?: boolean;
+  isBodyWeight?: boolean;
+  recommendedWeight?: string | number;
+  order?: number;
 }
 
 // Define interface for Exercise display (simplified)
@@ -159,13 +171,20 @@ const MetricsDashboard: React.FC = () => {
       
       const summaries = snapshot.docs.map(doc => {
         const data = doc.data();
+        // Process data to ensure we don't have nested objects that might be rendered directly
         const processedData = {
           ...data,
           id: doc.id,
           startTime: data.startTime,
           completedAt: data.completedAt,
           createdAt: data.createdAt,
-          updatedAt: data.updatedAt
+          updatedAt: data.updatedAt,
+          // Ensure nested objects are not passed directly to be rendered
+          exercise: data.exercise ? String(data.exercise) : undefined,
+          recommendedWeightInfo: data.recommendedWeightInfo ? String(data.recommendedWeightInfo) : undefined,
+          feedback: data.feedback ? String(data.feedback) : undefined,
+          note: data.note ? String(data.note) : undefined,
+          log: data.log ? String(data.log) : undefined
         };
         return processedData;
       }) as WorkoutSummaryDisplay[];
@@ -287,7 +306,14 @@ const MetricsDashboard: React.FC = () => {
     try {
       // Convert to proper Date object using our utility
       const convertedDate = convertFirestoreTimestamp(date);
-      return convertedDate.toLocaleString();
+      // *** ADD CHECK FOR VALID DATE ***
+      if (convertedDate instanceof Date && !isNaN(convertedDate.getTime())) {
+        return convertedDate.toLocaleString();
+      } else {
+        // Return a placeholder if conversion failed or resulted in invalid date
+        console.warn('formatDate received invalid date object:', date, 'Converted:', convertedDate);
+        return 'Invalid Date'; 
+      }
     } catch (error) {
       console.error('Error formatting date:', error, date);
       return 'Invalid date';
@@ -323,10 +349,10 @@ const MetricsDashboard: React.FC = () => {
           <div className="flex items-center gap-3">
             <Activity className="h-6 w-6 text-[#d7ff00]" />
             <div>
-              <h4 className="text-lg font-medium text-white">{summary.title || 'Untitled Workout'}</h4>
+              <h4 className="text-lg font-medium text-white">{safeCellRender(summary.title) || 'Untitled Workout'}</h4>
               <p className="text-gray-400 text-sm">
                 {summary.startTime 
-                  ? formatDate(summary.startTime) 
+                  ? safeCellRender(summary.startTime) 
                   : 'Unknown Date'}
               </p>
             </div>
@@ -347,11 +373,11 @@ const MetricsDashboard: React.FC = () => {
             <div className="space-y-3">
               <div>
                 <div className="text-gray-400 text-xs">ID</div>
-                <div className="text-gray-300 font-mono text-sm break-all">{summary.id}</div>
+                <div className="text-gray-300 font-mono text-sm break-all">{safeCellRender(summary.id)}</div>
               </div>
               <div>
                 <div className="text-gray-400 text-xs">Original Workout ID</div>
-                <div className="text-gray-300 font-mono text-sm break-all">{summary.workoutId || 'N/A'}</div>
+                <div className="text-gray-300 font-mono text-sm break-all">{safeCellRender(summary.workoutId) || 'N/A'}</div>
               </div>
               <div>
                 <div className="text-gray-400 text-xs">Completed</div>
@@ -376,11 +402,11 @@ const MetricsDashboard: React.FC = () => {
             <div className="space-y-3">
               <div>
                 <div className="text-gray-400 text-xs">Username</div>
-                <div className="text-gray-300">{summary.username || 'Unknown User'}</div>
+                <div className="text-gray-300">{safeCellRender(summary.username) || 'Unknown User'}</div>
               </div>
               <div>
                 <div className="text-gray-400 text-xs">User ID</div>
-                <div className="text-gray-300 font-mono text-sm break-all">{summary.userId || 'N/A'}</div>
+                <div className="text-gray-300 font-mono text-sm break-all">{safeCellRender(summary.userId) || 'N/A'}</div>
               </div>
             </div>
           </div>
@@ -391,11 +417,11 @@ const MetricsDashboard: React.FC = () => {
             <div className="space-y-3">
               <div>
                 <div className="text-gray-400 text-xs">Start Time</div>
-                <div className="text-gray-300">{formatDate(summary.startTime)}</div>
+                <div className="text-gray-300">{summary.startTime ? safeCellRender(summary.startTime) : 'N/A'}</div>
               </div>
               <div>
                 <div className="text-gray-400 text-xs">Completion Time</div>
-                <div className="text-gray-300">{formatDate(summary.completedAt)}</div>
+                <div className="text-gray-300">{summary.completedAt ? safeCellRender(summary.completedAt) : 'N/A'}</div>
               </div>
               <div>
                 <div className="text-gray-400 text-xs">Duration</div>
@@ -403,7 +429,7 @@ const MetricsDashboard: React.FC = () => {
               </div>
               <div>
                 <div className="text-gray-400 text-xs">Created At</div>
-                <div className="text-gray-300">{formatDate(summary.createdAt)}</div>
+                <div className="text-gray-300">{summary.createdAt ? safeCellRender(summary.createdAt) : 'N/A'}</div>
               </div>
             </div>
           </div>
@@ -750,6 +776,26 @@ const MetricsDashboard: React.FC = () => {
     );
   };
 
+  // Safe render helper for table cells to prevent rendering objects directly
+  const safeCellRender = (value: any): React.ReactNode => {
+    if (value === undefined || value === null) {
+      return 'N/A';
+    }
+    
+    if (typeof value === 'object' && !(value instanceof Date)) {
+      // For objects that aren't Dates, return a placeholder or stringify
+      return JSON.stringify(value).substring(0, 30) + '...';
+    }
+    
+    // For dates, use our formatDate function
+    if (value instanceof Date || (typeof value === 'object' && value && 'toDate' in value)) {
+      return formatDate(value);
+    }
+    
+    // For other values, convert to string
+    return String(value);
+  };
+
   const renderTabContent = () => {
     if (loading[activeTab] && activeTab !== 'moves' && activeTab !== 'workouts') {
       return (
@@ -1008,22 +1054,22 @@ const MetricsDashboard: React.FC = () => {
                       <React.Fragment key={summary.id}>
                         <tr className={`hover:bg-[#2a2f36] transition-colors ${selectedWorkoutSummary?.id === summary.id ? 'bg-[#1d2b3a]' : ''}`}>
                           <td className="py-3 px-4 border-b border-gray-700 text-gray-300">
-                            {summary.title || 'Untitled Workout'}
+                            {safeCellRender(summary.title) || 'Untitled Workout'}
                           </td>
                           <td className="py-3 px-4 border-b border-gray-700 text-gray-300">
-                            {summary.username || 'Unknown User'}
+                            {safeCellRender(summary.username) || 'Unknown User'}
                           </td>
                           <td className="py-3 px-4 border-b border-gray-700 text-gray-300 font-mono text-xs">
                             {summary.userId ? summary.userId.substring(0, 8) + '...' : 'N/A'}
                           </td>
                           <td className="py-3 px-4 border-b border-gray-700 text-gray-300">
-                            {summary.startTime ? formatDate(summary.startTime) : 'N/A'}
+                            {summary.startTime ? safeCellRender(summary.startTime) : 'N/A'}
                           </td>
                           <td className="py-3 px-4 border-b border-gray-700 text-gray-300">
                             {formatDuration(summary.duration || 0)}
                           </td>
                           <td className="py-3 px-4 border-b border-gray-700 text-gray-300">
-                            {summary.exercises || 0}
+                            {safeCellRender(summary.exercises) || 0}
                           </td>
                           <td className="py-3 px-4 border-b border-gray-700 text-center">
                             <button

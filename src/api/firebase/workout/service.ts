@@ -33,7 +33,7 @@ import {
   ExerciseReference } from '../exercise/types';
 import { exerciseService } from '../exercise/service';
 import { ProfileImage, User } from '../user/types'
-import { Workout, WorkoutSummary, BodyZone, IntroVideo, RepsAndWeightLog, WorkoutRating } from '../workout/types';
+import { Workout, WorkoutSummary, BodyZone, IntroVideo, RepsAndWeightLog, WorkoutRating, WorkoutSession } from '../workout/types';
 import { WorkoutStatus, SweatlistCollection, SweatlistIdentifiers } from './types';
 import { format } from 'date-fns'; 
 import { convertTimestamp, serverTimestamp } from '../../../utils/timestamp'; // Adjust the import path
@@ -183,11 +183,12 @@ class WorkoutService {
 
     console.log("Exercise instance Object being used:", exerciseInstanceClass);
 
-    // Create exercise reference
-    const exerciseRef: ExerciseReference = {
+    // Create exercise reference using the constructor
+    const exerciseRef = new ExerciseReference({
       exercise: exerciseInstanceClass,
       groupId: detail.groupId || 0
-    };
+      // isCompleted will be defaulted to false by the ExerciseReference constructor
+    });
     exerciseReferences.push(exerciseRef);
 
     // Create logs using the same category details
@@ -2273,29 +2274,25 @@ async deleteWorkoutSession(workoutId: string | null): Promise<void> {
 
     const now = new Date();
 
-    const sessionData = new Workout({
+    const sessionData = new WorkoutSession({
       id: newSessionId,
-      roundWorkoutId: `${workoutTemplate.id}-${now.getTime()}`, // Based on template's ID
-      exercises: workoutTemplate.exercises, // From template
+      userId: userId, // WorkoutSession needs userId
+      workoutTemplateId: workoutTemplate.id, // Link to the Workout template
+      challengeId: challengeId, // Pass the specific challengeId for this session
+      roundWorkoutId: `${workoutTemplate.id}-${now.getTime()}`,
       title: workoutTemplate.title || 'Test Simulation Workout',
-      description: workoutTemplate.description,
-      duration: workoutTemplate.duration,
-      workoutRating: workoutTemplate.workoutRating,
-      useAuthorContent: workoutTemplate.useAuthorContent,
-      isCompleted: false,
-      workoutStatus: WorkoutStatus.InProgress, // Start as InProgress for simulation
-      author: workoutTemplate.author, // Template author
+      description: workoutTemplate.description, // Optional, can be from template
+      author: workoutTemplate.author, // Ensure this is passed
+      // Exercises are typically not directly on the session document if logs reference a template.
+      // Logs will be created in the subcollection.
+      workoutStatus: WorkoutStatus.InProgress,
+      startTime: now,
       createdAt: now,
       updatedAt: now,
-      startTime: now,
-      collectionId: challengeId, // Link to the challenge/collection if provided
-      challenge: null, // Or fetch/construct if needed, simplified for test
-      logs: [], // Logs will be in subcollection
-      order: workoutTemplate.order,
-      zone: workoutTemplate.zone,
-      // Add sweatlistId if you have it on Workout model, or handle as needed
-      // sweatlistId: sweatlistId 
     });
+
+    // Log the relevant parts of sessionData (which is now a WorkoutSession instance)
+    console.log('[WorkoutService createFullTestWorkoutSession] Session data being written (WorkoutSession instance):', JSON.stringify({ id: sessionData.id, userId: sessionData.userId, workoutTemplateId: sessionData.workoutTemplateId, challengeId: sessionData.challengeId, workoutStatus: sessionData.workoutStatus, author: sessionData.author, title: sessionData.title }, null, 2)); // DEBUG LOG
 
     const workoutSessionRef = doc(db, 'users', userId, 'workoutSessions', newSessionId);
     await setDoc(workoutSessionRef, sessionData.toDictionary());
@@ -2393,7 +2390,7 @@ async deleteWorkoutSession(workoutId: string | null): Promise<void> {
   async simulateUpdateWorkoutSession(
     userId: string,
     sessionId: string,
-    updates: Partial<Workout> // Allow updating specific fields
+    updates: Partial<WorkoutSession> // Changed from Partial<Workout> to Partial<WorkoutSession>
   ): Promise<void> {
     if (!userId || !sessionId) {
       throw new Error('User ID and Session ID are required.');
@@ -2405,8 +2402,11 @@ async deleteWorkoutSession(workoutId: string | null): Promise<void> {
     if (updates.startTime) {
       firestoreUpdates.startTime = dateToUnixTimestamp(updates.startTime as Date);
     }
-    if ((updates as any).endTime) { // Linter fix: Cast to any for endTime
-      firestoreUpdates.endTime = dateToUnixTimestamp((updates as any).endTime as Date); // Linter fix
+    // endTime is not a standard property of WorkoutSession, but if used, ensure it's handled.
+    // If endTime comes from a custom part of 'updates', it might need specific handling.
+    // For now, assuming if it exists in 'updates', it should be converted.
+    if ((updates as any).endTime) { 
+      firestoreUpdates.endTime = dateToUnixTimestamp((updates as any).endTime as Date);
     }
     if (updates.updatedAt) {
       firestoreUpdates.updatedAt = dateToUnixTimestamp(updates.updatedAt as Date);

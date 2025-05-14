@@ -114,8 +114,7 @@ const RoundsFilter: React.FC<RoundsFilterProps> = ({
 // Helper functions for filtering rounds
 export const filterRounds = (
   rounds: SweatlistCollection[], 
-  tab: RoundTab,
-  currentUserId: string
+  tab: RoundTab
 ): SweatlistCollection[] => {
   const now = new Date();
   
@@ -192,8 +191,7 @@ export const filterUserRounds = (
 
 export const filterChallenges = (
   challenges: Challenge[], 
-  tab: RoundTab,
-  currentUserId: string
+  tab: RoundTab
 ): Challenge[] => {
   const now = new Date();
   

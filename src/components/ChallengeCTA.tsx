@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/router';
 import { User as UserIcon, Download, Smartphone, ArrowRight } from 'lucide-react';
 import { Challenge } from '../api/firebase/workout/types';
-import { useUser } from '../hooks/useUser';
 import { useDispatch } from 'react-redux';
 import { setRoundIdRedirect } from '../redux/tempRedirectSlice';
 
@@ -19,7 +18,6 @@ interface ChallengeCTAProps {
 
 const ChallengeCTA: React.FC<ChallengeCTAProps> = ({ challenge, ttclid }) => {
   const router = useRouter();
-  const currentUser = useUser();
   const dispatch = useDispatch();
   const [showInstructions, setShowInstructions] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
@@ -52,16 +50,6 @@ const ChallengeCTA: React.FC<ChallengeCTAProps> = ({ challenge, ttclid }) => {
   }
   const encodedBaseUrl = encodeURIComponent(baseUrl);
   const deepLinkUrl = `https://quicklifts.page.link/?link=${encodedBaseUrl}&apn=com.pulse.fitnessapp&ibi=Tremaine.QuickLifts&isi=6451497729`;
-
-  // Choose the endpoint based on the environment
-  const endpoint =
-    process.env.NODE_ENV === 'development'
-      ? 'http://localhost:8888'
-      : 'https://fitwithpulse.ai';
-
-  // Construct the web app URL using dynamic values from challenge.
-  // Assumes that challenge.ownerId is an array and uses its first element.
-  const webAppUrl = `${endpoint}/round/${challenge.id}`
 
   const handleJoinChallenge = async () => {
     setIsJoining(true);
