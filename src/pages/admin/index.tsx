@@ -80,6 +80,12 @@ const AdminHome: React.FC = () => {
       link: '/admin/users'
     },
     {
+      title: 'Beta Users',
+      description: 'Manage beta access and Founding Coaches Program',
+      icon: 'fas fa-star',
+      link: '/admin/betausers'
+    },
+    {
       title: 'Metrics Dashboard',
       description: 'View key app metrics like moves, workouts, and rounds.',
       icon: 'fas fa-chart-line',
