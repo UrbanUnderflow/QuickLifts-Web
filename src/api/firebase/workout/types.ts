@@ -142,6 +142,15 @@ export class Workout {
   zone: BodyZone;
   estimatedDuration: number;
 
+  // Properties from WorkoutSession merged back
+  workoutTemplateId?: string; 
+  challengeId?: string | null; 
+  roundWorkoutId?: string; 
+  workoutStatus?: WorkoutStatus; 
+  startTime?: Date | null; 
+  endTime?: Date | null; 
+  isCompleted?: boolean;
+
   constructor(data: any) {
     this.id = data.id || '';
     this.collectionId = data.collectionId || null;
@@ -153,7 +162,6 @@ export class Workout {
     
     this.exercises = Array.isArray(data.exercises)
       ? data.exercises.map((exRefData: any) => {
-          // Ensure exRefData and exRefData.exercise are not null before creating instances
           if (exRefData && exRefData.exercise) {
             return new ExerciseReference({
               exercise: new Exercise(exRefData.exercise),
@@ -161,10 +169,10 @@ export class Workout {
               isCompleted: exRefData.isCompleted || false,
             });
           }
-          return null; // Or handle error appropriately
+          return null; 
         }).filter((ref: ExerciseReference | null): ref is ExerciseReference => ref !== null)
       : [];
-      this.logs = Array.isArray(data?.logs)
+    this.logs = Array.isArray(data?.logs)
       ? data.logs.map((log: any) => {
           if (!log?.exercise || !Array.isArray(log?.sets)) return null;
           return new ExerciseLog({
@@ -175,16 +183,22 @@ export class Workout {
       : [];
 
     this.order = data.order !== undefined ? data.order : null;
-    
-    // Simplified author handling for template
     this.author = typeof data.author === 'string' ? data.author : (data.author?.userId || '');
-
     this.assignedDate = data.assignedDate ? convertFirestoreTimestamp(data.assignedDate) : null;
     this.createdAt = data.createdAt ? convertFirestoreTimestamp(data.createdAt) : new Date();
     this.updatedAt = data.updatedAt ? convertFirestoreTimestamp(data.updatedAt) : new Date();
     
     this.zone = data.zone || Workout.determineWorkoutZone(this.exercises) || BodyZone.FullBody;
     this.estimatedDuration = data.estimatedDuration || Workout.estimatedDuration(this.exercises);
+
+    // Initialize merged properties
+    this.workoutTemplateId = data.workoutTemplateId;
+    this.challengeId = data.challengeId !== undefined ? data.challengeId : null;
+    this.roundWorkoutId = data.roundWorkoutId;
+    this.workoutStatus = data.workoutStatus;
+    this.startTime = data.startTime ? convertFirestoreTimestamp(data.startTime) : null;
+    this.endTime = data.endTime ? convertFirestoreTimestamp(data.endTime) : null;
+    this.isCompleted = data.isCompleted || false;
   }
 
   // Static methods like estimatedDuration and determineWorkoutZone remain largely the same,
@@ -303,11 +317,21 @@ export class Workout {
       estimatedDuration: this.estimatedDuration,
       createdAt: dateToUnixTimestamp(this.createdAt),
       updatedAt: dateToUnixTimestamp(this.updatedAt),
+      isCompleted: this.isCompleted, // Merged property
     };
     if (this.collectionId && this.collectionId.length > 0) dict.collectionId = this.collectionId;
     if (this.workoutRating) dict.workoutRating = this.workoutRating;
     if (this.order !== null && this.order !== undefined) dict.order = this.order;
     if (this.assignedDate) dict.assignedDate = dateToUnixTimestamp(this.assignedDate);
+
+    // Add merged properties to dictionary
+    if (this.workoutTemplateId) dict.workoutTemplateId = this.workoutTemplateId;
+    if (this.challengeId) dict.challengeId = this.challengeId;
+    if (this.roundWorkoutId) dict.roundWorkoutId = this.roundWorkoutId;
+    if (this.workoutStatus) dict.workoutStatus = this.workoutStatus;
+    if (this.startTime) dict.startTime = dateToUnixTimestamp(this.startTime);
+    if (this.endTime) dict.endTime = dateToUnixTimestamp(this.endTime);
+    
     return dict;
   }
 }
