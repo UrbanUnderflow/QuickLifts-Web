@@ -365,7 +365,9 @@ const EarlyAccessForm = () => {
     clientCount: '',
     yearsExperience: '',
     longTermGoal: '',
-    isCertified: false
+    isCertified: false,
+    certificationName: '',
+    applyForFoundingCoaches: false
   });
   
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -424,14 +426,16 @@ const EarlyAccessForm = () => {
         throw new Error('Please select at least one role');
       }
       
-      // You would normally send this data to your backend
-      // For now, we'll simulate a successful submission
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // Submit to Firebase
+      const result = await userService.saveApplicationForm(formData);
+      
+      if (!result.success) {
+        throw new Error(result.message || 'Failed to submit application');
+      }
       
       // Success!
       setSubmitSuccess(true);
       
-      // In a real implementation, you would send the form data to your backend
       console.log('Form submitted:', formData);
       
     } catch (error) {
@@ -451,11 +455,28 @@ const EarlyAccessForm = () => {
         <p className="text-zinc-400 mb-8 max-w-md">
           Thank you for your interest in Pulse Programming. We'll review your application and get back to you shortly with access details.
         </p>
-        <img 
-          src="/PulseProgrammingLogoWhite.png" 
-          alt="Pulse Programming Logo" 
-          className="w-48 opacity-50"
-        />
+        
+        <div className="flex flex-col items-center gap-6">
+          <img 
+            src="/PulseProgrammingLogoWhite.png" 
+            alt="Pulse Programming Logo" 
+            className="w-48 opacity-50 mb-2"
+          />
+          
+          <a 
+            href="https://apps.apple.com/us/app/pulse-fitness-workout-app/id1626908941" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 px-6 py-3 bg-[#E0FE10] text-black rounded-lg hover:bg-[#E0FE10]/90 transition-colors"
+          >
+            <Zap className="w-5 h-5" />
+            <span className="font-semibold">Download Pulse App</span>
+          </a>
+          
+          <p className="text-sm text-zinc-500 max-w-xs text-center">
+            Start your fitness journey today with the Pulse app while we review your Programming access request
+          </p>
+        </div>
       </div>
     );
   }
@@ -667,7 +688,7 @@ const EarlyAccessForm = () => {
           </div>
           
           <div>
-            <label className="block text-sm font-medium text-zinc-400 mb-2">Are you certified?</label>
+            <label className="block text-sm font-medium text-zinc-400 mb-2">Are you certified? (FYI, this is not required)</label>
             <div className="flex space-x-4">
               <label className="flex items-center">
                 <input 
@@ -688,6 +709,47 @@ const EarlyAccessForm = () => {
                 />
                 <span className="ml-2 text-white">No</span>
               </label>
+            </div>
+          </div>
+
+          {formData.isCertified && (
+            <div className="pl-6 border-l-2 border-[#E0FE10]/30">
+              <label htmlFor="certificationName" className="block text-sm font-medium text-zinc-400 mb-1">Which certification(s) do you have?</label>
+              <input
+                type="text"
+                id="certificationName"
+                name="certificationName"
+                value={formData.certificationName}
+                onChange={handleInputChange}
+                className="w-full p-3 bg-[#262a30] rounded-lg border border-zinc-700 text-white placeholder:text-zinc-500 focus:border-[#E0FE10] focus:outline-none transition-all"
+                placeholder="E.g., NASM, ACE, ISSA, NSCA, etc."
+              />
+            </div>
+          )}
+
+          <div className="mt-6 p-4 bg-[#262a30]/50 rounded-lg border border-zinc-700/80 hover:border-[#E0FE10]/20 transition-colors">
+            <div className="flex items-start">
+              <input 
+                type="checkbox" 
+                id="applyForFoundingCoaches"
+                checked={formData.applyForFoundingCoaches}
+                onChange={() => setFormData(prev => ({ ...prev, applyForFoundingCoaches: !prev.applyForFoundingCoaches }))}
+                className="form-checkbox h-5 w-5 text-[#E0FE10] bg-zinc-700 border-zinc-600 rounded mt-1"
+              />
+              <div className="ml-3">
+                <label htmlFor="applyForFoundingCoaches" className="block text-sm font-medium text-white">Apply for the Pulse Pilot Founding 100 Coaches Program</label>
+                <p className="text-zinc-400 text-xs mt-1">
+                  Get early access to all premium features and be part of our exclusive founding coaches community.
+                  <a 
+                    href="/starter-pack" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="ml-1 text-[#E0FE10] underline hover:text-[#E0FE10]/80 transition-colors"
+                  >
+                    What is the Founding 100 Coaches Pilot?
+                  </a>
+                </p>
+              </div>
             </div>
           </div>
         </div>

@@ -3,7 +3,7 @@ import { Workout } from '../workout';
 import { Exercise, ExerciseVideo, ExerciseAuthor, ExerciseLog } from '../exercise/types';
 import { ProfileImage, SubscriptionType } from '../user';
 
-import { doc, getDoc, setDoc, documentId, collection, query, where, getDocs, limit, writeBatch, deleteDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, documentId, collection, query, where, getDocs, limit, writeBatch, deleteDoc, addDoc } from 'firebase/firestore';
 import { ref, deleteObject, getStorage } from 'firebase/storage';
 import { db } from '../config';
 
@@ -797,6 +797,94 @@ class UserService {
     } catch (error) {
       console.error('Error checking if user has purchased challenge:', error);
       return { hasPurchased: false };
+    }
+  }
+
+  /**
+   * Saves the Pulse Programming application form data to the beta collection
+   * @param formData The form data to save
+   * @returns Promise resolving to success status
+   */
+  async saveApplicationForm(formData: {
+    name: string;
+    email: string;
+    role: {
+      trainer: boolean;
+      enthusiast: boolean;
+      coach: boolean;
+      fitnessInstructor: boolean;
+    };
+    primaryUse: string;
+    useCases: {
+      oneOnOneCoaching: boolean;
+      communityRounds: boolean;
+      personalPrograms: boolean;
+    };
+    clientCount: string;
+    yearsExperience: string;
+    longTermGoal: string;
+    isCertified: boolean;
+    certificationName?: string;
+    applyForFoundingCoaches: boolean;
+  }): Promise<{ success: boolean; message: string }> {
+    try {
+      // Normalize email to lowercase for consistency
+      const normalizedEmail = formData.email.toLowerCase();
+      
+      // Check if there's an existing application for this email
+      const betaRef = collection(db, 'beta');
+      const betaQuery = query(betaRef, where('email', '==', normalizedEmail));
+      const querySnapshot = await getDocs(betaQuery);
+      
+      const formDataToSave = {
+        email: normalizedEmail,
+        name: formData.name,
+        role: formData.role,
+        primaryUse: formData.primaryUse,
+        useCases: formData.useCases,
+        clientCount: formData.clientCount,
+        yearsExperience: formData.yearsExperience,
+        longTermGoal: formData.longTermGoal,
+        isCertified: formData.isCertified,
+        certificationName: formData.certificationName,
+        applyForFoundingCoaches: formData.applyForFoundingCoaches,
+        isApproved: false, // Default to false for new submissions
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+
+      // If a document exists for this email, update it
+      if (!querySnapshot.empty) {
+        const docRef = querySnapshot.docs[0].ref;
+        // Preserve isApproved status if it exists
+        const existingData = querySnapshot.docs[0].data();
+        
+        await setDoc(docRef, {
+          ...formDataToSave,
+          isApproved: existingData.isApproved ?? false, // Keep existing approval status
+          createdAt: existingData.createdAt || new Date(), // Keep original creation date
+          updatedAt: new Date() // Update the updated date
+        }, { merge: true });
+        
+        return { 
+          success: true, 
+          message: 'Application updated successfully' 
+        };
+      } else {
+        // Create a new document
+        await addDoc(betaRef, formDataToSave);
+        
+        return { 
+          success: true, 
+          message: 'Application submitted successfully' 
+        };
+      }
+    } catch (error) {
+      console.error('Error saving application form:', error);
+      return { 
+        success: false, 
+        message: error instanceof Error ? error.message : 'An error occurred while saving your application' 
+      };
     }
   }
 }

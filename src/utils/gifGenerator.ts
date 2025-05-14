@@ -1,5 +1,4 @@
 import { FirebaseStorageService } from '../api/firebase/storage/service';
-import { ref, getStorage, getDownloadURL } from 'firebase/storage';
 import GIF from 'gif.js';
 
 interface GifGeneratorOptions {
