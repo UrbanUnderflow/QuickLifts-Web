@@ -2553,7 +2553,7 @@ const PulseProgrammingPage: React.FC = () => {
           content="The Chat GPT For Personal Trainers" 
         />
         <meta property="og:type" content="website" />
-        <meta property="og:image" content="/PulseProgrammingPreview.jpg" />
+        <meta property="og:image" content="/PulseProgrammingPreview.png" />
       </Head>
   
 
