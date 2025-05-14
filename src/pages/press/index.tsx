@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
-import { ArrowUpRight, Download, Search, Loader2, AlertTriangle } from 'lucide-react';
+import { ArrowUpRight, Download, Search, Loader2, AlertTriangle, X } from 'lucide-react';
 import { useScrollFade } from '../../hooks/useScrollFade';
 import Header from '../../components/Header';
 import Footer from '../../components/Footer/Footer';
@@ -22,11 +22,544 @@ interface PressKitAssets {
   logoSigPng?: string;
 }
 
+// FactSheetModal Component
+interface FactSheetModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+const FactSheetModal: React.FC<FactSheetModalProps> = ({ isOpen, onClose }) => {
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+
+  const handleDownload = async () => {
+    try {
+      // Dynamically import html2pdf to avoid SSR issues
+      const html2pdf = (await import('html2pdf.js')).default;
+      setIsGenerating(true);
+      
+      // Create a completely new white-themed document for PDF
+      const pdfContainer = document.createElement('div');
+      pdfContainer.className = "bg-white text-zinc-900";
+      pdfContainer.style.backgroundColor = "#ffffff";
+      pdfContainer.style.color = "#18181b";
+      pdfContainer.style.fontFamily = 'Arial, sans-serif';
+      pdfContainer.style.padding = '20px';
+      pdfContainer.style.maxWidth = '100%';
+      
+      // Header with logo
+      const header = document.createElement('header');
+      header.style.display = 'flex';
+      header.style.justifyContent = 'space-between';
+      header.style.alignItems = 'center';
+      header.style.marginBottom = '30px';
+      header.style.borderBottom = '1px solid #e5e7eb';
+      header.style.paddingBottom = '20px';
+      
+      const logoContainer = document.createElement('div');
+      logoContainer.style.display = 'flex';
+      logoContainer.style.alignItems = 'center';
+      logoContainer.style.gap = '10px';
+      
+      // Use the SVG logo
+      const logoImg = document.createElement('img');
+      logoImg.src = window.location.origin + '/pulse-logo.svg';
+      logoImg.alt = 'Pulse Logo';
+      logoImg.style.height = '32px';
+      logoImg.style.width = 'auto';
+      
+      logoContainer.appendChild(logoImg);
+      header.appendChild(logoContainer);
+      pdfContainer.appendChild(header);
+      
+      // Main content
+      const main = document.createElement('main');
+      main.style.width = '100%';
+      
+      // Title and Subtitle
+      const title = document.createElement('h1');
+      title.style.fontSize = '28px';
+      title.style.fontWeight = 'bold';
+      title.style.textAlign = 'center';
+      title.style.marginBottom = '12px';
+      title.style.color = '#18181b';
+      title.textContent = 'Pulse: Fact-Check Sheet';
+      
+      const subtitle = document.createElement('p');
+      subtitle.style.textAlign = 'center';
+      subtitle.style.fontSize = '14px';
+      subtitle.style.color = '#6b7280';
+      subtitle.style.marginBottom = '32px';
+      subtitle.textContent = 'All the official information about Pulse, compiled for easy reference to ensure accuracy in reporting.';
+      
+      main.appendChild(title);
+      main.appendChild(subtitle);
+      
+      // I'll define a helper function to create content sections
+      const createSection = (title: string, items: Array<{label: string, content: string | string[]}>) => {
+        const section = document.createElement('div');
+        section.style.border = '1px solid #e5e7eb';
+        section.style.borderRadius = '12px';
+        section.style.padding = '24px';
+        section.style.marginBottom = '24px';
+        section.style.backgroundColor = '#ffffff';
+        section.style.boxShadow = '0 1px 3px rgba(0,0,0,0.05)';
+        
+        const sectionTitle = document.createElement('h2');
+        sectionTitle.style.fontSize = '20px';
+        sectionTitle.style.fontWeight = '600';
+        sectionTitle.style.marginBottom = '24px';
+        sectionTitle.style.color = '#18181b';
+        sectionTitle.textContent = title;
+        section.appendChild(sectionTitle);
+        
+        items.forEach((item: {label: string, content: string | string[]}) => {
+          const itemContainer = document.createElement('div');
+          itemContainer.style.marginBottom = '20px';
+          itemContainer.style.paddingBottom = '12px';
+          itemContainer.style.borderBottom = '1px solid #f3f4f6';
+          
+          const label = document.createElement('p');
+          label.style.fontSize = '12px';
+          label.style.fontWeight = '500';
+          label.style.marginBottom = '4px';
+          label.style.color = '#6b7280';
+          label.style.textTransform = 'uppercase';
+          label.textContent = item.label;
+          itemContainer.appendChild(label);
+          
+          if (typeof item.content === 'string') {
+            const content = document.createElement('p');
+            content.style.color = '#18181b';
+            content.textContent = item.content;
+            itemContainer.appendChild(content);
+          } else {
+            const list = document.createElement('ul');
+            list.style.listStyleType = 'disc';
+            list.style.paddingLeft = '20px';
+            list.style.marginTop = '8px';
+            
+            item.content.forEach((li: string) => {
+              const listItem = document.createElement('li');
+              listItem.style.color = '#18181b';
+              listItem.style.marginBottom = '4px';
+              listItem.textContent = li;
+              list.appendChild(listItem);
+            });
+            
+            itemContainer.appendChild(list);
+          }
+          
+          section.appendChild(itemContainer);
+        });
+        
+        return section;
+      };
+      
+      // Create all sections
+      const companyInfo = createSection('Company Information', [
+        { label: 'LEGAL NAME', content: 'Pulse Fitness Collective LLC' },
+        { label: 'BRAND NAMES', content: 'Pulse, Pulse Fitness Collective' },
+        { label: 'FOUNDER & CEO', content: 'Tremaine Grant' },
+        { label: 'FOUNDED', content: 'June 2023' },
+        { label: 'HEADQUARTERS', content: 'Atlanta, Georgia, USA' },
+        { label: 'LEGAL ENTITY TYPE', content: 'C-Corporation' },
+        { label: 'EIN', content: '99-2545975' },
+        { label: 'PRODUCT STAGE', content: 'Product Live + Post Revenue' },
+        { label: 'PLATFORM AVAILABILITY', content: 'iOS App Store, Web App (https://fitwithpulse.ai)' }
+      ]);
+      
+      const productTerms = createSection('Product Terminology', [
+        { label: 'MOVES', content: 'Bite-sized video demonstrations of a single exercise (5–30s).' },
+        { label: 'STACKS', content: 'Custom-built workouts composed of several Moves.' },
+        { label: 'ROUNDS', content: 'Community-driven fitness challenges; gamified workout programs where multiple participants track and compete together.' },
+        { label: 'PULSE PROGRAMMING', content: 'AI-driven trainer tool that creates personalized workouts and Rounds in minutes by combining trainer prompts with Moves from our content vault.' },
+        { label: 'SWEAT SYNC LIVE', content: 'Real-time syncing feature allowing users to work out together virtually, with live progress indicators and join-in capability.' }
+      ]);
+      
+      const businessModel = createSection('Business Model', [
+        { label: 'FITNESS SEEKERS', content: '$4.99/month or $39.99/year' },
+        { label: 'CONTENT CREATORS', content: '$79.99/year to unlock monetization (Sweat Equity Program)' },
+        { label: 'PLANNED REVENUE STREAMS', content: [
+          'Brand sponsorships',
+          'Affiliate marketplace',
+          'Creator monetization commissions',
+          'Corporate wellness B2B licensing'
+        ]}
+      ]);
+      
+      const keyMetrics = createSection('Key Metrics (as of May 2025)', [
+        { label: 'ACTIVE USERS', content: '12,800+' },
+        { label: 'CREATOR COMMUNITY', content: '1,100+ founding creators onboarded' },
+        { label: 'CONTENT STATS', content: '17,000+ workouts shared\n55,000+ moves created' },
+        { label: 'MORNING MOBILITY CHALLENGE', content: '2,500+ participants (87% completion rate)' },
+        { label: 'EMAIL SUBSCRIBERS', content: '115,000' }
+      ]);
+      
+      const legalHighlights = createSection('IP & Legal Highlights', [
+        { label: 'TRADEMARKS FILED', content: 'Pulse Programming™, Sweat Sync Live™, Pulse Rounds™, Pulse Stacks™' },
+        { label: 'PROVISIONAL PATENTS PENDING', content: [
+          'AI-powered workout programming system',
+          'Real-time social workout synchronization',
+          'User-generated content monetization engine'
+        ]}
+      ]);
+      
+      const pressMedia = createSection('Press & Media', [
+        { label: 'CONTACT', content: 'press@fitwithpulse.ai' },
+        { label: 'DOWNLOADABLE KIT', content: 'fitwithpulse.ai/press' },
+        { label: 'NOTABLE MENTIONS', content: [
+          'SoulCycle ATL Collaboration',
+          'Black Ambition Prize Applicant',
+          'FitFest ATL Demo'
+        ]}
+      ]);
+      
+      const socialVision = createSection('Social Presence & Vision', [
+        { label: 'SOCIAL MEDIA', content: [
+          'Instagram: @fitwithpulse',
+          'TikTok: @fitwithpulse',
+          'YouTube: First Player Series by Tremaine Grant'
+        ]},
+        { label: 'VISION STATEMENT', content: 'To become the go-to digital platform for real people to build, share, and grow their fitness journeys—powered by AI, driven by community, and rewarding for creators.' },
+        { label: 'MISSION STATEMENT', content: 'To help the world move together. We empower fitness creators to scale their influence, monetize their knowledge, and inspire communities to take action through authentic, accessible content.' }
+      ]);
+      
+      // Create a grid layout for the sections
+      const gridRow1 = document.createElement('div');
+      gridRow1.style.display = 'grid';
+      gridRow1.style.gridTemplateColumns = 'repeat(2, 1fr)';
+      gridRow1.style.gap = '24px';
+      gridRow1.style.marginBottom = '24px';
+      
+      gridRow1.appendChild(companyInfo);
+      gridRow1.appendChild(productTerms);
+      
+      const gridRow2 = document.createElement('div');
+      gridRow2.style.display = 'grid';
+      gridRow2.style.gridTemplateColumns = 'repeat(2, 1fr)';
+      gridRow2.style.gap = '24px';
+      gridRow2.style.marginBottom = '24px';
+      
+      gridRow2.appendChild(businessModel);
+      gridRow2.appendChild(keyMetrics);
+      
+      const gridRow3 = document.createElement('div');
+      gridRow3.style.display = 'grid';
+      gridRow3.style.gridTemplateColumns = 'repeat(2, 1fr)';
+      gridRow3.style.gap = '24px';
+      gridRow3.style.marginBottom = '24px';
+      
+      gridRow3.appendChild(legalHighlights);
+      gridRow3.appendChild(pressMedia);
+      
+      main.appendChild(gridRow1);
+      main.appendChild(gridRow2);
+      main.appendChild(gridRow3);
+      main.appendChild(socialVision);
+      
+      pdfContainer.appendChild(main);
+      
+      // Footer
+      const footer = document.createElement('footer');
+      footer.style.marginTop = '40px';
+      footer.style.borderTop = '1px solid #e5e7eb';
+      footer.style.paddingTop = '16px';
+      footer.style.display = 'flex';
+      footer.style.justifyContent = 'space-between';
+      footer.style.alignItems = 'center';
+      
+      const footerText = document.createElement('p');
+      footerText.style.fontSize = '12px';
+      footerText.style.color = '#6b7280';
+      footerText.textContent = `Last updated: May 2025 • Generated on ${new Date().toLocaleDateString()}`;
+      
+      const footerLogo = document.createElement('div');
+      footerLogo.style.display = 'flex';
+      footerLogo.style.alignItems = 'center';
+      footerLogo.style.gap = '8px';
+      
+      // Use the SVG logo in the footer as well
+      const footerLogoImg = document.createElement('img');
+      footerLogoImg.src = window.location.origin + '/pulse-logo.svg';
+      footerLogoImg.alt = 'Pulse Logo';
+      footerLogoImg.style.height = '20px';
+      footerLogoImg.style.width = 'auto';
+      
+      footerLogo.appendChild(footerLogoImg);
+      
+      footer.appendChild(footerText);
+      footer.appendChild(footerLogo);
+      
+      pdfContainer.appendChild(footer);
+      
+      // PDF generation options
+      const opt = {
+        margin: [10, 10],
+        filename: 'Pulse_Fitness_Collective_Fact_Sheet.pdf',
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true, logging: false },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      };
+      
+      // Generate PDF
+      await html2pdf().from(pdfContainer).set(opt).save();
+      
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      alert('There was an error generating the PDF. Please try again later.');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+      <div className="bg-[#1a1e24] rounded-xl w-full max-w-5xl mx-4 max-h-[90vh] overflow-hidden shadow-2xl">
+        <div className="flex justify-between items-center px-6 py-4 border-b border-zinc-800">
+          <h3 className="text-lg font-medium text-white">Pulse Fitness Collective: Fact-Check Sheet</h3>
+          <button 
+            onClick={onClose}
+            className="text-zinc-400 hover:text-white transition-colors"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        
+        <div ref={contentRef} className="overflow-y-auto p-6 max-h-[calc(90vh-120px)] scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-zinc-800">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {/* Company Information */}
+            <div className="bg-zinc-900/80 border border-zinc-800 rounded-xl p-6 hover:border-[#E0FE10]/20 transition-colors duration-300">
+              <h4 className="text-white text-xl font-semibold mb-4">Company Information</h4>
+              
+              <div className="space-y-4">
+                <div className="border-b border-zinc-800 pb-3">
+                  <p className="text-zinc-500 text-sm mb-1">LEGAL NAME</p>
+                  <p className="text-white">Pulse Fitness Collective LLC</p>
+                </div>
+                <div className="border-b border-zinc-800 pb-3">
+                  <p className="text-zinc-500 text-sm mb-1">BRAND NAMES</p>
+                  <p className="text-white">Pulse, Pulse Fitness Collective</p>
+                </div>
+                <div className="border-b border-zinc-800 pb-3">
+                  <p className="text-zinc-500 text-sm mb-1">FOUNDER & CEO</p>
+                  <p className="text-white">Tremaine Grant</p>
+                </div>
+                <div className="border-b border-zinc-800 pb-3">
+                  <p className="text-zinc-500 text-sm mb-1">FOUNDED</p>
+                  <p className="text-white">June 2023</p>
+                </div>
+                <div className="border-b border-zinc-800 pb-3">
+                  <p className="text-zinc-500 text-sm mb-1">HEADQUARTERS</p>
+                  <p className="text-white">Atlanta, Georgia, USA</p>
+                </div>
+                <div className="border-b border-zinc-800 pb-3">
+                  <p className="text-zinc-500 text-sm mb-1">LEGAL ENTITY TYPE</p>
+                  <p className="text-white">C-Corporation</p>
+                </div>
+                <div className="border-b border-zinc-800 pb-3">
+                  <p className="text-zinc-500 text-sm mb-1">EIN</p>
+                  <p className="text-white">99-2545975</p>
+                </div>
+                <div className="border-b border-zinc-800 pb-3">
+                  <p className="text-zinc-500 text-sm mb-1">PRODUCT STAGE</p>
+                  <p className="text-white">Product Live + Post Revenue</p>
+                </div>
+                <div>
+                  <p className="text-zinc-500 text-sm mb-1">PLATFORM AVAILABILITY</p>
+                  <p className="text-white">iOS App Store, Web App (https://fitwithpulse.ai)</p>
+                </div>
+              </div>
+            </div>
+            
+            {/* Product Terminology */}
+            <div className="bg-zinc-900/80 border border-zinc-800 rounded-xl p-6 hover:border-[#E0FE10]/20 transition-colors duration-300">
+              <h4 className="text-white text-xl font-semibold mb-4">Product Terminology</h4>
+              
+              <div className="space-y-4">
+                <div className="border-b border-zinc-800 pb-3">
+                  <p className="text-zinc-500 text-sm mb-1">MOVES</p>
+                  <p className="text-white">Bite-sized video demonstrations of a single exercise (5–30s).</p>
+                </div>
+                <div className="border-b border-zinc-800 pb-3">
+                  <p className="text-zinc-500 text-sm mb-1">STACKS</p>
+                  <p className="text-white">Custom-built workouts composed of several Moves.</p>
+                </div>
+                <div className="border-b border-zinc-800 pb-3">
+                  <p className="text-zinc-500 text-sm mb-1">ROUNDS</p>
+                  <p className="text-white">Community-driven fitness challenges; gamified workout programs where multiple participants track and compete together.</p>
+                </div>
+                <div className="border-b border-zinc-800 pb-3">
+                  <p className="text-zinc-500 text-sm mb-1">PULSE PROGRAMMING</p>
+                  <p className="text-white">AI-driven trainer tool that creates personalized workouts and Rounds in minutes by combining trainer prompts with Moves from our content vault.</p>
+                </div>
+                <div>
+                  <p className="text-zinc-500 text-sm mb-1">SWEAT SYNC LIVE</p>
+                  <p className="text-white">Real-time syncing feature allowing users to work out together virtually, with live progress indicators and join-in capability.</p>
+                </div>
+              </div>
+            </div>
+            
+            {/* Business Model */}
+            <div className="bg-zinc-900/80 border border-zinc-800 rounded-xl p-6 hover:border-[#E0FE10]/20 transition-colors duration-300">
+              <h4 className="text-white text-xl font-semibold mb-4">Business Model</h4>
+              
+              <div className="space-y-4">
+                <div className="border-b border-zinc-800 pb-3">
+                  <p className="text-zinc-500 text-sm mb-1">FITNESS SEEKERS</p>
+                  <p className="text-white">$4.99/month or $39.99/year</p>
+                </div>
+                <div className="border-b border-zinc-800 pb-3">
+                  <p className="text-zinc-500 text-sm mb-1">CONTENT CREATORS</p>
+                  <p className="text-white">$79.99/year to unlock monetization (Sweat Equity Program)</p>
+                </div>
+                <div>
+                  <p className="text-zinc-500 text-sm mb-1">PLANNED REVENUE STREAMS</p>
+                  <ul className="text-white list-disc ml-5 mt-2 space-y-1">
+                    <li>Brand sponsorships</li>
+                    <li>Affiliate marketplace</li>
+                    <li>Creator monetization commissions</li>
+                    <li>Corporate wellness B2B licensing</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+            
+            {/* Key Metrics */}
+            <div className="bg-zinc-900/80 border border-zinc-800 rounded-xl p-6 hover:border-[#E0FE10]/20 transition-colors duration-300">
+              <h4 className="text-white text-xl font-semibold mb-4">Key Metrics (as of May 2025)</h4>
+              
+              <div className="space-y-4">
+                <div className="border-b border-zinc-800 pb-3">
+                  <p className="text-zinc-500 text-sm mb-1">ACTIVE USERS</p>
+                  <p className="text-white">12,800+</p>
+                </div>
+                <div className="border-b border-zinc-800 pb-3">
+                  <p className="text-zinc-500 text-sm mb-1">CREATOR COMMUNITY</p>
+                  <p className="text-white">1,100+ founding creators onboarded</p>
+                </div>
+                <div className="border-b border-zinc-800 pb-3">
+                  <p className="text-zinc-500 text-sm mb-1">CONTENT STATS</p>
+                  <p className="text-white">17,000+ workouts shared</p>
+                  <p className="text-white">55,000+ moves created</p>
+                </div>
+                <div className="border-b border-zinc-800 pb-3">
+                  <p className="text-zinc-500 text-sm mb-1">MORNING MOBILITY CHALLENGE</p>
+                  <p className="text-white">2,500+ participants (87% completion rate)</p>
+                </div>
+                <div>
+                  <p className="text-zinc-500 text-sm mb-1">EMAIL SUBSCRIBERS</p>
+                  <p className="text-white">115,000</p>
+                </div>
+              </div>
+            </div>
+            
+            {/* IP & Legal Highlights */}
+            <div className="bg-zinc-900/80 border border-zinc-800 rounded-xl p-6 hover:border-[#E0FE10]/20 transition-colors duration-300">
+              <h4 className="text-white text-xl font-semibold mb-4">IP & Legal Highlights</h4>
+              
+              <div className="space-y-4">
+                <div className="border-b border-zinc-800 pb-3">
+                  <p className="text-zinc-500 text-sm mb-1">TRADEMARKS FILED</p>
+                  <p className="text-white">Pulse Programming™, Sweat Sync Live™, Pulse Rounds™, Pulse Stacks™</p>
+                </div>
+                <div>
+                  <p className="text-zinc-500 text-sm mb-1">PROVISIONAL PATENTS PENDING</p>
+                  <ul className="text-white list-disc ml-5 mt-2 space-y-1">
+                    <li>AI-powered workout programming system</li>
+                    <li>Real-time social workout synchronization</li>
+                    <li>User-generated content monetization engine</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+            
+            {/* Press & Media */}
+            <div className="bg-zinc-900/80 border border-zinc-800 rounded-xl p-6 hover:border-[#E0FE10]/20 transition-colors duration-300">
+              <h4 className="text-white text-xl font-semibold mb-4">Press & Media</h4>
+              
+              <div className="space-y-4">
+                <div className="border-b border-zinc-800 pb-3">
+                  <p className="text-zinc-500 text-sm mb-1">CONTACT</p>
+                  <p className="text-white">press@fitwithpulse.ai</p>
+                </div>
+                <div className="border-b border-zinc-800 pb-3">
+                  <p className="text-zinc-500 text-sm mb-1">DOWNLOADABLE KIT</p>
+                  <p className="text-white">fitwithpulse.ai/press</p>
+                </div>
+                <div>
+                  <p className="text-zinc-500 text-sm mb-1">NOTABLE MENTIONS</p>
+                  <ul className="text-white list-disc ml-5 mt-2 space-y-1">
+                    <li>SoulCycle ATL Collaboration</li>
+                    <li>Black Ambition Prize Applicant</li>
+                    <li>FitFest ATL Demo</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+            
+            {/* Social Presence */}
+            <div className="bg-zinc-900/80 border border-zinc-800 rounded-xl p-6 hover:border-[#E0FE10]/20 transition-colors duration-300 md:col-span-2">
+              <h4 className="text-white text-xl font-semibold mb-4">Social Presence & Vision</h4>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <p className="text-zinc-500 text-sm mb-2">SOCIAL MEDIA</p>
+                  <ul className="text-white list-disc ml-5 space-y-1">
+                    <li>Instagram: @fitwithpulse</li>
+                    <li>TikTok: @fitwithpulse</li>
+                    <li>YouTube: First Player Series by Tremaine Grant</li>
+                  </ul>
+                </div>
+                
+                <div>
+                  <div className="mb-4">
+                    <p className="text-zinc-500 text-sm mb-1">VISION STATEMENT</p>
+                    <p className="text-white text-sm">To become the go-to digital platform for real people to build, share, and grow their fitness journeys—powered by AI, driven by community, and rewarding for creators.</p>
+                  </div>
+                  <div>
+                    <p className="text-zinc-500 text-sm mb-1">MISSION STATEMENT</p>
+                    <p className="text-white text-sm">To help the world move together. We empower fitness creators to scale their influence, monetize their knowledge, and inspire communities to take action through authentic, accessible content.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div className="px-6 py-4 border-t border-zinc-800 flex justify-between items-center">
+          <p className="text-zinc-400 text-sm">Last updated: May 2025</p>
+          <button 
+            onClick={handleDownload}
+            disabled={isGenerating}
+            className="flex items-center gap-2 px-4 py-2 bg-[#E0FE10] text-black rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isGenerating ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Generating PDF...</span>
+              </>
+            ) : (
+              <>
+                <Download className="h-4 w-4" />
+                <span>Download PDF</span>
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const PressKit = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [pressKitAssets, setPressKitAssets] = useState<PressKitAssets | null>(null);
   const [isLoadingAssets, setIsLoadingAssets] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [showFactSheetModal, setShowFactSheetModal] = useState(false);
 
   useEffect(() => {
     const fetchPressKitAssets = async () => {
@@ -101,6 +634,9 @@ const PressKit = () => {
 
   return (
     <div className="min-h-screen bg-zinc-900">
+      {/* Fact Sheet Modal */}
+      <FactSheetModal isOpen={showFactSheetModal} onClose={() => setShowFactSheetModal(false)} />
+
       <Head>
         <title>Press Kit - Pulse Fitness Collective</title>
         <meta name="description" content="Pulse press resources, media materials, and downloadable assets for journalists and creators." />
@@ -352,12 +888,12 @@ const PressKit = () => {
                   <h5 className="text-white text-lg font-medium mb-3">User Testimonials</h5>
                   <div className="space-y-4">
                     <div className="p-4 bg-black/30 rounded-lg">
-                      <p className="text-zinc-300 italic">"I've tried dozens of fitness apps, but Pulse is the first one where I feel like I'm part of something bigger than just my own workouts. The community challenges keep me motivated in a way nothing else has."</p>
-                      <p className="text-[#E0FE10] mt-2 text-sm">Sarah, Los Angeles</p>
+                      <p className="text-zinc-300 italic">"Pulse reminds me of the best classrooms — They're places where every student can feel success."</p>
+                      <p className="text-[#E0FE10] mt-2 text-sm">Deray Mckesson, NYC</p>
                     </div>
                     <div className="p-4 bg-black/30 rounded-lg">
-                      <p className="text-zinc-300 italic">"As a personal trainer, Pulse has revolutionized how I connect with clients. I can create custom workouts, track their progress, and build a community around my training philosophy."</p>
-                      <p className="text-[#E0FE10] mt-2 text-sm">Marcus, Chicago</p>
+                      <p className="text-zinc-300 italic">"The Mobility Challenge is Amazing! I do it after my workouts and it feels soooo good!"</p>
+                      <p className="text-[#E0FE10] mt-2 text-sm">Marques Zak, NYC</p>
                     </div>
                   </div>
                 </div>
@@ -372,7 +908,7 @@ const PressKit = () => {
                   onClick={(e) => !pressKitAssets?.productOnePagerPdf && e.preventDefault()}
                 >
                   <Download className="mr-2 h-5 w-5" />
-                  Download full product overview
+                  Download Full Product Overview
                 </a>
               </div>
             </div>
@@ -545,17 +1081,17 @@ const PressKit = () => {
               <div className="aspect-video bg-zinc-800 rounded-xl overflow-hidden mb-4 relative">
                 <img 
                   src="/media-assets/b-roll-thumbnail.jpg" 
-                  alt="B-Roll Video" 
+                  alt="App Videos & Demos" 
                   className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end">
                   <div className="p-6">
-                    <p className="text-white font-medium text-lg">B-Roll Video</p>
+                    <p className="text-white font-medium text-lg">App Videos & Demos</p>
                     <p className="text-zinc-300 text-sm">App demonstrations and usage</p>
                   </div>
                 </div>
               </div>
-              <h3 className="text-white text-xl font-medium mb-2">B-Roll Video</h3>
+              <h3 className="text-white text-xl font-medium mb-2">Product Demos</h3>
               <p className="text-zinc-400 mb-4">Professional footage of Pulse in use, ideal for broadcast</p>
               <Link href="/press/videos">
                 <span className="flex items-center text-[#E0FE10] hover:text-white group cursor-pointer">
@@ -637,11 +1173,11 @@ const PressKit = () => {
               <div className="space-y-6">
                 <div className="border-b border-zinc-800 pb-4">
                   <p className="text-zinc-500 text-sm mb-1">COMPANY NAME</p>
-                  <p className="text-white">Pulse, Inc. (legal), "Pulse" or "Pulse Fitness Collective" (informal)</p>
+                  <p className="text-white">Pulse Fitness Collective LLC (legal), "Pulse" or "Pulse Fitness Collective" (informal)</p>
                 </div>
                 <div className="border-b border-zinc-800 pb-4">
                   <p className="text-zinc-500 text-sm mb-1">FOUNDING</p>
-                  <p className="text-white">Founded in 2023 by Tremaine Grant in Atlanta, Georgia</p>
+                  <p className="text-white">Founded in June 2023 by Tremaine Grant in Atlanta, Georgia</p>
                 </div>
                 <div className="border-b border-zinc-800 pb-4">
                   <p className="text-zinc-500 text-sm mb-1">PRODUCT NAMES</p>
@@ -666,43 +1202,38 @@ const PressKit = () => {
               <div className="space-y-6">
                 <div className="border-b border-zinc-800 pb-4">
                   <p className="text-zinc-500 text-sm mb-1">USERS</p>
-                  <p className="text-white">10,000+ active users as of May 2023</p>
+                  <p className="text-white">12,800+ active users as of May 2025</p>
                   <p className="text-zinc-500 text-xs mt-1">Source: Internal analytics, updated monthly</p>
                 </div>
                 <div className="border-b border-zinc-800 pb-4">
                   <p className="text-zinc-500 text-sm mb-1">CREATOR COMMUNITY</p>
-                  <p className="text-white">1,000+ creators in the Founding Class (joined within first 45 days)</p>
-                  <p className="text-zinc-500 text-xs mt-1">Source: User registration data, verified May 2023</p>
+                  <p className="text-white">1,100+ founding creators onboarded</p>
+                  <p className="text-zinc-500 text-xs mt-1">Source: User registration data, verified May 2025</p>
                 </div>
                 <div className="border-b border-zinc-800 pb-4">
                   <p className="text-zinc-500 text-sm mb-1">CONTENT STATS</p>
-                  <p className="text-white">15,000+ workouts shared</p>
-                  <p className="text-white">50,000+ exercises created</p>
-                  <p className="text-zinc-500 text-xs mt-1">Source: Platform database, May 2023</p>
+                  <p className="text-white">17,000+ workouts shared</p>
+                  <p className="text-white">55,000+ moves created</p>
+                  <p className="text-zinc-500 text-xs mt-1">Source: Platform database, May 2025</p>
                 </div>
                 <div>
                   <p className="text-zinc-500 text-sm mb-1">MORNING MOBILITY CHALLENGE</p>
-                  <p className="text-white">2,500+ participants in inaugural challenge</p>
+                  <p className="text-white">2,500+ participants</p>
                   <p className="text-white">87% completion rate</p>
-                  <p className="text-zinc-500 text-xs mt-1">Source: Challenge analytics, April-May 2023</p>
+                  <p className="text-zinc-500 text-xs mt-1">Source: Challenge analytics, May 2025</p>
                 </div>
               </div>
             </div>
           </div>
           
           <div className="mt-8 text-center">
-            <a 
-              href={pressKitAssets?.factCheckSheetPdf || '#'} 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className={`inline-flex items-center text-[#E0FE10] hover:text-white ${
-                !pressKitAssets?.factCheckSheetPdf ? 'opacity-50 cursor-not-allowed' : ''
-              }`}
-              onClick={(e) => !pressKitAssets?.factCheckSheetPdf && e.preventDefault()}
+            <button 
+              onClick={() => setShowFactSheetModal(true)}
+              className="inline-flex items-center text-[#E0FE10] hover:text-white"
             >
               <Download className="mr-2 h-5 w-5" />
-              Download complete fact-check sheet
-            </a>
+              View and download complete fact-check sheet
+            </button>
           </div>
         </div>
       </section>

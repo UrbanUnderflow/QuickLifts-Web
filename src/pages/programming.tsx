@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
+import Head from 'next/head';
 import { 
     Users,
     Lock,
@@ -15,6 +16,7 @@ import {
     Layout,
     Lightbulb,
     Video,
+    XCircle,
 } from 'lucide-react';
 import { Switch } from '@headlessui/react';
 
@@ -426,7 +428,7 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
     const [searchTerm, setSearchTerm] = useState('');
     const [allStacks, setAllStacks] = useState<Workout[]>([]);
     const [selectedStacks, setSelectedStacks] = useState<WorkoutWithRoundId[]>([]);
-    const [isAIMode, setIsAIMode] = useState(false);
+    const [isAIMode, setIsAIMode] = useState(true);
     const currentUser = useUser();
 
     const generalAiPreferencesOptions = [
@@ -1460,7 +1462,20 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
               ) : (
                   // Original Stack Selector Content (Now below the always-visible preferences)
                   <div className="h-full overflow-y-auto p-6 scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-zinc-800">
-                      <h2 className="text-white text-2xl font-bold mb-4">Your Stacks</h2>
+                      <div className="flex flex-col items-center mb-6">
+                          <div className="w-56 h-24 flex items-center justify-center mb-2">
+                              <img 
+                                  src="/PulseProgrammingLogoWhite.png" 
+                                  alt="Pulse Programming Logo" 
+                                  className="object-contain max-h-full max-w-full"
+                              />
+                          </div>
+                          <h2 className="text-white text-2xl font-bold">Manual Stack Selection</h2>
+                          <p className="text-zinc-400 text-center text-sm mt-1 mb-6">
+                              Build your round by selecting specific stacks from your library
+                          </p>
+                      </div>
+                      <h2 className="text-white text-xl font-bold mb-4">Your Stacks</h2>
                       <input
                           type="text"
                           placeholder="Search stacks..."
@@ -1532,7 +1547,7 @@ const TutorialModal: React.FC<TutorialModalProps> = ({ isOpen, onClose }) => {
       </p>
     </div>,
 
-    // Slide 2: Core Concepts (Rounds and Stacks)
+    // Slide 2: Core Concepts (Rounds, Stacks, and Moves)
     <div key="slide-2" className="flex flex-col items-center">
       <div className="h-16 w-16 bg-purple-500 rounded-full flex items-center justify-center mb-6">
         <Layout className="h-8 w-8 text-white" />
@@ -1549,6 +1564,12 @@ const TutorialModal: React.FC<TutorialModalProps> = ({ isOpen, onClose }) => {
           <h3 className="text-[#E0FE10] font-semibold text-lg mb-2">Stacks</h3>
           <p className="text-zinc-400">
             Individual workouts that make up a round. Each stack contains a set of exercises designed to be completed in a single session.
+          </p>
+        </div>
+        <div className="bg-zinc-800 p-4 rounded-lg border border-zinc-700">
+          <h3 className="text-[#E0FE10] font-semibold text-lg mb-2">Moves</h3>
+          <p className="text-zinc-400">
+            The specific exercises that make up a stack. Select from a library of moves or use AI to recommend the perfect exercises for your training goals.
           </p>
         </div>
       </div>
@@ -1628,7 +1649,7 @@ const TutorialModal: React.FC<TutorialModalProps> = ({ isOpen, onClose }) => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
-      <div className="bg-[#1a1e24] rounded-xl w-100 max-w-2xl mx-4 overflow-hidden shadow-2xl">
+      <div className="bg-[#1a1e24] rounded-xl w-full max-w-5xl mx-4 overflow-hidden shadow-2xl">
         {/* Progress bar */}
         <div className="w-full h-1 bg-zinc-800">
           <div 
@@ -1763,6 +1784,20 @@ const PulseProgrammingPage: React.FC = () => {
 
   return (
     <>
+      <Head>
+        <title>Programming - The GPT For Personal Trainers</title>
+        <meta name="description" content="Create personalized training programs with AI assistance. Design structured workout rounds for your community." />
+        <meta property="og:title" content="Programming - The GPT For Personal Trainers" />
+        <meta property="og:description" content="Create personalized training programs with AI assistance. Design structured workout rounds for your community." />
+        <meta property="og:image" content="/PulseProgrammingPreview.jpg" />
+        <meta property="og:url" content="https://fitwithpulse.ai/programming" />
+        <meta property="og:type" content="website" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="Programming - The GPT For Personal Trainers" />
+        <meta name="twitter:description" content="Create personalized training programs with AI assistance. Design structured workout rounds for your community." />
+        <meta name="twitter:image" content="/PulseProgrammingPreview.jpg" />
+      </Head>
+      
       {/* Tutorial Modal */}
       <TutorialModal 
         isOpen={showTutorialModal} 
