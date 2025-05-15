@@ -1,7 +1,7 @@
 import type { Handler, HandlerEvent, HandlerContext } from "@netlify/functions";
 
 const BREVO_API_KEY = process.env.BREVO_MARKETING_KEY;
-const SENDER_EMAIL = process.env.BREVO_SENDER_EMAIL || "team@fitwithpulse.ai";
+const SENDER_EMAIL = process.env.BREVO_SENDER_EMAIL || "tre@fitwithpulse.ai";
 const SENDER_NAME = process.env.BREVO_SENDER_NAME || "The Pulse Team";
 
 const handler: Handler = async (event: HandlerEvent, context: HandlerContext) => {
