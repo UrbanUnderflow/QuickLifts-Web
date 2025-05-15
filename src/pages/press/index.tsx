@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react';
-import Head from 'next/head';
 import Link from 'next/link';
 import { ArrowUpRight, Download, Search, Loader2, AlertTriangle, X } from 'lucide-react';
 import { useScrollFade } from '../../hooks/useScrollFade';
@@ -7,9 +6,10 @@ import Header from '../../components/Header';
 import Footer from '../../components/Footer/Footer';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
-import { adminMethods } from '../../api/firebase/admin/methods'; // Added for getServerSideProps
-import { PageMetaData } from '../../api/firebase/admin/types'; // Added for type hint
-import { GetServerSideProps } from 'next'; // Added for getServerSideProps type
+import { adminMethods } from '../../api/firebase/admin/methods';
+import { PageMetaData } from '../../api/firebase/admin/types';
+import { GetServerSideProps } from 'next';
+import PageHead from '../../components/PageHead';
 
 interface PressKitAssets {
   overviewPdf?: string;
@@ -1005,7 +1005,6 @@ const FactSheetModal: React.FC<FactSheetModalProps> = ({ isOpen, onClose }) => {
 
 interface PressKitPageProps {
   metaData?: PageMetaData | null;
-  // You can add other props fetched in getServerSideProps here if needed
 }
 
 const PressKit: React.FC<PressKitPageProps> = ({ metaData }) => {
@@ -1123,31 +1122,16 @@ const PressKit: React.FC<PressKitPageProps> = ({ metaData }) => {
 
   return (
     <div className="min-h-screen bg-zinc-900">
+      <PageHead 
+        metaData={metaData}
+        pageOgUrl="https://fitwithpulse.ai/press" // Canonical URL for this page still required
+      />
+
       {/* Fact Sheet Modal */}
       <FactSheetModal isOpen={showFactSheetModal} onClose={() => setShowFactSheetModal(false)} />
       
       {/* Overview Modal */}
       <OverviewModal isOpen={showOverviewModal} onClose={() => setShowOverviewModal(false)} />
-
-      <Head>
-        <title>{metaData?.pageTitle || 'Press Kit - Pulse Fitness Collective'}</title>
-        <meta name="description" content={metaData?.metaDescription || 'Pulse press resources, media materials, and downloadable assets for journalists and creators.'} />
-        
-        {/* OpenGraph Meta Tags for sharing */}
-        <meta property="og:title" content={metaData?.ogTitle || 'Pulse Fitness Collective Press Kit'} />
-        <meta property="og:description" content={metaData?.ogDescription || 'Official media resources, brand assets, and downloadable materials for Pulse Fitness Collective.'} />
-        {metaData?.ogImage && <meta property="og:image" content={metaData.ogImage} />}
-        {!metaData?.ogImage && <meta property="og:image" content="https://fitwithpulse.ai/PressKitPreview.png" /> } {/* Fallback if not in DB */}
-        <meta property="og:url" content={metaData?.ogUrl || 'https://fitwithpulse.ai/press'} />
-        <meta property="og:type" content={metaData?.ogType || 'website'} />
-        
-        {/* Twitter Card Tags */}
-        <meta name="twitter:card" content={metaData?.twitterCard || 'summary_large_image'} />
-        <meta name="twitter:title" content={metaData?.twitterTitle || 'Pulse Fitness Collective Press Kit'} />
-        <meta name="twitter:description" content={metaData?.twitterDescription || 'Official media resources, brand assets, and downloadable materials for Pulse Fitness Collective.'} />
-        {metaData?.twitterImage && <meta name="twitter:image" content={metaData.twitterImage} />}
-        {!metaData?.twitterImage && <meta name="twitter:image" content="https://fitwithpulse.ai/PressKitPreview.png" /> } {/* Fallback if not in DB */}
-      </Head>
 
       {/* Hero Section */}
       <section ref={useScrollFade()} className="relative min-h-[70vh] flex flex-col items-center justify-center text-center px-8 py-20 overflow-hidden animate-gradient-background">
@@ -2017,15 +2001,6 @@ export const getServerSideProps: GetServerSideProps<PressKitPageProps> = async (
   try {
     const metaData = await adminMethods.getPageMetaData('press');
     
-    // Ensure that Timestamp objects are converted to a serializable format if they exist
-    // For PageMetaData, lastUpdated is a Timestamp.
-    // Firebase Timestamps are not directly serializable by Next.js's JSON serializer.
-    // We can convert it to a string or number, or just not pass it if not needed by the client.
-    // If you need it on the client, convert: e.g., lastUpdated: metaData.lastUpdated.toMillis()
-    // For this use case, the client component `PressKit` doesn't directly use `lastUpdated` in the Head, so we can omit it or pass it as is.
-    // Next.js will handle basic object serialization for props.
-
-    // If metaData is null, we still pass null to the component, which will use its fallbacks.
     return {
       props: {
         metaData: metaData ? JSON.parse(JSON.stringify(metaData)) : null,
@@ -2035,7 +2010,7 @@ export const getServerSideProps: GetServerSideProps<PressKitPageProps> = async (
     console.error("Error fetching metaData for press page in getServerSideProps:", error);
     return {
       props: {
-        metaData: null, // Fallback to default meta tags in component
+        metaData: null,
       },
     };
   }
