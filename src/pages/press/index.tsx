@@ -680,6 +680,19 @@ const PressKit = () => {
       <Head>
         <title>Press Kit - Pulse Fitness Collective</title>
         <meta name="description" content="Pulse press resources, media materials, and downloadable assets for journalists and creators." />
+        
+        {/* OpenGraph Meta Tags for sharing */}
+        <meta property="og:title" content="Pulse Fitness Collective Press Kit" />
+        <meta property="og:description" content="Official media resources, brand assets, and downloadable materials for Pulse Fitness Collective." />
+        <meta property="og:image" content="/PressKitPreview.png" />
+        <meta property="og:url" content="https://fitwithpulse.ai/press" />
+        <meta property="og:type" content="website" />
+        
+        {/* Twitter Card Tags */}
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="Pulse Fitness Collective Press Kit" />
+        <meta name="twitter:description" content="Official media resources, brand assets, and downloadable materials for Pulse Fitness Collective." />
+        <meta name="twitter:image" content="/PressKitPreview.png" />
       </Head>
 
       {/* Hero Section */}
