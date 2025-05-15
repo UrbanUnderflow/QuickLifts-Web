@@ -221,8 +221,8 @@ const FactSheetModal: React.FC<FactSheetModalProps> = ({ isOpen, onClose }) => {
           'TikTok: @fitwithpulse',
           'YouTube: First Player Series by Tremaine Grant'
         ]},
-        { label: 'VISION STATEMENT', content: 'To become the go-to digital platform for real people to build, share, and grow their fitness journeys—powered by AI, driven by community, and rewarding for creators.' },
-        { label: 'MISSION STATEMENT', content: 'To help the world move together. We empower fitness creators to scale their influence, monetize their knowledge, and inspire communities to take action through authentic, accessible content.' }
+        { label: 'VISION STATEMENT', content: 'To become the dominant digital fitness platform globally. We see this position as open and ready for the taking, with no singular platform currently serving as the go-to destination. We will achieve dominance through comprehensive content categories, innovative health-based products, and by leading the frontier of fitness technology.' },
+        { label: 'MISSION STATEMENT', content: 'To create meaningful fitness connections in an era that prioritizes media consumption over social interaction, while simultaneously opening new economic opportunities in the fitness space. We aim to democratize fitness expertise the way Spotify revolutionized the music industry, creating new passive income streams for fitness professionals and enthusiasts alike.' }
       ]);
       
       // Create a grid layout for the sections
@@ -351,6 +351,16 @@ const FactSheetModal: React.FC<FactSheetModalProps> = ({ isOpen, onClose }) => {
                   <p className="text-zinc-500 text-sm mb-1">FOUNDED</p>
                   <p className="text-white">June 2023</p>
                 </div>
+                <div>
+                  <div className="mb-4">
+                    <p className="text-zinc-500 text-sm mb-1">VISION STATEMENT</p>
+                    <p className="text-white text-sm">To become the dominant digital fitness platform globally. We see this position as open and ready for the taking, with no singular platform currently serving as the go-to destination. We will achieve dominance through comprehensive content categories, innovative health-based products, and by leading the frontier of fitness technology.</p>
+                  </div>
+                  <div>
+                    <p className="text-zinc-500 text-sm mb-1">MISSION STATEMENT</p>
+                    <p className="text-white text-sm">To create meaningful fitness connections in an era that prioritizes media consumption over social interaction, while simultaneously opening new economic opportunities in the fitness space. We aim to democratize fitness expertise the way Spotify revolutionized the music industry, creating new passive income streams for fitness professionals and enthusiasts alike.</p>
+                  </div>
+                </div>
                 <div className="border-b border-zinc-800 pb-3">
                   <p className="text-zinc-500 text-sm mb-1">HEADQUARTERS</p>
                   <p className="text-white">Atlanta, Georgia, USA</p>
@@ -361,7 +371,7 @@ const FactSheetModal: React.FC<FactSheetModalProps> = ({ isOpen, onClose }) => {
                 </div>
                 <div className="border-b border-zinc-800 pb-3">
                   <p className="text-zinc-500 text-sm mb-1">EIN</p>
-                  <p className="text-white">99-2545975</p>
+                  <p className="text-white">Available upon request</p>
                 </div>
                 <div className="border-b border-zinc-800 pb-3">
                   <p className="text-zinc-500 text-sm mb-1">PRODUCT STAGE</p>
@@ -430,24 +440,31 @@ const FactSheetModal: React.FC<FactSheetModalProps> = ({ isOpen, onClose }) => {
             {/* Key Metrics */}
             <div className="bg-zinc-900/80 border border-zinc-800 rounded-xl p-6 hover:border-[#E0FE10]/20 transition-colors duration-300">
               <h4 className="text-white text-xl font-semibold mb-4">Key Metrics (as of May 2025)</h4>
-              
-              <div className="space-y-4">
-                <div className="border-b border-zinc-800 pb-3">
-                  <p className="text-zinc-500 text-sm mb-1">ACTIVE USERS</p>
-                  <p className="text-white">12,800+</p>
+              <div className="space-y-6">
+                <div className="border-b border-zinc-800 pb-4">
+                  <p className="text-zinc-500 text-sm mb-1">USERS</p>
+                  <p className="text-white">1,000+ customer reached(through beta + full launch) as of May 2025</p>
+                  <p className="text-white">150+ paid members</p>
+                  <p className="text-zinc-500 text-xs mt-1">Source: Internal analytics, AppStore Connect</p>
                 </div>
-                <div className="border-b border-zinc-800 pb-3">
+                <div className="border-b border-zinc-800 pb-4">
                   <p className="text-zinc-500 text-sm mb-1">CREATOR COMMUNITY</p>
-                  <p className="text-white">1,100+ founding creators onboarded</p>
+                  <p className="text-white">50 creators onboarded(<a href="https://www.fitwithpulse.ai/100trainers" className="text-[#E0FE10] hover:text-white">persuing 100 tariners through pilot program</a>)</p>
+                  <p className="text-zinc-500 text-xs mt-1">Source: User registration data, verified May 2025</p>
                 </div>
-                <div className="border-b border-zinc-800 pb-3">
+                <div className="border-b border-zinc-800 pb-4">
                   <p className="text-zinc-500 text-sm mb-1">CONTENT STATS</p>
-                  <p className="text-white">17,000+ workouts shared</p>
-                  <p className="text-white">55,000+ moves created</p>
+                  <p className="text-white">800+ unique workout share links generated</p>
+                  <p className="text-white">1000+ moves created</p>
+                  <p className="text-white">30,000+ workouts completed</p>
+                  <p className="text-zinc-500 text-xs mt-1">Source: Platform database, May 2025</p>
                 </div>
-                <div className="border-b border-zinc-800 pb-3">
-                  <p className="text-zinc-500 text-sm mb-1">MORNING MOBILITY CHALLENGE</p>
-                  <p className="text-white">2,500+ participants (87% completion rate)</p>
+                <div>
+                  <p className="text-zinc-500 text-sm mb-1">ROUND PARTICIPATION</p>
+                  <p className="text-white">3 Rounds launched since Jan 2025</p>
+                  <p className="text-white">200+ participants</p>
+                  <p className="text-white">12,000+ workouts completed</p>
+                  <p className="text-zinc-500 text-xs mt-1">Source: Challenge analytics, May 2025</p>
                 </div>
                 <div>
                   <p className="text-zinc-500 text-sm mb-1">EMAIL SUBSCRIBERS</p>
@@ -512,18 +529,7 @@ const FactSheetModal: React.FC<FactSheetModalProps> = ({ isOpen, onClose }) => {
                     <li>TikTok: @fitwithpulse</li>
                     <li>YouTube: First Player Series by Tremaine Grant</li>
                   </ul>
-                </div>
-                
-                <div>
-                  <div className="mb-4">
-                    <p className="text-zinc-500 text-sm mb-1">VISION STATEMENT</p>
-                    <p className="text-white text-sm">To become the go-to digital platform for real people to build, share, and grow their fitness journeys—powered by AI, driven by community, and rewarding for creators.</p>
-                  </div>
-                  <div>
-                    <p className="text-zinc-500 text-sm mb-1">MISSION STATEMENT</p>
-                    <p className="text-white text-sm">To help the world move together. We empower fitness creators to scale their influence, monetize their knowledge, and inspire communities to take action through authentic, accessible content.</p>
-                  </div>
-                </div>
+                </div>                
               </div>
             </div>
           </div>
@@ -560,6 +566,15 @@ const PressKit = () => {
   const [isLoadingAssets, setIsLoadingAssets] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [showFactSheetModal, setShowFactSheetModal] = useState(false);
+  const [appScreenshots, setAppScreenshots] = useState<{
+    moves: string | null;
+    stacks: string | null;
+    rounds: string | null;
+  }>({
+    moves: null,
+    stacks: null,
+    rounds: null
+  });
 
   useEffect(() => {
     const fetchPressKitAssets = async () => {
@@ -586,6 +601,31 @@ const PressKit = () => {
     };
 
     fetchPressKitAssets();
+  }, []);
+
+  useEffect(() => {
+    const fetchAppScreenshots = async () => {
+      try {
+        const docRef = doc(db, "pressKitData", "liveAssets");
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          const liveAssets = docSnap.data();
+          
+          // Get the first image from each key category
+          setAppScreenshots({
+            moves: liveAssets.appScreenshot_moves_1 || null,
+            stacks: liveAssets.appScreenshot_stacks_1 || null,
+            rounds: liveAssets.appScreenshot_rounds_1 || null
+          });
+          
+          console.log("App screenshots loaded for press kit");
+        }
+      } catch (error) {
+        console.error("Error fetching app screenshots:", error);
+      }
+    };
+
+    fetchAppScreenshots();
   }, []);
 
   const sections = [
@@ -686,16 +726,16 @@ const PressKit = () => {
               
               <div className="bg-zinc-900/80 border border-zinc-800 rounded-xl p-8 mb-8 hover:border-[#E0FE10]/20 transition-colors duration-300">
                 <h4 className="text-white text-xl font-semibold mb-4">Elevator Pitch</h4>
-                <p className="text-zinc-400 text-lg mb-6">
-                  Pulse is a fitness collective platform where enthusiasts create, share, and grow together through community-driven workouts and challenges, transforming solo fitness into shared experiences.
+                                  <p className="text-zinc-400 text-lg mb-6">
+                  Pulse is a fitness app where creators capture and share their Moves—we turn those into gamified, community-driven fitness experiences for their audiences. At its core, we help people move together.
                 </p>
                 
                 <h4 className="text-white text-xl font-semibold mb-4 mt-8">Why Now? Narrative</h4>
                 <p className="text-zinc-400 text-lg mb-4">
-                  The fitness industry has long focused on solo experiences and expert-driven content, leaving a gap for genuine community participation and content creation by everyday fitness enthusiasts.
+                  In the post-COVID era, people are yearning for authentic connection in fitness. We're seeing explosive growth in in-person run clubs, community workouts, and fitness communities seeking meaningful engagement beyond digital screens.
                 </p>
-                <p className="text-zinc-400 text-lg">
-                  With over 1,000 creators joining our founding class within 45 days of launch, Pulse is proving that fitness-minded individuals are hungry for a platform where they can not only consume but actively contribute to the collective fitness experience.
+                <p className="text-zinc-400 text-lg mb-4">
+                  Meanwhile, short-form content has revolutionized how people consume information, creating perfect conditions for bite-sized fitness content. The fitness industry continues to grow exponentially, with digital fitness projected to reach $44.7 billion by 2026, creating space for a dominant digital platform that connects people through movement.
                 </p>
                 
                 <a 
@@ -788,10 +828,10 @@ const PressKit = () => {
                 <div className="mt-8 p-4 bg-black/30 border border-zinc-800 rounded-lg">
                   <h5 className="text-[#E0FE10] text-sm font-semibold mb-2">INTERESTING FACTS</h5>
                   <ul className="text-zinc-400 text-sm list-disc ml-4 space-y-2">
-                    <li>Former collegiate track athlete (400m specialist)</li>
-                    <li>Self-taught programmer who built his first app at 16</li>
+                    <li>Former collegiate track athlete (110m,400m hurdles specialist)</li>
+                    <li>Self-taught programmer at age 12 (went on to major in computer science)</li>
                     <li>Passionate advocate for diversity in tech and fitness spaces</li>
-                    <li>Has completed 7 marathons across 5 countries</li>
+                    <li>Has traveled to 31 countries</li>
                   </ul>
                 </div>
                 
@@ -952,21 +992,21 @@ const PressKit = () => {
                 <div className="mt-8 grid grid-cols-3 gap-6">
                   <div className="aspect-[9/19.5] bg-zinc-800 rounded-lg overflow-hidden">
                     <img 
-                      src="/app-screens/moves-screen.jpg" 
+                      src={appScreenshots.moves || "/app-screens/moves-screen.jpg"} 
                       alt="Moves Screen" 
                       className="w-full h-full object-cover"
                     />
                   </div>
                   <div className="aspect-[9/19.5] bg-zinc-800 rounded-lg overflow-hidden">
                     <img 
-                      src="/app-screens/stacks-screen.jpg" 
+                      src={appScreenshots.stacks || "/app-screens/stacks-screen.jpg"} 
                       alt="Stacks Screen" 
                       className="w-full h-full object-cover"
                     />
                   </div>
                   <div className="aspect-[9/19.5] bg-zinc-800 rounded-lg overflow-hidden">
                     <img 
-                      src="/app-screens/rounds-screen.jpg" 
+                      src={appScreenshots.rounds || "/app-screens/rounds-screen.jpg"} 
                       alt="Rounds Screen" 
                       className="w-full h-full object-cover"
                     />
@@ -1034,8 +1074,8 @@ const PressKit = () => {
             <div className="group">
               <div className="aspect-video bg-zinc-800 rounded-xl overflow-hidden mb-4 relative">
                 <img 
-                  src="/media-assets/app-screens-thumbnail.jpg" 
-                  alt="App Screenshots" 
+                  src={appScreenshots.moves || "/media-assets/app-screens-thumbnail.jpg"} 
+                  alt="App Screenshots - Moves" 
                   className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end">
@@ -1055,56 +1095,35 @@ const PressKit = () => {
               </Link>
             </div>
             
-            <div className="group">
-              <div className="aspect-video bg-zinc-800 rounded-xl overflow-hidden mb-4 relative">
-                <img 
-                  src="/media-assets/app-gifs-thumbnail.jpg" 
-                  alt="App GIFs" 
-                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end">
-                  <div className="p-6">
-                    <p className="text-white font-medium text-lg">App GIFs</p>
-                    <p className="text-zinc-300 text-sm">5-sec feature loops</p>
-                  </div>
-                </div>
-              </div>
-              <h3 className="text-white text-xl font-medium mb-2">App GIFs</h3>
-              <p className="text-zinc-400 mb-4">Short animated GIFs showing key app features in action</p>
-              <a href="#" className="flex items-center text-[#E0FE10] hover:text-white group">
-                View all
-                <ArrowUpRight className="w-5 h-5 ml-2 transition-transform duration-300 group-hover:translate-x-1 group-hover:-translate-y-1" />
-              </a>
-            </div>
             
-            <div className="group">
+            {/* <div className="group">
               <div className="aspect-video bg-zinc-800 rounded-xl overflow-hidden mb-4 relative">
                 <img 
-                  src="/media-assets/b-roll-thumbnail.jpg" 
-                  alt="App Videos & Demos" 
+                  src={appScreenshots.rounds || "/media-assets/b-roll-thumbnail.jpg"} 
+                  alt="Rounds Feature" 
                   className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end">
                   <div className="p-6">
-                    <p className="text-white font-medium text-lg">App Videos & Demos</p>
-                    <p className="text-zinc-300 text-sm">App demonstrations and usage</p>
+                    <p className="text-white font-medium text-lg">Rounds Feature</p>
+                    <p className="text-zinc-300 text-sm">Community workout challenges</p>
                   </div>
                 </div>
               </div>
-              <h3 className="text-white text-xl font-medium mb-2">Product Demos</h3>
-              <p className="text-zinc-400 mb-4">Professional footage of Pulse in use, ideal for broadcast</p>
-              <Link href="/press/videos">
+              <h3 className="text-white text-xl font-medium mb-2">Rounds Feature</h3>
+              <p className="text-zinc-400 mb-4">See how Pulse Rounds engage users in group workout challenges</p>
+              <Link href="/press/app-screenshots">
                 <span className="flex items-center text-[#E0FE10] hover:text-white group cursor-pointer">
                   View all
                   <ArrowUpRight className="w-5 h-5 ml-2 transition-transform duration-300 group-hover:translate-x-1 group-hover:-translate-y-1" />
                 </span>
               </Link>
             </div>
-            
+             */}
             <div className="group">
               <div className="aspect-video bg-zinc-800 rounded-xl overflow-hidden mb-4 relative">
                 <img 
-                  src="/media-assets/branding-thumbnail.jpg" 
+                  src="/brandGuidelines.png" 
                   alt="Brand Guidelines" 
                   className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                 />
@@ -1128,7 +1147,7 @@ const PressKit = () => {
             <div className="group">
               <div className="aspect-video bg-zinc-800 rounded-xl overflow-hidden mb-4 relative">
                 <img 
-                  src="/media-assets/press-releases-thumbnail.jpg" 
+                  src="/PulseProgrammingPreview.png" 
                   alt="Press Releases" 
                   className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                 />
@@ -1141,12 +1160,13 @@ const PressKit = () => {
               </div>
               <h3 className="text-white text-xl font-medium mb-2">Press Releases</h3>
               <p className="text-zinc-400 mb-4">Official announcements and news from the Pulse team</p>
-              <Link href="/press/press-releases">
+              <p className="flex items-center text-[#E0FE10] hover:text-white group cursor-pointer">Coming soon</p>
+              {/* <Link href="/press/press-releases">
                 <span className="flex items-center text-[#E0FE10] hover:text-white group cursor-pointer">
                   View all
                   <ArrowUpRight className="w-5 h-5 ml-2 transition-transform duration-300 group-hover:translate-x-1 group-hover:-translate-y-1" />
                 </span>
-              </Link>
+              </Link> */}
             </div>
           </div>
         </div>
@@ -1179,8 +1199,18 @@ const PressKit = () => {
                   <p className="text-zinc-500 text-sm mb-1">FOUNDING</p>
                   <p className="text-white">Founded in June 2023 by Tremaine Grant in Atlanta, Georgia</p>
                 </div>
+                <div>
+                  <div className="mb-4">
+                    <p className="text-zinc-500 text-sm mb-1">VISION STATEMENT</p>
+                    <p className="text-white text-sm">To become the dominant digital fitness platform globally. We see this position as open and ready for the taking, with no singular platform currently serving as the go-to destination. We will achieve dominance through comprehensive content categories, innovative health-based products, and by leading the frontier of fitness technology.</p>
+                  </div>
+                  <div>
+                    <p className="text-zinc-500 text-sm mb-1">MISSION STATEMENT</p>
+                    <p className="text-white text-sm">To create meaningful fitness connections in an era that prioritizes media consumption over social interaction, while simultaneously opening new economic opportunities in the fitness space. We aim to democratize fitness expertise the way Spotify revolutionized the music industry, creating new passive income streams for fitness professionals and enthusiasts alike.</p>
+                  </div>
+                </div>
                 <div className="border-b border-zinc-800 pb-4">
-                  <p className="text-zinc-500 text-sm mb-1">PRODUCT NAMES</p>
+                  <p className="text-zinc-500 text-sm mb-1">PRODUCT TERMINOLOGY</p>
                   <p className="text-white">Moves (individual exercise videos)</p>
                   <p className="text-white">Stacks (workout routines)</p>
                   <p className="text-white">Rounds (community challenges)</p>
@@ -1202,24 +1232,27 @@ const PressKit = () => {
               <div className="space-y-6">
                 <div className="border-b border-zinc-800 pb-4">
                   <p className="text-zinc-500 text-sm mb-1">USERS</p>
-                  <p className="text-white">12,800+ active users as of May 2025</p>
-                  <p className="text-zinc-500 text-xs mt-1">Source: Internal analytics, updated monthly</p>
+                  <p className="text-white">1,000+ customer reached(through beta + full launch) as of May 2025</p>
+                  <p className="text-white">150+ paid members</p>
+                  <p className="text-zinc-500 text-xs mt-1">Source: Internal analytics, AppStore Connect</p>
                 </div>
                 <div className="border-b border-zinc-800 pb-4">
                   <p className="text-zinc-500 text-sm mb-1">CREATOR COMMUNITY</p>
-                  <p className="text-white">1,100+ founding creators onboarded</p>
+                  <p className="text-white">50 creators onboarded(<a href="https://www.fitwithpulse.ai/100trainers" className="text-[#E0FE10] hover:text-white">persuing 100 tariners through pilot program</a>)</p>
                   <p className="text-zinc-500 text-xs mt-1">Source: User registration data, verified May 2025</p>
                 </div>
                 <div className="border-b border-zinc-800 pb-4">
                   <p className="text-zinc-500 text-sm mb-1">CONTENT STATS</p>
-                  <p className="text-white">17,000+ workouts shared</p>
-                  <p className="text-white">55,000+ moves created</p>
+                  <p className="text-white">800+ unique workout share links generated</p>
+                  <p className="text-white">1000+ moves created</p>
+                  <p className="text-white">30,000+ workouts completed</p>
                   <p className="text-zinc-500 text-xs mt-1">Source: Platform database, May 2025</p>
                 </div>
                 <div>
-                  <p className="text-zinc-500 text-sm mb-1">MORNING MOBILITY CHALLENGE</p>
-                  <p className="text-white">2,500+ participants</p>
-                  <p className="text-white">87% completion rate</p>
+                  <p className="text-zinc-500 text-sm mb-1">ROUND PARTICIPATION</p>
+                  <p className="text-white">3 Rounds launched since Jan 2025</p>
+                  <p className="text-white">200+ participants</p>
+                  <p className="text-white">12,000+ workouts completed</p>
                   <p className="text-zinc-500 text-xs mt-1">Source: Challenge analytics, May 2025</p>
                 </div>
               </div>

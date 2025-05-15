@@ -3,7 +3,9 @@ import Head from 'next/head';
 import React, { useState, useEffect } from 'react';
 import { Download, FileImage, X, Smartphone } from 'lucide-react'; // Changed icon
 import Footer from '../../components/Footer/Footer';
-// import Header from '../../components/Header'; // Optional: Add header if needed
+// Import Firebase dependencies
+import { doc, getDoc, collection, getDocs, query, where } from 'firebase/firestore';
+import { db } from '../../api/firebase/config';
 
 // Define structure for screenshot data
 interface ScreenshotAsset {
@@ -56,34 +58,41 @@ const PressAppScreenshotsPage: NextPage = () => {
       setIsLoading(true);
       setFetchError(null);
       try {
-        // --- TODO: Implement actual fetching logic here ---
-        console.log('Simulating fetching screenshots...');
-        await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate network delay
-
-        // Example simulated data:
-        const fetchedScreenshots: ScreenshotAsset[] = [
-          // User Features
-          { id: 'ss1', name: 'Moves_List.png', url: '/placeholder/screenshot.png', fileType: 'image/png', category: screenshotCategories.moves },
-          { id: 'ss2', name: 'Stacks_Overview.png', url: '/placeholder/screenshot.png', fileType: 'image/png', category: screenshotCategories.stacks },
-          { id: 'ss3', name: 'Rounds_Marketplace.png', url: '/placeholder/screenshot.png', fileType: 'image/png', category: screenshotCategories.rounds },
-          { id: 'ss4', name: 'Workout_InProgress_Timer.png', url: '/placeholder/screenshot.png', fileType: 'image/png', category: screenshotCategories.inProgressWorkout },
-          { id: 'ss5', name: 'Weight_Exercise.png', url: '/placeholder/screenshot.png', fileType: 'image/png', category: screenshotCategories.weightTraining },
-          { id: 'ss6', name: 'Log_Weight_Modal.png', url: '/placeholder/screenshot.png', fileType: 'image/png', category: screenshotCategories.loggingWeights },
-          { id: 'ss7', name: 'Progress_Graph.png', url: '/placeholder/screenshot.png', fileType: 'image/png', category: screenshotCategories.progressReport },
-          { id: 'ss8', name: 'Workout_Summary_Screen.png', url: '/placeholder/screenshot.png', fileType: 'image/png', category: screenshotCategories.workoutSummary },
-          { id: 'ss9', name: 'Check_In_Calendar.png', url: '/placeholder/screenshot.png', fileType: 'image/png', category: screenshotCategories.checkingIn },
-          { id: 'ss10', name: 'Weigh_In_Input.png', url: '/placeholder/screenshot.png', fileType: 'image/png', category: screenshotCategories.weeklyWeighIns },
-          { id: 'ss11', name: 'Set_Round_Price.png', url: '/placeholder/screenshot.png', fileType: 'image/png', category: screenshotCategories.roundPricing },
-          { id: 'ss12', name: 'Create_Round_Builder.png', url: '/placeholder/screenshot.png', fileType: 'image/png', category: screenshotCategories.creatingRound },
-          // Trainer Features
-          { id: 'ss13', name: 'Creator_Dashboard_Earnings.png', url: '/placeholder/screenshot.png', fileType: 'image/png', category: screenshotCategories.creatorPaymentDashboard },
-          { id: 'ss14', name: 'AI_Round_Generation.png', url: '/placeholder/screenshot.png', fileType: 'image/png', category: screenshotCategories.generatingRoundAI },
-          { id: 'ss15', name: 'Stripe_Connect_Setup.png', url: '/placeholder/screenshot.png', fileType: 'image/png', category: screenshotCategories.stripeConnect },
-          { id: 'ss16', name: 'Professional_Dashboard_Analytics.png', url: '/placeholder/screenshot.png', fileType: 'image/png', category: screenshotCategories.professionalDashboard },
-        ];
-        // --- End of TODO ---
-
-        setScreenshots(fetchedScreenshots);
+        // Fetch all the screenshot URLs from the pressKitData/liveAssets document
+        const docRef = doc(db, "pressKitData", "liveAssets");
+        const docSnap = await getDoc(docRef);
+        
+        if (docSnap.exists()) {
+          const liveAssets = docSnap.data();
+          const screenshots: ScreenshotAsset[] = [];
+          
+          // Process all the appScreenshot_ fields from the document
+          Object.entries(liveAssets).forEach(([key, url]) => {
+            if (key.startsWith('appScreenshot_') && url) {
+              // Parse the key format: appScreenshot_categoryKey_index
+              const parts = key.split('_');
+              if (parts.length === 3) {
+                const categoryKey = parts[1];
+                const categoryName = screenshotCategories[categoryKey] || categoryKey;
+                const index = parseInt(parts[2]);
+                
+                screenshots.push({
+                  id: key,
+                  name: `${categoryName}_${index}.png`,
+                  url: url as string,
+                  fileType: 'image/png', // Assuming PNG for simplicity
+                  category: categoryName
+                });
+              }
+            }
+          });
+          
+          setScreenshots(screenshots);
+          console.log("Fetched screenshots:", screenshots);
+        } else {
+          console.log("No liveAssets document found!");
+          setFetchError("No screenshots available. Please check back later.");
+        }
       } catch (error) {
         console.error("Failed to fetch screenshots:", error);
         setFetchError("Failed to load screenshots. Please try again later.");
