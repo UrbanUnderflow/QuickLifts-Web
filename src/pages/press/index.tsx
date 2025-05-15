@@ -1222,7 +1222,7 @@ const PressKit: React.FC<PressKitPageProps> = ({ metaData }) => {
                 <div className="grid grid-cols-2 gap-6">
                   <div>
                     <p className="text-zinc-500 text-sm mb-1">FOUNDED</p>
-                    <p className="text-white text-xl">2023</p>
+                    <p className="text-white text-xl">June 2023</p>
                   </div>
                   <div>
                     <p className="text-zinc-500 text-sm mb-1">HEADQUARTERS</p>
