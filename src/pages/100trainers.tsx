@@ -8,7 +8,6 @@ import { useUser } from '../hooks/useUser';
 import { useRouter } from 'next/router';
 import Footer from '../components/Footer/Footer';
 import Header from '../components/Header';
-import { useAuth } from '../contexts/AuthContext';
 import { GetServerSideProps } from 'next';
 import { adminMethods } from '../api/firebase/admin/methods';
 import { PageMetaData } from '../api/firebase/admin/types';
@@ -124,7 +123,6 @@ const CreatorChecklist = ({ metaData }: HundredTrainersPageProps) => {
   const description = 'Apply to join Pulse\'s exclusive Founding 100 Coaches Program. Get lifetime free access to our platform and shape the future of fitness training.';
 
   const router = useRouter();
-  const { user, loading } = useAuth();
   const [showVideo, setShowVideo] = useState(false);
 
   // Pre-fill form with user data once on mount
@@ -142,7 +140,10 @@ const CreatorChecklist = ({ metaData }: HundredTrainersPageProps) => {
 
   useEffect(() => {
     // Potentially handle redirection or UI changes based on auth status
-  }, [user, loading, router]);
+    if (!currentUser && router.pathname.startsWith('/app')) { // Example, adjust as needed
+      // router.push('/login');
+    }
+  }, [currentUser, router]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;

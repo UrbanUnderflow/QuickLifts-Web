@@ -1,5 +1,4 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
-import { User } from '../api/firebase/user';
 
 interface UserState {
   currentUser: Record<string, any> | null; // Dictionary representation
