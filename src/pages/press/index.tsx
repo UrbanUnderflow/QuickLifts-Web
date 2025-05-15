@@ -7,6 +7,9 @@ import Header from '../../components/Header';
 import Footer from '../../components/Footer/Footer';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
+import { adminMethods } from '../../api/firebase/admin/methods'; // Added for getServerSideProps
+import { PageMetaData } from '../../api/firebase/admin/types'; // Added for type hint
+import { GetServerSideProps } from 'next'; // Added for getServerSideProps type
 
 interface PressKitAssets {
   overviewPdf?: string;
@@ -21,6 +24,464 @@ interface PressKitAssets {
   logoSigSvg?: string;
   logoSigPng?: string;
 }
+
+// OverviewModal Component
+interface OverviewModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+const OverviewModal: React.FC<OverviewModalProps> = ({ isOpen, onClose }) => {
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+
+  const handleDownload = async () => {
+    try {
+      // Dynamically import html2pdf to avoid SSR issues
+      const html2pdf = (await import('html2pdf.js')).default;
+      setIsGenerating(true);
+      
+      // Create a completely new white-themed document for PDF
+      const pdfContainer = document.createElement('div');
+      pdfContainer.className = "bg-white text-zinc-900";
+      pdfContainer.style.backgroundColor = "#ffffff";
+      pdfContainer.style.color = "#18181b";
+      pdfContainer.style.fontFamily = 'Arial, sans-serif';
+      pdfContainer.style.padding = '20px';
+      pdfContainer.style.maxWidth = '100%';
+      
+      // Header with logo
+      const header = document.createElement('header');
+      header.style.display = 'flex';
+      header.style.justifyContent = 'space-between';
+      header.style.alignItems = 'center';
+      header.style.marginBottom = '30px';
+      header.style.borderBottom = '1px solid #e5e7eb';
+      header.style.paddingBottom = '20px';
+      
+      const logoContainer = document.createElement('div');
+      logoContainer.style.display = 'flex';
+      logoContainer.style.alignItems = 'center';
+      logoContainer.style.gap = '10px';
+      
+      // Use the SVG logo
+      const logoImg = document.createElement('img');
+      logoImg.src = window.location.origin + '/pulse-logo.svg';
+      logoImg.alt = 'Pulse Logo';
+      logoImg.style.height = '32px';
+      logoImg.style.width = 'auto';
+      
+      logoContainer.appendChild(logoImg);
+      header.appendChild(logoContainer);
+      pdfContainer.appendChild(header);
+      
+      // Main content
+      const main = document.createElement('main');
+      main.style.width = '100%';
+      
+      // Title and Subtitle
+      const title = document.createElement('h1');
+      title.style.fontSize = '28px';
+      title.style.fontWeight = 'bold';
+      title.style.textAlign = 'center';
+      title.style.marginBottom = '12px';
+      title.style.color = '#18181b';
+      title.textContent = 'Pulse: Lean Business Plan';
+      
+      const subtitle = document.createElement('p');
+      subtitle.style.textAlign = 'center';
+      subtitle.style.fontSize = '14px';
+      subtitle.style.color = '#6b7280';
+      subtitle.style.marginBottom = '32px';
+      subtitle.textContent = 'A fitness app and community platform that redefines how we create, share, and experience workouts together.';
+      
+      main.appendChild(title);
+      main.appendChild(subtitle);
+      
+      // Create the business plan table
+      const businessPlan = document.createElement('table');
+      businessPlan.style.width = '100%';
+      businessPlan.style.borderCollapse = 'collapse';
+      businessPlan.style.marginBottom = '40px';
+      businessPlan.style.fontSize = '14px';
+      businessPlan.style.border = '1px solid #e5e7eb';
+      
+      // Table header
+      const tableHeader = document.createElement('thead');
+      const headerRow = document.createElement('tr');
+      headerRow.style.backgroundColor = '#f3f4f6';
+      headerRow.style.textAlign = 'center';
+      
+      const headerCell = document.createElement('th');
+      headerCell.style.padding = '12px';
+      headerCell.style.fontWeight = 'bold';
+      headerCell.style.fontSize = '18px';
+      headerCell.colSpan = 2;
+      headerCell.textContent = 'Lean Business Plan';
+      
+      headerRow.appendChild(headerCell);
+      tableHeader.appendChild(headerRow);
+      businessPlan.appendChild(tableHeader);
+      
+      // Table body
+      const tableBody = document.createElement('tbody');
+      
+      // Create a function to add a row to the table
+      const addRow = (title: string | [string, string], content: string | [string, string], isFullWidth = false, borderBottom = true) => {
+        const row = document.createElement('tr');
+        if (borderBottom) {
+          row.style.borderBottom = '1px solid #e5e7eb';
+        }
+        
+        if (isFullWidth) {
+          const cell = document.createElement('td');
+          cell.colSpan = 2;
+          cell.style.padding = '16px';
+          cell.style.verticalAlign = 'top';
+          
+          const titleEl = document.createElement('p');
+          titleEl.style.fontSize = '12px';
+          titleEl.style.fontWeight = '600';
+          titleEl.style.color = '#6b7280';
+          titleEl.style.marginBottom = '8px';
+          titleEl.style.textTransform = 'uppercase';
+          titleEl.textContent = title as string; // Type assertion
+          
+          const contentEl = document.createElement('p');
+          contentEl.style.color = '#374151';
+          contentEl.innerHTML = content as string; // Type assertion
+          
+          cell.appendChild(titleEl);
+          cell.appendChild(contentEl);
+          row.appendChild(cell);
+        } else {
+          const titleCell = document.createElement('td');
+          titleCell.style.width = '50%';
+          titleCell.style.padding = '16px';
+          titleCell.style.borderRight = '1px solid #e5e7eb';
+          titleCell.style.verticalAlign = 'top';
+          
+          const titleTitleEl = document.createElement('p');
+          titleTitleEl.style.fontSize = '12px';
+          titleTitleEl.style.fontWeight = '600';
+          titleTitleEl.style.color = '#6b7280';
+          titleTitleEl.style.marginBottom = '8px';
+          titleTitleEl.style.textTransform = 'uppercase';
+          titleTitleEl.textContent = (title as [string, string])[0]; // Type assertion
+          
+          const titleContentEl = document.createElement('p');
+          titleContentEl.style.color = '#374151';
+          titleContentEl.innerHTML = (title as [string, string])[1]; // Type assertion
+          
+          titleCell.appendChild(titleTitleEl);
+          titleCell.appendChild(titleContentEl);
+          
+          const contentCell = document.createElement('td');
+          contentCell.style.width = '50%';
+          contentCell.style.padding = '16px';
+          contentCell.style.verticalAlign = 'top';
+          
+          const contentTitleEl = document.createElement('p');
+          contentTitleEl.style.fontSize = '12px';
+          contentTitleEl.style.fontWeight = '600';
+          contentTitleEl.style.color = '#6b7280';
+          contentTitleEl.style.marginBottom = '8px';
+          contentTitleEl.style.textTransform = 'uppercase';
+          contentTitleEl.textContent = (content as [string, string])[0]; // Type assertion
+          
+          const contentContentEl = document.createElement('p');
+          contentContentEl.style.color = '#374151';
+          contentContentEl.innerHTML = (content as [string, string])[1]; // Type assertion
+          
+          contentCell.appendChild(contentTitleEl);
+          contentCell.appendChild(contentContentEl);
+          
+          row.appendChild(titleCell);
+          row.appendChild(contentCell);
+        }
+        
+        tableBody.appendChild(row);
+      };
+      
+      // IDENTITY Section (full width)
+      addRow('IDENTITY', 'Pulse: The Fitness Collective is a fitness app and community platform that redefines how we create, share, and experience workouts together.', true);
+      
+      // PROBLEM & SOLUTION Row
+      addRow(
+        ['PROBLEM WORTH SOLVING', 'The fitness app market is fragmented, which directs people to use social media for their primary fitness discovery tool, however social media fails to inspire genuine fitness commitment, and action.'],
+        ['OUR SOLUTION', 'Pulse centralizes and democratizes fitness expertise, with an app where creators can easily share and monetize their fitness content, and fitness seekers can find quality content in one place.']
+      );
+      
+      // TARGET MARKET & COMPETITION Row
+      addRow(
+        ['TARGET MARKET', '<strong>Fitness content creators</strong> - particularly those with established audiences, who can share expertise and monetize their content through the platform.<br><br><strong>Fitness seekers</strong> - with established workout habits, looking for new routines, progress tracking, and community connections.<br><br>Pulse aims to connect these two groups, creating a community-driven fitness experience that makes fitness more accessible and rewarding for both creators and users.'],
+        ['THE COMPETITION', 'Pulse operates in a fragmented fitness app market, with its primary competitor being Instagram, which hosts an estimated 280 million fitness content creators. Other competitors include specialized fitness apps like FitBod and Nike Fit Club.<br><br>Pulse differentiated itself by harnessing the collective wisdom of its community. Unlike traditional apps Pulse\'s magic lies in its video-first, community-driven approach, where every user becomes both student and teacher. By seamlessly blending social engagement with practical fitness tools, Pulse transforms passive scrolling into active participation.']
+      );
+      
+      // SALES & MARKETING Row
+      addRow(
+        ['SALES CHANNELS', 'Pulse employs a strategic, segmented approach to sales and user acquisition. The platform targets content creators across three tiers: Micro (100-5000 followers), Median (5000-50,000 followers), and Macro (50,000+ followers), with tailored outreach and support for each segment.'],
+        ['MARKETING ACTIVITIES', 'Digital marketing platforms such as Apple Search Ads, Google Ads, Instagram, TikTok.<br><br>We will also do direct sale through gym partnerships, in-person events, and direct content creator recruiting through social media.']
+      );
+      
+      // REVENUE & EXPENSES Row
+      addRow(
+        ['REVENUE', 'Fitness users can subscribe to the app for $4.99 monthly or $39.99 annually.<br><br>Content creators opt into a $79.99 annual subscription to monetize their content through an engagement-based profit-sharing model'],
+        ['EXPENSES', 'Content Creator Recruitment, Digital Marketing & Sales, Technology Stack, Product Development, Research and Development, Operational Expenses, Headcount (Salaries), In-person Events']
+      );
+      
+      // MILESTONES Row
+      addRow(
+        ['MILESTONES', 'MVP launched in January 2024, 275 users in open beta, 364 exercise videos uploaded, 20 content creators recruited, 115,000 email list built, UI/UX designer hired, Digital Marketing Manager hired, 5-star Apple App Store rating achieved'],
+        ['', '']
+      );
+      
+      // TEAM & PARTNERS Row
+      addRow(
+        ['TEAM AND KEY ROLES', '- &nbsp;&nbsp;Lead Software Engineer(Myself)<br>- &nbsp;&nbsp;Brand/ Product Designer(Joseph)<br>- &nbsp;&nbsp;Social Media Manager(Funso) - Looking for replacement'],
+        ['PARTNERS AND RESOURCES', 'We are looking to build gym partnerships, and corporate partnerships with notable brands(Lulu Lemon is our dream partnership)'],
+        false,
+        false
+      );
+      
+      businessPlan.appendChild(tableBody);
+      main.appendChild(businessPlan);
+      
+      // Elevator pitch section
+      const elevatorPitchTitle = document.createElement('h2');
+      elevatorPitchTitle.style.fontSize = '20px';
+      elevatorPitchTitle.style.fontWeight = '600';
+      elevatorPitchTitle.style.marginBottom = '12px';
+      elevatorPitchTitle.style.color = '#18181b';
+      elevatorPitchTitle.textContent = 'Elevator Pitch';
+      
+      const elevatorPitchContent = document.createElement('p');
+      elevatorPitchContent.style.marginBottom = '24px';
+      elevatorPitchContent.style.lineHeight = '1.6';
+      elevatorPitchContent.textContent = 'Pulse is a fitness app where creators capture and share their Moves—we turn those into gamified, community-driven fitness experiences for their audiences. At its core, we help people move together.';
+      
+      main.appendChild(elevatorPitchTitle);
+      main.appendChild(elevatorPitchContent);
+      
+      // Why Now section
+      const whyNowTitle = document.createElement('h2');
+      whyNowTitle.style.fontSize = '20px';
+      whyNowTitle.style.fontWeight = '600';
+      whyNowTitle.style.marginBottom = '12px';
+      whyNowTitle.style.color = '#18181b';
+      whyNowTitle.textContent = 'Why Now? Narrative';
+      
+      const whyNowContent1 = document.createElement('p');
+      whyNowContent1.style.marginBottom = '12px';
+      whyNowContent1.style.lineHeight = '1.6';
+      whyNowContent1.textContent = 'In the post-COVID era, people are yearning for authentic connection in fitness. We\'re seeing explosive growth in in-person run clubs, community workouts, and fitness communities seeking meaningful engagement beyond digital screens.';
+      
+      const whyNowContent2 = document.createElement('p');
+      whyNowContent2.style.marginBottom = '24px';
+      whyNowContent2.style.lineHeight = '1.6';
+      whyNowContent2.textContent = 'Meanwhile, short-form content has revolutionized how people consume information, creating perfect conditions for bite-sized fitness content. The fitness industry continues to grow exponentially, with digital fitness projected to reach $44.7 billion by 2026, creating space for a dominant digital platform that connects people through movement.';
+      
+      main.appendChild(whyNowTitle);
+      main.appendChild(whyNowContent1);
+      main.appendChild(whyNowContent2);
+      
+      pdfContainer.appendChild(main);
+      
+      // Footer
+      const footer = document.createElement('footer');
+      footer.style.marginTop = '40px';
+      footer.style.borderTop = '1px solid #e5e7eb';
+      footer.style.paddingTop = '16px';
+      footer.style.display = 'flex';
+      footer.style.justifyContent = 'space-between';
+      footer.style.alignItems = 'center';
+      
+      const footerText = document.createElement('p');
+      footerText.style.fontSize = '12px';
+      footerText.style.color = '#6b7280';
+      footerText.textContent = `Last updated: May 2025 • Generated on ${new Date().toLocaleDateString()}`;
+      
+      const footerLogo = document.createElement('div');
+      footerLogo.style.display = 'flex';
+      footerLogo.style.alignItems = 'center';
+      footerLogo.style.gap = '8px';
+      
+      // Use the SVG logo in the footer as well
+      const footerLogoImg = document.createElement('img');
+      footerLogoImg.src = window.location.origin + '/pulse-logo.svg';
+      footerLogoImg.alt = 'Pulse Logo';
+      footerLogoImg.style.height = '20px';
+      footerLogoImg.style.width = 'auto';
+      
+      footerLogo.appendChild(footerLogoImg);
+      
+      footer.appendChild(footerText);
+      footer.appendChild(footerLogo);
+      
+      pdfContainer.appendChild(footer);
+      
+      // PDF generation options
+      const opt = {
+        margin: [10, 10],
+        filename: 'Pulse_Fitness_Collective_Overview.pdf',
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true, logging: false },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      };
+      
+      // Generate PDF
+      await html2pdf().from(pdfContainer).set(opt).save();
+      
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      alert('There was an error generating the PDF. Please try again later.');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+      <div className="bg-[#1a1e24] rounded-xl w-full max-w-5xl mx-4 max-h-[90vh] overflow-hidden shadow-2xl">
+        <div className="flex justify-between items-center px-6 py-4 border-b border-zinc-800">
+          <h3 className="text-lg font-medium text-white">Pulse Fitness Collective: Overview</h3>
+          <button 
+            onClick={onClose}
+            className="text-zinc-400 hover:text-white transition-colors"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        
+        <div ref={contentRef} className="overflow-y-auto p-6 max-h-[calc(90vh-120px)] scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-zinc-800">
+          <div className="space-y-8">
+            <div className="rounded-lg overflow-hidden border border-zinc-700">
+              <div className="bg-[#F5F5F4] p-4 text-center">
+                <h3 className="text-black text-2xl font-bold">Lean Business Plan</h3>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2">
+                {/* IDENTITY */}
+                <div className="col-span-1 md:col-span-2 bg-white p-5 border-b border-zinc-300">
+                  <p className="text-zinc-500 text-xs uppercase font-semibold mb-1">IDENTITY</p>
+                  <p className="text-black">Pulse: The Fitness Collective is a fitness app and community platform that redefines how we create, share, and experience workouts together.</p>
+                </div>
+                
+                {/* PROBLEM & SOLUTION */}
+                <div className="bg-white p-5 border-b border-r md:border-r border-zinc-300">
+                  <p className="text-zinc-500 text-xs uppercase font-semibold mb-1">PROBLEM WORTH SOLVING</p>
+                  <p className="text-black">The fitness app market is fragmented, which directs people to use social media for their primary fitness discovery tool, however social media fails to inspire genuine fitness commitment, and action.</p>
+                </div>
+                
+                <div className="bg-white p-5 border-b border-zinc-300">
+                  <p className="text-zinc-500 text-xs uppercase font-semibold mb-1">OUR SOLUTION</p>
+                  <p className="text-black">Pulse centralizes and democratizes fitness expertise, with an app where creators can easily share and monetize their fitness content, and fitness seekers can find quality content in one place.</p>
+                </div>
+                
+                {/* TARGET MARKET & COMPETITION */}
+                <div className="bg-white p-5 border-b border-r md:border-r border-zinc-300">
+                  <p className="text-zinc-500 text-xs uppercase font-semibold mb-1">TARGET MARKET</p>
+                  <p className="text-black font-medium mb-2">Fitness content creators - particularly those with established audiences, who can share expertise and monetize their content through the platform.</p>
+                  <p className="text-black font-medium mb-2">Fitness seekers - with established workout habits, looking for new routines, progress tracking, and community connections.</p>
+                  <p className="text-black">Pulse aims to connect these two groups, creating a community-driven fitness experience that makes fitness more accessible and rewarding for both creators and users.</p>
+                </div>
+                
+                <div className="bg-white p-5 border-b border-zinc-300">
+                  <p className="text-zinc-500 text-xs uppercase font-semibold mb-1">THE COMPETITION</p>
+                  <p className="text-black mb-3">Pulse operates in a fragmented fitness app market, with its primary competitor being Instagram, which hosts an estimated 280 million fitness content creators. Other competitors include specialized fitness apps like FitBod and Nike Fit Club.</p>
+                  <p className="text-black">Pulse differentiated itself by harnessing the collective wisdom of its community. Unlike traditional apps Pulse&apos;s magic lies in its video-first, community-driven approach, where every user becomes both student and teacher. By seamlessly blending social engagement with practical fitness tools, Pulse transforms passive scrolling into active participation.</p>
+                </div>
+                
+                {/* SALES & MARKETING */}
+                <div className="bg-white p-5 border-b border-r md:border-r border-zinc-300">
+                  <p className="text-zinc-500 text-xs uppercase font-semibold mb-1">SALES CHANNELS</p>
+                  <p className="text-black">Pulse employs a strategic, segmented approach to sales and user acquisition. The platform targets content creators across three tiers: Micro (100-5000 followers), Median (5000-50,000 followers), and Macro (50,000+ followers), with tailored outreach and support for each segment.</p>
+                </div>
+                
+                <div className="bg-white p-5 border-b border-zinc-300">
+                  <p className="text-zinc-500 text-xs uppercase font-semibold mb-1">MARKETING ACTIVITIES</p>
+                  <p className="text-black mb-2">Digital marketing platforms such as Apple Search Ads, Google Ads, Instagram, TikTok.</p>
+                  <p className="text-black">We will also do direct sale through gym partnerships, in-person events, and direct content creator recruiting through social media.</p>
+                </div>
+                
+                {/* REVENUE & EXPENSES */}
+                <div className="bg-white p-5 border-b border-r md:border-r border-zinc-300">
+                  <p className="text-zinc-500 text-xs uppercase font-semibold mb-1">REVENUE</p>
+                  <p className="text-black mb-3">Fitness users can subscribe to the app for $4.99 monthly or $39.99 annually.</p>
+                  <p className="text-black">Content creators opt into a $79.99 annual subscription to monetize their content through an engagement-based profit-sharing model</p>
+                </div>
+                
+                <div className="bg-white p-5 border-b border-zinc-300">
+                  <p className="text-zinc-500 text-xs uppercase font-semibold mb-1">EXPENSES</p>
+                  <p className="text-black">Content Creator Recruitment, Digital Marketing & Sales, Technology Stack, Product Development, Research and Development, Operational Expenses, Headcount (Salaries), In-person Events</p>
+                </div>
+                
+                {/* MILESTONES */}
+                <div className="bg-white p-5 border-b border-r md:border-r border-zinc-300">
+                  <p className="text-zinc-500 text-xs uppercase font-semibold mb-1">MILESTONES</p>
+                  <p className="text-black">MVP launched in January 2024, 275 users in open beta, 364 exercise videos uploaded, 20 content creators recruited, 115,000 email list built, UI/UX designer hired, Digital Marketing Manager hired, 5-star Apple App Store rating achieved</p>
+                </div>
+                
+                {/* TEAM & PARTNERS */}
+                <div className="bg-white p-5 border-r md:border-r border-zinc-300">
+                  <p className="text-zinc-500 text-xs uppercase font-semibold mb-1">TEAM AND KEY ROLES</p>
+                  <p className="text-black">
+                    - &nbsp;&nbsp;Lead Software Engineer(Myself)<br />
+                    - &nbsp;&nbsp;Brand/Product Designer(Joseph)<br />
+                    - &nbsp;&nbsp;Social Media Manager(Funso) - Looking for replacement
+                  </p>
+                </div>
+                
+                <div className="bg-white p-5">
+                  <p className="text-zinc-500 text-xs uppercase font-semibold mb-1">PARTNERS AND RESOURCES</p>
+                  <p className="text-black">We are looking to build gym partnerships, and corporate partnerships with notable brands(Lulu Lemon is our dream partnership)</p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-zinc-900/80 border border-zinc-800 rounded-xl p-6 hover:border-[#E0FE10]/20 transition-colors duration-300">
+              <h4 className="text-white text-xl font-semibold mb-4">Elevator Pitch</h4>
+              <p className="text-zinc-400 text-lg mb-6">
+                Pulse is a fitness app where creators capture and share their Moves—we turn those into gamified, community-driven fitness experiences for their audiences. At its core, we help people move together.
+              </p>
+              
+              <h4 className="text-white text-xl font-semibold mb-4 mt-8">Why Now? Narrative</h4>
+              <p className="text-zinc-400 text-lg mb-4">
+                In the post-COVID era, people are yearning for authentic connection in fitness. We\'re seeing explosive growth in in-person run clubs, community workouts, and fitness communities seeking meaningful engagement beyond digital screens.
+              </p>
+              <p className="text-zinc-400 text-lg mb-4">
+                Meanwhile, short-form content has revolutionized how people consume information, creating perfect conditions for bite-sized fitness content. The fitness industry continues to grow exponentially, with digital fitness projected to reach $44.7 billion by 2026, creating space for a dominant digital platform that connects people through movement.
+              </p>
+            </div>
+          </div>
+        </div>
+        
+        <div className="px-6 py-4 border-t border-zinc-800 flex justify-between items-center">
+          <p className="text-zinc-400 text-sm">Last updated: May 2025</p>
+          <button 
+            onClick={handleDownload}
+            disabled={isGenerating}
+            className="flex items-center gap-2 px-4 py-2 bg-[#E0FE10] text-black rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isGenerating ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Generating PDF...</span>
+              </>
+            ) : (
+              <>
+                <Download className="h-4 w-4" />
+                <span>Download PDF</span>
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 // FactSheetModal Component
 interface FactSheetModalProps {
@@ -334,22 +795,14 @@ const FactSheetModal: React.FC<FactSheetModalProps> = ({ isOpen, onClose }) => {
             <div className="bg-zinc-900/80 border border-zinc-800 rounded-xl p-6 hover:border-[#E0FE10]/20 transition-colors duration-300">
               <h4 className="text-white text-xl font-semibold mb-4">Company Information</h4>
               
-              <div className="space-y-4">
-                <div className="border-b border-zinc-800 pb-3">
-                  <p className="text-zinc-500 text-sm mb-1">LEGAL NAME</p>
-                  <p className="text-white">Pulse Fitness Collective LLC</p>
+              <div className="space-y-6">
+                <div className="border-b border-zinc-800 pb-4">
+                  <p className="text-zinc-500 text-sm mb-1">COMPANY NAME</p>
+                  <p className="text-white">Pulse Fitness Collective LLC (legal), "Pulse" or "Pulse Fitness Collective" (informal)</p>
                 </div>
-                <div className="border-b border-zinc-800 pb-3">
-                  <p className="text-zinc-500 text-sm mb-1">BRAND NAMES</p>
-                  <p className="text-white">Pulse, Pulse Fitness Collective</p>
-                </div>
-                <div className="border-b border-zinc-800 pb-3">
-                  <p className="text-zinc-500 text-sm mb-1">FOUNDER & CEO</p>
-                  <p className="text-white">Tremaine Grant</p>
-                </div>
-                <div className="border-b border-zinc-800 pb-3">
-                  <p className="text-zinc-500 text-sm mb-1">FOUNDED</p>
-                  <p className="text-white">June 2023</p>
+                <div className="border-b border-zinc-800 pb-4">
+                  <p className="text-zinc-500 text-sm mb-1">FOUNDING</p>
+                  <p className="text-white">Founded in June 2023 by Tremaine Grant in Atlanta, Georgia</p>
                 </div>
                 <div>
                   <div className="mb-4">
@@ -361,25 +814,19 @@ const FactSheetModal: React.FC<FactSheetModalProps> = ({ isOpen, onClose }) => {
                     <p className="text-white text-sm">To create meaningful fitness connections in an era that prioritizes media consumption over social interaction, while simultaneously opening new economic opportunities in the fitness space. We aim to democratize fitness expertise the way Spotify revolutionized the music industry, creating new passive income streams for fitness professionals and enthusiasts alike.</p>
                   </div>
                 </div>
-                <div className="border-b border-zinc-800 pb-3">
-                  <p className="text-zinc-500 text-sm mb-1">HEADQUARTERS</p>
-                  <p className="text-white">Atlanta, Georgia, USA</p>
+                <div className="border-b border-zinc-800 pb-4">
+                  <p className="text-zinc-500 text-sm mb-1">PRODUCT TERMINOLOGY</p>
+                  <p className="text-white">Moves (individual exercise videos)</p>
+                  <p className="text-white">Stacks (workout routines)</p>
+                  <p className="text-white">Rounds (community challenges)</p>
                 </div>
-                <div className="border-b border-zinc-800 pb-3">
-                  <p className="text-zinc-500 text-sm mb-1">LEGAL ENTITY TYPE</p>
-                  <p className="text-white">C-Corporation</p>
-                </div>
-                <div className="border-b border-zinc-800 pb-3">
-                  <p className="text-zinc-500 text-sm mb-1">EIN</p>
-                  <p className="text-white">Available upon request</p>
-                </div>
-                <div className="border-b border-zinc-800 pb-3">
-                  <p className="text-zinc-500 text-sm mb-1">PRODUCT STAGE</p>
-                  <p className="text-white">Product Live + Post Revenue</p>
+                <div className="border-b border-zinc-800 pb-4">
+                  <p className="text-zinc-500 text-sm mb-1">PLATFORM AVAILABILITY</p>
+                  <p className="text-white">iOS App Store, Web app (fitwithpulse.ai)</p>
                 </div>
                 <div>
-                  <p className="text-zinc-500 text-sm mb-1">PLATFORM AVAILABILITY</p>
-                  <p className="text-white">iOS App Store, Web App (https://fitwithpulse.ai)</p>
+                  <p className="text-zinc-500 text-sm mb-1">HEADQUARTERS</p>
+                  <p className="text-white">Atlanta, Georgia, USA</p>
                 </div>
               </div>
             </div>
@@ -465,10 +912,6 @@ const FactSheetModal: React.FC<FactSheetModalProps> = ({ isOpen, onClose }) => {
                   <p className="text-white">200+ participants</p>
                   <p className="text-white">12,000+ workouts completed</p>
                   <p className="text-zinc-500 text-xs mt-1">Source: Challenge analytics, May 2025</p>
-                </div>
-                <div>
-                  <p className="text-zinc-500 text-sm mb-1">EMAIL SUBSCRIBERS</p>
-                  <p className="text-white">115,000</p>
                 </div>
               </div>
             </div>
@@ -560,12 +1003,18 @@ const FactSheetModal: React.FC<FactSheetModalProps> = ({ isOpen, onClose }) => {
   );
 };
 
-const PressKit = () => {
+interface PressKitPageProps {
+  metaData?: PageMetaData | null;
+  // You can add other props fetched in getServerSideProps here if needed
+}
+
+const PressKit: React.FC<PressKitPageProps> = ({ metaData }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [pressKitAssets, setPressKitAssets] = useState<PressKitAssets | null>(null);
   const [isLoadingAssets, setIsLoadingAssets] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [showFactSheetModal, setShowFactSheetModal] = useState(false);
+  const [showOverviewModal, setShowOverviewModal] = useState(false);
   const [appScreenshots, setAppScreenshots] = useState<{
     moves: string | null;
     stacks: string | null;
@@ -676,23 +1125,28 @@ const PressKit = () => {
     <div className="min-h-screen bg-zinc-900">
       {/* Fact Sheet Modal */}
       <FactSheetModal isOpen={showFactSheetModal} onClose={() => setShowFactSheetModal(false)} />
+      
+      {/* Overview Modal */}
+      <OverviewModal isOpen={showOverviewModal} onClose={() => setShowOverviewModal(false)} />
 
       <Head>
-        <title>Press Kit - Pulse Fitness Collective</title>
-        <meta name="description" content="Pulse press resources, media materials, and downloadable assets for journalists and creators." />
+        <title>{metaData?.pageTitle || 'Press Kit - Pulse Fitness Collective'}</title>
+        <meta name="description" content={metaData?.metaDescription || 'Pulse press resources, media materials, and downloadable assets for journalists and creators.'} />
         
         {/* OpenGraph Meta Tags for sharing */}
-        <meta property="og:title" content="Pulse Fitness Collective Press Kit" />
-        <meta property="og:description" content="Official media resources, brand assets, and downloadable materials for Pulse Fitness Collective." />
-        <meta property="og:image" content="https://fitwithpulse.ai/PressKitPreview.png" />
-        <meta property="og:url" content="https://fitwithpulse.ai/press" />
-        <meta property="og:type" content="website" />
+        <meta property="og:title" content={metaData?.ogTitle || 'Pulse Fitness Collective Press Kit'} />
+        <meta property="og:description" content={metaData?.ogDescription || 'Official media resources, brand assets, and downloadable materials for Pulse Fitness Collective.'} />
+        {metaData?.ogImage && <meta property="og:image" content={metaData.ogImage} />}
+        {!metaData?.ogImage && <meta property="og:image" content="https://fitwithpulse.ai/PressKitPreview.png" /> } {/* Fallback if not in DB */}
+        <meta property="og:url" content={metaData?.ogUrl || 'https://fitwithpulse.ai/press'} />
+        <meta property="og:type" content={metaData?.ogType || 'website'} />
         
         {/* Twitter Card Tags */}
-        <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content="Pulse Fitness Collective Press Kit" />
-        <meta name="twitter:description" content="Official media resources, brand assets, and downloadable materials for Pulse Fitness Collective." />
-        <meta name="twitter:image" content="https://fitwithpulse.ai/PressKitPreview.png" />
+        <meta name="twitter:card" content={metaData?.twitterCard || 'summary_large_image'} />
+        <meta name="twitter:title" content={metaData?.twitterTitle || 'Pulse Fitness Collective Press Kit'} />
+        <meta name="twitter:description" content={metaData?.twitterDescription || 'Official media resources, brand assets, and downloadable materials for Pulse Fitness Collective.'} />
+        {metaData?.twitterImage && <meta name="twitter:image" content={metaData.twitterImage} />}
+        {!metaData?.twitterImage && <meta name="twitter:image" content="https://fitwithpulse.ai/PressKitPreview.png" /> } {/* Fallback if not in DB */}
       </Head>
 
       {/* Hero Section */}
@@ -732,7 +1186,7 @@ const PressKit = () => {
           <div className="flex flex-col lg:flex-row gap-16 items-start">
             <div className="lg:w-1/2">
               <h2 className="text-[#E0FE10] uppercase tracking-wide font-semibold mb-4 relative inline-block hover:text-white transition-colors duration-300 group cursor-pointer">
-                00_Overview
+                Overview
                 <span className="absolute -bottom-1 left-0 w-full h-0.5 bg-[#E0FE10] transition-all duration-300 transform scale-x-0 group-hover:scale-x-100 origin-left"></span>
               </h2>
               <h3 className="text-white text-4xl font-bold mb-8">The 30-second pitch</h3>
@@ -745,20 +1199,15 @@ const PressKit = () => {
                 
                 <h4 className="text-white text-xl font-semibold mb-4 mt-8">Why Now? Narrative</h4>
                 <p className="text-zinc-400 text-lg mb-4">
-                  In the post-COVID era, people are yearning for authentic connection in fitness. We're seeing explosive growth in in-person run clubs, community workouts, and fitness communities seeking meaningful engagement beyond digital screens.
+                  In the post-COVID era, people are yearning for authentic connection in fitness. We\'re seeing explosive growth in in-person run clubs, community workouts, and fitness communities seeking meaningful engagement beyond digital screens.
                 </p>
                 <p className="text-zinc-400 text-lg mb-4">
                   Meanwhile, short-form content has revolutionized how people consume information, creating perfect conditions for bite-sized fitness content. The fitness industry continues to grow exponentially, with digital fitness projected to reach $44.7 billion by 2026, creating space for a dominant digital platform that connects people through movement.
                 </p>
                 
                 <a 
-                  href={pressKitAssets?.overviewPdf || '#'} 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className={`mt-8 inline-flex items-center text-[#E0FE10] hover:text-white ${
-                    !pressKitAssets?.overviewPdf ? 'opacity-50 cursor-not-allowed' : ''
-                  }`}
-                  onClick={(e) => !pressKitAssets?.overviewPdf && e.preventDefault()}
+                  onClick={() => setShowOverviewModal(true)}
+                  className="mt-8 inline-flex items-center text-[#E0FE10] hover:text-white cursor-pointer"
                 >
                   <Download className="mr-2 h-5 w-5" />
                   Download Full Overview PDF
@@ -780,16 +1229,16 @@ const PressKit = () => {
                     <p className="text-white text-xl">Atlanta, GA</p>
                   </div>
                   <div>
+                    <p className="text-zinc-500 text-sm mb-1">USERS</p>
+                    <p className="text-white text-xl">1,000+</p>
+                  </div>
+                  <div>
                     <p className="text-zinc-500 text-sm mb-1">UNIQUE MOVES</p>
                     <p className="text-white text-xl">500+</p>
                   </div>
                   <div>
                     <p className="text-zinc-500 text-sm mb-1">WORKOUTS COMPLETED</p>
-                    <p className="text-white text-xl">1,500+</p>
-                  </div>
-                  <div>
-                    <p className="text-zinc-500 text-sm mb-1">WORKOUTS SHARED</p>
-                    <p className="text-white text-xl">15,000+</p>
+                    <p className="text-white text-xl">30,000+</p>
                   </div>
                   <div>
                     <p className="text-zinc-500 text-sm mb-1">FUNDING</p>
@@ -1562,6 +2011,34 @@ const PressKit = () => {
       <Footer />
     </div>
   );
+};
+
+export const getServerSideProps: GetServerSideProps<PressKitPageProps> = async (context) => {
+  try {
+    const metaData = await adminMethods.getPageMetaData('press');
+    
+    // Ensure that Timestamp objects are converted to a serializable format if they exist
+    // For PageMetaData, lastUpdated is a Timestamp.
+    // Firebase Timestamps are not directly serializable by Next.js's JSON serializer.
+    // We can convert it to a string or number, or just not pass it if not needed by the client.
+    // If you need it on the client, convert: e.g., lastUpdated: metaData.lastUpdated.toMillis()
+    // For this use case, the client component `PressKit` doesn't directly use `lastUpdated` in the Head, so we can omit it or pass it as is.
+    // Next.js will handle basic object serialization for props.
+
+    // If metaData is null, we still pass null to the component, which will use its fallbacks.
+    return {
+      props: {
+        metaData: metaData ? JSON.parse(JSON.stringify(metaData)) : null,
+      },
+    };
+  } catch (error) {
+    console.error("Error fetching metaData for press page in getServerSideProps:", error);
+    return {
+      props: {
+        metaData: null, // Fallback to default meta tags in component
+      },
+    };
+  }
 };
 
 export default PressKit;

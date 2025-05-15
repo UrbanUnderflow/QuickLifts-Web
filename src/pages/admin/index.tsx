@@ -41,64 +41,70 @@ const AdminCard: React.FC<AdminCardProps> = ({ title, description, icon, link })
   );
 };
 
-const AdminHome: React.FC = () => {
-  const adminFunctions = [
-    {
-      title: 'App Version Control',
-      description: 'Add or manage app versions and force updates',
-      icon: 'fas fa-code-branch',
-      link: '/admin/addVersion'
-    },
-    {
-      title: 'Challenge Status',
-      description: 'View and manage user challenge statuses',
-      icon: 'fas fa-trophy',
-      link: '/admin/challengestatus'
-    },
-    {
-      title: 'Add Points',
-      description: 'Reward users with points for social sharing',
-      icon: 'fas fa-coins',
-      link: '/admin/addpoints'
-    },
-    {
-      title: 'Inactivity Check',
-      description: 'Monitor and trigger workout inactivity notifications',
-      icon: 'fas fa-clock',
-      link: '/admin/inactivityCheck'
-    },
-    {
-      title: 'Send Notifications',
-      description: 'Send push notifications to users',
-      icon: 'fas fa-bell',
-      link: '/admin/SendNotification'
-    },
-    {
-      title: 'User Management',
-      description: 'Manage user accounts and permissions',
-      icon: 'fas fa-users',
-      link: '/admin/users'
-    },
-    {
-      title: 'Beta Users',
-      description: 'Manage beta access and Founding Coaches Program',
-      icon: 'fas fa-star',
-      link: '/admin/betausers'
-    },
-    {
-      title: 'Metrics Dashboard',
-      description: 'View key app metrics like moves, workouts, and rounds.',
-      icon: 'fas fa-chart-line',
-      link: '/admin/metrics'
-    },
-    {
-      title: 'Press Releases',
-      description: 'Manage and generate automated press releases',
-      icon: 'fas fa-newspaper',
-      link: '/admin/pressReleases'
-    }
-  ];
+const adminCardsData = [
+  {
+    title: "Manage Beta Users",
+    description: "View, search, and manage beta user accounts and their status.",
+    icon: "👥", // Placeholder icon, consider using an SVG or a Lucide icon component
+    link: "/admin/betausers"
+  },
+  {
+    title: "Application Metrics",
+    description: "Monitor key application metrics, user engagement, and performance data.",
+    icon: "📊",
+    link: "/admin/metrics"
+  },
+  {
+    title: "Challenge Status",
+    description: "Oversee and manage ongoing user challenges and their statuses.",
+    icon: "🏆",
+    link: "/admin/challengestatus"
+  },
+  {
+    title: "Inactivity Check",
+    description: "Identify and manage users based on their inactivity periods.",
+    icon: "⏳",
+    link: "/admin/inactivityCheck"
+  },
+  {
+    title: "Add Points to User",
+    description: "Manually add points to a user for specific activities or rewards.",
+    icon: "➕",
+    link: "/admin/addpoints"
+  },
+  {
+    title: "Press Releases",
+    description: "Create, edit, and manage press releases for public announcement.",
+    icon: "📰",
+    link: "/admin/pressReleases"
+  },
+  {
+    title: "Send Notification",
+    description: "Send push notifications to users or specific user groups.",
+    icon: "🔔",
+    link: "/admin/SendNotification"
+  },
+  {
+    title: "User Management",
+    description: "Comprehensive user management including editing profiles and roles.",
+    icon: "🔧",
+    link: "/admin/users"
+  },
+  {
+    title: "Add App Version",
+    description: "Manage application versions and update notes for releases.",
+    icon: "📱",
+    link: "/admin/addVersion"
+  },
+  {
+    title: "Manage Page Meta Data",
+    description: "Control SEO and social sharing tags for application pages.",
+    icon: "⚙️", // Consider a more specific icon like <Tags /> from lucide-react
+    link: "/admin/manageMeta"
+  }
+];
 
+const AdminHome: React.FC = () => {
   return (
     <AdminRouteGuard>
       <Head>
@@ -116,7 +122,7 @@ const AdminHome: React.FC = () => {
           </h1>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {adminFunctions.map((func, index) => (
+            {adminCardsData.map((func, index) => (
               <AdminCard
                 key={index}
                 title={func.title}
