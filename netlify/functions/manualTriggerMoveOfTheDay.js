@@ -44,7 +44,7 @@ async function selectAndSaveMove() {
     createdAt: serverTimestamp,
     updatedAt: serverTimestamp,
   };
-  await db.collection("moveOfTheDayCollection").doc(documentId).set(moveOfTheDayData, { merge: true });
+  await db.collection("moveOfTheDay").doc(documentId).set(moveOfTheDayData, { merge: true });
   console.log(`[manualTriggerMoveOfTheDay] Saved Move of the Day for ${documentId}: ${randomExercise.name}.`);
   return { success: true, message: `Move of the Day for ${documentId} set to ${randomExercise.name}.`, exerciseName: randomExercise.name, documentId };
 }

@@ -236,7 +236,7 @@ const Discover = () => {
       const year = today.getUTCFullYear();
       const documentId = `${month}-${day}-${year}`;
       
-      const motdDocRef = doc(db, "moveOfTheDayCollection", documentId);
+      const motdDocRef = doc(db, "moveOfTheDay", documentId);
       const motdSnapshot = await getDoc(motdDocRef);
 
       if (motdSnapshot.exists()) {

@@ -80,7 +80,9 @@ type AssetType =
   | 'logoApparelGreenSvg'
   | 'logoApparelGreenPng'
   | 'logoApparelWhiteSvg'
-  | 'logoApparelWhitePng';
+  | 'logoApparelWhitePng'
+  | 'logoWordmarkWhiteSvg'
+  | 'logoWordmarkWhitePng';
 
 const videoCategories: { [key: string]: string } = {
   appDemos: "App Demos",
@@ -128,6 +130,8 @@ const PressUploadPage: NextPage = () => {
     logoApparelGreenPng: null,
     logoApparelWhiteSvg: null,
     logoApparelWhitePng: null,
+    logoWordmarkWhiteSvg: null,
+    logoWordmarkWhitePng: null,
   };
 
   const initialIsUploading: Record<AssetType, boolean> = {
@@ -158,6 +162,8 @@ const PressUploadPage: NextPage = () => {
     logoApparelGreenPng: false,
     logoApparelWhiteSvg: false,
     logoApparelWhitePng: false,
+    logoWordmarkWhiteSvg: false,
+    logoWordmarkWhitePng: false,
   };
   
   const initialDragActiveMap: Record<string, boolean> = { // string key for dragActiveMap
@@ -188,6 +194,8 @@ const PressUploadPage: NextPage = () => {
     logoApparelGreenPng: false,
     logoApparelWhiteSvg: false,
     logoApparelWhitePng: false,
+    logoWordmarkWhiteSvg: false,
+    logoWordmarkWhitePng: false,
   };
 
   // Populate initial states for screenshot assets
@@ -447,6 +455,16 @@ const PressUploadPage: NextPage = () => {
           expectedFileType = 'image';
           allowedMimeTypes = ['image/png'];
           break;
+        case 'logoWordmarkWhiteSvg':
+          storagePath = `${PRESS_ASSET_PATHS.logos}/wordmark_white.svg`;
+          expectedFileType = 'image';
+          allowedMimeTypes = ['image/svg+xml'];
+          break;
+        case 'logoWordmarkWhitePng':
+          storagePath = `${PRESS_ASSET_PATHS.logos}/wordmark_white.png`;
+          expectedFileType = 'image';
+          allowedMimeTypes = ['image/png'];
+          break;
         default:
           console.error('Invalid asset type');
           return;
@@ -560,14 +578,16 @@ const PressUploadPage: NextPage = () => {
       case 'logoGreenPng': return 'Green Logo (PNG)';
       case 'logoWatermarkSvg': return 'Watermark Logo (SVG)';
       case 'logoWatermarkPng': return 'Watermark Logo (PNG)';
-      case 'logoWordmarkSvg': return 'Wordmark Only Logo (SVG)';
-      case 'logoWordmarkPng': return 'Wordmark Only Logo (PNG)';
+      case 'logoWordmarkSvg': return 'Wordmark Logo (SVG)';
+      case 'logoWordmarkPng': return 'Wordmark Logo (PNG)';
       case 'logoApparelSvg': return 'Apparel Logo (SVG)';
       case 'logoApparelPng': return 'Apparel Logo (PNG)';
       case 'logoApparelGreenSvg': return 'Apparel Logo - Green (SVG)';
       case 'logoApparelGreenPng': return 'Apparel Logo - Green (PNG)';
       case 'logoApparelWhiteSvg': return 'Apparel Logo - White (SVG)';
       case 'logoApparelWhitePng': return 'Apparel Logo - White (PNG)';
+      case 'logoWordmarkWhiteSvg': return 'Wordmark Logo (White) (SVG)';
+      case 'logoWordmarkWhitePng': return 'Wordmark Logo (White) (PNG)';
       default: return 'Asset';
     }
   };
@@ -1247,8 +1267,10 @@ const PressUploadPage: NextPage = () => {
                   {/* New Watermark and Wordmark Logos */}
                   {renderDropZone("Watermark Logo", 'logoWatermarkSvg', "image/svg+xml")}
                   {renderDropZone("Watermark Logo", 'logoWatermarkPng', "image/png")}
-                  {renderDropZone("Wordmark Logo", 'logoWordmarkSvg', "image/svg+xml")}
-                  {renderDropZone("Wordmark Logo", 'logoWordmarkPng', "image/png")}
+                  {renderDropZone("Wordmark Logo (Black)", 'logoWordmarkSvg', "image/svg+xml")}
+                  {renderDropZone("Wordmark Logo (Black)", 'logoWordmarkPng', "image/png")}
+                  {renderDropZone("Wordmark Logo (White)", 'logoWordmarkWhiteSvg', "image/svg+xml")}
+                  {renderDropZone("Wordmark Logo (White)", 'logoWordmarkWhitePng', "image/png")}
                 </div>
                 {uploadError && (
                   <p className="text-red-500 text-sm mt-2">{uploadError}</p>

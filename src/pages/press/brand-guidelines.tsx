@@ -43,6 +43,8 @@ interface PressKitAssets {
   logoApparelGreenPng?: string;
   logoApparelWhiteSvg?: string;
   logoApparelWhitePng?: string;
+  logoWordmarkWhiteSvg?: string; // Added for white wordmark
+  logoWordmarkWhitePng?: string; // Added for white wordmark
   // Add other asset keys as needed from your 'liveAssets' document
 }
 
@@ -60,7 +62,11 @@ const BrandGuidelines = () => {
     zinc900: false,
     zinc800: false,
     zinc500: false,
-    zinc300: false
+    zinc300: false,
+    interBold: false,
+    interSemibold: false, 
+    interMedium: false,
+    interRegular: false
   });
   
   const sectionsRef = useRef<SectionRefs>({
@@ -74,6 +80,8 @@ const BrandGuidelines = () => {
     voice: null,
     photography: null,
     apparelLogos: null, // Added for Apparel Logos section
+    logoMisuse: null, // Added for Logo Misuse section
+    minSize: null, // Added for Minimum Size section
   });
 
   const [pressKitAssets, setPressKitAssets] = useState<PressKitAssets | null>(null); // Raw from Firestore
@@ -157,6 +165,8 @@ const BrandGuidelines = () => {
             { id: 'logoApparelGreenPng', key: 'logoApparelGreenPng', name: 'Pulse Apparel Green.png', type: 'image/png' },
             { id: 'logoApparelWhiteSvg', key: 'logoApparelWhiteSvg', name: 'Pulse Apparel White.svg', type: 'image/svg+xml' },
             { id: 'logoApparelWhitePng', key: 'logoApparelWhitePng', name: 'Pulse Apparel White.png', type: 'image/png' },
+            { id: 'logoWordmarkWhiteSvg', key: 'logoWordmarkWhiteSvg', name: 'Pulse Wordmark White.svg', type: 'image/svg+xml' },
+            { id: 'logoWordmarkWhitePng', key: 'logoWordmarkWhitePng', name: 'Pulse Wordmark White.png', type: 'image/png' },
           ];
 
           const fetchedLogos: Record<string, DisplayLogoAsset> = {};
@@ -262,7 +272,9 @@ const BrandGuidelines = () => {
                     { id: 'iconography', label: 'Iconography', number: 7 }, // Renumbered
                     { id: 'voice', label: 'Brand Voice', number: 8 }, // Renumbered
                     { id: 'photography', label: 'Photography', number: 9 }, // Renumbered
-                    { id: 'apparelLogos', label: 'Apparel Logos', number: 10 } // Renumbered
+                    { id: 'apparelLogos', label: 'Apparel Logos', number: 10 }, // Renumbered
+                    { id: 'logoMisuse', label: 'Logo Misuse', number: 11 }, // New section
+                    { id: 'minSize', label: 'Minimum Size', number: 12 }, // New section
                   ].map((item) => (
                     <button
                       key={item.id}
@@ -448,9 +460,9 @@ const BrandGuidelines = () => {
                         </div>
                         <div className="flex items-center justify-center bg-black p-8 rounded-lg">
                           <img 
-                            src={processedLogos['logoWordmarkSvg']?.url || "/brand/pulse-wordmark-white.svg"} // Assuming wordmark SVG is adaptable or light
-                            alt={processedLogos['logoWordmarkSvg']?.name || "Pulse wordmark (white)"} 
-                            className="max-w-xs h-auto object-contain filter-white-if-needed-on-black-bg" // Placeholder for potential class if SVG needs explicit styling for white on black
+                            src={processedLogos['logoWordmarkWhiteSvg']?.url || "/brand/pulse-wordmark-white.svg"}
+                            alt={processedLogos['logoWordmarkWhiteSvg']?.name || "Pulse wordmark (white)"} 
+                            className="max-w-xs h-auto object-contain"
                           />
                         </div>
                       </div>
@@ -462,11 +474,19 @@ const BrandGuidelines = () => {
                       <div className="flex flex-wrap gap-4 mt-6">
                         <a href={processedLogos['logoWordmarkSvg']?.url || '#'} download={processedLogos['logoWordmarkSvg']?.name} className="inline-flex items-center text-[#E0FE10] hover:text-white group">
                           <Download className="mr-2 h-5 w-5" />
-                          Download Wordmark SVG
+                          Download Wordmark SVG (Black)
                         </a>
                         <a href={processedLogos['logoWordmarkPng']?.url || '#'} download={processedLogos['logoWordmarkPng']?.name} className="inline-flex items-center text-[#E0FE10] hover:text-white group">
                           <Download className="mr-2 h-5 w-5" />
-                          Download Wordmark PNG
+                          Download Wordmark PNG (Black)
+                        </a>
+                        <a href={processedLogos['logoWordmarkWhiteSvg']?.url || '#'} download={processedLogos['logoWordmarkWhiteSvg']?.name} className="inline-flex items-center text-[#E0FE10] hover:text-white group">
+                          <Download className="mr-2 h-5 w-5" />
+                          Download Wordmark SVG (White)
+                        </a>
+                        <a href={processedLogos['logoWordmarkWhitePng']?.url || '#'} download={processedLogos['logoWordmarkWhitePng']?.name} className="inline-flex items-center text-[#E0FE10] hover:text-white group">
+                          <Download className="mr-2 h-5 w-5" />
+                          Download Wordmark PNG (White)
                         </a>
                       </div>
                     </div>
@@ -589,11 +609,96 @@ const BrandGuidelines = () => {
                   </div>
                 </div>
                 
+                <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8 mb-10">
+                  <h3 className="text-white text-xl font-semibold mb-6">Secondary Typeface: Inter</h3>
+                  
+                  <div className="mb-10">
+                    <img 
+                      src="/brand/inter-sample.jpg" 
+                      alt="Inter Font Sample" 
+                      className="w-full rounded-lg mb-6"
+                    />
+                    
+                    <p className="text-zinc-400 text-lg mb-6">
+                      Inter is our secondary typeface used primarily for digital interfaces, web applications, and 
+                      user interfaces. This variable font family is optimized for screen legibility and offers 
+                      versatile weights that adapt seamlessly across different devices and platforms.
+                    </p>
+                    
+                    <a href="https://fonts.google.com/specimen/Inter" target="_blank" rel="noopener noreferrer" className="inline-flex items-center text-[#E0FE10] hover:text-white group">
+                      <ArrowUpRight className="mr-2 h-5 w-5" />
+                      View on Google Fonts
+                    </a>
+                  </div>
+                  
+                  <h4 className="text-white text-lg font-semibold mb-4">Font Weights & Usage</h4>
+                  
+                  <div className="space-y-6">
+                    <div className="border-b border-zinc-800 pb-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-white font-bold text-3xl" style={{fontFamily: 'Inter'}}>700 Bold</span>
+                        <button 
+                          onClick={() => handleCopy('700 Inter Bold', 'interBold')}
+                          className="flex items-center text-sm text-zinc-400 hover:text-[#E0FE10]"
+                        >
+                          <Copy className="h-4 w-4 mr-1" />
+                          Copy
+                        </button>
+                      </div>
+                      <p className="text-zinc-400">UI headings, buttons, emphasized elements</p>
+                    </div>
+                    
+                    <div className="border-b border-zinc-800 pb-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-white font-semibold text-2xl" style={{fontFamily: 'Inter'}}>600 SemiBold</span>
+                        <button 
+                          onClick={() => handleCopy('600 Inter SemiBold', 'interSemibold')}
+                          className="flex items-center text-sm text-zinc-400 hover:text-[#E0FE10]"
+                        >
+                          <Copy className="h-4 w-4 mr-1" />
+                          Copy
+                        </button>
+                      </div>
+                      <p className="text-zinc-400">Subheadings, navigation items, important information</p>
+                    </div>
+                    
+                    <div className="border-b border-zinc-800 pb-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-white font-medium text-base" style={{fontFamily: 'Inter'}}>500 Medium</span>
+                        <button 
+                          onClick={() => handleCopy('500 Inter Medium', 'interMedium')}
+                          className="flex items-center text-sm text-zinc-400 hover:text-[#E0FE10]"
+                        >
+                          <Copy className="h-4 w-4 mr-1" />
+                          Copy
+                        </button>
+                      </div>
+                      <p className="text-zinc-400">Interface body text, default UI text weight</p>
+                    </div>
+                    
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-white font-normal text-sm" style={{fontFamily: 'Inter'}}>400 Regular</span>
+                        <button 
+                          onClick={() => handleCopy('400 Inter Regular', 'interRegular')}
+                          className="flex items-center text-sm text-zinc-400 hover:text-[#E0FE10]"
+                        >
+                          <Copy className="h-4 w-4 mr-1" />
+                          Copy
+                        </button>
+                      </div>
+                      <p className="text-zinc-400">General body text, descriptions, longer content</p>
+                    </div>
+                  </div>
+                </div>
+                
                 <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8">
                   <h3 className="text-white text-xl font-semibold mb-4">Web Typography</h3>
                   <p className="text-zinc-400 text-lg mb-6">
                     For web applications and websites, we've established a typographic scale that maintains 
-                    consistency across all digital touchpoints.
+                    consistency across all digital touchpoints. While HK Grotesk is used for marketing materials 
+                    and brand assets, Inter is our preferred typeface for web interfaces, dashboards, and 
+                    digital products due to its excellent screen readability.
                   </p>
                   
                   <div className="overflow-x-auto">
@@ -882,8 +987,8 @@ const BrandGuidelines = () => {
                     <div className="text-center">
                       <div className="bg-white p-4 rounded-lg mb-4 flex items-center justify-center">
                         <img 
-                          src="/brand/pulse-logo-black.svg" 
-                          alt="Minimum logo size" 
+                          src={processedLogos['logoBlackSvg']?.url || processedLogos['logoSigSvg']?.url || "/brand/pulse-logo-black.svg"} 
+                          alt={processedLogos['logoBlackSvg']?.name || "Minimum logo size"} 
                           className="w-32"
                         />
                       </div>
@@ -893,8 +998,8 @@ const BrandGuidelines = () => {
                     <div className="text-center">
                       <div className="bg-white p-4 rounded-lg mb-4 flex items-center justify-center">
                         <img 
-                          src="/brand/pulse-icon-black.svg" 
-                          alt="Minimum icon size" 
+                          src={processedLogos['logoBlackSvg']?.url || processedLogos['logoSigSvg']?.url || "/brand/pulse-icon-black.svg"} 
+                          alt={processedLogos['logoBlackSvg']?.name || "Minimum icon size"} 
                           className="w-12 h-12"
                         />
                       </div>
@@ -904,8 +1009,8 @@ const BrandGuidelines = () => {
                     <div className="text-center">
                       <div className="bg-white p-4 rounded-lg mb-4 flex items-center justify-center">
                         <img 
-                          src="/brand/pulse-wordmark-black.svg" 
-                          alt="Minimum wordmark size" 
+                          src={processedLogos['logoWordmarkSvg']?.url || "/brand/pulse-wordmark-black.svg"} 
+                          alt={processedLogos['logoWordmarkSvg']?.name || "Minimum wordmark size"} 
                           className="w-24"
                         />
                       </div>
@@ -917,113 +1022,82 @@ const BrandGuidelines = () => {
                     To maintain legibility, never use the logo at sizes smaller than specified here. For smaller 
                     applications like favicons, use only the icon element.
                   </p>
+                </div>               
+              </section>
+              
+              {/* Minimum Size */}
+              <section 
+                id="minSize" 
+                ref={(el) => { sectionsRef.current.minSize = el; }}
+                className="mb-20"
+              >
+                <div className="flex items-center mb-6">
+                  <div className="w-10 h-10 rounded-full bg-[#E0FE10] flex items-center justify-center mr-4">
+                    <span className="font-bold text-black">12</span>
+                  </div>
+                  <h2 className="text-white text-3xl font-bold">Minimum Size</h2>
+                </div>
+                
+                <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8">
+                  <p className="text-zinc-400 text-lg mb-6">
+                    To maintain legibility, the Pulse logo and logomark should not be reproduced at sizes smaller 
+                    than specified below. These minimum sizes ensure the brand remains recognizable across all applications.
+                  </p>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="bg-zinc-800 p-6 rounded-lg">
+                      <h4 className="text-white text-lg font-semibold mb-3">Logo Minimum Size</h4>
+                      <p className="text-zinc-400 mb-4">Print: 25mm wide</p>
+                      <p className="text-zinc-400 mb-4">Digital: 100px wide</p>
+                      <div className="border-t border-zinc-700 pt-4">
+                        <img src={processedLogos['logoBlackSvg']?.url || processedLogos['logoSigSvg']?.url || "/brand/pulse-logo-black.svg"} 
+                             alt={processedLogos['logoBlackSvg']?.name || "Pulse Logo"} 
+                             className="h-8 w-auto" />
+                      </div>
+                    </div>
+                    
+                    <div className="bg-zinc-800 p-6 rounded-lg">
+                      <h4 className="text-white text-lg font-semibold mb-3">Logomark Minimum Size</h4>
+                      <p className="text-zinc-400 mb-4">Print: 10mm wide</p>
+                      <p className="text-zinc-400 mb-4">Digital: 40px wide</p>
+                      <div className="border-t border-zinc-700 pt-4">
+                        <img src={processedLogos['logoBlackSvg']?.url || processedLogos['logoSigSvg']?.url || "/brand/pulse-icon-black.svg"} 
+                             alt={processedLogos['logoBlackSvg']?.name || "Pulse Logomark"} 
+                             className="h-8 w-8" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              {/* Logo Misuse */}
+              <section 
+                id="logoMisuse"
+                ref={(el) => { sectionsRef.current.logoMisuse = el; }}
+                className="mb-20"
+              >
+                <div className="flex items-center mb-6">
+                  <div className="w-10 h-10 rounded-full bg-[#E0FE10] flex items-center justify-center mr-4">
+                    <span className="font-bold text-black">5</span>
+                  </div>
+                  <h2 className="text-white text-3xl font-bold">Logo Misuse</h2>
                 </div>
                 
                 <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8">
                   <h3 className="text-white text-xl font-semibold mb-6">Incorrect Usage</h3>
                   
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                    <div>
-                      <div className="bg-zinc-800 p-6 rounded-lg mb-3 aspect-square flex items-center justify-center">
-                        <div className="relative">
-                          <img 
-                            src="/brand/pulse-logo-distorted.svg" 
-                            alt="Distorted logo" 
-                            className="max-w-full h-auto opacity-70"
-                          />
-                          <div className="absolute inset-0 flex items-center justify-center">
-                            <div className="w-12 h-1 bg-red-500 rotate-45"></div>
-                          </div>
-                        </div>
-                      </div>
-                      <p className="text-zinc-400">Don't stretch or distort the logo</p>
-                    </div>
-                    
-                    <div>
-                      <div className="bg-zinc-800 p-6 rounded-lg mb-3 aspect-square flex items-center justify-center">
-                        <div className="relative">
-                          <img 
-                            src="/brand/pulse-logo-recolor.svg" 
-                            alt="Recolored logo" 
-                            className="max-w-full h-auto opacity-70"
-                          />
-                          <div className="absolute inset-0 flex items-center justify-center">
-                            <div className="w-12 h-1 bg-red-500 rotate-45"></div>
-                          </div>
-                        </div>
-                      </div>
-                      <p className="text-zinc-400">Don't change the logo colors</p>
-                    </div>
-                    
-                    <div>
-                      <div className="bg-zinc-800 p-6 rounded-lg mb-3 aspect-square flex items-center justify-center">
-                        <div className="relative">
-                          <img 
-                            src="/brand/pulse-logo-effects.svg" 
-                            alt="Logo with effects" 
-                            className="max-w-full h-auto opacity-70"
-                          />
-                          <div className="absolute inset-0 flex items-center justify-center">
-                            <div className="w-12 h-1 bg-red-500 rotate-45"></div>
-                          </div>
-                        </div>
-                      </div>
-                      <p className="text-zinc-400">Don't add effects or drop shadows</p>
-                    </div>
-                    
-                    <div>
-                      <div className="bg-zinc-800 p-6 rounded-lg mb-3 aspect-square flex items-center justify-center">
-                        <div className="relative">
-                          <img 
-                            src="/brand/pulse-logo-rotate.svg" 
-                            alt="Rotated logo" 
-                            className="max-w-full h-auto opacity-70"
-                          />
-                          <div className="absolute inset-0 flex items-center justify-center">
-                            <div className="w-12 h-1 bg-red-500 rotate-45"></div>
-                          </div>
-                        </div>
-                      </div>
-                      <p className="text-zinc-400">Don't rotate or tilt the logo</p>
-                    </div>
-                    
-                    <div>
-                      <div className="bg-zinc-800 p-6 rounded-lg mb-3 aspect-square flex items-center justify-center">
-                        <div className="relative">
-                          <img 
-                            src="/brand/pulse-logo-low-contrast.svg" 
-                            alt="Low contrast logo placement" 
-                            className="max-w-full h-auto opacity-70"
-                          />
-                          <div className="absolute inset-0 flex items-center justify-center">
-                            <div className="w-12 h-1 bg-red-500 rotate-45"></div>
-                          </div>
-                        </div>
-                      </div>
-                      <p className="text-zinc-400">Don't use on low-contrast backgrounds</p>
-                    </div>
-                    
-                    <div>
-                      <div className="bg-zinc-800 p-6 rounded-lg mb-3 aspect-square flex items-center justify-center">
-                        <div className="relative">
-                          <img 
-                            src="/brand/pulse-logo-outline.svg" 
-                            alt="Outlined logo" 
-                            className="max-w-full h-auto opacity-70"
-                          />
-                          <div className="absolute inset-0 flex items-center justify-center">
-                            <div className="w-12 h-1 bg-red-500 rotate-45"></div>
-                          </div>
-                        </div>
-                      </div>
-                      <p className="text-zinc-400">Don't outline or stroke the logo</p>
-                    </div>
-                  </div>
-                  
-                  <p className="text-zinc-400 text-lg">
-                    To maintain the integrity of the Pulse brand, avoid these common misuses of our logo. Always use 
-                    the approved logo files without modification.
+                  <p className="text-zinc-400 text-lg mb-6">
+                    To maintain the integrity of the Pulse brand, please avoid the following common misuses of our logo. Always use 
+                    the approved logo files without modification:
                   </p>
+                  <ul className="list-disc list-inside text-zinc-400 space-y-3 pl-4">
+                    <li>Don't stretch or distort the logo.</li>
+                    <li>Don't change the logo colors.</li>
+                    <li>Don't add effects or drop shadows.</li>
+                    <li>Don't rotate or tilt the logo.</li>
+                    <li>Don't use on low-contrast backgrounds.</li>
+                    <li>Don't outline or stroke the logo.</li>
+                  </ul>
                 </div>
               </section>
               

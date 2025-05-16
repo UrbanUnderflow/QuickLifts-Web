@@ -77,8 +77,8 @@ async function selectAndSaveMove() {
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
   };
 
-  // 7. Save to moveOfTheDayCollection
-  await db.collection("moveOfTheDayCollection").doc(documentId).set(moveOfTheDayData, { merge: true }); // Use merge to overwrite if exists
+  // 7. Save to moveOfTheDay
+  await db.collection("moveOfTheDay").doc(documentId).set(moveOfTheDayData, { merge: true }); // Use merge to overwrite if exists
   console.log(`Successfully saved Move of the Day for ${documentId}: Exercise "${randomExercise.name}", Video (Doc ID: ${randomVideo.firestoreDocId})`);
   return { success: true, message: `Move of the Day for ${documentId} set to ${randomExercise.name}.`, exerciseName: randomExercise.name, documentId };
 }
@@ -95,7 +95,7 @@ async function selectAndSaveMove() {
 //       console.log("DEPRECATED Firebase scheduled selectMoveOfTheDay function execution START - SHOULD NOT RUN.");
 //       const documentId = getTodaysDocumentId(); // This helper might need to be inside selectAndSaveMove or passed if that's sole user
 
-//       const existingDoc = await db.collection("moveOfTheDayCollection").doc(documentId).get();
+//       const existingDoc = await db.collection("moveOfTheDay").doc(documentId).get();
 //       if (existingDoc.exists) {
 //         console.log(`Move of the Day for ${documentId} already exists. Skipping scheduled selection.`);
 //         return null;
