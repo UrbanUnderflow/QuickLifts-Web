@@ -589,7 +589,7 @@ export class Exercise {
 }
 
 // types/ExerciseVideo.ts
-export type ExerciseVideoVisibility = 'open' | 'private' | 'followers';
+export type ExerciseVideoVisibility = 'open' | 'private' | 'followers' | 'rejected';
 
 // ExerciseVideo.ts
 export class ExerciseVideo {

@@ -20,9 +20,14 @@ import {
   BoltIcon, 
   XCircleIcon,
   SunIcon,
-  MoonIcon 
+  MoonIcon,
+  CalendarDaysIcon,
+  PlayIcon
 } from '@heroicons/react/24/outline';
 import { useUser } from '../../../hooks/useUser';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../../../api/firebase/config';
+import { ExerciseVideo } from '../../../api/firebase/exercise/types';
 
 // Enum for category tabs
 const CategoryTab = {
@@ -45,6 +50,8 @@ const Discover = () => {
   const [featuredCreators, setFeaturedCreators] = useState<User[]>([]);
   const [activeRounds, setActiveRounds] = useState<UserChallenge[]>([]);
   const [featuredRounds, setFeaturedRounds] = useState<Challenge[]>([]);
+  const [moveOfTheDay, setMoveOfTheDay] = useState<{ exercise: Exercise, video: ExerciseVideo } | null>(null);
+  const [loadingMoveOfTheDay, setLoadingMoveOfTheDay] = useState(true);
   
   // Search results
   const [filteredExercises, setFilteredExercises] = useState<Exercise[]>([]);
@@ -113,12 +120,12 @@ const Discover = () => {
 
   // IntersectionObserver for "Load More"
   useEffect(() => {
-    if (!loaderRef.current || !hasMore || selectedCategory !== CategoryTab.MOVES) return;
+    if (!loaderRef.current || !hasMore || selectedCategory !== CategoryTab.MOVES || !hasMore /* trendingExercises no longer paginated */) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting && hasMore && !loadingMore) {
-          loadMoreTrendingExercises();
+          // loadMoreTrendingExercises(); // This will be removed
         }
       },
       { threshold: 0.5 }
@@ -144,9 +151,12 @@ const Discover = () => {
       // First, load non-user-specific data that doesn't require authentication
       
       // Load trending exercises
-      const { exercises, lastVisible } = await exerciseService.fetchPaginatedExercises(null, 10);
-      setTrendingExercises(exercises);
-      setLastDoc(lastVisible);
+      // const { exercises, lastVisible } = await exerciseService.fetchPaginatedExercises(null, 10);
+      // setTrendingExercises(exercises);
+      // setLastDoc(lastVisible);
+
+      // Fetch Move of the Day
+      await fetchMoveOfTheDayData();
       
       // Load trending stacks
       const trendingStacksData = await workoutService.fetchRandomTrendingStacks();
@@ -200,19 +210,53 @@ const Discover = () => {
   };
 
   const loadMoreTrendingExercises = async () => {
-    if (!hasMore || loadingMore) return;
+    // This function is no longer needed and will be removed.
+    // if (!hasMore || loadingMore) return;
     
-    setLoadingMore(true);
-    try {
-      const { exercises: newExercises, lastVisible } = await exerciseService.fetchPaginatedExercises(lastDoc, 10);
+    // setLoadingMore(true);
+    // try {
+    //   const { exercises: newExercises, lastVisible } = await exerciseService.fetchPaginatedExercises(lastDoc, 10);
       
-      setTrendingExercises(prev => [...prev, ...newExercises]);
-      setLastDoc(lastVisible);
-      setHasMore(newExercises.length > 0);
+    //   setTrendingExercises(prev => [...prev, ...newExercises]);
+    //   setLastDoc(lastVisible);
+    //   setHasMore(newExercises.length > 0);
+    // } catch (error) {
+    //   console.error('Error loading more exercises:', error);
+    // } finally {
+    //   setLoadingMore(false);
+    // }
+  };
+
+  const fetchMoveOfTheDayData = async () => {
+    setLoadingMoveOfTheDay(true);
+    try {
+      const today = new Date();
+      const month = String(today.getUTCMonth() + 1).padStart(2, "0");
+      const day = String(today.getUTCDate()).padStart(2, "0");
+      const year = today.getUTCFullYear();
+      const documentId = `${month}-${day}-${year}`;
+      
+      const motdDocRef = doc(db, "moveOfTheDayCollection", documentId);
+      const motdSnapshot = await getDoc(motdDocRef);
+
+      if (motdSnapshot.exists()) {
+        const data = motdSnapshot.data();
+        // Assuming data structure is { exercise: ExerciseData, video: VideoData }
+        // We might need to construct Exercise and ExerciseVideo instances if methods are needed
+        // For now, direct data usage for rendering might be okay if types align
+        setMoveOfTheDay({ 
+          exercise: new Exercise(data.exercise), // Construct to ensure methods/types
+          video: new ExerciseVideo(data.video)   // Construct to ensure methods/types
+        });
+      } else {
+        setMoveOfTheDay(null);
+        console.log("Move of the Day for today not found.");
+      }
     } catch (error) {
-      console.error('Error loading more exercises:', error);
+      console.error("Error fetching Move of the Day:", error);
+      setMoveOfTheDay(null);
     } finally {
-      setLoadingMore(false);
+      setLoadingMoveOfTheDay(false);
     }
   };
 
@@ -224,11 +268,9 @@ const Discover = () => {
     
     const lowerQuery = query.toLowerCase().trim();
     
-    // Filter exercises
-    const matchingExercises = trendingExercises.filter(exercise => 
-      exercise.name.toLowerCase().includes(lowerQuery)
-    );
-    setFilteredExercises(matchingExercises);
+    // Filter exercises - This section needs to be re-evaluated as trendingExercises is removed.
+    // For now, an empty array will be set, or we search all exercises from DB (out of scope for this change)
+    setFilteredExercises([]); 
     
     // Filter rounds
     const matchingUserChallenges = activeRounds.filter(round => 
@@ -278,16 +320,18 @@ const Discover = () => {
   };
 
   const handleVideoSelection = (exerciseIndex: number, videoIndex: number) => {
-    const updatedExercises = [...trendingExercises];
-    const exercise = updatedExercises[exerciseIndex];
+    // This function might be obsolete or need to apply to moveOfTheDay if it has multiple videos.
+    // For now, assuming moveOfTheDay has one primary video.
+    // const updatedExercises = [...trendingExercises];
+    // const exercise = updatedExercises[exerciseIndex];
     
-    if (exercise && exercise.videos && exercise.videos[videoIndex]) {
-      updatedExercises[exerciseIndex] = new Exercise({
-        ...exercise,
-        currentVideoPosition: videoIndex
-      });
-      setTrendingExercises(updatedExercises);
-    }
+    // if (exercise && exercise.videos && exercise.videos[videoIndex]) {
+    //   updatedExercises[exerciseIndex] = new Exercise({
+    //     ...exercise,
+    //     currentVideoPosition: videoIndex
+    //   });
+    //   setTrendingExercises(updatedExercises);
+    // }
   };
 
   const handleProfileClick = (username: string) => {
@@ -628,119 +672,116 @@ const Discover = () => {
     );
   };
 
-  const renderTrendingExercises = () => {
-    return (
-      <div className="mb-20">
-        <h3 className="text-white font-bold mb-4">Trending Moves</h3>
-        
-        <div className="grid grid-cols-2 gap-4">
-          {trendingExercises.map((exercise, exerciseIndex) => (
-            <div 
-              key={exercise.id}
-              className="bg-zinc-800 rounded-lg overflow-hidden cursor-pointer"
-              onClick={() => selectExercise(exercise)}
-            >
-              <div className="relative aspect-square w-full">
-                {exercise.videos && exercise.videos.length > 0 && (
-                  <video
-                    src={exercise.videos[exercise.currentVideoPosition || 0]?.videoURL}
-                    className="w-full h-full object-cover"
-                    loop
-                    muted
-                    playsInline
-                    autoPlay
-                    onError={(e) => {
-                      console.error('Video error:', e);
-                      console.log('Video URL:', exercise.videos[exercise.currentVideoPosition || 0]?.videoURL);
-                    }}
-                    onLoadStart={() => {
-                      console.log('Loading video URL:', exercise.videos[exercise.currentVideoPosition || 0]?.videoURL);
-                    }}
-                  />
-                )}
-              </div>
-              
-              <div className="p-3">
-                <div className="flex items-center gap-3 mb-2">
-                  <div 
-                    className="w-6 h-6 rounded-full overflow-hidden cursor-pointer"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      const username = exercise.videos[exercise.currentVideoPosition || 0]?.username;
-                      if (username) handleProfileClick(username);
-                    }}
-                  >
-                    {exercise.videos[exercise.currentVideoPosition || 0]?.profileImage?.profileImageURL ? (
-                      <img 
-                        src={exercise.videos[exercise.currentVideoPosition || 0].profileImage.profileImageURL}
-                        alt="User"
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full bg-zinc-700 flex items-center justify-center">
-                        <span className="text-xs text-white">
-                          {exercise.videos[exercise.currentVideoPosition || 0]?.username?.charAt(0).toUpperCase() || "U"}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                  
-                  <span 
-                    className="text-white text-sm font-medium cursor-pointer"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      const username = exercise.videos[exercise.currentVideoPosition || 0]?.username;
-                      if (username) handleProfileClick(username);
-                    }}
-                  >
-                    {exercise.videos[exercise.currentVideoPosition || 0]?.username || "Unknown User"}
-                  </span>
-                </div>
-                
-                <h4 className="text-white text-sm mb-1">{exercise.name}</h4>
-                <p className="text-zinc-500 text-xs mb-3 line-clamp-1">{exercise.description}</p>
-                
-                <div className="flex gap-2">
-                  {exercise.videos.slice(0, 4).map((video, videoIndex) => (
-                    <button
-                      key={video.id}
-                      className={`w-8 h-8 rounded-full overflow-hidden border-2 
-                      ${(exercise.currentVideoPosition || 0) === videoIndex 
-                        ? 'border-[#E0FE10]' 
-                        : 'border-zinc-600'}`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleVideoSelection(exerciseIndex, videoIndex);
-                      }}
-                    >
-                      <GifImageViewer
-                        gifUrl={video.gifURL || '/default-gif.gif'}
-                        alt={`Preview ${videoIndex + 1}`}
-                        frameSize={{ width: 32, height: 32 }}
-                        contentMode="cover"
-                      />
-                    </button>
-                  ))}
-                  
-                  {exercise.videos.length > 4 && (
-                    <div className="w-8 h-8 rounded-full bg-zinc-700 flex items-center justify-center text-white text-xs">
-                      +{exercise.videos.length - 4}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          ))}
+  const renderMoveOfTheDaySection = () => {
+    if (loadingMoveOfTheDay) {
+      return (
+        <div className="mb-8 p-4 bg-zinc-800 rounded-xl shadow-lg animate-pulse">
+          <div className="h-8 bg-zinc-700 rounded w-3/4 mb-4"></div>
+          <div className="aspect-video bg-zinc-700 rounded-lg mb-3"></div>
+          <div className="h-4 bg-zinc-700 rounded w-1/2 mb-2"></div>
+          <div className="h-4 bg-zinc-700 rounded w-1/3"></div>
         </div>
-        
-        {/* Loader for infinite scrolling */}
-        {hasMore && selectedCategory === CategoryTab.MOVES && (
-          <div ref={loaderRef} className="flex justify-center py-6">
-            {loadingMore && (
-              <div className="w-8 h-8 border-t-2 border-[#E0FE10] rounded-full animate-spin"></div>
-            )}
+      );
+    }
+
+    if (!moveOfTheDay) {
+      return (
+        <div className="mb-8 p-6 bg-zinc-800 rounded-xl shadow-lg text-center">
+          <CalendarDaysIcon className="w-12 h-12 text-zinc-500 mx-auto mb-3" />
+          <h3 className="text-lg font-semibold text-white mb-1">Move of the Day</h3>
+          <p className="text-zinc-400 text-sm">Check back soon for today's featured move!</p>
+        </div>
+      );
+    }
+
+    const { exercise, video } = moveOfTheDay;
+
+    return (
+      <div className="mb-8 bg-gradient-to-br from-zinc-800 to-zinc-900 p-1 rounded-xl shadow-2xl hover:shadow-lime-500/30 transition-shadow duration-300">
+        <div className="bg-zinc-800 rounded-lg overflow-hidden">
+          <div className="p-4">
+            <div className="flex justify-between items-center mb-3">
+              <h2 className="text-xl font-bold text-[#E0FE10] flex items-center">
+                <BoltIcon className="w-6 h-6 mr-2 text-[#E0FE10]" />
+                Move of the Day
+              </h2>
+              {/* Optional: Add date or a small badge here */}
+            </div>
           </div>
-        )}
+
+          <div 
+            className="relative aspect-video w-full cursor-pointer group"
+            onClick={() => selectExercise(exercise)}
+          >
+            {video.videoURL ? (
+              <video
+                key={video.videoURL} // Add key to force re-render if URL changes
+                src={video.videoURL}
+                className="w-full h-full object-cover"
+                loop
+                muted
+                playsInline
+                autoPlay
+                poster={video.thumbnail || ''} // Use thumbnail as poster
+              />
+            ) : (
+              <div className="w-full h-full bg-zinc-700 flex items-center justify-center">
+                <BoltIcon className="w-16 h-16 text-zinc-500" />
+              </div>
+            )}
+            <div className="absolute inset-0 bg-black/30 group-hover:bg-black/50 transition-all duration-300 flex items-center justify-center opacity-0 group-hover:opacity-100">
+              <PlayIcon className="w-16 h-16 text-white/80" />
+            </div>
+          </div>
+          
+          <div className="p-4">
+            <h3 
+              className="text-xl font-semibold text-white mb-1 hover:text-[#E0FE10] cursor-pointer transition-colors"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (video.username) handleProfileClick(video.username);
+              }}
+            >
+              {exercise.name}
+            </h3>
+            
+            {/* Creator Info */}
+            <div 
+              className="flex items-center gap-2 mt-2 mb-3 cursor-pointer"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (video.username) handleProfileClick(video.username);
+              }}
+            >
+              {video.profileImage?.profileImageURL ? (
+                <img 
+                  src={video.profileImage.profileImageURL}
+                  alt={video.username || "Creator"}
+                  className="w-8 h-8 rounded-full object-cover border-2 border-zinc-700"
+                />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-zinc-700 flex items-center justify-center text-sm text-[#E0FE10]">
+                  {video.username?.charAt(0).toUpperCase() || "?"}
+                </div>
+              )}
+              <span className="text-sm text-zinc-300 hover:text-white transition-colors">
+                {video.username || "QuickLifts Official"}
+              </span>
+            </div>
+
+            <p className="text-zinc-400 text-xs mb-3 line-clamp-2">
+              {exercise.description || "Check out this amazing move to boost your workout!"}
+            </p>
+            
+            <button
+              onClick={() => selectExercise(exercise)}
+              className="w-full bg-[#E0FE10] text-zinc-900 py-2.5 px-4 rounded-lg font-semibold text-sm hover:bg-lime-400 transition-colors flex items-center justify-center gap-2"
+            >
+              <BoltIcon className="w-4 h-4" />
+              View Move Details
+            </button>
+          </div>
+        </div>
       </div>
     );
   };
@@ -984,16 +1025,16 @@ const Discover = () => {
               <>
                 {renderContinueWorkoutCard()}
                 {renderActiveRounds()}
+                {renderMoveOfTheDaySection()}
                 {renderTrendingStacks()}
                 {renderFeaturedCreators()}
-                {renderTrendingExercises()}
               </>
             )}
             
             {selectedCategory === CategoryTab.MOVES && (
               <>
+                {renderMoveOfTheDaySection()}
                 {renderTrendingStacks()}
-                {renderTrendingExercises()}
               </>
             )}
             

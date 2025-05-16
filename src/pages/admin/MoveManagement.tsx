@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Head from 'next/head';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
-import { collection, getDocs, query, orderBy, where, getCountFromServer } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, where, getCountFromServer, doc, updateDoc, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
 import { getAuth, getIdToken } from 'firebase/auth';
-import { Dumbbell, Video, PlayCircle, RefreshCw, AlertCircle, CheckCircle, Loader2, Eye, XCircle, ImageIcon } from 'lucide-react';
+import { Dumbbell, Video, PlayCircle, RefreshCw, AlertCircle, CheckCircle, Loader2, Eye, XCircle, ImageIcon, Check, X } from 'lucide-react';
 import { Exercise, ExerciseVideo } from '../../api/firebase/exercise/types'; // Assuming types are here
 
 // Define interfaces for display (can be expanded)
@@ -40,6 +40,7 @@ interface ReportedItemDisplay {
   videoURL?: string;
   createdAt?: any; // Firestore Timestamp or Date
   updatedAt?: any; // Firestore Timestamp or Date
+  videoId?: string; // Added to ensure we have the video's Firestore document ID
 }
 
 const MoveManagement: React.FC = () => {
@@ -62,6 +63,7 @@ const MoveManagement: React.FC = () => {
   const [loadingExerciseVideos, setLoadingExerciseVideos] = useState(false);
 
   const [isTriggeringMOTD, setIsTriggeringMOTD] = useState(false);
+  const [updatingItems, setUpdatingItems] = useState<{[reportId: string]: boolean}>({});
 
   // Show/hide toast
   useEffect(() => {
@@ -140,6 +142,7 @@ const MoveManagement: React.FC = () => {
         return {
           id: doc.id,
           ...data,
+          videoId: data.videoId, // Explicitly map videoId if it exists in the Firestore document
         } as ReportedItemDisplay;
       });
       setReportedItems(fetchedItems);
@@ -240,6 +243,80 @@ const MoveManagement: React.FC = () => {
       setToastMessage({ type: 'error', text: `Failed to set Move of the Day: ${errorMessage}` });
     } finally {
       setIsTriggeringMOTD(false);
+    }
+  };
+
+  const handleMarkAsComplete = async (reportId: string) => {
+    setUpdatingItems(prev => ({ ...prev, [reportId]: true }));
+    setToastMessage({ type: 'info', text: 'Updating report status...' });
+    try {
+      const reportRef = doc(db, 'reported-exercises', reportId);
+      await updateDoc(reportRef, {
+        status: 'completed',
+        updatedAt: serverTimestamp(),
+      });
+
+      setReportedItems(prevItems =>
+        prevItems.map(item =>
+          item.id === reportId ? { ...item, status: 'completed', updatedAt: new Date() } : item
+        )
+      );
+      // Re-calculate pending reports count
+      setPendingReportsCount(prev => prev > 0 ? prev -1 : 0);
+
+      setToastMessage({ type: 'success', text: 'Report status updated to completed.' });
+    } catch (err) {
+      console.error('[MoveManagement] Error marking report as complete:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error.';
+      setToastMessage({ type: 'error', text: `Failed to update report: ${errorMessage}` });
+    } finally {
+      setUpdatingItems(prev => ({ ...prev, [reportId]: false }));
+    }
+  };
+
+  const handleRejectContent = async (reportId: string, videoId?: string) => {
+    if (!videoId) {
+      setToastMessage({ type: 'error', text: 'Video ID not found for this report. Cannot hide video. Marking report as complete only.' });
+      await handleMarkAsComplete(reportId); // Mark report as complete anyway
+      return;
+    }
+
+    setUpdatingItems(prev => ({ ...prev, [reportId]: true }));
+    setToastMessage({ type: 'info', text: 'Rejecting content and updating report...' });
+    try {
+      const batch = writeBatch(db);
+
+      // 1. Update report status
+      const reportRef = doc(db, 'reported-exercises', reportId);
+      batch.update(reportRef, {
+        status: 'completed',
+        updatedAt: serverTimestamp(),
+      });
+
+      // 2. Update video visibility
+      const videoRef = doc(db, 'exerciseVideos', videoId);
+      batch.update(videoRef, {
+        visibility: 'rejected', // This type was added to ExerciseVideoVisibility
+        updatedAt: serverTimestamp(),
+      });
+
+      await batch.commit();
+
+      setReportedItems(prevItems =>
+        prevItems.map(item =>
+          item.id === reportId ? { ...item, status: 'completed', updatedAt: new Date() } : item
+        )
+      );
+      // Re-calculate pending reports count
+      setPendingReportsCount(prev => prev > 0 ? prev -1 : 0);
+      
+      setToastMessage({ type: 'success', text: 'Content hidden and report marked as completed.' });
+    } catch (err) {
+      console.error('[MoveManagement] Error rejecting content:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error.';
+      setToastMessage({ type: 'error', text: `Failed to reject content: ${errorMessage}` });
+    } finally {
+      setUpdatingItems(prev => ({ ...prev, [reportId]: false }));
     }
   };
 
@@ -511,6 +588,7 @@ const MoveManagement: React.FC = () => {
                       <th className="py-3 px-5 text-left text-xs text-gray-400 font-semibold uppercase tracking-wider">Date Reported</th>
                       <th className="py-3 px-5 text-left text-xs text-gray-400 font-semibold uppercase tracking-wider">Video Owner</th>
                       <th className="py-3 px-5 text-center text-xs text-gray-400 font-semibold uppercase tracking-wider">Video</th>
+                      <th className="py-3 px-5 text-center text-xs text-gray-400 font-semibold uppercase tracking-wider">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-700">
@@ -536,6 +614,38 @@ const MoveManagement: React.FC = () => {
                           ) : (
                             <span className="text-xs text-gray-500">No URL</span>
                           )}
+                        </td>
+                        <td className="py-4 px-5 text-center">
+                          <div className="flex items-center justify-center space-x-2">
+                            <button
+                              onClick={() => handleMarkAsComplete(item.id)}
+                              disabled={updatingItems[item.id] || item.status === 'completed'}
+                              className={`p-1.5 rounded-md transition-colors ${
+                                updatingItems[item.id]
+                                  ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                                  : item.status === 'completed' 
+                                    ? 'bg-green-700/30 text-green-500 cursor-not-allowed'
+                                    : 'bg-green-700/80 hover:bg-green-600/80 text-white'
+                              }`}
+                              title={item.status === 'completed' ? "Report already completed" : "Mark as completed"}
+                            >
+                              {updatingItems[item.id] ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                            </button>
+                            <button
+                              onClick={() => handleRejectContent(item.id, item.videoId)}
+                              disabled={updatingItems[item.id] || item.status === 'completed'}
+                              className={`p-1.5 rounded-md transition-colors ${
+                                updatingItems[item.id]
+                                  ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                                  : item.status === 'completed' 
+                                    ? 'bg-red-700/30 text-red-500 cursor-not-allowed' 
+                                    : 'bg-red-700/80 hover:bg-red-600/80 text-white'
+                              }`}
+                              title={item.status === 'completed' ? "Report already completed (Content rejection should be done before marking complete if needed)" : "Hide video & mark report as completed"}
+                            >
+                              {updatingItems[item.id] ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />}
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
