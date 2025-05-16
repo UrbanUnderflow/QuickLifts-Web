@@ -1,21 +1,25 @@
 import React from 'react';
-import Head from 'next/head';
+import type { NextPage, GetServerSideProps } from 'next';
 import { useScrollFade } from '../hooks/useScrollFade';
+import PageHead from '../components/PageHead';
+import { adminMethods } from '../api/firebase/admin/methods';
+import { PageMetaData as FirestorePageMetaData } from '../api/firebase/admin/types';
 
-const StacksPage = () => {
+interface SerializablePageMetaData extends Omit<FirestorePageMetaData, 'lastUpdated'> {
+  lastUpdated: string; 
+}
+
+interface StacksPageProps {
+  metaData: SerializablePageMetaData | null;
+}
+
+const StacksPage: NextPage<StacksPageProps> = ({ metaData }) => {
   return (
     <div className="min-h-screen bg-zinc-900">
-      <Head>
-        <title>Stacks - Build Your Perfect Workout | Pulse</title>
-        <meta 
-          name="description" 
-          content="Create custom workouts by combining your favorite Moves into Stacks." 
-        />
-        <meta property="og:title" content="Stacks - Build Your Perfect Workout | Pulse" />
-        <meta property="og:description" content="Create custom workouts by combining your favorite Moves into Stacks." />
-        <meta property="og:type" content="website" />
-        <meta property="og:image" content="/stacks-preview.jpg" />
-      </Head>
+      <PageHead 
+        metaData={metaData}
+        pageOgUrl="https://fitwithpulse.ai/stacks"
+      />
 
       {/* Hero Section */}
       <main ref={useScrollFade()} className="min-h-screen flex flex-col lg:flex-row items-center justify-center gap-20 p-8">
@@ -204,6 +208,29 @@ const StacksPage = () => {
       </section>
     </div>
   );
+};
+
+export const getServerSideProps: GetServerSideProps<StacksPageProps> = async (context) => {
+  let rawMetaData: FirestorePageMetaData | null = null;
+  try {
+    rawMetaData = await adminMethods.getPageMetaData('stacks');
+  } catch (error) {
+    console.error("Error fetching page meta data for stacks page:", error);
+  }
+
+  let serializableMetaData: SerializablePageMetaData | null = null;
+  if (rawMetaData) {
+    serializableMetaData = {
+      ...rawMetaData,
+      lastUpdated: rawMetaData.lastUpdated.toDate().toISOString(),
+    };
+  }
+
+  return {
+    props: {
+      metaData: serializableMetaData,
+    },
+  };
 };
 
 export default StacksPage;

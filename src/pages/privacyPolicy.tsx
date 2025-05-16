@@ -1,20 +1,25 @@
 import React from 'react';
-import Head from 'next/head';
+import type { NextPage, GetServerSideProps } from 'next';
 import { useScrollFade } from '../hooks/useScrollFade';
+import PageHead from '../components/PageHead';
+import { adminMethods } from '../api/firebase/admin/methods';
+import { PageMetaData as FirestorePageMetaData } from '../api/firebase/admin/types';
 
-const PrivacyPolicy = () => {
+interface SerializablePageMetaData extends Omit<FirestorePageMetaData, 'lastUpdated'> {
+  lastUpdated: string; 
+}
+
+interface PrivacyPolicyPageProps {
+  metaData: SerializablePageMetaData | null;
+}
+
+const PrivacyPolicy: NextPage<PrivacyPolicyPageProps> = ({ metaData }) => {
  return (
    <div className="min-h-screen bg-zinc-900">
-     <Head>
-       <title>Privacy Policy | Pulse</title>
-       <meta 
-         name="description" 
-         content="Privacy policy for using Pulse fitness app." 
-       />
-       <meta property="og:title" content="Privacy Policy | Pulse" />
-       <meta property="og:description" content="Privacy policy for using Pulse fitness app." />
-       <meta property="og:type" content="website" />
-     </Head>
+     <PageHead 
+        metaData={metaData}
+        pageOgUrl="https://fitwithpulse.ai/privacyPolicy"
+      />
 
      {/* Hero Section */}
      <main ref={useScrollFade()} className="max-w-4xl mx-auto px-4 py-20">
@@ -128,6 +133,29 @@ const PrivacyPolicy = () => {
      </section>
    </div>
  );
+};
+
+export const getServerSideProps: GetServerSideProps<PrivacyPolicyPageProps> = async (context) => {
+  let rawMetaData: FirestorePageMetaData | null = null;
+  try {
+    rawMetaData = await adminMethods.getPageMetaData('privacyPolicy');
+  } catch (error) {
+    console.error("Error fetching page meta data for privacy policy page:", error);
+  }
+
+  let serializableMetaData: SerializablePageMetaData | null = null;
+  if (rawMetaData) {
+    serializableMetaData = {
+      ...rawMetaData,
+      lastUpdated: rawMetaData.lastUpdated.toDate().toISOString(),
+    };
+  }
+
+  return {
+    props: {
+      metaData: serializableMetaData,
+    },
+  };
 };
 
 export default PrivacyPolicy;

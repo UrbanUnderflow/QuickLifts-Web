@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
-import Head from 'next/head';
+import type { GetServerSideProps, NextPage } from 'next'; // Added GetServerSideProps, NextPage
 import { 
     Users,
     Lock,
@@ -41,6 +41,14 @@ import { ExerciseGrid } from '../components/App/ExerciseGrid/ExerciseGrid';
 import { MultiUserSelector } from '../components/App/MultiSelectUser/MultiSelectUser';
 import { generateId } from '../utils/generateId';
 import { useUser } from '../hooks/useUser';
+import PageHead from '../components/PageHead'; // Added PageHead import
+import { adminMethods } from '../api/firebase/admin/methods'; // Added adminMethods
+import { PageMetaData as FirestorePageMetaData } from '../api/firebase/admin/types'; // Added PageMetaData
+
+// Define a serializable version of PageMetaData for this page's props
+interface SerializablePageMetaData extends Omit<FirestorePageMetaData, 'lastUpdated'> {
+  lastUpdated: string; 
+}
 
 // Landing Page Components
 const LandingPage = ({ hasAccess, setShowEarlyAccessForm }: { hasAccess: boolean, setShowEarlyAccessForm: (show: boolean) => void }) => {
@@ -2467,35 +2475,57 @@ const TutorialModal: React.FC<TutorialModalProps> = ({ isOpen, onClose }) => {
   );
 };
 
-const PulseProgrammingPage: React.FC = () => {
-  const [challengeData, setChallengeData] = useState<ChallengeData>(() => {
-    const initialStartDate = new Date();
-    const initialEndDate = new Date(initialStartDate.getTime() + 7 * 86400 * 1000); // Default to 1 week later
-    return {
-        startDate: initialStartDate,
-        endDate: initialEndDate,
-        challengeName: '',
-        challengeDesc: '',
-        roundType: SweatlistType.together,
-        pinCode: '',
-        restDayPreferences: { // Initialize with defaults
-            includeRestDays: false,
-            restDays: [],
-            preferences: [],
-        },
-    };
-  });
+interface PulseProgrammingPageProps {
+  metaData: SerializablePageMetaData | null;
+}
 
+const PulseProgrammingPage: NextPage<PulseProgrammingPageProps> = ({ metaData }) => {
+  const router = useRouter();
+  const currentUser = useUser();
+  const [hasAccess, setHasAccess] = useState(false);
+  const [isLoadingAccess, setIsLoadingAccess] = useState(true);
+  const [showEarlyAccessForm, setShowEarlyAccessForm] = useState(false);
+  const [showTutorial, setShowTutorial] = useState(false);
+
+  // ViewModel definition - this will be constructed to match the ViewModel interface
+  const constructedViewModel: ViewModel = {
+    appCoordinator: {
+      showFloatingTextfield: () => { console.log('mock: showFloatingTextfield'); },
+      closeFloatingMenu: () => { console.log('mock: closeFloatingMenu'); },
+      closeModals: () => { console.log('mock: closeModals'); },
+    },
+    validateChallengeInput: (startDate: Date, endDate: Date, name: string, desc: string, type: SweatlistType, pin: string) => { 
+      console.log('mock: validateChallengeInput from constructedViewModel'); 
+      return true; 
+    },
+    setChallenge: (startDate: Date, endDate: Date, name: string, desc: string, type: SweatlistType, pin: string, restDayPreferences?: ChallengeData['restDayPreferences']) => { 
+      console.log('mock: setChallenge from constructedViewModel', startDate, endDate, name, desc, type, pin, restDayPreferences); 
+    },
+  };
+
+  // Initial ChallengeData state setup
+  const initialStartDate = new Date();
+  const initialEndDate = new Date(initialStartDate.getTime() + 7 * 86400 * 1000); // Default to 1 week later
+  const initialChallengeData: ChallengeData = {
+    startDate: initialStartDate,
+    endDate: initialEndDate,
+    challengeName: '',
+    challengeDesc: '',
+    roundType: SweatlistType.together,
+    pinCode: '',
+    restDayPreferences: { // Initialize with defaults
+        includeRestDays: false,
+        restDays: [],
+        preferences: [],
+    },
+  };
+
+  // State for managing challenge data, selected stacks for mobile, and desktop specifics
+  const [challengeData, setChallengeData] = useState<ChallengeData>(initialChallengeData);
   const [selectedStacks, setSelectedStacks] = useState<WorkoutWithRoundId[]>([]); 
   
   // New state for tutorial modal
   const [showTutorialModal, setShowTutorialModal] = useState(false);
-  
-  // New state for early access - set to false to test the actual app
-  const [hasAccess, setHasAccess] = useState(false);
-  
-  // State to control showing the early access form directly
-  const [showEarlyAccessForm, setShowEarlyAccessForm] = useState(false);
 
   // Check localStorage on mount to determine if tutorial should be shown
   useEffect(() => {
@@ -2524,40 +2554,22 @@ const PulseProgrammingPage: React.FC = () => {
     }));
   };
 
-  // Mock viewModel for example purposes
-  const mockViewModel: ViewModel = {
-    appCoordinator: {
-      showFloatingTextfield: () => { console.log('mock: showFloatingTextfield'); },
-      closeFloatingMenu: () => { console.log('mock: closeFloatingMenu'); },
-      closeModals: () => { console.log('mock: closeModals'); },
-    },
-    validateChallengeInput: () => { console.log('mock: validateChallengeInput'); return true; },
-    setChallenge: (s, e, n, d, t, p, r) => { console.log('mock: setChallenge', s, e, n, d, t, p, r); },
-  };
-
   const handleRemoveStackForMobile = (stackId: string) => {
     setSelectedStacks(prev => prev.filter(stack => (stack.roundWorkoutId || stack.id) !== stackId));
   };
 
   return (
-    <>
-      <Head>
-        <title>Introducing Programming</title>
-        <meta 
-          name="description" 
-          content="The Chat GPT for Personal Trainers" 
-        />
-        <meta property="og:title" content="Morning Mobility Challenge – Win $1,000 | Pulse Fitness" />
-        <meta 
-          property="og:description" 
-          content="The Chat GPT For Personal Trainers" 
-        />
-        <meta property="og:type" content="website" />
-        <meta property="og:image" content="/PulseProgrammingPreview.png" />
-      </Head>
-  
-
-      
+    <div className="min-h-screen bg-[#111417]">
+      {/* Removed existing Head component */}
+      <PageHead 
+        metaData={metaData}
+        pageOgUrl="https://fitwithpulse.ai/programming"
+      />
+      {/* Tutorial Modal */}
+      <TutorialModal 
+        isOpen={showTutorialModal} 
+        onClose={handleCloseTutorial} 
+      />
       {/* Show the landing page by default */}
       {!showEarlyAccessForm && !hasAccess && (
         <LandingPage 
@@ -2578,12 +2590,6 @@ const PulseProgrammingPage: React.FC = () => {
       {/* Only show the actual app if the user has access */}
       {hasAccess && (
         <>
-          {/* Tutorial Modal */}
-          <TutorialModal 
-            isOpen={showTutorialModal} 
-            onClose={handleCloseTutorial} 
-          />
-          
           {/* Mobile view */}
           <div className="block lg:hidden bg-[#111417] min-h-screen">
             <div className="w-full max-w-[500px] mx-auto bg-[#1a1e24] rounded-t-xl relative flex flex-col min-h-screen">
@@ -2602,8 +2608,8 @@ const PulseProgrammingPage: React.FC = () => {
                   currentChallengeData={challengeData}
                   selectedStacks={selectedStacks}
                   setSelectedStacks={setSelectedStacks}
-                  onRemoveStack={handleRemoveStackForMobile} // Use specific remover if logic differs slightly or for clarity
-                  viewModel={mockViewModel}
+                  onRemoveStack={handleRemoveStackForMobile} 
+                  viewModel={constructedViewModel} // Use the correctly structured ViewModel
                 />
               </div>
               
@@ -2611,7 +2617,7 @@ const PulseProgrammingPage: React.FC = () => {
                 <button
                   className="w-full py-3 bg-[#E0FE10] text-black rounded-lg font-semibold hover:opacity-90 transition-opacity"
                   onClick={() => {
-                    if (mockViewModel.validateChallengeInput(
+                    if (constructedViewModel.validateChallengeInput( // Use the correctly structured ViewModel
                       challengeData.startDate,
                       challengeData.endDate,
                       challengeData.challengeName,
@@ -2619,7 +2625,7 @@ const PulseProgrammingPage: React.FC = () => {
                       challengeData.roundType,
                       challengeData.pinCode
                     )) {
-                      mockViewModel.setChallenge(
+                      constructedViewModel.setChallenge( // Use the correctly structured ViewModel
                         challengeData.startDate,
                         challengeData.endDate,
                         challengeData.challengeName,
@@ -2628,7 +2634,7 @@ const PulseProgrammingPage: React.FC = () => {
                         challengeData.pinCode,
                         challengeData.restDayPreferences // Pass the entire object
                       );
-                      mockViewModel.appCoordinator.closeModals();
+                      constructedViewModel.appCoordinator.closeModals(); // Access nested appCoordinator
                     }
                   }}
                   disabled={selectedStacks.length === 0} // Basic validation for mobile button
@@ -2644,21 +2650,36 @@ const PulseProgrammingPage: React.FC = () => {
             <DesktopChallengeSetupView
               challengeData={challengeData}
               setChallengeData={updateChallengeDataState}
-              viewModel={mockViewModel}
+              viewModel={constructedViewModel} // Use the correctly structured ViewModel
             />
           </div>
         </>
       )}
-    </>
+    </div>
   );
 };
 
-// Add the fadeIn animation to global styles
-const globalStyles = `
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-`;
+export const getServerSideProps: GetServerSideProps<PulseProgrammingPageProps> = async (context) => {
+  let rawMetaData: FirestorePageMetaData | null = null;
+  try {
+    rawMetaData = await adminMethods.getPageMetaData('programming');
+  } catch (error) {
+    console.error("Error fetching page meta data for programming page:", error);
+  }
+
+  let serializableMetaData: SerializablePageMetaData | null = null;
+  if (rawMetaData) {
+    serializableMetaData = {
+      ...rawMetaData,
+      lastUpdated: rawMetaData.lastUpdated.toDate().toISOString(),
+    };
+  }
+
+  return {
+    props: {
+      metaData: serializableMetaData,
+    },
+  };
+};
 
 export default PulseProgrammingPage;

@@ -1,9 +1,14 @@
 import React from 'react';
 import Head from 'next/head';
-import { PageMetaData } from '../api/firebase/admin/types'; // Adjust path as needed
+import { PageMetaData as FirestorePageMetaData } from '../api/firebase/admin/types'; // Renamed import
+
+// Define the expected prop type, where lastUpdated is a string
+interface SerializablePageMetaDataForHead extends Omit<FirestorePageMetaData, 'lastUpdated'> {
+  lastUpdated: string;
+}
 
 interface PageHeadProps {
-  metaData?: PageMetaData | null;
+  metaData?: SerializablePageMetaDataForHead | null; // Updated to use the serializable type
   pageOgUrl: string; // Canonical URL for the current page, should be absolute
   // defaultTitle, defaultDescription, defaultOgImage are removed
 }

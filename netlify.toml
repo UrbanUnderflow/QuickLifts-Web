@@ -60,3 +60,7 @@
 
 [functions.triggerGenerateKpiSnapshot]
   is_background = true
+
+# Schedule the Move of the Day function to run daily
+[functions.scheduleMoveOfTheDay]
+  schedule = "@daily"

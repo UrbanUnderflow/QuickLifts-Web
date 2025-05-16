@@ -9,6 +9,7 @@ interface HeaderProps {
   toggleMobileMenu: () => void;
   setIsSignInModalVisible: () => void;
   theme?: Theme;
+  hideNav?: boolean;
 }
 
 const Header: React.FC<HeaderProps> = ({
@@ -16,7 +17,8 @@ const Header: React.FC<HeaderProps> = ({
   currentSection,
   toggleMobileMenu,
   setIsSignInModalVisible,
-  theme = 'light'
+  theme = 'light',
+  hideNav = false
 }) => {
   const getClassName = (section: Section) => {
     if (theme === 'dark') {
@@ -40,43 +42,47 @@ const Header: React.FC<HeaderProps> = ({
           />
         </div>
 
-        {/* Desktop Menu */}
-        <div className="hidden sm:flex relative w-[570px] h-[39px] p-2.5 justify-center items-center gap-10">
-          <button className={getClassName('home')} onClick={() => onSectionChange('home')}>
-            Features
-          </button>
-          <button className={getClassName('creator')} onClick={() => onSectionChange('creator')}>
-            Creators
-          </button>
-          <button className={getClassName('support')} onClick={() => onSectionChange('support')}>
-            Support
-          </button>
-          <a href="mailto:pulsefitnessapp@gmail.com" className={getClassName('contact')}>
-            Contact Us
-          </a>
-          <div className={theme === 'dark' ? 'text-white' : 'text-gray-700'}>|</div>
-          <button 
-            onClick={setIsSignInModalVisible}
-            className={`text-base font-medium ${
-              theme === 'dark' 
-                ? 'text-white hover:text-[#E0FE10]' 
-                : 'text-gray-700 hover:text-[#14B8A6]'
-            }`}
-          >
-            Sign In
-          </button>
-        </div>
+        {/* Desktop Menu - Only show when hideNav is false */}
+        {!hideNav && (
+          <div className="hidden sm:flex relative w-[570px] h-[39px] p-2.5 justify-center items-center gap-10">
+            <button className={getClassName('home')} onClick={() => onSectionChange('home')}>
+              Features
+            </button>
+            <button className={getClassName('creator')} onClick={() => onSectionChange('creator')}>
+              Creators
+            </button>
+            <button className={getClassName('support')} onClick={() => onSectionChange('support')}>
+              Support
+            </button>
+            <a href="mailto:pulsefitnessapp@gmail.com" className={getClassName('contact')}>
+              Contact Us
+            </a>
+            <div className={theme === 'dark' ? 'text-white' : 'text-gray-700'}>|</div>
+            <button 
+              onClick={setIsSignInModalVisible}
+              className={`text-base font-medium ${
+                theme === 'dark' 
+                  ? 'text-white hover:text-[#E0FE10]' 
+                  : 'text-gray-700 hover:text-[#14B8A6]'
+              }`}
+            >
+              Sign In
+            </button>
+          </div>
+        )}
 
-        {/* Mobile Menu Toggle */}
-        <div className="sm:hidden">
-          <button onClick={toggleMobileMenu} aria-label="Toggle Mobile Menu">
-            <img 
-              src={theme === 'dark' ? "/menu-icon-white.svg" : "/menu-icon.svg"} 
-              alt="Menu" 
-              className="h-12" 
-            />
-          </button>
-        </div>
+        {/* Mobile Menu Toggle - Only show when hideNav is false */}
+        {!hideNav && (
+          <div className="sm:hidden">
+            <button onClick={toggleMobileMenu} aria-label="Toggle Mobile Menu">
+              <img 
+                src={theme === 'dark' ? "/menu-icon-white.svg" : "/menu-icon.svg"} 
+                alt="Menu" 
+                className="h-12" 
+              />
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

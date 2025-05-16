@@ -2,11 +2,12 @@ import React from 'react';
 import { useRouter } from 'next/router';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import Head from 'next/head';
+import { Users, Settings, BarChart2, Bell, FileText, CheckSquare, PlusSquare, Image as ImageIcon, Zap, TrendingUp, Dumbbell, Tag, Users2, Activity, Award, Clock, Gift, Edit3, Send, Server } from 'lucide-react';
 
 interface AdminCardProps {
   title: string;
   description: string;
-  icon: string;
+  icon: React.ReactNode;
   link: string;
 }
 
@@ -15,7 +16,7 @@ const AdminCard: React.FC<AdminCardProps> = ({ title, description, icon, link })
   
   return (
     <div 
-      className="relative bg-[#1a1e24] rounded-xl p-6 shadow-xl overflow-hidden group cursor-pointer"
+      className="relative bg-[#1a1e24] rounded-xl p-6 shadow-xl overflow-hidden group cursor-pointer h-full flex flex-col"
       onClick={() => router.push(link)}
     >
       {/* Top gradient border */}
@@ -28,12 +29,12 @@ const AdminCard: React.FC<AdminCardProps> = ({ title, description, icon, link })
       <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-[#d7ff00]/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
       
       <div className="flex items-center mb-4">
-        <div className="w-10 h-10 flex items-center justify-center rounded-full bg-[#262a30] text-[#d7ff00] mr-3 group-hover:scale-110 transition-transform duration-300">
-          <i className={icon}></i>
+        <div className="w-10 h-10 flex items-center justify-center rounded-full bg-[#262a30] text-[#d7ff00] mr-3 group-hover:scale-110 transition-transform duration-300 flex-shrink-0">
+          {icon}
         </div>
         <h3 className="text-lg font-semibold text-white">{title}</h3>
       </div>
-      <p className="text-gray-400 group-hover:text-gray-300 transition-colors">{description}</p>
+      <p className="text-gray-400 group-hover:text-gray-300 transition-colors flex-grow">{description}</p>
       
       {/* Bottom gradient animation on hover */}
       <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-[#40c9ff] to-[#d7ff00] transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left"></div>
@@ -45,61 +46,67 @@ const adminCardsData = [
   {
     title: "Manage Beta Users",
     description: "View, search, and manage beta user accounts and their status.",
-    icon: "👥", // Placeholder icon, consider using an SVG or a Lucide icon component
+    icon: <Users2 className="w-5 h-5" />,
     link: "/admin/betausers"
   },
   {
     title: "Application Metrics",
     description: "Monitor key application metrics, user engagement, and performance data.",
-    icon: "📊",
+    icon: <BarChart2 className="w-5 h-5" />,
     link: "/admin/metrics"
   },
   {
     title: "Challenge Status",
     description: "Oversee and manage ongoing user challenges and their statuses.",
-    icon: "🏆",
+    icon: <Award className="w-5 h-5" />,
     link: "/admin/challengestatus"
   },
   {
     title: "Inactivity Check",
     description: "Identify and manage users based on their inactivity periods.",
-    icon: "⏳",
+    icon: <Clock className="w-5 h-5" />,
     link: "/admin/inactivityCheck"
   },
   {
     title: "Add Points to User",
     description: "Manually add points to a user for specific activities or rewards.",
-    icon: "➕",
+    icon: <Gift className="w-5 h-5" />,
     link: "/admin/addpoints"
   },
   {
     title: "Press Releases",
     description: "Create, edit, and manage press releases for public announcement.",
-    icon: "📰",
+    icon: <FileText className="w-5 h-5" />,
     link: "/admin/pressReleases"
   },
   {
     title: "Send Notification",
     description: "Send push notifications to users or specific user groups.",
-    icon: "🔔",
+    icon: <Bell className="w-5 h-5" />,
     link: "/admin/SendNotification"
   },
   {
     title: "User Management",
     description: "Comprehensive user management including editing profiles and roles.",
-    icon: "🔧",
+    icon: <Users className="w-5 h-5" />,
     link: "/admin/users"
   },
   {
     title: "Add App Version",
     description: "Manage application versions and update notes for releases.",
-    icon: "📱",
+    icon: <PlusSquare className="w-5 h-5" />,
     link: "/admin/addVersion"
+  },
+  {
+    title: "Move Management",
+    description: "Manage exercises, videos, and the Move of the Day.",
+    icon: <Dumbbell className="w-5 h-5" />,
+    link: "/admin/MoveManagement"
   },
   {
     title: "Manage Page Meta Data",
     description: "Control SEO and social sharing tags for application pages.",
-    icon: "⚙️", // Consider a more specific icon like <Tags /> from lucide-react
+    icon: <Tag className="w-5 h-5" />,
     link: "/admin/manageMeta"
   }
 ];

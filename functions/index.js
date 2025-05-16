@@ -12,6 +12,8 @@ const { manualSyncWorkoutSessions } = require("./manualSync");
 const { updateParticipantCounts } = require("./updateParticipantCounts");
 // Import the new thumbnail functions
 const { generateThumbnailOnWrite, generateMissingThumbnails, processThumbnailQueue } = require("./thumbnailGenerator");
+// Import the Move of the Day function
+const { selectMoveOfTheDay } = require("./moveOfTheDay");
 
 // Export all functions for Firebase to discover
 exports.syncWorkoutSessionToRoot = syncWorkoutSessionToRoot;
@@ -33,3 +35,9 @@ exports.sendSingleNotification = require("./sendSingleNotification").sendSingleN
 exports.generateThumbnailOnWrite = generateThumbnailOnWrite;
 exports.generateMissingThumbnails = generateMissingThumbnails; 
 exports.processThumbnailQueue = processThumbnailQueue; 
+
+// Export the Move of the Day function - THIS IS NOW DEPRECATED
+// exports.selectMoveOfTheDay = selectMoveOfTheDay;
+
+// Export the new manual trigger Move of the Day function
+exports.manualTriggerMoveOfTheDay = require("./moveOfTheDay").manualTriggerMoveOfTheDay; 

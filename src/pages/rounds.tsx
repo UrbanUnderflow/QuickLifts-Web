@@ -1,11 +1,21 @@
-import type { NextPage } from 'next';
-import Head from 'next/head';
+import type { NextPage, GetServerSideProps } from 'next';
 import React, { useState } from 'react';
 import { Section } from '../components/Header';
 import { useScrollFade } from '../hooks/useScrollFade';
+import PageHead from '../components/PageHead';
+import { adminMethods } from '../api/firebase/admin/methods';
+import { PageMetaData as FirestorePageMetaData } from '../api/firebase/admin/types';
 
+// Define a serializable version of PageMetaData for this page's props
+interface SerializablePageMetaData extends Omit<FirestorePageMetaData, 'lastUpdated'> {
+  lastUpdated: string; 
+}
 
-const RoundsPage: NextPage = () => {
+interface RoundsPageProps {
+  metaData: SerializablePageMetaData | null;
+}
+
+const RoundsPage: NextPage<RoundsPageProps> = ({ metaData }) => {
   const [currentSection, setCurrentSection] = useState<Section>('home');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -29,20 +39,10 @@ const RoundsPage: NextPage = () => {
 
   return (
     <div className="min-h-screen bg-zinc-900">
-      <Head>
-        <title>Rounds - Create and Share Fitness Videos | Pulse</title>
-        <meta 
-          name="description" 
-          content="Share your fitness journey through quick, engaging videos. Connect with fellow fitness enthusiasts and showcase your progress." 
-        />
-        <meta property="og:title" content="Rounds - Create and Share Fitness Videos | Pulse" />
-        <meta 
-          property="og:description" 
-          content="Share your fitness journey through quick, engaging videos. Connect with fellow fitness enthusiasts and showcase your progress." 
-        />
-        <meta property="og:type" content="website" />
-        <meta property="og:image" content="/rounds-preview.jpg" />
-      </Head>
+      <PageHead 
+        metaData={metaData}
+        pageOgUrl="https://fitwithpulse.ai/rounds"
+      />
 
       {/* Hero Section */}
       <main ref={useScrollFade()} className="min-h-screen flex flex-col lg:flex-row items-center justify-center gap-20 p-8">
@@ -151,6 +151,29 @@ const RoundsPage: NextPage = () => {
       </section>
     </div>
   );
+};
+
+export const getServerSideProps: GetServerSideProps<RoundsPageProps> = async (context) => {
+  let rawMetaData: FirestorePageMetaData | null = null;
+  try {
+    rawMetaData = await adminMethods.getPageMetaData('rounds');
+  } catch (error) {
+    console.error("Error fetching page meta data for rounds page:", error);
+  }
+
+  let serializableMetaData: SerializablePageMetaData | null = null;
+  if (rawMetaData) {
+    serializableMetaData = {
+      ...rawMetaData,
+      lastUpdated: rawMetaData.lastUpdated.toDate().toISOString(),
+    };
+  }
+
+  return {
+    props: {
+      metaData: serializableMetaData,
+    },
+  };
 };
 
 export default RoundsPage;

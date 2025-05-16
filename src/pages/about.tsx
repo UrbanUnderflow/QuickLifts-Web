@@ -1,11 +1,21 @@
-import type { NextPage } from 'next';
-import Head from 'next/head';
+import type { NextPage, GetServerSideProps } from 'next';
 import React from 'react';
 import Footer from '../components/Footer/Footer';
 import FAQ from '../components/FAQ';
 import { useScrollFade } from '../hooks/useScrollFade';
+import PageHead from '../components/PageHead';
+import { adminMethods } from '../api/firebase/admin/methods';
+import { PageMetaData as FirestorePageMetaData } from '../api/firebase/admin/types';
 
-const AboutPage: NextPage = () => {
+interface SerializablePageMetaData extends Omit<FirestorePageMetaData, 'lastUpdated'> {
+  lastUpdated: string; 
+}
+
+interface AboutPageProps {
+  metaData: SerializablePageMetaData | null;
+}
+
+const AboutPage: NextPage<AboutPageProps> = ({ metaData }) => {
 
   const scrollToElement = (id: string) => {
     const element = document.getElementById(id);
@@ -51,10 +61,10 @@ const AboutPage: NextPage = () => {
 
   return (
     <div className="min-h-screen bg-zinc-900">
-      <Head>
-        <title>About Pulse - The Fitness Collective</title>
-        <meta name="description" content="Discover how Pulse is transforming fitness through community-driven workouts and shared experiences." />
-      </Head>
+      <PageHead 
+        metaData={metaData}
+        pageOgUrl="https://fitwithpulse.ai/about"
+      />
 
       {/* What is Pulse Section */}
       <section ref={useScrollFade()} className="relative min-h-screen flex flex-col items-center justify-center text-center px-8 py-20 overflow-hidden animate-gradient-background">
@@ -319,6 +329,29 @@ const AboutPage: NextPage = () => {
       <Footer />
     </div>
   );
+};
+
+export const getServerSideProps: GetServerSideProps<AboutPageProps> = async (context) => {
+  let rawMetaData: FirestorePageMetaData | null = null;
+  try {
+    rawMetaData = await adminMethods.getPageMetaData('about');
+  } catch (error) {
+    console.error("Error fetching page meta data for about page:", error);
+  }
+
+  let serializableMetaData: SerializablePageMetaData | null = null;
+  if (rawMetaData) {
+    serializableMetaData = {
+      ...rawMetaData,
+      lastUpdated: rawMetaData.lastUpdated.toDate().toISOString(),
+    };
+  }
+
+  return {
+    props: {
+      metaData: serializableMetaData,
+    },
+  };
 };
 
 export default AboutPage;

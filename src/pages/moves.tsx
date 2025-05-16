@@ -1,22 +1,26 @@
 import React from 'react';
-import type { NextPage } from 'next';
-import Head from 'next/head';
+import type { NextPage, GetServerSideProps } from 'next';
 import { useScrollFade } from '../hooks/useScrollFade';
+import PageHead from '../components/PageHead';
+import { adminMethods } from '../api/firebase/admin/methods';
+import { PageMetaData as FirestorePageMetaData } from '../api/firebase/admin/types';
 
-const MovesPage: NextPage = () => {
+// Define a serializable version of PageMetaData for this page's props
+interface SerializablePageMetaData extends Omit<FirestorePageMetaData, 'lastUpdated'> {
+  lastUpdated: string; 
+}
+
+interface MovesPageProps {
+  metaData: SerializablePageMetaData | null;
+}
+
+const MovesPage: NextPage<MovesPageProps> = ({ metaData }) => {
   return (
     <div className="min-h-screen bg-zinc-900">
-      <Head>
-        <title>Moves - The Building Blocks of Your Workout | Pulse</title>
-        <meta 
-          name="description" 
-          content="Record, share, and discover exercises to build your perfect workout Stack." 
-        />
-        <meta property="og:title" content="Moves - The Building Blocks of Your Workout | Pulse" />
-        <meta property="og:description" content="Record, share, and discover exercises to build your perfect workout Stack." />
-        <meta property="og:type" content="website" />
-        <meta property="og:image" content="/moves-preview.jpg" />
-      </Head>
+      <PageHead 
+        metaData={metaData}
+        pageOgUrl="https://fitwithpulse.ai/moves"
+      />
 
       {/* Hero Section */}
       <main ref={useScrollFade()} className="min-h-screen flex flex-col lg:flex-row items-center justify-center gap-20 p-8">
@@ -171,6 +175,29 @@ const MovesPage: NextPage = () => {
       </section>
     </div>
   );
+};
+
+export const getServerSideProps: GetServerSideProps<MovesPageProps> = async (context) => {
+  let rawMetaData: FirestorePageMetaData | null = null;
+  try {
+    rawMetaData = await adminMethods.getPageMetaData('moves');
+  } catch (error) {
+    console.error("Error fetching page meta data for moves page:", error);
+  }
+
+  let serializableMetaData: SerializablePageMetaData | null = null;
+  if (rawMetaData) {
+    serializableMetaData = {
+      ...rawMetaData,
+      lastUpdated: rawMetaData.lastUpdated.toDate().toISOString(),
+    };
+  }
+
+  return {
+    props: {
+      metaData: serializableMetaData,
+    },
+  };
 };
 
 export default MovesPage;
