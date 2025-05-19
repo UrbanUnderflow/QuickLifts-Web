@@ -964,23 +964,6 @@ const BrandGuidelines = () => {
                 </div>
                 
                 <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8 mb-10">
-                  <h3 className="text-white text-xl font-semibold mb-6">Clear Space</h3>
-                  
-                  <div className="bg-zinc-800/70 p-8 rounded-lg mb-8">
-                    <img 
-                      src="/brand/logo-clearspace.svg" 
-                      alt="Logo clear space demonstration" 
-                      className="max-w-full h-auto"
-                    />
-                  </div>
-                  
-                  <p className="text-zinc-400 text-lg">
-                    Always maintain the minimum clear space around the logo to ensure its visibility and impact. 
-                    The clear space should be at least equal to the height of the 'p' in the Pulse wordmark.
-                  </p>
-                </div>
-                
-                <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8 mb-10">
                   <h3 className="text-white text-xl font-semibold mb-6">Minimum Size</h3>
                   
                   <div className="flex flex-wrap gap-12 mb-8">

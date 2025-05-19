@@ -230,7 +230,8 @@ exports.handler = async (event, context) => {
                                 console.log(`User: ${userId}, Auto-stopping WorkoutSession ${workoutSessionDoc.id} (located in user's subcollection) (RoundWorkoutId: ${lastActiveRoundWorkoutId})`);
                                 await workoutSessionDoc.ref.update({
                                     endTime: admin.firestore.Timestamp.now(),
-                                    status: 'completed',
+                                    workoutStatus: 'complete',
+                                    isCompleted: true,
                                     updatedAt: admin.firestore.FieldValue.serverTimestamp()
                                 });
                                 console.log(`User: ${userId}, WorkoutSession ${workoutSessionDoc.id} in subcollection updated.`);

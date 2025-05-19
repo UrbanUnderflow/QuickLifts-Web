@@ -56,14 +56,14 @@ const adminCardsData = [
     link: "/admin/metrics"
   },
   {
-    title: "Challenge Status",
-    description: "Oversee and manage ongoing user challenges and their statuses.",
+    title: "Round Managment",
+    description: "Oversee and manage ongoing rounds and their statuses.",
     icon: <Award className="w-5 h-5" />,
     link: "/admin/challengestatus"
   },
   {
-    title: "Inactivity Check",
-    description: "Identify and manage users based on their inactivity periods.",
+    title: "User Challenge Management",
+    description: "Identify and manage users challenges, checkeck activity, etc.",
     icon: <Clock className="w-5 h-5" />,
     link: "/admin/inactivityCheck"
   },

@@ -4,6 +4,7 @@ import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import debounce from 'lodash.debounce';
 import { UserChallenge } from '../../api/firebase/workout/types';
 import { workoutService } from '../../api/firebase/workout/service';
+import { Workout } from '../../api/firebase/workout/types'; // Added Workout type
 
 // CSS for toast animation
 const toastAnimation = `
@@ -67,6 +68,12 @@ const InactivityCheckPage: React.FC = () => {
   const [selectedUserChallenge, setSelectedUserChallenge] = useState<UserChallenge | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
     const [deleteResult, setDeleteResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  // State for workout detail modal
+  const [isWorkoutDetailModalOpen, setIsWorkoutDetailModalOpen] = useState(false);
+  const [selectedWorkoutForDetail, setSelectedWorkoutForDetail] = useState<Workout | null>(null);
+  const [isLoadingWorkoutDetail, setIsLoadingWorkoutDetail] = useState(false);
+  const [workoutDetailError, setWorkoutDetailError] = useState<string | null>(null);
 
 
   // Format date helper function
@@ -266,6 +273,37 @@ const InactivityCheckPage: React.FC = () => {
       });
     } finally {
       setInactivatingId(null);
+    }
+  };
+
+  // Fetch and display workout (stack) details
+  const handleViewWorkoutDetails = async (compositeWorkoutId: string) => {
+    if (!compositeWorkoutId) return;
+
+    // Parse the compositeWorkoutId to get the original stack ID
+    const originalStackId = compositeWorkoutId.split('-')[0];
+
+    if (!originalStackId) {
+      console.error('Could not parse originalStackId from:', compositeWorkoutId);
+      setWorkoutDetailError('Invalid workout ID format.');
+      return;
+    }
+
+    setIsLoadingWorkoutDetail(true);
+    setWorkoutDetailError(null);
+    try {
+      const workoutDetails = await workoutService.fetchStackWorkoutDetails(originalStackId);
+      if (workoutDetails) {
+        setSelectedWorkoutForDetail(workoutDetails);
+        setIsWorkoutDetailModalOpen(true);
+      } else {
+        setWorkoutDetailError(`Workout details not found for ID: ${originalStackId}.`);
+      }
+    } catch (err) {
+      console.error(`Error fetching workout details for ID ${originalStackId}:`, err);
+      setWorkoutDetailError(err instanceof Error ? err.message : 'Failed to fetch workout details.');
+    } finally {
+      setIsLoadingWorkoutDetail(false);
     }
   };
 
@@ -1203,6 +1241,59 @@ const InactivityCheckPage: React.FC = () => {
                   </div>
                 </div>
               </div>
+
+              {/* Completed Workouts - NEW SECTION */}
+              <div className="space-y-4 md:col-span-4"> {/* Changed md:col-span-2 to md:col-span-4 to take full width of the 4-column parent grid defined for the detail card sections */}
+                <h5 className="text-gray-400 text-sm font-medium mb-2 border-b border-gray-700 pb-1">
+                  Completed Workouts ({selectedUserChallenge.completedWorkouts?.length || 0})
+                </h5>
+                {selectedUserChallenge.completedWorkouts && selectedUserChallenge.completedWorkouts.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                    {selectedUserChallenge.completedWorkouts.map((workout) => (
+                      <div key={workout.id} className="p-3 bg-[#262a30] rounded-lg border border-gray-700 text-xs flex flex-col justify-between aspect-[4/3]">
+                        <div>
+                          <div className="flex justify-between items-center mb-1">
+                            <span className="text-gray-300 font-semibold truncate block" title={selectedWorkoutForDetail?.title || workout.workoutId}>
+                              {/* Display workout title from detail if available, else ID */}
+                              {selectedWorkoutForDetail && selectedWorkoutForDetail.id === workout.workoutId ? selectedWorkoutForDetail.title || workout.workoutId : workout.workoutId}
+                            </span>
+                            <button
+                              onClick={() => handleViewWorkoutDetails(workout.workoutId)}
+                              disabled={isLoadingWorkoutDetail && (!selectedWorkoutForDetail || selectedWorkoutForDetail.id !== workout.workoutId)}
+                              className="mt-2 w-full px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-md text-xs font-medium transition-colors flex items-center justify-center disabled:opacity-50"
+                            >
+                              {isLoadingWorkoutDetail && (!selectedWorkoutForDetail || selectedWorkoutForDetail.id !== workout.workoutId) ? (
+                                <svg className="animate-spin h-4 w-4 mr-1.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                              ) : (
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1.5" viewBox="0 0 20 20" fill="currentColor">
+                                  <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+                                  <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
+                                </svg>
+                              )}
+                              View Details
+                            </button>
+                          </div>
+                          <p className="text-blue-400 font-mono text-sm break-all mb-2" title={workout.workoutId}>{workout.workoutId}</p>
+                        </div>
+                        <div className="text-gray-400 mt-auto text-right">
+                          <span className="block text-xs">Completed:</span>
+                          <span className="block text-xs">{formatDate(workout.completedAt)}</span>
+                        </div>
+                         {/* Placeholder for workout title if we fetch it later */}
+                        {/* <div className="text-gray-400 mt-1">Title: {workout.title || 'N/A'}</div> */}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-gray-500 text-sm py-4">
+                    No completed workouts recorded for this challenge.
+                  </div>
+                )}
+              </div>
+
             </div>
 
             {/* Actions */}
@@ -1256,6 +1347,109 @@ const InactivityCheckPage: React.FC = () => {
         </div>
       </div>
 
+      {/* Workout Detail Modal */}
+      {isWorkoutDetailModalOpen && selectedWorkoutForDetail && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-[100] animate-fade-in-up">
+          <div className="bg-[#1a1e24] rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden border border-indigo-500">
+            <div className="flex items-center justify-between p-4 border-b border-gray-700 sticky top-0 bg-[#1a1e24] z-10">
+              <h3 className="text-lg font-semibold text-indigo-400 truncate pr-4">{selectedWorkoutForDetail.title || 'Workout Details'}</h3>
+              <button 
+                onClick={() => {
+                  setIsWorkoutDetailModalOpen(false);
+                  // Delay clearing selected workout to allow modal fade-out animation
+                  setTimeout(() => {
+                    setSelectedWorkoutForDetail(null);
+                    setWorkoutDetailError(null);
+                  }, 300); 
+                }}
+                className="text-gray-400 hover:text-white transition-colors"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto flex-grow">
+              {workoutDetailError && (
+                <div className="mb-4 p-3 bg-red-900/30 text-red-400 rounded-md text-sm">
+                  Error: {workoutDetailError}
+                </div>
+              )}
+              <div className="mb-4">
+                <h4 className="text-sm text-gray-400 font-medium">ID</h4>
+                <p className="text-gray-300 text-sm mt-1 font-mono">{selectedWorkoutForDetail.id}</p>
+              </div>
+              <div className="mb-4">
+                <h4 className="text-sm text-gray-400 font-medium">Description</h4>
+                <p className="text-gray-300 text-sm mt-1">{selectedWorkoutForDetail.description || 'No description provided.'}</p>
+              </div>
+
+              <div className="mb-4">
+                <h4 className="text-sm text-gray-400 font-medium">Zone</h4>
+                <p className="text-gray-300 text-sm mt-1">{selectedWorkoutForDetail.zone || 'N/A'}</p>
+              </div>
+
+              <div>
+                <h4 className="text-sm text-gray-400 font-medium mb-2">Exercises ({selectedWorkoutForDetail.exercises?.length || 0})</h4>
+                {selectedWorkoutForDetail.exercises && selectedWorkoutForDetail.exercises.length > 0 ? (
+                  <div className="space-y-3">
+                    {selectedWorkoutForDetail.exercises.map((exRef, index) => (
+                      <div key={exRef.exercise.id || index} className="p-3 bg-[#262a30] rounded-lg border border-gray-700">
+                        <h5 className="font-medium text-indigo-400 text-sm">{exRef.exercise.name || 'Unnamed Exercise'}</h5>
+                        <p className="text-xs text-gray-400 mt-0.5">Category: {exRef.exercise.category?.type || 'N/A'}</p>
+                        {exRef.exercise.category?.type === 'weight-training' && (
+                          <div className="text-xs text-gray-300 mt-1">
+                            Sets: {exRef.exercise.category.details?.sets ?? 'N/A'}, 
+                            Reps: {Array.isArray(exRef.exercise.category.details?.reps) ? exRef.exercise.category.details.reps.join(', ') : (exRef.exercise.category.details?.reps ?? 'N/A')}
+                          </div>
+                        )}
+                        {exRef.exercise.category?.type === 'cardio' && (
+                          <div className="text-xs text-gray-300 mt-1">
+                            Duration: {exRef.exercise.category.details?.duration ?? 'N/A'} seconds
+                          </div>
+                        )}
+                        {exRef.exercise.videos && exRef.exercise.videos.length > 0 && exRef.exercise.videos[0].videoURL && (
+                           <div className="mt-2">
+                            <a 
+                                href={exRef.exercise.videos[0].videoURL} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="text-xs text-blue-400 hover:text-blue-300 underline flex items-center"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+                                </svg>
+                                Watch Video
+                            </a>
+                           </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-gray-500 text-sm">No exercises listed for this workout.</p>
+                )}
+              </div>
+            </div>
+            
+            <div className="p-4 border-t border-gray-700 flex justify-end sticky bottom-0 bg-[#1a1e24] z-10">
+              <button
+                onClick={() => {
+                  setIsWorkoutDetailModalOpen(false);
+                  setTimeout(() => {
+                    setSelectedWorkoutForDetail(null);
+                    setWorkoutDetailError(null);
+                  }, 300); 
+                }}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-md text-sm font-medium transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Toast Notification */}
       {toastVisible && (

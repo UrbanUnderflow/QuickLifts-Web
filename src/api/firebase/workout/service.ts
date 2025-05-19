@@ -2438,6 +2438,46 @@ async deleteWorkoutSession(workoutId: string | null): Promise<void> {
     console.log(`Simulated update for workout session ${sessionId}.`);
   }
 
+  /**
+   * Fetches the details of a specific workout (stack) from the 'stacks' collection.
+   * @param stackId The ID of the workout/stack to fetch.
+   * @returns A Promise resolving to the Workout object or null if not found.
+   */
+  async fetchStackWorkoutDetails(stackId: string): Promise<Workout | null> {
+    if (!stackId) {
+      console.error('fetchStackWorkoutDetails: stackId is required');
+      return null;
+    }
+    try {
+      const stackDocRef = doc(db, 'stacks', stackId);
+      const stackDocSnap = await getDoc(stackDocRef);
+
+      if (!stackDocSnap.exists()) {
+        console.warn(`fetchStackWorkoutDetails: No stack found with ID ${stackId}`);
+        return null;
+      }
+
+      const stackData = stackDocSnap.data();
+      
+      // Construct a base Workout object
+      let workout = new Workout({
+        id: stackDocSnap.id,
+        ...stackData,
+      });
+
+      // Enrich exercises with videos
+      // This assumes fetchVideosForWorkout can correctly populate videos based on exercise names
+      // and that workout.exercises are already in ExerciseReference format or compatible
+      workout = await this.fetchVideosForWorkout(workout);
+
+      return workout;
+
+    } catch (error) {
+      console.error(`Error fetching stack workout details for ID ${stackId}:`, error);
+      throw error; // Re-throw the error to be handled by the caller
+    }
+  }
+
 }
 
 export const workoutService = new WorkoutService();
