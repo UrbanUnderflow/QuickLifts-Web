@@ -1,6 +1,16 @@
 import { UserCredential } from 'firebase/auth';
 import { Timestamp } from 'firebase/firestore';
 
+export interface DailyPrompt {
+  id?: string;
+  date: Date;
+  text: string;
+  exerciseId?: string;
+  exerciseName?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export interface PageMetaData {
   pageId: string;
   pageTitle?: string;
@@ -22,4 +32,7 @@ export interface AdminService {
   isAdmin: (email: string) => Promise<boolean>;
   setPageMetaData: (data: PageMetaData) => Promise<boolean>;
   getPageMetaData: (pageId: string) => Promise<PageMetaData | null>;
+  createDailyPrompt: (prompt: DailyPrompt) => Promise<boolean>;
+  getDailyPrompt: (id: string) => Promise<DailyPrompt | null>;
+  getDailyPrompts: (limit?: number) => Promise<DailyPrompt[]>;
 } 

@@ -41,3 +41,6 @@ exports.processThumbnailQueue = processThumbnailQueue;
 
 // Export the new manual trigger Move of the Day function
 exports.manualTriggerMoveOfTheDay = require("./moveOfTheDay").manualTriggerMoveOfTheDay; 
+
+// Export the new check-in callout notification function
+exports.sendCheckinCalloutNotification = require("./challengeNotifications").sendCheckinCalloutNotification; 

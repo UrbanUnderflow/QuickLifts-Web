@@ -829,3 +829,143 @@ exports.onMainChallengeStatusChange = onDocumentUpdated(`sweatlist-collection/{s
 
     return null; // No relevant status change or error handled
 }); 
+
+// --- NEW FUNCTION: Send Notification on Check-in Callout ---
+/**
+ * Sends a notification to a user when they are called out in a check-in.
+ *
+ * Triggered when a new document is created in the 'checkins' collection.
+ */
+exports.sendCheckinCalloutNotification = onDocumentCreated("checkins/{checkinId}", async (event) => {
+  const snap = event.data;
+  if (!snap) {
+    console.log(`No data associated with the event for checkins/${event.params.checkinId}. Exiting.`);
+    return null;
+  }
+  const checkinData = snap.data();
+  const checkinId = event.params.checkinId;
+
+  if (!checkinData) {
+    console.log(`No data found for new check-in ${checkinId}. Exiting.`);
+    return null;
+  }
+
+  const { 
+    originalChallengerUserId, 
+    originalChallengerFCMToken, 
+    calloutUserFCMToken, 
+    user: checkinUser, // This is the user performing the current check-in
+    calloutUser,       // This is the user who was called out (if it's an initial callout)
+    challengeId        // Assuming challengeId is present in checkinData
+  } = checkinData;
+
+  const responderUsername = checkinUser?.username || "Someone"; // User who is responding to a callout
+
+  // Scenario 1: This is a RESPONSE to a callout
+  if (originalChallengerUserId && originalChallengerFCMToken) {
+    console.log(`Check-in ${checkinId}: User ${responderUsername} (ID: ${checkinUser?.id}) responded to callout from ${originalChallengerUserId}.`);
+
+    if (!challengeId) {
+      console.error(`Check-in ${checkinId} (Callout Response): Missing challengeId. Cannot award points.`);
+      // Proceed with notification but log error for points
+    }
+
+    // --- Award Points ---
+    if (challengeId) {
+      try {
+        // Award 50 points to Responder
+        const responderUserChallengeRef = db.collection(userChallengeCollection)
+                                          .where("userId", "==", checkinUser?.id)
+                                          .where("challengeId", "==", challengeId)
+                                          .limit(1);
+        const responderUserChallengeSnap = await responderUserChallengeRef.get();
+        if (!responderUserChallengeSnap.empty) {
+          const userChallengeDoc = responderUserChallengeSnap.docs[0];
+          const currentPoints = userChallengeDoc.data().pulsePoints?.peerChallengeBonus || 0;
+          await userChallengeDoc.ref.update({ 
+            "pulsePoints.peerChallengeBonus": currentPoints + 50,
+            "pulsePoints.totalPoints": FieldValue.increment(50) // Assuming totalPoints needs manual update
+          });
+          console.log(`Awarded 50 peerChallengeBonus points to responder ${checkinUser?.id} for challenge ${challengeId}.`);
+        } else {
+          console.warn(`Could not find user-challenge for responder ${checkinUser?.id} in challenge ${challengeId}.`);
+        }
+
+        // Award 25 points to Original Challenger
+        const originalChallengerUserChallengeRef = db.collection(userChallengeCollection)
+                                                  .where("userId", "==", originalChallengerUserId)
+                                                  .where("challengeId", "==", challengeId)
+                                                  .limit(1);
+        const originalChallengerUserChallengeSnap = await originalChallengerUserChallengeRef.get();
+        if (!originalChallengerUserChallengeSnap.empty) {
+          const userChallengeDoc = originalChallengerUserChallengeSnap.docs[0];
+          const currentPoints = userChallengeDoc.data().pulsePoints?.peerChallengeBonus || 0;
+          await userChallengeDoc.ref.update({ 
+            "pulsePoints.peerChallengeBonus": currentPoints + 25,
+            "pulsePoints.totalPoints": FieldValue.increment(25) // Assuming totalPoints needs manual update
+           });
+          console.log(`Awarded 25 peerChallengeBonus points to original challenger ${originalChallengerUserId} for challenge ${challengeId}.`);
+        } else {
+          console.warn(`Could not find user-challenge for original challenger ${originalChallengerUserId} in challenge ${challengeId}.`);
+        }
+      } catch (pointError) {
+        console.error(`Error awarding points for callout response on check-in ${checkinId}:`, pointError);
+      }
+    }
+
+    // --- Send Notification to Original Challenger ---
+    const title = `${responderUsername} answered your callout!`;
+    const body = `They completed the check-in and you've both earned bonus points! You got +25! 🔥`;
+    const dataPayload = {
+      checkinId: checkinId,
+      responderId: checkinUser?.id || '',
+      responderUsername: responderUsername,
+      originalChallengerId: originalChallengerUserId,
+      challengeId: challengeId || '',
+      type: 'CALLOUT_ANSWERED',
+      timestamp: String(Math.floor(Date.now() / 1000))
+    };
+
+    try {
+      await sendNotification(originalChallengerFCMToken, title, body, dataPayload);
+      console.log(`Successfully sent CALLOUT_ANSWERED notification for check-in ${checkinId} to original challenger ${originalChallengerUserId}.`);
+    } catch (error) {
+      console.error(`Error sending CALLOUT_ANSWERED notification for check-in ${checkinId} to original challenger ${originalChallengerUserId}:`, error);
+    }
+
+  // Scenario 2: This is an INITIAL callout
+  } else if (calloutUserFCMToken) {
+    const initialChallengerUsername = checkinUser?.username || "Someone"; // User performing the initial callout
+    
+    if (!calloutUser || !calloutUser.id) {
+      console.log(`Check-in ${checkinId} (Initial Callout): calloutUser data is missing or incomplete. No notification will be sent.`);
+      return null;
+    }
+    
+    console.log(`Check-in ${checkinId}: User ${initialChallengerUsername} called out user ID ${calloutUser.id}. Preparing notification to token ${calloutUserFCMToken.substring(0,10)}...`);
+
+    const title = `⚡️ ${initialChallengerUsername} Challenged You!`;
+    const body = `You've been called out! Post your check-in today to claim +25 extra points! 🏆`;
+
+    const dataPayload = {
+      checkinId: checkinId,
+      challengerId: checkinUser?.id || '',
+      challengerUsername: initialChallengerUsername,
+      calloutUserId: calloutUser.id,
+      challengeId: challengeId || '',
+      type: 'CHECKIN_CALLOUT',
+      timestamp: String(Math.floor(Date.now() / 1000))
+    };
+
+    try {
+      await sendNotification(calloutUserFCMToken, title, body, dataPayload);
+      console.log(`Successfully sent CHECKIN_CALLOUT notification for check-in ${checkinId} to user ID ${calloutUser.id}.`);
+    } catch (error) {
+      console.error(`Error sending CHECKIN_CALLOUT notification for check-in ${checkinId} to user ID ${calloutUser.id}:`, error);
+    }
+  } else {
+    console.log(`Check-in ${checkinId}: Neither a callout response nor an initial callout with FCM token. No notification sent.`);
+  }
+
+  return null;
+}); 

@@ -108,6 +108,18 @@ const adminCardsData = [
     description: "Control SEO and social sharing tags for application pages.",
     icon: <Tag className="w-5 h-5" />,
     link: "/admin/manageMeta"
+  },
+  {
+    title: "Daily Reflection",
+    description: "Create and manage daily reflection prompts for users.",
+    icon: <Edit3 className="w-5 h-5" />,
+    link: "/admin/dailyReflection"
+  },
+  {
+    title: "Test Check-in Notification",
+    description: "Test the check-in callout notification functionality.",
+    icon: <Send className="w-5 h-5" />,
+    link: "/admin/testCheckinNotification"
   }
 ];
 

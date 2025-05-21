@@ -785,6 +785,7 @@ export class PulsePoints {
   cumulativeStreakBonus: number;
   shareBonus: number;
   referralBonus: number;
+  peerChallengeBonus?: number; // Added for callout response points
 
   constructor(data: any) {
     this.baseCompletion = data.baseCompletion ?? 0;
@@ -800,6 +801,7 @@ export class PulsePoints {
     this.cumulativeStreakBonus = data.cumulativeStreakBonus ?? 0;
     this.shareBonus = data.shareBonus ?? 0;
     this.referralBonus = data.referralBonus ?? 0;
+    this.peerChallengeBonus = data.peerChallengeBonus ?? 0; // Initialize
   }
 
   get totalStackPoints(): number {
@@ -823,7 +825,7 @@ export class PulsePoints {
   }
 
   get totalPoints(): number {
-    return this.totalStackPoints + this.totalCommunityPoints + this.cumulativeStreakBonus + this.shareBonus + this.referralBonus;
+    return this.totalStackPoints + this.totalCommunityPoints + this.cumulativeStreakBonus + this.shareBonus + this.referralBonus + (this.peerChallengeBonus || 0); // Include peerChallengeBonus
   }
 
   toDictionary(): any {
@@ -841,6 +843,7 @@ export class PulsePoints {
       cumulativeStreakBonus: this.cumulativeStreakBonus,
       shareBonus: this.shareBonus,
       referralBonus: this.referralBonus,
+      peerChallengeBonus: this.peerChallengeBonus || 0, // Add to dictionary
       totalStackPoints: this.totalStackPoints,
       totalCommunityPoints: this.totalCommunityPoints,
       totalPoints: this.totalPoints,
@@ -1138,7 +1141,9 @@ class Challenge {
     this.subtitle = data.subtitle;
     this.participants = Array.isArray(data.participants) ? data.participants : [];    
     this.status = data.status || ChallengeStatus.Draft;
-    this.introVideos = data.introVideos || [];
+    this.introVideos = Array.isArray(data.introVideos) 
+      ? data.introVideos.map(videoData => new IntroVideo(videoData)) 
+      : [];
     this.privacy = data.privacy || SweatlistType.Together;
     this.pin = data.pin;
     this.startDate = convertFirestoreTimestamp(data.startDate);

@@ -614,7 +614,7 @@ const BrandGuidelines = () => {
                   
                   <div className="mb-10">
                     <img 
-                      src="/brand/inter-sample.jpg" 
+                      src="inter-sample.jpg" 
                       alt="Inter Font Sample" 
                       className="w-full rounded-lg mb-6"
                     />
@@ -622,7 +622,7 @@ const BrandGuidelines = () => {
                     <p className="text-zinc-400 text-lg mb-6">
                       Inter is our secondary typeface used primarily for digital interfaces, web applications, and 
                       user interfaces. This variable font family is optimized for screen legibility and offers 
-                      versatile weights that adapt seamlessly across different devices and platforms.
+                      versatile weights that adapt seamlessly acwross different devices and platforms.
                     </p>
                     
                     <a href="https://fonts.google.com/specimen/Inter" target="_blank" rel="noopener noreferrer" className="inline-flex items-center text-[#E0FE10] hover:text-white group">

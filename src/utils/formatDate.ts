@@ -1,5 +1,3 @@
-import { Timestamp } from 'firebase/firestore';
-
 export const convertFirestoreTimestamp = (
   timestamp: any
 ): Date => {
@@ -40,4 +38,22 @@ export const dateToUnixTimestamp = (date: Date): number => {
       return Math.floor(Date.now() / 1000);
   }
   return Math.floor(date.getTime() / 1000);
+};
+
+/**
+ * Format a date for display in the UI
+ * @param date The date to format
+ * @returns A string representation of the date (e.g., "Jan 1, 2023")
+ */
+export const formatDate = (date: Date): string => {
+  if (!(date instanceof Date) || isNaN(date.getTime())) {
+    console.warn('formatDate received an invalid Date object');
+    return 'Invalid Date';
+  }
+  
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric'
+  });
 };
