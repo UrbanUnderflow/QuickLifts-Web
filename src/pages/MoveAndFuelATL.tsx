@@ -209,6 +209,27 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
     }
   };
   
+  // Function to generate consistent section classes
+  const getSectionClasses = (bgColor: string = 'bg-zinc-950') => {
+    if (isMobile) {
+      // Mobile: relative positioning, padding, no fixed height, margin between sections
+      return `w-full relative py-16 px-6 mb-8 ${bgColor}`;
+    } else {
+      // Desktop: snap scrolling, fixed height, centered content
+      return `w-full h-screen snap-start flex flex-col items-center justify-center relative ${bgColor}`;
+    }
+  };
+  
+  // Function for consistent content container classes
+  const getContentClasses = (alignment: 'center' | 'left' | 'right' = 'center') => {
+    const alignmentClass = alignment === 'center' ? 'text-center' : alignment === 'left' ? 'text-left' : 'text-right';
+    if (isMobile) {
+      return `w-full max-w-4xl mx-auto px-2 ${alignmentClass}`;
+    } else {
+      return `max-w-4xl mx-auto ${alignmentClass}`;
+    }
+  };
+  
   return (
     <div className="bg-zinc-950 text-white min-h-screen">
       <PageHead 
@@ -289,19 +310,21 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
         </button>
       </div>
       
-      {/* Main content */}
-      <main id="main-content" className={isMobile ? "overflow-y-auto" : "snap-y snap-mandatory h-screen overflow-y-scroll"}>
+      {/* Main content - completely different structure for mobile vs desktop */}
+      <main id="main-content" className={isMobile ? "relative space-y-0 pb-24" : "snap-y snap-mandatory h-screen overflow-y-scroll"}>
+        {/* Apply a common section class based on mobile status */}
+        {/* This template will be applied to all sections */}
         {/* 1. Hero Section */}
         <section 
           ref={(el) => { sectionRefs.current[0] = el as HTMLDivElement; }}
-          className={`w-full ${isMobile ? 'min-h-[90vh] py-16' : 'h-screen snap-start'} flex flex-col items-center justify-center relative overflow-hidden`}
+          className={`${getSectionClasses()} overflow-hidden`}
           style={{ 
             backgroundImage: 'linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7)), url("/atl_hills_event_photo.jpg")', 
             backgroundSize: 'cover', 
             backgroundPosition: 'center'
           }}
         >
-          <div className="max-w-4xl mx-auto px-6 text-center z-10">
+          <div className={`${getContentClasses()} ${!isMobile ? 'z-10' : ''}`}>
             <h1 className={`${isMobile ? 'text-4xl' : 'text-5xl md:text-7xl'} font-bold mb-6 text-white animate-fade-in-up`}>
               Move & Fuel <span className="text-[#E0FE10]">ATL</span>
             </h1>
@@ -323,9 +346,9 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
         {/* 2. Why Pulse Exists Section */}
         <section 
           ref={(el) => { sectionRefs.current[1] = el as HTMLDivElement; }}
-          className={`w-full ${isMobile ? 'min-h-[90vh] py-16' : 'h-screen snap-start'} flex flex-col items-center justify-center relative bg-zinc-900 px-6`}
+          className={getSectionClasses('bg-zinc-900')}
         >
-          <div className="max-w-4xl mx-auto text-center">
+          <div className={getContentClasses()}>
             <h2 className={`${isMobile ? 'text-3xl' : 'text-4xl md:text-5xl'} font-bold mb-8 text-white animate-fade-in-up`}>
               Why <span className="text-[#E0FE10]">Pulse</span> Exists
             </h2>
@@ -417,9 +440,9 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
         {/* 3. Tremaine Grant */}
         <section 
           ref={(el) => { sectionRefs.current[2] = el as HTMLDivElement; }}
-          className={`w-full ${isMobile ? 'min-h-[90vh] py-16' : 'h-screen snap-start'} flex flex-col items-center justify-center relative bg-zinc-950 px-6`}
+          className={getSectionClasses('bg-zinc-950')}
         >
-          <div className="max-w-4xl mx-auto text-center">
+          <div className={getContentClasses()}>
             <h2 className={`${isMobile ? 'text-3xl' : 'text-4xl md:text-5xl'} font-bold mb-8 text-white animate-fade-in-up`}>
               Meet <span className="text-[#E0FE10]">Tremaine</span>
             </h2>
@@ -450,13 +473,13 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
         {/* 4. Hills4ATL */}
         <section 
           ref={(el) => { sectionRefs.current[3] = el as HTMLDivElement; }}
-          className={`w-full ${isMobile ? 'min-h-[90vh] py-16 px-6' : 'h-screen snap-start px-8'} flex flex-col items-center justify-center relative overflow-hidden`}
+          className={`${getSectionClasses('bg-zinc-900')} overflow-hidden`}
         >
-          <div className="absolute inset-0 z-0">
-            <div className="absolute inset-0 bg-black opacity-70 z-10"></div>
-            <video className="absolute min-w-full min-h-full object-cover transform rotate-180" autoPlay loop muted playsInline src="/hillz.mov"></video>
+          <div className={isMobile ? "relative h-64 mb-4 overflow-hidden" : "absolute inset-0 z-0"}>
+            <div className={isMobile ? "relative bg-black opacity-70 h-full w-full" : "absolute inset-0 bg-black opacity-70 z-10"}></div>
+            <video className={isMobile ? "absolute top-0 left-0 h-full w-full object-cover transform rotate-180" : "absolute min-w-full min-h-full object-cover transform rotate-180"} autoPlay loop muted playsInline src="/hillz.mov"></video>
           </div>
-          <div className="max-w-4xl mx-auto text-center relative z-20">
+          <div className={isMobile ? "relative z-10" : "max-w-4xl mx-auto text-center relative z-20"}>
             <h2 className={`${isMobile ? 'text-3xl' : 'text-4xl md:text-5xl'} font-bold mb-8 text-white animate-fade-in-up`}>
               <span className="text-[#E0FE10]">Hills4ATL</span>
             </h2>
@@ -490,7 +513,7 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
         {/* NEW SLIDE 5: Atlanta Meal Prep */}
         <section 
           ref={(el) => { sectionRefs.current[4] = el as HTMLDivElement; }}
-          className={`w-full ${isMobile ? 'min-h-[90vh] py-16' : 'h-screen snap-start'} flex flex-col items-center justify-center relative bg-zinc-950 px-6`}
+          className={getSectionClasses('bg-zinc-950')}
         >
           <div className="max-w-4xl mx-auto text-center">
             <h2 className={`${isMobile ? 'text-3xl' : 'text-4xl md:text-5xl'} font-bold mb-8 text-white animate-fade-in-up`}>
@@ -540,7 +563,7 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
         {/* NEW SLIDE 6: What's a Round? */}
         <section 
           ref={(el) => { sectionRefs.current[5] = el as HTMLDivElement; }}
-          className={`w-full ${isMobile ? 'min-h-[90vh] py-16' : 'h-screen snap-start'} flex flex-col items-center justify-center relative bg-zinc-900 px-6`}
+          className={getSectionClasses('bg-zinc-900')}
         >
           <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center gap-12">
             <div className="md:w-1/2 text-left">
@@ -577,7 +600,7 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
         {/* App Screenshots - Community & Competition */}
         <section 
           ref={(el) => { sectionRefs.current[6] = el as HTMLDivElement; }}
-          className="h-screen w-full snap-start flex flex-col items-center justify-center relative bg-zinc-950 px-6"
+          className={getSectionClasses('bg-zinc-950')}
         >
           <div className="max-w-5xl mx-auto">
             <h2 className="text-4xl md:text-5xl font-bold mb-8 text-white text-center animate-fade-in-up">
@@ -626,7 +649,7 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
         {/* 4. Introducing Move & Fuel ATL */}
         <section 
           ref={(el) => { sectionRefs.current[7] = el as HTMLDivElement; }}
-          className="h-screen w-full snap-start flex flex-col items-center justify-center relative bg-zinc-900 px-6"
+          className={getSectionClasses('bg-zinc-900')}
         >
           <div className="max-w-4xl mx-auto text-center">
             <h2 className="text-4xl md:text-5xl font-bold mb-4 text-white animate-fade-in-up">
@@ -681,7 +704,7 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
         {/* 5. Program Components */}
         <section 
           ref={(el) => { sectionRefs.current[8] = el as HTMLDivElement; }}
-          className="h-screen w-full snap-start flex flex-col items-center justify-center relative bg-black px-6"
+          className={getSectionClasses('bg-black')}
         >
           <div className="max-w-5xl mx-auto">
             <h2 className="text-4xl md:text-5xl font-bold mb-12 text-white text-center animate-fade-in-up">
@@ -759,10 +782,10 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
         {/* 6. Tech Magic Under the Hood */}
         <section 
           ref={(el) => { sectionRefs.current[9] = el as HTMLDivElement; }}
-          className="h-screen w-full snap-start flex flex-col items-center justify-center relative bg-black px-6 overflow-hidden"
+          className={`${getSectionClasses('bg-black')} overflow-hidden`}
         >
           {/* Tech background elements */}
-          <div className="absolute inset-0 z-0">
+          <div className={isMobile ? "hidden" : "absolute inset-0 z-0"}>
             {/* Animated grid background */}
             <div className="absolute inset-0 bg-[url('/grid-pattern.svg')] opacity-20"></div>
             
@@ -1242,27 +1265,11 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
               
               <div className="flex flex-col justify-center items-center animate-fade-in-up animation-delay-300">
                 <div className="bg-zinc-800/50 p-8 rounded-xl text-center mb-6">
-                  <p className="text-5xl font-bold text-[#E0FE10] mb-2">+125</p>
-                  <p className="text-xl text-white font-medium">Projected Orders</p>
+                  <p className="text-5xl font-bold text-[#E0FE10] mb-2">+125 Referral Orders</p>
+                  <p className="text-xl text-white font-medium">Target Orders</p>
                   <p className="text-zinc-400">weekly during challenge</p>
                 </div>
-                
-                <div className="bg-zinc-800/50 p-6 rounded-xl text-center w-full">
-                  <h3 className="text-xl font-bold text-white mb-3">Exclusive Features</h3>
-                  <div className="p-4 bg-black/30 rounded-lg mb-4">
-                    <img 
-                      src="/meal_prep_badge.png" 
-                      alt="Official Meal Prep Partner Badge" 
-                      className="h-16 w-auto mx-auto mb-2"
-                    />
-                    <p className="text-zinc-300 text-sm">
-                      Official Partner Badge in app and promotional materials
-                    </p>
-                  </div>
-                  <p className="text-zinc-300">
-                    First access to future Pulse nutrition partnerships and features
-                  </p>
-                </div>
+
               </div>
             </div>
           </div>
