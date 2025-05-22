@@ -212,8 +212,8 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
   // Function to generate consistent section classes
   const getSectionClasses = (bgColor: string = 'bg-zinc-950') => {
     if (isMobile) {
-      // Mobile: relative positioning, padding, no fixed height, margin between sections
-      return `w-full relative py-16 px-6 mb-8 ${bgColor}`;
+      // Mobile: relative positioning, padding, no fixed height, larger margin between sections
+      return `w-full relative py-16 px-6 mb-24 ${bgColor}`;
     } else {
       // Desktop: snap scrolling, fixed height, centered content
       return `w-full h-screen snap-start flex flex-col items-center justify-center relative ${bgColor}`;
@@ -311,7 +311,7 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
       </div>
       
       {/* Main content - completely different structure for mobile vs desktop */}
-      <main id="main-content" className={isMobile ? "relative space-y-0 pb-24" : "snap-y snap-mandatory h-screen overflow-y-scroll"}>
+      <main id="main-content" className={isMobile ? "relative pb-24 overflow-visible" : "snap-y snap-mandatory h-screen overflow-y-scroll"}>
         {/* Apply a common section class based on mobile status */}
         {/* This template will be applied to all sections */}
         {/* 1. Hero Section */}
