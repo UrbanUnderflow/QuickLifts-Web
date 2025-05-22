@@ -44,3 +44,8 @@ exports.manualTriggerMoveOfTheDay = require("./moveOfTheDay").manualTriggerMoveO
 
 // Export the new check-in callout notification function
 exports.sendCheckinCalloutNotification = require("./challengeNotifications").sendCheckinCalloutNotification; 
+
+// Export the new batch workout fetch function, now directly from its v2 definition
+// The function is defined and exported in getWorkoutsBatch.js using the v2 onCall method.
+// We just need to re-export it here for Firebase to discover.
+exports.getWorkoutsBatch = require("./getWorkoutsBatch").getWorkoutsBatch; 

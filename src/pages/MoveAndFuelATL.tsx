@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Head from 'next/head';
-import { ChevronUp, ChevronDown, Check, Users, Star, Zap, Brain, Dumbbell, Utensils, Map, Award, Heart, Leaf, QrCode, Download } from 'lucide-react';
+import { ChevronUp, ChevronDown, Check, Users, Star, Zap, Brain, Dumbbell, Utensils, Map, Award, Heart, Leaf, QrCode, Download, Gift } from 'lucide-react';
 import Header from '../components/Header';
 import styles from '../styles/moveAndFuel.module.css';
 import PageHead from '../components/PageHead';
@@ -23,7 +23,7 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
   const [isNavigating, setIsNavigating] = useState(false);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
-  const totalSections = 21; // Updated from 21 to 22 after adding Recurring Challenge Ecosystem slide
+  const totalSections = 22; // Adding a new partnership synergy slide
   const sectionRefs = useRef<(HTMLDivElement | null)[]>(Array(totalSections).fill(null));
   
   // Check if we're on mobile
@@ -731,9 +731,140 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
           </div>
         </section>
         
-        {/* 5. Program Components */}
+        {/* NEW: Partnership Synergy - The 360° Lifestyle Engine */}
         <section 
           ref={(el) => { sectionRefs.current[8] = el as HTMLDivElement; }}
+          className={`${getSectionClasses('bg-gradient-to-b from-zinc-900 to-black')} overflow-hidden`}
+        >
+          <div className="max-w-5xl mx-auto">
+            <h2 className="text-4xl md:text-5xl font-bold mb-6 text-white text-center animate-fade-in-up">
+              The <span className="text-[#E0FE10]">Perfect Partnership</span>
+            </h2>
+            <p className="text-xl text-zinc-300 mb-12 text-center max-w-3xl mx-auto animate-fade-in-up animation-delay-300">
+              Three industry leaders creating a seamless 360° fitness lifestyle engine that transforms how Atlanta stays active and healthy.
+            </p>
+            
+            {/* Partnership Flywheel Visualization */}
+             
+            <div className="relative animate-fade-in-up animation-delay-600 mb-12">
+              {/* Center Pulse Logo */}
+              
+              <div className="relative mx-auto w-48 h-48 md:w-56 md:h-56 bg-zinc-900 rounded-full border-4 border-[#E0FE10] flex items-center justify-center z-20 shadow-[0_0_30px_rgba(224,254,16,0.3)]">
+                <div className="absolute inset-0 rounded-full animate-pulse-slow opacity-50 bg-[#E0FE10]/10"></div>
+                <img src="/pulse-logo-white.svg" alt="Pulse" className="w-24 h-24" />
+              </div>
+
+               {/* Value Proposition of the Partnership */}
+            <div className="bg-zinc-900/50 p-6 rounded-xl text-center animate-fade-in-up animation-delay-900">
+              <h3 className="text-2xl font-bold text-white mb-4">Seamless Integration Through Technology</h3>
+              <p className="text-zinc-300">
+                Together, we create a complete fitness ecosystem that's greater than the sum of its parts, seamlessly integrated through the Pulse platform.
+              </p>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+                <div className="p-3 bg-black/30 rounded-lg">
+                  <div className="flex justify-center mb-2">
+                    <Dumbbell className="w-6 h-6 text-[#E0FE10]" />
+                  </div>
+                  <p className="text-white text-sm">Physical Fitness</p>
+                </div>
+                <div className="p-3 bg-black/30 rounded-lg">
+                  <div className="flex justify-center mb-2">
+                    <Utensils className="w-6 h-6 text-[#E0FE10]" />
+                  </div>
+                  <p className="text-white text-sm">Nutrition</p>
+                </div>
+                <div className="p-3 bg-black/30 rounded-lg">
+                  <div className="flex justify-center mb-2">
+                    <Users className="w-6 h-6 text-[#E0FE10]" />
+                  </div>
+                  <p className="text-white text-sm">Social Engagement</p>
+                </div>
+                <div className="p-3 bg-black/30 rounded-lg">
+                  <div className="flex justify-center mb-2">
+                    <Gift className="w-6 h-6 text-[#E0FE10]" />
+                  </div>
+                  <p className="text-white text-sm">Rewards & Incentives</p>
+                </div>
+              </div>
+            </div>
+              
+              {/* Partner Orbits */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-16">
+                {/* Hills4ATL */}
+                <div className="bg-zinc-900/70 p-6 rounded-xl border-2 border-red-400 relative">
+                  <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 w-16 h-16 rounded-full bg-zinc-900 flex items-center justify-center border-2 border-red-400">
+                    <img src="/Hills4ATL.png" alt="Hills4ATL" className="w-12 h-12 object-contain" />
+                  </div>
+                  <h3 className="text-xl font-bold text-red-400 mt-4 mb-4 text-center">Hills4ATL</h3>
+                  <ul className="space-y-2">
+                    <li className="flex items-start gap-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-red-400 mt-2 flex-shrink-0"></div>
+                      <span className="text-zinc-200">In-person community workouts</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-red-400 mt-2 flex-shrink-0"></div>
+                      <span className="text-zinc-200">Social engagement opportunities</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-red-400 mt-2 flex-shrink-0"></div>
+                      <span className="text-zinc-200">Iconic Atlanta event locations</span>
+                    </li>
+                  </ul>
+                </div>
+                
+                {/* Pulse */}
+                <div className="bg-zinc-900/70 p-6 rounded-xl border-2 border-[#E0FE10] relative">
+                  <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 w-16 h-16 rounded-full bg-zinc-900 flex items-center justify-center border-2 border-[#E0FE10]">
+                    <img src="/pulse-logo-green.svg" alt="Pulse" className="w-12 h-12 object-contain" />
+                  </div>
+                  <h3 className="text-xl font-bold text-[#E0FE10] mt-4 mb-4 text-center">Pulse</h3>
+                  <ul className="space-y-2">
+                    <li className="flex items-start gap-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-[#E0FE10] mt-2 flex-shrink-0"></div>
+                      <span className="text-zinc-200">AI-powered fitness programming</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-[#E0FE10] mt-2 flex-shrink-0"></div>
+                      <span className="text-zinc-200">Competition & rewards system</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-[#E0FE10] mt-2 flex-shrink-0"></div>
+                      <span className="text-zinc-200">Growing prize pot & incentives</span>
+                    </li>
+                  </ul>
+                </div>
+                
+                {/* Atlanta Meal Prep */}
+                <div className="bg-zinc-900/70 p-6 rounded-xl border-2 border-blue-400 relative">
+                  <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 w-16 h-16 rounded-full bg-zinc-900 flex items-center justify-center border-2 border-blue-400">
+                    <img src="/ATLMealPrep.svg" alt="Atlanta Meal Prep" className="w-12 h-12 object-contain" />
+                  </div>
+                  <h3 className="text-xl font-bold text-blue-400 mt-4 mb-4 text-center">Atlanta Meal Prep</h3>
+                  <ul className="space-y-2">
+                    <li className="flex items-start gap-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-2 flex-shrink-0"></div>
+                      <span className="text-zinc-200">Nutritional guidance & meal plans</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-2 flex-shrink-0"></div>
+                      <span className="text-zinc-200">Convenient meal delivery</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-2 flex-shrink-0"></div>
+                      <span className="text-zinc-200">Custom macro-optimized options</span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+            
+           
+          </div>
+        </section>
+        
+        {/* 5. Program Components */}
+        <section 
+          ref={(el) => { sectionRefs.current[9] = el as HTMLDivElement; }}
           className={getSectionClasses('bg-black')}
         >
           <div className="max-w-5xl mx-auto">
@@ -741,8 +872,8 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
               Program <span className="text-[#E0FE10]">Components</span>
             </h2>
             
-            {/* Compact Program Components Grid */}
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 animate-fade-in-up animation-delay-300">
+            {/* Compact Program Components Grid - now 2 cols on mobile, 3 on md+ */}
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 animate-fade-in-up animation-delay-300">
               {/* Workouts Component */}
               <div className="bg-zinc-900/80 rounded-xl aspect-square p-4 hover:bg-zinc-800 transition-all duration-300 flex flex-col items-center justify-center text-center">
                 <div className="w-12 h-12 rounded-full bg-[#E0FE10]/20 flex items-center justify-center mb-3">
@@ -797,6 +928,17 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
                   100+ discount codes for community engagement
                 </p>
               </div>
+
+              {/* Prize Pot Component */}
+              <div className="bg-zinc-900/80 rounded-xl aspect-square p-4 hover:bg-zinc-800 transition-all duration-300 flex flex-col items-center justify-center text-center">
+                <div className="w-12 h-12 rounded-full bg-[#E0FE10]/20 flex items-center justify-center mb-3">
+                  <Gift className="h-6 w-6 text-[#E0FE10]" />
+                </div>
+                <h3 className="text-lg font-bold text-white mb-1">Prize Pot</h3>
+                <p className="text-xs text-zinc-400 line-clamp-3">
+                  Cumulative prize pot that grows when new members join
+                </p>
+              </div>
             </div>
             
             {/* Integrated Experience Banner */}
@@ -811,7 +953,7 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
         
         {/* 6. Tech Magic Under the Hood */}
         <section 
-          ref={(el) => { sectionRefs.current[9] = el as HTMLDivElement; }}
+          ref={(el) => { sectionRefs.current[10] = el as HTMLDivElement; }}
           className={`${getSectionClasses('bg-black')} overflow-hidden`}
         >
           {/* Tech background elements */}
@@ -1168,7 +1310,7 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
         
         {/* 7. Value for ATL Hills */}
         <section 
-          ref={(el) => { sectionRefs.current[10] = el as HTMLDivElement; }}
+          ref={(el) => { sectionRefs.current[11] = el as HTMLDivElement; }}
           className={`${getSectionClasses('bg-black')} px-6`}
         >
           <div className="max-w-4xl mx-auto">
@@ -1246,7 +1388,7 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
         
         {/* 8. Value for Meal Prep Co */}
         <section 
-          ref={(el) => { sectionRefs.current[11] = el as HTMLDivElement; }}
+          ref={(el) => { sectionRefs.current[12] = el as HTMLDivElement; }}
           className={`${getSectionClasses('bg-zinc-900')} px-6`}
         >
           <div className="max-w-4xl mx-auto">
@@ -1307,7 +1449,7 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
         
         {/* 9. Go-to-Market Playbook - Channel Strategy */}
         <section 
-          ref={(el) => { sectionRefs.current[12] = el as HTMLDivElement; }}
+          ref={(el) => { sectionRefs.current[13] = el as HTMLDivElement; }}
           className={`${getSectionClasses('bg-black')} px-6`}
         >
           <div className="max-w-5xl mx-auto">
@@ -1427,7 +1569,7 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
         
         {/* 10. Go-to-Market Playbook - Responsibility Matrix */}
         <section 
-          ref={(el) => { sectionRefs.current[13] = el as HTMLDivElement; }}
+          ref={(el) => { sectionRefs.current[14] = el as HTMLDivElement; }}
           className={`${getSectionClasses('bg-zinc-900')} px-6`}
         >
           <div className="max-w-5xl mx-auto">
@@ -1560,7 +1702,7 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
         
         {/* 11. Revenue Model */}
         <section 
-          ref={(el) => { sectionRefs.current[14] = el as HTMLDivElement; }}
+          ref={(el) => { sectionRefs.current[15] = el as HTMLDivElement; }}
           className={`${getSectionClasses('bg-[#0B0B0E]')} px-6`}
         >
           <div className="max-w-5xl mx-auto">
@@ -1652,7 +1794,7 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
         
         {/* 12. Financial Projections */}
         <section 
-          ref={(el) => { sectionRefs.current[15] = el as HTMLDivElement; }}
+          ref={(el) => { sectionRefs.current[16] = el as HTMLDivElement; }}
           className={`${getSectionClasses('bg-[#0B0B0E]')} px-6`}
         >
           <div className="max-w-5xl mx-auto">
@@ -1733,7 +1875,7 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
         
         {/* 13. Recurring Challenge Ecosystem */}
         <section 
-          ref={(el) => { sectionRefs.current[16] = el as HTMLDivElement; }}
+          ref={(el) => { sectionRefs.current[17] = el as HTMLDivElement; }}
           className={`${getSectionClasses('bg-black')} px-6 overflow-hidden`}
         >
           {/* High-tech background elements */}
@@ -1888,7 +2030,7 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
         
         {/* 14. Timeline & Milestones */}
         <section 
-          ref={(el) => { sectionRefs.current[17] = el as HTMLDivElement; }}
+          ref={(el) => { sectionRefs.current[18] = el as HTMLDivElement; }}
           className={`${getSectionClasses('bg-black')} px-6`}
         >
           <div className="max-w-5xl mx-auto">
@@ -2038,7 +2180,7 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
         
         {/* 15. What We Need From You */}
         <section 
-          ref={(el) => { sectionRefs.current[18] = el as HTMLDivElement; }}
+          ref={(el) => { sectionRefs.current[19] = el as HTMLDivElement; }}
           className={`${getSectionClasses('bg-zinc-900')} px-6`}
         >
           <div className="max-w-5xl mx-auto">
@@ -2139,7 +2281,7 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
         
         {/* 16. Next Steps */}
         <section 
-          ref={(el) => { sectionRefs.current[19] = el as HTMLDivElement; }}
+          ref={(el) => { sectionRefs.current[20] = el as HTMLDivElement; }}
           className={`${getSectionClasses('bg-zinc-900')} px-6`}
         >
           <div className="max-w-5xl mx-auto">
@@ -2240,7 +2382,7 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
         
         {/* 17. Closing & CTA */}
         <section 
-          ref={(el) => { sectionRefs.current[20] = el as HTMLDivElement; }}
+          ref={(el) => { sectionRefs.current[21] = el as HTMLDivElement; }}
           className={`${getSectionClasses('bg-transparent')} overflow-hidden`}
           style={{ 
             backgroundImage: 'linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7)), url("/atl_skyline_fitness.jpg")', 
