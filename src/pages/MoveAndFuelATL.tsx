@@ -479,7 +479,7 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
           <div className="absolute inset-0 z-0 overflow-hidden">
             <div className="absolute inset-0 bg-black opacity-85 z-10"></div>
             <video 
-              className="absolute min-w-full min-h-full object-cover transform rotate-180" 
+              className="absolute min-w-full min-h-full object-cover" 
               autoPlay 
               loop 
               muted 
@@ -538,7 +538,7 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
                 />
               </div>
               <div className="md:w-2/3 text-left animate-fade-in-up animation-delay-600">
-                <h3 className="text-2xl font-bold text-[#E0FE10] mb-4">Tasty. Wholesome. Convenient.</h3>
+                <h3 className="text-2xl font-bold text-[#E0FE10] mb-4">Bea Lewis</h3>
                 <p className="text-lg text-zinc-300 mb-4">
                   Established in 2015, Atlanta Meal Prep has become one of the city's leading healthy meal delivery services under Bea Lewis's leadership.
                 </p>
