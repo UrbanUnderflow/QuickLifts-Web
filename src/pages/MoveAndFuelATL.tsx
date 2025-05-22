@@ -1,13 +1,27 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Head from 'next/head';
-import { ChevronUp, ChevronDown, Check, Users, Star, Zap, Brain, Dumbbell, Utensils, Map, Award, Heart, Leaf, QrCode } from 'lucide-react';
+import { ChevronUp, ChevronDown, Check, Users, Star, Zap, Brain, Dumbbell, Utensils, Map, Award, Heart, Leaf, QrCode, Download } from 'lucide-react';
 import Header from '../components/Header';
 import styles from '../styles/moveAndFuel.module.css';
+import PageHead from '../components/PageHead';
+import { GetServerSideProps } from 'next';
+import { adminMethods } from '../api/firebase/admin/methods';
+import { PageMetaData as FirestorePageMetaData } from '../api/firebase/admin/types';
 
-const MoveAndFuel = () => {
+// Define a serializable version of PageMetaData for this page's props
+interface SerializablePageMetaData extends Omit<FirestorePageMetaData, 'lastUpdated'> {
+  lastUpdated: string; 
+}
+
+interface MoveAndFuelATLProps {
+  metaData: SerializablePageMetaData | null;
+}
+
+const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
   const [activeSection, setActiveSection] = useState(0);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isNavigating, setIsNavigating] = useState(false);
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const totalSections = 22; // Updated from 21 to 22 after adding Recurring Challenge Ecosystem slide
   const sectionRefs = useRef<(HTMLDivElement | null)[]>(Array(totalSections).fill(null));
   
@@ -151,13 +165,720 @@ const MoveAndFuel = () => {
     }
   };
   
+  // Function to generate and download PDF
+  const handleDownloadPDF = async () => {
+    try {
+      // Dynamically import html2pdf to avoid SSR issues
+      const html2pdf = (await import('html2pdf.js')).default;
+      setIsGeneratingPDF(true);
+      
+      // Create a completely new white-themed document for PDF
+      const pdfContainer = document.createElement('div');
+      pdfContainer.className = "bg-white text-zinc-900";
+      pdfContainer.style.backgroundColor = "#ffffff";
+      pdfContainer.style.color = "#18181b";
+      pdfContainer.style.fontFamily = 'Arial, sans-serif';
+      pdfContainer.style.padding = '20px';
+      pdfContainer.style.maxWidth = '100%';
+      
+      // Header with logo
+      const header = document.createElement('header');
+      header.style.display = 'flex';
+      header.style.justifyContent = 'space-between';
+      header.style.alignItems = 'center';
+      header.style.marginBottom = '30px';
+      header.style.borderBottom = '1px solid #e5e7eb';
+      header.style.paddingBottom = '20px';
+      
+      const logoContainer = document.createElement('div');
+      logoContainer.style.display = 'flex';
+      logoContainer.style.alignItems = 'center';
+      logoContainer.style.gap = '10px';
+      
+      // Use the SVG logo
+      const logoImg = document.createElement('img');
+      logoImg.src = window.location.origin + '/pulse-logo.svg';
+      logoImg.alt = 'Pulse Logo';
+      logoImg.style.height = '32px';
+      logoImg.style.width = 'auto';
+      
+      logoContainer.appendChild(logoImg);
+      header.appendChild(logoContainer);
+      pdfContainer.appendChild(header);
+      
+      // Main content
+      const main = document.createElement('main');
+      main.style.width = '100%';
+      
+      // Title and Subtitle
+      const title = document.createElement('h1');
+      title.style.fontSize = '28px';
+      title.style.fontWeight = 'bold';
+      title.style.textAlign = 'center';
+      title.style.marginBottom = '12px';
+      title.style.color = '#18181b';
+      title.textContent = 'Move & Fuel ATL';
+      
+      const subtitle = document.createElement('p');
+      subtitle.style.textAlign = 'center';
+      subtitle.style.fontSize = '16px';
+      subtitle.style.color = '#6b7280';
+      subtitle.style.marginBottom = '32px';
+      subtitle.textContent = 'A fitness collective by Pulse, Hills4ATL, and Atlanta Meal Prep';
+      
+      main.appendChild(title);
+      main.appendChild(subtitle);
+      
+      // Create a helper function to add section headers
+      const addSectionHeader = (title: string, number: string) => {
+        const sectionHeader = document.createElement('div');
+        sectionHeader.style.display = 'flex';
+        sectionHeader.style.alignItems = 'center';
+        sectionHeader.style.marginTop = '30px';
+        sectionHeader.style.marginBottom = '15px';
+        
+        const numberDiv = document.createElement('div');
+        numberDiv.style.width = '30px';
+        numberDiv.style.height = '30px';
+        numberDiv.style.borderRadius = '50%';
+        numberDiv.style.backgroundColor = '#E0FE10';
+        numberDiv.style.color = 'black';
+        numberDiv.style.display = 'flex';
+        numberDiv.style.alignItems = 'center';
+        numberDiv.style.justifyContent = 'center';
+        numberDiv.style.fontWeight = 'bold';
+        numberDiv.style.marginRight = '10px';
+        numberDiv.textContent = number;
+        
+        const headerText = document.createElement('h2');
+        headerText.style.fontSize = '20px';
+        headerText.style.fontWeight = 'bold';
+        headerText.style.color = '#18181b';
+        headerText.textContent = title;
+        
+        sectionHeader.appendChild(numberDiv);
+        sectionHeader.appendChild(headerText);
+        return sectionHeader;
+      };
+      
+      // Section 1: Program Overview
+      const section1 = document.createElement('div');
+      section1.appendChild(addSectionHeader('Program Overview', '1'));
+      
+      const description = document.createElement('div');
+      description.style.marginBottom = '20px';
+      description.style.padding = '15px';
+      description.style.borderRadius = '8px';
+      description.style.backgroundColor = '#f9fafb';
+      
+      const descriptionContent = document.createElement('p');
+      descriptionContent.style.lineHeight = '1.6';
+      descriptionContent.style.color = '#4b5563';
+      descriptionContent.textContent = 'Move & Fuel ATL is a 360° lifestyle engine for sustainable fitness and wellness, powered by Rounds on Pulse. This program brings together fitness, nutrition, and community to create a comprehensive wellness experience.';
+      
+      description.appendChild(descriptionContent);
+      section1.appendChild(description);
+      main.appendChild(section1);
+      
+      // Section 2: Why Pulse Exists
+      const section2 = document.createElement('div');
+      section2.appendChild(addSectionHeader('Why Pulse Exists', '2'));
+      
+      const pulseDescription = document.createElement('div');
+      pulseDescription.style.marginBottom = '20px';
+      pulseDescription.style.padding = '15px';
+      pulseDescription.style.borderRadius = '8px';
+      pulseDescription.style.backgroundColor = '#f9fafb';
+      
+      const pulseContent = document.createElement('p');
+      pulseContent.style.lineHeight = '1.6';
+      pulseContent.style.color = '#4b5563';
+      pulseContent.textContent = 'Pulse exists to make fitness more social, accessible, and rewarding. We believe that working out is better when shared, and that technology should connect us in real life, not just virtually.';
+      
+      pulseDescription.appendChild(pulseContent);
+      section2.appendChild(pulseDescription);
+      main.appendChild(section2);
+      
+      // Section 3: Meet Tremaine
+      const section3 = document.createElement('div');
+      section3.appendChild(addSectionHeader('Meet Tremaine', '3'));
+      
+      const founderDiv = document.createElement('div');
+      founderDiv.style.marginBottom = '20px';
+      founderDiv.style.padding = '15px';
+      founderDiv.style.borderRadius = '8px';
+      founderDiv.style.backgroundColor = '#f9fafb';
+      
+      const founderContent = document.createElement('p');
+      founderContent.style.lineHeight = '1.6';
+      founderContent.style.color = '#4b5563';
+      founderContent.textContent = 'Tremaine Grant is the Founder & CEO of Pulse Fitness Collective, reimagining how we facilitate connection and community through fitness experiences. Former Track and Field Athlete at Florida State University and Principle Engineer at companies like GM, IQVIA, and Warby Parker.';
+      
+      founderDiv.appendChild(founderContent);
+      section3.appendChild(founderDiv);
+      main.appendChild(section3);
+      
+      // Section 4: Hills4ATL
+      const section4 = document.createElement('div');
+      section4.appendChild(addSectionHeader('Hills4ATL', '4'));
+      
+      const hills4atlDiv = document.createElement('div');
+      hills4atlDiv.style.marginBottom = '20px';
+      hills4atlDiv.style.padding = '15px';
+      hills4atlDiv.style.borderRadius = '8px';
+      hills4atlDiv.style.backgroundColor = '#f9fafb';
+      
+      const hills4atlContent = document.createElement('p');
+      hills4atlContent.style.lineHeight = '1.6';
+      hills4atlContent.style.color = '#4b5563';
+      hills4atlContent.textContent = 'Hills4ATL is a community fitness experience founded by Alvin "A.B." Bailey that transforms hill workouts into engaging, group-driven events in Atlanta. Known for its high-energy training sessions, enthusiastic community, and effective workout formats that drive results.';
+      
+      hills4atlDiv.appendChild(hills4atlContent);
+      section4.appendChild(hills4atlDiv);
+      main.appendChild(section4);
+      
+      // Section 5: Atlanta Meal Prep
+      const section5 = document.createElement('div');
+      section5.appendChild(addSectionHeader('Atlanta Meal Prep', '5'));
+      
+      const atlMealPrepDiv = document.createElement('div');
+      atlMealPrepDiv.style.marginBottom = '20px';
+      atlMealPrepDiv.style.padding = '15px';
+      atlMealPrepDiv.style.borderRadius = '8px';
+      atlMealPrepDiv.style.backgroundColor = '#f9fafb';
+      
+      const atlMealPrepContent = document.createElement('p');
+      atlMealPrepContent.style.lineHeight = '1.6';
+      atlMealPrepContent.style.color = '#4b5563';
+      atlMealPrepContent.textContent = 'Atlanta Meal Prep is a premium meal preparation service founded by Chef Demetrius Brown, delivering chef-prepared, nutritionally optimized meals across Atlanta. Focused on quality ingredients, flexible meal plans, and supporting a healthy lifestyle.';
+      
+      atlMealPrepDiv.appendChild(atlMealPrepContent);
+      section5.appendChild(atlMealPrepDiv);
+      main.appendChild(section5);
+      
+      // Section 6: Move & Fuel ATL Overview
+      const section6 = document.createElement('div');
+      section6.appendChild(addSectionHeader('Move & Fuel ATL Overview', '6'));
+      
+      const overviewDiv = document.createElement('div');
+      overviewDiv.style.marginBottom = '20px';
+      overviewDiv.style.padding = '15px';
+      overviewDiv.style.borderRadius = '8px';
+      overviewDiv.style.backgroundColor = '#f9fafb';
+      
+      const overviewContent = document.createElement('p');
+      overviewContent.style.lineHeight = '1.6';
+      overviewContent.style.color = '#4b5563';
+      overviewContent.textContent = 'Move & Fuel ATL is a 45-day fitness and nutrition challenge that combines Hills4ATL workouts with Atlanta Meal Prep nutrition, all powered by the Pulse platform for tracking, social engagement, and gamification.';
+      
+      overviewDiv.appendChild(overviewContent);
+      section6.appendChild(overviewDiv);
+      main.appendChild(section6);
+      
+      // Section 7: Program Components
+      const section7 = document.createElement('div');
+      section7.appendChild(addSectionHeader('Program Components', '7'));
+      
+      const componentsList = document.createElement('div');
+      componentsList.style.display = 'grid';
+      componentsList.style.gridTemplateColumns = 'repeat(3, 1fr)';
+      componentsList.style.gap = '15px';
+      componentsList.style.marginBottom = '20px';
+      
+      const components = [
+        { icon: '💪', title: 'Group Workouts', description: 'Community-driven fitness challenges' },
+        { icon: '🥗', title: 'Meal Plans', description: 'Nutrition by Atlanta Meal Prep' },
+        { icon: '🏆', title: 'Gamification', description: 'Points, rewards & leaderboards' },
+        { icon: '📱', title: 'Mobile App', description: 'Seamless tracking & engagement' },
+        { icon: '🤝', title: 'Partnership', description: 'Revenue sharing model' }
+      ];
+      
+      components.forEach(component => {
+        const card = document.createElement('div');
+        card.style.padding = '15px';
+        card.style.borderRadius = '8px';
+        card.style.backgroundColor = '#f9fafb';
+        card.style.display = 'flex';
+        card.style.flexDirection = 'column';
+        
+        const iconSpan = document.createElement('span');
+        iconSpan.style.fontSize = '24px';
+        iconSpan.style.marginBottom = '10px';
+        iconSpan.textContent = component.icon;
+        
+        const cardTitle = document.createElement('h3');
+        cardTitle.style.fontSize = '16px';
+        cardTitle.style.fontWeight = 'bold';
+        cardTitle.style.marginBottom = '5px';
+        cardTitle.textContent = component.title;
+        
+        const cardDesc = document.createElement('p');
+        cardDesc.style.fontSize = '14px';
+        cardDesc.style.color = '#6b7280';
+        cardDesc.textContent = component.description;
+        
+        card.appendChild(iconSpan);
+        card.appendChild(cardTitle);
+        card.appendChild(cardDesc);
+        componentsList.appendChild(card);
+      });
+      
+      section7.appendChild(componentsList);
+      main.appendChild(section7);
+      
+      // Section 8: The Pulse Platform
+      const section8 = document.createElement('div');
+      section8.appendChild(addSectionHeader('The Pulse Platform', '8'));
+      
+      const platformDiv = document.createElement('div');
+      platformDiv.style.marginBottom = '20px';
+      platformDiv.style.padding = '15px';
+      platformDiv.style.borderRadius = '8px';
+      platformDiv.style.backgroundColor = '#f9fafb';
+      
+      const platformContent = document.createElement('p');
+      platformContent.style.lineHeight = '1.6';
+      platformContent.style.color = '#4b5563';
+      platformContent.textContent = 'Pulse is a social fitness platform that brings Rounds (structured workout programs) to life with social engagement, leaderboards, and integrated tracking. The platform connects fitness creators with their communities through shared workout experiences.';
+      
+      platformDiv.appendChild(platformContent);
+      section8.appendChild(platformDiv);
+      main.appendChild(section8);
+      
+      // Section 9: Introducing Rounds
+      const section9 = document.createElement('div');
+      section9.appendChild(addSectionHeader('Introducing Rounds', '9'));
+      
+      const roundsDiv = document.createElement('div');
+      roundsDiv.style.marginBottom = '20px';
+      roundsDiv.style.padding = '15px';
+      roundsDiv.style.borderRadius = '8px';
+      roundsDiv.style.backgroundColor = '#f9fafb';
+      
+      const roundsContent = document.createElement('p');
+      roundsContent.style.lineHeight = '1.6';
+      roundsContent.style.color = '#4b5563';
+      roundsContent.textContent = 'Rounds are structured workout programs on Pulse that transform typically solo daily workouts into group events where people track progress, share victories, and push each other forward over a defined timeline. Think of a Round like a group challenge with daily activities.';
+      
+      roundsDiv.appendChild(roundsContent);
+      section9.appendChild(roundsDiv);
+      main.appendChild(section9);
+      
+      // Section 10: Recurring Challenge Ecosystem
+      const section10 = document.createElement('div');
+      section10.appendChild(addSectionHeader('Recurring Challenge Ecosystem', '10'));
+      
+      const ecosystemDiv = document.createElement('div');
+      ecosystemDiv.style.marginBottom = '20px';
+      ecosystemDiv.style.padding = '15px';
+      ecosystemDiv.style.borderRadius = '8px';
+      ecosystemDiv.style.backgroundColor = '#f9fafb';
+      
+      const ecosystemContent = document.createElement('p');
+      ecosystemContent.style.lineHeight = '1.6';
+      ecosystemContent.style.color = '#4b5563';
+      ecosystemContent.textContent = 'Move & Fuel ATL creates a sustainable ecosystem of fitness challenges that drive recurring revenue, community engagement, and long-term customer relationships across all three partner brands.';
+      
+      ecosystemDiv.appendChild(ecosystemContent);
+      section10.appendChild(ecosystemDiv);
+      main.appendChild(section10);
+      
+      // Section 11: The Challenge Structure
+      const section11 = document.createElement('div');
+      section11.appendChild(addSectionHeader('The Challenge Structure', '11'));
+      
+      const structureDiv = document.createElement('div');
+      structureDiv.style.marginBottom = '20px';
+      structureDiv.style.padding = '15px';
+      structureDiv.style.borderRadius = '8px';
+      structureDiv.style.backgroundColor = '#f9fafb';
+      
+      const structureContent = document.createElement('p');
+      structureContent.style.lineHeight = '1.6';
+      structureContent.style.color = '#4b5563';
+      structureContent.textContent = '45-day fitness and nutrition challenge with 3 weekly Hills4ATL workouts and nutrition guidance from Atlanta Meal Prep, all delivered through the Pulse platform. Includes leaderboards, progress tracking, and community engagement.';
+      
+      structureDiv.appendChild(structureContent);
+      section11.appendChild(structureDiv);
+      main.appendChild(section11);
+      
+      // Section 12: Partner Value Propositions
+      const section12 = document.createElement('div');
+      section12.appendChild(addSectionHeader('Partner Value Propositions', '12'));
+      
+      const partners = [
+        { name: 'Hills4ATL', values: ['Data Insights', 'Member Engagement', 'Enhanced Offering', 'New Revenue Stream'] },
+        { name: 'Atlanta Meal Prep', values: ['Direct Marketing', 'Subscription Revenue', 'Customer Base Growth', 'Data-Driven Insights'] },
+        { name: 'Pulse', values: ['Local Partnerships', 'Content Creation', 'ATL Market Expansion', 'Recurring Revenue'] }
+      ];
+      
+      const partnerCards = document.createElement('div');
+      partnerCards.style.display = 'grid';
+      partnerCards.style.gridTemplateColumns = 'repeat(3, 1fr)';
+      partnerCards.style.gap = '15px';
+      partnerCards.style.marginBottom = '20px';
+      
+      partners.forEach(partner => {
+        const card = document.createElement('div');
+        card.style.padding = '15px';
+        card.style.borderRadius = '8px';
+        card.style.backgroundColor = '#f9fafb';
+        card.style.display = 'flex';
+        card.style.flexDirection = 'column';
+        
+        const partnerName = document.createElement('h3');
+        partnerName.style.fontSize = '18px';
+        partnerName.style.fontWeight = 'bold';
+        partnerName.style.marginBottom = '10px';
+        partnerName.textContent = partner.name;
+        
+        const valuesList = document.createElement('ul');
+        valuesList.style.paddingLeft = '20px';
+        
+        partner.values.forEach(value => {
+          const item = document.createElement('li');
+          item.style.marginBottom = '5px';
+          item.style.color = '#4b5563';
+          item.textContent = value;
+          valuesList.appendChild(item);
+        });
+        
+        card.appendChild(partnerName);
+        card.appendChild(valuesList);
+        partnerCards.appendChild(card);
+      });
+      
+      section12.appendChild(partnerCards);
+      main.appendChild(section12);
+      
+      // Section 13: Value for Hills4ATL
+      const section13 = document.createElement('div');
+      section13.appendChild(addSectionHeader('Value for Hills4ATL', '13'));
+      
+      const hills4atlValueDiv = document.createElement('div');
+      hills4atlValueDiv.style.marginBottom = '20px';
+      hills4atlValueDiv.style.padding = '15px';
+      hills4atlValueDiv.style.borderRadius = '8px';
+      hills4atlValueDiv.style.backgroundColor = '#f9fafb';
+      
+      const hills4atlValueContent = document.createElement('p');
+      hills4atlValueContent.style.lineHeight = '1.6';
+      hills4atlValueContent.style.color = '#4b5563';
+      hills4atlValueContent.textContent = 'Hills4ATL benefits from enhanced community engagement, deeper customer relationships, data-driven insights into member behavior, and a new revenue stream through the challenge participation fees and potential member growth.';
+      
+      hills4atlValueDiv.appendChild(hills4atlValueContent);
+      section13.appendChild(hills4atlValueDiv);
+      main.appendChild(section13);
+      
+      // Section 14: Value for Atlanta Meal Prep
+      const section14 = document.createElement('div');
+      section14.appendChild(addSectionHeader('Value for Atlanta Meal Prep', '14'));
+      
+      const ampValueDiv = document.createElement('div');
+      ampValueDiv.style.marginBottom = '20px';
+      ampValueDiv.style.padding = '15px';
+      ampValueDiv.style.borderRadius = '8px';
+      ampValueDiv.style.backgroundColor = '#f9fafb';
+      
+      const ampValueContent = document.createElement('p');
+      ampValueContent.style.lineHeight = '1.6';
+      ampValueContent.style.color = '#4b5563';
+      ampValueContent.textContent = 'Atlanta Meal Prep gains access to a targeted fitness audience, creates a new marketing channel for meal plan subscriptions, and establishes brand presence in a health-conscious community with high potential for recurring customers.';
+      
+      ampValueDiv.appendChild(ampValueContent);
+      section14.appendChild(ampValueDiv);
+      main.appendChild(section14);
+      
+      // Section 15: Value for Pulse
+      const section15 = document.createElement('div');
+      section15.appendChild(addSectionHeader('Value for Pulse', '15'));
+      
+      const pulseValueDiv = document.createElement('div');
+      pulseValueDiv.style.marginBottom = '20px';
+      pulseValueDiv.style.padding = '15px';
+      pulseValueDiv.style.borderRadius = '8px';
+      pulseValueDiv.style.backgroundColor = '#f9fafb';
+      
+      const pulseValueContent = document.createElement('p');
+      pulseValueContent.style.lineHeight = '1.6';
+      pulseValueContent.style.color = '#4b5563';
+      pulseValueContent.textContent = 'Pulse expands its Atlanta market presence, demonstrates the platform\'s capability to integrate fitness and nutrition partners, and creates a replicable model for future city-specific partnerships with fitness creators and businesses.';
+      
+      pulseValueDiv.appendChild(pulseValueContent);
+      section15.appendChild(pulseValueDiv);
+      main.appendChild(section15);
+      
+      // Section 16: Revenue & Financial Model
+      const section16 = document.createElement('div');
+      section16.appendChild(addSectionHeader('Revenue & Financial Model', '16'));
+      
+      const financialDetails = document.createElement('div');
+      financialDetails.style.padding = '15px';
+      financialDetails.style.borderRadius = '8px';
+      financialDetails.style.backgroundColor = '#f9fafb';
+      financialDetails.style.marginBottom = '20px';
+      
+      const pricingTitle = document.createElement('h3');
+      pricingTitle.style.fontSize = '16px';
+      pricingTitle.style.fontWeight = 'bold';
+      pricingTitle.style.marginBottom = '10px';
+      pricingTitle.textContent = 'Pricing Structure';
+      
+      const pricingDetails = document.createElement('p');
+      pricingDetails.style.marginBottom = '15px';
+      pricingDetails.style.color = '#4b5563';
+      pricingDetails.textContent = 'One-time $59 fee for the 45-day challenge with meal plan options as add-ons. Revenue sharing model splits earnings between all three partners.';
+      
+      const projectionTitle = document.createElement('h3');
+      projectionTitle.style.fontSize = '16px';
+      projectionTitle.style.fontWeight = 'bold';
+      projectionTitle.style.marginBottom = '10px';
+      projectionTitle.textContent = 'Target Projections';
+      
+      const projectionDetails = document.createElement('p');
+      projectionDetails.style.color = '#4b5563';
+      projectionDetails.textContent = 'Goal of 1,000 participants generating approximately $59,000 in gross revenue plus meal plan upgrades.';
+      
+      financialDetails.appendChild(pricingTitle);
+      financialDetails.appendChild(pricingDetails);
+      financialDetails.appendChild(projectionTitle);
+      financialDetails.appendChild(projectionDetails);
+      
+      section16.appendChild(financialDetails);
+      main.appendChild(section16);
+      
+      // Section 17: Revenue Sharing Model
+      const section17 = document.createElement('div');
+      section17.appendChild(addSectionHeader('Revenue Sharing Model', '17'));
+      
+      const revenueModelDiv = document.createElement('div');
+      revenueModelDiv.style.marginBottom = '20px';
+      revenueModelDiv.style.padding = '15px';
+      revenueModelDiv.style.borderRadius = '8px';
+      revenueModelDiv.style.backgroundColor = '#f9fafb';
+      
+      const revenueModelContent = document.createElement('p');
+      revenueModelContent.style.lineHeight = '1.6';
+      revenueModelContent.style.color = '#4b5563';
+      revenueModelContent.textContent = 'The revenue from challenge sign-ups will be distributed equitably among all three partners to ensure alignment of incentives and mutual benefits. Additional revenue from meal plan upgrades will be split between Atlanta Meal Prep and the platform partners.';
+      
+      revenueModelDiv.appendChild(revenueModelContent);
+      section17.appendChild(revenueModelDiv);
+      main.appendChild(section17);
+      
+      // Section 18: Marketing Strategy
+      const section18 = document.createElement('div');
+      section18.appendChild(addSectionHeader('Marketing Strategy', '18'));
+      
+      const marketingDiv = document.createElement('div');
+      marketingDiv.style.marginBottom = '20px';
+      marketingDiv.style.padding = '15px';
+      marketingDiv.style.borderRadius = '8px';
+      marketingDiv.style.backgroundColor = '#f9fafb';
+      
+      const marketingContent = document.createElement('p');
+      marketingContent.style.lineHeight = '1.6';
+      marketingContent.style.color = '#4b5563';
+      marketingContent.textContent = 'Coordinated marketing campaign leveraging all three partner audiences through social media, email, and in-person promotion. Cross-promotion of partners to maximize reach and participant sign-ups. Special emphasis on the community aspect and tangible results.';
+      
+      marketingDiv.appendChild(marketingContent);
+      section18.appendChild(marketingDiv);
+      main.appendChild(section18);
+      
+      // Section 19: Technical Implementation
+      const section19 = document.createElement('div');
+      section19.appendChild(addSectionHeader('Technical Implementation', '19'));
+      
+      const techDiv = document.createElement('div');
+      techDiv.style.marginBottom = '20px';
+      techDiv.style.padding = '15px';
+      techDiv.style.borderRadius = '8px';
+      techDiv.style.backgroundColor = '#f9fafb';
+      
+      const techContent = document.createElement('p');
+      techContent.style.lineHeight = '1.6';
+      techContent.style.color = '#4b5563';
+      techContent.textContent = 'The program will be powered by Pulse\'s Rounds feature with customizations for the Atlanta Meal Prep integration. Special features include QR codes for check-ins at Hills4ATL events, meal tracking integration, and automated leaderboards for engagement.';
+      
+      techDiv.appendChild(techContent);
+      section19.appendChild(techDiv);
+      main.appendChild(section19);
+      
+      // Section 20: User Experience
+      const section20 = document.createElement('div');
+      section20.appendChild(addSectionHeader('User Experience', '20'));
+      
+      const uxDiv = document.createElement('div');
+      uxDiv.style.marginBottom = '20px';
+      uxDiv.style.padding = '15px';
+      uxDiv.style.borderRadius = '8px';
+      uxDiv.style.backgroundColor = '#f9fafb';
+      
+      const uxContent = document.createElement('p');
+      uxContent.style.lineHeight = '1.6';
+      uxContent.style.color = '#4b5563';
+      uxContent.textContent = 'Participants will experience a seamless journey from sign-up through the challenge with intuitive interfaces for tracking workouts, accessing meal plans, and engaging with the community. The focus is on reducing friction while maximizing engagement and motivation.';
+      
+      uxDiv.appendChild(uxContent);
+      section20.appendChild(uxDiv);
+      main.appendChild(section20);
+      
+      // Section 21: Timeline & Next Steps
+      const section21 = document.createElement('div');
+      section21.appendChild(addSectionHeader('Timeline & Next Steps', '21'));
+      
+      const timeline = document.createElement('div');
+      timeline.style.padding = '15px';
+      timeline.style.borderRadius = '8px';
+      timeline.style.backgroundColor = '#f9fafb';
+      timeline.style.marginBottom = '20px';
+      
+      const steps = [
+        { title: 'Partnership Agreement', desc: 'Finalize terms and sign agreements between all parties' },
+        { title: 'Content Creation', desc: 'Develop workout programs and meal plans' },
+        { title: 'Technical Integration', desc: 'Set up APIs, payment processing, and QR codes' },
+        { title: 'Marketing Launch', desc: 'Coordinated announcement across all platforms' },
+        { title: 'Program Launch', desc: 'Begin the 45-day challenge with all partners' }
+      ];
+      
+      const stepsList = document.createElement('div');
+      stepsList.style.display = 'flex';
+      stepsList.style.flexDirection = 'column';
+      stepsList.style.gap = '10px';
+      
+      steps.forEach((step, index) => {
+        const stepItem = document.createElement('div');
+        stepItem.style.display = 'flex';
+        stepItem.style.gap = '10px';
+        
+        const stepNumber = document.createElement('div');
+        stepNumber.style.width = '25px';
+        stepNumber.style.height = '25px';
+        stepNumber.style.borderRadius = '50%';
+        stepNumber.style.backgroundColor = '#E0FE10';
+        stepNumber.style.color = 'black';
+        stepNumber.style.display = 'flex';
+        stepNumber.style.alignItems = 'center';
+        stepNumber.style.justifyContent = 'center';
+        stepNumber.style.fontWeight = 'bold';
+        stepNumber.style.flexShrink = '0';
+        stepNumber.textContent = (index + 1).toString();
+        
+        const stepContent = document.createElement('div');
+        
+        const stepTitle = document.createElement('h4');
+        stepTitle.style.fontSize = '15px';
+        stepTitle.style.fontWeight = 'bold';
+        stepTitle.style.marginBottom = '3px';
+        stepTitle.textContent = step.title;
+        
+        const stepDesc = document.createElement('p');
+        stepDesc.style.fontSize = '14px';
+        stepDesc.style.color = '#6b7280';
+        stepDesc.textContent = step.desc;
+        
+        stepContent.appendChild(stepTitle);
+        stepContent.appendChild(stepDesc);
+        stepItem.appendChild(stepNumber);
+        stepItem.appendChild(stepContent);
+        stepsList.appendChild(stepItem);
+      });
+      
+      timeline.appendChild(stepsList);
+      section21.appendChild(timeline);
+      main.appendChild(section21);
+      
+      // Partner logos section
+      const partnersSection = document.createElement('div');
+      partnersSection.style.marginTop = '40px';
+      partnersSection.style.textAlign = 'center';
+      
+      const partnersTitle = document.createElement('h2');
+      partnersTitle.style.fontSize = '18px';
+      partnersTitle.style.fontWeight = 'bold';
+      partnersTitle.style.marginBottom = '20px';
+      partnersTitle.style.color = '#6b7280';
+      partnersTitle.textContent = 'Partnership';
+      
+      const partnersContainer = document.createElement('div');
+      partnersContainer.style.display = 'flex';
+      partnersContainer.style.justifyContent = 'center';
+      partnersContainer.style.alignItems = 'center';
+      partnersContainer.style.gap = '40px';
+      partnersContainer.style.marginBottom = '30px';
+      
+      const partnerImages = [
+        { src: '/pulse-logo.svg', alt: 'Pulse', width: '100px' },
+        { src: '/Hills4ATL.png', alt: 'Hills4ATL', width: '100px' },
+        { src: '/ATLMealPrep.svg', alt: 'Atlanta Meal Prep', width: '100px' }
+      ];
+      
+      partnerImages.forEach(partner => {
+        const imgContainer = document.createElement('div');
+        imgContainer.style.textAlign = 'center';
+        
+        const img = document.createElement('img');
+        img.src = window.location.origin + partner.src;
+        img.alt = partner.alt;
+        img.style.width = partner.width;
+        img.style.height = 'auto';
+        
+        const label = document.createElement('p');
+        label.style.fontSize = '14px';
+        label.style.color = '#6b7280';
+        label.style.marginTop = '8px';
+        label.textContent = partner.alt;
+        
+        imgContainer.appendChild(img);
+        imgContainer.appendChild(label);
+        partnersContainer.appendChild(imgContainer);
+      });
+      
+      partnersSection.appendChild(partnersTitle);
+      partnersSection.appendChild(partnersContainer);
+      main.appendChild(partnersSection);
+      
+      // Contact information
+      const contactSection = document.createElement('div');
+      contactSection.style.marginTop = '40px';
+      contactSection.style.padding = '20px';
+      contactSection.style.borderTop = '1px solid #e5e7eb';
+      contactSection.style.textAlign = 'center';
+      
+      const contactText = document.createElement('p');
+      contactText.style.fontSize = '14px';
+      contactText.style.color = '#6b7280';
+      contactText.textContent = 'For more information, please contact: partnerships@fitwithpulse.ai';
+      
+      contactSection.appendChild(contactText);
+      main.appendChild(contactSection);
+      
+      pdfContainer.appendChild(main);
+      
+      // Generate PDF using html2pdf
+      const opt = {
+        margin: [10, 10, 10, 10],
+        filename: 'Move_and_Fuel_ATL.pdf',
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      };
+      
+      await html2pdf().from(pdfContainer).set(opt).save();
+      
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+    } finally {
+      setIsGeneratingPDF(false);
+    }
+  };
+  
   return (
     <div className="bg-zinc-950 text-white min-h-screen">
-      <Head>
-        <title>Move & Fuel ATL - Pulse Fitness Collective</title>
-        <meta name="description" content="Move together. Fuel smarter. Earn rewards. A fitness collective by Pulse, ATL Hills, and Meal Prep Partners." />
-        <link rel="icon" href="/favicon.ico" />
-      </Head>
+      <PageHead 
+        metaData={metaData}
+        pageOgUrl="https://fitwithpulse.ai/MoveAndFuelATL"
+      />
       
       <Header 
         onSectionChange={() => {}}
@@ -2203,9 +2924,29 @@ const MoveAndFuel = () => {
                 Let's create a fitness movement that transforms Atlanta's wellness landscape while driving growth for all partners involved.
               </p>
               
-              <button className="px-10 py-5 bg-[#E0FE10] hover:bg-[#d8f521] text-black text-xl font-bold rounded-lg transition-all duration-300 transform hover:scale-105">
-                Yes, Let's Co-Host!
-              </button>
+              <div className="flex flex-col md:flex-row items-center justify-center gap-4">
+                <button className="px-10 py-5 bg-[#E0FE10] hover:bg-[#d8f521] text-black text-xl font-bold rounded-lg transition-all duration-300 transform hover:scale-105">
+                  Yes, Let's Co-Host!
+                </button>
+                
+                <button 
+                  onClick={handleDownloadPDF}
+                  disabled={isGeneratingPDF}
+                  className="px-10 py-5 border-2 border-[#E0FE10] hover:bg-[#E0FE10]/10 text-[#E0FE10] text-xl font-bold rounded-lg transition-all duration-300 flex items-center justify-center gap-2"
+                >
+                  {isGeneratingPDF ? (
+                    <>
+                      <div className="w-5 h-5 border-2 border-t-transparent border-[#E0FE10] rounded-full animate-spin"></div>
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-5 h-5" />
+                      Download PDF
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
             
             <div className="mt-16 grid grid-cols-3 gap-8 animate-fade-in-up animation-delay-600">
@@ -2229,4 +2970,27 @@ const MoveAndFuel = () => {
   );
 };
 
-export default MoveAndFuel; 
+export default MoveAndFuelATL; 
+
+export const getServerSideProps: GetServerSideProps<MoveAndFuelATLProps> = async (context) => {
+  let rawMetaData: FirestorePageMetaData | null = null;
+  try {
+    rawMetaData = await adminMethods.getPageMetaData('MoveAndFuelATL');
+  } catch (error) {
+    console.error("Error fetching page meta data for MoveAndFuelATL page:", error);
+  }
+
+  let serializableMetaData: SerializablePageMetaData | null = null;
+  if (rawMetaData) {
+    serializableMetaData = {
+      ...rawMetaData,
+      lastUpdated: rawMetaData.lastUpdated.toDate().toISOString(),
+    };
+  }
+
+  return {
+    props: {
+      metaData: serializableMetaData,
+    },
+  };
+}; 

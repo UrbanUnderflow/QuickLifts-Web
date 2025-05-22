@@ -873,7 +873,7 @@ exports.sendCheckinCalloutNotification = onDocumentCreated("checkins/{checkinId}
     // --- Award Points ---
     if (challengeId) {
       try {
-        // Award 50 points to Responder
+        // Award 25 points to Responder (changed from 50)
         const responderUserChallengeRef = db.collection(userChallengeCollection)
                                           .where("userId", "==", checkinUser?.id)
                                           .where("challengeId", "==", challengeId)
@@ -883,15 +883,15 @@ exports.sendCheckinCalloutNotification = onDocumentCreated("checkins/{checkinId}
           const userChallengeDoc = responderUserChallengeSnap.docs[0];
           const currentPoints = userChallengeDoc.data().pulsePoints?.peerChallengeBonus || 0;
           await userChallengeDoc.ref.update({ 
-            "pulsePoints.peerChallengeBonus": currentPoints + 50,
-            "pulsePoints.totalPoints": FieldValue.increment(50) // Assuming totalPoints needs manual update
+            "pulsePoints.peerChallengeBonus": currentPoints + 25, // Changed from 50 to 25
+            "pulsePoints.totalPoints": FieldValue.increment(25) // Changed from 50 to 25
           });
-          console.log(`Awarded 50 peerChallengeBonus points to responder ${checkinUser?.id} for challenge ${challengeId}.`);
+          console.log(`Awarded 25 peerChallengeBonus points to responder ${checkinUser?.id} for challenge ${challengeId}.`);
         } else {
           console.warn(`Could not find user-challenge for responder ${checkinUser?.id} in challenge ${challengeId}.`);
         }
 
-        // Award 25 points to Original Challenger
+        // Award 50 points to Original Challenger (changed from 25)
         const originalChallengerUserChallengeRef = db.collection(userChallengeCollection)
                                                   .where("userId", "==", originalChallengerUserId)
                                                   .where("challengeId", "==", challengeId)
@@ -901,10 +901,10 @@ exports.sendCheckinCalloutNotification = onDocumentCreated("checkins/{checkinId}
           const userChallengeDoc = originalChallengerUserChallengeSnap.docs[0];
           const currentPoints = userChallengeDoc.data().pulsePoints?.peerChallengeBonus || 0;
           await userChallengeDoc.ref.update({ 
-            "pulsePoints.peerChallengeBonus": currentPoints + 25,
-            "pulsePoints.totalPoints": FieldValue.increment(25) // Assuming totalPoints needs manual update
+            "pulsePoints.peerChallengeBonus": currentPoints + 50, // Changed from 25 to 50
+            "pulsePoints.totalPoints": FieldValue.increment(50) // Changed from 25 to 50
            });
-          console.log(`Awarded 25 peerChallengeBonus points to original challenger ${originalChallengerUserId} for challenge ${challengeId}.`);
+          console.log(`Awarded 50 peerChallengeBonus points to original challenger ${originalChallengerUserId} for challenge ${challengeId}.`);
         } else {
           console.warn(`Could not find user-challenge for original challenger ${originalChallengerUserId} in challenge ${challengeId}.`);
         }
@@ -915,7 +915,7 @@ exports.sendCheckinCalloutNotification = onDocumentCreated("checkins/{checkinId}
 
     // --- Send Notification to Original Challenger ---
     const title = `${responderUsername} answered your callout!`;
-    const body = `They completed the check-in and you've both earned bonus points! You got +25! 🔥`;
+    const body = `They completed the check-in and you've both earned bonus points! You got +50! 🔥`;
     const dataPayload = {
       checkinId: checkinId,
       responderId: checkinUser?.id || '',
