@@ -23,7 +23,7 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
   const [isNavigating, setIsNavigating] = useState(false);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
-  const totalSections = 22; // Updated from 21 to 22 after adding Recurring Challenge Ecosystem slide
+  const totalSections = 21; // Updated from 21 to 22 after adding Recurring Challenge Ecosystem slide
   const sectionRefs = useRef<(HTMLDivElement | null)[]>(Array(totalSections).fill(null));
   
   // Check if we're on mobile
@@ -1308,7 +1308,7 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
         {/* 9. Go-to-Market Playbook - Channel Strategy */}
         <section 
           ref={(el) => { sectionRefs.current[12] = el as HTMLDivElement; }}
-          className="h-screen w-full snap-start flex flex-col items-center justify-center relative bg-black px-6"
+          className={`${getSectionClasses('bg-black')} px-6`}
         >
           <div className="max-w-5xl mx-auto">
             <h2 className="text-4xl md:text-5xl font-bold mb-4 text-white text-center animate-fade-in-up">
@@ -1428,7 +1428,7 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
         {/* 10. Go-to-Market Playbook - Responsibility Matrix */}
         <section 
           ref={(el) => { sectionRefs.current[13] = el as HTMLDivElement; }}
-          className="h-screen w-full snap-start flex flex-col items-center justify-center relative bg-zinc-900 px-6"
+          className={`${getSectionClasses('bg-zinc-900')} px-6`}
         >
           <div className="max-w-5xl mx-auto">
             <h2 className="text-4xl md:text-5xl font-bold mb-4 text-white text-center animate-fade-in-up">
@@ -1561,7 +1561,7 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
         {/* 11. Revenue Model */}
         <section 
           ref={(el) => { sectionRefs.current[14] = el as HTMLDivElement; }}
-          className="h-screen w-full snap-start flex flex-col items-center justify-center relative bg-[#0B0B0E] px-6"
+          className={`${getSectionClasses('bg-[#0B0B0E]')} px-6`}
         >
           <div className="max-w-5xl mx-auto">
             <h2 className="text-4xl md:text-5xl font-bold mb-4 text-white text-center animate-fade-in-up">
@@ -1653,7 +1653,7 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
         {/* 12. Financial Projections */}
         <section 
           ref={(el) => { sectionRefs.current[15] = el as HTMLDivElement; }}
-          className="h-screen w-full snap-start flex flex-col items-center justify-center relative bg-[#0B0B0E] px-6"
+          className={`${getSectionClasses('bg-[#0B0B0E]')} px-6`}
         >
           <div className="max-w-5xl mx-auto">
             <h2 className="text-4xl md:text-5xl font-bold mb-4 text-white text-center animate-fade-in-up">
@@ -1734,7 +1734,7 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
         {/* 13. Recurring Challenge Ecosystem */}
         <section 
           ref={(el) => { sectionRefs.current[16] = el as HTMLDivElement; }}
-          className="h-screen w-full snap-start flex flex-col items-center justify-center relative bg-black px-6 overflow-hidden"
+          className={`${getSectionClasses('bg-black')} px-6 overflow-hidden`}
         >
           {/* High-tech background elements */}
           <div className="absolute inset-0 z-0">
@@ -1889,7 +1889,7 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
         {/* 14. Timeline & Milestones */}
         <section 
           ref={(el) => { sectionRefs.current[17] = el as HTMLDivElement; }}
-          className="h-screen w-full snap-start flex flex-col items-center justify-center relative bg-black px-6"
+          className={`${getSectionClasses('bg-black')} px-6`}
         >
           <div className="max-w-5xl mx-auto">
             <h2 className="text-4xl md:text-5xl font-bold mb-12 text-white text-center animate-fade-in-up">
@@ -2039,7 +2039,7 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
         {/* 15. What We Need From You */}
         <section 
           ref={(el) => { sectionRefs.current[18] = el as HTMLDivElement; }}
-          className="h-screen w-full snap-start flex flex-col items-center justify-center relative bg-zinc-900 px-6"
+          className={`${getSectionClasses('bg-zinc-900')} px-6`}
         >
           <div className="max-w-5xl mx-auto">
             <h2 className="text-4xl md:text-5xl font-bold mb-12 text-white text-center animate-fade-in-up">
@@ -2140,7 +2140,7 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
         {/* 16. Next Steps */}
         <section 
           ref={(el) => { sectionRefs.current[19] = el as HTMLDivElement; }}
-          className="h-screen w-full snap-start flex flex-col items-center justify-center relative bg-zinc-900 px-6"
+          className={`${getSectionClasses('bg-zinc-900')} px-6`}
         >
           <div className="max-w-5xl mx-auto">
             <h2 className="text-4xl md:text-5xl font-bold mb-4 text-white text-center animate-fade-in-up">
@@ -2241,7 +2241,7 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
         {/* 17. Closing & CTA */}
         <section 
           ref={(el) => { sectionRefs.current[20] = el as HTMLDivElement; }}
-          className="h-screen w-full snap-start flex flex-col items-center justify-center relative overflow-hidden"
+          className={`${getSectionClasses('bg-transparent')} overflow-hidden`}
           style={{ 
             backgroundImage: 'linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7)), url("/atl_skyline_fitness.jpg")', 
             backgroundSize: 'cover', 
