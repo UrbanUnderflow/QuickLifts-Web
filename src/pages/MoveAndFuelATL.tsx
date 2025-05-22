@@ -1169,7 +1169,7 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
         {/* 7. Value for ATL Hills */}
         <section 
           ref={(el) => { sectionRefs.current[10] = el as HTMLDivElement; }}
-          className="h-screen w-full snap-start flex flex-col items-center justify-center relative bg-black px-6"
+          className={`${getSectionClasses('bg-black')} px-6`}
         >
           <div className="max-w-4xl mx-auto">
             <h2 className="text-4xl md:text-5xl font-bold mb-12 text-white text-center animate-fade-in-up">
@@ -1247,7 +1247,7 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
         {/* 8. Value for Meal Prep Co */}
         <section 
           ref={(el) => { sectionRefs.current[11] = el as HTMLDivElement; }}
-          className="h-screen w-full snap-start flex flex-col items-center justify-center relative bg-zinc-900 px-6"
+          className={`${getSectionClasses('bg-zinc-900')} px-6`}
         >
           <div className="max-w-4xl mx-auto">
             <h2 className="text-4xl md:text-5xl font-bold mb-12 text-white text-center animate-fade-in-up">
