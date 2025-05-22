@@ -473,13 +473,23 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
         {/* 4. Hills4ATL */}
         <section 
           ref={(el) => { sectionRefs.current[3] = el as HTMLDivElement; }}
-          className={`${getSectionClasses('bg-zinc-900')} overflow-hidden`}
+          className={`${getSectionClasses('bg-zinc-900')} overflow-hidden relative`}
         >
-          <div className={isMobile ? "relative h-64 mb-4 overflow-hidden" : "absolute inset-0 z-0"}>
-            <div className={isMobile ? "relative bg-black opacity-70 h-full w-full" : "absolute inset-0 bg-black opacity-70 z-10"}></div>
-            <video className={isMobile ? "absolute top-0 left-0 h-full w-full object-cover transform rotate-180" : "absolute min-w-full min-h-full object-cover transform rotate-180"} autoPlay loop muted playsInline src="/hillz.mov"></video>
+          {/* Video Background */}
+          <div className="absolute inset-0 z-0 overflow-hidden">
+            <div className="absolute inset-0 bg-black opacity-70 z-10"></div>
+            <video 
+              className="absolute min-w-full min-h-full object-cover transform rotate-180" 
+              autoPlay 
+              loop 
+              muted 
+              playsInline 
+              src="/hillz.mov"
+            ></video>
           </div>
-          <div className={isMobile ? "relative z-10" : "max-w-4xl mx-auto text-center relative z-20"}>
+          
+          {/* Content */}
+          <div className={`${getContentClasses()} relative z-20`}>
             <h2 className={`${isMobile ? 'text-3xl' : 'text-4xl md:text-5xl'} font-bold mb-8 text-white animate-fade-in-up`}>
               <span className="text-[#E0FE10]">Hills4ATL</span>
             </h2>
@@ -612,11 +622,31 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
             
             {/* App screenshots grid - smaller constrained size */}
             <div className="flex flex-col items-center mb-10 animate-fade-in-up animation-delay-600">
-              <div className="mx-auto w-full max-w-[250px]">
-                <div className="rounded-xl overflow-hidden shadow-lg border border-zinc-800 aspect-[9/16]">
-                  <img src="/IMG_6622.PNG" alt="Activity feed" className="w-full h-full object-contain" />
-                  <div className="p-2 bg-black/70">
-                    <p className="text-white text-xs font-medium text-center">Activity Feed</p>
+              <div className="flex gap-6 justify-center">
+                <div className="w-full max-w-[200px]">
+                  <div className="rounded-xl overflow-hidden aspect-[6/20]">
+                    <img src="/IMG_6622.PNG" alt="Activity feed" className="w-full h-full object-contain" />
+                    <div className="p-2 bg-black">
+                      <p className="text-white text-xs font-medium text-center">Activity Feed</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="w-full max-w-[190px] flex flex-col gap-3">
+                  <div>
+                    <div className="rounded-xl overflow-hidden aspect-[9/16]">
+                      <img src="/IMG_6627.PNG" alt="Leaderboard" className="w-full h-full object-contain" />
+                      <div className="p-2 bg-black">
+                        <p className="text-white text-xs font-medium text-center">Leaderboard</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="rounded-xl overflow-hidden aspect-[9/16]">
+                      <img src="/IMG_6631.PNG" alt="Progress Tracking" className="w-full h-full object-contain" />
+                      <div className="p-2 bg-black">
+                        <p className="text-white text-xs font-medium text-center">Progress Tracking</p>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1427,15 +1457,19 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
                   </li>
                   <li className="flex items-start gap-2">
                     <div className="w-1.5 h-1.5 rounded-full bg-[#E0FE10] mt-2 flex-shrink-0"></div>
-                    <span>$3,000 ad spend fronting</span>
+                    <span>Email marketing to 100K list</span>
                   </li>
                   <li className="flex items-start gap-2">
                     <div className="w-1.5 h-1.5 rounded-full bg-[#E0FE10] mt-2 flex-shrink-0"></div>
-                    <span>Email marketing to 50K users</span>
+                    <span>Press tour facilitation</span>
                   </li>
                   <li className="flex items-start gap-2">
                     <div className="w-1.5 h-1.5 rounded-full bg-[#E0FE10] mt-2 flex-shrink-0"></div>
-                    <span>Content calendar & creative</span>
+                    <span>QR discount cards & swag</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-[#E0FE10] mt-2 flex-shrink-0"></div>
+                    <span>Gym + cardio programming</span>
                   </li>
                 </ul>
               </div>
@@ -1452,19 +1486,19 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
                 <ul className="space-y-2 text-zinc-300">
                   <li className="flex items-start gap-2">
                     <div className="w-1.5 h-1.5 rounded-full bg-[#E0FE10] mt-2 flex-shrink-0"></div>
-                    <span>Member promotion (2,500)</span>
+                    <span>Marketing at in-person events</span>
                   </li>
                   <li className="flex items-start gap-2">
                     <div className="w-1.5 h-1.5 rounded-full bg-[#E0FE10] mt-2 flex-shrink-0"></div>
-                    <span>Social media amplification</span>
+                    <span>Social media promotion</span>
                   </li>
                   <li className="flex items-start gap-2">
                     <div className="w-1.5 h-1.5 rounded-full bg-[#E0FE10] mt-2 flex-shrink-0"></div>
-                    <span>5 in-person events hosting</span>
+                    <span>QR card distribution to members</span>
                   </li>
                   <li className="flex items-start gap-2">
                     <div className="w-1.5 h-1.5 rounded-full bg-[#E0FE10] mt-2 flex-shrink-0"></div>
-                    <span>Weekly challenges content</span>
+                    <span>Event schedule & point generation</span>
                   </li>
                 </ul>
               </div>
@@ -1481,26 +1515,32 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
                 <ul className="space-y-2 text-zinc-300">
                   <li className="flex items-start gap-2">
                     <div className="w-1.5 h-1.5 rounded-full bg-[#E0FE10] mt-2 flex-shrink-0"></div>
-                    <span>Customer promotion (4,000)</span>
+                    <span>Email marketing to customer base</span>
                   </li>
                   <li className="flex items-start gap-2">
                     <div className="w-1.5 h-1.5 rounded-full bg-[#E0FE10] mt-2 flex-shrink-0"></div>
-                    <span>Social media amplification</span>
+                    <span>Flyers with food deliveries</span>
                   </li>
                   <li className="flex items-start gap-2">
                     <div className="w-1.5 h-1.5 rounded-full bg-[#E0FE10] mt-2 flex-shrink-0"></div>
-                    <span>Meal plan content creation</span>
+                    <span>Social media promotion</span>
                   </li>
                   <li className="flex items-start gap-2">
                     <div className="w-1.5 h-1.5 rounded-full bg-[#E0FE10] mt-2 flex-shrink-0"></div>
-                    <span>In-app nutrition integration</span>
+                    <span>Meal programming collaboration</span>
                   </li>
                 </ul>
               </div>
             </div>
             
+            {/* Shared Responsibilities Banner */}
+            <div className="bg-zinc-800/70 p-4 rounded-xl mb-6 animate-fade-in-up animation-delay-450">
+              <h3 className="text-center text-white font-medium mb-2">Shared Promotional Responsibilities</h3>
+              <p className="text-center text-zinc-400 text-sm">All partners commit to consistent social media promotion, community engagement, and optional individual press outreach.</p>
+            </div>
+            
             {/* Confidence Footer Strip */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 animate-fade-in-up animation-delay-450">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 animate-fade-in-up animation-delay-600">
               <div className="bg-zinc-900/70 p-4 rounded-xl text-center">
                 <p className="text-[#E0FE10] text-2xl font-bold mb-1">&gt;1,000</p>
                 <p className="text-white font-medium">Seats forecasted</p>
@@ -1511,8 +1551,8 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
                 <p className="text-zinc-500 text-xs">after revenue share</p>
               </div>
               <div className="bg-zinc-900/70 p-4 rounded-xl text-center">
-                <p className="text-[#E0FE10] text-2xl font-bold mb-1">85%</p>
-                <p className="text-white font-medium">Of spend fronted by Pulse</p>
+                <p className="text-[#E0FE10] text-2xl font-bold mb-1">3</p>
+                <p className="text-white font-medium">Equal promotion partners</p>
               </div>
             </div>
           </div>
