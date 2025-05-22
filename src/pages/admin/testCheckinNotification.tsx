@@ -2,11 +2,11 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Head from 'next/head';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import { db } from '../../api/firebase/config'; // Firestore instance
-import { collection, doc, setDoc, deleteDoc, getDocs, Timestamp } from 'firebase/firestore';
+import { collection, doc, setDoc, deleteDoc, getDocs, Timestamp, query, orderBy, limit, where } from 'firebase/firestore';
 import { User, ShortUser } from '../../api/firebase/user/types';
 import { SweatlistCollection, Challenge } from '../../api/firebase/workout/types'; // Added Challenge types
 import { workoutService } from '../../api/firebase/workout/service'; // Added workoutService
-import { Loader2, Search, CheckCircle, AlertTriangle, XCircle, User as UserIcon, AtSign, RefreshCw, ListChecks } from 'lucide-react'; // Added ListChecks icon
+import { Loader2, Search, CheckCircle, AlertTriangle, XCircle, User as UserIcon, AtSign, RefreshCw, ListChecks, ChevronDown, ChevronUp, Eye, Calendar, ChevronRight } from 'lucide-react'; // Added icons
 import { v4 as uuidv4 } from 'uuid';
 
 const USER_CACHE_KEY = 'adminAllUsersCache';
@@ -28,6 +28,23 @@ interface TestCheckinData {
   challengeId?: string; // Added challengeId for the notification payload
   createdAt: Timestamp;
   updatedAt: Timestamp;
+}
+
+// Interface for check-in records displayed in the table
+interface CheckinRecord {
+  id: string;
+  caption: string;
+  user: Record<string, any>;
+  roundId?: string;
+  challengeId?: string;
+  calloutUser?: Record<string, any>;
+  calloutUserFCMToken?: string;
+  createdAt: Timestamp;
+  workoutSummary?: {
+    workoutTitle?: string;
+    id?: string;
+  };
+  // Add other relevant fields
 }
 
 const TestCheckinNotificationPage: React.FC = () => {
@@ -71,6 +88,14 @@ const TestCheckinNotificationPage: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Add new state for check-ins table
+  const [allCheckins, setAllCheckins] = useState<CheckinRecord[]>([]);
+  const [isLoadingCheckins, setIsLoadingCheckins] = useState(false);
+  const [checkinLimit, setCheckinLimit] = useState(20);
+  const [expandedCheckin, setExpandedCheckin] = useState<string | null>(null);
+  const [checkinSearchQuery, setCheckinSearchQuery] = useState('');
+  const [filteredCheckins, setFilteredCheckins] = useState<CheckinRecord[]>([]);
 
   const resetMessages = () => {
     setSuccessMessage(null);
@@ -308,6 +333,69 @@ const TestCheckinNotificationPage: React.FC = () => {
     handleChallengeSearchLogic(newQuery, setChallengeSearchResults);
   }, [handleChallengeSearchLogic]);
 
+  // Function to fetch check-ins from Firestore
+  const fetchCheckins = useCallback(async () => {
+    setIsLoadingCheckins(true);
+    try {
+      console.log('[Checkins] Fetching check-ins from Firestore...');
+      const checkinsRef = collection(db, 'checkins');
+      const checkinsQuery = query(checkinsRef, orderBy('createdAt', 'desc'), limit(checkinLimit));
+      const querySnapshot = await getDocs(checkinsQuery);
+      
+      const checkinsData = querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+        } as CheckinRecord;
+      });
+      
+      setAllCheckins(checkinsData);
+      setFilteredCheckins(checkinsData);
+      console.log(`[Checkins] ${checkinsData.length} check-ins fetched from Firestore.`);
+      setErrorMessage(null);
+    } catch (error) {
+      console.error('[Checkins] Error fetching check-ins from Firestore:', error);
+      setErrorMessage('Failed to fetch check-ins from Firestore.');
+    } finally {
+      setIsLoadingCheckins(false);
+    }
+  }, [checkinLimit]);
+  
+  // Effect to fetch check-ins on mount
+  useEffect(() => {
+    fetchCheckins();
+  }, [fetchCheckins]);
+  
+  // Function to filter check-ins based on search query
+  useEffect(() => {
+    if (!checkinSearchQuery.trim()) {
+      setFilteredCheckins(allCheckins);
+      return;
+    }
+    
+    const lowerCaseQuery = checkinSearchQuery.toLowerCase();
+    const filtered = allCheckins.filter(checkin => 
+      checkin.id.toLowerCase().includes(lowerCaseQuery) ||
+      checkin.caption.toLowerCase().includes(lowerCaseQuery) ||
+      checkin.user?.username?.toLowerCase().includes(lowerCaseQuery) ||
+      checkin.calloutUser?.username?.toLowerCase().includes(lowerCaseQuery) ||
+      checkin.roundId?.toLowerCase().includes(lowerCaseQuery) ||
+      checkin.challengeId?.toLowerCase().includes(lowerCaseQuery)
+    );
+    
+    setFilteredCheckins(filtered);
+  }, [checkinSearchQuery, allCheckins]);
+  
+  // Function to toggle expanded view for a check-in
+  const toggleExpandedCheckin = (checkinId: string) => {
+    if (expandedCheckin === checkinId) {
+      setExpandedCheckin(null);
+    } else {
+      setExpandedCheckin(checkinId);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     resetMessages();
@@ -362,17 +450,6 @@ const TestCheckinNotificationPage: React.FC = () => {
       setSuccessMessage(`Test check-in ${testCheckinId} created successfully. It will be auto-deleted in ~20 seconds.`);
       console.log(`[Submit] Test check-in ${testCheckinId} created successfully.`);
 
-      // Comment out the following lines to prevent form reset
-      // setCaption('');
-      // setMockWorkoutTitle('Test Workout Callout');
-      // setRoundId('test-round-callout');
-      // setSelectedChallenger(null);
-      // setChallengerSearchQuery('');
-      // setSelectedCalloutUser(null);
-      // setCalloutUserSearchQuery('');
-      // setSelectedChallenge(null);
-      // setChallengeSearchQuery('');
-
       // Auto-delete the test document after ~20 seconds
       setTimeout(async () => {
         try {
@@ -399,7 +476,7 @@ const TestCheckinNotificationPage: React.FC = () => {
         <title>Test Check-in Callout Notification | Pulse Admin</title>
       </Head>
       <div className="min-h-screen bg-[#111417] text-white py-10 px-4">
-        <div className="max-w-2xl mx-auto">
+        <div className="max-w-4xl mx-auto">
           <div className="flex justify-between items-center mb-4">
             <h1 className="text-2xl font-bold text-[#d7ff00] flex items-center">
               Test Check-in Callout Notification
@@ -414,12 +491,20 @@ const TestCheckinNotificationPage: React.FC = () => {
                 {isRefreshingUsers ? 'Refreshing Users...' : 'Refresh User List'}
               </button>
               <button
-                onClick={() => fetchAndCacheChallenges(true)} // Renamed handleRefreshChallengeCache to direct call
+                onClick={() => fetchAndCacheChallenges(true)}
                 disabled={isLoadingAllChallenges || isRefreshingChallenges}
                 className="flex items-center px-3 py-2 rounded-lg text-sm font-medium bg-[#262a30] text-[#d7ff00] hover:bg-[#31363c] border border-gray-700 transition disabled:opacity-70"
               >
                 {isRefreshingChallenges ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : <RefreshCw size={16} className="mr-2"/>}
                 {isRefreshingChallenges ? 'Refreshing Challenges...' : 'Refresh Challenge List'}
+              </button>
+              <button
+                onClick={fetchCheckins}
+                disabled={isLoadingCheckins}
+                className="flex items-center px-3 py-2 rounded-lg text-sm font-medium bg-[#262a30] text-[#d7ff00] hover:bg-[#31363c] border border-gray-700 transition disabled:opacity-70"
+              >
+                {isLoadingCheckins ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : <RefreshCw size={16} className="mr-2"/>}
+                {isLoadingCheckins ? 'Refreshing Check-ins...' : 'Refresh Check-ins'}
               </button>
             </div>
           </div>
@@ -525,6 +610,171 @@ const TestCheckinNotificationPage: React.FC = () => {
                 </div>
               )}
             </form>
+          </div>
+          
+          {/* Check-ins Table */}
+          <div className="bg-[#1a1e24] rounded-xl p-6 shadow-xl mb-6">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-[#d7ff00]">Recent Check-ins</h2>
+              <div className="flex items-center">
+                <div className="relative flex-1 mr-2">
+                  <input
+                    type="text"
+                    value={checkinSearchQuery}
+                    onChange={(e) => setCheckinSearchQuery(e.target.value)}
+                    placeholder="Search check-ins..."
+                    className="w-full bg-[#262a30] border border-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#d7ff00] transition text-white placeholder-gray-500"
+                  />
+                  <Search size={16} className="absolute right-3 top-3 text-gray-500" />
+                </div>
+                <select 
+                  value={checkinLimit}
+                  onChange={(e) => setCheckinLimit(Number(e.target.value))}
+                  className="bg-[#262a30] border border-gray-700 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#d7ff00] transition text-white"
+                >
+                  <option value={10}>10 rows</option>
+                  <option value={20}>20 rows</option>
+                  <option value={50}>50 rows</option>
+                  <option value={100}>100 rows</option>
+                </select>
+              </div>
+            </div>
+            
+            {isLoadingCheckins ? (
+              <div className="flex justify-center p-10">
+                <Loader2 size={30} className="animate-spin text-[#d7ff00]" />
+              </div>
+            ) : filteredCheckins.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr className="border-b border-gray-700 text-left text-gray-400 text-sm">
+                      <th className="p-3"></th>
+                      <th className="p-3">ID</th>
+                      <th className="p-3">User</th>
+                      <th className="p-3">Callout User</th>
+                      <th className="p-3">Challenge ID</th>
+                      <th className="p-3">FCM Token</th>
+                      <th className="p-3">Created</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredCheckins.map((checkin) => (
+                      <React.Fragment key={checkin.id}>
+                        <tr 
+                          className={`border-b border-gray-800 hover:bg-[#262a30] cursor-pointer ${expandedCheckin === checkin.id ? 'bg-[#262a30]' : ''}`}
+                          onClick={() => toggleExpandedCheckin(checkin.id)}
+                        >
+                          <td className="p-3 text-center">
+                            {expandedCheckin === checkin.id ? (
+                              <ChevronUp size={16} className="text-[#d7ff00]" />
+                            ) : (
+                              <ChevronDown size={16} className="text-gray-500" />
+                            )}
+                          </td>
+                          <td className="p-3 font-mono text-sm text-gray-300">{checkin.id.substring(0, 10)}...</td>
+                          <td className="p-3">{checkin.user?.username || 'N/A'}</td>
+                          <td className="p-3">{checkin.calloutUser?.username || 'None'}</td>
+                          <td className="p-3 font-mono text-sm text-gray-300">
+                            {checkin.challengeId ? checkin.challengeId.substring(0, 8) + '...' : 'None'}
+                          </td>
+                          <td className="p-3">
+                            {checkin.calloutUserFCMToken ? (
+                              <CheckCircle size={16} className="text-green-500" />
+                            ) : (
+                              <XCircle size={16} className="text-red-500" />
+                            )}
+                          </td>
+                          <td className="p-3 text-sm text-gray-300">
+                            {checkin.createdAt && checkin.createdAt.toDate 
+                              ? checkin.createdAt.toDate().toLocaleString() 
+                              : 'Invalid date'}
+                          </td>
+                        </tr>
+                        {expandedCheckin === checkin.id && (
+                          <tr className="bg-[#262a30]">
+                            <td colSpan={7} className="p-4">
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                  <h4 className="text-[#d7ff00] font-medium mb-2">Basic Info</h4>
+                                  <div className="space-y-2 text-sm">
+                                    <div><span className="text-gray-400">ID:</span> {checkin.id}</div>
+                                    <div><span className="text-gray-400">Caption:</span> {checkin.caption || 'None'}</div>
+                                    <div><span className="text-gray-400">Round ID:</span> {checkin.roundId || 'None'}</div>
+                                    <div><span className="text-gray-400">Challenge ID:</span> {checkin.challengeId || 'None'}</div>
+                                    {checkin.workoutSummary && (
+                                      <div>
+                                        <span className="text-gray-400">Workout:</span> {checkin.workoutSummary.workoutTitle || 'N/A'} 
+                                        {checkin.workoutSummary.id && <span className="text-xs text-gray-500 ml-1">({checkin.workoutSummary.id})</span>}
+                                      </div>
+                                    )}
+                                    <div>
+                                      <span className="text-gray-400">Created:</span> {checkin.createdAt && checkin.createdAt.toDate 
+                                        ? checkin.createdAt.toDate().toLocaleString() 
+                                        : 'Invalid date'}
+                                    </div>
+                                  </div>
+                                </div>
+                                <div>
+                                  <h4 className="text-[#d7ff00] font-medium mb-2">User Info</h4>
+                                  <div className="space-y-2 text-sm">
+                                    <div><span className="text-gray-400">User:</span> {checkin.user?.username || 'N/A'} {checkin.user?.displayName ? `(${checkin.user.displayName})` : ''}</div>
+                                    <div><span className="text-gray-400">User ID:</span> {checkin.user?.id || 'N/A'}</div>
+                                    {checkin.calloutUser && (
+                                      <>
+                                        <div className="border-t border-gray-700 pt-2 mt-2"></div>
+                                        <div><span className="text-gray-400">Callout User:</span> {checkin.calloutUser?.username || 'None'} {checkin.calloutUser?.displayName ? `(${checkin.calloutUser.displayName})` : ''}</div>
+                                        <div><span className="text-gray-400">Callout User ID:</span> {checkin.calloutUser?.id || 'None'}</div>
+                                        <div>
+                                          <span className="text-gray-400">FCM Token:</span> 
+                                          {checkin.calloutUserFCMToken ? (
+                                            <span className="text-green-500 font-medium ml-1">Present</span>
+                                          ) : (
+                                            <span className="text-red-500 font-medium ml-1">Missing</span>
+                                          )}
+                                        </div>
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                              
+                              {/* Raw Data Section */}
+                              <div className="mt-4">
+                                <details className="text-sm">
+                                  <summary className="cursor-pointer text-gray-400 hover:text-white focus:outline-none py-1">
+                                    <span className="flex items-center">
+                                      <ChevronRight size={16} className="mr-1" />
+                                      View Raw Data
+                                    </span>
+                                  </summary>
+                                  <pre className="mt-2 p-3 bg-[#1f2327] rounded overflow-x-auto text-xs text-gray-300">
+                                    {JSON.stringify(checkin, null, 2)}
+                                  </pre>
+                                </details>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="text-center py-8 text-gray-400">
+                {checkinSearchQuery ? (
+                  <>No check-ins match your search query "<span className="text-white">{checkinSearchQuery}</span>".</>
+                ) : (
+                  <>No check-ins found. Try refreshing or increasing the limit.</>
+                )}
+              </div>
+            )}
+            
+            <div className="mt-4 text-right text-sm text-gray-400">
+              Showing {filteredCheckins.length} of {allCheckins.length} check-ins
+              {checkinSearchQuery && <span> (filtered by search)</span>}
+            </div>
           </div>
         </div>
       </div>

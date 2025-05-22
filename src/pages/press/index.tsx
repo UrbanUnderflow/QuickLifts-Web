@@ -1391,42 +1391,84 @@ const PressKit: React.FC<PressKitPageProps> = ({ metaData }) => {
                         <div className="lg:w-1/2 order-1 lg:order-2">
                         <div className="grid grid-cols-2 gap-6">
                             <div className="col-span-2 aspect-[4/3] bg-zinc-800 rounded-xl overflow-hidden relative group">
-                            <img 
-                                src={pressKitAssets?.founderLandscape || "/founder-landscape.jpg"} 
-                                alt="Tremaine Grant - Landscape" 
-                                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                            />
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end">
-                                <div className="p-4">
-                                <p className="text-white font-medium">Tremaine Grant</p>
-                                <p className="text-zinc-300 text-sm">Landscape - High Res</p>
+                            <a 
+                                href={pressKitAssets?.founderLandscape || "/founder-landscape.jpg"} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                            >
+                                <img 
+                                    src={pressKitAssets?.founderLandscape || "/founder-landscape.jpg"} 
+                                    alt="Tremaine Grant - Landscape" 
+                                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                                />
+                            </a>
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end justify-between p-4">
+                                <div>
+                                    <p className="text-white font-medium">Tremaine Grant</p>
+                                    <p className="text-zinc-300 text-sm">Landscape - High Res</p>
                                 </div>
+                                <a 
+                                    href={pressKitAssets?.founderLandscape || "/founder-landscape.jpg"} 
+                                    download="Tremaine_Grant_Landscape.jpg"
+                                    className="bg-[#E0FE10] text-black rounded-full p-2 flex items-center justify-center hover:bg-white transition-colors"
+                                    onClick={(e) => e.stopPropagation()}
+                                >
+                                    <Download className="h-5 w-5" />
+                                </a>
                             </div>
                             </div>
                             <div className="aspect-[3/4] bg-zinc-800 rounded-xl overflow-hidden relative group">
-                            <img 
-                                src={pressKitAssets?.founderPortrait1 || "/founder-portrait-1.jpg"} 
-                                alt="Tremaine Grant - Portrait 1" 
-                                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                            />
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end">
-                                <div className="p-4">
-                                <p className="text-white font-medium">Portrait 1</p>
-                                <p className="text-zinc-300 text-sm">Studio Setting</p>
+                            <a 
+                                href={pressKitAssets?.founderPortrait1 || "/founder-portrait-1.jpg"} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                            >
+                                <img 
+                                    src={pressKitAssets?.founderPortrait1 || "/founder-portrait-1.jpg"} 
+                                    alt="Tremaine Grant - Portrait 1" 
+                                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                                />
+                            </a>
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end justify-between p-4">
+                                <div>
+                                    <p className="text-white font-medium">Portrait 1</p>
+                                    <p className="text-zinc-300 text-sm">Studio Setting</p>
                                 </div>
+                                <a 
+                                    href={pressKitAssets?.founderPortrait1 || "/founder-portrait-1.jpg"} 
+                                    download="Tremaine_Grant_Portrait_1.jpg"
+                                    className="bg-[#E0FE10] text-black rounded-full p-2 flex items-center justify-center hover:bg-white transition-colors"
+                                    onClick={(e) => e.stopPropagation()}
+                                >
+                                    <Download className="h-5 w-5" />
+                                </a>
                             </div>
                             </div>
                             <div className="aspect-[3/4] bg-zinc-800 rounded-xl overflow-hidden relative group">
-                            <img 
-                                src={pressKitAssets?.founderPortrait2 || "/founder-portrait-2.jpg"} 
-                                alt="Tremaine Grant - Portrait 2" 
-                                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                            />
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end">
-                                <div className="p-4">
-                                <p className="text-white font-medium">Portrait 2</p>
-                                <p className="text-zinc-300 text-sm">Casual Setting</p>
+                            <a 
+                                href={pressKitAssets?.founderPortrait2 || "/founder-portrait-2.jpg"} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                            >
+                                <img 
+                                    src={pressKitAssets?.founderPortrait2 || "/founder-portrait-2.jpg"} 
+                                    alt="Tremaine Grant - Portrait 2" 
+                                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                                />
+                            </a>
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end justify-between p-4">
+                                <div>
+                                    <p className="text-white font-medium">Portrait 2</p>
+                                    <p className="text-zinc-300 text-sm">Casual Setting</p>
                                 </div>
+                                <a 
+                                    href={pressKitAssets?.founderPortrait2 || "/founder-portrait-2.jpg"} 
+                                    download="Tremaine_Grant_Portrait_2.jpg"
+                                    className="bg-[#E0FE10] text-black rounded-full p-2 flex items-center justify-center hover:bg-white transition-colors"
+                                    onClick={(e) => e.stopPropagation()}
+                                >
+                                    <Download className="h-5 w-5" />
+                                </a>
                             </div>
                             </div>
                         </div>
