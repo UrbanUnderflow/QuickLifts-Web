@@ -22,12 +22,30 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isNavigating, setIsNavigating] = useState(false);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const totalSections = 22; // Updated from 21 to 22 after adding Recurring Challenge Ecosystem slide
   const sectionRefs = useRef<(HTMLDivElement | null)[]>(Array(totalSections).fill(null));
+  
+  // Check if we're on mobile
+  useEffect(() => {
+    const checkIfMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    // Check initially
+    checkIfMobile();
+    
+    // Add event listener for resize
+    window.addEventListener('resize', checkIfMobile);
+    
+    // Clean up
+    return () => window.removeEventListener('resize', checkIfMobile);
+  }, []);
   
   // Handle keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (isMobile) return; // Disable keyboard nav on mobile
       if (e.key === 'ArrowDown' && activeSection < totalSections - 1) {
         sectionRefs.current[activeSection + 1]?.scrollIntoView({ behavior: 'smooth' });
         setActiveSection(activeSection + 1);
@@ -39,7 +57,7 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
     
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeSection]);
+  }, [activeSection, isMobile]);
   
   // Use Intersection Observer to reliably detect which section is visible
   // Use Intersection Observer to reliably detect which section is visible
@@ -296,12 +314,28 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
         // Content cloning and styling will be added here in the next step
         const originalSectionElement = sectionRefs.current[i];
         if (originalSectionElement) {
-            const placeholderContent = document.createElement('p');
-            placeholderContent.textContent = `Full content for section ${sectionNumber} (${sectionTitle}) will be inserted here.`;
-            placeholderContent.style.padding = '20px';
-            placeholderContent.style.border = '1px dashed #ccc';
-            placeholderContent.style.backgroundColor = '#f0f0f0';
-            sectionContainer.appendChild(placeholderContent);
+            // Clone the section content
+            const clonedContent = originalSectionElement.cloneNode(true) as HTMLElement;
+            
+            // Basic styling adjustments for PDF
+            clonedContent.style.color = '#18181b'; // Ensure text is dark
+            clonedContent.style.backgroundColor = '#ffffff'; // Ensure background is white
+            
+            // Fix any potential styling issues that wouldn't work well in PDF
+            clonedContent.querySelectorAll('h1, h2, h3, h4, h5, h6').forEach(el => {
+              (el as HTMLElement).style.color = '#18181b';
+            });
+            
+            clonedContent.querySelectorAll('p, li, span, div').forEach(el => {
+              (el as HTMLElement).style.color = '#374151'; // Darker text for better readability
+            });
+            
+            // Remove animations or other interactive elements not suitable for PDF
+            clonedContent.querySelectorAll('[class*="animate-"]').forEach(el => {
+              el.classList.remove(...Array.from(el.classList).filter(c => c.startsWith('animate-')));
+            });
+            
+            sectionContainer.appendChild(clonedContent);
         } else {
           const missingContent = document.createElement('p');
           missingContent.textContent = `Content for section ${sectionNumber} (${sectionTitle}) is not available (ref missing).`;
@@ -358,12 +392,12 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
         Skip to main content
       </a>
       
-      {/* Vertical Progress Indicator */}
-      <div className="fixed right-6 top-1/2 transform -translate-y-1/2 z-50 flex flex-col items-end space-y-3">
+      {/* Vertical Progress Indicator - made smaller on mobile */}
+      <div className="fixed right-2 md:right-6 top-1/2 transform -translate-y-1/2 z-50 flex flex-col items-end space-y-2 md:space-y-3">
         {Array.from({ length: totalSections }).map((_, index) => (
           <div key={index} className="flex items-center group">
             {/* Section number - visible on hover or when active */}
-            <span className={`mr-2 text-xs font-medium transition-opacity duration-200 ${
+            <span className={`mr-1 md:mr-2 text-[10px] md:text-xs font-medium transition-opacity duration-200 ${
               activeSection === index 
                 ? 'text-[#E0FE10] opacity-100' 
                 : 'text-white opacity-0 group-hover:opacity-100'
@@ -371,19 +405,19 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
               {index + 1}
             </span>
             
-            {/* Dot indicator */}
+            {/* Dot indicator - smaller on mobile */}
             <button
               onClick={() => navigateToSection(index)}
               className={`relative rounded-full transition-all duration-300 flex items-center justify-center ${
                 activeSection === index 
-                  ? 'bg-[#E0FE10] w-6 h-6 shadow-[0_0_10px_rgba(224,254,16,0.7)]' 
-                  : 'bg-zinc-600 hover:bg-zinc-400 w-3 h-3'
+                  ? 'bg-[#E0FE10] w-4 h-4 md:w-6 md:h-6 shadow-[0_0_10px_rgba(224,254,16,0.7)]' 
+                  : 'bg-zinc-600 hover:bg-zinc-400 w-2 h-2 md:w-3 md:h-3'
               }`}
               aria-label={`Navigate to section ${index + 1}`}
             >
               {/* Show number inside active dot */}
               {activeSection === index && (
-                <span className="text-[8px] font-bold text-black">{index + 1}</span>
+                <span className="text-[6px] md:text-[8px] font-bold text-black">{index + 1}</span>
               )}
               
               {/* Ping animation */}
@@ -396,7 +430,7 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
       </div>
       
       {/* Navigation Arrows */}
-      <div className="fixed left-1/2 transform -translate-x-1/2 z-50 flex justify-between w-full max-w-7xl px-6">
+      <div className={`fixed left-1/2 transform -translate-x-1/2 z-50 flex justify-between w-full max-w-7xl px-6 ${isMobile ? 'hidden' : ''}`}>
         <button 
           onClick={() => activeSection > 0 && navigateToSection(activeSection - 1)}
           className={`fixed top-1/2 left-6 transform -translate-y-1/2 w-10 h-10 rounded-full bg-zinc-800/80 flex items-center justify-center transition-opacity duration-300 ${
@@ -417,11 +451,12 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
         </button>
       </div>
       
-      <main id="main-content" className="snap-y snap-mandatory h-screen overflow-y-scroll">
+      {/* Main content */}
+      <main id="main-content" className={isMobile ? "overflow-y-auto" : "snap-y snap-mandatory h-screen overflow-y-scroll"}>
         {/* 1. Hero Section */}
         <section 
           ref={(el) => { sectionRefs.current[0] = el as HTMLDivElement; }}
-          className="h-screen w-full snap-start flex flex-col items-center justify-center relative overflow-hidden"
+          className={`w-full ${isMobile ? 'min-h-[90vh] py-16' : 'h-screen snap-start'} flex flex-col items-center justify-center relative overflow-hidden`}
           style={{ 
             backgroundImage: 'linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7)), url("/atl_hills_event_photo.jpg")', 
             backgroundSize: 'cover', 
@@ -429,10 +464,10 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
           }}
         >
           <div className="max-w-4xl mx-auto px-6 text-center z-10">
-            <h1 className="text-5xl md:text-7xl font-bold mb-6 text-white animate-fade-in-up">
+            <h1 className={`${isMobile ? 'text-4xl' : 'text-5xl md:text-7xl'} font-bold mb-6 text-white animate-fade-in-up`}>
               Move & Fuel <span className="text-[#E0FE10]">ATL</span>
             </h1>
-            <p className="text-xl md:text-3xl mb-8 text-white animate-fade-in-up animation-delay-300">
+            <p className={`${isMobile ? 'text-lg' : 'text-xl md:text-3xl'} mb-8 text-white animate-fade-in-up animation-delay-300`}>
               Move together. Fuel smarter. Earn rewards.
             </p>
             <p className="text-lg md:text-xl mb-12 text-zinc-300 animate-fade-in-up animation-delay-600">
@@ -450,13 +485,13 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
         {/* 2. Why Pulse Exists Section */}
         <section 
           ref={(el) => { sectionRefs.current[1] = el as HTMLDivElement; }}
-          className="h-screen w-full snap-start flex flex-col items-center justify-center relative bg-zinc-900 px-6"
+          className={`w-full ${isMobile ? 'min-h-[90vh] py-16' : 'h-screen snap-start'} flex flex-col items-center justify-center relative bg-zinc-900 px-6`}
         >
           <div className="max-w-4xl mx-auto text-center">
-            <h2 className="text-4xl md:text-5xl font-bold mb-8 text-white animate-fade-in-up">
+            <h2 className={`${isMobile ? 'text-3xl' : 'text-4xl md:text-5xl'} font-bold mb-8 text-white animate-fade-in-up`}>
               Why <span className="text-[#E0FE10]">Pulse</span> Exists
             </h2>
-            <p className="text-lg md:text-xl mb-12 text-zinc-300 animate-fade-in-up animation-delay-300 max-w-3xl mx-auto">
+            <p className={`${isMobile ? 'text-base' : 'text-lg md:text-xl'} mb-12 text-zinc-300 animate-fade-in-up animation-delay-300 max-w-3xl mx-auto`}>
               Pulse exists to make fitness more social, accessible, and rewarding. We believe that working out is better when shared, and that technology should connect us in real life, not just virtually.
             </p>
             
@@ -541,13 +576,13 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
           </div>
         </section>
         
-        {/* NEW SLIDE 3: Tremaine Grant */}
+        {/* 3. Tremaine Grant */}
         <section 
           ref={(el) => { sectionRefs.current[2] = el as HTMLDivElement; }}
-          className="h-screen w-full snap-start flex flex-col items-center justify-center relative bg-zinc-950 px-6"
+          className={`w-full ${isMobile ? 'min-h-[90vh] py-16' : 'h-screen snap-start'} flex flex-col items-center justify-center relative bg-zinc-950 px-6`}
         >
           <div className="max-w-4xl mx-auto text-center">
-            <h2 className="text-4xl md:text-5xl font-bold mb-8 text-white animate-fade-in-up">
+            <h2 className={`${isMobile ? 'text-3xl' : 'text-4xl md:text-5xl'} font-bold mb-8 text-white animate-fade-in-up`}>
               Meet <span className="text-[#E0FE10]">Tremaine</span>
             </h2>
             <div className="flex flex-col md:flex-row items-center gap-8 mb-8">
@@ -555,45 +590,36 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
                 <img 
                   src="/TremaineFounder.jpg" 
                   alt="Tremaine Grant" 
-                  className="w-64 h-64 object-cover rounded-full mx-auto border-4 border-[#E0FE10]"
+                  className={`${isMobile ? 'w-48 h-48' : 'w-64 h-64'} object-cover rounded-full mx-auto border-4 border-[#E0FE10]`}
                 />
               </div>
               <div className="md:w-2/3 text-left animate-fade-in-up animation-delay-600">
-                <h3 className="text-2xl font-bold text-[#E0FE10] mb-4">Tremaine Grant</h3>
-                <p className="text-lg text-zinc-300 mb-3">
+                <h3 className={`${isMobile ? 'text-xl' : 'text-2xl'} font-bold text-[#E0FE10] mb-4`}>Tremaine Grant</h3>
+                <p className={`${isMobile ? 'text-base' : 'text-lg'} text-zinc-300 mb-3`}>
                   Founder & CEO of Pulse Fitness Collective, reimagining how we facilitate connection and community through fitness experiences.
                 </p>
-                <ul className="list-disc list-inside text-zinc-400 space-y-2">
+                <ul className="list-disc list-inside text-zinc-400 space-y-2 text-sm md:text-base">
                   <li>Principle Engineer at companies such as General Motors, IQVIA, Warby Parker, and more</li>
                   <li>Former Track and Field Athlete at Florida State University</li>
                   <li>Passionate about making fitness social, accessible, and rewarding</li>
-                                     <li>Creating technology that bridges the gap between in-person and digital fitness connection.</li>
+                  <li>Creating technology that bridges the gap between in-person and digital fitness connection.</li>
                 </ul>
               </div>
             </div>
           </div>
         </section>
         
-        {/* NEW SLIDE 4: AB Bailey / Hills4ATL */}
+        {/* 4. Hills4ATL */}
         <section 
           ref={(el) => { sectionRefs.current[3] = el as HTMLDivElement; }}
-          className="h-screen w-full snap-start flex flex-col items-center justify-center relative bg-zinc-900 px-6 overflow-hidden"
+          className={`w-full ${isMobile ? 'min-h-[90vh] py-16 px-6' : 'h-screen snap-start px-8'} flex flex-col items-center justify-center relative overflow-hidden`}
         >
-          {/* Background video */}
           <div className="absolute inset-0 z-0">
             <div className="absolute inset-0 bg-black opacity-70 z-10"></div>
-            <video
-              className="absolute min-w-full min-h-full object-cover transform rotate-180"
-              autoPlay
-              loop
-              muted
-              playsInline
-              src="/hillz.mov"
-            ></video>
+            <video className="absolute min-w-full min-h-full object-cover transform rotate-180" autoPlay loop muted playsInline src="/hillz.mov"></video>
           </div>
-          
           <div className="max-w-4xl mx-auto text-center relative z-20">
-            <h2 className="text-4xl md:text-5xl font-bold mb-8 text-white animate-fade-in-up">
+            <h2 className={`${isMobile ? 'text-3xl' : 'text-4xl md:text-5xl'} font-bold mb-8 text-white animate-fade-in-up`}>
               <span className="text-[#E0FE10]">Hills4ATL</span>
             </h2>
             <div className="flex flex-col md:flex-row items-center gap-8 mb-8">
@@ -601,15 +627,15 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
                 <img 
                   src="/aB.jpg" 
                   alt="Alvin 'A.B.' Bailey" 
-                  className="w-64 h-64 object-cover rounded-full mx-auto border-4 border-[#E0FE10]"
+                  className={`${isMobile ? 'w-48 h-48' : 'w-64 h-64'} object-cover rounded-full mx-auto border-4 border-[#E0FE10]`}
                 />
               </div>
               <div className="md:w-2/3 text-left animate-fade-in-up animation-delay-600">
-                <h3 className="text-2xl font-bold text-[#E0FE10] mb-4">Alvin "A.B." Bailey</h3>
-                <p className="text-lg text-zinc-300 mb-4">
+                <h3 className={`${isMobile ? 'text-xl' : 'text-2xl'} font-bold text-[#E0FE10] mb-4`}>Alvin "A.B." Bailey</h3>
+                <p className={`${isMobile ? 'text-base' : 'text-lg'} text-zinc-300 mb-3`}>
                   Professional DJ and founder of Hills4ATL, a free weekly workout community at Piedmont Park.
                 </p>
-                <ul className="list-disc list-inside text-zinc-400 space-y-2">
+                <ul className="list-disc list-inside text-zinc-400 space-y-2 text-sm md:text-base">
                   <li>Averages 120-150 participants every Wednesday</li>
                   <li>Created a safe, traffic-free workout environment</li>
                   <li>Building a growing "fitness family" in Atlanta</li>
@@ -626,40 +652,19 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
         {/* NEW SLIDE 5: Atlanta Meal Prep */}
         <section 
           ref={(el) => { sectionRefs.current[4] = el as HTMLDivElement; }}
-          className="h-screen w-full snap-start flex flex-col items-center justify-center relative bg-zinc-950 px-6"
+          className={`w-full ${isMobile ? 'min-h-[90vh] py-16' : 'h-screen snap-start'} flex flex-col items-center justify-center relative bg-zinc-950 px-6`}
         >
-          {/* Background meal photos with parallax effect */}
-          <div className="absolute inset-0 overflow-hidden opacity-20">
-            <div className="absolute -top-10 -left-10 w-48 h-48 rotate-6">
-              <img src="/IMG_6610.jpg" alt="Meal" className="w-full h-full object-cover rounded-lg" />
-            </div>
-            <div className="absolute top-20 right-10 w-40 h-40 -rotate-3">
-              <img src="/IMG_6611.jpg" alt="Meal" className="w-full h-full object-cover rounded-lg" />
-            </div>
-            <div className="absolute bottom-20 -left-5 w-44 h-44 rotate-12">
-              <img src="/IMG_6612.jpg" alt="Meal" className="w-full h-full object-cover rounded-lg" />
-            </div>
-            <div className="absolute -bottom-10 right-40 w-52 h-52 -rotate-6">
-              <img src="/IMG_6613.jpg" alt="Meal" className="w-full h-full object-cover rounded-lg" />
-            </div>
-            <div className="absolute top-1/2 left-1/2 w-60 h-60 -rotate-3 transform -translate-x-1/2 -translate-y-1/2">
-              <img src="/IMG_6614.jpg" alt="Meal" className="w-full h-full object-cover rounded-lg" />
-            </div>
-          </div>
-          
-          <div className="max-w-4xl mx-auto text-center z-10">
-            <h2 className="text-4xl md:text-5xl font-bold mb-8 text-white animate-fade-in-up">
-              <span className="text-[#E0FE10]">Atlanta Meal Prep</span>
+          <div className="max-w-4xl mx-auto text-center">
+            <h2 className={`${isMobile ? 'text-3xl' : 'text-4xl md:text-5xl'} font-bold mb-8 text-white animate-fade-in-up`}>
+              <span className="text-blue-400">Atlanta Meal Prep</span>
             </h2>
             <div className="flex flex-col md:flex-row items-center gap-8 mb-8">
               <div className="md:w-1/3 animate-fade-in-up animation-delay-300">
                 <img 
                   src="/bealewis.jpg" 
-                  alt="Bea Lewis" 
-                  className="w-64 h-64 object-cover rounded-full mx-auto border-4 border-[#E0FE10]"
+                  alt="Atlanta Meal Prep Logo" 
+                  className={`${isMobile ? 'w-48 h-48' : 'w-64 h-64'} object-contain rounded-lg mx-auto p-2 bg-white`}
                 />
-                <p className="text-[#E0FE10] font-medium mt-3">Bea Lewis</p>
-                <p className="text-zinc-400 text-sm">Founder</p>
               </div>
               <div className="md:w-2/3 text-left animate-fade-in-up animation-delay-600">
                 <h3 className="text-2xl font-bold text-[#E0FE10] mb-4">Tasty. Wholesome. Convenient.</h3>
@@ -694,10 +699,10 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
           </div>
         </section>
         
-        {/* 3. What's a Round Section */}
+        {/* NEW SLIDE 6: What's a Round? */}
         <section 
           ref={(el) => { sectionRefs.current[5] = el as HTMLDivElement; }}
-          className="h-screen w-full snap-start flex flex-col items-center justify-center relative bg-zinc-950 px-6"
+          className={`w-full ${isMobile ? 'min-h-[90vh] py-16' : 'h-screen snap-start'} flex flex-col items-center justify-center relative bg-zinc-900 px-6`}
         >
           <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center gap-12">
             <div className="md:w-1/2 text-left">
@@ -2430,6 +2435,27 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
           </div>
         </section>
       </main>
+      
+      {/* Add download button at the bottom - always visible */}
+      <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-50">
+        <button 
+          onClick={handleDownloadPDF}
+          disabled={isGeneratingPDF}
+          className={`flex items-center bg-[#E0FE10] text-black font-medium ${isMobile ? 'text-sm px-3 py-1.5' : 'px-4 py-2'} rounded-full shadow-lg hover:bg-[#E0FE10]/90 transition-all disabled:opacity-70`}
+        >
+          {isGeneratingPDF ? (
+            <>
+              <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin mr-2"></div>
+              Generating PDF...
+            </>
+          ) : (
+            <>
+              <Download size={isMobile ? 14 : 16} className="mr-2" />
+              Download Presentation
+            </>
+          )}
+        </button>
+      </div>
     </div>
   );
 };
