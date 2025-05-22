@@ -23,7 +23,7 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
   const [isNavigating, setIsNavigating] = useState(false);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
-  const totalSections = 21; // Removed Atlanta Meal Prep value section
+  const totalSections = 22; // Adding a new partnership synergy slide
   const sectionRefs = useRef<(HTMLDivElement | null)[]>(Array(totalSections).fill(null));
   
   // Check if we're on mobile
@@ -332,8 +332,7 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
               Move together. Fuel smarter. Earn rewards.
             </p>
             <p className="text-lg md:text-xl mb-12 text-zinc-300 animate-fade-in-up animation-delay-600">
-              <span className="text-[#E0FE10]">Pulse</span> × <span className="text-red-500">Hills4ATL</span>
-              <span className="block text-base mt-2 text-zinc-400">Featuring <span className="text-blue-400">Atlanta Meal Prep</span> as Strategic Nutrition Partner</span>
+              <span className="text-[#E0FE10]">Pulse</span> × <span className="text-red-500">Hills4ATL</span> × <span className="text-blue-400">Atlanta Meal Prep</span>
             </p>
             
             <div className="inline-block border border-[#E0FE10] rounded-full px-4 py-2 mb-8 animate-fade-in-up animation-delay-750">
@@ -521,52 +520,53 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
           </div>
         </section>
         
-        {/* NEW SLIDE 5: Atlanta Meal Prep - Strategic Nutrition Affiliate */}
+        {/* NEW SLIDE 5: Atlanta Meal Prep */}
         <section 
           ref={(el) => { sectionRefs.current[4] = el as HTMLDivElement; }}
           className={getSectionClasses('bg-zinc-950')}
         >
           <div className="max-w-4xl mx-auto text-center">
-            <h2 className={`${isMobile ? 'text-3xl' : 'text-4xl md:text-5xl'} font-bold mb-4 text-white animate-fade-in-up`}>
-              Strategic Nutrition Partner
+            <h2 className={`${isMobile ? 'text-3xl' : 'text-4xl md:text-5xl'} font-bold mb-8 text-white animate-fade-in-up`}>
+              <span className="text-blue-400">Atlanta Meal Prep</span>
             </h2>
-            <h3 className={`${isMobile ? 'text-xl' : 'text-2xl'} font-bold mb-8 text-blue-400 animate-fade-in-up animation-delay-200`}>
-              Atlanta Meal Prep
-            </h3>
             <div className="flex flex-col md:flex-row items-center gap-8 mb-8">
               <div className="md:w-1/3 animate-fade-in-up animation-delay-300">
                 <img 
                   src="/bealewis.jpg" 
-                  alt="Bea Lewis - Atlanta Meal Prep" 
+                  alt="Atlanta Meal Prep Logo" 
                   className={`${isMobile ? 'w-48 h-48' : 'w-64 h-64'} object-fill rounded-lg mx-auto bg-white border-4 border-blue-400`}
                 />
               </div>
               <div className="md:w-2/3 text-left animate-fade-in-up animation-delay-600">
-                <h4 className="text-xl font-bold text-blue-400 mb-4">Bea Lewis - Founder</h4>
+                <h3 className="text-2xl font-bold text-blue-400 mb-4">Bea Lewis</h3>
                 <p className="text-lg text-zinc-300 mb-4">
-                  As our affiliate nutrition partner, Atlanta Meal Prep provides convenient meal solutions that align with participants' fitness goals.
+                  Established in 2015, Atlanta Meal Prep has become one of the city's leading healthy meal delivery services under Bea Lewis's leadership.
                 </p>
                 <ul className="list-disc list-inside text-zinc-400 space-y-2">
-                  <li>9+ years serving Atlanta's health-conscious community</li>
                   <li>Featured in Atlanta Magazine and The Atlanta Journal-Constitution</li>
-                  <li>Commission-based partnership model</li>
-                  <li>Optional meal delivery for challenge participants</li>
+                  <li>Serves actors, athletes, and health-conscious individuals</li>
+                  <li>Uses fresh, locally sourced ingredients</li>
+                  <li>Offers diverse meal plans with flexible subscription options</li>
                 </ul>
               </div>
             </div>
-            <div className="bg-zinc-800/50 rounded-xl p-6 text-left animate-fade-in-up animation-delay-800">
-              <h4 className="text-lg font-bold text-white mb-3">Partnership Value</h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <p className="text-blue-400 font-medium">For Participants:</p>
-                  <p className="text-zinc-300 text-sm">Optional convenient meal delivery that supports their challenge nutrition goals</p>
-                </div>
-                <div>
-                  <p className="text-blue-400 font-medium">For Atlanta Meal Prep:</p>
-                  <p className="text-zinc-300 text-sm">Commission earnings from new customer acquisition through our platform</p>
-                </div>
+            <div className="flex gap-4 justify-center mt-8 overflow-hidden animate-fade-in-up animation-delay-900">
+              <div className="w-24 h-24 transform hover:scale-110 transition-transform">
+                <img src="/IMG_6615.jpg" alt="Meal Sample" className="w-full h-full object-cover rounded-lg shadow-lg" />
+              </div>
+              <div className="w-24 h-24 transform hover:scale-110 transition-transform">
+                <img src="/IMG_6616.jpg" alt="Meal Sample" className="w-full h-full object-cover rounded-lg shadow-lg" />
+              </div>
+              <div className="w-24 h-24 transform hover:scale-110 transition-transform">
+                <img src="/IMG_6617.jpg" alt="Meal Sample" className="w-full h-full object-cover rounded-lg shadow-lg" />
+              </div>
+              <div className="w-24 h-24 transform hover:scale-110 transition-transform">
+                <img src="/IMG_6618.jpg" alt="Meal Sample" className="w-full h-full object-cover rounded-lg shadow-lg" />
               </div>
             </div>
+            <p className="text-md text-zinc-400 animate-fade-in-up animation-delay-1200 mt-6 max-w-2xl mx-auto">
+              Culinary excellence meets nutritional goals, making healthy eating both convenient and enjoyable.
+            </p>
           </div>
         </section>
         
@@ -741,7 +741,7 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
               The <span className="text-[#E0FE10]">Perfect Partnership</span>
             </h2>
             <p className="text-xl text-zinc-300 mb-12 text-center max-w-3xl mx-auto animate-fade-in-up animation-delay-300">
-              Two core partners creating a seamless 360° fitness lifestyle engine that transforms how Atlanta stays active and healthy.
+              Three industry leaders creating a seamless 360° fitness lifestyle engine that transforms how Atlanta stays active and healthy.
             </p>
             
             {/* Partnership Flywheel Visualization */}
@@ -756,76 +756,72 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
 
                {/* Value Proposition of the Partnership */}
             <div className="bg-zinc-900/50 p-6 rounded-xl text-center animate-fade-in-up animation-delay-900">
-              <h3 className="text-2xl font-bold text-white mb-4">Stronger Together: Core Partnership Value</h3>
-              <p className="text-zinc-300 mb-6">
-                Pulse and Hills4ATL combine digital innovation with proven community building to create Atlanta's most comprehensive fitness experience.
+              <h3 className="text-2xl font-bold text-white mb-4">Seamless Integration Through Technology</h3>
+              <p className="text-zinc-300">
+                Together, we create a complete fitness ecosystem that's greater than the sum of its parts, seamlessly integrated through the Pulse platform.
               </p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="bg-black/30 p-4 rounded-lg">
-                  <div className="flex items-center justify-center mb-3">
-                    <div className="w-8 h-8 rounded-full bg-[#E0FE10]/20 flex items-center justify-center mr-2">
-                      <Dumbbell className="w-5 h-5 text-[#E0FE10]" />
-                    </div>
-                    <h4 className="text-white font-semibold">Technology + Community</h4>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+                <div className="p-3 bg-black/30 rounded-lg">
+                  <div className="flex justify-center mb-2">
+                    <Dumbbell className="w-6 h-6 text-[#E0FE10]" />
                   </div>
-                  <p className="text-zinc-300 text-sm">AI-powered programming meets established community trust and engagement</p>
+                  <p className="text-white text-sm">Physical Fitness</p>
                 </div>
-                <div className="bg-black/30 p-4 rounded-lg">
-                  <div className="flex items-center justify-center mb-3">
-                    <div className="w-8 h-8 rounded-full bg-red-400/20 flex items-center justify-center mr-2">
-                      <Users className="w-5 h-5 text-red-400" />
-                    </div>
-                    <h4 className="text-white font-semibold">Scale + Authenticity</h4>
+                <div className="p-3 bg-black/30 rounded-lg">
+                  <div className="flex justify-center mb-2">
+                    <Utensils className="w-6 h-6 text-[#E0FE10]" />
                   </div>
-                  <p className="text-zinc-300 text-sm">Digital reach of 100K+ members with authentic local Atlanta community connection</p>
+                  <p className="text-white text-sm">Nutrition</p>
+                </div>
+                <div className="p-3 bg-black/30 rounded-lg">
+                  <div className="flex justify-center mb-2">
+                    <Users className="w-6 h-6 text-[#E0FE10]" />
+                  </div>
+                  <p className="text-white text-sm">Social Engagement</p>
+                </div>
+                <div className="p-3 bg-black/30 rounded-lg">
+                  <div className="flex justify-center mb-2">
+                    <Gift className="w-6 h-6 text-[#E0FE10]" />
+                  </div>
+                  <p className="text-white text-sm">Rewards & Incentives</p>
                 </div>
               </div>
             </div>
               
-              {/* Core Partnership */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-16 max-w-4xl mx-auto">
+              {/* Partner Orbits */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-16">
                 {/* Hills4ATL */}
-                <div className="bg-zinc-900/70 p-8 rounded-xl border-2 border-red-400 relative">
+                <div className="bg-zinc-900/70 p-6 rounded-xl border-2 border-red-400 relative">
                   <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 w-16 h-16 rounded-full bg-zinc-900 flex items-center justify-center border-2 border-red-400">
                     <img src="/Hills4ATL.png" alt="Hills4ATL" className="w-12 h-12 object-contain" />
                   </div>
                   <h3 className="text-xl font-bold text-red-400 mt-4 mb-4 text-center">Hills4ATL</h3>
-                  <p className="text-center text-zinc-400 text-sm mb-4">Core Partner</p>
-                  <ul className="space-y-3">
+                  <ul className="space-y-2">
                     <li className="flex items-start gap-2">
                       <div className="w-1.5 h-1.5 rounded-full bg-red-400 mt-2 flex-shrink-0"></div>
-                      <span className="text-zinc-200">120-150 weekly participants</span>
+                      <span className="text-zinc-200">In-person community workouts</span>
                     </li>
                     <li className="flex items-start gap-2">
                       <div className="w-1.5 h-1.5 rounded-full bg-red-400 mt-2 flex-shrink-0"></div>
-                      <span className="text-zinc-200">Established community trust</span>
+                      <span className="text-zinc-200">Social engagement opportunities</span>
                     </li>
                     <li className="flex items-start gap-2">
                       <div className="w-1.5 h-1.5 rounded-full bg-red-400 mt-2 flex-shrink-0"></div>
                       <span className="text-zinc-200">Iconic Atlanta event locations</span>
                     </li>
-                    <li className="flex items-start gap-2">
-                      <div className="w-1.5 h-1.5 rounded-full bg-red-400 mt-2 flex-shrink-0"></div>
-                      <span className="text-zinc-200">Social media reach & influence</span>
-                    </li>
                   </ul>
                 </div>
                 
                 {/* Pulse */}
-                <div className="bg-zinc-900/70 p-8 rounded-xl border-2 border-[#E0FE10] relative">
+                <div className="bg-zinc-900/70 p-6 rounded-xl border-2 border-[#E0FE10] relative">
                   <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 w-16 h-16 rounded-full bg-zinc-900 flex items-center justify-center border-2 border-[#E0FE10]">
                     <img src="/pulse-logo-green.svg" alt="Pulse" className="w-12 h-12 object-contain" />
                   </div>
                   <h3 className="text-xl font-bold text-[#E0FE10] mt-4 mb-4 text-center">Pulse</h3>
-                  <p className="text-center text-zinc-400 text-sm mb-4">Core Partner</p>
-                  <ul className="space-y-3">
+                  <ul className="space-y-2">
                     <li className="flex items-start gap-2">
                       <div className="w-1.5 h-1.5 rounded-full bg-[#E0FE10] mt-2 flex-shrink-0"></div>
                       <span className="text-zinc-200">AI-powered fitness programming</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <div className="w-1.5 h-1.5 rounded-full bg-[#E0FE10] mt-2 flex-shrink-0"></div>
-                      <span className="text-zinc-200">Technology platform & infrastructure</span>
                     </li>
                     <li className="flex items-start gap-2">
                       <div className="w-1.5 h-1.5 rounded-full bg-[#E0FE10] mt-2 flex-shrink-0"></div>
@@ -833,28 +829,29 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
                     </li>
                     <li className="flex items-start gap-2">
                       <div className="w-1.5 h-1.5 rounded-full bg-[#E0FE10] mt-2 flex-shrink-0"></div>
-                      <span className="text-zinc-200">100K+ member email database</span>
+                      <span className="text-zinc-200">Growing prize pot & incentives</span>
                     </li>
                   </ul>
                 </div>
-              </div>
-              
-              {/* Strategic Affiliate */}
-              <div className="max-w-md mx-auto mt-12">
-                <div className="bg-zinc-800/50 p-6 rounded-xl border border-blue-400/50 relative">
-                  <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 w-12 h-12 rounded-full bg-zinc-800 flex items-center justify-center border border-blue-400/50">
-                    <img src="/ATLMealPrep.svg" alt="Atlanta Meal Prep" className="w-8 h-8 object-contain" />
+                
+                {/* Atlanta Meal Prep */}
+                <div className="bg-zinc-900/70 p-6 rounded-xl border-2 border-blue-400 relative">
+                  <div className="absolute -top-10 left-1/2 transform -translate-x-1/2 w-16 h-16 rounded-full bg-zinc-900 flex items-center justify-center border-2 border-blue-400">
+                    <img src="/ATLMealPrep.svg" alt="Atlanta Meal Prep" className="w-12 h-12 object-contain" />
                   </div>
-                  <h4 className="text-lg font-bold text-blue-400 mt-2 mb-2 text-center">Atlanta Meal Prep</h4>
-                  <p className="text-center text-zinc-400 text-xs mb-4">Strategic Nutrition Affiliate</p>
-                  <ul className="space-y-2 text-sm">
+                  <h3 className="text-xl font-bold text-blue-400 mt-4 mb-4 text-center">Atlanta Meal Prep</h3>
+                  <ul className="space-y-2">
                     <li className="flex items-start gap-2">
-                      <div className="w-1 h-1 rounded-full bg-blue-400 mt-1.5 flex-shrink-0"></div>
-                      <span className="text-zinc-300">Optional meal delivery for participants</span>
+                      <div className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-2 flex-shrink-0"></div>
+                      <span className="text-zinc-200">Nutritional guidance & meal plans</span>
                     </li>
                     <li className="flex items-start gap-2">
-                      <div className="w-1 h-1 rounded-full bg-blue-400 mt-1.5 flex-shrink-0"></div>
-                      <span className="text-zinc-300">Commission-based partnership model</span>
+                      <div className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-2 flex-shrink-0"></div>
+                      <span className="text-zinc-200">Convenient meal delivery</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-2 flex-shrink-0"></div>
+                      <span className="text-zinc-200">Custom macro-optimized options</span>
                     </li>
                   </ul>
                 </div>
@@ -1352,9 +1349,9 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
                     3
                   </div>
                   <div>
-                    <h3 className="text-xl font-bold text-white mb-2">Equal Partnership Revenue</h3>
+                    <h3 className="text-xl font-bold text-white mb-2">Revenue Share</h3>
                     <p className="text-zinc-300">
-                        Receive 50% of total round revenue with zero up-front cost. Based on our projections, that's approximately $29,500 in additional revenue for a 1,000-participant round.                   
+                        Receive 30% of total round revenue with zero up-front cost. Based on our projections, that's approximately $17,700 in additional revenue for a 1,000-participant round.                   
                     </p>
                   </div>
                 </div>
@@ -1362,29 +1359,25 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
               
               <div className="flex flex-col justify-center items-center animate-fade-in-up animation-delay-300">
                 <div className="bg-zinc-900/50 p-8 rounded-xl text-center mb-6">
-                  <p className="text-5xl font-bold text-red-400 mb-2">50%</p>
-                  <p className="text-xl text-white font-medium">Equal Core Partner</p>
-                  <p className="text-zinc-400">revenue share on all rounds</p>
+                  <p className="text-5xl font-bold text-[#E0FE10] mb-2">100%</p>
+                  <p className="text-xl text-white font-medium">Data Ownership</p>
+                  <p className="text-zinc-400">of participant insights & analytics</p>
                 </div>
                 
                 <div className="bg-zinc-900/50 p-6 rounded-xl text-center w-full">
-                  <h3 className="text-xl font-bold text-white mb-3">Core Partnership Benefits</h3>
+                  <h3 className="text-xl font-bold text-white mb-3">Additional Benefits</h3>
                   <ul className="text-zinc-300 space-y-2 text-left">
                     <li className="flex items-center">
-                      <div className="w-2 h-2 rounded-full bg-red-400 mr-2"></div>
-                      <span>Equal decision-making in round development</span>
-                    </li>
-                    <li className="flex items-center">
-                      <div className="w-2 h-2 rounded-full bg-red-400 mr-2"></div>
-                      <span>100% data ownership of participant insights</span>
-                    </li>
-                    <li className="flex items-center">
-                      <div className="w-2 h-2 rounded-full bg-red-400 mr-2"></div>
-                      <span>Exclusive co-branded marketing presence</span>
-                    </li>
-                    <li className="flex items-center">
-                      <div className="w-2 h-2 rounded-full bg-red-400 mr-2"></div>
+                      <div className="w-2 h-2 rounded-full bg-[#E0FE10] mr-2"></div>
                       <span>New foot traffic to your physical locations</span>
+                    </li>
+                    <li className="flex items-center">
+                      <div className="w-2 h-2 rounded-full bg-[#E0FE10] mr-2"></div>
+                      <span>Participant retention tracking and analytics</span>
+                    </li>
+                    <li className="flex items-center">
+                      <div className="w-2 h-2 rounded-full bg-[#E0FE10] mr-2"></div>
+                      <span>Exclusive featured partner status</span>
                     </li>
                   </ul>
                 </div>
@@ -1393,11 +1386,70 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
           </div>
         </section>
         
+        {/* 8. Value for Meal Prep Co */}
+        <section 
+          ref={(el) => { sectionRefs.current[12] = el as HTMLDivElement; }}
+          className={`${getSectionClasses('bg-zinc-900')} px-6`}
+        >
+          <div className="max-w-4xl mx-auto">
+            <h2 className="text-4xl md:text-5xl font-bold mb-12 text-white text-center animate-fade-in-up">
+              Value for <span className="text-[#E0FE10]">Atlanta Meal Prep</span>
+            </h2>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10">
+              <div className="space-y-6 animate-fade-in-up">
+                <div className="flex items-start gap-4 bg-zinc-800/50 p-6 rounded-xl">
+                  <div className="flex-shrink-0 w-10 h-10 rounded-full bg-[#E0FE10] flex items-center justify-center text-black font-bold">
+                    1
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-white mb-2">New Customer Acquisition</h3>
+                    <p className="text-zinc-300">
+                      Directly connect with health-conscious consumers actively seeking nutrition solutions. Built-in cross-selling opportunities.
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="flex items-start gap-4 bg-zinc-800/50 p-6 rounded-xl animate-fade-in-up animation-delay-300">
+                  <div className="flex-shrink-0 w-10 h-10 rounded-full bg-[#E0FE10] flex items-center justify-center text-black font-bold">
+                    2
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-white mb-2">In-App Integration & Incentives</h3>
+                    <p className="text-zinc-300">
+                      Your meals featured directly in the app with nutrition data and one-tap ordering. Points system rewards meal plan adherence and incentivizes recurring orders through gamified challenges.
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="flex items-start gap-4 bg-zinc-800/50 p-6 rounded-xl animate-fade-in-up animation-delay-600">
+                  <div className="flex-shrink-0 w-10 h-10 rounded-full bg-[#E0FE10] flex items-center justify-center text-black font-bold">
+                    3
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-white mb-2">Revenue Share</h3>
+                    <p className="text-zinc-300">
+                      Receive 30% of total round revenue with zero up-front cost. Based on our projections, that's approximately $17,700 in additional revenue for a 1,000-participant round.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex flex-col justify-center items-center animate-fade-in-up animation-delay-300">
+                <div className="bg-zinc-800/50 p-8 rounded-xl text-center mb-6">
+                  <p className="text-5xl font-bold text-[#E0FE10] mb-2">+125 Referral Orders</p>
+                  <p className="text-xl text-white font-medium">Target Orders</p>
+                  <p className="text-zinc-400">weekly during challenge</p>
+                </div>
 
+              </div>
+            </div>
+          </div>
+        </section>
         
         {/* 9. Go-to-Market Playbook - Channel Strategy */}
         <section 
-          ref={(el) => { sectionRefs.current[12] = el as HTMLDivElement; }}
+          ref={(el) => { sectionRefs.current[13] = el as HTMLDivElement; }}
           className={`${getSectionClasses('bg-black')} px-6`}
         >
           <div className="max-w-5xl mx-auto">
@@ -1517,7 +1569,7 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
         
         {/* 10. Go-to-Market Playbook - Responsibility Matrix */}
         <section 
-          ref={(el) => { sectionRefs.current[13] = el as HTMLDivElement; }}
+          ref={(el) => { sectionRefs.current[14] = el as HTMLDivElement; }}
           className={`${getSectionClasses('bg-zinc-900')} px-6`}
         >
           <div className="max-w-5xl mx-auto">
@@ -1526,94 +1578,98 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
             </h2>
             
             <p className="text-center text-[#E0FE10] uppercase tracking-wide text-sm font-semibold mb-8 animate-fade-in-up animation-delay-150">
-              How we hit 1,000 participants as core partners.
+              How we hit 1,000 participants together.
             </p>
             
-            {/* Core Partnership Matrix */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto mb-8 animate-fade-in-up animation-delay-300">
+            {/* Responsibility Matrix */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8 animate-fade-in-up animation-delay-300">
               {/* Pulse */}
-              <div className="relative bg-zinc-900/70 rounded-xl p-6 border-2 border-[#E0FE10]">
-                <div className="absolute top-2 right-2 bg-[#E0FE10]/20 px-3 py-1 rounded-full">
-                  <span className="text-xs text-[#E0FE10] font-medium">50% Core Partner</span>
+              <div className="relative bg-zinc-900/70 rounded-xl p-6 border border-zinc-800">
+                <div className="absolute top-2 right-2 bg-[#E0FE10]/20 px-2 py-1 rounded-full">
+                  <span className="text-xs text-[#E0FE10] font-medium">40% Pulse</span>
                 </div>
                 <div className="flex items-center mb-4">
-                  <img src="/pulse-logo-white.svg" alt="Pulse" className="h-8 mr-3" />
-                  <h4 className="text-xl font-bold text-white">Pulse</h4>
+                  <img src="/pulse-logo-white.svg" alt="Pulse" className="h-6 mr-2" />
+                  <h4 className="text-lg font-bold text-white"></h4>
                 </div>
-                <ul className="space-y-3 text-zinc-300">
+                <ul className="space-y-2 text-zinc-300">
                   <li className="flex items-start gap-2">
                     <div className="w-1.5 h-1.5 rounded-full bg-[#E0FE10] mt-2 flex-shrink-0"></div>
-                    <span>Platform & payment processing infrastructure</span>
+                    <span>Platform & payment processing</span>
                   </li>
                   <li className="flex items-start gap-2">
                     <div className="w-1.5 h-1.5 rounded-full bg-[#E0FE10] mt-2 flex-shrink-0"></div>
-                    <span>Email marketing to 100K+ member database</span>
+                    <span>Email marketing to 100K list</span>
                   </li>
                   <li className="flex items-start gap-2">
                     <div className="w-1.5 h-1.5 rounded-full bg-[#E0FE10] mt-2 flex-shrink-0"></div>
-                    <span>Press tour coordination & facilitation</span>
+                    <span>Press tour facilitation</span>
                   </li>
                   <li className="flex items-start gap-2">
                     <div className="w-1.5 h-1.5 rounded-full bg-[#E0FE10] mt-2 flex-shrink-0"></div>
-                    <span>QR discount cards, swag & promotional materials</span>
+                    <span>QR discount cards & swag</span>
                   </li>
                   <li className="flex items-start gap-2">
                     <div className="w-1.5 h-1.5 rounded-full bg-[#E0FE10] mt-2 flex-shrink-0"></div>
-                    <span>AI-powered gym & cardio programming</span>
+                    <span>Gym + cardio programming</span>
                   </li>
                 </ul>
               </div>
               
               {/* ATL Hills */}
-              <div className="relative bg-zinc-900/70 rounded-xl p-6 border-2 border-red-400">
-                <div className="absolute top-2 right-2 bg-red-400/20 px-3 py-1 rounded-full">
-                  <span className="text-xs text-red-400 font-medium">50% Core Partner</span>
+              <div className="relative bg-zinc-900/70 rounded-xl p-6 border border-zinc-800">
+                <div className="absolute top-2 right-2 bg-[#E0FE10]/20 px-2 py-1 rounded-full">
+                  <span className="text-xs text-[#E0FE10] font-medium">35% ATL Hills</span>
                 </div>
                 <div className="flex items-center mb-4">
-                  <img src="/Hills4ATL.png" alt="ATL Hills" className="h-8 mr-3" />
-                  <h4 className="text-xl font-bold text-white">Hills4ATL</h4>
+                  <img src="/Hills4ATL.png" alt="ATL Hills" className="h-6 mr-2" />
+                  <h4 className="text-lg font-bold text-white"></h4>
                 </div>
-                <ul className="space-y-3 text-zinc-300">
+                <ul className="space-y-2 text-zinc-300">
                   <li className="flex items-start gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-red-400 mt-2 flex-shrink-0"></div>
-                    <span>On-ground marketing at 120+ weekly participants</span>
+                    <div className="w-1.5 h-1.5 rounded-full bg-[#E0FE10] mt-2 flex-shrink-0"></div>
+                    <span>Marketing at in-person events</span>
                   </li>
                   <li className="flex items-start gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-red-400 mt-2 flex-shrink-0"></div>
-                    <span>Social media promotion to established community</span>
+                    <div className="w-1.5 h-1.5 rounded-full bg-[#E0FE10] mt-2 flex-shrink-0"></div>
+                    <span>Social media promotion</span>
                   </li>
                   <li className="flex items-start gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-red-400 mt-2 flex-shrink-0"></div>
-                    <span>QR card distribution & member enrollment</span>
+                    <div className="w-1.5 h-1.5 rounded-full bg-[#E0FE10] mt-2 flex-shrink-0"></div>
+                    <span>QR card distribution to members</span>
                   </li>
                   <li className="flex items-start gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-red-400 mt-2 flex-shrink-0"></div>
-                    <span>Event schedule coordination & point generation</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-red-400 mt-2 flex-shrink-0"></div>
-                    <span>Community trust & authentic Atlanta presence</span>
+                    <div className="w-1.5 h-1.5 rounded-full bg-[#E0FE10] mt-2 flex-shrink-0"></div>
+                    <span>Event schedule & point generation</span>
                   </li>
                 </ul>
               </div>
-            </div>
-            
-            {/* Strategic Affiliate */}
-            <div className="max-w-md mx-auto mb-8 animate-fade-in-up animation-delay-450">
-              <div className="bg-zinc-800/50 rounded-xl p-4 border border-blue-400/30">
-                <div className="flex items-center mb-3">
-                  <img src="/ATLMealPrep.svg" alt="Atlanta Meal Prep" className="h-6 mr-2" />
-                  <h5 className="text-lg font-bold text-blue-400">Atlanta Meal Prep</h5>
-                  <span className="ml-auto text-xs text-blue-400 bg-blue-400/10 px-2 py-1 rounded">Affiliate</span>
+              
+              {/* Atlanta Meal Prep */}
+              <div className="relative bg-zinc-900/70 rounded-xl p-6 border border-zinc-800">
+                <div className="absolute top-2 right-2 bg-[#E0FE10]/20 px-2 py-1 rounded-full">
+                  <span className="text-xs text-[#E0FE10] font-medium">25% Meal-Prep</span>
                 </div>
-                <ul className="space-y-2 text-zinc-300 text-sm">
+                <div className="flex items-center mb-4">
+                  <img src="/ATLMealPrep.svg" alt="Atlanta Meal Prep" className="h-6 mr-2" />
+                  <h4 className="text-lg font-bold text-white"></h4>
+                </div>
+                <ul className="space-y-2 text-zinc-300">
                   <li className="flex items-start gap-2">
-                    <div className="w-1 h-1 rounded-full bg-blue-400 mt-1.5 flex-shrink-0"></div>
-                    <span>Commission-based meal delivery partnerships</span>
+                    <div className="w-1.5 h-1.5 rounded-full bg-[#E0FE10] mt-2 flex-shrink-0"></div>
+                    <span>Email marketing to customer base</span>
                   </li>
                   <li className="flex items-start gap-2">
-                    <div className="w-1 h-1 rounded-full bg-blue-400 mt-1.5 flex-shrink-0"></div>
-                    <span>Optional promotional support</span>
+                    <div className="w-1.5 h-1.5 rounded-full bg-[#E0FE10] mt-2 flex-shrink-0"></div>
+                    <span>Flyers with food deliveries</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-[#E0FE10] mt-2 flex-shrink-0"></div>
+                    <span>Social media promotion</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-[#E0FE10] mt-2 flex-shrink-0"></div>
+                    <span>Meal programming collaboration</span>
                   </li>
                 </ul>
               </div>
@@ -1625,21 +1681,20 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
               <p className="text-center text-zinc-400 text-sm">All partners commit to consistent social media promotion, community engagement, and optional individual press outreach.</p>
             </div>
             
-            {/* Core Partnership Benefits */}
+            {/* Confidence Footer Strip */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 animate-fade-in-up animation-delay-600">
               <div className="bg-zinc-900/70 p-4 rounded-xl text-center">
                 <p className="text-[#E0FE10] text-2xl font-bold mb-1">&gt;1,000</p>
-                <p className="text-white font-medium">Participants targeted</p>
+                <p className="text-white font-medium">Seats forecasted</p>
               </div>
               <div className="bg-zinc-900/70 p-4 rounded-xl text-center">
-                <p className="text-[#E0FE10] text-2xl font-bold mb-1">50/50</p>
-                <p className="text-white font-medium">Equal Partnership</p>
-                <p className="text-zinc-500 text-xs">core decision making</p>
+                <p className="text-[#E0FE10] text-2xl font-bold mb-1">CAC &lt; $6</p>
+                <p className="text-white font-medium">Projected</p>
+                <p className="text-zinc-500 text-xs">after revenue share</p>
               </div>
               <div className="bg-zinc-900/70 p-4 rounded-xl text-center">
-                <p className="text-[#E0FE10] text-2xl font-bold mb-1">2</p>
-                <p className="text-white font-medium">Core Partners</p>
-                <p className="text-zinc-500 text-xs">+ strategic affiliates</p>
+                <p className="text-[#E0FE10] text-2xl font-bold mb-1">3</p>
+                <p className="text-white font-medium">Equal promotion partners</p>
               </div>
             </div>
           </div>
@@ -1647,7 +1702,7 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
         
         {/* 11. Revenue Model */}
         <section 
-          ref={(el) => { sectionRefs.current[14] = el as HTMLDivElement; }}
+          ref={(el) => { sectionRefs.current[15] = el as HTMLDivElement; }}
           className={`${getSectionClasses('bg-[#0B0B0E]')} px-6`}
         >
           <div className="max-w-5xl mx-auto">
@@ -1656,7 +1711,7 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
             </h2>
             
             <h4 className="text-xl text-center text-[#E0FE10] font-medium mb-8 animate-fade-in-up animation-delay-150">
-              Zero Up-Front Cost — Two-Way Core Partnership
+              Zero Up-Front Cost — Three-Way Profit Share
             </h4>
             
             <div className="animate-fade-in-up animation-delay-300">
@@ -1697,22 +1752,20 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
                 </div>
                 
                 <div className="p-5 bg-zinc-900/70">
-                  <p className="text-zinc-300 font-medium mb-3">Core Partnership Split</p>
-                  <div className="grid grid-cols-2 gap-4 text-center">
-                    <div className="bg-black/20 p-4 rounded-lg">
-                      <p className="text-2xl font-bold text-[#E0FE10]">50%</p>
+                  <p className="text-zinc-300 font-medium mb-3">Partner Share</p>
+                  <div className="grid grid-cols-3 gap-2 text-center">
+                    <div className="bg-black/20 p-3 rounded-lg">
+                      <p className="text-lg font-bold text-[#E0FE10]">40%</p>
                       <p className="text-zinc-400 text-sm">Pulse</p>
-                      <p className="text-zinc-500 text-xs">Platform & Technology</p>
                     </div>
-                    <div className="bg-black/20 p-4 rounded-lg">
-                      <p className="text-2xl font-bold text-red-400">50%</p>
-                      <p className="text-zinc-400 text-sm">Hills4ATL</p>
-                      <p className="text-zinc-500 text-xs">Community & Events</p>
+                    <div className="bg-black/20 p-3 rounded-lg">
+                      <p className="text-lg font-bold text-[#E0FE10]">30%</p>
+                      <p className="text-zinc-400 text-sm">ATL Hills</p>
                     </div>
-                  </div>
-                  <div className="mt-4 p-3 bg-blue-900/20 rounded-lg border border-blue-400/30">
-                    <p className="text-blue-300 text-sm font-medium mb-1">Atlanta Meal Prep</p>
-                    <p className="text-zinc-400 text-xs">Commission-based affiliate earnings from meal orders</p>
+                    <div className="bg-black/20 p-3 rounded-lg">
+                      <p className="text-lg font-bold text-[#E0FE10]">30%</p>
+                      <p className="text-zinc-400 text-sm">Atlanta Meal Prep</p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1726,14 +1779,14 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
                 <p className="text-zinc-500 text-sm">at full capacity</p>
               </div>
               <div className="bg-zinc-900/60 p-5 rounded-xl text-center">
-                <p className="text-[#E0FE10] text-3xl font-bold mb-1">$29.5K</p>
-                <p className="text-white font-medium">To Hills4ATL</p>
-                <p className="text-zinc-500 text-sm">50% core partner share</p>
+                <p className="text-[#E0FE10] text-3xl font-bold mb-1">$17.7K</p>
+                <p className="text-white font-medium">To Each Co-Host</p>
+                <p className="text-zinc-500 text-sm">30% partner share</p>
               </div>
               <div className="bg-zinc-900/60 p-5 rounded-xl text-center">
-                <p className="text-[#E0FE10] text-3xl font-bold mb-1">50/50</p>
-                <p className="text-white font-medium">Equal Partnership</p>
-                <p className="text-zinc-500 text-sm">core partner split</p>
+                <p className="text-[#E0FE10] text-3xl font-bold mb-1">40%</p>
+                <p className="text-white font-medium">Pulse Margin</p>
+                <p className="text-zinc-500 text-sm">supports platform costs</p>
               </div>
             </div>
           </div>
@@ -1741,7 +1794,7 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
         
         {/* 12. Financial Projections */}
         <section 
-          ref={(el) => { sectionRefs.current[15] = el as HTMLDivElement; }}
+          ref={(el) => { sectionRefs.current[16] = el as HTMLDivElement; }}
           className={`${getSectionClasses('bg-[#0B0B0E]')} px-6`}
         >
           <div className="max-w-5xl mx-auto">
@@ -1822,7 +1875,7 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
         
         {/* 13. Recurring Challenge Ecosystem */}
         <section 
-          ref={(el) => { sectionRefs.current[16] = el as HTMLDivElement; }}
+          ref={(el) => { sectionRefs.current[17] = el as HTMLDivElement; }}
           className={`${getSectionClasses('bg-black')} px-6 overflow-hidden`}
         >
           {/* High-tech background elements */}
@@ -1977,7 +2030,7 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
         
         {/* 14. Timeline & Milestones */}
         <section 
-          ref={(el) => { sectionRefs.current[17] = el as HTMLDivElement; }}
+          ref={(el) => { sectionRefs.current[18] = el as HTMLDivElement; }}
           className={`${getSectionClasses('bg-black')} px-6`}
         >
           <div className="max-w-5xl mx-auto">
@@ -2127,7 +2180,7 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
         
         {/* 15. What We Need From You */}
         <section 
-          ref={(el) => { sectionRefs.current[18] = el as HTMLDivElement; }}
+          ref={(el) => { sectionRefs.current[19] = el as HTMLDivElement; }}
           className={`${getSectionClasses('bg-zinc-900')} px-6`}
         >
           <div className="max-w-5xl mx-auto">
@@ -2228,7 +2281,7 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
         
         {/* 16. Next Steps */}
         <section 
-          ref={(el) => { sectionRefs.current[19] = el as HTMLDivElement; }}
+          ref={(el) => { sectionRefs.current[20] = el as HTMLDivElement; }}
           className={`${getSectionClasses('bg-zinc-900')} px-6`}
         >
           <div className="max-w-5xl mx-auto">
@@ -2329,7 +2382,7 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
         
         {/* 17. Closing & CTA */}
         <section 
-          ref={(el) => { sectionRefs.current[20] = el as HTMLDivElement; }}
+          ref={(el) => { sectionRefs.current[21] = el as HTMLDivElement; }}
           className={`${getSectionClasses('bg-transparent')} overflow-hidden`}
           style={{ 
             backgroundImage: 'linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7)), url("/atl_skyline_fitness.jpg")', 
@@ -2374,29 +2427,18 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
               </div>
             </div>
             
-            <div className="mt-16 flex flex-col items-center animate-fade-in-up animation-delay-600">
-              {/* Core Partners */}
-              <div className="flex gap-12 items-center mb-6">
-                <div className="flex flex-col items-center">
-                  <img src="/pulse-logo-white.svg" alt="Pulse Logo" className="h-16 w-auto mb-2" />
-                  <p className="text-[#E0FE10] text-sm font-medium">Pulse</p>
-                  <p className="text-zinc-500 text-xs">Core Partner</p>
-                </div>
-                <div className="text-white text-2xl">×</div>
-                <div className="flex flex-col items-center">
-                  <img src="/Hills4ATL.png" alt="Hills4ATL Logo" className="h-16 w-auto mb-2" />
-                  <p className="text-red-400 text-sm font-medium">Hills4ATL</p>
-                  <p className="text-zinc-500 text-xs">Core Partner</p>
-                </div>
-              </div>
-              
-              {/* Strategic Affiliate */}
+            <div className="mt-16 grid grid-cols-3 gap-8 animate-fade-in-up animation-delay-600">
               <div className="flex flex-col items-center">
-                <p className="text-zinc-500 text-xs mb-2">Featuring Strategic Affiliate</p>
-                <div className="flex items-center gap-2">
-                  <img src="/ATLMealPrep.svg" alt="Atlanta Meal Prep Logo" className="h-8 w-auto" />
-                  <p className="text-blue-400 text-sm">Atlanta Meal Prep</p>
-                </div>
+                <img src="/pulse-logo-white.svg" alt="Pulse Logo" className="h-12 w-auto mb-2" />
+                <p className="text-zinc-400 text-sm">Pulse</p>
+              </div>
+              <div className="flex flex-col items-center">
+                <img src="/Hills4ATL.png" alt="Hills4ATL Logo" className="h-12 w-auto mb-2" />
+                <p className="text-zinc-400 text-sm">Hills4ATL</p>
+              </div>
+              <div className="flex flex-col items-center">
+                <img src="/ATLMealPrep.svg" alt="Atlanta Meal Prep Logo" className="h-12 w-auto mb-2" />
+                <p className="text-zinc-400 text-sm">Atlanta Meal Prep</p>
               </div>
             </div>
           </div>
