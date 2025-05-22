@@ -183,189 +183,27 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
     }
   };
   
-  // Function to generate and download PDF
-  const handleDownloadPDF = async () => {
+  // Function to download the pre-made PDF
+  const handleDownloadPDF = () => {
     try {
-      // Dynamically import html2pdf to avoid SSR issues
-      const html2pdf = (await import('html2pdf.js')).default;
       setIsGeneratingPDF(true);
       
-      // Create a completely new white-themed document for PDF
-      const pdfContainer = document.createElement('div');
-      pdfContainer.className = "bg-white text-zinc-900";
-      pdfContainer.style.backgroundColor = "#ffffff";
-      pdfContainer.style.color = "#18181b";
-      pdfContainer.style.fontFamily = 'Arial, sans-serif';
-      pdfContainer.style.padding = '20px';
-      pdfContainer.style.maxWidth = '100%';
+      // Create a link element
+      const link = document.createElement('a');
       
-      // Header with logo
-      const header = document.createElement('header');
-      header.style.display = 'flex';
-      header.style.justifyContent = 'space-between';
-      header.style.alignItems = 'center';
-      header.style.marginBottom = '30px';
-      header.style.borderBottom = '1px solid #e5e7eb';
-      header.style.paddingBottom = '20px';
+      // Set the href to the pre-made PDF file path
+      link.href = '/Move&FuelATL.pdf';
       
-      const logoContainer = document.createElement('div');
-      logoContainer.style.display = 'flex';
-      logoContainer.style.alignItems = 'center';
-      logoContainer.style.gap = '10px';
+      // Set download attribute to suggest filename
+      link.download = 'Move_and_Fuel_ATL.pdf';
       
-      // Use the SVG logo
-      const logoImg = document.createElement('img');
-      logoImg.src = window.location.origin + '/pulse-logo.svg';
-      logoImg.alt = 'Pulse Logo';
-      logoImg.style.height = '32px';
-      logoImg.style.width = 'auto';
-      
-      logoContainer.appendChild(logoImg);
-      header.appendChild(logoContainer);
-      pdfContainer.appendChild(header);
-      
-      // Main content
-      const main = document.createElement('main');
-      main.style.width = '100%';
-      
-      // Title and Subtitle
-      const title = document.createElement('h1');
-      title.style.fontSize = '28px';
-      title.style.fontWeight = 'bold';
-      title.style.textAlign = 'center';
-      title.style.marginBottom = '12px';
-      title.style.color = '#18181b';
-      title.textContent = 'Move & Fuel ATL';
-      
-      const subtitle = document.createElement('p');
-      subtitle.style.textAlign = 'center';
-      subtitle.style.fontSize = '16px';
-      subtitle.style.color = '#6b7280';
-      subtitle.style.marginBottom = '32px';
-      subtitle.textContent = 'A fitness collective by Pulse, Hills4ATL, and Atlanta Meal Prep';
-      
-      main.appendChild(title);
-      main.appendChild(subtitle);
-      
-      // Create a helper function to add section headers
-      const addSectionHeader = (title: string, number: string) => {
-        const sectionHeader = document.createElement('div');
-        sectionHeader.style.display = 'flex';
-        sectionHeader.style.alignItems = 'center';
-        sectionHeader.style.marginTop = '30px';
-        sectionHeader.style.marginBottom = '15px';
-        
-        const numberDiv = document.createElement('div');
-        numberDiv.style.width = '30px';
-        numberDiv.style.height = '30px';
-        numberDiv.style.borderRadius = '50%';
-        numberDiv.style.backgroundColor = '#E0FE10';
-        numberDiv.style.color = 'black';
-        numberDiv.style.display = 'flex';
-        numberDiv.style.alignItems = 'center';
-        numberDiv.style.justifyContent = 'center';
-        numberDiv.style.fontWeight = 'bold';
-        numberDiv.style.marginRight = '10px';
-        numberDiv.textContent = number;
-        
-        const headerText = document.createElement('h2');
-        headerText.style.fontSize = '20px';
-        headerText.style.fontWeight = 'bold';
-        headerText.style.color = '#18181b'; // Dark text for white PDF background
-        headerText.textContent = title;
-        
-        sectionHeader.appendChild(numberDiv);
-        sectionHeader.appendChild(headerText);
-        return sectionHeader;
-      };
-
-      const sectionTitles = [
-        "Hero Section",
-        "Why Pulse Exists",
-        "Meet Tremaine",
-        "Hills4ATL",
-        "Atlanta Meal Prep",
-        "What's a Round?",
-        "Building Connections Through Competition",
-        "Introducing Move & Fuel ATL",
-        "Program Components",
-        "Tech Magic Under the Hood",
-        "Value for Hills4ATL",
-        "Value for Atlanta Meal Prep",
-        "Value for Pulse",
-        "Revenue & Financial Model",
-        "Revenue Sharing Model",
-        "Marketing Strategy",
-        "Technical Implementation",
-        "User Experience",
-        "Partnership Opportunities",
-        "Our Ask",
-        "Timeline & Next Steps",
-        "Let's Connect"
-      ];
-
-      // Loop through all 22 sections and append their content
-      for (let i = 0; i < totalSections; i++) {
-        const sectionNumber = (i + 1).toString();
-        const sectionTitle = sectionTitles[i] || `Section ${sectionNumber}`;
-        const sectionContainer = document.createElement('div');
-        sectionContainer.appendChild(addSectionHeader(sectionTitle, sectionNumber));
-
-        // Content cloning and styling will be added here in the next step
-        const originalSectionElement = sectionRefs.current[i];
-        if (originalSectionElement) {
-            // Clone the section content
-            const clonedContent = originalSectionElement.cloneNode(true) as HTMLElement;
-            
-            // Basic styling adjustments for PDF
-            clonedContent.style.color = '#18181b'; // Ensure text is dark
-            clonedContent.style.backgroundColor = '#ffffff'; // Ensure background is white
-            
-            // Fix any potential styling issues that wouldn't work well in PDF
-            clonedContent.querySelectorAll('h1, h2, h3, h4, h5, h6').forEach(el => {
-              (el as HTMLElement).style.color = '#18181b';
-            });
-            
-            clonedContent.querySelectorAll('p, li, span, div').forEach(el => {
-              (el as HTMLElement).style.color = '#374151'; // Darker text for better readability
-            });
-            
-            // Remove animations or other interactive elements not suitable for PDF
-            clonedContent.querySelectorAll('[class*="animate-"]').forEach(el => {
-              el.classList.remove(...Array.from(el.classList).filter(c => c.startsWith('animate-')));
-            });
-            
-            sectionContainer.appendChild(clonedContent);
-        } else {
-          const missingContent = document.createElement('p');
-          missingContent.textContent = `Content for section ${sectionNumber} (${sectionTitle}) is not available (ref missing).`;
-          missingContent.style.color = '#ef4444';
-          sectionContainer.appendChild(missingContent);
-        }
-        main.appendChild(sectionContainer);
-
-        if (i < totalSections - 1) {
-            const pageBreak = document.createElement('div');
-            pageBreak.style.pageBreakBefore = 'always'; 
-            main.appendChild(pageBreak);
-        }
-      }
-      
-      pdfContainer.appendChild(main);
-      
-      // Generate PDF using html2pdf
-      const opt = {
-        margin: [10, 10, 10, 10],
-        filename: 'Move_and_Fuel_ATL.pdf',
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-      };
-      
-      await html2pdf().from(pdfContainer).set(opt).save();
+      // Append to body, click to trigger download, then remove
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
       
     } catch (error) {
-      console.error('Error generating PDF:', error);
+      console.error('Error downloading PDF:', error);
     } finally {
       setIsGeneratingPDF(false);
     }
@@ -751,29 +589,11 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
             
             {/* App screenshots grid - smaller constrained size */}
             <div className="flex flex-col items-center mb-10 animate-fade-in-up animation-delay-600">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-3xl mx-auto">
-                <div className="mx-auto w-full max-w-[200px]">
-                  <div className="rounded-xl overflow-hidden shadow-lg border border-zinc-800 aspect-[9/16]">
-                    <img src="/IMG_6628.PNG" alt="Leaderboard view" className="w-full h-full object-contain" />
-                    <div className="p-2 bg-black/70">
-                      <p className="text-white text-xs font-medium text-center">Leaderboard</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="mx-auto w-full max-w-[200px]">
-                  <div className="rounded-xl overflow-hidden shadow-lg border border-zinc-800 aspect-[9/16]">
-                    <img src="/IMG_6622.PNG" alt="Activity feed" className="w-full h-full object-contain" />
-                    <div className="p-2 bg-black/70">
-                      <p className="text-white text-xs font-medium text-center">Activity Feed</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="mx-auto w-full max-w-[200px]">
-                  <div className="rounded-xl overflow-hidden shadow-lg border border-zinc-800 aspect-[9/16]">
-                    <img src="/IMG_6631.png" alt="Social sharing" className="w-full h-full object-contain" />
-                    <div className="p-2 bg-black/70">
-                      <p className="text-white text-xs font-medium text-center">Social Sharing</p>
-                    </div>
+              <div className="mx-auto w-full max-w-[250px]">
+                <div className="rounded-xl overflow-hidden shadow-lg border border-zinc-800 aspect-[9/16]">
+                  <img src="/IMG_6622.PNG" alt="Activity feed" className="w-full h-full object-contain" />
+                  <div className="p-2 bg-black/70">
+                    <p className="text-white text-xs font-medium text-center">Activity Feed</p>
                   </div>
                 </div>
               </div>
