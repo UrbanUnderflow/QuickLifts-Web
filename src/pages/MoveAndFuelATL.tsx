@@ -361,23 +361,23 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
               <div className="bg-zinc-800 rounded-xl p-6 hover:bg-zinc-800/80 transition-colors">
                 <div className="flex items-center justify-center mb-2">
                   <Users className="w-6 h-6 text-[#E0FE10] mr-2" />
-                  <span className="text-3xl font-bold text-white">1.1K</span>
+                  <span className="text-3xl font-bold text-white">100+</span>
                 </div>
-                <p className="text-zinc-400">Creators</p>
+                <p className="text-zinc-400">Creators and growing</p>
               </div>
               <div className="bg-zinc-800 rounded-xl p-6 hover:bg-zinc-800/80 transition-colors">
                 <div className="flex items-center justify-center mb-2">
                   <Dumbbell className="w-6 h-6 text-[#E0FE10] mr-2" />
-                  <span className="text-3xl font-bold text-white">12K+</span>
+                  <span className="text-3xl font-bold text-white">30K+</span>
                 </div>
-                <p className="text-zinc-400">Workouts</p>
+                <p className="text-zinc-400">Workouts Completed</p>
               </div>
               <div className="bg-zinc-800 rounded-xl p-6 hover:bg-zinc-800/80 transition-colors">
                 <div className="flex items-center justify-center mb-2">
                   <Brain className="w-6 h-6 text-[#E0FE10] mr-2" />
-                  <span className="text-white font-bold">AI-powered</span>
+                  <span className="text-3xl text-white font-bold">50k+</span>
                 </div>
-                <p className="text-zinc-400">Programming</p>
+                <p className="text-zinc-400">AI Insights Generated</p>
               </div>
             </div>
             
@@ -477,7 +477,7 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
         >
           {/* Video Background */}
           <div className="absolute inset-0 z-0 overflow-hidden">
-            <div className="absolute inset-0 bg-black opacity-70 z-10"></div>
+            <div className="absolute inset-0 bg-black opacity-85 z-10"></div>
             <video 
               className="absolute min-w-full min-h-full object-cover transform rotate-180" 
               autoPlay 
