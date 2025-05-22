@@ -491,18 +491,18 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
           {/* Content */}
           <div className={`${getContentClasses()} relative z-20`}>
             <h2 className={`${isMobile ? 'text-3xl' : 'text-4xl md:text-5xl'} font-bold mb-8 text-white animate-fade-in-up`}>
-              <span className="text-[#E0FE10]">Hills4ATL</span>
+              <span className="text-red-400">Hills4ATL</span>
             </h2>
             <div className="flex flex-col md:flex-row items-center gap-8 mb-8">
               <div className="md:w-1/3 animate-fade-in-up animation-delay-300">
                 <img 
                   src="/aB.jpg" 
                   alt="Alvin 'A.B.' Bailey" 
-                  className={`${isMobile ? 'w-48 h-48' : 'w-64 h-64'} object-cover rounded-full mx-auto border-4 border-[#E0FE10]`}
+                  className={`${isMobile ? 'w-48 h-48' : 'w-64 h-64'} object-cover rounded-full mx-auto border-4 border-red-400`}
                 />
               </div>
               <div className="md:w-2/3 text-left animate-fade-in-up animation-delay-600">
-                <h3 className={`${isMobile ? 'text-xl' : 'text-2xl'} font-bold text-[#E0FE10] mb-4`}>Alvin "A.B." Bailey</h3>
+                <h3 className={`${isMobile ? 'text-xl' : 'text-2xl'} font-bold text-red-400 mb-4`}>Alvin "A.B." Bailey</h3>
                 <p className={`${isMobile ? 'text-base' : 'text-lg'} text-zinc-300 mb-3`}>
                   Professional DJ and founder of Hills4ATL, a free weekly workout community at Piedmont Park.
                 </p>
@@ -534,11 +534,11 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
                 <img 
                   src="/bealewis.jpg" 
                   alt="Atlanta Meal Prep Logo" 
-                  className={`${isMobile ? 'w-48 h-48' : 'w-64 h-64'} object-contain rounded-lg mx-auto p-2 bg-white`}
+                  className={`${isMobile ? 'w-48 h-48' : 'w-64 h-64'} object-fill rounded-lg mx-auto bg-white border-4 border-blue-400`}
                 />
               </div>
               <div className="md:w-2/3 text-left animate-fade-in-up animation-delay-600">
-                <h3 className="text-2xl font-bold text-[#E0FE10] mb-4">Bea Lewis</h3>
+                <h3 className="text-2xl font-bold text-blue-400 mb-4">Bea Lewis</h3>
                 <p className="text-lg text-zinc-300 mb-4">
                   Established in 2015, Atlanta Meal Prep has become one of the city's leading healthy meal delivery services under Bea Lewis's leadership.
                 </p>
