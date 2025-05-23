@@ -74,6 +74,12 @@ const adminCardsData = [
     link: "/admin/addpoints"
   },
   {
+    title: "Referral Award",
+    description: "Manually link referrals and award points for missed referral connections.",
+    icon: <Users className="w-5 h-5" />,
+    link: "/admin/referralAward"
+  },
+  {
     title: "Press Releases",
     description: "Create, edit, and manage press releases for public announcement.",
     icon: <FileText className="w-5 h-5" />,
