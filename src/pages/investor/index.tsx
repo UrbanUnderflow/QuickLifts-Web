@@ -163,7 +163,11 @@ const InvestorDataroom: React.FC = () => {
             Building the future of social fitness with passionate communities
           </p>
           <div className="flex flex-wrap justify-center gap-4">
-            <a href="#deck" onClick={(e) => { e.preventDefault(); scrollToSection('deck'); }} className="inline-flex items-center justify-center px-8 py-3 bg-[#E0FE10] hover:bg-[#d8f521] text-black font-medium rounded-lg transition-colors">
+            <a 
+              href="/PulsePitchDeck.pdf" 
+              download="PulsePitchDeck.pdf"
+              className="inline-flex items-center justify-center px-8 py-3 bg-[#E0FE10] hover:bg-[#d8f521] text-black font-medium rounded-lg transition-colors"
+            >
               <Download className="mr-2 h-5 w-5" />
               Download Pitch Deck
             </a>
@@ -1007,11 +1011,19 @@ const InvestorDataroom: React.FC = () => {
                       business model, growth strategy, and financial projections.
                     </p>
                     <div className="flex flex-wrap gap-4 justify-center">
-                      <a href="#" className="inline-flex items-center justify-center px-6 py-3 bg-[#E0FE10] hover:bg-[#d8f521] text-black font-medium rounded-lg transition-colors">
+                      <a 
+                        href="/PulsePitchDeck.pdf" 
+                        download="PulsePitchDeck.pdf"
+                        className="inline-flex items-center justify-center px-6 py-3 bg-[#E0FE10] hover:bg-[#d8f521] text-black font-medium rounded-lg transition-colors"
+                      >
                         <Download className="mr-2 h-5 w-5" />
                         Download Pitch Deck (PDF)
                       </a>
-                      <a href="#" className="inline-flex items-center justify-center px-6 py-3 bg-zinc-800 hover:bg-zinc-700 text-white font-medium rounded-lg transition-colors">
+                      <a 
+                        href="/PulseFinancialModel.xlsx" 
+                        download="PulseFinancialModel.xlsx"
+                        className="inline-flex items-center justify-center px-6 py-3 bg-zinc-800 hover:bg-zinc-700 text-white font-medium rounded-lg transition-colors"
+                      >
                         <Download className="mr-2 h-5 w-5" />
                         Download Financial Model (XLS)
                       </a>

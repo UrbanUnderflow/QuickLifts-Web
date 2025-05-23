@@ -969,3 +969,198 @@ exports.sendCheckinCalloutNotification = onDocumentCreated("checkins/{checkinId}
 
   return null;
 }); 
+
+// --- NEW FUNCTION: Handle Referral Bonus ---
+/**
+ * Firebase Function to handle referral bonuses when a new UserChallenge is created
+ * Triggers on: user-challenge/{docId} onCreate
+ */
+exports.handleReferralBonus = onDocumentCreated(`${userChallengeCollection}/{userChallengeId}`, async (event) => {
+    try {
+      const snap = event.data;
+      if (!snap) {
+        console.log(`[Referral Bonus] No data associated with the event for ${userChallengeCollection}/${event.params.userChallengeId}. Exiting.`);
+        return null;
+      }
+      
+      const newUserChallenge = snap.data();
+      const userChallengeId = event.params.userChallengeId;
+      
+      console.log(`[Referral Bonus] Processing new UserChallenge: ${userChallengeId}`);
+      
+      // Check if this UserChallenge has a referral chain with a sharedBy value
+      const referralChain = newUserChallenge.referralChain;
+      if (!referralChain || !referralChain.sharedBy || referralChain.sharedBy === '') {
+        console.log(`[Referral Bonus] No referral chain or sharedBy value found for UserChallenge: ${userChallengeId}`);
+        return null;
+      }
+      
+      const referrerId = referralChain.sharedBy;
+      const newUserId = newUserChallenge.userId;
+      const challengeId = newUserChallenge.challengeId;
+      
+      // Don't award bonus if user referred themselves
+      if (referrerId === newUserId) {
+        console.log(`[Referral Bonus] User ${newUserId} referred themselves, skipping bonus`);
+        return null;
+      }
+      
+      console.log(`[Referral Bonus] Looking for referrer ${referrerId} in challenge ${challengeId}`);
+      
+      // Find the referrer's UserChallenge for this specific challenge
+      const referrerQuery = await db.collection(userChallengeCollection)
+        .where('userId', '==', referrerId)
+        .where('challengeId', '==', challengeId)
+        .limit(1)
+        .get();
+      
+      if (referrerQuery.empty) {
+        console.log(`[Referral Bonus] Referrer ${referrerId} not found in challenge ${challengeId}. They may not be a participant yet.`);
+        return null;
+      }
+      
+      const referrerDoc = referrerQuery.docs[0];
+      const referrerUserChallenge = referrerDoc.data();
+      const referrerDocId = referrerDoc.id;
+      
+      console.log(`[Referral Bonus] Found referrer ${referrerUserChallenge.username} (${referrerId}) in challenge ${challengeId}`);
+      
+      // Award 25 points to the referrer
+      const currentReferralBonus = referrerUserChallenge.pulsePoints?.referralBonus || 0;
+      const newReferralBonus = currentReferralBonus + 25;
+      
+      // Update the referrer's UserChallenge with bonus points
+      await db.collection(userChallengeCollection).doc(referrerDocId).update({
+        'pulsePoints.referralBonus': newReferralBonus,
+        'pulsePoints.totalPoints': FieldValue.increment(25), // Also update total points
+        'updatedAt': FieldValue.serverTimestamp()
+      });
+      
+      console.log(`[Referral Bonus] Successfully awarded 25 points to ${referrerUserChallenge.username} (${referrerId}). New referral bonus total: ${newReferralBonus}`);
+      
+      // Send push notification to referrer
+      const referrerFcmToken = referrerUserChallenge.fcmToken;
+      if (referrerFcmToken && referrerFcmToken !== '') {
+        try {
+          // Get challenge title for notification
+          const challengeDoc = await db.collection('sweatlist-collection').doc(challengeId).get();
+          const challengeTitle = challengeDoc.exists ? 
+            (challengeDoc.data().challenge?.title || challengeDoc.data().title || 'Challenge') : 
+            'Challenge';
+          
+          const notificationPayload = {
+            token: referrerFcmToken,
+            notification: {
+              title: '💰 +25 Pulse Points!',
+              body: `Your friend ${newUserChallenge.username} just joined "${challengeTitle}" using your link! You earned 25 points.`
+            },
+            data: {
+              type: 'referral_join_bonus',
+              challengeId: challengeId,
+              userId: referrerId,
+              referredUserId: newUserId,
+              referredUsername: newUserChallenge.username || 'Unknown',
+              pointsEarned: '25',
+              timestamp: String(Math.floor(Date.now() / 1000))
+            },
+            apns: {
+              payload: {
+                aps: {
+                  alert: {
+                    title: '💰 +25 Pulse Points!',
+                    body: `Your friend ${newUserChallenge.username} just joined "${challengeTitle}" using your link! You earned 25 points.`
+                  },
+                  badge: 1,
+                  sound: 'default'
+                }
+              }
+            },
+            android: {
+              priority: 'high',
+              notification: { sound: 'default' }
+            }
+          };
+          
+          await messaging.send(notificationPayload);
+          console.log(`[Referral Bonus] Successfully sent notification to ${referrerUserChallenge.username} (${referrerId})`);
+          
+        } catch (notificationError) {
+          console.error(`[Referral Bonus] Failed to send notification to ${referrerId}:`, notificationError);
+          // Don't fail the entire function if notification fails
+        }
+      } else {
+        console.log(`[Referral Bonus] No FCM token found for referrer ${referrerId}, skipping notification`);
+      }
+      
+      // Log successful referral bonus for analytics
+      console.log(`[Referral Bonus] COMPLETED: Referrer ${referrerUserChallenge.username} (${referrerId}) earned 25 points for referring ${newUserChallenge.username} (${newUserId}) to challenge ${challengeId}`);
+      
+      return null;
+      
+    } catch (error) {
+      console.error('[Referral Bonus] Error processing referral bonus:', error);
+      // Don't throw error to avoid retries - log and continue
+      return null;
+    }
+});
+
+// --- Import for HTTPS functions ---
+const {onCall} = require("firebase-functions/v2/https");
+
+// --- NEW FUNCTION: Process Retroactive Referral Bonuses ---
+/**
+ * Optional: Function to handle retroactive referral bonuses
+ * This can be called manually to process existing UserChallenges that may have missed referral bonuses
+ */
+exports.processRetroactiveReferralBonuses = onCall({
+  enforceAppCheck: false // Set to true if you have App Check enabled
+}, async (request) => {
+  try {
+    // Verify the request is from an authenticated admin user
+    if (!request.auth || !request.auth.token.admin) {
+      throw new Error('Only admin users can trigger retroactive processing');
+    }
+    
+    console.log('[Retroactive Referral] Starting retroactive referral bonus processing...');
+    
+    const userChallengesSnapshot = await db.collection(userChallengeCollection).get();
+    let processedCount = 0;
+    let bonusesAwarded = 0;
+    
+    for (const doc of userChallengesSnapshot.docs) {
+      const userChallenge = doc.data();
+      const referralChain = userChallenge.referralChain;
+      
+      if (referralChain && referralChain.sharedBy && referralChain.sharedBy !== '' && referralChain.sharedBy !== userChallenge.userId) {
+        try {
+          // Simulate the onCreate trigger for this document by creating a fake event
+          const fakeEvent = {
+            data: { 
+              data: () => userChallenge,
+              exists: true
+            },
+            params: { userChallengeId: doc.id }
+          };
+          
+          await exports.handleReferralBonus(fakeEvent);
+          processedCount++;
+          bonusesAwarded++; // This is approximate - the actual function will determine if bonus was awarded
+        } catch (error) {
+          console.error(`[Retroactive Referral] Error processing ${doc.id}:`, error);
+        }
+      }
+    }
+    
+    console.log(`[Retroactive Referral] Completed processing ${processedCount} UserChallenges`);
+    
+    return {
+      success: true,
+      processedCount: processedCount,
+      message: `Processed ${processedCount} UserChallenges for retroactive referral bonuses`
+    };
+    
+  } catch (error) {
+    console.error('[Retroactive Referral] Error:', error);
+    throw new Error('Error processing retroactive referral bonuses');
+  }
+}); 
