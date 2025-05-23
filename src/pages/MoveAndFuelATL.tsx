@@ -480,7 +480,7 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
           <div className="absolute inset-0 z-0 overflow-hidden">
             <div className="absolute inset-0 bg-black opacity-85 z-10"></div>
             <video 
-              className="absolute min-w-full min-h-full object-cover" 
+              className="absolute min-w-full min-h-full object-cover transform rotate-180" 
               autoPlay 
               loop 
               muted 
