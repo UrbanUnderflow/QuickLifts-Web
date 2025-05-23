@@ -461,7 +461,7 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
                   Founder & CEO of Pulse Fitness Collective, reimagining how we facilitate connection and community through fitness experiences.
                 </p>
                 <ul className="list-disc list-inside text-zinc-400 space-y-2 text-sm md:text-base">
-                  <li>Principle Engineer at companies such as General Motors, IQVIA, Warby Parker, and more</li>
+                  <li>Principle Engineer at industry leading companies such as General Motors, IQVIA, Pfizer, Warby Parker, and more</li>
                   <li>Former Track and Field Athlete at Florida State University</li>
                   <li>Passionate about making fitness social, accessible, and rewarding</li>
                   <li>Creating technology that bridges the gap between in-person and digital fitness connection.</li>
@@ -691,6 +691,8 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
               <div className="bg-zinc-800 rounded-xl p-6">
                 <h3 className="text-xl font-bold text-white mb-2">Duration</h3>
                 <p className="text-4xl font-bold text-[#E0FE10]">45 days</p>
+                <p className="text-zinc-400 text-sm mt-1">per cohort</p>
+
               </div>
               <div className="bg-zinc-800 rounded-xl p-6">
                 <h3 className="text-xl font-bold text-white mb-2">Target</h3>
