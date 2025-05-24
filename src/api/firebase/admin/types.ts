@@ -7,6 +7,8 @@ export interface DailyPrompt {
   text: string;
   exerciseId?: string;
   exerciseName?: string;
+  challengeId?: string;
+  challengeName?: string;
   createdAt: Date;
   updatedAt: Date;
 }

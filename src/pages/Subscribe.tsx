@@ -1,11 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import SubscriptionCard from '../components/SubscriptionCard';
-import FAQ from '../components/FAQ';
 import { useScrollFade } from '../hooks/useScrollFade';
-import { CheckCircle, Star, Shield, Clock, Zap, Users, UserCheck, Video, ChevronDown, LogOut } from 'lucide-react';
-import { loadStripe, Stripe } from '@stripe/stripe-js'; // Import Stripe.js
+import { CheckCircle, Star, Shield, Clock, Users, ChevronDown, LogOut } from 'lucide-react';
+import { loadStripe } from '@stripe/stripe-js'; // Import Stripe.js
 import { useUser } from '../hooks/useUser'; // Import useUser to get the userId
-import authService from '../api/firebase/auth'; // Import authService
 import { signOut } from 'firebase/auth'; // Import signOut
 import { auth } from '../api/firebase/config'; // Import auth instance
 import { getStripePublishableKey, isLocalhost } from '../utils/stripeKey'; // Import our utility functions

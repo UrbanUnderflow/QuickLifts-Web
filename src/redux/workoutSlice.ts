@@ -1,6 +1,4 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
-import { Workout, WorkoutSummary } from '../api/firebase/workout/types';
-import { ExerciseLog } from '../api/firebase/exercise/types';
 
 interface WorkoutState {
   currentWorkout: Record<string, any> | null;

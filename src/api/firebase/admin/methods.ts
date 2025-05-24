@@ -85,6 +85,14 @@ export const adminMethods: AdminService = {
         promptData.exerciseName = prompt.exerciseName;
       }
       
+      if (prompt.challengeId) {
+        promptData.challengeId = prompt.challengeId;
+      }
+      
+      if (prompt.challengeName) {
+        promptData.challengeName = prompt.challengeName;
+      }
+      
       await setDoc(doc(db, 'daily-reflections', promptId), promptData);
       return true;
     } catch (error) {
