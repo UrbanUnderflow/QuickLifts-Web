@@ -2,7 +2,11 @@ import React from 'react';
 import { useRouter } from 'next/router';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import Head from 'next/head';
-import { Users, Settings, BarChart2, Bell, FileText, CheckSquare, PlusSquare, Image as ImageIcon, Zap, TrendingUp, Dumbbell, Tag, Users2, Activity, Award, Clock, Gift, Edit3, Send, Server } from 'lucide-react';
+import { Users, Settings, BarChart2, Bell, FileText, CheckSquare, PlusSquare, Image as ImageIcon, Zap, TrendingUp, Dumbbell, Tag, Users2, Activity, Award, Clock, Gift, Edit3, Send, Server, ChevronDown } from 'lucide-react';
+import { useDispatch, useSelector } from 'react-redux';
+import { RootState } from '../../redux/store';
+import { toggleDevMode } from '../../redux/devModeSlice';
+import { initializeFirebase } from '../../api/firebase/config';
 
 interface AdminCardProps {
   title: string;
@@ -126,8 +130,118 @@ const adminCardsData = [
     description: "Test the check-in callout notification functionality.",
     icon: <Send className="w-5 h-5" />,
     link: "/admin/testCheckinNotification"
+  },
+  {
+    title: "Notification Logs",
+    description: "View notification logs and payloads for debugging and monitoring.",
+    icon: <Bell className="w-5 h-5" />,
+    link: "/admin/NotificationLogs"
   }
 ];
+
+const EnvironmentSwitcher: React.FC = () => {
+  const dispatch = useDispatch();
+  const isDevelopment = useSelector((state: RootState) => state.devMode.isDevelopment);
+  const [isDropdownOpen, setIsDropdownOpen] = React.useState(false);
+  const isLocalhost = typeof window !== 'undefined' && window.location.hostname === 'localhost';
+
+  const handleEnvironmentSwitch = (newMode: boolean) => {
+    if (newMode === isDevelopment) {
+      setIsDropdownOpen(false);
+      return; // No change needed
+    }
+
+    console.log('[Admin Environment Switch] Switching environment:', {
+      from: isDevelopment ? 'development' : 'production',
+      to: newMode ? 'development' : 'production',
+      isLocalhost,
+      source: isLocalhost ? '.env.local' : (newMode ? 'firebaseConfigs' : 'Netlify'),
+      timestamp: new Date().toISOString()
+    });
+
+    window.localStorage.setItem('devMode', String(newMode));
+    dispatch(toggleDevMode());
+    initializeFirebase(newMode);
+    
+    setIsDropdownOpen(false);
+    
+    // Add a slight delay before reloading to ensure Firebase initialization completes
+    setTimeout(() => {
+      window.location.reload();
+    }, 300);
+  };
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+        className="flex items-center gap-2 px-3 py-2 rounded-lg border border-zinc-700 bg-[#1a1e24] text-white hover:bg-[#262a30] transition-colors"
+        title={`Currently using ${isDevelopment ? 'development' : 'production'} configuration`}
+      >
+        <Server className="w-4 h-4" />
+        <span className="text-sm font-medium">
+          {isDevelopment ? 'Dev Environment' : 'Production Environment'}
+        </span>
+        <ChevronDown className={`w-4 h-4 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
+      </button>
+
+      {isDropdownOpen && (
+        <>
+          {/* Backdrop */}
+          <div 
+            className="fixed inset-0 z-10" 
+            onClick={() => setIsDropdownOpen(false)}
+          />
+          
+          {/* Dropdown */}
+          <div className="absolute top-full mt-1 right-0 w-64 bg-[#1a1e24] border border-zinc-700 rounded-lg shadow-xl z-20">
+            <div className="p-2">
+              <button
+                onClick={() => handleEnvironmentSwitch(false)}
+                className={`w-full text-left px-3 py-2 rounded-md transition-colors ${
+                  !isDevelopment 
+                    ? 'bg-[#E0FE10] text-black font-medium' 
+                    : 'text-zinc-300 hover:bg-[#262a30] hover:text-white'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <div className={`w-2 h-2 rounded-full ${!isDevelopment ? 'bg-black' : 'bg-zinc-600'}`} />
+                  <div>
+                    <div className="font-medium">Production</div>
+                    <div className="text-xs opacity-75">Live Firebase project</div>
+                  </div>
+                </div>
+              </button>
+              
+              <button
+                onClick={() => handleEnvironmentSwitch(true)}
+                className={`w-full text-left px-3 py-2 rounded-md transition-colors ${
+                  isDevelopment 
+                    ? 'bg-[#E0FE10] text-black font-medium' 
+                    : 'text-zinc-300 hover:bg-[#262a30] hover:text-white'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <div className={`w-2 h-2 rounded-full ${isDevelopment ? 'bg-black' : 'bg-zinc-600'}`} />
+                  <div>
+                    <div className="font-medium">Development</div>
+                    <div className="text-xs opacity-75">Dev Firebase project</div>
+                  </div>
+                </div>
+              </button>
+            </div>
+            
+            <div className="border-t border-zinc-700 p-2">
+              <div className="text-xs text-zinc-500 px-3 py-1">
+                Config source: {isLocalhost ? '.env.local' : (isDevelopment ? 'firebaseConfigs' : 'Netlify')}
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
 
 const AdminHome: React.FC = () => {
   return (
@@ -137,14 +251,18 @@ const AdminHome: React.FC = () => {
       </Head>
       <div className="min-h-screen bg-[#111417] text-white py-10 px-4">
         <div className="max-w-6xl mx-auto">
-          <h1 className="text-2xl font-bold mb-8 flex items-center">
-            <span className="text-[#d7ff00] mr-2">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-7 h-7">
-                <path d="M4.5 6.375a4.125 4.125 0 118.25 0 4.125 4.125 0 01-8.25 0zM14.25 8.625a3.375 3.375 0 116.75 0 3.375 3.375 0 01-6.75 0zM1.5 19.125a7.125 7.125 0 0114.25 0v.003l-.001.119a.75.75 0 01-.363.63 13.067 13.067 0 01-6.761 1.873c-2.472 0-4.786-.684-6.76-1.873a.75.75 0 01-.364-.63l-.001-.122zM17.25 19.128l-.001.144a2.25 2.25 0 01-.233.96 10.088 10.088 0 005.06-1.01.75.75 0 00.42-.643 4.875 4.875 0 00-6.957-4.611 8.586 8.586 0 011.71 5.157v.003z" />
-              </svg>
-            </span>
-            Admin Dashboard
-          </h1>
+          <div className="flex items-center justify-between mb-8">
+            <h1 className="text-2xl font-bold flex items-center">
+              <span className="text-[#d7ff00] mr-2">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-7 h-7">
+                  <path d="M4.5 6.375a4.125 4.125 0 118.25 0 4.125 4.125 0 01-8.25 0zM14.25 8.625a3.375 3.375 0 116.75 0 3.375 3.375 0 01-6.75 0zM1.5 19.125a7.125 7.125 0 0114.25 0v.003l-.001.119a.75.75 0 01-.363.63 13.067 13.067 0 01-6.761 1.873c-2.472 0-4.786-.684-6.76-1.873a.75.75 0 01-.364-.63l-.001-.122zM17.25 19.128l-.001.144a2.25 2.25 0 01-.233.96 10.088 10.088 0 005.06-1.01.75.75 0 00.42-.643 4.875 4.875 0 00-6.957-4.611 8.586 8.586 0 011.71 5.157v.003z" />
+                </svg>
+              </span>
+              Admin Dashboard
+            </h1>
+            
+            <EnvironmentSwitcher />
+          </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {adminCardsData.map((func, index) => (

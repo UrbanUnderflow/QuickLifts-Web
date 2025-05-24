@@ -1,8 +1,11 @@
 // Import necessary Firebase modules
-import * as admin from 'firebase-admin';
-import { HttpsError, onCall } from "firebase-functions/v2/https"; // Gen 2 imports
-import * as logger from "firebase-functions/logger"; // Gen 2 logger
+const admin = require('firebase-admin');
+const { HttpsError, onCall } = require("firebase-functions/v2/https"); // Gen 2 imports
+const logger = require("firebase-functions/logger"); // Gen 2 logger
 // const cors = require('cors')({origin: true}); // CORS typically handled by Cloud Functions v2 automatically or via framework
+
+// Import notification logger
+const { sendNotificationWithLogging } = require('./notificationLogger');
 
 // Ensure Firebase Admin SDK is initialized (typically done in index.js)
 // Use admin.initializeApp() if not initialized elsewhere, 
@@ -12,11 +15,10 @@ import * as logger from "firebase-functions/logger"; // Gen 2 logger
 // }
 
 // Adjust initialization for potential ES Module default export
-const adminInstance = admin.default ?? admin;
-const messaging = adminInstance.messaging();
+const messaging = admin.messaging();
 
 /**
- * Sends a single push notification to a specific FCM token.
+ * Sends a single push notification to a specific FCM token with logging.
  * @param {string} fcmToken The target device's FCM token.
  * @param {string} title Notification title.
  * @param {string} body Notification body.
@@ -24,57 +26,21 @@ const messaging = adminInstance.messaging();
  * @returns {Promise<object>} Result object with success status and message.
  */
 async function sendNotification(fcmToken, title, body, customData = {}) {
-  const message = {
-    token: fcmToken,
-    notification: {
-      title: title,
-      body: body,
-    },
-    data: customData,
-    apns: {
-      payload: {
-        aps: {
-          alert: {
-            title: title,
-            body: body,
-          },
-          badge: 1, // Consider if badge count should be dynamic
-          sound: 'default' // Ensure sound is configured correctly for your app
-        },
-      },
-    },
-    android: {
-      priority: 'high',
-      notification: {
-        sound: 'default' // Ensure sound is configured correctly for your app
-      }
-    }
-  };
-
-  try {
-    const response = await messaging.send(message);
-    logger.info('Successfully sent notification:', response); // Use Gen 2 logger
-    return { success: true, message: 'Notification sent successfully.' };
-  } catch (error) {
-    logger.error('Error sending notification:', error); // Use Gen 2 logger
-    // Handle specific errors like invalid token
-    // Use optional chaining and check error code safely
-    const errorCode = error?.code;
-    if (errorCode === 'messaging/registration-token-not-registered') {
-      // Optional: Add logic here to remove the invalid token from Firestore
-      logger.warn(`Invalid FCM token: ${fcmToken}. Consider removing it.`); // Use Gen 2 logger
-    }
-    // Re-throw the error
-    // Use optional chaining for error message
-    throw new HttpsError('internal', 'Error sending notification', error?.message || 'Unknown error');
-  }
+  return await sendNotificationWithLogging(
+    fcmToken, 
+    title, 
+    body, 
+    customData, 
+    'SINGLE_NOTIFICATION', 
+    'sendSingleNotification'
+  );
 }
 
 /**
  * Firebase Callable Function (Gen 2) to send a single notification.
  * Expects data in format: { fcmToken: "...", payload: { notification: { title: "...", body: "..." }, data: { ... } } }
  */
-export const sendSingleNotification = onCall(async (request) => {
+const sendSingleNotification = onCall(async (request) => {
   // Gen 2 uses request.auth instead of context.auth
   // --- SECURITY NOTE --- 
   // Consider adding additional authentication checks here.
@@ -129,4 +95,7 @@ export const sendSingleNotification = onCall(async (request) => {
       error?.message || 'Unknown error'
     );
   }
-}); 
+});
+
+// Export using CommonJS
+module.exports = { sendSingleNotification }; 

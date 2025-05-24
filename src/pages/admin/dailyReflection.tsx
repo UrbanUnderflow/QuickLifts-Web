@@ -5,8 +5,12 @@ import { adminMethods } from '../../api/firebase/admin/methods';
 import { DailyPrompt } from '../../api/firebase/admin/types';
 import { Timestamp } from 'firebase/firestore';
 import { exerciseService, Exercise } from '../../api/firebase/exercise';
+import { workoutService } from '../../api/firebase/workout/service';
+import { SweatlistCollection } from '../../api/firebase/workout/types';
 import { formatDate } from '../../utils/formatDate';
-import { Loader2, CalendarIcon, Search, CheckCircle, AlertTriangle, XCircle } from 'lucide-react';
+import { Loader2, CalendarIcon, Search, CheckCircle, AlertTriangle, XCircle, ListChecks, RefreshCw } from 'lucide-react';
+
+const CHALLENGE_CACHE_KEY = 'adminAllChallengesCache';
 
 const DailyReflectionPage: React.FC = () => {
   const [formData, setFormData] = useState<{
@@ -14,6 +18,8 @@ const DailyReflectionPage: React.FC = () => {
     text: string;
     exerciseId?: string;
     exerciseName?: string;
+    challengeId?: string;
+    challengeName?: string;
   }>({
     date: new Date(new Date().setHours(0, 0, 0, 0)),
     text: '',
@@ -30,6 +36,16 @@ const DailyReflectionPage: React.FC = () => {
   const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
   const searchResultsRef = useRef<HTMLDivElement>(null);
   
+  // Challenge search state
+  const [allChallenges, setAllChallenges] = useState<SweatlistCollection[]>([]);
+  const [isLoadingAllChallenges, setIsLoadingAllChallenges] = useState(true);
+  const [isRefreshingChallenges, setIsRefreshingChallenges] = useState(false);
+  const [selectedChallenge, setSelectedChallenge] = useState<SweatlistCollection | null>(null);
+  const [challengeSearchQuery, setChallengeSearchQuery] = useState('');
+  const [challengeSearchResults, setChallengeSearchResults] = useState<SweatlistCollection[]>([]);
+  const challengeResultsRef = useRef<HTMLDivElement>(null);
+  const challengeInputRef = useRef<HTMLInputElement>(null);
+
   // Format date for the input field
   const formatDateForInput = (date: Date) => {
     return date.toISOString().split('T')[0];
@@ -44,6 +60,11 @@ const DailyReflectionPage: React.FC = () => {
     const handleClickOutside = (event: MouseEvent) => {
       if (searchResultsRef.current && !searchResultsRef.current.contains(event.target as Node)) {
         setSearchResults([]);
+      }
+      if (challengeResultsRef.current && !challengeResultsRef.current.contains(event.target as Node) &&
+          challengeInputRef.current !== event.target &&
+          !challengeInputRef.current?.contains(event.target as Node)) {
+        setChallengeSearchResults([]);
       }
     };
 
@@ -136,6 +157,29 @@ const DailyReflectionPage: React.FC = () => {
     setSearchQuery('');
   };
 
+  const selectChallenge = (challenge: SweatlistCollection) => {
+    setSelectedChallenge(challenge);
+    setFormData(prev => ({
+      ...prev,
+      challengeId: challenge.id,
+      challengeName: challenge.challenge?.title || challenge.id
+    }));
+    setChallengeSearchQuery(challenge.challenge?.title || challenge.id);
+    setChallengeSearchResults([]);
+  };
+
+  const clearSelectedChallenge = () => {
+    setSelectedChallenge(null);
+    setFormData(prev => {
+      const updated = { ...prev };
+      // Remove these properties entirely rather than setting to undefined
+      delete updated.challengeId;
+      delete updated.challengeName;
+      return updated;
+    });
+    setChallengeSearchQuery('');
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -160,6 +204,10 @@ const DailyReflectionPage: React.FC = () => {
         promptData.exerciseName = formData.exerciseName.trim();
       }
       
+      if (formData.challengeId && formData.challengeId.trim()) {
+        promptData.challengeId = formData.challengeId.trim();
+      }
+      
       const success = await adminMethods.createDailyPrompt(promptData as DailyPrompt);
       
       if (success) {
@@ -169,7 +217,9 @@ const DailyReflectionPage: React.FC = () => {
           text: '',
         });
         setSelectedExercise(null);
+        setSelectedChallenge(null);
         setSearchQuery('');
+        setChallengeSearchQuery('');
         fetchExistingPrompts(); // Refresh the list
       } else {
         setErrorMessage('Failed to create daily reflection.');
@@ -182,6 +232,82 @@ const DailyReflectionPage: React.FC = () => {
     }
   };
 
+  // Challenge fetching and caching logic
+  const fetchAndCacheChallenges = React.useCallback(async (fromRefreshButton = false) => {
+    if (!fromRefreshButton) setIsLoadingAllChallenges(true);
+    else setIsRefreshingChallenges(true);
+
+    console.log('[Challenge Cache] Attempting to fetch challenges from Firestore...');
+    try {
+      const collections = await workoutService.fetchAllAdminCollections();
+      const challengesData = collections.map(c => c.toDictionary());
+      
+      localStorage.setItem(CHALLENGE_CACHE_KEY, JSON.stringify(challengesData));
+      console.log(`[Challenge Cache] ${challengesData.length} challenges fetched and cached in localStorage.`);
+      
+      setAllChallenges(collections);
+      console.log('[Challenge Cache] All challenges state updated with Firestore data:', collections);
+      setErrorMessage(null);
+      if (fromRefreshButton) setSuccessMessage("Challenge list refreshed from Firestore.");
+
+    } catch (error) {
+      console.error('[Challenge Cache] Error fetching challenges from Firestore:', error);
+      setErrorMessage('Failed to fetch challenge list from Firestore. Previous cache (if any) might be used.');
+    } finally {
+      if (!fromRefreshButton) setIsLoadingAllChallenges(false);
+      else setIsRefreshingChallenges(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    console.log('[Challenge Cache] Component did mount. Checking localStorage for cached challenges...');
+    const cachedChallengesJSON = localStorage.getItem(CHALLENGE_CACHE_KEY);
+    if (cachedChallengesJSON) {
+      try {
+        const cachedData = JSON.parse(cachedChallengesJSON);
+        const instantiatedChallenges = cachedData.map((data: any) => new SweatlistCollection(data));
+        setAllChallenges(instantiatedChallenges);
+        setIsLoadingAllChallenges(false);
+        console.log('[Challenge Cache] Loaded challenges from localStorage:', instantiatedChallenges);
+      } catch (e) {
+        console.error("[Challenge Cache] Error parsing challenges from localStorage, fetching from Firestore.", e);
+        localStorage.removeItem(CHALLENGE_CACHE_KEY);
+        fetchAndCacheChallenges();
+      }
+    } else {
+      console.log('[Challenge Cache] No challenges found in localStorage. Fetching from Firestore...');
+      fetchAndCacheChallenges();
+    }
+  }, [fetchAndCacheChallenges]);
+
+  // Challenge search logic
+  const handleChallengeSearchLogic = React.useCallback((searchQuery: string) => {
+    console.log(`[Challenge Search Logic] Query: "${searchQuery}"`);
+    if (!searchQuery.trim()) {
+      setChallengeSearchResults([]);
+      return;
+    }
+    if (isLoadingAllChallenges && allChallenges.length === 0) {
+      console.log(`[Challenge Search Logic] Initial challenge list still loading.`);
+      setChallengeSearchResults([]);
+      return;
+    }
+    const lowerCaseQuery = searchQuery.toLowerCase();
+    const filteredChallenges = allChallenges.filter(collection =>
+      (collection.id.toLowerCase().includes(lowerCaseQuery)) ||
+      (collection.challenge?.title?.toLowerCase().includes(lowerCaseQuery)) ||
+      (collection.challenge?.status?.toLowerCase().includes(lowerCaseQuery))
+    ).slice(0, 10);
+    console.log(`[Challenge Search Logic] Filtered results:`, filteredChallenges.map(c => c.challenge?.title || c.id));
+    setChallengeSearchResults(filteredChallenges);
+  }, [allChallenges, isLoadingAllChallenges]);
+
+  const handleChallengeQueryChange = React.useCallback((newQuery: string) => {
+    setChallengeSearchQuery(newQuery);
+    console.log(`[Typing - Challenge] Query changed to: "${newQuery}"`);
+    handleChallengeSearchLogic(newQuery);
+  }, [handleChallengeSearchLogic]);
+
   return (
     <AdminRouteGuard>
       <Head>
@@ -189,13 +315,30 @@ const DailyReflectionPage: React.FC = () => {
       </Head>
       <div className="min-h-screen bg-[#111417] text-white py-10 px-4">
         <div className="max-w-4xl mx-auto">
-          <h1 className="text-2xl font-bold mb-8 text-[#d7ff00] flex items-center">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-7 h-7 mr-2">
-              <path d="M21.731 2.269a2.625 2.625 0 0 0-3.712 0l-1.157 1.157 3.712 3.712 1.157-1.157a2.625 2.625 0 0 0 0-3.712ZM19.513 8.199l-3.712-3.712-8.4 8.4a5.25 5.25 0 0 0-1.32 2.214l-.8 2.685a.75.75 0 0 0 .933.933l2.685-.8a5.25 5.25 0 0 0 2.214-1.32l8.4-8.4Z" />
-              <path d="M5.25 5.25a3 3 0 0 0-3 3v10.5a3 3 0 0 0 3 3h10.5a3 3 0 0 0 3-3V13.5a.75.75 0 0 0-1.5 0v5.25a1.5 1.5 0 0 1-1.5 1.5H5.25a1.5 1.5 0 0 1-1.5-1.5V8.25a1.5 1.5 0 0 1 1.5-1.5h5.25a.75.75 0 0 0 0-1.5H5.25Z" />
-            </svg>
-            Daily Reflection
-          </h1>
+          <div className="flex justify-between items-center mb-8">
+            <h1 className="text-2xl font-bold text-[#d7ff00] flex items-center">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-7 h-7 mr-2">
+                <path d="M21.731 2.269a2.625 2.625 0 0 0-3.712 0l-1.157 1.157 3.712 3.712 1.157-1.157a2.625 2.625 0 0 0 0-3.712ZM19.513 8.199l-3.712-3.712-8.4 8.4a5.25 5.25 0 0 0-1.32 2.214l-.8 2.685a.75.75 0 0 0 .933.933l2.685-.8a5.25 5.25 0 0 0 2.214-1.32l8.4-8.4Z" />
+                <path d="M5.25 5.25a3 3 0 0 0-3 3v10.5a3 3 0 0 0 3 3h10.5a3 3 0 0 0 3-3V13.5a.75.75 0 0 0-1.5 0v5.25a1.5 1.5 0 0 1-1.5 1.5H5.25a1.5 1.5 0 0 1-1.5-1.5V8.25a1.5 1.5 0 0 1 1.5-1.5h5.25a.75.75 0 0 0 0-1.5H5.25Z" />
+              </svg>
+              Daily Reflection
+            </h1>
+            
+            <button
+              onClick={() => fetchAndCacheChallenges(true)}
+              disabled={isLoadingAllChallenges || isRefreshingChallenges}
+              className="flex items-center px-3 py-2 rounded-lg text-sm font-medium bg-[#262a30] text-[#d7ff00] hover:bg-[#31363c] border border-gray-700 transition disabled:opacity-70"
+            >
+              {isRefreshingChallenges ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : <RefreshCw size={16} className="mr-2"/>}
+              {isRefreshingChallenges ? 'Refreshing Challenges...' : 'Refresh Challenge List'}
+            </button>
+          </div>
+
+          {(isLoadingAllChallenges && allChallenges.length === 0) && (
+            <div className="my-4 p-3 bg-purple-900/30 text-purple-400 border border-purple-700 rounded-lg flex items-center animate-fadeIn">
+              <Loader2 size={20} className="animate-spin mr-2" /> Loading initial challenge list from cache/Firestore...
+            </div>
+          )}
 
           {/* Create Prompt Form */}
           <div className="bg-[#1a1e24] rounded-xl p-6 mb-6 shadow-xl">
@@ -298,6 +441,81 @@ const DailyReflectionPage: React.FC = () => {
                 </p>
               </div>
               
+              {/* Challenge Search */}
+              <div>
+                <label htmlFor="challengeSearch" className="block text-gray-300 mb-2 text-sm font-medium">
+                  Link to Challenge/Round (Optional)
+                </label>
+                <div className="relative">
+                  {selectedChallenge ? (
+                    <div className="flex items-center w-full bg-[#262a30] border border-gray-700 rounded-lg px-4 py-3 text-white">
+                      <ListChecks size={18} className="mr-2 text-[#d7ff00]" />
+                      <span className="flex-1">{selectedChallenge.challenge?.title || selectedChallenge.id}</span>
+                      <span className="text-xs text-gray-400 ml-2">({selectedChallenge.challenge?.status || 'N/A'})</span>
+                      <button 
+                        type="button" 
+                        onClick={clearSelectedChallenge} 
+                        className="ml-2 text-gray-400 hover:text-white"
+                      >
+                        <XCircle size={18} />
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex items-center w-full bg-[#262a30] border border-gray-700 rounded-lg overflow-hidden">
+                        <input
+                          id="challengeSearch"
+                          ref={challengeInputRef}
+                          type="text"
+                          value={challengeSearchQuery}
+                          onChange={(e) => handleChallengeQueryChange(e.target.value)}
+                          placeholder="Search for a challenge/round..."
+                          className="flex-1 bg-transparent px-4 py-3 focus:outline-none text-white placeholder-gray-500"
+                          disabled={isLoadingAllChallenges && allChallenges.length === 0}
+                        />
+                        <div className="px-4 py-3 text-gray-400">
+                          {(isLoadingAllChallenges && allChallenges.length === 0) ? (
+                            <Loader2 className="animate-spin h-5 w-5" />
+                          ) : (
+                            <Search size={18} />
+                          )}
+                        </div>
+                      </div>
+                      
+                      {/* Challenge Search Results Dropdown */}
+                      {challengeSearchResults.length > 0 && (
+                        <div 
+                          ref={challengeResultsRef} 
+                          className="absolute z-10 w-full mt-1 max-h-60 overflow-auto bg-[#262a30] border border-gray-700 rounded-lg shadow-lg"
+                        >
+                          {challengeSearchResults.map((challenge) => (
+                            <div
+                              key={challenge.id}
+                              onClick={() => selectChallenge(challenge)}
+                              className="p-3 hover:bg-[#31363c] cursor-pointer border-b border-gray-700 last:border-b-0"
+                            >
+                              <div className="text-white font-medium">{challenge.challenge?.title || challenge.id}</div>
+                              <div className="text-gray-400 text-xs">
+                                ID: {challenge.id} | Status: {challenge.challenge?.status || 'N/A'}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      
+                      {(challengeSearchQuery && challengeSearchResults.length === 0 && !(isLoadingAllChallenges && allChallenges.length === 0)) && (
+                        <div className="absolute z-10 w-full mt-1 bg-[#262a30] border border-gray-700 rounded-lg shadow-lg p-3 text-gray-400 text-sm">
+                          No challenges found matching "{challengeSearchQuery}".
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+                <p className="mt-1 text-xs text-gray-400">
+                  Optionally link this reflection to a specific challenge or round
+                </p>
+              </div>
+              
               {/* Submit Button */}
               <button
                 type="submit"
@@ -340,6 +558,7 @@ const DailyReflectionPage: React.FC = () => {
                       <th className="pb-3 font-medium text-gray-300">Date</th>
                       <th className="pb-3 font-medium text-gray-300">Reflection</th>
                       <th className="pb-3 font-medium text-gray-300">Linked Exercise</th>
+                      <th className="pb-3 font-medium text-gray-300">Linked Challenge</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -351,8 +570,18 @@ const DailyReflectionPage: React.FC = () => {
                         <td className="py-4 pr-4">
                           <div className="line-clamp-2">{prompt.text}</div>
                         </td>
-                        <td className="py-4">
+                        <td className="py-4 pr-4">
                           {prompt.exerciseName || '-'}
+                        </td>
+                        <td className="py-4">
+                          {(prompt as any).challengeId ? (
+                            <div>
+                              <div className="text-white text-sm">{(prompt as any).challengeName || (prompt as any).challengeId}</div>
+                              <div className="text-gray-400 text-xs font-mono">{(prompt as any).challengeId}</div>
+                            </div>
+                          ) : (
+                            '-'
+                          )}
                         </td>
                       </tr>
                     ))}

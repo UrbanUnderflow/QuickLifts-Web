@@ -6,7 +6,7 @@ import { collection, doc, setDoc, deleteDoc, getDocs, Timestamp, query, orderBy,
 import { User, ShortUser } from '../../api/firebase/user/types';
 import { SweatlistCollection, Challenge } from '../../api/firebase/workout/types'; // Added Challenge types
 import { workoutService } from '../../api/firebase/workout/service'; // Added workoutService
-import { Loader2, Search, CheckCircle, AlertTriangle, XCircle, User as UserIcon, AtSign, RefreshCw, ListChecks, ChevronDown, ChevronUp, Eye, Calendar, ChevronRight } from 'lucide-react'; // Added icons
+import { Loader2, Search, CheckCircle, AlertTriangle, XCircle, User as UserIcon, AtSign, RefreshCw, ListChecks, ChevronDown, ChevronUp, Eye, Calendar, ChevronRight, Trash2 } from 'lucide-react'; // Added icons
 import { v4 as uuidv4 } from 'uuid';
 
 const USER_CACHE_KEY = 'adminAllUsersCache';
@@ -96,6 +96,8 @@ const TestCheckinNotificationPage: React.FC = () => {
   const [expandedCheckin, setExpandedCheckin] = useState<string | null>(null);
   const [checkinSearchQuery, setCheckinSearchQuery] = useState('');
   const [filteredCheckins, setFilteredCheckins] = useState<CheckinRecord[]>([]);
+  const [deleteLoading, setDeleteLoading] = useState<string | null>(null);
+  const [deleteResult, setDeleteResult] = useState<{ success: boolean; message: string } | null>(null);
 
   const resetMessages = () => {
     setSuccessMessage(null);
@@ -396,6 +398,55 @@ const TestCheckinNotificationPage: React.FC = () => {
     }
   };
 
+  // Function to delete a check-in
+  const deleteCheckin = async (checkinId: string) => {
+    if (!checkinId) return;
+    
+    setDeleteLoading(checkinId);
+    setDeleteResult(null);
+    
+    try {
+      console.log(`[Delete Checkin] Attempting to delete checkin: ${checkinId}`);
+      
+      // Delete the checkin document from Firestore
+      await deleteDoc(doc(db, 'checkins', checkinId));
+      
+      console.log(`[Delete Checkin] Successfully deleted checkin: ${checkinId}`);
+      
+      setDeleteResult({
+        success: true,
+        message: `Check-in ${checkinId.substring(0, 8)}... deleted successfully`
+      });
+      
+      // Refresh the checkins list
+      await fetchCheckins();
+      
+      // Clear any expanded view if we deleted the expanded checkin
+      if (expandedCheckin === checkinId) {
+        setExpandedCheckin(null);
+      }
+      
+      // Clear delete result message after 5 seconds
+      setTimeout(() => {
+        setDeleteResult(null);
+      }, 5000);
+      
+    } catch (error) {
+      console.error(`[Delete Checkin] Error deleting checkin ${checkinId}:`, error);
+      setDeleteResult({
+        success: false,
+        message: `Failed to delete check-in: ${error instanceof Error ? error.message : 'Unknown error'}`
+      });
+      
+      // Clear delete result message after 5 seconds
+      setTimeout(() => {
+        setDeleteResult(null);
+      }, 5000);
+    } finally {
+      setDeleteLoading(null);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     resetMessages();
@@ -656,21 +707,26 @@ const TestCheckinNotificationPage: React.FC = () => {
                       <th className="p-3">Challenge ID</th>
                       <th className="p-3">FCM Token</th>
                       <th className="p-3">Created</th>
+                      <th className="p-3">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredCheckins.map((checkin) => (
                       <React.Fragment key={checkin.id}>
                         <tr 
-                          className={`border-b border-gray-800 hover:bg-[#262a30] cursor-pointer ${expandedCheckin === checkin.id ? 'bg-[#262a30]' : ''}`}
-                          onClick={() => toggleExpandedCheckin(checkin.id)}
+                          className={`border-b border-gray-800 hover:bg-[#262a30] ${expandedCheckin === checkin.id ? 'bg-[#262a30]' : ''}`}
                         >
                           <td className="p-3 text-center">
-                            {expandedCheckin === checkin.id ? (
-                              <ChevronUp size={16} className="text-[#d7ff00]" />
-                            ) : (
-                              <ChevronDown size={16} className="text-gray-500" />
-                            )}
+                            <button
+                              onClick={() => toggleExpandedCheckin(checkin.id)}
+                              className="text-gray-500 hover:text-[#d7ff00] transition"
+                            >
+                              {expandedCheckin === checkin.id ? (
+                                <ChevronUp size={16} className="text-[#d7ff00]" />
+                              ) : (
+                                <ChevronDown size={16} />
+                              )}
+                            </button>
                           </td>
                           <td className="p-3 font-mono text-sm text-gray-300">{checkin.id.substring(0, 10)}...</td>
                           <td className="p-3">{checkin.user?.username || 'N/A'}</td>
@@ -690,10 +746,29 @@ const TestCheckinNotificationPage: React.FC = () => {
                               ? checkin.createdAt.toDate().toLocaleString() 
                               : 'Invalid date'}
                           </td>
+                          <td className="p-3">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (window.confirm(`Are you sure you want to delete check-in ${checkin.id.substring(0, 8)}...?`)) {
+                                  deleteCheckin(checkin.id);
+                                }
+                              }}
+                              disabled={deleteLoading === checkin.id}
+                              className="flex items-center justify-center w-8 h-8 rounded-lg bg-red-600 hover:bg-red-700 disabled:bg-red-800 disabled:opacity-50 transition text-white"
+                              title="Delete check-in"
+                            >
+                              {deleteLoading === checkin.id ? (
+                                <Loader2 size={14} className="animate-spin" />
+                              ) : (
+                                <Trash2 size={14} />
+                              )}
+                            </button>
+                          </td>
                         </tr>
                         {expandedCheckin === checkin.id && (
                           <tr className="bg-[#262a30]">
-                            <td colSpan={7} className="p-4">
+                            <td colSpan={8} className="p-4">
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                   <h4 className="text-[#d7ff00] font-medium mb-2">Basic Info</h4>
@@ -775,6 +850,22 @@ const TestCheckinNotificationPage: React.FC = () => {
               Showing {filteredCheckins.length} of {allCheckins.length} check-ins
               {checkinSearchQuery && <span> (filtered by search)</span>}
             </div>
+            
+            {/* Delete result message */}
+            {deleteResult && (
+              <div className={`mt-4 p-3 border rounded-lg flex items-center animate-fadeIn ${
+                deleteResult.success 
+                  ? 'bg-green-900/30 text-green-400 border-green-700' 
+                  : 'bg-red-900/30 text-red-400 border-red-700'
+              }`}>
+                {deleteResult.success ? (
+                  <CheckCircle size={20} className="mr-2" />
+                ) : (
+                  <AlertTriangle size={20} className="mr-2" />
+                )}
+                {deleteResult.message}
+              </div>
+            )}
           </div>
         </div>
       </div>

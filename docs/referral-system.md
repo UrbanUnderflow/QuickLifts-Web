@@ -17,6 +17,36 @@ The referral bonus system has been moved entirely to Firebase Functions to ensur
 - If referrer is found and is a participant in the same challenge, awards 25 points
 - Sends push notification to referrer about earning points
 
+## Date Handling Requirements
+
+**⚠️ Important**: All date operations in the referral system follow the project's standardized date formatting:
+
+- **When saving to Firestore**: Use `dateToUnixTimestamp(new Date())` instead of `FieldValue.serverTimestamp()`
+- **When reading from Firestore**: Use `convertFirestoreTimestamp()` for any date fields
+- **updatedAt field**: Always update this field when modifying UserChallenge documents as it serves as the "lastActive" indicator for inactivity tracking
+
+### Date Utility Functions
+Both Firebase Functions and Netlify Functions include these utilities:
+
+```javascript
+const dateToUnixTimestamp = (date) => {
+  return Math.floor(date.getTime() / 1000);
+};
+
+const convertFirestoreTimestamp = (timestamp) => {
+  if (timestamp == null) return new Date();
+  if (timestamp instanceof Date) return timestamp;
+  
+  const numTimestamp = typeof timestamp === 'string' ? parseFloat(timestamp) : timestamp;
+  
+  if (numTimestamp < 10000000000) {
+    return new Date(numTimestamp * 1000);
+  }
+  
+  return new Date(numTimestamp);
+};
+```
+
 ## Firebase Function Details
 
 ### Main Function: `handleReferralBonus`

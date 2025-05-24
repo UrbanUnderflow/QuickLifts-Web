@@ -1,6 +1,9 @@
 const {onDocumentCreated} = require("firebase-functions/v2/firestore");
 const admin = require("firebase-admin");
 
+// Import notification logger
+const { logMulticastNotification } = require('./notificationLogger');
+
 // Ensure Firebase Admin is initialized (likely done in index.js)
 const db = admin.firestore();
 const messaging = admin.messaging();
@@ -92,6 +95,18 @@ exports.sendDirectMessageNotification = onDocumentCreated(`${chatsCollection}/{c
     console.log(`Sending direct message notification to ${recipientTokens.length} tokens for chat ${chatId}.`);
     try {
         const response = await messaging.sendMulticast(message);
+        
+        // Log multicast notification
+        await logMulticastNotification({
+            tokens: recipientTokens,
+            title: notificationPayload.title,
+            body: notificationPayload.body,
+            dataPayload,
+            notificationType: 'DIRECT_MESSAGE',
+            functionName: 'sendDirectMessageNotification',
+            response
+        });
+        
         console.log(`Successfully sent DM notifications: ${response.successCount} of ${recipientTokens.length}`);
 
         if (response.failureCount > 0) {

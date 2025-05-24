@@ -6,6 +6,9 @@ const {onDocumentCreated, onDocumentUpdated, onDocumentWritten} = require("fireb
 const admin = require("firebase-admin");
 const { FieldValue } = require("firebase-admin/firestore"); // Used for potential timestamp updates
 
+// Import notification logger
+const { sendNotificationWithLogging, logMulticastNotification } = require('./notificationLogger');
+
 // Ensure Firebase Admin is initialized (likely done in index.js, but good practice)
 // if (admin.apps.length === 0) {
 //   admin.initializeApp();
@@ -13,61 +16,53 @@ const { FieldValue } = require("firebase-admin/firestore"); // Used for potentia
 const db = admin.firestore();
 const messaging = admin.messaging();
 
+// Date utility functions following project standards
+const dateToUnixTimestamp = (date) => {
+  return Math.floor(date.getTime() / 1000);
+};
+
+const convertFirestoreTimestamp = (timestamp) => {
+  // If null or undefined, return the current date.
+  if (timestamp == null) return new Date();
+
+  // If it's already a Date, return it.
+  if (timestamp instanceof Date) return timestamp;
+
+  // Convert to number if it's a string (using parseFloat preserves decimals).
+  const numTimestamp = typeof timestamp === 'string' ? parseFloat(timestamp) : timestamp;
+
+  // If the timestamp looks like seconds (less than 10 billion), convert to milliseconds.
+  if (numTimestamp < 10000000000) {
+    return new Date(numTimestamp * 1000);
+  }
+
+  // Otherwise, assume it's in milliseconds.
+  return new Date(numTimestamp);
+};
+
 const userChallengeCollection = "user-challenge";
 const challengesCollection = "challenges"; // Assuming this is the name
 
-// --- COPIED HELPER FUNCTION --- 
+// --- ENHANCED HELPER FUNCTION WITH LOGGING --- 
 /**
- * Sends a single push notification to a specific FCM token.
- * (Copied from sendSingleNotification.js for reuse)
+ * Sends a single push notification to a specific FCM token with logging.
  * @param {string} fcmToken The target device's FCM token.
  * @param {string} title Notification title.
  * @param {string} body Notification body.
  * @param {object} customData Additional data to send with the notification.
+ * @param {string} notificationType Type of notification for logging (optional).
  * @returns {Promise<object>} Result object with success status and message.
  */
-async function sendNotification(fcmToken, title, body, customData = {}) {
-  const message = {
-    token: fcmToken,
-    notification: {
-      title: title,
-      body: body,
-    },
-    data: customData,
-    apns: {
-      payload: {
-        aps: {
-          alert: {
-            title: title,
-            body: body,
-          },
-          badge: 1, // Consider if badge count should be dynamic
-          sound: 'default' // Ensure sound is configured correctly for your app
-        },
-      },
-    },
-    android: {
-      priority: 'high',
-      notification: {
-        sound: 'default' // Ensure sound is configured correctly for your app
-      }
-    }
-  };
-
-  try {
-    const response = await messaging.send(message);
-    console.log('Helper: Successfully sent notification:', response);
-    return { success: true, message: 'Notification sent successfully.' };
-  } catch (error) {
-    console.error('Helper: Error sending notification:', error);
-    if (error.code === 'messaging/registration-token-not-registered') {
-      console.log(`Helper: Invalid FCM token: ${fcmToken}. Consider removing it.`);
-    }
-    // Re-throw to be caught by caller
-    throw error;
-  }
+async function sendNotification(fcmToken, title, body, customData = {}, notificationType = 'CHALLENGE_NOTIFICATION') {
+  return await sendNotificationWithLogging(
+    fcmToken, 
+    title, 
+    body, 
+    customData, 
+    notificationType, 
+    'challengeNotifications'
+  );
 }
-// --- END HELPER FUNCTION ---
 
 /**
  * Sends a push notification to all participants of a challenge (except the new joiner)
@@ -167,32 +162,7 @@ exports.sendNewUserJoinedChallengeNotification = onDocumentCreated(`${userChalle
           skippedUserCount.missing++;
           continue;
         }
-        
-        // --- 4. Construct Notification Payload (moved inside loop) --- 
-        /* // Payload definition moved outside loop
-        const title = `New Challenger! 🤺`; // Fixed title quoting
-        const body = `${newUsername} just joined "${challengeTitle}"! Let's welcome them in the chat! 🎉`; // Escape quotes
-        const dataPayload = {
-            challengeId: challengeId,
-            type: 'NEW_PARTICIPANT',
-            newUserId: newUserId,
-            newUsername: newUsername,
-            timestamp: String(Math.floor(Date.now() / 1000))
-        };
-        */
 
-        // --- 5. Send Notification (moved inside loop) ---
-        /* // Replaced with collecting tokens
-        try {
-            console.log(`Sending NEW_PARTICIPANT notification to user ${participantId} (${participantToken.substring(0,10)}...)`);
-            await sendNotification(participantToken, title, body, dataPayload);
-            sentCount++;
-        } catch (error) {
-            failedCount++;
-            console.error(`Error sending NEW_PARTICIPANT notification to ${participantId} (token: ${participantToken.substring(0,10)}...):`, error);
-            // Error already logged within sendNotification helper, don't need to re-log full details unless desired
-        }
-        */
         eligibleTokens.push(participantToken); // Collect token
       }
 
@@ -221,6 +191,18 @@ exports.sendNewUserJoinedChallengeNotification = onDocumentCreated(`${userChalle
         const response = await messaging.sendEachForMulticast(message);
         sentCount = response.successCount;
         failedCount = response.failureCount;
+        
+        // Log multicast notification
+        await logMulticastNotification({
+          tokens: eligibleTokens,
+          title,
+          body,
+          dataPayload,
+          notificationType: 'NEW_PARTICIPANT',
+          functionName: 'sendNewUserJoinedChallengeNotification',
+          response
+        });
+        
         console.log(`Finished sending NEW_PARTICIPANT notifications. Sent: ${sentCount}, Failed: ${failedCount}, Missing tokens: ${skippedUserCount.missing}.`);
 
         if (response.failureCount > 0) {
@@ -358,7 +340,7 @@ exports.onChallengeStatusChange = onDocumentUpdated(`${userChallengeCollection}/
                     return null;
                 }
                 console.log(`Sending ${dataPayload.type || 'notification'} to individual user ${userId} for user challenge ${userChallengeId}.`);
-                await sendNotification(fcmToken, notificationPayload.title, notificationPayload.body, dataPayload);
+                await sendNotification(fcmToken, notificationPayload.title, notificationPayload.body, dataPayload, 'CHALLENGE_COMPLETED');
                 console.log(`Successfully sent individual notification to user ${userId}.`);
 
             } else {
@@ -670,6 +652,18 @@ exports.sendWorkoutStartNotification = onDocumentWritten("users/{userId}/workout
           const response = await messaging.sendEachForMulticast(message);
           sentCount = response.successCount;
           failedCount = response.failureCount;
+          
+          // Log multicast notification
+          await logMulticastNotification({
+            tokens: eligibleTokens,
+            title: notificationPayload.title,
+            body: notificationPayload.body,
+            dataPayload,
+            notificationType: 'WORKOUT_STARTED',
+            functionName: 'sendWorkoutStartNotification',
+            response
+          });
+          
           console.log(`Finished sending WORKOUT_STARTED notifications. Sent: ${sentCount}, Failed: ${failedCount}, Ignored: ${skippedUserCount.ignored}, Missing tokens: ${skippedUserCount.missing}.`);
 
           if (response.failureCount > 0) {
@@ -807,6 +801,18 @@ exports.onMainChallengeStatusChange = onDocumentUpdated(`sweatlist-collection/{s
                 const response = await messaging.sendEachForMulticast(message);
                 sentCount = response.successCount;
                 failedCount = response.failureCount;
+                
+                // Log multicast notification
+                await logMulticastNotification({
+                  tokens: eligibleTokens,
+                  title: notificationPayload.title,
+                  body: notificationPayload.body,
+                  dataPayload,
+                  notificationType: dataPayload.type.toUpperCase(),
+                  functionName: 'onMainChallengeStatusChange',
+                  response
+                });
+                
                 console.log(`Finished sending ${dataPayload.type} notifications. Sent: ${sentCount}, Failed: ${failedCount}, Missing tokens: ${missingTokenCount}.`);
 
                 if (response.failureCount > 0) {
@@ -856,8 +862,11 @@ exports.sendCheckinCalloutNotification = onDocumentCreated("checkins/{checkinId}
     calloutUserFCMToken, 
     user: checkinUser, // This is the user performing the current check-in
     calloutUser,       // This is the user who was called out (if it's an initial callout)
-    challengeId        // Assuming challengeId is present in checkinData
+    roundId       // Assuming challengeId is present in checkinData
   } = checkinData;
+
+  // Determine the effective challengeId - use challengeId if available, otherwise fallback to roundId
+  const effectiveChallengeId = roundId;
 
   const responderUsername = checkinUser?.username || "Someone"; // User who is responding to a callout
 
@@ -865,18 +874,18 @@ exports.sendCheckinCalloutNotification = onDocumentCreated("checkins/{checkinId}
   if (originalChallengerUserId && originalChallengerFCMToken) {
     console.log(`Check-in ${checkinId}: User ${responderUsername} (ID: ${checkinUser?.id}) responded to callout from ${originalChallengerUserId}.`);
 
-    if (!challengeId) {
-      console.error(`Check-in ${checkinId} (Callout Response): Missing challengeId. Cannot award points.`);
+    if (!effectiveChallengeId) {
+      console.error(`Check-in ${checkinId} (Callout Response): Missing challengeId and roundId. Cannot award points.`);
       // Proceed with notification but log error for points
     }
 
     // --- Award Points ---
-    if (challengeId) {
+    if (effectiveChallengeId) {
       try {
         // Award 25 points to Responder (changed from 50)
         const responderUserChallengeRef = db.collection(userChallengeCollection)
                                           .where("userId", "==", checkinUser?.id)
-                                          .where("challengeId", "==", challengeId)
+                                          .where("challengeId", "==", effectiveChallengeId)
                                           .limit(1);
         const responderUserChallengeSnap = await responderUserChallengeRef.get();
         if (!responderUserChallengeSnap.empty) {
@@ -886,15 +895,15 @@ exports.sendCheckinCalloutNotification = onDocumentCreated("checkins/{checkinId}
             "pulsePoints.peerChallengeBonus": currentPoints + 25, // Changed from 50 to 25
             "pulsePoints.totalPoints": FieldValue.increment(25) // Changed from 50 to 25
           });
-          console.log(`Awarded 25 peerChallengeBonus points to responder ${checkinUser?.id} for challenge ${challengeId}.`);
+          console.log(`Awarded 25 peerChallengeBonus points to responder ${checkinUser?.id} for challenge ${effectiveChallengeId}.`);
         } else {
-          console.warn(`Could not find user-challenge for responder ${checkinUser?.id} in challenge ${challengeId}.`);
+          console.warn(`Could not find user-challenge for responder ${checkinUser?.id} in challenge ${effectiveChallengeId}.`);
         }
 
         // Award 50 points to Original Challenger (changed from 25)
         const originalChallengerUserChallengeRef = db.collection(userChallengeCollection)
                                                   .where("userId", "==", originalChallengerUserId)
-                                                  .where("challengeId", "==", challengeId)
+                                                  .where("challengeId", "==", effectiveChallengeId)
                                                   .limit(1);
         const originalChallengerUserChallengeSnap = await originalChallengerUserChallengeRef.get();
         if (!originalChallengerUserChallengeSnap.empty) {
@@ -904,9 +913,9 @@ exports.sendCheckinCalloutNotification = onDocumentCreated("checkins/{checkinId}
             "pulsePoints.peerChallengeBonus": currentPoints + 50, // Changed from 25 to 50
             "pulsePoints.totalPoints": FieldValue.increment(50) // Changed from 25 to 50
            });
-          console.log(`Awarded 50 peerChallengeBonus points to original challenger ${originalChallengerUserId} for challenge ${challengeId}.`);
+          console.log(`Awarded 50 peerChallengeBonus points to original challenger ${originalChallengerUserId} for challenge ${effectiveChallengeId}.`);
         } else {
-          console.warn(`Could not find user-challenge for original challenger ${originalChallengerUserId} in challenge ${challengeId}.`);
+          console.warn(`Could not find user-challenge for original challenger ${originalChallengerUserId} in challenge ${effectiveChallengeId}.`);
         }
       } catch (pointError) {
         console.error(`Error awarding points for callout response on check-in ${checkinId}:`, pointError);
@@ -921,13 +930,17 @@ exports.sendCheckinCalloutNotification = onDocumentCreated("checkins/{checkinId}
       responderId: checkinUser?.id || '',
       responderUsername: responderUsername,
       originalChallengerId: originalChallengerUserId,
-      challengeId: challengeId || '',
       type: 'CALLOUT_ANSWERED',
       timestamp: String(Math.floor(Date.now() / 1000))
     };
 
+    // Only add challengeId to payload if it exists and is not empty
+    if (effectiveChallengeId) {
+      dataPayload.challengeId = effectiveChallengeId;
+    }
+
     try {
-      await sendNotification(originalChallengerFCMToken, title, body, dataPayload);
+      await sendNotification(originalChallengerFCMToken, title, body, dataPayload, 'CALLOUT_ANSWERED');
       console.log(`Successfully sent CALLOUT_ANSWERED notification for check-in ${checkinId} to original challenger ${originalChallengerUserId}.`);
     } catch (error) {
       console.error(`Error sending CALLOUT_ANSWERED notification for check-in ${checkinId} to original challenger ${originalChallengerUserId}:`, error);
@@ -952,13 +965,17 @@ exports.sendCheckinCalloutNotification = onDocumentCreated("checkins/{checkinId}
       challengerId: checkinUser?.id || '',
       challengerUsername: initialChallengerUsername,
       calloutUserId: calloutUser.id,
-      challengeId: challengeId || '',
       type: 'CHECKIN_CALLOUT',
       timestamp: String(Math.floor(Date.now() / 1000))
     };
 
+    // Only add challengeId to payload if it exists and is not empty
+    if (effectiveChallengeId) {
+      dataPayload.challengeId = effectiveChallengeId;
+    }
+
     try {
-      await sendNotification(calloutUserFCMToken, title, body, dataPayload);
+      await sendNotification(calloutUserFCMToken, title, body, dataPayload, 'CHECKIN_CALLOUT');
       console.log(`Successfully sent CHECKIN_CALLOUT notification for check-in ${checkinId} to user ID ${calloutUser.id}.`);
     } catch (error) {
       console.error(`Error sending CHECKIN_CALLOUT notification for check-in ${checkinId} to user ID ${calloutUser.id}:`, error);
@@ -1033,7 +1050,7 @@ exports.handleReferralBonus = onDocumentCreated(`${userChallengeCollection}/{use
       await db.collection(userChallengeCollection).doc(referrerDocId).update({
         'pulsePoints.referralBonus': newReferralBonus,
         'pulsePoints.totalPoints': FieldValue.increment(25), // Also update total points
-        'updatedAt': FieldValue.serverTimestamp()
+        'updatedAt': dateToUnixTimestamp(new Date())
       });
       
       console.log(`[Referral Bonus] Successfully awarded 25 points to ${referrerUserChallenge.username} (${referrerId}). New referral bonus total: ${newReferralBonus}`);
@@ -1107,60 +1124,6 @@ exports.handleReferralBonus = onDocumentCreated(`${userChallengeCollection}/{use
 // --- Import for HTTPS functions ---
 const {onCall} = require("firebase-functions/v2/https");
 
-// --- NEW FUNCTION: Process Retroactive Referral Bonuses ---
-/**
- * Optional: Function to handle retroactive referral bonuses
- * This can be called manually to process existing UserChallenges that may have missed referral bonuses
- */
-exports.processRetroactiveReferralBonuses = onCall({
-  enforceAppCheck: false // Set to true if you have App Check enabled
-}, async (request) => {
-  try {
-    // Verify the request is from an authenticated admin user
-    if (!request.auth || !request.auth.token.admin) {
-      throw new Error('Only admin users can trigger retroactive processing');
-    }
-    
-    console.log('[Retroactive Referral] Starting retroactive referral bonus processing...');
-    
-    const userChallengesSnapshot = await db.collection(userChallengeCollection).get();
-    let processedCount = 0;
-    let bonusesAwarded = 0;
-    
-    for (const doc of userChallengesSnapshot.docs) {
-      const userChallenge = doc.data();
-      const referralChain = userChallenge.referralChain;
-      
-      if (referralChain && referralChain.sharedBy && referralChain.sharedBy !== '' && referralChain.sharedBy !== userChallenge.userId) {
-        try {
-          // Simulate the onCreate trigger for this document by creating a fake event
-          const fakeEvent = {
-            data: { 
-              data: () => userChallenge,
-              exists: true
-            },
-            params: { userChallengeId: doc.id }
-          };
-          
-          await exports.handleReferralBonus(fakeEvent);
-          processedCount++;
-          bonusesAwarded++; // This is approximate - the actual function will determine if bonus was awarded
-        } catch (error) {
-          console.error(`[Retroactive Referral] Error processing ${doc.id}:`, error);
-        }
-      }
-    }
-    
-    console.log(`[Retroactive Referral] Completed processing ${processedCount} UserChallenges`);
-    
-    return {
-      success: true,
-      processedCount: processedCount,
-      message: `Processed ${processedCount} UserChallenges for retroactive referral bonuses`
-    };
-    
-  } catch (error) {
-    console.error('[Retroactive Referral] Error:', error);
-    throw new Error('Error processing retroactive referral bonuses');
-  }
-}); 
+// --- Removed processRetroactiveReferralBonuses function ---
+// This functionality is better handled by the existing Netlify function /netlify/functions/link-referral.js
+// which provides more precise control for individual referral cases through the admin UI 

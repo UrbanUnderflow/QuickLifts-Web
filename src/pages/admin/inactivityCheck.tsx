@@ -1027,6 +1027,55 @@ const InactivityCheckPage: React.FC = () => {
                       </button>
                     </div>
                   </div>
+                  <div>
+                    <div className="text-gray-400 text-xs">Referral Chain</div>
+                    <div className="text-gray-300 text-sm space-y-1">
+                      {selectedUserChallenge.referralChain && 
+                       selectedUserChallenge.referralChain.sharedBy && 
+                       selectedUserChallenge.referralChain.sharedBy !== '' ? (
+                        <>
+                          <div className="flex items-center">
+                            <span className="text-gray-400 text-xs mr-2">Shared By:</span>
+                            <button
+                              onClick={() =>
+                                copyToClipboard(selectedUserChallenge.referralChain.sharedBy)
+                              }
+                              className="hover:text-blue-400 font-mono text-xs flex items-center"
+                              title="Copy referrer user ID"
+                            >
+                              {selectedUserChallenge.referralChain.sharedBy}
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 ml-1" viewBox="0 0 20 20" fill="currentColor">
+                                <path d="M8 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" />
+                                <path d="M6 3a2 2 0 00-2 2v11a2 2 0 002 2h8a2 2 0 002-2V5a2 2 0 00-2-2 3 3 0 01-3 3H9a3 3 0 01-3-3z" />
+                              </svg>
+                            </button>
+                          </div>
+                          {selectedUserChallenge.referralChain.originalHostId && 
+                           selectedUserChallenge.referralChain.originalHostId !== '' && 
+                           selectedUserChallenge.referralChain.originalHostId !== selectedUserChallenge.referralChain.sharedBy && (
+                            <div className="flex items-center">
+                              <span className="text-gray-400 text-xs mr-2">Original Host:</span>
+                              <button
+                                onClick={() =>
+                                  copyToClipboard(selectedUserChallenge.referralChain.originalHostId)
+                                }
+                                className="hover:text-blue-400 font-mono text-xs flex items-center"
+                                title="Copy original host user ID"
+                              >
+                                {selectedUserChallenge.referralChain.originalHostId}
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 ml-1" viewBox="0 0 20 20" fill="currentColor">
+                                  <path d="M8 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" />
+                                  <path d="M6 3a2 2 0 00-2 2v11a2 2 0 002 2h8a2 2 0 002-2V5a2 2 0 00-2-2 3 3 0 01-3 3H9a3 3 0 01-3-3z" />
+                                </svg>
+                              </button>
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-gray-500 text-xs">Direct join (no referral)</span>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
 

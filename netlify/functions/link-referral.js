@@ -21,6 +21,30 @@ const db = admin.firestore();
 const messaging = admin.messaging();
 const { FieldValue } = admin.firestore;
 
+// Date utility functions following project standards
+const dateToUnixTimestamp = (date) => {
+  return Math.floor(date.getTime() / 1000);
+};
+
+const convertFirestoreTimestamp = (timestamp) => {
+  // If null or undefined, return the current date.
+  if (timestamp == null) return new Date();
+
+  // If it's already a Date, return it.
+  if (timestamp instanceof Date) return timestamp;
+
+  // Convert to number if it's a string (using parseFloat preserves decimals).
+  const numTimestamp = typeof timestamp === 'string' ? parseFloat(timestamp) : timestamp;
+
+  // If the timestamp looks like seconds (less than 10 billion), convert to milliseconds.
+  if (numTimestamp < 10000000000) {
+    return new Date(numTimestamp * 1000);
+  }
+
+  // Otherwise, assume it's in milliseconds.
+  return new Date(numTimestamp);
+};
+
 // Define CORS headers
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -141,7 +165,7 @@ exports.handler = async (event, context) => {
     await db.collection('user-challenge').doc(refereeUserChallengeId).update({
       'referralChain.sharedBy': referrerId,
       'referralChain.originalHostId': referrerId, // Set same as sharedBy for manual links
-      'updatedAt': FieldValue.serverTimestamp()
+      'updatedAt': dateToUnixTimestamp(new Date())
     });
 
     console.log(`✅ [Manual Referral] Updated referee's referral chain: sharedBy = ${referrerId}`);
@@ -153,7 +177,7 @@ exports.handler = async (event, context) => {
     await db.collection('user-challenge').doc(referrerUserChallengeId).update({
       'pulsePoints.referralBonus': newReferralBonus,
       'pulsePoints.totalPoints': FieldValue.increment(25),
-      'updatedAt': FieldValue.serverTimestamp()
+      'updatedAt': dateToUnixTimestamp(new Date())
     });
 
     console.log(`✅ [Manual Referral] Awarded 25 points to ${referrerUsername}. New referral bonus total: ${newReferralBonus}`);
