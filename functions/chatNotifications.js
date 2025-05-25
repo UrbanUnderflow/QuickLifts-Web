@@ -127,6 +127,13 @@ exports.sendDirectMessageNotification = onDocumentCreated("chats/{chatId}/messag
     return null;
   }
 
+  // Skip notification if content is empty - indicates special message types (peer challenges, etc.) 
+  // that have their own notification systems
+  if (!content || !content.trim()) {
+    console.log(`Empty content in direct message ${messageId}. Skipping notification to avoid duplicates.`);
+    return null;
+  }
+
   console.log(`New direct message ${messageId} from ${senderId} in chat ${chatId}. Preparing notifications.`);
 
   try {
@@ -254,12 +261,12 @@ exports.sendDirectMessageNotification = onDocumentCreated("chats/{chatId}/messag
 
 /**
  * Sends notifications when a new round table message is created
- * Triggered when a new document is created in 'challenges/{challengeId}/messages/{messageId}'
+ * Triggered when a new document is created in 'sweatlist-collection/{challengeId}/messages/{messageId}'
  */
-exports.sendRoundTableNotification = onDocumentCreated("challenges/{challengeId}/messages/{messageId}", async (event) => {
+exports.sendRoundTableNotification = onDocumentCreated("sweatlist-collection/{challengeId}/messages/{messageId}", async (event) => {
   const snap = event.data;
   if (!snap) {
-    console.log(`No data associated with the event for challenges/${event.params.challengeId}/messages/${event.params.messageId}. Exiting.`);
+    console.log(`No data associated with the event for sweatlist-collection/${event.params.challengeId}/messages/${event.params.messageId}. Exiting.`);
     return null;
   }
 
@@ -280,7 +287,7 @@ exports.sendRoundTableNotification = onDocumentCreated("challenges/{challengeId}
   }
 
   if (!content || !content.trim()) {
-    console.log(`Empty content in round table message ${messageId}. Skipping notification.`);
+    console.log(`Empty content in round table message ${messageId}. Skipping notification to avoid duplicates.`);
     return null;
   }
 
@@ -402,7 +409,7 @@ exports.sendRoundTableNotificationAlt = onDocumentCreated("roundTableMessages/{m
   }
 
   if (!content || !content.trim()) {
-    console.log(`Empty content in round table message ${messageId}. Skipping notification.`);
+    console.log(`Empty content in round table message ${messageId}. Skipping notification to avoid duplicates.`);
     return null;
   }
 

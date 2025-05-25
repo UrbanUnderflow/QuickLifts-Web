@@ -1206,13 +1206,16 @@ exports.sendChainReactionNotification = onDocumentCreated("daily-reflections/{re
             aps: {
               alert: { title, body },
               badge: 1,
-              sound: 'default'
+              sound: 'chain_reaction.mp3' // Custom sound for chain reaction events
             },
           },
         },
         android: {
           priority: 'high',
-          notification: { sound: 'default' }
+          notification: { 
+            sound: 'chain_reaction', // Custom sound for Android (without extension)
+            channelId: 'chain_events' // Custom notification channel for chain events
+          }
         }
       };
 

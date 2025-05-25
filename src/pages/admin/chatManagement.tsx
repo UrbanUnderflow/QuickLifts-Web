@@ -2,9 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import Head from 'next/head';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import { db } from '../../api/firebase/config';
-import { collection, query, orderBy, limit, getDocs, getDoc, doc, Timestamp, collectionGroup } from 'firebase/firestore';
+import { collection, query, orderBy, limit, getDocs, getDoc, doc, Timestamp, collectionGroup, deleteDoc, writeBatch } from 'firebase/firestore';
 import { formatDate, convertFirestoreTimestamp } from '../../utils/formatDate';
-import { Loader2, Search, RefreshCw, MessageCircle, Users, ChevronDown, ChevronUp, Eye, Calendar, User as UserIcon, Hash, Clock, AlertTriangle, CheckCircle, ChevronRight } from 'lucide-react';
+import { Loader2, Search, RefreshCw, MessageCircle, Users, ChevronDown, ChevronUp, Eye, Calendar, User as UserIcon, Hash, Clock, AlertTriangle, CheckCircle, ChevronRight, Trash2, X } from 'lucide-react';
 
 // Interface for Group Messages (Challenge chats)
 interface GroupMessage {
@@ -76,6 +76,12 @@ const ChatManagementPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'group' | 'direct' | 'metadata'>('group');
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Deletion State
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [chatToDelete, setChatToDelete] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
 
   // Format timestamp for display using the project's conversion utility
   const formatTimestamp = (timestamp: Timestamp | undefined | null): string => {
@@ -359,6 +365,71 @@ const ChatManagementPage: React.FC = () => {
   // Toggle expanded view for direct messages
   const toggleExpandedDirectMessage = (messageId: string) => {
     setExpandedDirectMessage(expandedDirectMessage === messageId ? null : messageId);
+  };
+
+  // Chat deletion functions
+  const openDeleteModal = (chatId: string) => {
+    setChatToDelete(chatId);
+    setDeleteConfirmText('');
+    setShowDeleteModal(true);
+  };
+
+  const closeDeleteModal = () => {
+    setShowDeleteModal(false);
+    setChatToDelete(null);
+    setDeleteConfirmText('');
+  };
+
+  const deleteChat = async () => {
+    if (!chatToDelete || deleteConfirmText !== 'DELETE') {
+      setErrorMessage('Please type "DELETE" to confirm deletion.');
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      console.log(`[Chat Management] Starting deletion of chat ${chatToDelete}...`);
+
+      // Create a batch for atomic operations
+      const batch = writeBatch(db);
+
+      // First, get all messages in this chat to delete them
+      const messagesRef = collection(db, 'chats', chatToDelete, 'messages');
+      const messagesSnapshot = await getDocs(messagesRef);
+      
+      console.log(`[Chat Management] Found ${messagesSnapshot.size} messages to delete in chat ${chatToDelete}`);
+
+      // Add all message deletions to the batch
+      messagesSnapshot.docs.forEach((messageDoc) => {
+        batch.delete(messageDoc.ref);
+      });
+
+      // Add the chat document deletion to the batch
+      const chatRef = doc(db, 'chats', chatToDelete);
+      batch.delete(chatRef);
+
+      // Execute all deletions atomically
+      await batch.commit();
+
+      console.log(`[Chat Management] Successfully deleted chat ${chatToDelete} and ${messagesSnapshot.size} messages`);
+      
+      setSuccessMessage(`Successfully deleted chat ${chatToDelete.substring(0, 8)}... and ${messagesSnapshot.size} messages.`);
+      
+      // Refresh the data based on current tab
+      if (activeTab === 'direct') {
+        await fetchDirectMessages();
+      } else if (activeTab === 'metadata') {
+        await fetchChatMetadata();
+      }
+      
+      closeDeleteModal();
+      
+    } catch (error) {
+      console.error(`[Chat Management] Error deleting chat ${chatToDelete}:`, error);
+      setErrorMessage(`Failed to delete chat: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   // Clear messages when timeout occurs
@@ -646,175 +717,210 @@ const ChatManagementPage: React.FC = () => {
                   </div>
                 ) : filteredDirectMessages.length > 0 ? (
                   <div className="overflow-x-auto">
-                    <table className="w-full border-collapse">
-                      <thead>
-                        <tr className="border-b border-gray-700 text-left text-gray-400 text-sm">
-                          <th className="p-3"></th>
-                          <th className="p-3">Message ID</th>
-                          <th className="p-3">Chat ID</th>
-                          <th className="p-3">Participants</th>
-                          <th className="p-3">Sender</th>
-                          <th className="p-3">Content</th>
-                          <th className="p-3">Timestamp</th>
-                          <th className="p-3">Recipients</th>
-                          <th className="p-3">Type</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filteredDirectMessages.map((message) => (
-                          <React.Fragment key={`${message.chatId}-${message.id}`}>
-                            <tr 
-                              className={`border-b border-gray-800 hover:bg-[#262a30] ${expandedDirectMessage === message.id ? 'bg-[#262a30]' : ''}`}
-                            >
-                              <td className="p-3 text-center">
-                                <button
-                                  onClick={() => toggleExpandedDirectMessage(message.id)}
-                                  className="text-gray-500 hover:text-[#d7ff00] transition"
-                                >
-                                  {expandedDirectMessage === message.id ? (
-                                    <ChevronUp size={16} className="text-[#d7ff00]" />
-                                  ) : (
-                                    <ChevronDown size={16} />
-                                  )}
-                                </button>
-                              </td>
-                              <td className="p-3 font-mono text-sm text-gray-300">{message.id.substring(0, 10)}...</td>
-                              <td className="p-3 font-mono text-sm text-gray-300">{message.chatId.substring(0, 8)}...</td>
-                              <td className="p-3 max-w-xs">
-                                {message.participants && message.participants.length > 0 ? (
-                                  <div className="truncate">
-                                    {message.participants.map(p => p.username).join(', ')}
-                                  </div>
-                                ) : (
-                                  <span className="text-gray-500">{message.participantIds?.length || 0} users</span>
-                                )}
-                              </td>
-                              <td className="p-3">{message.senderUsername || message.senderId.substring(0, 8) + '...'}</td>
-                              <td className="p-3 max-w-xs">
-                                <div className="truncate">{message.content || 'No content'}</div>
-                              </td>
-                              <td className="p-3 text-sm text-gray-300">{formatTimestamp(message.timestamp)}</td>
-                              <td className="p-3 text-sm">{message.recipientFcmTokens?.length || 0}</td>
-                              <td className="p-3 text-sm">
-                                {message.workout ? 'Workout' : message.request ? 'Request' : 'Text'}
-                              </td>
+                    {/* Get unique chat IDs for deletion purposes */}
+                    {(() => {
+                      const uniqueChats = Array.from(new Set(filteredDirectMessages.map(msg => msg.chatId)));
+                      const chatMessageCounts = uniqueChats.reduce((acc, chatId) => {
+                        acc[chatId] = filteredDirectMessages.filter(msg => msg.chatId === chatId).length;
+                        return acc;
+                      }, {} as Record<string, number>);
+
+                      return (
+                        <table className="w-full border-collapse">
+                          <thead>
+                            <tr className="border-b border-gray-700 text-left text-gray-400 text-sm">
+                              <th className="p-3"></th>
+                              <th className="p-3">Message ID</th>
+                              <th className="p-3">Chat ID</th>
+                              <th className="p-3">Participants</th>
+                              <th className="p-3">Sender</th>
+                              <th className="p-3">Content</th>
+                              <th className="p-3">Timestamp</th>
+                              <th className="p-3">Recipients</th>
+                              <th className="p-3">Type</th>
+                              <th className="p-3">Actions</th>
                             </tr>
-                            {expandedDirectMessage === message.id && (
-                              <tr className="bg-[#262a30]">
-                                <td colSpan={9} className="p-4">
-                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div>
-                                      <h4 className="text-[#d7ff00] font-medium mb-2">Message Details</h4>
-                                      <div className="space-y-2 text-sm">
-                                        <div><span className="text-gray-400">Full Message ID:</span> {message.id}</div>
-                                        <div><span className="text-gray-400">Full Chat ID:</span> {message.chatId}</div>
-                                        <div><span className="text-gray-400">Sender ID:</span> {message.senderId}</div>
-                                        <div><span className="text-gray-400">Sender Username:</span> {message.senderUsername || 'Not set'}</div>
-                                        <div><span className="text-gray-400">Content:</span> {message.content || 'None'}</div>
-                                        <div><span className="text-gray-400">Timestamp:</span> {formatTimestamp(message.timestamp)}</div>
-                                      </div>
-                                    </div>
-                                    <div>
-                                      <h4 className="text-[#d7ff00] font-medium mb-2">Participants & Recipients</h4>
-                                      <div className="space-y-2 text-sm">
-                                        <div>
-                                          <span className="text-gray-400">Participants ({message.participants?.length || 0}):</span>
-                                          {message.participants && message.participants.length > 0 ? (
-                                            <div className="ml-2 mt-1 max-h-16 overflow-y-auto">
-                                              {message.participants.map((participant, index) => (
-                                                <div key={index} className="text-xs">
-                                                  <span className="text-gray-300">{participant.username}</span>
-                                                  <span className="text-gray-500 ml-1">({participant.id ? String(participant.id).substring(0, 8) + '...' : 'No ID'})</span>
-                                                </div>
-                                              ))}
-                                            </div>
-                                          ) : (
-                                            <span className="ml-1 text-gray-500">No participant data</span>
-                                          )}
-                                        </div>
-                                        <div>
-                                          <span className="text-gray-400">Participant IDs:</span>
-                                          {message.participantIds && message.participantIds.length > 0 ? (
-                                            <div className="ml-2 mt-1 max-h-12 overflow-y-auto">
-                                              {message.participantIds.map((id, index) => (
-                                                <div key={index} className="text-xs text-gray-500 font-mono">
-                                                  {id}
-                                                </div>
-                                              ))}
-                                            </div>
-                                          ) : (
-                                            <span className="ml-1 text-gray-500">None</span>
-                                          )}
-                                        </div>
-                                        <div><span className="text-gray-400">FCM Token Count:</span> {message.recipientFcmTokens?.length || 0}</div>
-                                        {message.recipientFcmTokens && message.recipientFcmTokens.length > 0 && (
-                                          <div>
-                                            <span className="text-gray-400">FCM Tokens:</span>
-                                            <div className="ml-2 mt-1 max-h-20 overflow-y-auto">
-                                              {message.recipientFcmTokens.map((token, index) => (
-                                                <div key={index} className="text-xs text-gray-500 font-mono">
-                                                  {token.substring(0, 20)}...
-                                                </div>
-                                              ))}
-                                            </div>
-                                          </div>
+                          </thead>
+                          <tbody>
+                            {filteredDirectMessages.map((message, index) => {
+                              const isFirstMessageInChat = index === 0 || filteredDirectMessages[index - 1].chatId !== message.chatId;
+                              
+                              return (
+                                <React.Fragment key={`${message.chatId}-${message.id}`}>
+                                  <tr 
+                                    className={`border-b border-gray-800 hover:bg-[#262a30] ${expandedDirectMessage === message.id ? 'bg-[#262a30]' : ''}`}
+                                  >
+                                    <td className="p-3 text-center">
+                                      <button
+                                        onClick={() => toggleExpandedDirectMessage(message.id)}
+                                        className="text-gray-500 hover:text-[#d7ff00] transition"
+                                      >
+                                        {expandedDirectMessage === message.id ? (
+                                          <ChevronUp size={16} className="text-[#d7ff00]" />
+                                        ) : (
+                                          <ChevronDown size={16} />
                                         )}
-                                        <div><span className="text-gray-400">Has Workout:</span> {message.workout ? 'Yes' : 'No'}</div>
-                                        <div><span className="text-gray-400">Has Request:</span> {message.request ? 'Yes' : 'No'}</div>
-                                      </div>
-                                    </div>
-                                  </div>
-                                  
-                                  {/* Enhanced Raw Data Section */}
-                                  <div className="mt-6 border-t border-gray-700 pt-4">
-                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                                      {/* Message Raw Data */}
-                                      <div>
-                                        <details className="text-sm">
-                                          <summary className="cursor-pointer text-gray-400 hover:text-white focus:outline-none py-2 bg-[#1f2327] rounded px-3 border border-gray-600">
-                                            <span className="flex items-center">
-                                              <ChevronRight size={16} className="mr-2" />
-                                              <Eye size={16} className="mr-1" />
-                                              View Message Raw Data
-                                            </span>
-                                          </summary>
-                                          <pre className="mt-2 p-3 bg-[#1f2327] rounded overflow-x-auto text-xs text-gray-300 border border-gray-600 max-h-80">
-                                            {JSON.stringify(message, null, 2)}
-                                          </pre>
-                                        </details>
-                                      </div>
-                                      
-                                      {/* Chat Document Raw Data */}
-                                      <div>
-                                        <details className="text-sm">
-                                          <summary className="cursor-pointer text-gray-400 hover:text-white focus:outline-none py-2 bg-[#1f2327] rounded px-3 border border-gray-600">
-                                            <span className="flex items-center">
-                                              <ChevronRight size={16} className="mr-2" />
-                                              <Hash size={16} className="mr-1" />
-                                              View Chat Metadata
-                                            </span>
-                                          </summary>
-                                          <div className="mt-2 p-3 bg-[#1f2327] rounded border border-gray-600">
-                                            <div className="text-xs text-gray-300 space-y-1">
-                                              <div><span className="text-gray-400">Chat ID:</span> {message.chatId}</div>
-                                              <div><span className="text-gray-400">Participants:</span> {message.participantIds?.length || 0}</div>
-                                              <div><span className="text-gray-400">Participant IDs:</span></div>
-                                              {message.participantIds?.map((id, index) => (
-                                                <div key={index} className="ml-2 font-mono text-xs">{id}</div>
-                                              ))}
+                                      </button>
+                                    </td>
+                                    <td className="p-3 font-mono text-sm text-gray-300">{message.id.substring(0, 10)}...</td>
+                                    <td className="p-3 font-mono text-sm text-gray-300">{message.chatId.substring(0, 8)}...</td>
+                                    <td className="p-3 max-w-xs">
+                                      {message.participants && message.participants.length > 0 ? (
+                                        <div className="truncate">
+                                          {message.participants.map(p => p.username || 'Unknown').filter(Boolean).join(', ')}
+                                        </div>
+                                      ) : (
+                                        <span className="text-gray-500">{message.participantIds?.length || 0} users</span>
+                                      )}
+                                    </td>
+                                    <td className="p-3">{message.senderUsername || message.senderId.substring(0, 8) + '...'}</td>
+                                    <td className="p-3 max-w-xs">
+                                      <div className="truncate">{message.content || 'No content'}</div>
+                                    </td>
+                                    <td className="p-3 text-sm text-gray-300">{formatTimestamp(message.timestamp)}</td>
+                                    <td className="p-3 text-sm">{message.recipientFcmTokens?.length || 0}</td>
+                                    <td className="p-3 text-sm">
+                                      {message.workout ? 'Workout' : message.request ? 'Request' : 'Text'}
+                                    </td>
+                                    <td className="p-3 text-sm">
+                                      {isFirstMessageInChat ? (
+                                        <div className="flex items-center space-x-2">
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              openDeleteModal(message.chatId);
+                                            }}
+                                            className="text-red-500 hover:text-red-400 transition flex items-center space-x-1"
+                                            title={`Delete entire chat (${chatMessageCounts[message.chatId]} messages)`}
+                                          >
+                                            <Trash2 size={16} />
+                                            <span className="text-xs">Delete Chat</span>
+                                          </button>
+                                        </div>
+                                      ) : (
+                                        <span className="text-gray-500 text-xs">↑ Same chat</span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                  {expandedDirectMessage === message.id && (
+                                    <tr className="bg-[#262a30]">
+                                      <td colSpan={10} className="p-4">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                          <div>
+                                            <h4 className="text-[#d7ff00] font-medium mb-2">Message Details</h4>
+                                            <div className="space-y-2 text-sm">
+                                              <div><span className="text-gray-400">Full Message ID:</span> {message.id}</div>
+                                              <div><span className="text-gray-400">Full Chat ID:</span> {message.chatId}</div>
+                                              <div><span className="text-gray-400">Sender ID:</span> {message.senderId}</div>
+                                              <div><span className="text-gray-400">Sender Username:</span> {message.senderUsername || 'Not set'}</div>
+                                              <div><span className="text-gray-400">Content:</span> {message.content || 'None'}</div>
+                                              <div><span className="text-gray-400">Timestamp:</span> {formatTimestamp(message.timestamp)}</div>
                                             </div>
                                           </div>
-                                        </details>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </td>
-                              </tr>
-                            )}
-                          </React.Fragment>
-                        ))}
-                      </tbody>
-                    </table>
+                                          <div>
+                                            <h4 className="text-[#d7ff00] font-medium mb-2">Participants & Recipients</h4>
+                                            <div className="space-y-2 text-sm">
+                                              <div>
+                                                <span className="text-gray-400">Participants ({message.participants?.length || 0}):</span>
+                                                {message.participants && message.participants.length > 0 ? (
+                                                  <div className="ml-2 mt-1 max-h-16 overflow-y-auto">
+                                                    {message.participants.map((participant, index) => (
+                                                      <div key={index} className="text-xs">
+                                                        <span className="text-gray-300">{participant?.username || 'Unknown'}</span>
+                                                        <span className="text-gray-500 ml-1">({participant?.id ? String(participant.id).substring(0, 8) + '...' : 'No ID'})</span>
+                                                      </div>
+                                                    ))}
+                                                  </div>
+                                                ) : (
+                                                  <span className="ml-1 text-gray-500">No participant data</span>
+                                                )}
+                                              </div>
+                                              <div>
+                                                <span className="text-gray-400">Participant IDs:</span>
+                                                {message.participantIds && message.participantIds.length > 0 ? (
+                                                  <div className="ml-2 mt-1 max-h-12 overflow-y-auto">
+                                                    {message.participantIds.map((id, index) => (
+                                                      <div key={index} className="text-xs text-gray-500 font-mono">
+                                                        {String(id || 'Unknown')}
+                                                      </div>
+                                                    ))}
+                                                  </div>
+                                                ) : (
+                                                  <span className="ml-1 text-gray-500">None</span>
+                                                )}
+                                              </div>
+                                              <div><span className="text-gray-400">FCM Token Count:</span> {message.recipientFcmTokens?.length || 0}</div>
+                                              {message.recipientFcmTokens && message.recipientFcmTokens.length > 0 && (
+                                                <div>
+                                                  <span className="text-gray-400">FCM Tokens:</span>
+                                                  <div className="ml-2 mt-1 max-h-20 overflow-y-auto">
+                                                    {message.recipientFcmTokens.map((token, index) => (
+                                                      <div key={index} className="text-xs text-gray-500 font-mono">
+                                                        {String(token || 'Invalid token').substring(0, 20)}...
+                                                      </div>
+                                                    ))}
+                                                  </div>
+                                                </div>
+                                              )}
+                                              <div><span className="text-gray-400">Has Workout:</span> {message.workout ? 'Yes' : 'No'}</div>
+                                              <div><span className="text-gray-400">Has Request:</span> {message.request ? 'Yes' : 'No'}</div>
+                                            </div>
+                                          </div>
+                                        </div>
+                                        
+                                        {/* Enhanced Raw Data Section */}
+                                        <div className="mt-6 border-t border-gray-700 pt-4">
+                                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                            {/* Message Raw Data */}
+                                            <div>
+                                              <details className="text-sm">
+                                                <summary className="cursor-pointer text-gray-400 hover:text-white focus:outline-none py-2 bg-[#1f2327] rounded px-3 border border-gray-600">
+                                                  <span className="flex items-center">
+                                                    <ChevronRight size={16} className="mr-2" />
+                                                    <Eye size={16} className="mr-1" />
+                                                    View Message Raw Data
+                                                  </span>
+                                                </summary>
+                                                <pre className="mt-2 p-3 bg-[#1f2327] rounded overflow-x-auto text-xs text-gray-300 border border-gray-600 max-h-80">
+                                                  {JSON.stringify(message, null, 2)}
+                                                </pre>
+                                              </details>
+                                            </div>
+                                            
+                                            {/* Chat Document Raw Data */}
+                                            <div>
+                                              <details className="text-sm">
+                                                <summary className="cursor-pointer text-gray-400 hover:text-white focus:outline-none py-2 bg-[#1f2327] rounded px-3 border border-gray-600">
+                                                  <span className="flex items-center">
+                                                    <ChevronRight size={16} className="mr-2" />
+                                                    <Hash size={16} className="mr-1" />
+                                                    View Chat Metadata
+                                                  </span>
+                                                </summary>
+                                                <div className="mt-2 p-3 bg-[#1f2327] rounded border border-gray-600">
+                                                  <div className="text-xs text-gray-300 space-y-1">
+                                                    <div><span className="text-gray-400">Chat ID:</span> {message.chatId}</div>
+                                                    <div><span className="text-gray-400">Participants:</span> {message.participantIds?.length || 0}</div>
+                                                    <div><span className="text-gray-400">Participant IDs:</span></div>
+                                                    {message.participantIds?.map((id, index) => (
+                                                      <div key={index} className="ml-2 font-mono text-xs">{String(id || 'Unknown')}</div>
+                                                    ))}
+                                                  </div>
+                                                </div>
+                                              </details>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  )}
+                                </React.Fragment>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      );
+                    })()}
                   </div>
                 ) : (
                   <div className="text-center py-8 text-gray-400">
@@ -849,6 +955,7 @@ const ChatManagementPage: React.FC = () => {
                           <th className="p-3">Message Count</th>
                           <th className="p-3">Created At</th>
                           <th className="p-3">Last Activity</th>
+                          <th className="p-3">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -859,6 +966,16 @@ const ChatManagementPage: React.FC = () => {
                             <td className="p-3">{chat.messageCount || 0}</td>
                             <td className="p-3 text-sm text-gray-300">{formatTimestamp(chat.createdAt)}</td>
                             <td className="p-3 text-sm text-gray-300">{formatTimestamp(chat.lastActivity)}</td>
+                            <td className="p-3">
+                              <button
+                                onClick={() => openDeleteModal(chat.id)}
+                                className="text-red-500 hover:text-red-400 transition flex items-center space-x-1"
+                                title={`Delete chat and ${chat.messageCount || 0} messages`}
+                              >
+                                <Trash2 size={16} />
+                                <span className="text-xs">Delete</span>
+                              </button>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -874,6 +991,81 @@ const ChatManagementPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-[#1a1e24] rounded-xl p-6 max-w-md w-full mx-4 border border-gray-700">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold text-red-400 flex items-center">
+                <AlertTriangle size={20} className="mr-2" />
+                Delete Chat
+              </h3>
+              <button
+                onClick={closeDeleteModal}
+                className="text-gray-500 hover:text-white transition"
+                disabled={isDeleting}
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="mb-4">
+              <p className="text-gray-300 mb-2">
+                Are you sure you want to delete this chat and all its messages?
+              </p>
+              <p className="text-sm text-gray-400 mb-4">
+                <strong>Chat ID:</strong> {chatToDelete}
+              </p>
+              <p className="text-sm text-red-400 mb-4">
+                ⚠️ This action cannot be undone. All messages in this chat will be permanently deleted.
+              </p>
+              
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Type "DELETE" to confirm:
+                </label>
+                <input
+                  type="text"
+                  value={deleteConfirmText}
+                  onChange={(e) => setDeleteConfirmText(e.target.value)}
+                  placeholder="Type DELETE here"
+                  className="w-full bg-[#262a30] border border-gray-700 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-500 transition text-white placeholder-gray-500"
+                  disabled={isDeleting}
+                />
+              </div>
+            </div>
+            
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={closeDeleteModal}
+                className="px-4 py-2 bg-[#262a30] text-gray-300 rounded-lg hover:bg-[#31363c] transition"
+                disabled={isDeleting}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={deleteChat}
+                disabled={deleteConfirmText !== 'DELETE' || isDeleting}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+              >
+                {isDeleting ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin mr-2" />
+                    Deleting...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 size={16} className="mr-2" />
+                    Delete Chat
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <style jsx global>{`
         .animate-fadeIn {
           animation: fadeIn 0.5s ease-out;
