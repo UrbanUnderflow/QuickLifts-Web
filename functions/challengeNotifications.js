@@ -1161,7 +1161,7 @@ exports.sendChainReactionNotification = onDocumentCreated("daily-reflections/{re
   let missingTokenCount = 0;
 
   // Define the notification payload
-  const title = `⚡ Chain Reaction Event!`;
+  const title = `⛓️‍💥 Chain Reaction Event!`;
   const body = `A special reflection has been shared for "${challengeTitle}"! Join the chain reaction and earn up to +75 bonus points! 🔥`;
   const dataPayload = {
     challengeId: challengeId,
