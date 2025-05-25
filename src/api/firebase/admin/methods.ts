@@ -1,4 +1,4 @@
-import { setDoc, doc, getDoc, Timestamp, collection, query, orderBy, limit as firestoreLimit, getDocs } from 'firebase/firestore';
+import { setDoc, doc, getDoc, deleteDoc, Timestamp, collection, query, orderBy, limit as firestoreLimit, getDocs } from 'firebase/firestore';
 import { db } from '../config';
 import { AdminService, PageMetaData, DailyPrompt } from './types';
 import { dateToUnixTimestamp, convertFirestoreTimestamp } from '../../../utils/formatDate';
@@ -148,6 +148,18 @@ export const adminMethods: AdminService = {
     } catch (error) {
       console.error('Error getting daily prompts:', error);
       return [];
+    }
+  },
+
+  async deleteDailyPrompt(id: string): Promise<boolean> {
+    try {
+      const docRef = doc(db, 'daily-reflections', id);
+      await deleteDoc(docRef);
+      console.log(`Successfully deleted daily reflection: ${id}`);
+      return true;
+    } catch (error) {
+      console.error('Error deleting daily prompt:', error);
+      return false;
     }
   }
 }; 

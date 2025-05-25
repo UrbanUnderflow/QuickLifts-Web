@@ -8,7 +8,7 @@ import { exerciseService, Exercise } from '../../api/firebase/exercise';
 import { workoutService } from '../../api/firebase/workout/service';
 import { SweatlistCollection } from '../../api/firebase/workout/types';
 import { formatDate } from '../../utils/formatDate';
-import { Loader2, CalendarIcon, Search, CheckCircle, AlertTriangle, XCircle, ListChecks, RefreshCw } from 'lucide-react';
+import { Loader2, CalendarIcon, Search, CheckCircle, AlertTriangle, XCircle, ListChecks, RefreshCw, Trash2, Copy } from 'lucide-react';
 
 const CHALLENGE_CACHE_KEY = 'adminAllChallengesCache';
 
@@ -45,6 +45,10 @@ const DailyReflectionPage: React.FC = () => {
   const [challengeSearchResults, setChallengeSearchResults] = useState<SweatlistCollection[]>([]);
   const challengeResultsRef = useRef<HTMLDivElement>(null);
   const challengeInputRef = useRef<HTMLInputElement>(null);
+  
+  // Delete state
+  const [deleteLoading, setDeleteLoading] = useState<string | null>(null);
+  const [deleteResult, setDeleteResult] = useState<{ success: boolean; message: string } | null>(null);
 
   // Format date for the input field
   const formatDateForInput = (date: Date) => {
@@ -308,6 +312,79 @@ const DailyReflectionPage: React.FC = () => {
     handleChallengeSearchLogic(newQuery);
   }, [handleChallengeSearchLogic]);
 
+  // Function to copy text to clipboard
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setSuccessMessage('Reflection text copied to clipboard!');
+      // Clear the message after 3 seconds
+      setTimeout(() => {
+        setSuccessMessage(null);
+      }, 3000);
+    } catch (error) {
+      console.error('Failed to copy text:', error);
+      setErrorMessage('Failed to copy text to clipboard');
+      setTimeout(() => {
+        setErrorMessage(null);
+      }, 3000);
+    }
+  };
+
+  // Function to delete a daily reflection
+  const deleteReflection = async (reflectionId: string) => {
+    if (!reflectionId) return;
+    
+    setDeleteLoading(reflectionId);
+    setDeleteResult(null);
+    
+    try {
+      console.log(`[Delete Reflection] Attempting to delete reflection: ${reflectionId}`);
+      
+      // Delete the reflection using admin methods
+      const success = await adminMethods.deleteDailyPrompt(reflectionId);
+      
+      if (success) {
+        console.log(`[Delete Reflection] Successfully deleted reflection: ${reflectionId}`);
+        
+        setDeleteResult({
+          success: true,
+          message: `Reflection ${reflectionId.substring(0, 8)}... deleted successfully`
+        });
+        
+        // Refresh the reflections list
+        await fetchExistingPrompts();
+        
+        // Clear delete result message after 5 seconds
+        setTimeout(() => {
+          setDeleteResult(null);
+        }, 5000);
+      } else {
+        setDeleteResult({
+          success: false,
+          message: `Failed to delete reflection: Unknown error`
+        });
+        
+        setTimeout(() => {
+          setDeleteResult(null);
+        }, 5000);
+      }
+      
+    } catch (error) {
+      console.error(`[Delete Reflection] Error deleting reflection ${reflectionId}:`, error);
+      setDeleteResult({
+        success: false,
+        message: `Failed to delete reflection: ${error instanceof Error ? error.message : 'Unknown error'}`
+      });
+      
+      // Clear delete result message after 5 seconds
+      setTimeout(() => {
+        setDeleteResult(null);
+      }, 5000);
+    } finally {
+      setDeleteLoading(null);
+    }
+  };
+
   return (
     <AdminRouteGuard>
       <Head>
@@ -559,6 +636,7 @@ const DailyReflectionPage: React.FC = () => {
                       <th className="pb-3 font-medium text-gray-300">Reflection</th>
                       <th className="pb-3 font-medium text-gray-300">Linked Exercise</th>
                       <th className="pb-3 font-medium text-gray-300">Linked Challenge</th>
+                      <th className="pb-3 font-medium text-gray-300">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -568,12 +646,23 @@ const DailyReflectionPage: React.FC = () => {
                           {formatDate(prompt.date)}
                         </td>
                         <td className="py-4 pr-4">
-                          <div className="line-clamp-2">{prompt.text}</div>
+                          <div className="flex items-start space-x-2">
+                            <div className="flex-1 text-white leading-relaxed">
+                              {prompt.text}
+                            </div>
+                            <button
+                              onClick={() => copyToClipboard(prompt.text)}
+                              className="flex-shrink-0 p-1 text-gray-400 hover:text-[#d7ff00] transition-colors"
+                              title="Copy reflection text"
+                            >
+                              <Copy size={16} />
+                            </button>
+                          </div>
                         </td>
                         <td className="py-4 pr-4">
                           {prompt.exerciseName || '-'}
                         </td>
-                        <td className="py-4">
+                        <td className="py-4 pr-4">
                           {(prompt as any).challengeId ? (
                             <div>
                               <div className="text-white text-sm">{(prompt as any).challengeName || (prompt as any).challengeId}</div>
@@ -583,6 +672,25 @@ const DailyReflectionPage: React.FC = () => {
                             '-'
                           )}
                         </td>
+                        <td className="py-4">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (prompt.id && window.confirm(`Are you sure you want to delete this reflection from ${formatDate(prompt.date)}?`)) {
+                                deleteReflection(prompt.id);
+                              }
+                            }}
+                            disabled={deleteLoading === prompt.id}
+                            className="flex items-center justify-center w-8 h-8 rounded-lg bg-red-600 hover:bg-red-700 disabled:bg-red-800 disabled:opacity-50 transition text-white"
+                            title="Delete reflection"
+                          >
+                            {deleteLoading === prompt.id ? (
+                              <Loader2 size={14} className="animate-spin" />
+                            ) : (
+                              <Trash2 size={14} />
+                            )}
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -591,6 +699,22 @@ const DailyReflectionPage: React.FC = () => {
             ) : (
               <div className="text-center py-8 text-gray-400">
                 No reflections found. Create your first reflection above.
+              </div>
+            )}
+            
+            {/* Delete result message */}
+            {deleteResult && (
+              <div className={`mt-4 p-3 border rounded-lg flex items-center animate-fadeIn ${
+                deleteResult.success 
+                  ? 'bg-green-900/30 text-green-400 border-green-700' 
+                  : 'bg-red-900/30 text-red-400 border-red-700'
+              }`}>
+                {deleteResult.success ? (
+                  <CheckCircle size={20} className="mr-2" />
+                ) : (
+                  <AlertTriangle size={20} className="mr-2" />
+                )}
+                {deleteResult.message}
               </div>
             )}
           </div>

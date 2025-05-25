@@ -194,6 +194,17 @@ async function logMulticastNotification({
   response
 }) {
   try {
+    // Create detailed individual results with truncated tokens for privacy
+    const individualResults = response.responses.map((resp, index) => ({
+      tokenPreview: tokens[index] ? tokens[index].substring(0, 20) + '...' : 'MISSING_TOKEN',
+      success: resp.success,
+      messageId: resp.messageId || null,
+      error: resp.error ? {
+        code: resp.error.code || 'UNKNOWN',
+        message: resp.error.message || 'Unknown error'
+      } : null
+    }));
+
     const logEntry = {
       notificationType,
       functionName,
@@ -209,7 +220,10 @@ async function logMulticastNotification({
       successCount: response.successCount,
       failureCount: response.failureCount,
       
-      // Individual results summary
+      // Individual results with detailed breakdown
+      individualResults,
+      
+      // Individual results summary (keeping for backward compatibility)
       results: {
         successful: response.successCount,
         failed: response.failureCount,

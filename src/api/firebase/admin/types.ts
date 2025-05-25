@@ -37,4 +37,5 @@ export interface AdminService {
   createDailyPrompt: (prompt: DailyPrompt) => Promise<boolean>;
   getDailyPrompt: (id: string) => Promise<DailyPrompt | null>;
   getDailyPrompts: (limit?: number) => Promise<DailyPrompt[]>;
+  deleteDailyPrompt: (id: string) => Promise<boolean>;
 } 

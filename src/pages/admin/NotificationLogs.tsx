@@ -21,6 +21,15 @@ interface NotificationLog {
   totalTokens?: number;
   successCount?: number;
   failureCount?: number;
+  individualResults?: Array<{
+    tokenPreview: string;
+    success: boolean;
+    messageId?: string;
+    error?: {
+      code: string;
+      message: string;
+    };
+  }>;
 }
 
 const NotificationLogs: React.FC = () => {
@@ -189,6 +198,51 @@ const NotificationLogs: React.FC = () => {
                       <p>Success: {selectedLog.successCount}</p>
                       <p>Failed: {selectedLog.failureCount}</p>
                     </div>
+                    
+                    {/* Individual Recipients Details */}
+                    {selectedLog.individualResults && selectedLog.individualResults.length > 0 && (
+                      <div className="mt-4">
+                        <h4 className="text-sm font-medium text-[#d7ff00] mb-2">Individual Recipients</h4>
+                        <div className="max-h-60 overflow-y-auto space-y-2">
+                          {selectedLog.individualResults.map((result, index) => (
+                            <div 
+                              key={index}
+                              className={`p-3 rounded-lg text-xs ${
+                                result.success 
+                                  ? 'bg-green-900/30 border border-green-700' 
+                                  : 'bg-red-900/30 border border-red-700'
+                              }`}
+                            >
+                              <div className="flex justify-between items-start mb-1">
+                                <span className="font-mono text-gray-300">
+                                  {result.tokenPreview}
+                                </span>
+                                <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                  result.success 
+                                    ? 'bg-green-500 text-white' 
+                                    : 'bg-red-500 text-white'
+                                }`}>
+                                  {result.success ? 'Sent' : 'Failed'}
+                                </span>
+                              </div>
+                              
+                              {result.success && result.messageId && (
+                                <div className="text-gray-400">
+                                  <span className="font-medium">Message ID:</span> {result.messageId}
+                                </div>
+                              )}
+                              
+                              {!result.success && result.error && (
+                                <div className="text-red-300">
+                                  <div><span className="font-medium">Error:</span> {result.error.code}</div>
+                                  <div className="text-red-400 mt-1">{result.error.message}</div>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <>
