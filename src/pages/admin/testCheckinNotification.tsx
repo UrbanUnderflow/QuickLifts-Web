@@ -25,6 +25,8 @@ interface TestCheckinData {
   promptReply?: string | null;
   calloutUser?: Record<string, any>; // Was ShortUser, now plain object from toDictionary()
   calloutUserFCMToken?: string;
+  originalChallengerUserId?: string; // For callout responses
+  originalChallengerFCMToken?: string; // For callout responses
   challengeId?: string; // Added challengeId for the notification payload
   createdAt: Timestamp;
   updatedAt: Timestamp;
@@ -88,6 +90,9 @@ const TestCheckinNotificationPage: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  
+  // NEW: Test mode selection
+  const [testMode, setTestMode] = useState<'initial' | 'response'>('initial');
 
   // Add new state for check-ins table
   const [allCheckins, setAllCheckins] = useState<CheckinRecord[]>([]);
@@ -470,35 +475,66 @@ const TestCheckinNotificationPage: React.FC = () => {
     const testCheckinId = `test_checkin_${uuidv4()}`;
     const now = Timestamp.now();
 
-    const checkinData: TestCheckinData = {
-      id: testCheckinId,
-      imageURL: { 
-        downloadURL: 'https://via.placeholder.com/150',
-        gsURL: 'gs://placeholder/test_image.jpg',
-        storagePath: 'test_images/test_image.jpg',
-      },
-      caption: caption.trim() || `Test callout from ${selectedChallenger.username} to ${selectedCalloutUser.username}`,
-      user: selectedChallenger.toShortUser().toDictionary(),
-      gym: null,
-      workoutSummary: { 
-        workoutTitle: mockWorkoutTitle,
-        id: `test_summary_${uuidv4()}`
-      },
-      roundId: selectedChallenge.id, // This assumes SweatlistCollection ID is the round/challenge ID
-      dailyPrompt: null,
-      promptReply: null,
-      calloutUser: selectedCalloutUser.toShortUser().toDictionary(),
-      calloutUserFCMToken: selectedCalloutUser.fcmToken,
-      challengeId: selectedChallenge.challenge?.id || selectedChallenge.id, // Prefer nested challenge.id if available
-      createdAt: now,
-      updatedAt: now,
-    };
+    let checkinData: TestCheckinData;
+    
+    if (testMode === 'initial') {
+      // INITIAL CALLOUT: selectedChallenger calls out selectedCalloutUser
+      checkinData = {
+        id: testCheckinId,
+        imageURL: { 
+          downloadURL: 'https://via.placeholder.com/150',
+          gsURL: 'gs://placeholder/test_image.jpg',
+          storagePath: 'test_images/test_image.jpg',
+        },
+        caption: caption.trim() || `Test callout from ${selectedChallenger.username} to ${selectedCalloutUser.username}`,
+        user: selectedChallenger.toShortUser().toDictionary(), // Challenger is the one posting
+        gym: null,
+        workoutSummary: { 
+          workoutTitle: mockWorkoutTitle,
+          id: `test_summary_${uuidv4()}`
+        },
+        roundId: selectedChallenge.id,
+        dailyPrompt: null,
+        promptReply: null,
+        calloutUser: selectedCalloutUser.toShortUser().toDictionary(), // User being called out
+        calloutUserFCMToken: selectedCalloutUser.fcmToken, // FCM token of user being called out
+        challengeId: selectedChallenge.challenge?.id || selectedChallenge.id,
+        createdAt: now,
+        updatedAt: now,
+      };
+    } else {
+      // CALLOUT RESPONSE: selectedCalloutUser responds to a callout from selectedChallenger
+      checkinData = {
+        id: testCheckinId,
+        imageURL: { 
+          downloadURL: 'https://via.placeholder.com/150',
+          gsURL: 'gs://placeholder/test_image.jpg',
+          storagePath: 'test_images/test_image.jpg',
+        },
+        caption: caption.trim() || `Test response from ${selectedCalloutUser.username} to ${selectedChallenger.username}'s callout`,
+        user: selectedCalloutUser.toShortUser().toDictionary(), // Callout user is the one responding
+        gym: null,
+        workoutSummary: { 
+          workoutTitle: mockWorkoutTitle,
+          id: `test_summary_${uuidv4()}`
+        },
+        roundId: selectedChallenge.id,
+        dailyPrompt: null,
+        promptReply: null,
+        originalChallengerUserId: selectedChallenger.id, // Original challenger who made the callout
+        originalChallengerFCMToken: selectedChallenger.fcmToken, // FCM token of original challenger
+        challengeId: selectedChallenge.challenge?.id || selectedChallenge.id,
+        createdAt: now,
+        updatedAt: now,
+      };
+    }
 
-    console.log("[Submit] Creating test check-in (with plain objects for users and challengeId):", checkinData);
+    console.log(`[Submit] Creating test check-in for ${testMode}:`, checkinData);
     try {
       const checkinRef = doc(db, 'checkins', testCheckinId);
       await setDoc(checkinRef, checkinData);
-      setSuccessMessage(`Test check-in ${testCheckinId} created successfully. It will be auto-deleted in ~20 seconds.`);
+      const testModeText = testMode === 'initial' ? 'initial callout' : 'callout response';
+      setSuccessMessage(`Test ${testModeText} check-in ${testCheckinId} created successfully. It will be auto-deleted in ~20 seconds.`);
       console.log(`[Submit] Test check-in ${testCheckinId} created successfully.`);
 
       // Auto-delete the test document after ~20 seconds
@@ -615,6 +651,45 @@ const TestCheckinNotificationPage: React.FC = () => {
                 allChallengesCount={allChallenges.length}
               />
 
+              {/* Test Mode Selection */}
+              <div>
+                <label className="block text-gray-300 mb-2 text-sm font-medium">Test Mode</label>
+                <div className="space-y-2">
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="testMode"
+                      value="initial"
+                      checked={testMode === 'initial'}
+                      onChange={(e) => setTestMode(e.target.value as 'initial' | 'response')}
+                      className="mr-3 text-[#d7ff00] focus:ring-[#d7ff00] bg-[#262a30] border-gray-700"
+                    />
+                    <span className="text-gray-300 text-sm">
+                      <span className="font-medium text-[#d7ff00]">Initial Callout</span>
+                      <span className="block text-xs text-gray-400 ml-6">
+                        {selectedChallenger?.username || 'Challenger'} calls out {selectedCalloutUser?.username || 'Callout User'} - sends notification to callout user
+                      </span>
+                    </span>
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="testMode"
+                      value="response"
+                      checked={testMode === 'response'}
+                      onChange={(e) => setTestMode(e.target.value as 'initial' | 'response')}
+                      className="mr-3 text-[#d7ff00] focus:ring-[#d7ff00] bg-[#262a30] border-gray-700"
+                    />
+                    <span className="text-gray-300 text-sm">
+                      <span className="font-medium text-[#d7ff00]">Callout Response</span>
+                      <span className="block text-xs text-gray-400 ml-6">
+                        {selectedCalloutUser?.username || 'Callout User'} responds to {selectedChallenger?.username || 'Challenger'} - sends notification to original challenger + awards points
+                      </span>
+                    </span>
+                  </label>
+                </div>
+              </div>
+
               <div>
                 <label htmlFor="caption" className="block text-gray-300 mb-2 text-sm font-medium">Caption (Optional)</label>
                 <textarea
@@ -647,7 +722,7 @@ const TestCheckinNotificationPage: React.FC = () => {
                 className="w-full flex justify-center items-center px-4 py-3 rounded-lg font-medium bg-[#d7ff00] text-black hover:bg-[#b8cc00] transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {(isSubmitting || (isLoadingAllUsers && allUsers.length === 0) || isRefreshingUsers || (isLoadingAllChallenges && allChallenges.length === 0) || isRefreshingChallenges) ? <Loader2 className="animate-spin h-5 w-5 mr-2" /> : null}
-                Send Test Check-in & Notify
+                {testMode === 'initial' ? 'Send Test Initial Callout' : 'Send Test Callout Response'}
               </button>
               
               {successMessage && (

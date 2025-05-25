@@ -88,7 +88,7 @@ exports.handler = async (event) => {
 
   try {
     const documentId = getTodaysDocumentId();
-    const existingDoc = await db.collection("moveOfTheDayCollection").doc(documentId).get();
+    const existingDoc = await db.collection("moveOfTheDay").doc(documentId).get();
 
     if (existingDoc.exists) {
       console.log(`Move of the Day for ${documentId} already exists (likely set manually or by a previous run). Skipping scheduled selection.`);

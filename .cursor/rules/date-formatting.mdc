@@ -1,7 +1,7 @@
 ---
-description: This rule is helpful when dealing with dates. Any time you are writing code where a date is being saved or loaded view this rule.
+description: 
 globs: 
-alwaysApply: false
+alwaysApply: true
 ---
 # Date Formatting in Pulse
 

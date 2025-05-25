@@ -923,8 +923,8 @@ exports.sendCheckinCalloutNotification = onDocumentCreated("checkins/{checkinId}
     }
 
     // --- Send Notification to Original Challenger ---
-    const title = `${responderUsername} answered your callout!`;
-    const body = `They completed the check-in and you've both earned bonus points! You got +50! 🔥`;
+    const title = `🔗 Chain Linked!`;
+    const body = `${responderUsername} completed the chain! You earned +50 points! Now it's up to them to continue the chain. 🔥`;
     const dataPayload = {
       checkinId: checkinId,
       responderId: checkinUser?.id || '',
@@ -957,15 +957,15 @@ exports.sendCheckinCalloutNotification = onDocumentCreated("checkins/{checkinId}
     
     console.log(`Check-in ${checkinId}: User ${initialChallengerUsername} called out user ID ${calloutUser.id}. Preparing notification to token ${calloutUserFCMToken.substring(0,10)}...`);
 
-    const title = `⚡️ ${initialChallengerUsername} Challenged You!`;
-    const body = `You've been called out! Post your check-in today to claim +25 extra points! 🏆`;
+    const title = `⛓️ ${initialChallengerUsername} Chained You!`;
+    const body = `You've been called out to join the chain! Post your check-in today to claim +25 points and keep it alive! 🔥`;
 
     const dataPayload = {
       checkinId: checkinId,
       challengerId: checkinUser?.id || '',
       challengerUsername: initialChallengerUsername,
-      calloutUserId: calloutUser.id,
-      type: 'CHECKIN_CALLOUT',
+      chainedUserId: calloutUser.id, // Updated from calloutUserId
+      type: 'CHECKIN_CHAIN', // Updated from CHECKIN_CALLOUT
       timestamp: String(Math.floor(Date.now() / 1000))
     };
 
@@ -1065,40 +1065,19 @@ exports.handleReferralBonus = onDocumentCreated(`${userChallengeCollection}/{use
             (challengeDoc.data().challenge?.title || challengeDoc.data().title || 'Challenge') : 
             'Challenge';
           
-          const notificationPayload = {
-            token: referrerFcmToken,
-            notification: {
-              title: '💰 +25 Pulse Points!',
-              body: `Your friend ${newUserChallenge.username} just joined "${challengeTitle}" using your link! You earned 25 points.`
-            },
-            data: {
-              type: 'referral_join_bonus',
-              challengeId: challengeId,
-              userId: referrerId,
-              referredUserId: newUserId,
-              referredUsername: newUserChallenge.username || 'Unknown',
-              pointsEarned: '25',
-              timestamp: String(Math.floor(Date.now() / 1000))
-            },
-            apns: {
-              payload: {
-                aps: {
-                  alert: {
-                    title: '💰 +25 Pulse Points!',
-                    body: `Your friend ${newUserChallenge.username} just joined "${challengeTitle}" using your link! You earned 25 points.`
-                  },
-                  badge: 1,
-                  sound: 'default'
-                }
-              }
-            },
-            android: {
-              priority: 'high',
-              notification: { sound: 'default' }
-            }
+          const title = '💰 +25 Pulse Points!';
+          const body = `Your friend ${newUserChallenge.username} just joined "${challengeTitle}" using your link! You earned 25 points.`;
+          const dataPayload = {
+            type: 'referral_join_bonus',
+            challengeId: challengeId,
+            userId: referrerId,
+            referredUserId: newUserId,
+            referredUsername: newUserChallenge.username || 'Unknown',
+            pointsEarned: '25',
+            timestamp: String(Math.floor(Date.now() / 1000))
           };
           
-          await messaging.send(notificationPayload);
+          await sendNotification(referrerFcmToken, title, body, dataPayload, 'REFERRAL_BONUS');
           console.log(`[Referral Bonus] Successfully sent notification to ${referrerUserChallenge.username} (${referrerId})`);
           
         } catch (notificationError) {

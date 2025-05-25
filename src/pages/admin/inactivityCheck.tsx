@@ -1286,6 +1286,10 @@ const InactivityCheckPage: React.FC = () => {
                         <span className="text-gray-400">Referral Bonus</span>
                         <span className="text-gray-300">{selectedUserChallenge.pulsePoints?.referralBonus || 0}</span>
                       </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Peer Challenge Bonus</span>
+                        <span className="text-gray-300">{selectedUserChallenge.pulsePoints?.peerChallengeBonus || 0}</span>
+                      </div>
                     </div>
                   </div>
                 </div>
