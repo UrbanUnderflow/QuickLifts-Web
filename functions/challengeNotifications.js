@@ -1161,8 +1161,8 @@ exports.sendChainReactionNotification = onDocumentCreated("daily-reflections/{re
   let missingTokenCount = 0;
 
   // Define the notification payload
-  const title = `⛓️‍💥 Chain Reaction Event!`;
-  const body = `A special reflection has been shared for "${challengeTitle}"! Join the chain reaction and earn up to +75 bonus points! 🔥`;
+  const title = `⛓️‍💥 Chain Event!`;
+  const body = `A special reflection has been shared for "${challengeTitle}"! Join the chain and earn up to +75 bonus points! 🔥`;
   const dataPayload = {
     challengeId: challengeId,
     reflectionId: reflectionId,
@@ -1177,7 +1177,7 @@ exports.sendChainReactionNotification = onDocumentCreated("daily-reflections/{re
       .get();
 
     if (participantsSnapshot.empty) {
-      console.log(`No participants found for challenge ${challengeId}. No Chain Reaction notifications sent.`);
+      console.log(`No participants found for challenge ${challengeId}. No Chain notifications sent.`);
       return null;
     }
 

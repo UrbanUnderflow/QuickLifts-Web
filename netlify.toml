@@ -17,20 +17,58 @@
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
+# Handle specific known routes that should go to the SPA
 [[redirects]]
   from = "/profile/*"
   to = "/"
   status = 200
 
 [[redirects]]
+  from = "/round/*"
+  to = "/"
+  status = 200
+
+[[redirects]]
+  from = "/round-invitation/*"
+  to = "/"
+  status = 200
+
+[[redirects]]
+  from = "/payment/*"
+  to = "/"
+  status = 200
+
+[[redirects]]
+  from = "/admin/*"
+  to = "/"
+  status = 200
+
+# Catch-all for SPA routes - this should be last and more specific
+[[redirects]]
   from = "/*"
   to = "/"
   status = 200
+  force = false
 
 [[headers]]
   for = "/*"
   [headers.values]
     Cache-Control = "public, max-age=0, must-revalidate"
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+
+# Specific headers for static assets
+[[headers]]
+  for = "/static/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# Headers for API routes
+[[headers]]
+  for = "/api/*"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
 
 [functions]
   directory = "netlify/functions"

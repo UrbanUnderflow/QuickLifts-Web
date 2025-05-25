@@ -1,0 +1,29 @@
+# Handle specific routes that should go to the SPA
+/profile/*  /  200
+/round/*  /  200
+/round-invitation/*  /  200
+/payment/*  /  200
+/admin/*  /  200
+
+# Handle API routes
+/api/*  /.netlify/functions/:splat  200
+
+# Prevent redirecting static assets
+/static/*  /static/:splat  200
+/_next/*  /_next/:splat  200
+/favicon.ico  /favicon.ico  200
+/*.js  /:splat  200
+/*.css  /:splat  200
+/*.png  /:splat  200
+/*.jpg  /:splat  200
+/*.jpeg  /:splat  200
+/*.gif  /:splat  200
+/*.svg  /:splat  200
+/*.ico  /:splat  200
+/*.webp  /:splat  200
+/*.mp4  /:splat  200
+/*.mov  /:splat  200
+/*.pdf  /:splat  200
+
+# Catch-all for SPA routes (should be last)
+/*  /  200 

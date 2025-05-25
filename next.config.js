@@ -42,34 +42,23 @@ const nextConfig = {
   trailingSlash: false,
   // Ensure pages are generated statically when possible
   generateEtags: false,
-  // Add headers for SharedArrayBuffer support
+  // Add headers for better caching and security
   async headers() {
     return [
       {
-        // Only apply COOP/COEP headers to video trimming related routes
-        source: '/trim-video(.*)',
+        source: '/(.*)',
         headers: [
           {
-            key: 'Cross-Origin-Embedder-Policy',
-            value: 'credentialless',
+            key: 'X-Content-Type-Options',
+            value: 'nosniff',
           },
           {
-            key: 'Cross-Origin-Opener-Policy',
-            value: 'same-origin',
-          },
-        ],
-      },
-      {
-        // Also apply to the API route if you have one for video trimming
-        source: '/api/trim-video(.*)',
-        headers: [
-          {
-            key: 'Cross-Origin-Embedder-Policy',
-            value: 'credentialless',
+            key: 'X-Frame-Options',
+            value: 'DENY',
           },
           {
-            key: 'Cross-Origin-Opener-Policy',
-            value: 'same-origin',
+            key: 'X-XSS-Protection',
+            value: '1; mode=block',
           },
         ],
       },

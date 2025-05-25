@@ -14,6 +14,7 @@ import AuthWrapper from '../components/AuthWrapper';
 import Toast from '../components/common/Toast';
 import GlobalLoader from '../components/common/GlobalLoader';
 import ErrorBoundary from '../components/ErrorBoundary';
+import RouterErrorBoundary from '../components/RouterErrorBoundary';
 
 // Only import in development mode
 const isDev = process.env.NODE_ENV === 'development';
@@ -66,27 +67,45 @@ const MixpanelInitializer: React.FC = () => {
 };
 
 const MyApp: React.FC<AppProps> = ({ Component, pageProps }) => {
+  // Add debugging for Android issues
   useEffect(() => {
-    // Log a reminder about environment debugging in development mode
-    if (isDev && typeof window !== 'undefined') {
-      console.log('🔧 Debug tools available in development mode. Try window.debugEnv() in console.');
+    if (typeof window !== 'undefined') {
+      console.log('[App] User Agent:', navigator.userAgent);
+      console.log('[App] Current URL:', window.location.href);
+      
+      // Check for Android-specific issues
+      const isAndroid = /Android/i.test(navigator.userAgent);
+      if (isAndroid) {
+        console.log('[App] Android device detected');
+        
+        // Add Android-specific error handling
+        window.addEventListener('error', (event) => {
+          console.error('[App] Android Error:', event.error);
+        });
+        
+        window.addEventListener('unhandledrejection', (event) => {
+          console.error('[App] Android Unhandled Rejection:', event.reason);
+        });
+      }
     }
   }, []);
 
-  return (    
+  return (
     <>
-      {/* TikTok Pixel Code Start (Global) */}
-      <Script id="tiktok-pixel" strategy="afterInteractive">
+      {/* Google Analytics */}
+      <Script
+        src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"
+        strategy="afterInteractive"
+      />
+      <Script id="google-analytics" strategy="afterInteractive">
         {`
-          !function (w, d, t) {
-            w.TiktokAnalyticsObject=t;var ttq=w[t]=w[t]||[];ttq.methods=["page","track","identify","instances","debug","on","off","once","ready","alias","group","enableCookie","disableCookie","holdConsent","revokeConsent","grantConsent"],ttq.setAndDefer=function(t,e){t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))};};for(var i=0;i<ttq.methods.length;i++)ttq.setAndDefer(ttq,ttq.methods[i]);ttq.instance=function(t){for(var e=ttq._i[t]||[],n=0;n<ttq.methods.length;n++)ttq.setAndDefer(e,ttq.methods[n]);return e;},ttq.load=function(e,n){var r="https://analytics.tiktok.com/i18n/pixel/events.js",o=n&&n.partner;ttq._i=ttq._i||{},ttq._i[e]=[],ttq._i[e]._u=r,ttq._t=ttq._t||{},ttq._t[e]=+new Date,ttq._o=ttq._o||{},ttq._o[e]=n||{};n=document.createElement("script");n.type="text/javascript",n.async=!0,n.src=r+"?sdkid="+e+"&lib="+t;e=document.getElementsByTagName("script")[0];e.parentNode.insertBefore(n,e)};
-            ttq.load('D03A763C77UE0J0RV17G');
-            ttq.page();
-          }(window, document, 'ttq');
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-XXXXXXXXXX');
         `}
       </Script>
-      {/* TikTok Pixel Code End (Global) */}
-      {/* Redux Provider and App Content */}
+
       <Provider store={store}>
         <ErrorBoundary fallbackRender={(error) => (
           <div style={{ padding: '20px', textAlign: 'center', color: 'white', backgroundColor: 'black', minHeight: '100vh' }}>
@@ -100,12 +119,14 @@ const MyApp: React.FC<AppProps> = ({ Component, pageProps }) => {
           </div>
         )}>
           <PersistGate loading={null} persistor={persistor}>
-            <MixpanelInitializer />
-            <AuthWrapper>
-              <Component {...pageProps} />
-            </AuthWrapper>
-            <Toast />
-            <GlobalLoader />
+            <RouterErrorBoundary>
+              <MixpanelInitializer />
+              <AuthWrapper>
+                <Component {...pageProps} />
+              </AuthWrapper>
+              <Toast />
+              <GlobalLoader />
+            </RouterErrorBoundary>
           </PersistGate>
         </ErrorBoundary>
       </Provider>

@@ -131,9 +131,14 @@ const NotificationLogs: React.FC = () => {
                     onClick={() => setSelectedLog(log)}
                   >
                     <div className="flex justify-between items-start mb-2">
-                      <div>
-                        <h3 className="font-medium text-[#d7ff00]">{log.title}</h3>
-                        <p className="text-sm text-gray-300 truncate">{log.body}</p>
+                      <div className="flex-1 min-w-0 pr-4">
+                        <h3 className="font-medium text-[#d7ff00] truncate">{log.title}</h3>
+                        <p className="text-sm text-gray-300 break-words overflow-hidden" style={{
+                          display: '-webkit-box',
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: 'vertical' as const,
+                          maxHeight: '2.5rem'
+                        }}>{log.body}</p>
                       </div>
                       {getStatusBadge(log)}
                     </div>
@@ -162,12 +167,12 @@ const NotificationLogs: React.FC = () => {
               <div className="space-y-4">
                 <div>
                   <h4 className="text-sm font-medium text-[#d7ff00] mb-1">Title</h4>
-                  <p className="text-sm">{selectedLog.title}</p>
+                  <p className="text-sm break-words">{selectedLog.title}</p>
                 </div>
                 
                 <div>
                   <h4 className="text-sm font-medium text-[#d7ff00] mb-1">Body</h4>
-                  <p className="text-sm">{selectedLog.body}</p>
+                  <p className="text-sm break-words whitespace-pre-wrap">{selectedLog.body}</p>
                 </div>
                 
                 <div>
@@ -227,7 +232,7 @@ const NotificationLogs: React.FC = () => {
                               </div>
                               
                               {result.success && result.messageId && (
-                                <div className="text-gray-400">
+                                <div className="text-gray-400 break-words">
                                   <span className="font-medium">Message ID:</span> {result.messageId}
                                 </div>
                               )}
@@ -235,7 +240,7 @@ const NotificationLogs: React.FC = () => {
                               {!result.success && result.error && (
                                 <div className="text-red-300">
                                   <div><span className="font-medium">Error:</span> {result.error.code}</div>
-                                  <div className="text-red-400 mt-1">{result.error.message}</div>
+                                  <div className="text-red-400 mt-1 break-words">{result.error.message}</div>
                                 </div>
                               )}
                             </div>
@@ -248,13 +253,13 @@ const NotificationLogs: React.FC = () => {
                   <>
                     <div>
                       <h4 className="text-sm font-medium text-[#d7ff00] mb-1">FCM Token (truncated)</h4>
-                      <p className="text-sm font-mono">{selectedLog.fcmToken}</p>
+                      <p className="text-sm font-mono break-all">{selectedLog.fcmToken}</p>
                     </div>
                     
                     {selectedLog.messageId && (
                       <div>
                         <h4 className="text-sm font-medium text-[#d7ff00] mb-1">Message ID</h4>
-                        <p className="text-sm font-mono">{selectedLog.messageId}</p>
+                        <p className="text-sm font-mono break-all">{selectedLog.messageId}</p>
                       </div>
                     )}
                   </>
@@ -265,14 +270,14 @@ const NotificationLogs: React.FC = () => {
                     <h4 className="text-sm font-medium text-red-400 mb-1">Error</h4>
                     <div className="bg-red-900/20 p-3 rounded text-sm">
                       <p><strong>Code:</strong> {selectedLog.error.code}</p>
-                      <p><strong>Message:</strong> {selectedLog.error.message}</p>
+                      <p className="break-words"><strong>Message:</strong> {selectedLog.error.message}</p>
                     </div>
                   </div>
                 )}
                 
                 <div>
                   <h4 className="text-sm font-medium text-[#d7ff00] mb-1">Data Payload</h4>
-                  <pre className="text-xs bg-[#262a30] p-3 rounded overflow-auto max-h-40">
+                  <pre className="text-xs bg-[#262a30] p-3 rounded overflow-auto max-h-40 whitespace-pre-wrap break-words">
                     {JSON.stringify((selectedLog as any).dataPayload, null, 2)}
                   </pre>
                 </div>
@@ -287,4 +292,4 @@ const NotificationLogs: React.FC = () => {
   );
 };
 
-export default NotificationLogs; 
+export default NotificationLogs;
