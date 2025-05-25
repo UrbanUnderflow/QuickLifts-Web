@@ -48,6 +48,9 @@ exports.sendCheckinCalloutNotification = require("./challengeNotifications").sen
 // Export the referral bonus functions
 exports.handleReferralBonus = require("./challengeNotifications").handleReferralBonus;
 
+// Export the new Chain Reaction notification function
+exports.sendChainReactionNotification = require("./challengeNotifications").sendChainReactionNotification;
+
 // Export the new batch workout fetch function, now directly from its v2 definition
 // The function is defined and exported in getWorkoutsBatch.js using the v2 onCall method.
 // We just need to re-export it here for Firebase to discover.

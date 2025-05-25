@@ -1106,3 +1106,151 @@ const {onCall} = require("firebase-functions/v2/https");
 // --- Removed processRetroactiveReferralBonuses function ---
 // This functionality is better handled by the existing Netlify function /netlify/functions/link-referral.js
 // which provides more precise control for individual referral cases through the admin UI 
+
+// --- NEW FUNCTION: Send Chain Reaction Notification for Daily Reflections ---
+/**
+ * Sends notifications to challenge participants when a new daily reflection is created
+ * that's linked to their challenge, announcing a "Chain Reaction" event.
+ *
+ * Triggered when a new document is created in the 'daily-reflections' collection.
+ */
+exports.sendChainReactionNotification = onDocumentCreated("daily-reflections/{reflectionId}", async (event) => {
+  const snap = event.data;
+  if (!snap) {
+    console.log(`No data associated with the event for daily-reflections/${event.params.reflectionId}. Exiting.`);
+    return null;
+  }
+  
+  const reflectionData = snap.data();
+  const reflectionId = event.params.reflectionId;
+
+  if (!reflectionData) {
+    console.log(`No data found for new daily reflection ${reflectionId}. Exiting.`);
+    return null;
+  }
+
+  const { challengeId, text: reflectionText } = reflectionData;
+
+  // Only proceed if this reflection is linked to a challenge
+  if (!challengeId) {
+    console.log(`Daily reflection ${reflectionId} is not linked to a challenge. No Chain Reaction notification needed.`);
+    return null;
+  }
+
+  console.log(`Daily reflection ${reflectionId} created for challenge ${challengeId}. Preparing Chain Reaction notifications.`);
+
+  // --- 1. Get Challenge Title ---
+  let challengeTitle = "a challenge";
+  try {
+    const challengeRef = db.collection('sweatlist-collection').doc(challengeId);
+    const challengeDoc = await challengeRef.get();
+    if (challengeDoc.exists && challengeDoc.data()?.challenge?.title) {
+      challengeTitle = challengeDoc.data().challenge.title;
+      console.log(`Fetched challenge title: "${challengeTitle}"`);
+    } else {
+      console.warn(`Challenge document ${challengeId} not found or has no title. Using default title.`);
+    }
+  } catch (error) {
+    console.error(`Error fetching challenge title for ${challengeId}:`, error);
+  }
+
+  // --- 2. Find Challenge Participants and Send Notifications ---
+  const eligibleTokens = [];
+  let sentCount = 0;
+  let failedCount = 0;
+  let missingTokenCount = 0;
+
+  // Define the notification payload
+  const title = `⚡ Chain Reaction Event!`;
+  const body = `A special reflection has been shared for "${challengeTitle}"! Join the chain reaction and earn up to +75 bonus points! 🔥`;
+  const dataPayload = {
+    challengeId: challengeId,
+    reflectionId: reflectionId,
+    type: 'CHAIN_REACTION',
+    maxBonusPoints: '75',
+    timestamp: String(Math.floor(Date.now() / 1000))
+  };
+
+  try {
+    const participantsSnapshot = await db.collection(userChallengeCollection)
+      .where("challengeId", "==", challengeId)
+      .get();
+
+    if (participantsSnapshot.empty) {
+      console.log(`No participants found for challenge ${challengeId}. No Chain Reaction notifications sent.`);
+      return null;
+    }
+
+    // Collect eligible FCM tokens
+    for (const doc of participantsSnapshot.docs) {
+      const participantData = doc.data();
+      const participantToken = participantData.fcmToken;
+      
+      if (!participantToken) {
+        missingTokenCount++;
+        console.warn(`Participant ${doc.id} in challenge ${challengeId} is missing an FCM token.`);
+        continue;
+      }
+      
+      eligibleTokens.push(participantToken);
+    }
+
+    // --- Send using sendEachForMulticast ---
+    if (eligibleTokens.length > 0) {
+      const message = {
+        tokens: eligibleTokens,
+        notification: { title, body },
+        data: dataPayload,
+        apns: {
+          payload: {
+            aps: {
+              alert: { title, body },
+              badge: 1,
+              sound: 'default'
+            },
+          },
+        },
+        android: {
+          priority: 'high',
+          notification: { sound: 'default' }
+        }
+      };
+
+      console.log(`Sending CHAIN_REACTION notification via sendEachForMulticast to ${eligibleTokens.length} tokens.`);
+      const response = await messaging.sendEachForMulticast(message);
+      sentCount = response.successCount;
+      failedCount = response.failureCount;
+      
+      // Log multicast notification
+      await logMulticastNotification({
+        tokens: eligibleTokens,
+        title,
+        body,
+        dataPayload,
+        notificationType: 'CHAIN_REACTION',
+        functionName: 'sendChainReactionNotification',
+        response
+      });
+      
+      console.log(`Finished sending CHAIN_REACTION notifications. Sent: ${sentCount}, Failed: ${failedCount}, Missing tokens: ${missingTokenCount}.`);
+
+      if (response.failureCount > 0) {
+        response.responses.forEach((resp, idx) => {
+          if (!resp.success) {
+            console.error(` - Failed sending to token [${idx}] (${eligibleTokens[idx].substring(0,10)}...): ${resp.error.code} - ${resp.error.message}`);
+          }
+        });
+      }
+    } else {
+      console.log(`No eligible tokens found for CHAIN_REACTION notification. Sent: 0, Failed: 0, Missing tokens: ${missingTokenCount}.`);
+    }
+
+  } catch (error) {
+    console.error(`Error querying participants or sending Chain Reaction notifications for challenge ${challengeId}:`, error);
+    return null;
+  }
+
+  return null;
+}); 
+
+// --- Import for HTTPS functions --- 
