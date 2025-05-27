@@ -28,6 +28,9 @@ exports.handler = async (event, context) => {
     let totalMealsSkipped = 0;
 
     try {
+        // Debug: Verify Firebase connection
+        console.log(`[Netlify Meal Sync] Connected to Firebase project: ${admin.app().options.projectId || 'unknown'}`);
+        
         // 1. Try to acquire lock
         await db.runTransaction(async (transaction) => {
             const lockDoc = await transaction.get(lockRef);
@@ -78,6 +81,28 @@ exports.handler = async (event, context) => {
                 };
             }
 
+            // Debug: Log first few user IDs
+            console.log(`[Netlify Meal Sync] First 5 user IDs:`, userIds.slice(0, 5));
+
+            // Debug: Test query for first user
+            if (userIds.length > 0) {
+                const testUserId = userIds[0];
+                console.log(`[Netlify Meal Sync] Testing meal logs query for user: ${testUserId}`);
+                try {
+                    const testMealsRef = db.collection('users').doc(testUserId).collection('mealLogs');
+                    const testSnapshot = await testMealsRef.limit(3).get();
+                    console.log(`[Netlify Meal Sync] Test query result: ${testSnapshot.size} documents found`);
+                    if (!testSnapshot.empty) {
+                        const testDoc = testSnapshot.docs[0];
+                        console.log(`[Netlify Meal Sync] Test document ID: ${testDoc.id}`);
+                        console.log(`[Netlify Meal Sync] Test document data keys: ${Object.keys(testDoc.data()).join(', ')}`);
+                        console.log(`[Netlify Meal Sync] Test document name: ${testDoc.data().name}`);
+                    }
+                } catch (testError) {
+                    console.error(`[Netlify Meal Sync] Test query failed:`, testError);
+                }
+            }
+
             let currentBatch = db.batch();
             let batchCounter = 0;
 
@@ -90,17 +115,35 @@ exports.handler = async (event, context) => {
                     console.log(`[Netlify Meal Sync] Processing user ${totalUsersProcessed}/${totalUsers} (ID: ${userId})...`);
                 }
 
-                const mealsRef = db.collection('users', userId, 'mealLogs');
+                const mealsRef = db.collection('users').doc(userId).collection('mealLogs');
                 const mealsSnapshot = await mealsRef.get();
 
+                console.log(`[Netlify Meal Sync] User ${userId}: Found ${mealsSnapshot.size} meal documents`);
+
                 if (!mealsSnapshot.empty) {
+                    // Debug: Log first few meal documents for this user
+                    if (totalUsersProcessed <= 3) {
+                        console.log(`[Netlify Meal Sync] DEBUG - User ${userId} meal docs:`, 
+                            mealsSnapshot.docs.slice(0, 3).map(doc => ({
+                                id: doc.id,
+                                data: doc.data(),
+                                hasName: !!doc.data()?.name
+                            }))
+                        );
+                    }
+
                     for (const mealDoc of mealsSnapshot.docs) {
                         const mealId = mealDoc.id;
                         const mealData = mealDoc.data();
                         
-                        // Basic validation
-                        if (!mealData || !mealData.name) {
-                            console.warn(`[Netlify Meal Sync] Skipping meal ${mealId} for user ${userId} due to missing data.`);
+                        // Enhanced validation and debugging
+                        if (!mealData) {
+                            console.warn(`[Netlify Meal Sync] Skipping meal ${mealId} for user ${userId} - no data found.`);
+                            continue;
+                        }
+
+                        if (!mealData.name) {
+                            console.warn(`[Netlify Meal Sync] Skipping meal ${mealId} for user ${userId} - missing name field. Available fields: ${Object.keys(mealData).join(', ')}`);
                             continue;
                         }
 

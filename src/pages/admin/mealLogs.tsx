@@ -19,10 +19,13 @@ import {
   RotateCcw as Sync,
   Database,
   Zap,
-  BarChart2
+  BarChart2,
+  Copy,
+  Check,
+  MessageSquare
 } from 'lucide-react';
 import { convertFirestoreTimestamp } from '../../utils/formatDate';
-import { Meal, MealData } from '../../api/firebase/meal';
+import { MealData } from '../../api/firebase/meal/types';
 
 // Define interface for meal log data from root collection
 interface MealLogEntry {
@@ -33,6 +36,7 @@ interface MealLogEntry {
   protein: number;
   fat: number;
   carbs: number;
+  ingredients: string[];
   image?: string;
   entryMethod?: string;
   createdAt: Date;
@@ -50,6 +54,7 @@ const MealLogsManagement: React.FC = () => {
   const [selectedMealLog, setSelectedMealLog] = useState<MealLogEntry | null>(null);
   const [syncLoading, setSyncLoading] = useState(false);
   const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error' | 'info', text: string } | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // Debounced search function
   const debouncedSearch = useMemo(
@@ -126,6 +131,7 @@ const MealLogsManagement: React.FC = () => {
           protein: data.protein || 0,
           fat: data.fat || 0,
           carbs: data.carbs || 0,
+          ingredients: data.ingredients || [],
           image: data.image,
           entryMethod: data.entryMethod,
           createdAt: convertFirestoreTimestamp(data.createdAt),
@@ -204,6 +210,18 @@ const MealLogsManagement: React.FC = () => {
 
   const formatMacros = (protein: number, carbs: number, fat: number): string => {
     return `P: ${protein}g | C: ${carbs}g | F: ${fat}g`;
+  };
+
+  // Copy to clipboard helper
+  const copyToClipboard = async (text: string, id: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(null), 2000); // Reset after 2 seconds
+    } catch (error) {
+      console.error('Failed to copy to clipboard:', error);
+      setToastMessage({ type: 'error', text: 'Failed to copy to clipboard' });
+    }
   };
 
   // Render meal log details modal
@@ -302,6 +320,24 @@ const MealLogsManagement: React.FC = () => {
                 <p className="text-white font-semibold">{formatDate(mealLog.updatedAt)}</p>
               </div>
             </div>
+
+            {/* Ingredients */}
+            {mealLog.ingredients && mealLog.ingredients.length > 0 && (
+              <div className="bg-[#262a30] rounded-lg p-4 mb-6">
+                <h4 className="text-white font-semibold mb-3 flex items-center gap-2">
+                  <MessageSquare className="w-4 h-4" />
+                  Ingredients ({mealLog.ingredients.length})
+                </h4>
+                <div className="space-y-2">
+                  {mealLog.ingredients.map((ingredient, index) => (
+                    <div key={index} className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-[#d7ff00] rounded-full flex-shrink-0"></div>
+                      <span className="text-gray-300">{ingredient}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Image */}
             {mealLog.image && (
@@ -437,6 +473,7 @@ const MealLogsManagement: React.FC = () => {
               <table className="w-full">
                 <thead className="bg-[#262a30]">
                   <tr>
+                    <th className="text-left p-4 text-gray-300 font-medium">ID</th>
                     <th className="text-left p-4 text-gray-300 font-medium">Meal Name</th>
                     <th className="text-left p-4 text-gray-300 font-medium">User</th>
                     <th className="text-left p-4 text-gray-300 font-medium">Calories</th>
@@ -450,20 +487,36 @@ const MealLogsManagement: React.FC = () => {
                 <tbody>
                   {loading ? (
                     <tr>
-                      <td colSpan={8} className="p-8 text-center text-gray-400">
+                      <td colSpan={9} className="p-8 text-center text-gray-400">
                         <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" />
                         Loading meal logs...
                       </td>
                     </tr>
                   ) : filteredMealLogs.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="p-8 text-center text-gray-400">
+                      <td colSpan={9} className="p-8 text-center text-gray-400">
                         No meal logs found
                       </td>
                     </tr>
                   ) : (
                     filteredMealLogs.map((mealLog) => (
                       <tr key={mealLog.id} className="border-b border-zinc-700 hover:bg-[#262a30] transition-colors">
+                        <td className="p-4">
+                          <button
+                            onClick={() => copyToClipboard(mealLog.id, mealLog.id)}
+                            className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors group"
+                            title="Click to copy ID"
+                          >
+                            <span className="font-mono text-sm truncate max-w-[120px]">
+                              {mealLog.id}
+                            </span>
+                            {copiedId === mealLog.id ? (
+                              <Check className="w-3 h-3 text-green-400" />
+                            ) : (
+                              <Copy className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                            )}
+                          </button>
+                        </td>
                         <td className="p-4">
                           <span className="text-white font-medium">{mealLog.name || 'Unnamed Meal'}</span>
                         </td>
