@@ -64,6 +64,16 @@ const nextConfig = {
       },
     ];
   },
+  // Add redirects for URL aliases
+  async redirects() {
+    return [
+      {
+        source: '/invest',
+        destination: '/investor',
+        permanent: true, // 301 redirect for SEO
+      },
+    ];
+  },
 };
 
 module.exports = nextConfig;

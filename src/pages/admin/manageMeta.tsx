@@ -15,7 +15,7 @@ const pageFileNames = [
   'createStack', 'subscription-success', 'subscribe', 'mobility', 'morningMobilityRedirect', 
   'join-challenge', 'index', 'download', 'trim-video', 'create', 'rounds', 
   'privacyPolicy', 'terms', 'stacks', 'moves', 'update-challenge-status', 
-  'user-dashboard', 'Support', 'connect', 'notification-test', 'creator', 'press', 'MoveAndFuelATL'
+  'user-dashboard', 'Support', 'connect', 'notification-test', 'creator', 'press', 'MoveAndFuelATL', 'investor', 'invest'
 ].sort(); // Sort it once here
 
 const ManageMetaPage: React.FC = () => {

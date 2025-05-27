@@ -2,9 +2,13 @@ import React, { useState, useRef, useEffect } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import dynamic from 'next/dynamic';
+import { GetServerSideProps } from 'next';
 import { ArrowUpRight, Download, ChevronRight, ArrowLeft, TrendingUp } from 'lucide-react';
 import Header from '../../components/Header';
 import Footer from '../../components/Footer/Footer';
+import PageHead from '../../components/PageHead';
+import { adminMethods } from '../../api/firebase/admin/methods';
+import { PageMetaData as FirestorePageMetaData } from '../../api/firebase/admin/types';
 import { doc, getDoc, collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
 import { UserChallenge } from '../../api/firebase/workout/types';
@@ -76,7 +80,16 @@ interface KEffectiveMetrics {
   viralPercentage: number;
 }
 
-const InvestorDataroom: React.FC = () => {
+// Define serializable interface for meta data
+interface SerializablePageMetaDataForInvestor extends Omit<FirestorePageMetaData, 'lastUpdated'> {
+  lastUpdated: string; 
+}
+
+interface InvestorDataroomPageProps {
+  metaData?: SerializablePageMetaDataForInvestor | null;
+}
+
+const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => {
   const [activeSection, setActiveSection] = useState<string>('overview');
   const [financialMetrics, setFinancialMetrics] = useState<FinancialMetrics | null>(null);
   const [kEffectiveMetrics, setKEffectiveMetrics] = useState<KEffectiveMetrics | null>(null);
@@ -288,10 +301,10 @@ const InvestorDataroom: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-zinc-950">
-      <Head>
-        <title>Investor Dataroom - Pulse Fitness Collective</title>
-        <meta name="description" content="Exclusive investor information for Pulse Fitness Collective" />
-      </Head>
+      <PageHead 
+        metaData={metaData} 
+        pageOgUrl="https://fitwithpulse.ai/investor" 
+      />
 
       <Header 
         onSectionChange={handleHeaderSectionChange} 
@@ -2507,6 +2520,51 @@ const InvestorDataroom: React.FC = () => {
       <Footer />
     </div>
   );
+};
+
+export const getServerSideProps: GetServerSideProps<InvestorDataroomPageProps> = async (context) => {
+  // Determine which page ID to use based on the URL
+  const isInvestRoute = context.resolvedUrl?.startsWith('/invest');
+  const primaryPageId = isInvestRoute ? 'invest' : 'investor';
+  const fallbackPageId = 'investor';
+  
+  let rawMetaData: FirestorePageMetaData | null = null;
+  try {
+    // Try the primary page ID first
+    rawMetaData = await adminMethods.getPageMetaData(primaryPageId);
+    
+    // If no meta data found for 'invest', fall back to 'investor'
+    if (!rawMetaData && primaryPageId !== fallbackPageId) {
+      rawMetaData = await adminMethods.getPageMetaData(fallbackPageId);
+    }
+  } catch (error) {
+    console.error(`Error fetching metaData for ${primaryPageId} page in getServerSideProps:`, error);
+    
+    // Try fallback if primary failed and they're different
+    if (primaryPageId !== fallbackPageId) {
+      try {
+        rawMetaData = await adminMethods.getPageMetaData(fallbackPageId);
+      } catch (fallbackError) {
+        console.error(`Error fetching fallback metaData for ${fallbackPageId} page:`, fallbackError);
+      }
+    }
+    // Fallthrough to return props with metaData: null
+  }
+
+  let serializableMetaData: SerializablePageMetaDataForInvestor | null = null;
+  if (rawMetaData) {
+    serializableMetaData = {
+      ...rawMetaData,
+      // Ensure lastUpdated is serializable, converting Timestamp to ISO string
+      lastUpdated: rawMetaData.lastUpdated.toDate().toISOString(),
+    };
+  }
+    
+  return {
+    props: {
+      metaData: serializableMetaData,
+    },
+  };
 };
 
 export default InvestorDataroom;
