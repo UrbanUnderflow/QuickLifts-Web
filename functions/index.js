@@ -8,7 +8,9 @@ if (admin.apps.length === 0) {
 // Import functions from their respective files
 const { syncWorkoutSessionToRoot } = require("./syncWorkoutSessions");
 const { syncWorkoutSummaryToRoot } = require("./syncWorkoutSummaries");
+const { syncMealLogToRoot } = require("./syncMealLogs");
 const { manualSyncWorkoutSessions } = require("./manualSync");
+const { manualSyncMealLogs } = require("./manualSyncMealLogs");
 const { updateParticipantCounts } = require("./updateParticipantCounts");
 // Import the new thumbnail functions
 const { generateThumbnailOnWrite, generateMissingThumbnails, processThumbnailQueue } = require("./thumbnailGenerator");
@@ -18,7 +20,9 @@ const { selectMoveOfTheDay } = require("./moveOfTheDay");
 // Export all functions for Firebase to discover
 exports.syncWorkoutSessionToRoot = syncWorkoutSessionToRoot;
 exports.syncWorkoutSummaryToRoot = syncWorkoutSummaryToRoot;
+exports.syncMealLogToRoot = syncMealLogToRoot;
 exports.manualSyncWorkoutSessions = manualSyncWorkoutSessions;
+exports.manualSyncMealLogs = manualSyncMealLogs;
 exports.updateParticipantCounts = updateParticipantCounts;
 
 // Add any other function exports from other files here if needed

@@ -2,7 +2,7 @@ import React from 'react';
 import { useRouter } from 'next/router';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import Head from 'next/head';
-import { Users, Settings, BarChart2, Bell, FileText, CheckSquare, PlusSquare, Image as ImageIcon, Zap, TrendingUp, Dumbbell, Tag, Users2, Activity, Award, Clock, Gift, Edit3, Send, Server, ChevronDown, MessageCircle } from 'lucide-react';
+import { Users, Settings, BarChart2, Bell, FileText, CheckSquare, PlusSquare, Image as ImageIcon, Zap, TrendingUp, Dumbbell, Tag, Users2, Activity, Award, Clock, Gift, Edit3, Send, Server, ChevronDown, MessageCircle, Utensils } from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '../../redux/store';
 import { toggleDevMode } from '../../redux/devModeSlice';
@@ -142,6 +142,24 @@ const adminCardsData = [
     description: "View and debug chat data including group messages, direct messages, and chat metadata.",
     icon: <MessageCircle className="w-5 h-5" />,
     link: "/admin/chatManagement"
+  },
+  {
+    title: "Workout Summaries",
+    description: "View and search all workout summaries from the root collection with user filtering.",
+    icon: <Activity className="w-5 h-5" />,
+    link: "/admin/workoutSummaries"
+  },
+  {
+    title: "Generate Meal Macros",
+    description: "View and monitor meal macro generation requests from the generateMealMacros collection.",
+    icon: <Utensils className="w-5 h-5" />,
+    link: "/admin/generateMealMacros"
+  },
+  {
+    title: "Meal Logs Management",
+    description: "View and manage all meal logs from the root collection with manual sync functionality.",
+    icon: <Utensils className="w-5 h-5" />,
+    link: "/admin/mealLogs"
   }
 ];
 

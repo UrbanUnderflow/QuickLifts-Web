@@ -3,6 +3,7 @@ import { Timestamp } from 'firebase/firestore';
 
 export interface DailyPrompt {
   id?: string;
+  dateId?: string;
   date: Date;
   text: string;
   exerciseId?: string;

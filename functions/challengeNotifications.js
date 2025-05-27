@@ -871,11 +871,25 @@ exports.sendCheckinCalloutNotification = onDocumentCreated("checkins/{checkinId}
   const responderUsername = checkinUser?.username || "Someone"; // User who is responding to a callout
 
   // Scenario 1: This is a RESPONSE to a callout
-  if (originalChallengerUserId && originalChallengerFCMToken) {
+  if (originalChallengerUserId) {
     console.log(`Check-in ${checkinId}: User ${responderUsername} (ID: ${checkinUser?.id}) responded to callout from ${originalChallengerUserId}.`);
 
+    // Look up the original challenger's current FCM token from their user document
+    let currentOriginalChallengerFCMToken = null;
+    try {
+      const originalChallengerDoc = await db.collection('users').doc(originalChallengerUserId).get();
+      if (originalChallengerDoc.exists) {
+        currentOriginalChallengerFCMToken = originalChallengerDoc.data().fcmToken;
+        console.log(`Found current FCM token for original challenger ${originalChallengerUserId}: ${currentOriginalChallengerFCMToken ? 'Present' : 'Missing'}`);
+      } else {
+        console.warn(`Original challenger user document not found: ${originalChallengerUserId}`);
+      }
+    } catch (tokenLookupError) {
+      console.error(`Error looking up FCM token for original challenger ${originalChallengerUserId}:`, tokenLookupError);
+    }
+
     if (!effectiveChallengeId) {
-      console.error(`Check-in ${checkinId} (Callout Response): Missing challengeId and roundId. Cannot award points.`);
+      console.error(`Check-in ${checkinId} (Callout Response): Missing challengeId. Cannot award points.`);
       // Proceed with notification but log error for points
     }
 
@@ -923,62 +937,79 @@ exports.sendCheckinCalloutNotification = onDocumentCreated("checkins/{checkinId}
     }
 
     // --- Send Notification to Original Challenger ---
-    const title = `🔗 Chain Linked!`;
-    const body = `${responderUsername} completed the chain! You earned +50 points! Now it's up to them to continue the chain. 🔥`;
-    const dataPayload = {
-      checkinId: checkinId,
-      responderId: checkinUser?.id || '',
-      responderUsername: responderUsername,
-      originalChallengerId: originalChallengerUserId,
-      type: 'CALLOUT_ANSWERED',
-      timestamp: String(Math.floor(Date.now() / 1000))
-    };
+    if (currentOriginalChallengerFCMToken && currentOriginalChallengerFCMToken.trim() !== '') {
+      const title = `🔗 Chain Linked!`;
+      const body = `${responderUsername} completed the chain! You earned +50 points! Now it's up to them to continue the chain. 🔥`;
+      const dataPayload = {
+        checkinId: checkinId,
+        responderId: checkinUser?.id || '',
+        responderUsername: responderUsername,
+        originalChallengerId: originalChallengerUserId,
+        type: 'CALLOUT_ANSWERED',
+        timestamp: String(Math.floor(Date.now() / 1000))
+      };
 
-    // Only add challengeId to payload if it exists and is not empty
-    if (effectiveChallengeId) {
-      dataPayload.challengeId = effectiveChallengeId;
-    }
+      // Only add challengeId to payload if it exists and is not empty
+      if (effectiveChallengeId) {
+        dataPayload.challengeId = effectiveChallengeId;
+      }
 
-    try {
-      await sendNotification(originalChallengerFCMToken, title, body, dataPayload, 'CALLOUT_ANSWERED');
-      console.log(`Successfully sent CALLOUT_ANSWERED notification for check-in ${checkinId} to original challenger ${originalChallengerUserId}.`);
-    } catch (error) {
-      console.error(`Error sending CALLOUT_ANSWERED notification for check-in ${checkinId} to original challenger ${originalChallengerUserId}:`, error);
+      try {
+        await sendNotification(currentOriginalChallengerFCMToken, title, body, dataPayload, 'CALLOUT_ANSWERED');
+        console.log(`Successfully sent CALLOUT_ANSWERED notification for check-in ${checkinId} to original challenger ${originalChallengerUserId}.`);
+      } catch (error) {
+        console.error(`Error sending CALLOUT_ANSWERED notification for check-in ${checkinId} to original challenger ${originalChallengerUserId}:`, error);
+      }
+    } else {
+      console.warn(`Cannot send notification to original challenger ${originalChallengerUserId}: No valid FCM token found (token: ${currentOriginalChallengerFCMToken ? 'empty/invalid' : 'null'})`);
     }
 
   // Scenario 2: This is an INITIAL callout
-  } else if (calloutUserFCMToken) {
+  } else if (calloutUser && calloutUser.id) {
     const initialChallengerUsername = checkinUser?.username || "Someone"; // User performing the initial callout
     
-    if (!calloutUser || !calloutUser.id) {
-      console.log(`Check-in ${checkinId} (Initial Callout): calloutUser data is missing or incomplete. No notification will be sent.`);
-      return null;
-    }
-    
-    console.log(`Check-in ${checkinId}: User ${initialChallengerUsername} called out user ID ${calloutUser.id}. Preparing notification to token ${calloutUserFCMToken.substring(0,10)}...`);
+    console.log(`Check-in ${checkinId}: User ${initialChallengerUsername} called out user ID ${calloutUser.id}. Looking up current FCM token...`);
 
-    const title = `⛓️ ${initialChallengerUsername} Chained You!`;
-    const body = `You've been called out to join the chain! Post your check-in today to claim +25 points and keep it alive! 🔥`;
-
-    const dataPayload = {
-      checkinId: checkinId,
-      challengerId: checkinUser?.id || '',
-      challengerUsername: initialChallengerUsername,
-      chainedUserId: calloutUser.id, // Updated from calloutUserId
-      type: 'CHECKIN_CHAIN', // Updated from CHECKIN_CALLOUT
-      timestamp: String(Math.floor(Date.now() / 1000))
-    };
-
-    // Only add challengeId to payload if it exists and is not empty
-    if (effectiveChallengeId) {
-      dataPayload.challengeId = effectiveChallengeId;
-    }
-
+    // Look up the callout user's current FCM token from their user document
+    let currentCalloutUserFCMToken = null;
     try {
-      await sendNotification(calloutUserFCMToken, title, body, dataPayload, 'CHECKIN_CALLOUT');
-      console.log(`Successfully sent CHECKIN_CALLOUT notification for check-in ${checkinId} to user ID ${calloutUser.id}.`);
-    } catch (error) {
-      console.error(`Error sending CHECKIN_CALLOUT notification for check-in ${checkinId} to user ID ${calloutUser.id}:`, error);
+      const calloutUserDoc = await db.collection('users').doc(calloutUser.id).get();
+      if (calloutUserDoc.exists) {
+        currentCalloutUserFCMToken = calloutUserDoc.data().fcmToken;
+        console.log(`Found current FCM token for callout user ${calloutUser.id}: ${currentCalloutUserFCMToken ? 'Present' : 'Missing'}`);
+      } else {
+        console.warn(`Callout user document not found: ${calloutUser.id}`);
+      }
+    } catch (tokenLookupError) {
+      console.error(`Error looking up FCM token for callout user ${calloutUser.id}:`, tokenLookupError);
+    }
+
+    if (currentCalloutUserFCMToken && currentCalloutUserFCMToken.trim() !== '') {
+      const title = `⛓️ ${initialChallengerUsername} Chained You!`;
+      const body = `You've been called out to join the chain! Post your check-in today to claim +25 points and keep it alive! 🔥`;
+
+      const dataPayload = {
+        checkinId: checkinId,
+        challengerId: checkinUser?.id || '',
+        challengerUsername: initialChallengerUsername,
+        chainedUserId: calloutUser.id, // Updated from calloutUserId
+        type: 'CHECKIN_CHAIN', // Updated from CHECKIN_CALLOUT
+        timestamp: String(Math.floor(Date.now() / 1000))
+      };
+
+      // Only add challengeId to payload if it exists and is not empty
+      if (effectiveChallengeId) {
+        dataPayload.challengeId = effectiveChallengeId;
+      }
+
+      try {
+        await sendNotification(currentCalloutUserFCMToken, title, body, dataPayload, 'CHECKIN_CALLOUT');
+        console.log(`Successfully sent CHECKIN_CALLOUT notification for check-in ${checkinId} to user ID ${calloutUser.id}.`);
+      } catch (error) {
+        console.error(`Error sending CHECKIN_CALLOUT notification for check-in ${checkinId} to user ID ${calloutUser.id}:`, error);
+      }
+    } else {
+      console.warn(`Cannot send notification to callout user ${calloutUser.id}: No valid FCM token found (token: ${currentCalloutUserFCMToken ? 'empty/invalid' : 'null'})`);
     }
   } else {
     console.log(`Check-in ${checkinId}: Neither a callout response nor an initial callout with FCM token. No notification sent.`);
@@ -1112,32 +1143,27 @@ const {onCall} = require("firebase-functions/v2/https");
  * Sends notifications to challenge participants when a new daily reflection is created
  * that's linked to their challenge, announcing a "Chain Reaction" event.
  *
- * Triggered when a new document is created in the 'daily-reflections' collection.
+ * Triggered when a new document is created in the 'daily-reflections/{dateId}/challenges/{challengeId}' collection.
  */
-exports.sendChainReactionNotification = onDocumentCreated("daily-reflections/{reflectionId}", async (event) => {
+exports.sendChainReactionNotification = onDocumentCreated("daily-reflections/{dateId}/challenges/{challengeId}", async (event) => {
   const snap = event.data;
   if (!snap) {
-    console.log(`No data associated with the event for daily-reflections/${event.params.reflectionId}. Exiting.`);
+    console.log(`No data associated with the event for daily-reflections/${event.params.dateId}/challenges/${event.params.challengeId}. Exiting.`);
     return null;
   }
   
   const reflectionData = snap.data();
-  const reflectionId = event.params.reflectionId;
+  const dateId = event.params.dateId; // MM-DD-YYYY format
+  const challengeId = event.params.challengeId;
 
   if (!reflectionData) {
-    console.log(`No data found for new daily reflection ${reflectionId}. Exiting.`);
+    console.log(`No data found for new daily reflection ${dateId}/${challengeId}. Exiting.`);
     return null;
   }
 
-  const { challengeId, text: reflectionText } = reflectionData;
+  const { text: reflectionText } = reflectionData;
 
-  // Only proceed if this reflection is linked to a challenge
-  if (!challengeId) {
-    console.log(`Daily reflection ${reflectionId} is not linked to a challenge. No Chain Reaction notification needed.`);
-    return null;
-  }
-
-  console.log(`Daily reflection ${reflectionId} created for challenge ${challengeId}. Preparing Chain Reaction notifications.`);
+  console.log(`Daily reflection created for date ${dateId} and challenge ${challengeId}. Preparing Chain Reaction notifications.`);
 
   // --- 1. Get Challenge Title ---
   let challengeTitle = "a challenge";
@@ -1165,7 +1191,7 @@ exports.sendChainReactionNotification = onDocumentCreated("daily-reflections/{re
   const body = `A special reflection has been shared for "${challengeTitle}"! Join the chain and earn up to +75 bonus points! 🔥`;
   const dataPayload = {
     challengeId: challengeId,
-    reflectionId: reflectionId,
+    dateId: dateId,
     type: 'CHAIN_REACTION',
     maxBonusPoints: '75',
     timestamp: String(Math.floor(Date.now() / 1000))

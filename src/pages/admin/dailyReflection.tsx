@@ -8,7 +8,7 @@ import { exerciseService, Exercise } from '../../api/firebase/exercise';
 import { workoutService } from '../../api/firebase/workout/service';
 import { SweatlistCollection } from '../../api/firebase/workout/types';
 import { formatDate } from '../../utils/formatDate';
-import { Loader2, CalendarIcon, Search, CheckCircle, AlertTriangle, XCircle, ListChecks, RefreshCw, Trash2, Copy } from 'lucide-react';
+import { Loader2, CalendarIcon, Search, CheckCircle, AlertTriangle, XCircle, ListChecks, RefreshCw, Trash2, Copy, Users } from 'lucide-react';
 
 const CHALLENGE_CACHE_KEY = 'adminAllChallengesCache';
 
@@ -628,73 +628,169 @@ const DailyReflectionPage: React.FC = () => {
                 <Loader2 className="animate-spin h-8 w-8 text-[#d7ff00]" />
               </div>
             ) : existingPrompts.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="text-left border-b border-gray-700">
-                      <th className="pb-3 font-medium text-gray-300">Date</th>
-                      <th className="pb-3 font-medium text-gray-300">Reflection</th>
-                      <th className="pb-3 font-medium text-gray-300">Linked Exercise</th>
-                      <th className="pb-3 font-medium text-gray-300">Linked Challenge</th>
-                      <th className="pb-3 font-medium text-gray-300">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {existingPrompts.map((prompt) => (
-                      <tr key={prompt.id} className="border-b border-gray-800 hover:bg-[#262a30]">
-                        <td className="py-4 pr-4 whitespace-nowrap">
-                          {formatDate(prompt.date)}
-                        </td>
-                        <td className="py-4 pr-4">
-                          <div className="flex items-start space-x-2">
-                            <div className="flex-1 text-white leading-relaxed">
-                              {prompt.text}
-                            </div>
-                            <button
-                              onClick={() => copyToClipboard(prompt.text)}
-                              className="flex-shrink-0 p-1 text-gray-400 hover:text-[#d7ff00] transition-colors"
-                              title="Copy reflection text"
-                            >
-                              <Copy size={16} />
-                            </button>
-                          </div>
-                        </td>
-                        <td className="py-4 pr-4">
-                          {prompt.exerciseName || '-'}
-                        </td>
-                        <td className="py-4 pr-4">
-                          {(prompt as any).challengeId ? (
+              <div className="space-y-6">
+                {/* Group reflections by date */}
+                {(() => {
+                  // Group prompts by dateId
+                  const groupedByDate = existingPrompts.reduce((acc, prompt) => {
+                    const dateKey = (prompt as any).dateId || formatDate(prompt.date);
+                    if (!acc[dateKey]) {
+                      acc[dateKey] = [];
+                    }
+                    acc[dateKey].push(prompt);
+                    return acc;
+                  }, {} as Record<string, DailyPrompt[]>);
+
+                  // Sort dates in descending order
+                  const sortedDates = Object.keys(groupedByDate).sort((a, b) => {
+                    // Convert MM-DD-YYYY to Date for proper sorting
+                    const dateA = new Date(a.split('-').reverse().join('-'));
+                    const dateB = new Date(b.split('-').reverse().join('-'));
+                    return dateB.getTime() - dateA.getTime();
+                  });
+
+                  return sortedDates.map(dateKey => {
+                    const datePrompts = groupedByDate[dateKey];
+                    const displayDate = datePrompts[0]?.date ? formatDate(datePrompts[0].date) : dateKey;
+                    
+                    // Separate general and challenge-specific reflections
+                    const generalReflections = datePrompts.filter(p => !(p as any).challengeId);
+                    const challengeReflections = datePrompts.filter(p => (p as any).challengeId);
+
+                    return (
+                      <div key={dateKey} className="border border-gray-700 rounded-lg overflow-hidden">
+                        {/* Date Header */}
+                        <div className="bg-[#262a30] px-4 py-3 border-b border-gray-700">
+                          <h3 className="text-lg font-semibold text-[#d7ff00] flex items-center">
+                            <CalendarIcon size={20} className="mr-2" />
+                            {displayDate}
+                            <span className="ml-2 text-sm text-gray-400">
+                              ({generalReflections.length + challengeReflections.length} reflection{generalReflections.length + challengeReflections.length !== 1 ? 's' : ''})
+                            </span>
+                          </h3>
+                        </div>
+
+                        <div className="p-4 space-y-4">
+                          {/* General Reflections */}
+                          {generalReflections.length > 0 && (
                             <div>
-                              <div className="text-white text-sm">{(prompt as any).challengeName || (prompt as any).challengeId}</div>
-                              <div className="text-gray-400 text-xs font-mono">{(prompt as any).challengeId}</div>
+                              <h4 className="text-sm font-medium text-gray-300 mb-2 flex items-center">
+                                <ListChecks size={16} className="mr-1" />
+                                General Reflection
+                              </h4>
+                              {generalReflections.map((prompt) => (
+                                <div key={prompt.id} className="bg-[#1f2327] rounded-lg p-4 border border-gray-700">
+                                  <div className="flex items-start justify-between">
+                                    <div className="flex-1">
+                                      <div className="flex items-start space-x-2 mb-2">
+                                        <div className="flex-1 text-white leading-relaxed">
+                                          {prompt.text}
+                                        </div>
+                                        <button
+                                          onClick={() => copyToClipboard(prompt.text)}
+                                          className="flex-shrink-0 p-1 text-gray-400 hover:text-[#d7ff00] transition-colors"
+                                          title="Copy reflection text"
+                                        >
+                                          <Copy size={16} />
+                                        </button>
+                                      </div>
+                                      {prompt.exerciseName && (
+                                        <div className="text-sm text-gray-400">
+                                          <span className="font-medium">Linked Exercise:</span> {prompt.exerciseName}
+                                        </div>
+                                      )}
+                                    </div>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (prompt.id && window.confirm(`Are you sure you want to delete this general reflection from ${displayDate}?`)) {
+                                          deleteReflection(prompt.id);
+                                        }
+                                      }}
+                                      disabled={deleteLoading === prompt.id}
+                                      className="ml-3 flex items-center justify-center w-8 h-8 rounded-lg bg-red-600 hover:bg-red-700 disabled:bg-red-800 disabled:opacity-50 transition text-white"
+                                      title="Delete reflection"
+                                    >
+                                      {deleteLoading === prompt.id ? (
+                                        <Loader2 size={14} className="animate-spin" />
+                                      ) : (
+                                        <Trash2 size={14} />
+                                      )}
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
                             </div>
-                          ) : (
-                            '-'
                           )}
-                        </td>
-                        <td className="py-4">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (prompt.id && window.confirm(`Are you sure you want to delete this reflection from ${formatDate(prompt.date)}?`)) {
-                                deleteReflection(prompt.id);
-                              }
-                            }}
-                            disabled={deleteLoading === prompt.id}
-                            className="flex items-center justify-center w-8 h-8 rounded-lg bg-red-600 hover:bg-red-700 disabled:bg-red-800 disabled:opacity-50 transition text-white"
-                            title="Delete reflection"
-                          >
-                            {deleteLoading === prompt.id ? (
-                              <Loader2 size={14} className="animate-spin" />
-                            ) : (
-                              <Trash2 size={14} />
-                            )}
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+
+                          {/* Challenge-Specific Reflections */}
+                          {challengeReflections.length > 0 && (
+                            <div>
+                              <h4 className="text-sm font-medium text-gray-300 mb-2 flex items-center">
+                                <Users size={16} className="mr-1" />
+                                Challenge-Specific Reflections ({challengeReflections.length})
+                              </h4>
+                              <div className="space-y-3">
+                                {challengeReflections.map((prompt) => (
+                                  <div key={prompt.id} className="bg-[#1f2327] rounded-lg p-4 border border-gray-700">
+                                    <div className="flex items-start justify-between">
+                                      <div className="flex-1">
+                                        <div className="flex items-center mb-2">
+                                          <div className="bg-[#d7ff00] text-black px-2 py-1 rounded text-xs font-medium mr-2">
+                                            {(prompt as any).challengeName || (prompt as any).challengeId}
+                                          </div>
+                                          {(prompt as any).challengeId && (
+                                            <div className="text-xs text-gray-500 font-mono">
+                                              {(prompt as any).challengeId}
+                                            </div>
+                                          )}
+                                        </div>
+                                        <div className="flex items-start space-x-2 mb-2">
+                                          <div className="flex-1 text-white leading-relaxed">
+                                            {prompt.text}
+                                          </div>
+                                          <button
+                                            onClick={() => copyToClipboard(prompt.text)}
+                                            className="flex-shrink-0 p-1 text-gray-400 hover:text-[#d7ff00] transition-colors"
+                                            title="Copy reflection text"
+                                          >
+                                            <Copy size={16} />
+                                          </button>
+                                        </div>
+                                        {prompt.exerciseName && (
+                                          <div className="text-sm text-gray-400">
+                                            <span className="font-medium">Linked Exercise:</span> {prompt.exerciseName}
+                                          </div>
+                                        )}
+                                      </div>
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          if (prompt.id && window.confirm(`Are you sure you want to delete this challenge reflection from ${displayDate}?`)) {
+                                            deleteReflection(prompt.id);
+                                          }
+                                        }}
+                                        disabled={deleteLoading === prompt.id}
+                                        className="ml-3 flex items-center justify-center w-8 h-8 rounded-lg bg-red-600 hover:bg-red-700 disabled:bg-red-800 disabled:opacity-50 transition text-white"
+                                        title="Delete reflection"
+                                      >
+                                        {deleteLoading === prompt.id ? (
+                                          <Loader2 size={14} className="animate-spin" />
+                                        ) : (
+                                          <Trash2 size={14} />
+                                        )}
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  });
+                })()}
               </div>
             ) : (
               <div className="text-center py-8 text-gray-400">
