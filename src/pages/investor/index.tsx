@@ -681,8 +681,8 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                       {/* K-Factor Metric */}
                       <div className="text-center bg-zinc-800/30 rounded-lg p-4">
                         <p className="text-zinc-400 text-sm mb-2">Current K-Factor</p>
-                        <p className="text-white text-2xl font-bold">1.24</p>
-                        <p className="text-zinc-500 text-xs">One new user for every 0.24 shares</p>
+                        <p className="text-white text-2xl font-bold">9.83</p>
+                        <p className="text-zinc-500 text-xs">See below for detailed breakdown</p>
                       </div>
                       
                       {/* Visual Examples */}
