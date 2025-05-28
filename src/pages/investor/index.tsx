@@ -2222,14 +2222,21 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                             </div>
                             
                             <div className="bg-zinc-800/50 rounded-lg p-4 mt-4">
-                            <h5 className="text-[#E0FE10] text-sm font-medium mb-2">Current Revenue Mix</h5>
+                            <h5 className="text-[#E0FE10] text-sm font-medium mb-2">Current Revenue Mix (4 months)</h5>
                             <div className="flex justify-between items-center mb-1">
-                                <span className="text-zinc-400 text-sm">Annual ($39.99)</span>
-                                <span className="text-white font-medium">$3,199 (56%)</span>
+                                <span className="text-zinc-400 text-sm">Annual ($39.99) • 80 subs</span>
+                                <span className="text-white font-medium">$1,400 (56%)</span>
                             </div>
-                            <div className="flex justify-between items-center">
-                                <span className="text-zinc-400 text-sm">Monthly ($4.99)</span>
-                                <span className="text-white font-medium">$319 (44%)</span>
+                            <div className="flex justify-between items-center mb-3">
+                                <span className="text-zinc-400 text-sm">Monthly ($4.99) • 64 subs</span>
+                                <span className="text-white font-medium">$1,100 (44%)</span>
+                            </div>
+                            <div className="border-t border-zinc-700 pt-2">
+                                <div className="flex justify-between items-center">
+                                    <span className="text-white text-sm font-medium">Total Revenue</span>
+                                    <span className="text-[#E0FE10] font-bold">$2,500</span>
+                                </div>
+                                <p className="text-zinc-500 text-xs mt-1">Since January 2025 launch</p>
                             </div>
                             </div>
                         </div>
@@ -2252,7 +2259,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                             
                             <div className="bg-zinc-800/50 rounded-lg p-4">
                             <p className="text-zinc-400 text-sm">ARPU</p>
-                            <p className="text-white text-xl font-bold">$17.36</p>
+                            <p className="text-white text-xl font-bold">$4.34</p>
                             <p className="text-[#E0FE10] text-xs">Monthly average</p>
                             </div>
                             
@@ -2318,6 +2325,195 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                     <p className="text-zinc-500 text-sm mt-4 italic">
                         Note: Detailed financial projections and audited financials are available upon request with signed NDA.
                     </p>
+                    </div>
+                    
+                    {/* Revenue Story Section */}
+                    <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8 mb-10">
+                    <h3 className="text-white text-xl font-semibold mb-6">Revenue Story: From Launch to Scale</h3>
+                    
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+                        {/* Phase 1: Early Validation */}
+                        <div className="bg-zinc-800/50 rounded-xl p-6">
+                        <div className="flex items-center mb-4">
+                            <div className="w-8 h-8 rounded-full bg-[#E0FE10]/20 flex items-center justify-center mr-3">
+                            <span className="text-[#E0FE10] text-sm font-bold">1</span>
+                            </div>
+                            <h4 className="text-white font-semibold">Early Validation</h4>
+                        </div>
+                        <p className="text-zinc-400 text-sm mb-3">January - April 2025</p>
+                        <div className="space-y-2 text-sm">
+                            <div className="flex justify-between">
+                            <span className="text-zinc-400">Revenue:</span>
+                            <span className="text-white font-medium">$2,500</span>
+                            </div>
+                            <div className="flex justify-between">
+                            <span className="text-zinc-400">Subscribers:</span>
+                            <span className="text-white font-medium">144</span>
+                            </div>
+                            <div className="flex justify-between">
+                            <span className="text-zinc-400">Conversion:</span>
+                            <span className="text-[#E0FE10] font-medium">18%</span>
+                            </div>
+                        </div>
+                        <p className="text-zinc-500 text-xs mt-3">
+                            Strong early monetization validates premium model and user willingness to pay
+                        </p>
+                        </div>
+                        
+                        {/* Phase 2: Creator Scaling */}
+                        <div className="bg-zinc-800/50 rounded-xl p-6">
+                        <div className="flex items-center mb-4">
+                            <div className="w-8 h-8 rounded-full bg-[#E0FE10]/20 flex items-center justify-center mr-3">
+                            <span className="text-[#E0FE10] text-sm font-bold">2</span>
+                            </div>
+                            <h4 className="text-white font-semibold">Creator Scaling</h4>
+                        </div>
+                        <p className="text-zinc-400 text-sm mb-3">Q3-Q4 2025 (Projected)</p>
+                        <div className="space-y-2 text-sm">
+                            <div className="flex justify-between">
+                            <span className="text-zinc-400">Revenue:</span>
+                            <span className="text-white font-medium">$28K</span>
+                            </div>
+                            <div className="flex justify-between">
+                            <span className="text-zinc-400">Subscribers:</span>
+                            <span className="text-white font-medium">450</span>
+                            </div>
+                            <div className="flex justify-between">
+                            <span className="text-zinc-400">Creators:</span>
+                            <span className="text-[#E0FE10] font-medium">50+</span>
+                            </div>
+                        </div>
+                        <p className="text-zinc-500 text-xs mt-3">
+                            Creator flywheel accelerates growth as each creator brings their audience
+                        </p>
+                        </div>
+                        
+                        {/* Phase 3: Market Expansion */}
+                        <div className="bg-zinc-800/50 rounded-xl p-6">
+                        <div className="flex items-center mb-4">
+                            <div className="w-8 h-8 rounded-full bg-[#E0FE10]/20 flex items-center justify-center mr-3">
+                            <span className="text-[#E0FE10] text-sm font-bold">3</span>
+                            </div>
+                            <h4 className="text-white font-semibold">Market Expansion</h4>
+                        </div>
+                        <p className="text-zinc-400 text-sm mb-3">2026-2027 (Projected)</p>
+                        <div className="space-y-2 text-sm">
+                            <div className="flex justify-between">
+                            <span className="text-zinc-400">Revenue:</span>
+                            <span className="text-white font-medium">$2.8M</span>
+                            </div>
+                            <div className="flex justify-between">
+                            <span className="text-zinc-400">Subscribers:</span>
+                            <span className="text-white font-medium">15K</span>
+                            </div>
+                            <div className="flex justify-between">
+                            <span className="text-zinc-400">ARPU:</span>
+                            <span className="text-[#E0FE10] font-medium">$15.50</span>
+                            </div>
+                        </div>
+                        <p className="text-zinc-500 text-xs mt-3">
+                            Premium features and creator revenue sharing drive higher ARPU
+                        </p>
+                        </div>
+                    </div>
+                    
+                    {/* Key Revenue Insights */}
+                    <div className="bg-gradient-to-r from-[#E0FE10]/10 to-[#E0FE10]/5 border border-[#E0FE10]/20 rounded-xl p-6">
+                        <h4 className="text-[#E0FE10] font-semibold mb-4">💡 Key Revenue Insights</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <h5 className="text-white font-medium mb-2">Strong Annual Preference</h5>
+                            <p className="text-zinc-300 text-sm">
+                            56% of subscribers choose annual plans, indicating high confidence in the platform 
+                            and providing better cash flow predictability.
+                            </p>
+                        </div>
+                        <div>
+                            <h5 className="text-white font-medium mb-2">Creator-Driven Growth</h5>
+                            <p className="text-zinc-300 text-sm">
+                            Each creator brings an average of 37.5 users, with 18% converting to paid subscriptions—
+                            creating a scalable, low-CAC growth engine.
+                            </p>
+                        </div>
+                        </div>
+                    </div>
+                    </div>
+                    
+                    <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8">
+                    <h3 className="text-white text-xl font-semibold mb-6">Why Invest in Pulse?</h3>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-zinc-900 to-zinc-800 p-1">
+                        <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-[#d7ff00]/10"></div>
+                        <div className="relative bg-zinc-900 rounded-lg p-6 h-full">
+                            <h4 className="text-[#E0FE10] font-medium mb-3">Early Stage Validation</h4>
+                            <p className="text-zinc-400">
+                            Strong early metrics with 808 users, 61% retention, and 18% conversion rate in just 4 months 
+                            since public launch, demonstrating clear product-market fit.
+                            </p>
+                        </div>
+                        </div>
+                        
+                        <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-zinc-900 to-zinc-800 p-1">
+                        <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-[#d7ff00]/10"></div>
+                        <div className="relative bg-zinc-900 rounded-lg p-6 h-full">
+                            <h4 className="text-[#E0FE10] font-medium mb-3">Creator-Driven Growth</h4>
+                            <p className="text-zinc-400">
+                            Proven creator acquisition model with 37.5x user multiplier per creator and validation 
+                            from SoulCycle instructors bringing 75 paying users.
+                            </p>
+                        </div>
+                        </div>
+                        
+                        <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-zinc-900 to-zinc-800 p-1">
+                        <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-[#d7ff00]/10"></div>
+                        <div className="relative bg-zinc-900 rounded-lg p-6 h-full">
+                            <h4 className="text-[#E0FE10] font-medium mb-3">Experienced Founder</h4>
+                            <p className="text-zinc-400">
+                            Led by Tremaine Grant, first-generation Jamaican-American software engineer with proven 
+                            track record in building and scaling consumer products.
+                            </p>
+                        </div>
+                        </div>
+                        
+                        <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-zinc-900 to-zinc-800 p-1">
+                        <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-[#d7ff00]/10"></div>
+                        <div className="relative bg-zinc-900 rounded-lg p-6 h-full">
+                            <h4 className="text-[#E0FE10] font-medium mb-3">Massive Market Opportunity</h4>
+                            <p className="text-zinc-400">
+                            Operating in the $120B+ global fitness app market with a unique social-first approach 
+                            that differentiates from existing competitors.
+                            </p>
+                        </div>
+                        </div>
+                    </div>
+                    
+                    <div className="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
+                        <a href="mailto:invest@fitwithpulse.ai" className="inline-flex items-center justify-center px-8 py-4 bg-[#E0FE10] hover:bg-[#d8f521] text-black font-bold rounded-lg transition-colors text-center">
+                        Schedule Investor Meeting
+                        </a>
+                        <a href="#" className="inline-flex items-center justify-center px-8 py-4 border border-zinc-700 hover:border-[#E0FE10] text-white font-medium rounded-lg transition-colors text-center">
+                        Request Due Diligence Access
+                        </a>
+                    </div>
+                    </div>
+                </section>
+
+                {/* Security & Compliance Footer */}
+                <section className="py-8 bg-zinc-950 border-t border-zinc-800">
+                    <div className="max-w-7xl mx-auto px-4 sm:px-8">
+                    <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+                        <div className="flex items-center gap-2 text-zinc-400 text-sm">
+                        <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                        <span>Pulse is GDPR-compliant, HIPAA-ready, and SOC-2 roadmap kicking off Q3 2025.</span>
+                        </div>
+                        <div className="flex items-center gap-6 text-zinc-500 text-xs">
+                        <span>🔒 End-to-end encryption</span>
+                        <span>🛡️ Privacy by design</span>
+                        <span>🛡️ Privacy by design</span>
+                        <span>📋 Regular security audits</span>
+                        </div>
+                    </div>
                     </div>
                 </section>
 
