@@ -1,6 +1,6 @@
-import { setDoc, doc, getDoc, deleteDoc, Timestamp, collection, query, orderBy, limit as firestoreLimit, getDocs } from 'firebase/firestore';
+import { setDoc, doc, getDoc, deleteDoc, Timestamp, collection, query, orderBy, limit as firestoreLimit, getDocs, addDoc, where } from 'firebase/firestore';
 import { db } from '../config';
-import { AdminService, PageMetaData, DailyPrompt } from './types';
+import { AdminService, PageMetaData, DailyPrompt, ProgrammingAccess } from './types';
 import { dateToUnixTimestamp, convertFirestoreTimestamp } from '../../../utils/formatDate';
 
 export const adminMethods: AdminService = {
@@ -260,6 +260,130 @@ export const adminMethods: AdminService = {
       return true;
     } catch (error) {
       console.error('Error deleting daily prompt:', error);
+      return false;
+    }
+  },
+
+  // Programming Access methods
+  async createProgrammingAccessRequest(request: Omit<ProgrammingAccess, 'id' | 'createdAt' | 'updatedAt'>): Promise<boolean> {
+    try {
+      const now = new Date();
+      const requestData = {
+        ...request,
+        email: request.email.toLowerCase(), // Normalize email
+        status: request.status || 'requested',
+        createdAt: Timestamp.fromDate(now),
+        updatedAt: Timestamp.fromDate(now)
+      };
+
+      // Check if request already exists for this email
+      const existingQuery = query(
+        collection(db, 'programming-access'),
+        where('email', '==', request.email.toLowerCase())
+      );
+      const existingSnapshot = await getDocs(existingQuery);
+
+      if (!existingSnapshot.empty) {
+        // Update existing request
+        const existingDoc = existingSnapshot.docs[0];
+        await setDoc(doc(db, 'programming-access', existingDoc.id), {
+          ...requestData,
+          createdAt: existingDoc.data().createdAt, // Keep original creation date
+          updatedAt: Timestamp.fromDate(now)
+        });
+        console.log('Updated existing programming access request for:', request.email);
+      } else {
+        // Create new request
+        await addDoc(collection(db, 'programming-access'), requestData);
+        console.log('Created new programming access request for:', request.email);
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Error creating programming access request:', error);
+      return false;
+    }
+  },
+
+  async getProgrammingAccessRequests(): Promise<ProgrammingAccess[]> {
+    try {
+      const requestsQuery = query(
+        collection(db, 'programming-access'),
+        orderBy('createdAt', 'desc')
+      );
+      const snapshot = await getDocs(requestsQuery);
+
+      return snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: convertFirestoreTimestamp(doc.data().createdAt),
+        updatedAt: convertFirestoreTimestamp(doc.data().updatedAt),
+        approvedAt: doc.data().approvedAt ? convertFirestoreTimestamp(doc.data().approvedAt) : undefined
+      })) as ProgrammingAccess[];
+    } catch (error) {
+      console.error('Error fetching programming access requests:', error);
+      return [];
+    }
+  },
+
+  async updateProgrammingAccessStatus(id: string, status: 'active' | 'deactivated', approvedBy?: string): Promise<boolean> {
+    try {
+      const now = new Date();
+      const updateData: any = {
+        status,
+        updatedAt: Timestamp.fromDate(now)
+      };
+
+      if (status === 'active') {
+        updateData.approvedAt = Timestamp.fromDate(now);
+        if (approvedBy) {
+          updateData.approvedBy = approvedBy;
+        }
+      }
+
+      await setDoc(doc(db, 'programming-access', id), updateData, { merge: true });
+      console.log(`Updated programming access status for ${id} to ${status}`);
+      return true;
+    } catch (error) {
+      console.error('Error updating programming access status:', error);
+      return false;
+    }
+  },
+
+  async checkProgrammingAccess(email: string): Promise<ProgrammingAccess | null> {
+    try {
+      const accessQuery = query(
+        collection(db, 'programming-access'),
+        where('email', '==', email.toLowerCase()),
+        where('status', '==', 'active')
+      );
+      const snapshot = await getDocs(accessQuery);
+
+      if (snapshot.empty) {
+        return null;
+      }
+
+      const doc = snapshot.docs[0];
+      return {
+        id: doc.id,
+        ...doc.data(),
+        createdAt: convertFirestoreTimestamp(doc.data().createdAt),
+        updatedAt: convertFirestoreTimestamp(doc.data().updatedAt),
+        approvedAt: doc.data().approvedAt ? convertFirestoreTimestamp(doc.data().approvedAt) : undefined
+      } as ProgrammingAccess;
+    } catch (error) {
+      console.error('Error checking programming access:', error);
+      return null;
+    }
+  },
+
+  async deleteProgrammingAccessRequest(id: string): Promise<boolean> {
+    try {
+      await deleteDoc(doc(db, 'programming-access', id));
+      console.log(`Successfully deleted programming access request: ${id}`);
+      return true;
+    } catch (error) {
+      console.error('Error deleting programming access request:', error);
       return false;
     }
   }

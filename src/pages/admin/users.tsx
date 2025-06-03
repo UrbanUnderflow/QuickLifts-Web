@@ -4,10 +4,12 @@ import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import { collection, getDocs, query, orderBy, doc, getDoc, setDoc, deleteDoc, writeBatch } from 'firebase/firestore';
 import { db, auth } from '../../api/firebase/config';
 import debounce from 'lodash.debounce';
-import { Trash2 as TrashIcon, AlertCircle, CheckCircle, Activity, Clock, Calendar, Dumbbell, Eye, XCircle, ArrowRight, ChevronRight } from 'lucide-react';
+import { Trash2 as TrashIcon, AlertCircle, CheckCircle, Activity, Clock, Calendar, Dumbbell, Eye, XCircle, ArrowRight, ChevronRight, Code, Users, Shield } from 'lucide-react';
 import { workoutService } from '../../api/firebase/workout/service';
 import { Workout, WorkoutStatus, WorkoutSummary, RepsAndWeightLog } from '../../api/firebase/workout/types';
 import { ExerciseLog } from '../../api/firebase/exercise/types';
+import { adminMethods } from '../../api/firebase/admin/methods';
+import { ProgrammingAccess } from '../../api/firebase/admin/types';
 
 
 type User = {
@@ -27,8 +29,8 @@ type WorkoutSessionDisplay = {
   logs: ExerciseLog[];
 };
 
-// Update TabType to include 'logs'
-type TabType = 'all' | 'admins' | 'workoutSessions' | 'logs';
+// Update TabType to include 'logs' and 'programmingAccess'
+type TabType = 'all' | 'admins' | 'workoutSessions' | 'logs' | 'programmingAccess';
 
 const UsersManagement: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
@@ -81,6 +83,14 @@ const UsersManagement: React.FC = () => {
   // *** START: State for Expanded Session Log Details ***
   const [selectedSessionLogId, setSelectedSessionLogId] = useState<string | null>(null);
   // *** END: State for Expanded Session Log Details ***
+
+  // *** START: State for Programming Access ***
+  const [programmingAccessRequests, setProgrammingAccessRequests] = useState<ProgrammingAccess[]>([]);
+  const [loadingProgrammingAccess, setLoadingProgrammingAccess] = useState(false);
+  const [programmingAccessError, setProgrammingAccessError] = useState<string | null>(null);
+  const [processingAccessStatus, setProcessingAccessStatus] = useState<string | null>(null);
+  const [selectedProgrammingRequest, setSelectedProgrammingRequest] = useState<ProgrammingAccess | null>(null);
+  // *** END: State for Programming Access ***
 
   // Copy ID to clipboard and show toast
   const copyToClipboard = (id: string) => {
@@ -408,6 +418,11 @@ const UsersManagement: React.FC = () => {
     loadAllUsers();
   }, []);
 
+  // Load programming access requests on component mount
+  useEffect(() => {
+    loadProgrammingAccessRequests();
+  }, []);
+
   // Update filtered users based on search term and active tab
   const updateFilteredUsers = (allUsers: User[], term: string, tab: TabType) => {
     let filtered = [...allUsers];
@@ -455,13 +470,18 @@ const UsersManagement: React.FC = () => {
   const handleTabChange = (tab: TabType) => {
     setActiveTab(tab);
     
+    // Load programming access data when switching to that tab
+    if (tab === 'programmingAccess') {
+      loadProgrammingAccessRequests();
+    }
+    
     // Only apply filtering for 'all' and 'admins' tabs
-    if (tab !== 'workoutSessions') {
+    if (tab !== 'workoutSessions' && tab !== 'programmingAccess') {
       updateFilteredUsers(users, searchTerm, tab);
     }
     
     // If switching away from workout sessions, ensure filtering is correct
-    if (activeTab === 'workoutSessions' && tab !== 'workoutSessions') {
+    if (activeTab === 'workoutSessions' && tab !== 'workoutSessions' && tab !== 'programmingAccess') {
       updateFilteredUsers(users, searchTerm, tab);
     }
   };
@@ -1317,6 +1337,107 @@ const UsersManagement: React.FC = () => {
   };
   // *** END: Render Log Details Function ***
 
+  // *** START: Programming Access Management Functions ***
+  const loadProgrammingAccessRequests = async () => {
+    try {
+      setLoadingProgrammingAccess(true);
+      setProgrammingAccessError(null);
+      
+      const requests = await adminMethods.getProgrammingAccessRequests();
+      setProgrammingAccessRequests(requests);
+    } catch (error) {
+      console.error('Error loading programming access requests:', error);
+      setProgrammingAccessError('Failed to load programming access requests');
+    } finally {
+      setLoadingProgrammingAccess(false);
+    }
+  };
+
+  const handleUpdateAccessStatus = async (id: string, status: 'active' | 'deactivated') => {
+    try {
+      setProcessingAccessStatus(id);
+      
+      const currentUser = auth.currentUser;
+      const approvedBy = currentUser?.email || 'Unknown Admin';
+      
+      const success = await adminMethods.updateProgrammingAccessStatus(id, status, approvedBy);
+      
+      if (success) {
+        setToastMessage({ 
+          type: 'success', 
+          text: `Access ${status === 'active' ? 'approved' : 'deactivated'} successfully` 
+        });
+        await loadProgrammingAccessRequests();
+      } else {
+        throw new Error('Failed to update status');
+      }
+    } catch (error) {
+      console.error('Error updating access status:', error);
+      setToastMessage({ 
+        type: 'error', 
+        text: `Failed to ${status === 'active' ? 'approve' : 'deactivate'} access` 
+      });
+    } finally {
+      setProcessingAccessStatus(null);
+    }
+  };
+
+  const handleDeleteAccessRequest = async (id: string, email: string) => {
+    if (!window.confirm(`Are you sure you want to delete the programming access request for ${email}? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      setProcessingAccessStatus(id);
+      
+      const success = await adminMethods.deleteProgrammingAccessRequest(id);
+      
+      if (success) {
+        setToastMessage({ 
+          type: 'success', 
+          text: 'Access request deleted successfully' 
+        });
+        await loadProgrammingAccessRequests();
+        if (selectedProgrammingRequest?.id === id) {
+          setSelectedProgrammingRequest(null);
+        }
+      } else {
+        throw new Error('Failed to delete request');
+      }
+    } catch (error) {
+      console.error('Error deleting access request:', error);
+      setToastMessage({ 
+        type: 'error', 
+        text: 'Failed to delete access request' 
+      });
+    } finally {
+      setProcessingAccessStatus(null);
+    }
+  };
+  // *** END: Programming Access Management Functions ***
+
+  // Helper function to format role field
+  const formatRoleField = (role: any): string => {
+    if (Array.isArray(role)) {
+      return role.join(', ');
+    }
+    if (typeof role === 'object' && role) {
+      return Object.keys(role).filter(key => role[key]).join(', ');
+    }
+    return role || 'Not provided';
+  };
+
+  // Helper function to format use cases field
+  const formatUseCasesField = (useCases: any): string => {
+    if (Array.isArray(useCases)) {
+      return useCases.join(', ');
+    }
+    if (typeof useCases === 'object' && useCases) {
+      return Object.keys(useCases).filter(key => useCases[key]).join(', ');
+    }
+    return useCases || 'Not provided';
+  };
+
   return (
     <AdminRouteGuard>
       <Head>
@@ -1525,6 +1646,28 @@ const UsersManagement: React.FC = () => {
                   )}
                 </button>
               )}
+
+              {/* Programming Access Tab */}
+              <button
+                className={`py-2 px-4 mr-2 font-medium text-sm transition-colors relative ${
+                  activeTab === 'programmingAccess'
+                    ? 'text-[#d7ff00]'
+                    : 'text-gray-400 hover:text-gray-200'
+                } ${isBatchDeleting ? 'pointer-events-none opacity-60' : ''}`}
+                onClick={() => handleTabChange('programmingAccess')}
+                disabled={isBatchDeleting}
+              >
+                <div className="flex items-center">
+                  <Code className="h-4 w-4 mr-1" />
+                  Programming Access
+                  <span className="ml-2 px-2 py-0.5 bg-gray-800 rounded-full text-xs">
+                    {programmingAccessRequests.length}
+                  </span>
+                </div>
+                {activeTab === 'programmingAccess' && (
+                  <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-blue-500 via-purple-500 to-[#d7ff00]"></div>
+                )}
+              </button>
             </div>
 
             {/* Batch Deletion Progress UI */}
@@ -1573,126 +1716,7 @@ const UsersManagement: React.FC = () => {
             )}
 
             {/* Conditional Content Based on Tab */}
-            {activeTab !== 'workoutSessions' ? (
-              // Display Users Table for 'all' and 'admins' tabs
-              <div className="overflow-x-auto">
-                <table className={`min-w-full bg-[#262a30] rounded-lg overflow-hidden ${isBatchDeleting ? 'opacity-60 pointer-events-none' : ''}`}>
-                  <thead>
-                    <tr className="border-b border-gray-700">
-                      {/* Conditional Checkbox Header */}
-                      {isSelectingForDelete && (
-                          <th className="py-3 px-4 text-center w-12">
-                              <input
-                                  type="checkbox"
-                                  className="form-checkbox h-4 w-4 text-[#d7ff00] bg-gray-800 border-gray-600 rounded focus:ring-[#d7ff00] focus:ring-offset-0"
-                                  checked={areAllVisibleSelected}
-                                  onChange={handleSelectAllVisibleChange}
-                                  title="Select/Deselect all visible users"
-                                  disabled={isBatchDeleting}
-                              />
-                          </th>
-                      )}
-                      <th className="py-3 px-4 text-left text-gray-300 font-medium">ID</th>
-                      <th className="py-3 px-4 text-left text-gray-300 font-medium">Email</th>
-                      <th className="py-3 px-4 text-left text-gray-300 font-medium">Username</th>
-                      <th className="py-3 px-4 text-left text-gray-300 font-medium">Registration</th>
-                      <th className="py-3 px-4 text-left text-gray-300 font-medium">Admin</th>
-                      <th className="py-3 px-4 text-center text-gray-300 font-medium">Admin Actions</th>
-                      <th className="py-3 px-4 text-center text-gray-300 font-medium">View</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredUsers.map((user, index) => (
-                      <React.Fragment key={user.id}>
-                        <tr className={`hover:bg-[#2a2f36] transition-colors ${selectedUser?.id === user.id ? 'bg-[#1d2b3a]' : ''}`}>
-                          {/* Conditional Checkbox Cell */}
-                          {isSelectingForDelete && (
-                              <td className="py-3 px-4 border-b border-gray-700 text-center">
-                                  <input
-                                      type="checkbox"
-                                      className="form-checkbox h-4 w-4 text-[#d7ff00] bg-gray-800 border-gray-600 rounded focus:ring-[#d7ff00] focus:ring-offset-0"
-                                      checked={selectedUserIds.has(user.id)}
-                                      onChange={() => handleUserCheckboxChange(user.id)}
-                                      disabled={isBatchDeleting}
-                                  />
-                              </td>
-                          )}
-                          <td className="py-3 px-4 border-b border-gray-700 text-gray-300">
-                            <button
-                              onClick={() => copyToClipboard(user.id)}
-                              className="text-blue-400 hover:text-blue-300"
-                              title="Click to copy user ID"
-                            >
-                              {user.id.substring(0, 8)}...
-                            </button>
-                          </td>
-                          <td className="py-3 px-4 border-b border-gray-700 text-gray-300">{user.email}</td>
-                          <td className="py-3 px-4 border-b border-gray-700 text-gray-300">{user.username || '-'}</td>
-                          <td className="py-3 px-4 border-b border-gray-700">
-                            {user.registrationComplete ? 
-                              <span className="px-2 py-1 bg-green-900/30 text-green-400 rounded-full text-xs font-medium border border-green-900">Complete</span> : 
-                              <span className="px-2 py-1 bg-orange-900/30 text-orange-400 rounded-full text-xs font-medium border border-orange-900">Incomplete</span>
-                            }
-                          </td>
-                          <td className="py-3 px-4 border-b border-gray-700">
-                            {user.adminVerified ? 
-                              <span className="px-2 py-1 bg-blue-900/30 text-blue-400 rounded-full text-xs font-medium border border-blue-900">Yes</span> : 
-                              <span className="px-2 py-1 bg-gray-900/30 text-gray-400 rounded-full text-xs font-medium border border-gray-700">No</span>
-                            }
-                          </td>
-                          <td className="py-3 px-4 border-b border-gray-700 text-center">
-                            <button
-                              onClick={() => toggleAdminStatus(user)}
-                              disabled={!user.email || processingAdmin === user.email}
-                              className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
-                                user.adminVerified
-                                  ? 'bg-red-900/30 text-red-400 hover:bg-red-900/50 border border-red-900'
-                                  : 'bg-blue-900/30 text-blue-400 hover:bg-blue-900/50 border border-blue-900'
-                              }`}
-                            >
-                              {processingAdmin === user.email ? (
-                                <svg className="animate-spin h-4 w-4 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                </svg>
-                              ) : user.adminVerified ? (
-                                'Remove Admin'
-                              ) : (
-                                'Make Admin'
-                              )}
-                            </button>
-                          </td>
-                          <td className="py-3 px-4 border-b border-gray-700 text-center">
-                            <button
-                              onClick={() => setSelectedUser(selectedUser?.id === user.id ? null : user)}
-                              className={`px-2 py-1 rounded-lg text-xs font-medium border hover:bg-blue-800/40 transition-colors flex items-center mx-auto ${
-                                selectedUser?.id === user.id 
-                                  ? 'bg-blue-800/50 text-blue-300 border-blue-900' 
-                                  : 'bg-blue-900/30 text-blue-400 border-blue-900'
-                              }`}
-                              title="View user details"
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                                <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
-                                <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
-                              </svg>
-                              {selectedUser?.id === user.id ? 'Hide' : 'View'}
-                            </button>
-                          </td>
-                        </tr>
-                        {selectedUser?.id === user.id && (
-                          <tr>
-                            <td colSpan={isSelectingForDelete ? 8 : 7} className="p-0 border-b border-gray-700">
-                              {renderUserDetails(user)}
-                            </td>
-                          </tr>
-                        )}
-                      </React.Fragment>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
+            {activeTab === 'workoutSessions' ? (
               // Display Workout Sessions Content
               <div className="mt-4">
                 <div className="bg-[#1d2b3a] rounded-lg border border-blue-800 p-6 animate-fade-in-up">
@@ -2033,113 +2057,332 @@ const UsersManagement: React.FC = () => {
                   </div>
                 </div>
               </div>
-            )}
-            {/* *** START: Placeholder for Logs Tab Content *** */}
-            {activeTab === 'logs' && logsWorkoutSession && (
+            ) : activeTab === 'programmingAccess' ? (
+              // Display Programming Access Content
               <div className="mt-4">
-                <div className="bg-[#1d2b3a] rounded-lg border border-purple-800 p-6 animate-fade-in-up">
-                  <div className="flex items-center justify-between gap-3 mb-4">
+                <div className="bg-[#1d2b3a] rounded-lg border border-green-800 p-6 animate-fade-in-up">
+                  <div className="flex items-center justify-between gap-3 mb-6">
                     <div className="flex items-center gap-3">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-[#d7ff00]" viewBox="0 0 20 20" fill="currentColor"> <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" /> </svg> 
-                      <h3 className="text-lg font-medium text-white">Exercise Logs</h3>
-                      <span className="text-purple-300 text-sm">
-                        Session ID: {logsWorkoutSession.workout.id}
+                      <Code className="h-5 w-5 text-[#d7ff00]" />
+                      <h3 className="text-lg font-medium text-white">Programming Access Management</h3>
+                    </div>
+                    <div className="flex gap-2 text-sm">
+                      <span className="px-3 py-1 bg-blue-900/30 text-blue-300 rounded-full border border-blue-800">
+                        Total: {programmingAccessRequests.length}
+                      </span>
+                      <span className="px-3 py-1 bg-orange-900/30 text-orange-300 rounded-full border border-orange-800">
+                        Pending: {programmingAccessRequests.filter(r => r.status === 'requested').length}
+                      </span>
+                      <span className="px-3 py-1 bg-green-900/30 text-green-300 rounded-full border border-green-800">
+                        Active: {programmingAccessRequests.filter(r => r.status === 'active').length}
                       </span>
                     </div>
-                    {/* Load Logs Button */} 
-                    <button 
-                      className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors flex items-center gap-2 ${ 
-                        loadingSessionLogs 
-                          ? 'bg-gray-600 text-gray-400 cursor-not-allowed' 
-                          : 'bg-purple-700/80 hover:bg-purple-600/80 text-white'
-                      }`}
-                      onClick={loadLogsForSession}
-                      disabled={loadingSessionLogs}
-                    >
-                      {loadingSessionLogs ? (
-                        <>
-                          <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"> <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle> <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path> </svg>
-                          Loading...
-                        </>
-                      ) : (
-                        'Load Session Logs'
-                      )}
-                    </button>
                   </div>
-                  
-                  {/* Log Display Area */} 
-                  <div className="bg-[#262a30] rounded-lg p-4 min-h-[100px]">
-                    {loadingSessionLogs ? (
-                      <div className="flex items-center justify-center text-gray-400 italic h-full">
-                        <svg className="animate-spin h-5 w-5 mr-2 text-purple-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"> <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle> <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path> </svg>
-                        Loading logs...
+
+                  {loadingProgrammingAccess ? (
+                    <div className="bg-[#262a30] rounded-lg p-8 flex flex-col items-center justify-center">
+                      <svg className="animate-spin h-8 w-8 mb-4 text-[#d7ff00]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      <p className="text-gray-300">Loading programming access requests...</p>
+                    </div>
+                  ) : programmingAccessError ? (
+                    <div className="bg-[#262a30] rounded-lg p-6">
+                      <div className="flex items-start gap-3 text-red-400 bg-red-900/20 p-4 rounded-lg border border-red-800">
+                        <AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <p className="font-medium mb-1">Failed to load programming access requests</p>
+                          <p className="text-sm text-red-300">{programmingAccessError}</p>
+                        </div>
                       </div>
-                    ) : sessionLogsError ? (
-                      <div className="flex items-center justify-center text-red-400 bg-red-900/20 p-3 rounded border border-red-800 h-full">
-                        <AlertCircle className="h-5 w-5 mr-2 flex-shrink-0" />
-                        <span>{sessionLogsError}</span>
+                    </div>
+                  ) : programmingAccessRequests.length === 0 ? (
+                    <div className="bg-[#262a30] rounded-lg p-6 flex items-center justify-center">
+                      <p className="text-gray-400 italic">No programming access requests found.</p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full bg-[#262a30] rounded-lg overflow-hidden">
+                        <thead>
+                          <tr className="border-b border-gray-700">
+                            <th className="py-3 px-4 text-left text-gray-300 font-medium">Email</th>
+                            <th className="py-3 px-4 text-left text-gray-300 font-medium">Name</th>
+                            <th className="py-3 px-4 text-left text-gray-300 font-medium">Role</th>
+                            <th className="py-3 px-4 text-left text-gray-300 font-medium">Status</th>
+                            <th className="py-3 px-4 text-left text-gray-300 font-medium">Requested</th>
+                            <th className="py-3 px-4 text-center text-gray-300 font-medium">Actions</th>
+                            <th className="py-3 px-4 text-center text-gray-300 font-medium">View</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {programmingAccessRequests.map((request) => (
+                            <React.Fragment key={request.id}>
+                              <tr className={`hover:bg-[#2a2f36] transition-colors ${selectedProgrammingRequest?.id === request.id ? 'bg-[#1d2b3a]' : ''}`}>
+                                <td className="py-3 px-4 border-b border-gray-700 text-gray-300">{request.email}</td>
+                                <td className="py-3 px-4 border-b border-gray-700 text-gray-300">{request.name || '-'}</td>
+                                <td className="py-3 px-4 border-b border-gray-700 text-gray-300">
+                                  {formatRoleField(request.role)}
+                                </td>
+                                <td className="py-3 px-4 border-b border-gray-700">
+                                  {request.status === 'requested' && (
+                                    <span className="px-2 py-1 bg-orange-900/30 text-orange-400 rounded-full text-xs font-medium border border-orange-900">Pending</span>
+                                  )}
+                                  {request.status === 'active' && (
+                                    <span className="px-2 py-1 bg-green-900/30 text-green-400 rounded-full text-xs font-medium border border-green-900">Active</span>
+                                  )}
+                                  {request.status === 'deactivated' && (
+                                    <span className="px-2 py-1 bg-red-900/30 text-red-400 rounded-full text-xs font-medium border border-red-900">Deactivated</span>
+                                  )}
+                                </td>
+                                <td className="py-3 px-4 border-b border-gray-700 text-gray-300 text-sm">
+                                  {formatDate(request.createdAt)}
+                                </td>
+                                <td className="py-3 px-4 border-b border-gray-700 text-center">
+                                  <div className="flex gap-1 justify-center">
+                                    {request.status === 'requested' && (
+                                      <>
+                    <button 
+                                          onClick={() => handleUpdateAccessStatus(request.id || '', 'active')}
+                                          disabled={processingAccessStatus === request.id}
+                                          className="px-2 py-1 bg-green-900/30 text-green-400 hover:bg-green-900/50 rounded text-xs font-medium border border-green-900 transition-colors"
+                                        >
+                                          {processingAccessStatus === request.id ? '...' : 'Approve'}
+                                        </button>
+                                        <button
+                                          onClick={() => handleDeleteAccessRequest(request.id || '', request.email || '')}
+                                          disabled={processingAccessStatus === request.id}
+                                          className="px-2 py-1 bg-red-900/30 text-red-400 hover:bg-red-900/50 rounded text-xs font-medium border border-red-900 transition-colors"
+                                        >
+                                          {processingAccessStatus === request.id ? '...' : 'Deny'}
+                                        </button>
+                                      </>
+                                    )}
+                                    {request.status === 'active' && (
+                                      <button
+                                        onClick={() => handleUpdateAccessStatus(request.id || '', 'deactivated')}
+                                        disabled={processingAccessStatus === request.id}
+                                        className="px-2 py-1 bg-red-900/30 text-red-400 hover:bg-red-900/50 rounded text-xs font-medium border border-red-900 transition-colors"
+                                      >
+                                        {processingAccessStatus === request.id ? '...' : 'Deactivate'}
+                    </button>
+                                    )}
+                                    {request.status === 'deactivated' && (
+                                      <button
+                                        onClick={() => handleUpdateAccessStatus(request.id || '', 'active')}
+                                        disabled={processingAccessStatus === request.id}
+                                        className="px-2 py-1 bg-green-900/30 text-green-400 hover:bg-green-900/50 rounded text-xs font-medium border border-green-900 transition-colors"
+                                      >
+                                        {processingAccessStatus === request.id ? '...' : 'Reactivate'}
+                                      </button>
+                                    )}
+                  </div>
+                                </td>
+                                <td className="py-3 px-4 border-b border-gray-700 text-center">
+                                  <button
+                                    onClick={() => setSelectedProgrammingRequest(selectedProgrammingRequest?.id === request.id ? null : request)}
+                                    className={`px-2 py-1 rounded-lg text-xs font-medium border hover:bg-blue-800/40 transition-colors flex items-center mx-auto ${
+                                      selectedProgrammingRequest?.id === request.id 
+                                        ? 'bg-blue-800/50 text-blue-300 border-blue-900' 
+                                        : 'bg-blue-900/30 text-blue-400 border-blue-900'
+                                    }`}
+                                  >
+                                    <Eye className="h-3 w-3 mr-1" />
+                                    {selectedProgrammingRequest?.id === request.id ? 'Hide' : 'View'}
+                                  </button>
+                                </td>
+                              </tr>
+                              {selectedProgrammingRequest?.id === request.id && (
+                                <tr>
+                                  <td colSpan={7} className="p-0 border-b border-gray-700">
+                                    <div className="bg-[#1a1e24] p-6 border-l-4 border-[#d7ff00]">
+                                      <h4 className="text-white font-medium mb-4">Request Details</h4>
+                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                                        <div>
+                                          <span className="text-gray-400">Email:</span>
+                                          <span className="text-white ml-2">{request.email}</span>
                       </div>
-                    ) : sessionLogs.length === 0 ? (
-                      <div className="flex items-center justify-center text-gray-400 italic h-full">
-                         (No logs loaded or found for this session)
+                                        <div>
+                                          <span className="text-gray-400">Name:</span>
+                                          <span className="text-white ml-2">{request.name || 'Not provided'}</span>
                       </div>
-                    ) : (
-                      // *** START: Log Table Display ***
+                                        <div>
+                                          <span className="text-gray-400">Role:</span>
+                                          <span className="text-white ml-2">{formatRoleField(request.role)}</span>
+                      </div>
+                                        <div>
+                                          <span className="text-gray-400">Primary Use:</span>
+                                          <span className="text-white ml-2">{request.primaryUse || 'Not provided'}</span>
+                                        </div>
+                                        <div>
+                                          <span className="text-gray-400">Client Count:</span>
+                                          <span className="text-white ml-2">{request.clientCount || 'Not provided'}</span>
+                                        </div>
+                                        <div>
+                                          <span className="text-gray-400">Years Experience:</span>
+                                          <span className="text-white ml-2">{request.yearsExperience || 'Not provided'}</span>
+                                        </div>
+                                        <div>
+                                          <span className="text-gray-400">Certified:</span>
+                                          <span className="text-white ml-2">{request.isCertified ? 'Yes' : 'No'}</span>
+                                        </div>
+                                        {request.certificationName && (
+                                          <div>
+                                            <span className="text-gray-400">Certification:</span>
+                                            <span className="text-white ml-2">{request.certificationName}</span>
+                                          </div>
+                                        )}
+                                        <div className="md:col-span-2">
+                                          <span className="text-gray-400">Use Cases:</span>
+                                          <span className="text-white ml-2">{formatUseCasesField(request.useCases)}</span>
+                                        </div>
+                                        <div className="md:col-span-2">
+                                          <span className="text-gray-400">Long Term Goal:</span>
+                                          <span className="text-white ml-2">{request.longTermGoal || 'Not provided'}</span>
+                                        </div>
+                                        <div>
+                                          <span className="text-gray-400">Founding Coaches:</span>
+                                          <span className="text-white ml-2">{request.applyForFoundingCoaches ? 'Yes' : 'No'}</span>
+                                        </div>
+                                        {request.approvedBy && (
+                                          <div>
+                                            <span className="text-gray-400">Approved By:</span>
+                                            <span className="text-white ml-2">{request.approvedBy}</span>
+                                          </div>
+                                        )}
+                                        {request.approvedAt && (
+                                          <div>
+                                            <span className="text-gray-400">Approved At:</span>
+                                            <span className="text-white ml-2">{formatDate(request.approvedAt)}</span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+                            </React.Fragment>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : activeTab === 'logs' ? (
+              // Display Logs Content (existing logs content)
+              <div>Logs content...</div>
+            ) : (
+              // Display Users Table for 'all' and 'admins' tabs
                       <div className="overflow-x-auto">
-                        <table className="min-w-full bg-[#1d2b3a] rounded-lg overflow-hidden">
+                <table className={`min-w-full bg-[#262a30] rounded-lg overflow-hidden ${isBatchDeleting ? 'opacity-60 pointer-events-none' : ''}`}>
                           <thead>
                             <tr className="border-b border-gray-700">
-                              <th className="py-3 px-4 text-left text-gray-300 font-medium text-sm">Log ID</th>
-                              <th className="py-3 px-4 text-left text-gray-300 font-medium text-sm">Exercise</th>
-                              <th className="py-3 px-4 text-left text-gray-300 font-medium text-sm">Status</th>
-                              <th className="py-3 px-4 text-left text-gray-300 font-medium text-sm">Completed At</th>
-                              <th className="py-3 px-4 text-center text-gray-300 font-medium text-sm">View</th>
+                      {/* Conditional Checkbox Header */}
+                      {isSelectingForDelete && (
+                          <th className="py-3 px-4 text-center w-12">
+                              <input
+                                  type="checkbox"
+                                  className="form-checkbox h-4 w-4 text-[#d7ff00] bg-gray-800 border-gray-600 rounded focus:ring-[#d7ff00] focus:ring-offset-0"
+                                  checked={areAllVisibleSelected}
+                                  onChange={handleSelectAllVisibleChange}
+                                  title="Select/Deselect all visible users"
+                                  disabled={isBatchDeleting}
+                              />
+                          </th>
+                      )}
+                      <th className="py-3 px-4 text-left text-gray-300 font-medium">ID</th>
+                      <th className="py-3 px-4 text-left text-gray-300 font-medium">Email</th>
+                      <th className="py-3 px-4 text-left text-gray-300 font-medium">Username</th>
+                      <th className="py-3 px-4 text-left text-gray-300 font-medium">Registration</th>
+                      <th className="py-3 px-4 text-left text-gray-300 font-medium">Admin</th>
+                      <th className="py-3 px-4 text-center text-gray-300 font-medium">Admin Actions</th>
+                      <th className="py-3 px-4 text-center text-gray-300 font-medium">View</th>
                             </tr>
                           </thead>
                           <tbody>
-                            {sessionLogs.map((log) => (
-                              <React.Fragment key={log.id}>
-                                <tr className={`hover:bg-[#2a2f36] transition-colors ${selectedSessionLogId === log.id ? 'bg-[#262a30]' : ''}`}>
-                                  <td className="py-2 px-4 border-b border-gray-700 text-gray-300 font-mono text-xs">
+                    {filteredUsers.map((user, index) => (
+                      <React.Fragment key={user.id}>
+                        <tr className={`hover:bg-[#2a2f36] transition-colors ${selectedUser?.id === user.id ? 'bg-[#1d2b3a]' : ''}`}>
+                          {/* Conditional Checkbox Cell */}
+                          {isSelectingForDelete && (
+                              <td className="py-3 px-4 border-b border-gray-700 text-center">
+                                  <input
+                                      type="checkbox"
+                                      className="form-checkbox h-4 w-4 text-[#d7ff00] bg-gray-800 border-gray-600 rounded focus:ring-[#d7ff00] focus:ring-offset-0"
+                                      checked={selectedUserIds.has(user.id)}
+                                      onChange={() => handleUserCheckboxChange(user.id)}
+                                      disabled={isBatchDeleting}
+                                  />
+                              </td>
+                          )}
+                          <td className="py-3 px-4 border-b border-gray-700 text-gray-300">
                                      <button 
-                                      onClick={() => copyToClipboard(log.id)} 
-                                      className="hover:text-blue-400"
-                                      title="Copy log ID"
-                                    >
-                                      {log.id.substring(0, 8)}...
+                              onClick={() => copyToClipboard(user.id)}
+                              className="text-blue-400 hover:text-blue-300"
+                              title="Click to copy user ID"
+                            >
+                              {user.id.substring(0, 8)}...
                                     </button>
                                   </td>
-                                  <td className="py-2 px-4 border-b border-gray-700 text-gray-300 text-sm">{log.exercise?.name || 'N/A'}</td>
-                                  <td className="py-2 px-4 border-b border-gray-700 text-sm">
-                                    {log.logSubmitted ? (
-                                      <span className="px-2 py-0.5 bg-green-900/30 text-green-400 rounded-full text-xs font-medium border border-green-900">Submitted</span>
-                                    ) : (
-                                      <span className="px-2 py-0.5 bg-orange-900/30 text-orange-400 rounded-full text-xs font-medium border border-orange-900">Pending</span>
-                                    )}
+                          <td className="py-3 px-4 border-b border-gray-700 text-gray-300">{user.email}</td>
+                          <td className="py-3 px-4 border-b border-gray-700 text-gray-300">{user.username || '-'}</td>
+                          <td className="py-3 px-4 border-b border-gray-700">
+                            {user.registrationComplete ? 
+                              <span className="px-2 py-1 bg-green-900/30 text-green-400 rounded-full text-xs font-medium border border-green-900">Complete</span> : 
+                              <span className="px-2 py-1 bg-orange-900/30 text-orange-400 rounded-full text-xs font-medium border border-orange-900">Incomplete</span>
+                            }
+                          </td>
+                          <td className="py-3 px-4 border-b border-gray-700">
+                            {user.adminVerified ? 
+                              <span className="px-2 py-1 bg-blue-900/30 text-blue-400 rounded-full text-xs font-medium border border-blue-900">Yes</span> : 
+                              <span className="px-2 py-1 bg-gray-900/30 text-gray-400 rounded-full text-xs font-medium border border-gray-700">No</span>
+                            }
+                          </td>
+                          <td className="py-3 px-4 border-b border-gray-700 text-center">
+                            <button
+                              onClick={() => toggleAdminStatus(user)}
+                              disabled={!user.email || processingAdmin === user.email}
+                              className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+                                user.adminVerified
+                                  ? 'bg-red-900/30 text-red-400 hover:bg-red-900/50 border border-red-900'
+                                  : 'bg-blue-900/30 text-blue-400 hover:bg-blue-900/50 border border-blue-900'
+                              }`}
+                            >
+                              {processingAdmin === user.email ? (
+                                <svg className="animate-spin h-4 w-4 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                              ) : user.adminVerified ? (
+                                'Remove Admin'
+                              ) : (
+                                'Make Admin'
+                              )}
+                            </button>
                                   </td>
-                                  <td className="py-2 px-4 border-b border-gray-700 text-gray-300 text-sm">
-                                    {log.completedAt ? formatDate(log.completedAt) : '-'}
-                                  </td>
-                                  <td className="py-2 px-4 border-b border-gray-700 text-center">
+                          <td className="py-3 px-4 border-b border-gray-700 text-center">
                                     <button
-                                      onClick={() => setSelectedSessionLogId(selectedSessionLogId === log.id ? null : log.id)}
+                              onClick={() => setSelectedUser(selectedUser?.id === user.id ? null : user)}
                                       className={`px-2 py-1 rounded-lg text-xs font-medium border hover:bg-blue-800/40 transition-colors flex items-center mx-auto ${ 
-                                        selectedSessionLogId === log.id 
+                                selectedUser?.id === user.id 
                                           ? 'bg-blue-800/50 text-blue-300 border-blue-900' 
                                           : 'bg-blue-900/30 text-blue-400 border-blue-900'
                                       }`}
-                                      title="View log details"
-                                    >
-                                      <Eye className="h-3 w-3 mr-1" />
-                                      {selectedSessionLogId === log.id ? 'Hide' : 'View'}
+                              title="View user details"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                                <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+                                <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
+                              </svg>
+                              {selectedUser?.id === user.id ? 'Hide' : 'View'}
                                     </button>
                                   </td>
                                 </tr>
-                                {selectedSessionLogId === log.id && (
+                        {selectedUser?.id === user.id && (
                                   <tr>
-                                    {/* Ensure colSpan matches the number of columns */}
-                                    <td colSpan={5} className="p-0 border-b border-gray-700">
-                                      {renderSessionLogDetails(log)}
+                            <td colSpan={isSelectingForDelete ? 8 : 7} className="p-0 border-b border-gray-700">
+                              {renderUserDetails(user)}
                                     </td>
                                   </tr>
                                 )}
@@ -2148,14 +2391,7 @@ const UsersManagement: React.FC = () => {
                           </tbody>
                         </table>
                       </div>
-                      // *** END: Log Table Display ***
-                    )}
-                  </div>
-                  
-                </div>
-              </div>
             )}
-            {/* *** END: Placeholder for Logs Tab Content *** */}
           </div>
         </div>
       </div>

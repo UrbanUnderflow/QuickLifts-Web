@@ -74,7 +74,54 @@ async function generateUniqueWorkoutStacks(numberOfStacks, existingWorkouts = []
       messages: [
         {
           role: 'system',
-          content: `You are an elite fitness trainer designing workout routines. Generate only the requested number of unique workout routines (stacks) as valid JSON. Do not include rest days.`
+          content: `### Pulse Object Model & Gameplay Concepts (for internal use)
+
+**Move**
+• Atomic exercise unit: name, video demo, coaching cues, muscle tags, difficulty, equipment, default rep/time target.
+• Creators upload and own Moves; each Move can be reused infinitely.
+
+**Stack**
+• An ordered list (playlist) of Moves.
+• Used for on-demand programs *or* as the template the bot drops into a live Round.
+• Must include total duration, intensity rating, and optional rest blocks.
+
+**Round**
+• A live or asynchronous *container* for one or more Stacks.
+• Primary use-case: real-time, multiplayer session with shared leaderboard.
+    – Leaderboard updates only when a participant finishes a Move/Workout, not every second.
+• Secondary use-case: 1-on-1 programming (single participant) — same data structure, no leaderboard visible to others.
+• Features inside a Round:
+    – Lobby & invite link / QR code
+    – Group chat (persists during & after)
+    – Check-in screen after each workout where users can add photo + caption + location for bonus points
+    – Points engine (see below)
+• *No power-ups yet* — exclude that mechanic until v2.
+
+**Scoring – Pulse Points**
+| Action | Points | Notes |
+|--------|--------|-------|
+| Base completion | 100 | Each workout finished inside the Round |
+| First completion bonus | 50 | One-time per challenge |
+| Streak bonus | 25 × consecutive-days | e.g., 3-day streak = 75 |
+| Check-in (photo + caption) | 25 | Logged on summary screen |
+| Invitation bonus | 25 | Friend joins via your link & completes first workout |
+| Social share bonus | 5 | We repost your IG story that tags @fitwithpulse |
+
+**Bot responsibilities for generateRound intent**
+1. Surface candidate Moves → assemble Stack(s) respecting coach filters (level, equipment, length).
+2. Package Stack(s) into a Round object with metadata: title, description, duration, scoring enabled = true.
+3. Return JSON that the app can POST to /rounds endpoint.
+
+You are an elite fitness trainer designing workout programs. Generate only the requested number of unique workout routines (stacks) as valid JSON. Do not include rest days.
+
+Equipment Preferences:
+- Selected Equipment: ${promptData.equipmentPreferences?.selectedEquipment?.join(", ") || "None specified"}
+- Equipment Only: ${promptData.equipmentPreferences?.equipmentOnly ? 'Yes' : 'No'}
+
+Tagged Users: ${promptData.taggedUsers?.map(u => u.name || u).join(", ") || "None"}
+
+Conversation History: ${promptData.conversationHistory?.join("\n") || "None"}
+`
         },
         { role: 'user', content: prompt }
       ],
@@ -186,7 +233,54 @@ async function generateFullSchedule(totalNeeded, existingWorkouts = [], retryCou
       messages: [
         {
           role: 'system',
-          content: `You are an elite fitness trainer designing workout programs. Generate valid JSON representing workout and rest day stacks to complete a schedule.`
+          content: `### Pulse Object Model & Gameplay Concepts (for internal use)
+
+**Move**
+• Atomic exercise unit: name, video demo, coaching cues, muscle tags, difficulty, equipment, default rep/time target.
+• Creators upload and own Moves; each Move can be reused infinitely.
+
+**Stack**
+• An ordered list (playlist) of Moves.
+• Used for on-demand programs *or* as the template the bot drops into a live Round.
+• Must include total duration, intensity rating, and optional rest blocks.
+
+**Round**
+• A live or asynchronous *container* for one or more Stacks.
+• Primary use-case: real-time, multiplayer session with shared leaderboard.
+    – Leaderboard updates only when a participant finishes a Move/Workout, not every second.
+• Secondary use-case: 1-on-1 programming (single participant) — same data structure, no leaderboard visible to others.
+• Features inside a Round:
+    – Lobby & invite link / QR code
+    – Group chat (persists during & after)
+    – Check-in screen after each workout where users can add photo + caption + location for bonus points
+    – Points engine (see below)
+• *No power-ups yet* — exclude that mechanic until v2.
+
+**Scoring – Pulse Points**
+| Action | Points | Notes |
+|--------|--------|-------|
+| Base completion | 100 | Each workout finished inside the Round |
+| First completion bonus | 50 | One-time per challenge |
+| Streak bonus | 25 × consecutive-days | e.g., 3-day streak = 75 |
+| Check-in (photo + caption) | 25 | Logged on summary screen |
+| Invitation bonus | 25 | Friend joins via your link & completes first workout |
+| Social share bonus | 5 | We repost your IG story that tags @fitwithpulse |
+
+**Bot responsibilities for generateRound intent**
+1. Surface candidate Moves → assemble Stack(s) respecting coach filters (level, equipment, length).
+2. Package Stack(s) into a Round object with metadata: title, description, duration, scoring enabled = true.
+3. Return JSON that the app can POST to /rounds endpoint.
+
+You are an elite fitness trainer designing workout programs. Generate valid JSON representing workout and rest day stacks to complete a schedule.
+
+Equipment Preferences:
+- Selected Equipment: ${promptData.equipmentPreferences?.selectedEquipment?.join(", ") || "None specified"}
+- Equipment Only: ${promptData.equipmentPreferences?.equipmentOnly ? 'Yes' : 'No'}
+
+Tagged Users: ${promptData.taggedUsers?.map(u => u.name || u).join(", ") || "None"}
+
+Conversation History: ${promptData.conversationHistory?.join("\n") || "None"}
+`
         },
         { 
           role: 'user', 
@@ -254,14 +348,17 @@ export default async function handler(req, res) {
 
   try {
     const { 
-      mustIncludeExercises, 
+      mustIncludeExercises = [], 
       userPrompt, 
-      preferences, 
-      availableExercises, // Now receiving only names
+      preferences = [], 
+      availableExercises = [], 
       startDate, 
       endDate, 
-      numberOfUniqueStacks, // New parameter (can be null)
-      selectedRestDays // New parameter (array of names, e.g., ['Sunday', 'Tuesday'])
+      numberOfUniqueStacks, 
+      selectedRestDays = [],
+      equipmentPreferences = { selectedEquipment: [], equipmentOnly: false },
+      taggedUsers = [],
+      conversationHistory = []
     } = req.body;
 
     // Validate essential data
@@ -284,7 +381,10 @@ export default async function handler(req, res) {
         availableExercises: availableExercises, // Already just names
         startDate: startDate,
         endDate: endDate,
-        selectedRestDays: selectedRestDays || [] // Pass selected rest days for context
+        selectedRestDays: selectedRestDays || [], // Pass selected rest days for context
+        equipmentPreferences: equipmentPreferences || { selectedEquipment: [], equipmentOnly: false },
+        taggedUsers: taggedUsers || [],
+        conversationHistory: conversationHistory || []
     };
 
     if (typeof numberOfUniqueStacks === 'number' && numberOfUniqueStacks > 0) {

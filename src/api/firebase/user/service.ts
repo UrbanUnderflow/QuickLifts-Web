@@ -828,63 +828,75 @@ class UserService {
     applyForFoundingCoaches: boolean;
   }): Promise<{ success: boolean; message: string }> {
     try {
-      // Normalize email to lowercase for consistency
-      const normalizedEmail = formData.email.toLowerCase();
-      
-      // Check if there's an existing application for this email
-      const betaRef = collection(db, 'beta');
-      const betaQuery = query(betaRef, where('email', '==', normalizedEmail));
-      const querySnapshot = await getDocs(betaQuery);
-      
-      const formDataToSave = {
-        email: normalizedEmail,
-        name: formData.name,
-        role: formData.role,
-        primaryUse: formData.primaryUse,
-        useCases: formData.useCases,
-        clientCount: formData.clientCount,
-        yearsExperience: formData.yearsExperience,
-        longTermGoal: formData.longTermGoal,
-        isCertified: formData.isCertified,
-        certificationName: formData.certificationName,
-        applyForFoundingCoaches: formData.applyForFoundingCoaches,
-        isApproved: false, // Default to false for new submissions
-        createdAt: new Date(),
-        updatedAt: new Date()
+      const docData = {
+        ...formData,
+        submittedAt: new Date(),
+        status: 'pending'
       };
 
-      // If a document exists for this email, update it
-      if (!querySnapshot.empty) {
-        const docRef = querySnapshot.docs[0].ref;
-        // Preserve isApproved status if it exists
-        const existingData = querySnapshot.docs[0].data();
-        
-        await setDoc(docRef, {
-          ...formDataToSave,
-          isApproved: existingData.isApproved ?? false, // Keep existing approval status
-          createdAt: existingData.createdAt || new Date(), // Keep original creation date
-          updatedAt: new Date() // Update the updated date
-        }, { merge: true });
-        
-        return { 
-          success: true, 
-          message: 'Application updated successfully' 
-        };
-      } else {
-        // Create a new document
-        await addDoc(betaRef, formDataToSave);
-        
-        return { 
-          success: true, 
-          message: 'Application submitted successfully' 
-        };
-      }
-    } catch (error) {
-      console.error('Error saving application form:', error);
-      return { 
-        success: false, 
-        message: error instanceof Error ? error.message : 'An error occurred while saving your application' 
+      const docRef = await addDoc(collection(db, 'beta-applications'), docData);
+      console.log('Application saved with ID:', docRef.id);
+      
+      return {
+        success: true,
+        message: 'Application submitted successfully'
       };
+    } catch (error) {
+      console.error('Error saving application:', error);
+      return {
+        success: false,
+        message: 'Failed to submit application'
+      };
+    }
+  }
+
+  // UserDataCard methods for AI programming context
+  async fetchAllUserDataCards(): Promise<any[]> {
+    try {
+      console.log('Fetching all user data cards from Firestore...');
+      const dataCardsRef = collection(db, 'user-datacards');
+      const querySnapshot = await getDocs(dataCardsRef);
+      
+      const dataCards: any[] = [];
+      querySnapshot.forEach((doc) => {
+        const data = { id: doc.id, ...doc.data() };
+        dataCards.push(data);
+      });
+
+      console.log(`Fetched ${dataCards.length} user data cards from Firestore`);
+      return dataCards;
+    } catch (error) {
+      console.error('Error fetching user data cards:', error);
+      throw error;
+    }
+  }
+
+  async createUserDataCard(dataCard: any): Promise<string> {
+    try {
+      const docRef = await addDoc(collection(db, 'user-datacards'), {
+        ...dataCard,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      });
+      console.log('User data card created with ID:', docRef.id);
+      return docRef.id;
+    } catch (error) {
+      console.error('Error creating user data card:', error);
+      throw error;
+    }
+  }
+
+  async updateUserDataCard(cardId: string, dataCard: any): Promise<void> {
+    try {
+      const cardRef = doc(db, 'user-datacards', cardId);
+      await setDoc(cardRef, {
+        ...dataCard,
+        updatedAt: new Date()
+      }, { merge: true });
+      console.log('User data card updated:', cardId);
+    } catch (error) {
+      console.error('Error updating user data card:', error);
+      throw error;
     }
   }
 }

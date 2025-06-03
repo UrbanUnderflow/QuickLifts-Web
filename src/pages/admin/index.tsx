@@ -2,7 +2,7 @@ import React from 'react';
 import { useRouter } from 'next/router';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import Head from 'next/head';
-import { Users, Settings, BarChart2, Bell, FileText, CheckSquare, PlusSquare, Image as ImageIcon, Zap, TrendingUp, Dumbbell, Tag, Users2, Activity, Award, Clock, Gift, Edit3, Send, Server, ChevronDown, MessageCircle, Utensils } from 'lucide-react';
+import { Users, Settings, BarChart2, Bell, FileText, CheckSquare, PlusSquare, Image as ImageIcon, Zap, TrendingUp, Dumbbell, Tag, Users2, Activity, Award, Clock, Gift, Edit3, Send, Server, ChevronDown, MessageCircle, Utensils, Code } from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '../../redux/store';
 import { toggleDevMode } from '../../redux/devModeSlice';
@@ -52,6 +52,12 @@ const adminCardsData = [
     description: "View, search, and manage beta user accounts and their status.",
     icon: <Users2 className="w-5 h-5" />,
     link: "/admin/betausers"
+  },
+  {
+    title: "Programming Access Management",
+    description: "Manage access requests and permissions for Pulse Programming platform.",
+    icon: <Code className="w-5 h-5" />,
+    link: "/admin/programmingAccess"
   },
   {
     title: "Application Metrics",

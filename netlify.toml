@@ -102,3 +102,11 @@
 # Schedule the Move of the Day function to run daily
 [functions.scheduleMoveOfTheDay]
   schedule = "@daily"
+
+# Schedule the calorie algorithm analysis function to run daily
+[functions.analyzeCalorieAlgorithm]
+  schedule = "@daily"
+
+# Mark trigger functions as background functions without schedules
+[functions.triggerCalorieAnalysis]
+  is_background = true

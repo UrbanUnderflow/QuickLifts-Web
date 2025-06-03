@@ -140,4 +140,84 @@ exports.handler = async (event, context) => {
 
 - Catch errors within the main `try...catch` block.
 - Handle specific known errors (e.g., `auth/user-not-found`) gracefully if possible.
-- Return a generic `500 Internal Server Error` for unexpected issues. 
+- Return a generic `500 Internal Server Error` for unexpected issues.
+
+## 11. Scheduled Functions
+
+Some functions are configured to run on a schedule via `netlify.toml`. These functions follow a specific pattern:
+
+### Scheduled Function Examples
+
+#### Calorie Algorithm Analysis (`analyzeCalorieAlgorithm.js`)
+- **Schedule:** Daily (`@daily`)
+- **Purpose:** Analyzes calorie comparison data and automatically improves the algorithm
+- **Data Sources:** `calorie_comparison_data` collection (last 30 days)
+- **Outputs:** 
+  - Stores analysis in `calorie_analysis_results/latest`
+  - Updates multipliers in `algorithm_settings/calorie_multipliers` (if confidence > 60%)
+- **Manual Trigger:** `triggerCalorieAnalysis.js`
+
+#### Move of the Day (`scheduleMoveOfTheDay.js`)
+- **Schedule:** Daily (`@daily`)
+- **Purpose:** Selects a random exercise and video for the daily move
+- **Manual Trigger:** Available via admin UI
+
+#### Challenge Status Updates (`update-challenge-status.js`)
+- **Schedule:** Daily (`@daily`)
+- **Purpose:** Updates challenge statuses based on start/end dates
+- **Manual Trigger:** `trigger-challenge-status-update.js`
+
+### Scheduled Function Configuration
+
+Add to `netlify.toml`:
+
+```toml
+# Schedule the function to run daily
+[functions.functionName]
+  schedule = "@daily"
+
+# Mark manual trigger as background function
+[functions.triggerFunctionName]
+  is_background = true
+```
+
+### Scheduled Function Pattern
+
+```javascript
+exports.handler = async (event) => {
+    // Check if this is a scheduled execution
+    const source = event.headers?.['x-netlify-event-source'] || 'manual';
+    console.log(`Function triggered via ${source}.`);
+    
+    // Check Firebase connection
+    if (!admin || !db || admin.apps.length === 0) {
+        throw new Error('Firebase Admin SDK not initialized');
+    }
+    
+    try {
+        // Core logic here
+        const result = await performScheduledTask();
+        
+        return {
+            statusCode: 200,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                success: true,
+                message: 'Scheduled task completed successfully.',
+                result
+            })
+        };
+    } catch (error) {
+        console.error('Error in scheduled function:', error);
+        return {
+            statusCode: 500,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                success: false,
+                error: error.message,
+                timestamp: new Date().toISOString()
+            })
+        };
+    }
+};
+```

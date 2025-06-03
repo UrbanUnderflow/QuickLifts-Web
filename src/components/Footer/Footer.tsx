@@ -11,7 +11,7 @@ const Footer = () => {
 
   const footerLinks = [
     { name: 'About', href: '/about' },
-    { name: 'Press Kit', href: '/press-kit' },
+    { name: 'Press Kit', href: '/press' },
     { name: 'Privacy', href: '/privacy' },
     { name: 'Terms', href: '/terms' },
   ];

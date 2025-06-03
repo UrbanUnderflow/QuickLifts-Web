@@ -30,6 +30,37 @@ export interface PageMetaData {
   lastUpdated: Timestamp;
 }
 
+export interface ProgrammingAccess {
+  id?: string;
+  email: string;
+  username?: string;
+  userId?: string;
+  status: 'requested' | 'active' | 'deactivated';
+  name?: string;
+  role?: {
+    trainer: boolean;
+    enthusiast: boolean;
+    coach: boolean;
+    fitnessInstructor: boolean;
+  };
+  primaryUse?: string;
+  useCases?: {
+    oneOnOneCoaching: boolean;
+    communityRounds: boolean;
+    personalPrograms: boolean;
+  };
+  clientCount?: string;
+  yearsExperience?: string;
+  longTermGoal?: string;
+  isCertified?: boolean;
+  certificationName?: string;
+  applyForFoundingCoaches?: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+  approvedAt?: Date;
+  approvedBy?: string;
+}
+
 export interface AdminService {
   addVersion: (version: string, changeNotes: string[], isCriticalUpdate: boolean) => Promise<boolean>;
   isAdmin: (email: string) => Promise<boolean>;
@@ -39,4 +70,10 @@ export interface AdminService {
   getDailyPrompt: (id: string) => Promise<DailyPrompt | null>;
   getDailyPrompts: (limit?: number) => Promise<DailyPrompt[]>;
   deleteDailyPrompt: (id: string) => Promise<boolean>;
+  // Programming Access methods
+  createProgrammingAccessRequest: (request: Omit<ProgrammingAccess, 'id' | 'createdAt' | 'updatedAt'>) => Promise<boolean>;
+  getProgrammingAccessRequests: () => Promise<ProgrammingAccess[]>;
+  updateProgrammingAccessStatus: (id: string, status: 'active' | 'deactivated', approvedBy?: string) => Promise<boolean>;
+  checkProgrammingAccess: (email: string) => Promise<ProgrammingAccess | null>;
+  deleteProgrammingAccessRequest: (id: string) => Promise<boolean>;
 } 
