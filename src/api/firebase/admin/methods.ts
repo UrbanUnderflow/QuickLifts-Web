@@ -1,6 +1,6 @@
 import { setDoc, doc, getDoc, deleteDoc, Timestamp, collection, query, orderBy, limit as firestoreLimit, getDocs, addDoc, where } from 'firebase/firestore';
 import { db } from '../config';
-import { AdminService, PageMetaData, DailyPrompt, ProgrammingAccess } from './types';
+import { AdminService, PageMetaData, DailyPrompt, ProgrammingAccess, BetaApplication } from './types';
 import { dateToUnixTimestamp, convertFirestoreTimestamp } from '../../../utils/formatDate';
 
 export const adminMethods: AdminService = {
@@ -384,6 +384,63 @@ export const adminMethods: AdminService = {
       return true;
     } catch (error) {
       console.error('Error deleting programming access request:', error);
+      return false;
+    }
+  },
+
+  // Beta Application methods
+  async getBetaApplications(): Promise<BetaApplication[]> {
+    try {
+      const applicationsQuery = query(
+        collection(db, 'beta-applications'),
+        orderBy('submittedAt', 'desc')
+      );
+      const snapshot = await getDocs(applicationsQuery);
+
+      return snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        submittedAt: convertFirestoreTimestamp(doc.data().submittedAt),
+        approvedAt: doc.data().approvedAt ? convertFirestoreTimestamp(doc.data().approvedAt) : undefined,
+        updatedAt: doc.data().updatedAt ? convertFirestoreTimestamp(doc.data().updatedAt) : undefined
+      })) as BetaApplication[];
+    } catch (error) {
+      console.error('Error fetching beta applications:', error);
+      return [];
+    }
+  },
+
+  async updateBetaApplicationStatus(id: string, status: 'approved' | 'rejected', approvedBy?: string): Promise<boolean> {
+    try {
+      const now = new Date();
+      const updateData: any = {
+        status,
+        updatedAt: Timestamp.fromDate(now)
+      };
+
+      if (status === 'approved') {
+        updateData.approvedAt = Timestamp.fromDate(now);
+        if (approvedBy) {
+          updateData.approvedBy = approvedBy;
+        }
+      }
+
+      await setDoc(doc(db, 'beta-applications', id), updateData, { merge: true });
+      console.log(`Updated beta application status for ${id} to ${status}`);
+      return true;
+    } catch (error) {
+      console.error('Error updating beta application status:', error);
+      return false;
+    }
+  },
+
+  async deleteBetaApplication(id: string): Promise<boolean> {
+    try {
+      await deleteDoc(doc(db, 'beta-applications', id));
+      console.log(`Successfully deleted beta application: ${id}`);
+      return true;
+    } catch (error) {
+      console.error('Error deleting beta application:', error);
       return false;
     }
   }

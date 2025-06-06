@@ -31,7 +31,7 @@ import {
 import { Switch } from '@headlessui/react';
 import { useScrollFade } from '../hooks/useScrollFade';
 
-import { userService } from '../api/firebase/user/service';
+import { userService, User } from '../api/firebase/user';
 import { workoutService } from '../api/firebase/workout/service';
 import { exerciseService } from '../api/firebase/exercise/service';
 import { Exercise, ExerciseDetail, ExerciseCategory, ExerciseVideo, ExerciseReference, WeightTrainingExercise, CardioExercise } from '../api/firebase/exercise/types';
@@ -103,6 +103,10 @@ interface UserDataCard {
   lastActiveDate?: Date;
   currentChallengeParticipation?: string[]; // Challenge IDs they're currently in
   
+  // Raw User Input (preserved for AI context)
+  additionalGoalsText?: string; // Full text from user's additional goals
+  bioText?: string; // Full bio text from user
+  
   // Created/Updated tracking
   createdAt: Date;
   updatedAt: Date;
@@ -140,6 +144,8 @@ class UserDataCard {
   recentWorkoutTypes?: string[];
   lastActiveDate?: Date;
   currentChallengeParticipation?: string[];
+  additionalGoalsText?: string;
+  bioText?: string;
   createdAt: Date;
   updatedAt: Date;
 
@@ -175,6 +181,8 @@ class UserDataCard {
     this.recentWorkoutTypes = data.recentWorkoutTypes || [];
     this.lastActiveDate = data.lastActiveDate ? new Date(data.lastActiveDate) : undefined;
     this.currentChallengeParticipation = data.currentChallengeParticipation || [];
+    this.additionalGoalsText = data.additionalGoalsText;
+    this.bioText = data.bioText;
     this.createdAt = new Date(data.createdAt || new Date());
     this.updatedAt = new Date(data.updatedAt || new Date());
   }
@@ -201,6 +209,8 @@ class UserDataCard {
       Challenges Completed: ${this.pastChallengesCompleted}
       ${this.favoriteExercises?.length ? `Favorite Exercises: ${this.favoriteExercises.join(', ')}` : ''}
       ${this.dislikedExercises?.length ? `Exercises to Avoid: ${this.dislikedExercises.join(', ')}` : ''}
+      ${this.bioText ? `User Bio: ${this.bioText}` : ''}
+      ${this.additionalGoalsText ? `Additional Goals/Notes: ${this.additionalGoalsText}` : ''}
       `.trim();
   }
 
@@ -1382,6 +1392,24 @@ const MobileChallengeSetupView: React.FC<MobileChallengeSetupProps> = ({
     );
   };
 
+interface ChatResponse {
+  message: string;
+  success?: boolean;
+  readyToGenerate?: boolean;
+  questionCount?: number;
+  isAwaitingConfirmation?: boolean;
+  finalPrompt?: string;
+  suggestedName?: string;
+  suggestedDescription?: string;
+  suggestedStartDate?: string;
+  suggestedEndDate?: string;
+  configuredRestDays?: string[];
+  shouldEnableRestDays?: boolean;
+  shouldAnimateName?: boolean;
+  shouldAnimateDescription?: boolean;
+  error?: string;
+}
+
 interface DesktopChallengeSetupProps {
   challengeData: ChallengeData;
   setChallengeData: (data: ChallengeData) => void; // Simplified to pass the whole object
@@ -1401,8 +1429,8 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
     const currentUser = useUser();
 
     // User tagging state
-    const [allUsers, setAllUsers] = useState<UserDataCard[]>([]);
-    const [taggedUsers, setTaggedUsers] = useState<UserDataCard[]>([]);
+    const [allUsers, setAllUsers] = useState<User[]>([]);
+    const [taggedUsers, setTaggedUsers] = useState<User[]>([]);
     const [showUserDropdown, setShowUserDropdown] = useState(false);
     const [userSearchTerm, setUserSearchTerm] = useState('');
     const [cursorPosition, setCursorPosition] = useState(0);
@@ -1467,10 +1495,32 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
         const updatedHistory = [...conversationHistory, newUserMessage];
         setConversationHistory(updatedHistory);
 
+        // Convert tagged users to UserDataCard format for AI processing
+        const convertedTaggedUsers = taggedUsers.map(user => {
+          const converted = convertUserToDataCard(user);
+          console.log(`🔄 Converted user ${user.displayName || user.username}:`, {
+            original: { 
+              id: user.id, 
+              displayName: user.displayName, 
+              username: user.username, 
+              level: user.level,
+              goal: user.goal
+            },
+            converted: { 
+              id: converted.id, 
+              name: converted.name, 
+              fitnessLevel: converted.fitnessLevel,
+              primaryGoals: converted.primaryGoals,
+              experienceYears: converted.experienceYears
+            }
+          });
+          return converted;
+        });
+
         console.log('Sending to chatbot API...', {
           message,
           conversationHistory: updatedHistory,
-          taggedUsers,
+          taggedUsers: convertedTaggedUsers,
           challengeData,
           selectedMoves,
           selectedCreators,
@@ -1487,7 +1537,7 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
           body: JSON.stringify({
             message,
             conversationHistory,
-            taggedUsers,
+            taggedUsers: convertedTaggedUsers,
             challengeData,
             selectedMoves,
             selectedCreators,
@@ -1501,28 +1551,109 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
           throw new Error('Failed to get AI response');
         }
 
-        const data = await response.json();
+        const data: ChatResponse = await response.json();
         console.log('Chatbot response:', data);
 
         if (data.success && data.message) {
+          console.log('📦 Full AI Response Data:', data);
+          
           // Add AI response to conversation
           const aiMessage = { role: 'assistant' as const, content: data.message };
           setConversationHistory(prev => [...prev, aiMessage]);
           
-          // Update question count and show generate card if ready
+          // Update question count and show generate card if ready (but not if validation issues remain)
           setQuestionCount(data.questionCount || 0);
-          setShowGenerateCard(data.readyToGenerate || false);
+          
+          // Only show generate card if validation passes AND AI says ready
+          const currentValidation = validateChallengeInputQuiet();
+          const shouldShowGenerateCard = data.readyToGenerate && currentValidation;
+          setShowGenerateCard(shouldShowGenerateCard || false);
           setIsAwaitingConfirmation(data.isAwaitingConfirmation || false);
+          
+          console.log('Generate card visibility:', {
+            aiReadyToGenerate: data.readyToGenerate,
+            validationPassed: currentValidation,
+            showingCard: shouldShowGenerateCard
+          });
           
           // Handle final prompt and suggested description
           if (data.finalPrompt) {
             setFinalPrompt(data.finalPrompt);
           }
           
+          // Handle suggested field population from validation
           if (data.suggestedDescription && !challengeData.challengeDesc) {
             setSuggestedDescription(data.suggestedDescription);
             // Auto-update the challenge description
             handleLocalSetChallengeData({ challengeDesc: data.suggestedDescription });
+          }
+          
+          if (data.suggestedName && !challengeData.challengeName) {
+            console.log('Auto-populating challenge name:', data.suggestedName);
+            handleLocalSetChallengeData({ challengeName: data.suggestedName });
+          }
+          
+          if (data.suggestedStartDate && data.suggestedEndDate) {
+            console.log('Auto-populating dates:', data.suggestedStartDate, data.suggestedEndDate);
+            handleLocalSetChallengeData({ 
+              startDate: new Date(data.suggestedStartDate),
+              endDate: new Date(data.suggestedEndDate)
+            });
+          }
+          
+          // Handle automated rest day configuration with animation
+          console.log('🔍 Checking rest day fields:', {
+            shouldEnableRestDays: data.shouldEnableRestDays,
+            configuredRestDays: data.configuredRestDays,
+            hasConfiguredRestDays: data.configuredRestDays && data.configuredRestDays.length > 0
+          });
+          
+          if (data.shouldEnableRestDays && data.configuredRestDays && data.configuredRestDays.length > 0) {
+            console.log('🎬 Triggering rest day animation with:', data.configuredRestDays);
+            animateRestDayConfiguration(data.configuredRestDays);
+          } else {
+            console.log('❌ Rest day animation NOT triggered because:');
+            console.log('  - shouldEnableRestDays:', data.shouldEnableRestDays);
+            console.log('  - configuredRestDays:', data.configuredRestDays);
+            console.log('  - configuredRestDays length:', data.configuredRestDays?.length);
+            
+            // Fallback: Check if the message contains rest day information manually
+            const message = data.message.toLowerCase();
+            if (message.includes('configured') && (message.includes('rest day') || message.includes('rest days'))) {
+              console.log('🔧 Fallback: Detected rest day configuration in message, checking for day names...');
+              const daysFound: string[] = [];
+              const dayPatterns = [
+                { pattern: /\b(monday|mon)\b/i, day: 'Monday' },
+                { pattern: /\b(tuesday|tue|tues)\b/i, day: 'Tuesday' },
+                { pattern: /\b(wednesday|wed)\b/i, day: 'Wednesday' },
+                { pattern: /\b(thursday|thu|thur|thurs)\b/i, day: 'Thursday' },
+                { pattern: /\b(friday|fri)\b/i, day: 'Friday' },
+                { pattern: /\b(saturday|sat)\b/i, day: 'Saturday' },
+                { pattern: /\b(sunday|sun)\b/i, day: 'Sunday' }
+              ];
+              
+              dayPatterns.forEach(({ pattern, day }) => {
+                if (pattern.test(message)) {
+                  daysFound.push(day);
+                }
+              });
+              
+              if (daysFound.length > 0) {
+                console.log('🎬 Fallback: Triggering rest day animation with detected days:', daysFound);
+                animateRestDayConfiguration(daysFound);
+              }
+            }
+          }
+          
+          // Handle name and description auto-population with typing animation
+          if (data.shouldAnimateName && data.suggestedName) {
+            console.log('🎯 AI suggesting name:', data.suggestedName);
+            await animateTypingIntoField(data.suggestedName, 'name');
+          }
+          
+          if (data.shouldAnimateDescription && data.suggestedDescription) {
+            console.log('🎯 AI suggesting description:', data.suggestedDescription);
+            await animateTypingIntoField(data.suggestedDescription, 'description');
           }
         } else {
           throw new Error(data.error || 'Invalid response from AI');
@@ -1609,161 +1740,18 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
 
     // Load all users for tagging functionality
     useEffect(() => {
-      const fetchUsersAndSeedIfEmpty = async () => {
+      const fetchUsers = async () => {
         try {
-          console.log('Attempting to load user data cards from Firestore...');
-          const rawDataCards = await userService.fetchAllUserDataCards();
-          
-          if (rawDataCards.length === 0) {
-            console.log('No user data cards found in Firestore. Attempting to seed mock data...');
-            // Check a flag to prevent re-seeding. This is a simple in-memory flag.
-            // For a more persistent solution, consider localStorage or a Firestore flag.
-            if (!(window as any).__hasSeededMockUsers) {
-              const mockUsersToSeed: Omit<UserDataCard, 'id' | 'createdAt' | 'updatedAt' | 'toAIContext' | 'getChatDisplaySummary'>[] = [
-                {
-                  name: 'Alice Wonderland',
-                  email: 'alice@example.com',
-                  fitnessLevel: 'beginner',
-                  primaryGoals: ['general-fitness', 'weight-loss'],
-                  trainingFrequency: 3,
-                  availableEquipment: ['home-gym', 'bodyweight-only'],
-                  preferredDuration: 30,
-                  experienceYears: 0,
-                  preferredWorkoutTypes: ['yoga', 'cardio'],
-                  preferredIntensity: 'low',
-                  injuries: [],
-                  limitations: [],
-                  healthConditions: [],
-                  availableDays: ['monday', 'wednesday', 'friday'],
-                  timeOfDay: ['morning'],
-                  favoriteExercises: ['Jumping Jacks', 'Yoga Sun Salutation'],
-                  dislikedExercises: ['Burpees'],
-                  pastChallengesCompleted: 0,
-                  motivationStyle: ['independent'],
-                  preferredFeedback: ['encouraging'],
-                },
-                {
-                  name: 'Bob The Builder',
-                  email: 'bob@example.com',
-                  fitnessLevel: 'intermediate',
-                  primaryGoals: ['strength', 'hypertrophy'],
-                  trainingFrequency: 4,
-                  availableEquipment: ['full-gym'],
-                  preferredDuration: 60,
-                  experienceYears: 2,
-                  preferredWorkoutTypes: ['weight-training'],
-                  preferredIntensity: 'moderate',
-                  injuries: ['Slight knee discomfort'],
-                  limitations: [],
-                  healthConditions: [],
-                  availableDays: ['tuesday', 'thursday', 'saturday', 'sunday'],
-                  timeOfDay: ['evening'],
-                  favoriteExercises: ['Bench Press', 'Squats'],
-                  dislikedExercises: ['Running long distance'],
-                  pastChallengesCompleted: 2,
-                  motivationStyle: ['competitive'],
-                  preferredFeedback: ['technical'],
-                },
-                {
-                  name: 'Charlie Brown',
-                  email: 'charlie@example.com',
-                  fitnessLevel: 'advanced',
-                  primaryGoals: ['athletic-performance'],
-                  trainingFrequency: 5,
-                  availableEquipment: ['full-gym', 'minimal-equipment'],
-                  preferredDuration: 75,
-                  experienceYears: 5,
-                  preferredWorkoutTypes: ['sports-specific', 'functional'],
-                  preferredIntensity: 'high',
-                  injuries: [],
-                  limitations: [],
-                  healthConditions: [],
-                  availableDays: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'],
-                  timeOfDay: ['afternoon'],
-                  favoriteExercises: ['Deadlifts', 'Olympic Lifts'],
-                  dislikedExercises: [],
-                  pastChallengesCompleted: 5,
-                  motivationStyle: ['coach-guided'],
-                  preferredFeedback: ['detailed'],
-                }
-              ];
-
-              console.log('Seeding mock users:', mockUsersToSeed);
-              for (const userData of mockUsersToSeed) {
-                // UserDataCard constructor will fill in missing dates and default values
-                const cardToCreate = new UserDataCard(userData);
-                // We need to convert the class instance to a plain object for Firestore
-                const plainCardObject = { ...cardToCreate }; 
-                // Remove methods if they exist on the object, Firestore cannot store functions
-                delete (plainCardObject as any).toAIContext;
-                delete (plainCardObject as any).getChatDisplaySummary;
-
-                await userService.createUserDataCard(plainCardObject);
-              }
-              console.log('Mock user data seeding complete.');
-              (window as any).__hasSeededMockUsers = true;
-
-              // Re-fetch after seeding
-              const freshRawDataCards = await userService.fetchAllUserDataCards();
-              const freshDataCards = freshRawDataCards.map(data => new UserDataCard(data));
-              setAllUsers(freshDataCards);
-              console.log(`Loaded ${freshDataCards.length} user data cards after seeding.`);
-              return; // Exit after successful seeding and re-fetch
-            } else {
-              console.log('Mock data already seeded in this session. Skipping.');
-            }
-          }
-          
-          // If data was found initially or seeding was skipped/already done
-          const dataCards = rawDataCards.map(data => new UserDataCard(data));
-          setAllUsers(dataCards);
-          console.log(`Loaded ${dataCards.length} user data cards.`);
-
+          console.log('🔍 Loading real users from Firestore users table...');
+          const users = await userService.getAllUsers();
+          setAllUsers(users);
+          console.log(`✅ Loaded ${users.length} real users for tagging.`);
         } catch (error) {
-          console.error('Error fetching or seeding user data cards:', error);
-          // Fallback to existing mock data if Firestore operations fail catastrophically
-          // This part of the logic can be kept as a final fallback
-          console.log('Falling back to local mock data due to error...');
-          const mockUsers: UserDataCard[] = [
-            new UserDataCard({
-              id: '1',
-              name: 'Sarah Johnson (Fallback)',
-              email: 'sarah@example.com',
-              fitnessLevel: 'intermediate',
-              primaryGoals: ['strength', 'hypertrophy'],
-              trainingFrequency: 4,
-              availableEquipment: ['full-gym'],
-              preferredDuration: 60,
-              pastChallengesCompleted: 3
-            }),
-            new UserDataCard({
-              id: '2', 
-              name: 'Mike Chen (Fallback)',
-              email: 'mike@example.com',
-              fitnessLevel: 'advanced',
-              primaryGoals: ['athletic-performance', 'strength'],
-              trainingFrequency: 5,
-              availableEquipment: ['full-gym'],
-              preferredDuration: 75,
-              injuries: ['Previous shoulder injury'],
-              pastChallengesCompleted: 8
-            }),
-            new UserDataCard({
-              id: '3',
-              name: 'Emma Rodriguez (Fallback)',
-              email: 'emma@example.com', 
-              fitnessLevel: 'beginner',
-              primaryGoals: ['general-fitness', 'weight-loss'],
-              trainingFrequency: 3,
-              availableEquipment: ['home-gym'],
-              preferredDuration: 30,
-              pastChallengesCompleted: 1
-            })
-          ];
-          setAllUsers(mockUsers);
+          console.error('❌ Error fetching users:', error);
+          setAllUsers([]);
         }
       };
-      fetchUsersAndSeedIfEmpty();
+      fetchUsers();
     }, []);
 
     // Handle @ symbol detection and user search
@@ -1787,19 +1775,21 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
 
     // Filter users based on search term
     const filteredUsers = allUsers.filter(user => 
-      user.name.toLowerCase().includes(userSearchTerm.toLowerCase()) && 
+      (user.displayName.toLowerCase().includes(userSearchTerm.toLowerCase()) || 
+       user.username.toLowerCase().includes(userSearchTerm.toLowerCase())) && 
       !taggedUsers.some(tagged => tagged.id === user.id)
     );
 
     // Handle user selection from dropdown
-    const handleUserSelect = (user: UserDataCard) => {
+    const handleUserSelect = (user: User) => {
       const textBeforeCursor = aiPromptText.substring(0, cursorPosition);
       const textAfterCursor = aiPromptText.substring(cursorPosition);
       const lastAtIndex = textBeforeCursor.lastIndexOf('@');
       
       if (lastAtIndex !== -1) {
         const beforeAt = textBeforeCursor.substring(0, lastAtIndex);
-        const newText = `${beforeAt}@${user.name} ${textAfterCursor}`;
+        const displayName = user.displayName || user.username;
+        const newText = `${beforeAt}@${displayName} ${textAfterCursor}`;
         
         setAiPromptText(newText);
         setTaggedUsers(prev => [...prev, user]);
@@ -1807,7 +1797,7 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
         setUserSearchTerm('');
         
         // Update cursor position to after the inserted name
-        const newCursorPosition = beforeAt.length + user.name.length + 2; // +2 for "@" and space
+        const newCursorPosition = beforeAt.length + displayName.length + 2; // +2 for "@" and space
         setCursorPosition(newCursorPosition);
       }
     };
@@ -1819,7 +1809,8 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
       // Also remove from prompt text
       const userToRemove = allUsers.find(u => u.id === userId);
       if (userToRemove) {
-        const updatedText = aiPromptText.replace(new RegExp(`@${userToRemove.name}\\s?`, 'g'), '');
+        const displayName = userToRemove.displayName || userToRemove.username;
+        const updatedText = aiPromptText.replace(new RegExp(`@${displayName}\\s?`, 'g'), '');
         setAiPromptText(updatedText);
       }
     };
@@ -1861,24 +1852,57 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
   };
 
   const validateChallengeInput = (): boolean => {
+    console.log('🔍 Validating challenge input...');
+    console.log('Challenge Data:', {
+      name: challengeData.challengeName,
+      description: challengeData.challengeDesc,
+      startDate: challengeData.startDate,
+      endDate: challengeData.endDate,
+      roundType: challengeData.roundType,
+      pinCode: challengeData.pinCode,
+      isAIMode: isAIMode,
+      selectedStacksCount: selectedStacks.length
+    });
+
     if (challengeData.challengeName.trim().length === 0) {
-      //   toast(...)
+      console.log('❌ Validation failed: Challenge name is empty');
       return false;
     }
     if (challengeData.challengeDesc.trim().length === 0) {
-      //   toast(...)
+      console.log('❌ Validation failed: Challenge description is empty');
       return false;
     }
     if (challengeData.endDate <= challengeData.startDate) {
-      //   toast(...)
+      console.log('❌ Validation failed: End date must be after start date');
       return false;
     }
     if (challengeData.roundType === SweatlistType.locked && challengeData.pinCode.length !== 9) {
-      //   toast(...)
+      console.log('❌ Validation failed: Pin code must be 9 characters for locked rounds');
       return false;
     }
     if (!isAIMode && selectedStacks.length === 0) { // Only check selectedStacks if not in AI mode
-      //   toast(...)
+      console.log('❌ Validation failed: No stacks selected (not in AI mode)');
+      return false;
+    }
+    console.log('✅ Validation passed!');
+    return true;
+  };
+
+  // Quiet version of validation for internal checks (no console logging)
+  const validateChallengeInputQuiet = (): boolean => {
+    if (challengeData.challengeName.trim().length === 0) {
+      return false;
+    }
+    if (challengeData.challengeDesc.trim().length === 0) {
+      return false;
+    }
+    if (challengeData.endDate <= challengeData.startDate) {
+      return false;
+    }
+    if (challengeData.roundType === SweatlistType.locked && challengeData.pinCode.length !== 9) {
+      return false;
+    }
+    if (!isAIMode && selectedStacks.length === 0) {
       return false;
     }
     return true;
@@ -2006,7 +2030,8 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
         if (taggedUsers.length > 0) {
           comprehensivePrompt += '\nCLIENT PROFILES:\n';
           taggedUsers.forEach((user, index) => {
-            comprehensivePrompt += `${user.name}: ${user.toAIContext ? user.toAIContext() : `${user.fitnessLevel}, Goals: ${user.primaryGoals?.join(', ') || 'Not specified'}`}\n`;
+            const userDataCard = convertUserToDataCard(user);
+            comprehensivePrompt += `${userDataCard.name}: ${userDataCard.toAIContext()}\n`;
           });
         }
       } else {
@@ -2017,7 +2042,8 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
         if (taggedUsers.length > 0) {
           comprehensivePrompt += '\n\nCLIENT PROFILES:\n';
           taggedUsers.forEach((user, index) => {
-            comprehensivePrompt += `${user.name}: ${user.toAIContext ? user.toAIContext() : `${user.fitnessLevel}, Goals: ${user.primaryGoals?.join(', ') || 'Not specified'}`}\n`;
+            const userDataCard = convertUserToDataCard(user);
+            comprehensivePrompt += `${userDataCard.name}: ${userDataCard.toAIContext()}\n`;
           });
         }
       }
@@ -2388,6 +2414,293 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
             preferences: finalAiPrefs,
         }
     });
+  };
+
+  // Animate rest day configuration from chatbot suggestions
+  const animateRestDayConfiguration = async (restDays: string[]) => {
+    try {
+      console.log('🎬 Starting rest day animation with days:', restDays);
+      console.log('🎬 Current challenge data before animation:', challengeData.restDayPreferences);
+
+      // Format all the days first
+      const formattedDays = restDays.map(day => day.charAt(0).toUpperCase() + day.slice(1).toLowerCase());
+      
+      // First enable the toggle with a natural delay
+      setTimeout(() => {
+        console.log('🔄 Step 1: Enabling rest days toggle');
+        handleDesktopIncludeRestDaysChange(true);
+      }, 800);
+
+      // Step 2: Add each rest day progressively, building the cumulative list
+      let cumulativeDays: string[] = [];
+      
+      formattedDays.forEach((dayFormatted, index) => {
+        setTimeout(() => {
+          cumulativeDays.push(dayFormatted);
+          
+          console.log(`🔄 Step ${index + 2}: Adding ${dayFormatted} to rest days`);
+          console.log(`🔄 Cumulative days so far:`, [...cumulativeDays]);
+          
+          // Build the updated preferences with all days selected so far
+          const currentRestPrefs = challengeData.restDayPreferences || { includeRestDays: false, restDays: [], preferences: [] };
+          let newAiPreferences = currentRestPrefs.preferences.filter(p => !p.startsWith('Schedule rest days'));
+          
+          if (cumulativeDays.length > 0) {
+            const restDayPrompt = `Schedule rest days on ${cumulativeDays.join(', ')} throughout the program duration. Ensure these days align with the program's start date ${challengeData.startDate.toLocaleDateString()} and end date ${challengeData.endDate.toLocaleDateString()}.`;
+            newAiPreferences.push(restDayPrompt);
+          }
+
+          // Update state with cumulative days
+          handleLocalSetChallengeData({
+            restDayPreferences: {
+              includeRestDays: true,
+              restDays: [...cumulativeDays], // Use the cumulative list
+              preferences: newAiPreferences,
+            }
+          });
+          
+          console.log(`🔄 After adding ${dayFormatted}, total selected days:`, [...cumulativeDays]);
+        }, 1500 + (index * 1000)); // More natural, slower timing
+      });
+
+    } catch (error) {
+      console.error('Error animating rest day configuration:', error);
+    }
+  };
+
+  // Animate typing text into form fields
+  const animateTypingIntoField = async (text: string, fieldType: 'name' | 'description') => {
+    try {
+      console.log(`🎬 Starting typing animation for ${fieldType}:`, text);
+      
+      const delay = 50; // Delay between each character (milliseconds)
+      
+      // Clear the field first with a small delay
+      setTimeout(() => {
+        if (fieldType === 'name') {
+          handleLocalSetChallengeData({ challengeName: '' });
+        } else {
+          handleLocalSetChallengeData({ challengeDesc: '' });
+        }
+      }, 300);
+      
+      // Type each character with a delay
+      for (let i = 0; i <= text.length; i++) {
+        setTimeout(() => {
+          const currentText = text.substring(0, i);
+          if (fieldType === 'name') {
+            handleLocalSetChallengeData({ challengeName: currentText });
+          } else {
+            handleLocalSetChallengeData({ challengeDesc: currentText });
+          }
+          
+          if (i === text.length) {
+            console.log(`✅ Finished typing animation for ${fieldType}`);
+          }
+        }, 500 + (i * delay)); // Start after 500ms, then 50ms per character
+      }
+      
+    } catch (error) {
+      console.error(`Error animating ${fieldType} typing:`, error);
+    }
+  };
+
+  // Enhanced User to UserDataCard conversion function
+  // Intelligently maps User data to UserDataCard format while preserving raw text for AI context
+  const convertUserToDataCard = (user: User): UserDataCard => {
+    // Extract fitness information from bio and additionalGoals
+    const extractFitnessInfo = (text: string = '') => {
+      const lowerText = text.toLowerCase();
+      const injuries = [];
+      const preferences = [];
+      
+      // Common injury keywords
+      if (lowerText.includes('knee') || lowerText.includes('knees')) injuries.push('Knee issues');
+      if (lowerText.includes('back') || lowerText.includes('spine')) injuries.push('Back issues');
+      if (lowerText.includes('shoulder')) injuries.push('Shoulder issues');
+      if (lowerText.includes('ankle')) injuries.push('Ankle issues');
+      if (lowerText.includes('wrist')) injuries.push('Wrist issues');
+      
+      // Workout preferences from bio/goals
+      if (lowerText.includes('yoga')) preferences.push('yoga');
+      if (lowerText.includes('cardio') || lowerText.includes('running')) preferences.push('cardio');
+      if (lowerText.includes('strength') || lowerText.includes('weights')) preferences.push('weight-training');
+      if (lowerText.includes('pilates')) preferences.push('pilates');
+      if (lowerText.includes('crossfit') || lowerText.includes('functional')) preferences.push('functional');
+      
+      return { injuries, preferences };
+    };
+
+    // Analyze bio and additional goals for fitness insights
+    const bioInfo = extractFitnessInfo(user.bio);
+    const goalInfo = extractFitnessInfo(user.additionalGoals);
+    const allInjuries = [...bioInfo.injuries, ...goalInfo.injuries];
+    const allPreferences = [...bioInfo.preferences, ...goalInfo.preferences];
+
+    // Determine equipment based on user profile
+    const determineEquipment = (): ('full-gym' | 'home-gym' | 'minimal-equipment' | 'bodyweight-only')[] => {
+      if (user.homeGym?.name) return ['full-gym']; // Has a home gym
+      if (user.location) return ['full-gym']; // Likely has access to gyms
+      if (user.creator?.isTrainer) return ['full-gym']; // Trainers usually have gym access
+      return ['full-gym', 'home-gym']; // Default to flexible
+    };
+
+    // Determine fitness level based on multiple factors
+    const determineFitnessLevel = (): 'beginner' | 'intermediate' | 'advanced' | 'expert' => {
+      let score = 0;
+      
+      // Base level from user.level
+      if (user.level === 'expert') score += 3;
+      else if (user.level === 'intermediate') score += 2;
+      else score += 1; // novice
+      
+      // Boost for creators (they usually know more about fitness)
+      if (user.creator?.isTrainer) score += 2;
+      if (user.creator) score += 1;
+      
+      // Boost for video count (active users tend to be more experienced)
+      if (user.videoCount > 50) score += 2;
+      else if (user.videoCount > 20) score += 1;
+      
+      // Boost for detailed goals/bio (shows knowledge)
+      if (user.additionalGoals?.length > 50 || user.bio?.length > 100) score += 1;
+      
+      if (score >= 6) return 'expert';
+      if (score >= 4) return 'advanced';
+      if (score >= 2) return 'intermediate';
+      return 'beginner';
+    };
+
+    // Determine motivation style based on profile
+    const determineMotivationStyle = (): ('competitive' | 'collaborative' | 'independent' | 'coach-guided')[] => {
+      const styles = [];
+      
+      if (user.creator?.isTrainer) styles.push('coach-guided');
+      if (user.workoutBuddy || user.workoutBuddyUser) styles.push('collaborative');
+      if (user.creator) styles.push('independent');
+      if (user.videoCount > 10) styles.push('competitive'); // Active users tend to be competitive
+      
+      return styles.length > 0 ? styles as ('competitive' | 'collaborative' | 'independent' | 'coach-guided')[] : ['independent'];
+    };
+
+    // Create intelligent defaults based on available User data
+    const defaultData = {
+      id: user.id,
+      name: user.displayName || user.username,
+      email: user.email,
+      profileImage: user.profileImage?.profileImageURL,
+      
+             // Enhanced demographics
+       age: user.birthdate ? Math.floor((Date.now() - user.birthdate.getTime()) / (365.25 * 24 * 60 * 60 * 1000)) : undefined,
+       gender: user.gender ? (user.gender.toString() === 'man' ? 'male' : user.gender.toString() === 'woman' ? 'female' : 'other') : 
+              (user.selfDisclosedGender ? 'other' : undefined),
+      
+      // Enhanced fitness level determination
+      fitnessLevel: determineFitnessLevel(),
+      experienceYears: user.level === 'expert' ? 5 : user.level === 'intermediate' ? 3 : 
+                     user.creator?.isTrainer ? 4 : 1,
+      
+      // Enhanced goal mapping including additionalGoals
+      primaryGoals: (() => {
+        const goals = [];
+        
+        // From user.goal enum
+        if (user.goal?.length > 0) {
+          user.goal.forEach(g => {
+            const goalStr = g.toString().toLowerCase();
+            if (goalStr.includes('weight') && goalStr.includes('lose')) goals.push('weight-loss');
+            else if (goalStr.includes('muscle') || goalStr.includes('mass') || goalStr.includes('gain')) goals.push('hypertrophy');
+            else if (goalStr.includes('tone') || goalStr.includes('strength')) goals.push('strength');
+            else if (goalStr.includes('endurance') || goalStr.includes('cardio')) goals.push('endurance');
+            else if (goalStr.includes('athletic') || goalStr.includes('performance')) goals.push('athletic-performance');
+            else goals.push('general-fitness');
+          });
+        }
+        
+        // From additionalGoals text
+        if (user.additionalGoals) {
+          const goalText = user.additionalGoals.toLowerCase();
+          if (goalText.includes('lose weight') || goalText.includes('weight loss')) goals.push('weight-loss');
+          if (goalText.includes('muscle') || goalText.includes('hypertrophy') || goalText.includes('bulk')) goals.push('hypertrophy');
+          if (goalText.includes('strength') || goalText.includes('strong')) goals.push('strength');
+          if (goalText.includes('endurance') || goalText.includes('cardio') || goalText.includes('marathon')) goals.push('endurance');
+          if (goalText.includes('athletic') || goalText.includes('performance') || goalText.includes('sport')) goals.push('athletic-performance');
+        }
+        
+                 return goals.length > 0 ? 
+           Array.from(new Set(goals)) as ('strength' | 'hypertrophy' | 'endurance' | 'weight-loss' | 'athletic-performance' | 'general-fitness')[] :
+           ['general-fitness'];
+      })(),
+      
+      // Enhanced workout type preferences
+      preferredWorkoutTypes: (() => {
+        const types = ['weight-training']; // Default
+        allPreferences.forEach(pref => {
+          if (!types.includes(pref)) types.push(pref);
+        });
+        return types as ('weight-training' | 'cardio' | 'yoga' | 'pilates' | 'functional' | 'sports-specific')[];
+      })(),
+      
+      // Enhanced intensity based on experience and goals
+      preferredIntensity: user.level === 'novice' ? 'low' : 
+                         user.level === 'expert' ? 'high' : 
+                         user.creator?.isTrainer ? 'high' : 'moderate' as 'low' | 'moderate' | 'high' | 'varied',
+      
+      // Smart equipment determination
+      availableEquipment: determineEquipment(),
+      
+      // Enhanced duration based on experience
+      preferredDuration: user.level === 'expert' ? 75 : 
+                        user.level === 'intermediate' ? 60 : 
+                        user.creator?.isTrainer ? 90 : 45,
+      
+      // Enhanced frequency based on level and goals
+      trainingFrequency: user.level === 'expert' ? 5 : 
+                        user.level === 'intermediate' ? 4 : 
+                        user.creator?.isTrainer ? 6 : 3,
+      
+      availableDays: ['monday', 'tuesday', 'thursday', 'friday'] as ('monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday')[],
+      timeOfDay: ['evening'] as ('early-morning' | 'morning' | 'afternoon' | 'evening' | 'flexible')[],
+      
+      // Enhanced injury and limitation data
+      injuries: allInjuries,
+      limitations: [],
+      healthConditions: [],
+      favoriteExercises: [],
+      dislikedExercises: [],
+      
+      // Enhanced challenge participation based on platform activity
+      pastChallengesCompleted: user.videoCount > 50 ? 5 : user.videoCount > 20 ? 3 : user.videoCount > 5 ? 1 : 0,
+      averageWorkoutCompletionRate: user.isCurrentlyActive ? 85 : 
+                                   user.videoCount > 20 ? 80 : 
+                                   user.videoCount > 5 ? 70 : 60,
+      
+      // Enhanced body composition from User data
+      height: user.height ? (user.height.feet * 12 + user.height.inches) * 2.54 : undefined, // Convert to cm
+      weight: user.bodyWeight?.length > 0 ? user.bodyWeight[user.bodyWeight.length - 1].newWeight : undefined,
+      bodyFatPercentage: undefined,
+      
+      // Enhanced behavioral data
+      motivationStyle: determineMotivationStyle(),
+      preferredFeedback: user.creator?.isTrainer ? ['technical', 'detailed'] :
+                        user.level === 'expert' ? ['detailed'] :
+                        ['encouraging'] as ('detailed' | 'minimal' | 'encouraging' | 'technical')[],
+      
+      // Enhanced activity data
+      recentWorkoutTypes: allPreferences,
+      lastActiveDate: user.updatedAt,
+      currentChallengeParticipation: user.isCurrentlyActive ? ['current-activity'] : [],
+      
+      // Raw user input preserved for AI context
+      additionalGoalsText: user.additionalGoals || undefined,
+      bioText: user.bio || undefined,
+      
+      // Timestamps
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt
+    };
+
+    return new UserDataCard(defaultData);
   };
 
   // Chat input refs for focus management
@@ -2917,8 +3230,8 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
                             <UserCircle className="w-4 h-4 text-[#E0FE10]" />
                           </div>
                           <div className="flex flex-col">
-                            <span className="text-sm font-medium text-white whitespace-nowrap">{user.name}</span>
-                            <span className="text-xs text-zinc-400 whitespace-nowrap">{user.getChatDisplaySummary()}</span>
+                            <span className="text-sm font-medium text-white whitespace-nowrap">{user.displayName || user.username}</span>
+                            <span className="text-xs text-zinc-400 whitespace-nowrap">@{user.username}</span>
                           </div>
                           <button
                             onClick={() => handleRemoveTaggedUser(user.id)}
@@ -3012,8 +3325,8 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
                               <UserCircle className="w-5 h-5 text-[#E0FE10]" />
                             </div>
                             <div className="flex-1 min-w-0">
-                              <div className="text-sm font-medium text-white">{user.name}</div>
-                              <div className="text-xs text-zinc-400 truncate">{user.getChatDisplaySummary()}</div>
+                              <div className="text-sm font-medium text-white">{user.displayName || user.username}</div>
+                              <div className="text-xs text-zinc-400 truncate">@{user.username}</div>
                             </div>
                           </button>
                         ))}

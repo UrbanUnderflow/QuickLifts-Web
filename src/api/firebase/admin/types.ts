@@ -61,6 +61,35 @@ export interface ProgrammingAccess {
   approvedBy?: string;
 }
 
+export interface BetaApplication {
+  id?: string;
+  name: string;
+  email: string;
+  role: {
+    trainer: boolean;
+    enthusiast: boolean;
+    coach: boolean;
+    fitnessInstructor: boolean;
+  };
+  primaryUse: string;
+  useCases: {
+    oneOnOneCoaching: boolean;
+    communityRounds: boolean;
+    personalPrograms: boolean;
+  };
+  clientCount: string;
+  yearsExperience: string;
+  longTermGoal: string;
+  isCertified: boolean;
+  certificationName?: string;
+  applyForFoundingCoaches: boolean;
+  submittedAt: Date;
+  status: 'pending' | 'approved' | 'rejected';
+  approvedAt?: Date;
+  approvedBy?: string;
+  updatedAt?: Date;
+}
+
 export interface AdminService {
   addVersion: (version: string, changeNotes: string[], isCriticalUpdate: boolean) => Promise<boolean>;
   isAdmin: (email: string) => Promise<boolean>;
@@ -76,4 +105,8 @@ export interface AdminService {
   updateProgrammingAccessStatus: (id: string, status: 'active' | 'deactivated', approvedBy?: string) => Promise<boolean>;
   checkProgrammingAccess: (email: string) => Promise<ProgrammingAccess | null>;
   deleteProgrammingAccessRequest: (id: string) => Promise<boolean>;
+  // Beta Application methods
+  getBetaApplications: () => Promise<BetaApplication[]>;
+  updateBetaApplicationStatus: (id: string, status: 'approved' | 'rejected', approvedBy?: string) => Promise<boolean>;
+  deleteBetaApplication: (id: string) => Promise<boolean>;
 } 

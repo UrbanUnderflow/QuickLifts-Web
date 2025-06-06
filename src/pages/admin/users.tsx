@@ -9,7 +9,7 @@ import { workoutService } from '../../api/firebase/workout/service';
 import { Workout, WorkoutStatus, WorkoutSummary, RepsAndWeightLog } from '../../api/firebase/workout/types';
 import { ExerciseLog } from '../../api/firebase/exercise/types';
 import { adminMethods } from '../../api/firebase/admin/methods';
-import { ProgrammingAccess } from '../../api/firebase/admin/types';
+import { BetaApplication } from '../../api/firebase/admin/types';
 
 
 type User = {
@@ -29,8 +29,8 @@ type WorkoutSessionDisplay = {
   logs: ExerciseLog[];
 };
 
-// Update TabType to include 'logs' and 'programmingAccess'
-type TabType = 'all' | 'admins' | 'workoutSessions' | 'logs' | 'programmingAccess';
+// Update TabType to include 'logs' and 'betaApplications'
+type TabType = 'all' | 'admins' | 'workoutSessions' | 'logs' | 'betaApplications';
 
 const UsersManagement: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
@@ -84,13 +84,13 @@ const UsersManagement: React.FC = () => {
   const [selectedSessionLogId, setSelectedSessionLogId] = useState<string | null>(null);
   // *** END: State for Expanded Session Log Details ***
 
-  // *** START: State for Programming Access ***
-  const [programmingAccessRequests, setProgrammingAccessRequests] = useState<ProgrammingAccess[]>([]);
-  const [loadingProgrammingAccess, setLoadingProgrammingAccess] = useState(false);
-  const [programmingAccessError, setProgrammingAccessError] = useState<string | null>(null);
-  const [processingAccessStatus, setProcessingAccessStatus] = useState<string | null>(null);
-  const [selectedProgrammingRequest, setSelectedProgrammingRequest] = useState<ProgrammingAccess | null>(null);
-  // *** END: State for Programming Access ***
+  // *** START: State for Beta Applications ***
+  const [betaApplications, setBetaApplications] = useState<BetaApplication[]>([]);
+  const [loadingBetaApplications, setLoadingBetaApplications] = useState(false);
+  const [betaApplicationsError, setBetaApplicationsError] = useState<string | null>(null);
+  const [processingApplicationStatus, setProcessingApplicationStatus] = useState<string | null>(null);
+  const [selectedBetaApplication, setSelectedBetaApplication] = useState<BetaApplication | null>(null);
+  // *** END: State for Beta Applications ***
 
   // Copy ID to clipboard and show toast
   const copyToClipboard = (id: string) => {
@@ -131,10 +131,6 @@ const UsersManagement: React.FC = () => {
         adminVerified: false // Initialize with unverified state
       })) as User[];
 
-      // Set users first, then check admin status for each
-      setUsers(allUsers);
-      setFilteredUsers(allUsers);
-      
       // Check admin status for each user
       const usersWithAdminStatus = await Promise.all(
         allUsers.map(async (user) => {
@@ -146,11 +142,17 @@ const UsersManagement: React.FC = () => {
         })
       );
 
+      // Update state with the final user list that includes admin status
       setUsers(usersWithAdminStatus);
       updateFilteredUsers(usersWithAdminStatus, searchTerm, activeTab);
-      setLoading(false);
+      
     } catch (error) {
       console.error('Error loading users:', error);
+      setToastMessage({ 
+        type: 'error', 
+        text: 'Error loading users. Please try again.' 
+      });
+    } finally {
       setLoading(false);
     }
   };
@@ -420,7 +422,7 @@ const UsersManagement: React.FC = () => {
 
   // Load programming access requests on component mount
   useEffect(() => {
-    loadProgrammingAccessRequests();
+    loadBetaApplications();
   }, []);
 
   // Update filtered users based on search term and active tab
@@ -462,26 +464,61 @@ const UsersManagement: React.FC = () => {
       };
   }, [searchTerm, debouncedSearch]);
 
-  const handleRefresh = () => {
-    setSearchTerm(''); // Clear search term on refresh
-    loadAllUsers();
+  const handleRefresh = async () => {
+    try {
+      setLoading(true);
+      setSearchTerm(''); // Clear search term on refresh
+      
+      // Close any open detail views
+      setSelectedUser(null);
+      setSelectedWorkoutSession(null);
+      setSelectedSessionLogId(null);
+      setSelectedBetaApplication(null);
+      
+      // Clear any selections
+      setSelectedUserIds(new Set());
+      setSelectedWorkoutSessionIds(new Set());
+      
+      // Reset selection mode
+      setIsSelectingForDelete(false);
+      
+      // Load fresh data
+      await loadAllUsers();
+      
+      // If we're on the beta applications tab, refresh that data too
+      if (activeTab === 'betaApplications') {
+        await loadBetaApplications();
+      }
+      
+      setToastMessage({ 
+        type: 'success', 
+        text: 'User data refreshed successfully!' 
+      });
+    } catch (error) {
+      console.error('Error refreshing data:', error);
+      setToastMessage({ 
+        type: 'error', 
+        text: 'Error refreshing user data. Please try again.' 
+      });
+      setLoading(false);
+    }
   };
 
   const handleTabChange = (tab: TabType) => {
     setActiveTab(tab);
     
     // Load programming access data when switching to that tab
-    if (tab === 'programmingAccess') {
-      loadProgrammingAccessRequests();
+    if (tab === 'betaApplications') {
+      loadBetaApplications();
     }
     
     // Only apply filtering for 'all' and 'admins' tabs
-    if (tab !== 'workoutSessions' && tab !== 'programmingAccess') {
+    if (tab !== 'workoutSessions' && tab !== 'betaApplications') {
       updateFilteredUsers(users, searchTerm, tab);
     }
     
     // If switching away from workout sessions, ensure filtering is correct
-    if (activeTab === 'workoutSessions' && tab !== 'workoutSessions' && tab !== 'programmingAccess') {
+    if (activeTab === 'workoutSessions' && tab !== 'workoutSessions' && tab !== 'betaApplications') {
       updateFilteredUsers(users, searchTerm, tab);
     }
   };
@@ -1337,84 +1374,84 @@ const UsersManagement: React.FC = () => {
   };
   // *** END: Render Log Details Function ***
 
-  // *** START: Programming Access Management Functions ***
-  const loadProgrammingAccessRequests = async () => {
+  // *** START: Beta Applications Management Functions ***
+  const loadBetaApplications = async () => {
     try {
-      setLoadingProgrammingAccess(true);
-      setProgrammingAccessError(null);
+      setLoadingBetaApplications(true);
+      setBetaApplicationsError(null);
       
-      const requests = await adminMethods.getProgrammingAccessRequests();
-      setProgrammingAccessRequests(requests);
+      const applications = await adminMethods.getBetaApplications();
+      setBetaApplications(applications);
     } catch (error) {
-      console.error('Error loading programming access requests:', error);
-      setProgrammingAccessError('Failed to load programming access requests');
+      console.error('Error loading beta applications:', error);
+      setBetaApplicationsError('Failed to load beta applications');
     } finally {
-      setLoadingProgrammingAccess(false);
+      setLoadingBetaApplications(false);
     }
   };
 
-  const handleUpdateAccessStatus = async (id: string, status: 'active' | 'deactivated') => {
+  const handleUpdateApplicationStatus = async (id: string, status: 'approved' | 'rejected') => {
     try {
-      setProcessingAccessStatus(id);
+      setProcessingApplicationStatus(id);
       
       const currentUser = auth.currentUser;
       const approvedBy = currentUser?.email || 'Unknown Admin';
       
-      const success = await adminMethods.updateProgrammingAccessStatus(id, status, approvedBy);
+      const success = await adminMethods.updateBetaApplicationStatus(id, status, approvedBy);
       
       if (success) {
         setToastMessage({ 
           type: 'success', 
-          text: `Access ${status === 'active' ? 'approved' : 'deactivated'} successfully` 
+          text: `Application ${status === 'approved' ? 'approved' : 'rejected'} successfully` 
         });
-        await loadProgrammingAccessRequests();
+        await loadBetaApplications();
       } else {
         throw new Error('Failed to update status');
       }
     } catch (error) {
-      console.error('Error updating access status:', error);
+      console.error('Error updating application status:', error);
       setToastMessage({ 
         type: 'error', 
-        text: `Failed to ${status === 'active' ? 'approve' : 'deactivate'} access` 
+        text: `Failed to ${status === 'approved' ? 'approve' : 'reject'} application` 
       });
     } finally {
-      setProcessingAccessStatus(null);
+      setProcessingApplicationStatus(null);
     }
   };
 
-  const handleDeleteAccessRequest = async (id: string, email: string) => {
-    if (!window.confirm(`Are you sure you want to delete the programming access request for ${email}? This action cannot be undone.`)) {
+  const handleDeleteApplication = async (id: string, email: string) => {
+    if (!window.confirm(`Are you sure you want to delete the beta application for ${email}? This action cannot be undone.`)) {
       return;
     }
 
     try {
-      setProcessingAccessStatus(id);
+      setProcessingApplicationStatus(id);
       
-      const success = await adminMethods.deleteProgrammingAccessRequest(id);
+      const success = await adminMethods.deleteBetaApplication(id);
       
       if (success) {
         setToastMessage({ 
           type: 'success', 
-          text: 'Access request deleted successfully' 
+          text: 'Application deleted successfully' 
         });
-        await loadProgrammingAccessRequests();
-        if (selectedProgrammingRequest?.id === id) {
-          setSelectedProgrammingRequest(null);
+        await loadBetaApplications();
+        if (selectedBetaApplication?.id === id) {
+          setSelectedBetaApplication(null);
         }
       } else {
-        throw new Error('Failed to delete request');
+        throw new Error('Failed to delete application');
       }
     } catch (error) {
-      console.error('Error deleting access request:', error);
+      console.error('Error deleting application:', error);
       setToastMessage({ 
         type: 'error', 
-        text: 'Failed to delete access request' 
+        text: 'Failed to delete application' 
       });
     } finally {
-      setProcessingAccessStatus(null);
+      setProcessingApplicationStatus(null);
     }
   };
-  // *** END: Programming Access Management Functions ***
+  // *** END: Beta Applications Management Functions ***
 
   // Helper function to format role field
   const formatRoleField = (role: any): string => {
@@ -1647,24 +1684,24 @@ const UsersManagement: React.FC = () => {
                 </button>
               )}
 
-              {/* Programming Access Tab */}
-              <button
-                className={`py-2 px-4 mr-2 font-medium text-sm transition-colors relative ${
-                  activeTab === 'programmingAccess'
-                    ? 'text-[#d7ff00]'
-                    : 'text-gray-400 hover:text-gray-200'
-                } ${isBatchDeleting ? 'pointer-events-none opacity-60' : ''}`}
-                onClick={() => handleTabChange('programmingAccess')}
-                disabled={isBatchDeleting}
-              >
-                <div className="flex items-center">
-                  <Code className="h-4 w-4 mr-1" />
-                  Programming Access
-                  <span className="ml-2 px-2 py-0.5 bg-gray-800 rounded-full text-xs">
-                    {programmingAccessRequests.length}
-                  </span>
-                </div>
-                {activeTab === 'programmingAccess' && (
+              {/* Beta Applications Tab */}
+                              <button
+                  className={`py-2 px-4 mr-2 font-medium text-sm transition-colors relative ${
+                    activeTab === 'betaApplications'
+                      ? 'text-[#d7ff00]'
+                      : 'text-gray-400 hover:text-gray-200'
+                  } ${isBatchDeleting ? 'pointer-events-none opacity-60' : ''}`}
+                  onClick={() => handleTabChange('betaApplications')}
+                  disabled={isBatchDeleting}
+                >
+                  <div className="flex items-center">
+                    <Users className="h-4 w-4 mr-1" />
+                    Beta Applications
+                    <span className="ml-2 px-2 py-0.5 bg-gray-800 rounded-full text-xs">
+                      {betaApplications.length}
+                    </span>
+                  </div>
+                {activeTab === 'betaApplications' && (
                   <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-blue-500 via-purple-500 to-[#d7ff00]"></div>
                 )}
               </button>
@@ -2057,49 +2094,49 @@ const UsersManagement: React.FC = () => {
                   </div>
                 </div>
               </div>
-            ) : activeTab === 'programmingAccess' ? (
-              // Display Programming Access Content
+            ) : activeTab === 'betaApplications' ? (
+              // Display Beta Applications Content
               <div className="mt-4">
                 <div className="bg-[#1d2b3a] rounded-lg border border-green-800 p-6 animate-fade-in-up">
-                  <div className="flex items-center justify-between gap-3 mb-6">
-                    <div className="flex items-center gap-3">
-                      <Code className="h-5 w-5 text-[#d7ff00]" />
-                      <h3 className="text-lg font-medium text-white">Programming Access Management</h3>
-                    </div>
+                                      <div className="flex items-center justify-between gap-3 mb-6">
+                      <div className="flex items-center gap-3">
+                        <Users className="h-5 w-5 text-[#d7ff00]" />
+                        <h3 className="text-lg font-medium text-white">Beta Applications Management</h3>
+                      </div>
                     <div className="flex gap-2 text-sm">
                       <span className="px-3 py-1 bg-blue-900/30 text-blue-300 rounded-full border border-blue-800">
-                        Total: {programmingAccessRequests.length}
+                        Total: {betaApplications.length}
                       </span>
                       <span className="px-3 py-1 bg-orange-900/30 text-orange-300 rounded-full border border-orange-800">
-                        Pending: {programmingAccessRequests.filter(r => r.status === 'requested').length}
+                        Pending: {betaApplications.filter(a => a.status === 'pending').length}
                       </span>
                       <span className="px-3 py-1 bg-green-900/30 text-green-300 rounded-full border border-green-800">
-                        Active: {programmingAccessRequests.filter(r => r.status === 'active').length}
+                        Active: {betaApplications.filter(a => a.status === 'approved').length}
                       </span>
                     </div>
                   </div>
 
-                  {loadingProgrammingAccess ? (
+                  {loadingBetaApplications ? (
                     <div className="bg-[#262a30] rounded-lg p-8 flex flex-col items-center justify-center">
                       <svg className="animate-spin h-8 w-8 mb-4 text-[#d7ff00]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                       </svg>
-                      <p className="text-gray-300">Loading programming access requests...</p>
+                      <p className="text-gray-300">Loading beta applications...</p>
                     </div>
-                  ) : programmingAccessError ? (
+                  ) : betaApplicationsError ? (
                     <div className="bg-[#262a30] rounded-lg p-6">
                       <div className="flex items-start gap-3 text-red-400 bg-red-900/20 p-4 rounded-lg border border-red-800">
                         <AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
                         <div>
-                          <p className="font-medium mb-1">Failed to load programming access requests</p>
-                          <p className="text-sm text-red-300">{programmingAccessError}</p>
+                          <p className="font-medium mb-1">Failed to load beta applications</p>
+                          <p className="text-sm text-red-300">{betaApplicationsError}</p>
                         </div>
                       </div>
                     </div>
-                  ) : programmingAccessRequests.length === 0 ? (
+                  ) : betaApplications.length === 0 ? (
                     <div className="bg-[#262a30] rounded-lg p-6 flex items-center justify-center">
-                      <p className="text-gray-400 italic">No programming access requests found.</p>
+                      <p className="text-gray-400 italic">No beta applications found.</p>
                     </div>
                   ) : (
                     <div className="overflow-x-auto">
@@ -2108,7 +2145,6 @@ const UsersManagement: React.FC = () => {
                           <tr className="border-b border-gray-700">
                             <th className="py-3 px-4 text-left text-gray-300 font-medium">Email</th>
                             <th className="py-3 px-4 text-left text-gray-300 font-medium">Name</th>
-                            <th className="py-3 px-4 text-left text-gray-300 font-medium">Role</th>
                             <th className="py-3 px-4 text-left text-gray-300 font-medium">Status</th>
                             <th className="py-3 px-4 text-left text-gray-300 font-medium">Requested</th>
                             <th className="py-3 px-4 text-center text-gray-300 font-medium">Actions</th>
@@ -2116,146 +2152,152 @@ const UsersManagement: React.FC = () => {
                           </tr>
                         </thead>
                         <tbody>
-                          {programmingAccessRequests.map((request) => (
-                            <React.Fragment key={request.id}>
-                              <tr className={`hover:bg-[#2a2f36] transition-colors ${selectedProgrammingRequest?.id === request.id ? 'bg-[#1d2b3a]' : ''}`}>
-                                <td className="py-3 px-4 border-b border-gray-700 text-gray-300">{request.email}</td>
-                                <td className="py-3 px-4 border-b border-gray-700 text-gray-300">{request.name || '-'}</td>
-                                <td className="py-3 px-4 border-b border-gray-700 text-gray-300">
-                                  {formatRoleField(request.role)}
-                                </td>
+                          {betaApplications.map((application) => (
+                            <React.Fragment key={application.id}>
+                              <tr className={`hover:bg-[#2a2f36] transition-colors ${selectedBetaApplication?.id === application.id ? 'bg-[#1d2b3a]' : ''}`}>
+                                <td className="py-3 px-4 border-b border-gray-700 text-gray-300">{application.email}</td>
+                                <td className="py-3 px-4 border-b border-gray-700 text-gray-300">{application.name || '-'}</td>
                                 <td className="py-3 px-4 border-b border-gray-700">
-                                  {request.status === 'requested' && (
+                                  {application.status === 'pending' && (
                                     <span className="px-2 py-1 bg-orange-900/30 text-orange-400 rounded-full text-xs font-medium border border-orange-900">Pending</span>
                                   )}
-                                  {request.status === 'active' && (
-                                    <span className="px-2 py-1 bg-green-900/30 text-green-400 rounded-full text-xs font-medium border border-green-900">Active</span>
+                                  {application.status === 'approved' && (
+                                    <span className="px-2 py-1 bg-green-900/30 text-green-400 rounded-full text-xs font-medium border border-green-900">Approved</span>
                                   )}
-                                  {request.status === 'deactivated' && (
-                                    <span className="px-2 py-1 bg-red-900/30 text-red-400 rounded-full text-xs font-medium border border-red-900">Deactivated</span>
+                                  {application.status === 'rejected' && (
+                                    <span className="px-2 py-1 bg-red-900/30 text-red-400 rounded-full text-xs font-medium border border-red-900">Rejected</span>
                                   )}
                                 </td>
                                 <td className="py-3 px-4 border-b border-gray-700 text-gray-300 text-sm">
-                                  {formatDate(request.createdAt)}
+                                  {formatDate(application.submittedAt)}
                                 </td>
                                 <td className="py-3 px-4 border-b border-gray-700 text-center">
                                   <div className="flex gap-1 justify-center">
-                                    {request.status === 'requested' && (
+                                    {application.status === 'pending' && (
                                       <>
                     <button 
-                                          onClick={() => handleUpdateAccessStatus(request.id || '', 'active')}
-                                          disabled={processingAccessStatus === request.id}
+                                          onClick={() => handleUpdateApplicationStatus(application.id || '', 'approved')}
+                                          disabled={processingApplicationStatus === application.id}
                                           className="px-2 py-1 bg-green-900/30 text-green-400 hover:bg-green-900/50 rounded text-xs font-medium border border-green-900 transition-colors"
                                         >
-                                          {processingAccessStatus === request.id ? '...' : 'Approve'}
+                                          {processingApplicationStatus === application.id ? '...' : 'Approve'}
                                         </button>
                                         <button
-                                          onClick={() => handleDeleteAccessRequest(request.id || '', request.email || '')}
-                                          disabled={processingAccessStatus === request.id}
+                                          onClick={() => handleDeleteApplication(application.id || '', application.email || '')}
+                                          disabled={processingApplicationStatus === application.id}
                                           className="px-2 py-1 bg-red-900/30 text-red-400 hover:bg-red-900/50 rounded text-xs font-medium border border-red-900 transition-colors"
                                         >
-                                          {processingAccessStatus === request.id ? '...' : 'Deny'}
+                                          {processingApplicationStatus === application.id ? '...' : 'Reject'}
                                         </button>
                                       </>
                                     )}
-                                    {request.status === 'active' && (
+                                    {application.status === 'approved' && (
                                       <button
-                                        onClick={() => handleUpdateAccessStatus(request.id || '', 'deactivated')}
-                                        disabled={processingAccessStatus === request.id}
+                                        onClick={() => handleUpdateApplicationStatus(application.id || '', 'rejected')}
+                                        disabled={processingApplicationStatus === application.id}
                                         className="px-2 py-1 bg-red-900/30 text-red-400 hover:bg-red-900/50 rounded text-xs font-medium border border-red-900 transition-colors"
                                       >
-                                        {processingAccessStatus === request.id ? '...' : 'Deactivate'}
+                                        {processingApplicationStatus === application.id ? '...' : 'Reject'}
                     </button>
                                     )}
-                                    {request.status === 'deactivated' && (
+                                    {application.status === 'rejected' && (
                                       <button
-                                        onClick={() => handleUpdateAccessStatus(request.id || '', 'active')}
-                                        disabled={processingAccessStatus === request.id}
+                                        onClick={() => handleUpdateApplicationStatus(application.id || '', 'approved')}
+                                        disabled={processingApplicationStatus === application.id}
                                         className="px-2 py-1 bg-green-900/30 text-green-400 hover:bg-green-900/50 rounded text-xs font-medium border border-green-900 transition-colors"
                                       >
-                                        {processingAccessStatus === request.id ? '...' : 'Reactivate'}
+                                        {processingApplicationStatus === application.id ? '...' : 'Approve'}
                                       </button>
                                     )}
                   </div>
                                 </td>
                                 <td className="py-3 px-4 border-b border-gray-700 text-center">
                                   <button
-                                    onClick={() => setSelectedProgrammingRequest(selectedProgrammingRequest?.id === request.id ? null : request)}
+                                    onClick={() => setSelectedBetaApplication(selectedBetaApplication?.id === application.id ? null : application)}
                                     className={`px-2 py-1 rounded-lg text-xs font-medium border hover:bg-blue-800/40 transition-colors flex items-center mx-auto ${
-                                      selectedProgrammingRequest?.id === request.id 
+                                      selectedBetaApplication?.id === application.id 
                                         ? 'bg-blue-800/50 text-blue-300 border-blue-900' 
                                         : 'bg-blue-900/30 text-blue-400 border-blue-900'
                                     }`}
                                   >
                                     <Eye className="h-3 w-3 mr-1" />
-                                    {selectedProgrammingRequest?.id === request.id ? 'Hide' : 'View'}
+                                    {selectedBetaApplication?.id === application.id ? 'Hide' : 'View'}
                                   </button>
                                 </td>
                               </tr>
-                              {selectedProgrammingRequest?.id === request.id && (
+                              {selectedBetaApplication?.id === application.id && (
                                 <tr>
                                   <td colSpan={7} className="p-0 border-b border-gray-700">
                                     <div className="bg-[#1a1e24] p-6 border-l-4 border-[#d7ff00]">
-                                      <h4 className="text-white font-medium mb-4">Request Details</h4>
+                                      <h4 className="text-white font-medium mb-4">Application Details</h4>
                                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                                         <div>
                                           <span className="text-gray-400">Email:</span>
-                                          <span className="text-white ml-2">{request.email}</span>
+                                          <span className="text-white ml-2">{application.email}</span>
                       </div>
                                         <div>
                                           <span className="text-gray-400">Name:</span>
-                                          <span className="text-white ml-2">{request.name || 'Not provided'}</span>
+                                          <span className="text-white ml-2">{application.name || 'Not provided'}</span>
                       </div>
                                         <div>
-                                          <span className="text-gray-400">Role:</span>
-                                          <span className="text-white ml-2">{formatRoleField(request.role)}</span>
-                      </div>
-                                        <div>
-                                          <span className="text-gray-400">Primary Use:</span>
-                                          <span className="text-white ml-2">{request.primaryUse || 'Not provided'}</span>
+                                          <span className="text-gray-400">Status:</span>
+                                          <span className="text-white ml-2">{application.status}</span>
                                         </div>
-                                        <div>
-                                          <span className="text-gray-400">Client Count:</span>
-                                          <span className="text-white ml-2">{request.clientCount || 'Not provided'}</span>
-                                        </div>
+                                        
                                         <div>
                                           <span className="text-gray-400">Years Experience:</span>
-                                          <span className="text-white ml-2">{request.yearsExperience || 'Not provided'}</span>
+                                          <span className="text-white ml-2">{application.yearsExperience || 'Not provided'}</span>
                                         </div>
                                         <div>
                                           <span className="text-gray-400">Certified:</span>
-                                          <span className="text-white ml-2">{request.isCertified ? 'Yes' : 'No'}</span>
+                                          <span className="text-white ml-2">{application.isCertified ? 'Yes' : 'No'}</span>
                                         </div>
-                                        {request.certificationName && (
+                                        {application.certificationName && (
                                           <div>
                                             <span className="text-gray-400">Certification:</span>
-                                            <span className="text-white ml-2">{request.certificationName}</span>
+                                            <span className="text-white ml-2">{application.certificationName}</span>
                                           </div>
                                         )}
                                         <div className="md:col-span-2">
                                           <span className="text-gray-400">Use Cases:</span>
-                                          <span className="text-white ml-2">{formatUseCasesField(request.useCases)}</span>
+                                          <span className="text-white ml-2">{formatUseCasesField(application.useCases)}</span>
                                         </div>
                                         <div className="md:col-span-2">
                                           <span className="text-gray-400">Long Term Goal:</span>
-                                          <span className="text-white ml-2">{request.longTermGoal || 'Not provided'}</span>
+                                          <span className="text-white ml-2">{application.longTermGoal || 'Not provided'}</span>
                                         </div>
                                         <div>
                                           <span className="text-gray-400">Founding Coaches:</span>
-                                          <span className="text-white ml-2">{request.applyForFoundingCoaches ? 'Yes' : 'No'}</span>
+                                          <span className="text-white ml-2">{application.applyForFoundingCoaches ? 'Yes' : 'No'}</span>
                                         </div>
-                                        {request.approvedBy && (
+                                        {application.approvedBy && (
                                           <div>
                                             <span className="text-gray-400">Approved By:</span>
-                                            <span className="text-white ml-2">{request.approvedBy}</span>
+                                            <span className="text-white ml-2">{application.approvedBy}</span>
                                           </div>
                                         )}
-                                        {request.approvedAt && (
+                                        {application.approvedAt && (
                                           <div>
                                             <span className="text-gray-400">Approved At:</span>
-                                            <span className="text-white ml-2">{formatDate(request.approvedAt)}</span>
+                                            <span className="text-white ml-2">{formatDate(application.approvedAt)}</span>
                                           </div>
                                         )}
+                                        <div>
+                                          <span className="text-gray-400">Primary Use:</span>
+                                          <span className="text-white ml-2">{application.primaryUse || 'Not provided'}</span>
+                                        </div>
+                                        <div>
+                                          <span className="text-gray-400">Client Count:</span>
+                                          <span className="text-white ml-2">{application.clientCount || 'Not provided'}</span>
+                                        </div>
+                                        <div>
+                                          <span className="text-gray-400">Status:</span>
+                                          <span className="text-white ml-2">{application.status}</span>
+                                        </div>
+                                        <div>
+                                          <span className="text-gray-400">Role:</span>
+                                          <span className="text-white ml-2">{formatRoleField(application.role)}</span>
+                                        </div>
                                       </div>
                                     </div>
                                   </td>

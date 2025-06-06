@@ -4,6 +4,60 @@ const openai = new OpenAI({
   apiKey: process.env.OPEN_AI_SECRET_KEY,
 });
 
+// Function to check challenge validation status
+function checkChallengeValidation(challengeData) {
+  const issues = [];
+  const today = new Date();
+  const oneWeekFromNow = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
+  
+  // Check if dates seem like defaults (today + one week)
+  const startDate = challengeData.startDate ? new Date(challengeData.startDate) : null;
+  const endDate = challengeData.endDate ? new Date(challengeData.endDate) : null;
+  
+  const isDatesLikelyDefault = startDate && endDate && 
+    Math.abs(startDate.getTime() - today.getTime()) < 24 * 60 * 60 * 1000 && // Start date is today-ish
+    Math.abs(endDate.getTime() - oneWeekFromNow.getTime()) < 24 * 60 * 60 * 1000; // End date is ~1 week from today
+  
+  // Calculate program duration if dates exist
+  let programDuration = 0;
+  if (startDate && endDate && endDate > startDate) {
+    programDuration = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+  }
+  
+  // Check required fields
+  if (!challengeData.challengeName || challengeData.challengeName.trim().length === 0) {
+    issues.push('MISSING_NAME');
+  }
+  
+  if (!challengeData.challengeDesc || challengeData.challengeDesc.trim().length === 0) {
+    issues.push('MISSING_DESCRIPTION');
+  }
+  
+  if (!startDate || !endDate) {
+    issues.push('MISSING_DATES');
+  } else if (endDate <= startDate) {
+    issues.push('INVALID_DATES');
+  } else if (isDatesLikelyDefault) {
+    issues.push('LIKELY_DEFAULT_DATES');
+  }
+  
+  if (challengeData.roundType === 'locked' && (!challengeData.pinCode || challengeData.pinCode.length !== 9)) {
+    issues.push('INVALID_PIN');
+  }
+  
+  return {
+    isValid: issues.length === 0,
+    issues,
+    hasName: !!challengeData.challengeName?.trim(),
+    hasDescription: !!challengeData.challengeDesc?.trim(),
+    hasDates: !!(startDate && endDate && endDate > startDate),
+    isDatesLikelyDefault,
+    programDuration,
+    startDate: startDate?.toLocaleDateString(),
+    endDate: endDate?.toLocaleDateString()
+  };
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -35,6 +89,10 @@ export default async function handler(req, res) {
     console.log('Selected Moves:', selectedMoves.length);
     console.log('Selected Creators:', selectedCreators.length);
     console.log('Rest Day Preferences:', restDayPreferences);
+
+    // Check validation status of challenge setup
+    const validationStatus = checkChallengeValidation(challengeData);
+    console.log('Validation Status:', validationStatus);
 
     // Build context from tagged users
     let userContext = '';
@@ -93,14 +151,46 @@ PERSONALITY: Confident, concise, knowledgeable. Think military trainer meets sea
 
 ROLE: Help coaches design programs through targeted questions. Get the info needed, build the program.
 
-CRITICAL: Review CURRENT CONFIGURATION below. Don't ask about configured info. Focus on what's missing.
+CRITICAL VALIDATION STATUS: ${JSON.stringify(validationStatus)}
 
-FLOW:
+COLLABORATION-FIRST APPROACH:
+1. Focus on program design collaboration FIRST
+2. Ask training questions, understand goals, design the program
+3. Only check validation when ready to generate
+4. If validation fails at generation time, ask for missing fields then
+5. Keep the focus on coaching and program design
+
+PROGRAM DESIGN FLOW (main focus):
 1. Coach describes goals
-2. Ask 3 sharp, specific questions 
-3. After 3+ questions, summarize the program plan
+2. Ask 3-5 sharp, specific questions about training
+3. After sufficient questions, summarize the program plan
 4. Ask "Ready to build this?"
-5. If confirmed, generate refined prompt and set readyToGenerate: true
+5. If confirmed, THEN check validation
+
+SMART INFORMATION RECOGNITION:
+- ALWAYS acknowledge information already provided in the conversation
+- Don't re-ask for information that's already been given
+- Build upon existing info with follow-up questions
+- Examples:
+  * If user says "grow her glutes" → DON'T ask "Primary goal - strength or size?"
+  * Instead ask: "Got it, glute growth focus. What's her current hip thrust strength?"
+  * If user mentions training history → acknowledge it and ask specifics
+  * If user mentions injuries → acknowledge and ask for details
+
+VALIDATION FLOW (only when ready to generate):
+- If user confirms ready to build, check validation status
+- Missing name → Ask: "What should we call this program?" → Return suggestedName
+- Missing description → Ask: "Brief description for this program?" → Return suggestedDescription  
+- Missing/invalid dates → Ask: "Start and end dates for the program?"
+- Default dates → Ask: "I see ${validationStatus.startDate} to ${validationStatus.endDate} (${validationStatus.programDuration} days). Use these dates?"
+- Once validated AND confirmed → set readyToGenerate: true
+
+SMART FORM FILLING:
+When user provides program name or description, auto-populate form fields:
+- User says: "Sarah's Glute Plan" → Set suggestedName: "Sarah's Glute Plan", shouldAnimateName: true
+- User provides description → Set suggestedDescription: "[description]", shouldAnimateDescription: true
+- AI creates description → Set suggestedDescription: "[AI description]", shouldAnimateDescription: true
+- Always acknowledge: "Perfect, I'll call it 'Sarah's Glute Plan'" or "Got it, updating the description now."
 
 RESPONSE TONE EXAMPLES:
 ❌ "That's a great question! I'd love to help you explore the best options for your client's upper body development journey..."
@@ -116,7 +206,15 @@ RESPONSE FORMAT (JSON only):
   "questionCount": 1,
   "isAwaitingConfirmation": false,
   "finalPrompt": "", 
-  "suggestedDescription": ""
+  "suggestedDescription": "",
+  "suggestedName": "",
+  "suggestedStartDate": "",
+  "suggestedEndDate": "",
+  "validationPriority": true, // Set to true when addressing validation issues
+  "configuredRestDays": [], // Array of detected rest days: ["Wednesday", "Sunday"]
+  "shouldEnableRestDays": false, // Set to true when rest days are configured
+  "shouldAnimateName": false, // Set to true when name should be typed into form
+  "shouldAnimateDescription": false // Set to true when description should be typed into form
 }
 
 CRITICAL MESSAGE RULES:
@@ -135,6 +233,15 @@ SMART CONFIG ANALYSIS:
 - Dates set = duration known, don't ask
 - Moves selected = acknowledge, ask about progression/intensity
 - Use "moves" not "exercises"
+
+REST DAY DETECTION:
+When user mentions specific days as rest days:
+- Extract day names: "wednesday and sundays" → ["Wednesday", "Sunday"]
+- Set configuredRestDays: ["Wednesday", "Sunday"] 
+- Set shouldEnableRestDays: true
+- Confirm in message: "Got it. Configured Wednesday and Sunday as rest days in Round Preferences."
+- Supported days: Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday
+- Match any variation: "wed", "wednesday", "sun", "sunday", etc.
 
 UI PANEL AWARENESS:
 When asking questions that users can answer via the Round Customization panel, guide them to it:
@@ -160,8 +267,10 @@ Must be detailed and specific. Include:
 
 EXAMPLE RESPONSES:
 First question: "Got it. What's their training age and current strength level?"
-Follow-up: "Perfect. Primary goal - pure strength or size? And any injury history?"
-Summary: "Here's the plan: 4-week upper body program, 4x/week, compound-focused with rear delt emphasis. Progressive overload weekly. Ready to build this?"
+Smart follow-up: "Perfect, glute growth focus. What's her current hip thrust/squat strength? Any lower body injuries?"
+Acknowledge + build: "5 years training, above average strength, glute growth goal. How many days per week can she train glutes specifically?"
+Summary: "Here's the plan: 4-week glute specialization program, 4x/week, progressive hip thrusts with accessory work. Ready to build this?"
+Validation after confirmation: "What should we call this program?" (only if missing after user confirms)
 
 REMEMBER: JSON only. Be direct, confident, concise.
 
@@ -240,6 +349,30 @@ ${userContext}${currentConfig}${conversationContext}`;
     }
     if (typeof parsedResponse.suggestedDescription !== 'string') {
       parsedResponse.suggestedDescription = '';
+    }
+    if (typeof parsedResponse.suggestedName !== 'string') {
+      parsedResponse.suggestedName = '';
+    }
+    if (typeof parsedResponse.suggestedStartDate !== 'string') {
+      parsedResponse.suggestedStartDate = '';
+    }
+    if (typeof parsedResponse.suggestedEndDate !== 'string') {
+      parsedResponse.suggestedEndDate = '';
+    }
+    if (typeof parsedResponse.validationPriority !== 'boolean') {
+      parsedResponse.validationPriority = false;
+    }
+    if (!Array.isArray(parsedResponse.configuredRestDays)) {
+      parsedResponse.configuredRestDays = [];
+    }
+    if (typeof parsedResponse.shouldEnableRestDays !== 'boolean') {
+      parsedResponse.shouldEnableRestDays = false;
+    }
+    if (typeof parsedResponse.shouldAnimateName !== 'boolean') {
+      parsedResponse.shouldAnimateName = false;
+    }
+    if (typeof parsedResponse.shouldAnimateDescription !== 'boolean') {
+      parsedResponse.shouldAnimateDescription = false;
     }
 
     console.log('Parsed Response:', parsedResponse);
