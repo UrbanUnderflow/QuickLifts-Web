@@ -1397,13 +1397,54 @@ const UsersManagement: React.FC = () => {
       const currentUser = auth.currentUser;
       const approvedBy = currentUser?.email || 'Unknown Admin';
       
+      // Find the application to get user details for email
+      const application = betaApplications.find(app => app.id === id);
+      
       const success = await adminMethods.updateBetaApplicationStatus(id, status, approvedBy);
       
       if (success) {
-        setToastMessage({ 
-          type: 'success', 
-          text: `Application ${status === 'approved' ? 'approved' : 'rejected'} successfully` 
-        });
+        // If user was just approved, send the congratulatory email
+        if (status === 'approved' && application) {
+          try {
+            const emailResponse = await fetch('/.netlify/functions/send-approval-email', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                email: application.email,
+                name: application.name || application.email
+              })
+            });
+
+            if (!emailResponse.ok) {
+              const errorData = await emailResponse.json();
+              console.error('Failed to send approval email:', emailResponse.status, errorData);
+              setToastMessage({ 
+                type: 'success', 
+                text: `Application approved successfully, but email notification failed to send` 
+              });
+            } else {
+              console.log('Approval email sent successfully to:', application.email);
+              setToastMessage({ 
+                type: 'success', 
+                text: `Application approved and congratulatory email sent to ${application.email}` 
+              });
+            }
+          } catch (emailError) {
+            console.error('Error sending approval email:', emailError);
+            setToastMessage({ 
+              type: 'success', 
+              text: `Application approved successfully, but email notification failed to send` 
+            });
+          }
+        } else {
+          setToastMessage({ 
+            type: 'success', 
+            text: `Application ${status === 'approved' ? 'approved' : 'rejected'} successfully` 
+          });
+        }
+        
         await loadBetaApplications();
       } else {
         throw new Error('Failed to update status');
@@ -2197,7 +2238,7 @@ const UsersManagement: React.FC = () => {
                                         disabled={processingApplicationStatus === application.id}
                                         className="px-2 py-1 bg-red-900/30 text-red-400 hover:bg-red-900/50 rounded text-xs font-medium border border-red-900 transition-colors"
                                       >
-                                        {processingApplicationStatus === application.id ? '...' : 'Reject'}
+                                        {processingApplicationStatus === application.id ? '...' : 'Revoke'}
                     </button>
                                     )}
                                     {application.status === 'rejected' && (

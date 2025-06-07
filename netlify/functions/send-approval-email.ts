@@ -24,13 +24,13 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
     const subject = `🎉 Congratulations, ${name}! You're Approved for Pulse Programming!`;
 
     const gettingStartedGuideSummary = `
-      <h2 style="color: #E0FE10; font-size: 20px;">Welcome to the Pulse Founding 100 Coaches Program!</h2>
-      <p style="font-size: 16px; line-height: 1.6;">We're thrilled to have you on board. Here's a quick guide to get you started and make the most of Pulse:</p>
-      <ul style="font-size: 16px; line-height: 1.6; padding-left: 20px;">
-        <li style="margin-bottom: 10px;"><strong>Download the Pulse App:</strong> If you haven't already, grab it from the <a href="https://apps.apple.com/ca/app/pulse-community-workouts/id6451497729" style="color: #E0FE10; text-decoration: none;">App Store</a>.</li>
+      <h2 style="color: #2563eb; font-size: 20px;">Welcome to the Pulse Founding 100 Coaches Program!</h2>
+      <p style="font-size: 16px; line-height: 1.6; color: #000000;">We're thrilled to have you on board. Here's a quick guide to get you started and make the most of Pulse:</p>
+      <ul style="font-size: 16px; line-height: 1.6; padding-left: 20px; color: #000000;">
+        <li style="margin-bottom: 10px;"><strong>Download the Pulse App:</strong> If you haven't already, grab it from the <a href="https://apps.apple.com/ca/app/pulse-community-workouts/id6451497729" style="color: #2563eb; text-decoration: underline;">App Store</a>.</li>
         <li style="margin-bottom: 10px;"><strong>Set Up Your Profile:</strong> Add a great photo and a bio that showcases your unique expertise.</li>
         <li style="margin-bottom: 10px;"><strong>Create Your First Content:</strong>
-          <ul style="padding-left: 20px; margin-top: 5px;">
+          <ul style="padding-left: 20px; margin-top: 5px; color: #000000;">
             <li>Start with a <strong>Move</strong> (a single exercise video).</li>
             <li>Combine Moves into a <strong>Stack</strong> (a complete workout).</li>
             <li>Organize Stacks into a <strong>Round</strong> (a full training program or challenge).</li>
@@ -38,35 +38,38 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
         </li>
         <li style="margin-bottom: 10px;"><strong>Experience Pulse:</strong> Try out your own workouts or join a Round to see Pulse from your community's perspective.</li>
       </ul>
-      <p style="font-size: 16px; line-height: 1.6;">For more details and a visual walkthrough, check out our full <a href="https://fitwithpulse.ai/starter-pack" style="color: #E0FE10; text-decoration: none; font-weight: bold;">Getting Started Guide</a>.</p>
+      <p style="font-size: 16px; line-height: 1.6; color: #000000;">For more details and a visual walkthrough, check out our full <a href="https://fitwithpulse.ai/starter-pack" style="color: #2563eb; text-decoration: underline; font-weight: bold;">Getting Started Guide</a>.</p>
     `;
 
     const inspirationalMessage = `
-      <h2 style="color: #E0FE10; font-size: 20px; margin-top: 30px;">You're a Founding Coach!</h2>
-      <p style="font-size: 16px; line-height: 1.6;">You are now part of an exclusive group of founding coaches who will play a pivotal role in shaping the future of fitness programming with Pulse. We're not just building an app; we're building a community and a new way for talented trainers like you to share your passion, grow your reach, and make a real impact.</p>
-      <p style="font-size: 16px; line-height: 1.6;">Your insights, feedback, and the incredible content you'll create are invaluable to us. We're committed to providing you with the tools and support you need to succeed. This is just the beginning of an exciting journey, and we're so glad you're here to build it with us.</p>
-      <p style="font-size: 16px; line-height: 1.6;">Welcome to the Pulse team!</p>
-      <p style="font-size: 16px; line-height: 1.6; margin-top: 20px;">Warmly,<br/><strong>The Pulse Team</strong></p>
+      <h2 style="color: #2563eb; font-size: 20px; margin-top: 30px;">You're a Founding Coach!</h2>
+      <p style="font-size: 16px; line-height: 1.6; color: #000000;">You are now part of an exclusive group of founding coaches who will play a pivotal role in shaping the future of fitness programming with Pulse. We're not just building an app; we're building a community and a new way for talented trainers like you to share your passion, grow your reach, and make a real impact.</p>
+      <p style="font-size: 16px; line-height: 1.6; color: #000000;">Your insights, feedback, and the incredible content you'll create are invaluable to us. We're committed to providing you with the tools and support you need to succeed. This is just the beginning of an exciting journey, and we're so glad you're here to build it with us.</p>
+      <p style="font-size: 16px; line-height: 1.6; color: #000000;">Welcome to the Pulse team!</p>
+      <p style="font-size: 16px; line-height: 1.6; margin-top: 20px; color: #000000;">Warmly,<br/><strong>The Pulse Team</strong></p>
     `;
 
     const htmlContent = `
       <html>
         <head>
           <style>
-            body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; margin: 0; padding: 0; background-color: #111417; color: #ffffff; }
-            .container { max-width: 600px; margin: 20px auto; background-color: #1a1e24; padding: 30px; border-radius: 8px; border: 1px solid #333; }
-            a { color: #E0FE10; text-decoration: none; }
-            p { margin-bottom: 15px; }
-            .footer { margin-top: 30px; text-align: center; font-size: 12px; color: #777; }
+            body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; margin: 0; padding: 0; background-color: #f5f5f5; color: #000000; }
+            .container { max-width: 600px; margin: 20px auto; background-color: #ffffff; padding: 30px; border-radius: 8px; border: 1px solid #e0e0e0; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+            a { color: #2563eb; text-decoration: underline; }
+            p { margin-bottom: 15px; color: #000000; }
+            .footer { margin-top: 30px; text-align: center; font-size: 12px; color: #666666; }
+            .logo { text-align: center; margin-bottom: 30px; }
+            .logo h1 { color: #2563eb; font-size: 32px; font-weight: bold; margin: 0; letter-spacing: 2px; }
           </style>
         </head>
         <body>
           <div class="container">
-            <div style="text-align: center; margin-bottom: 20px;">
-              <img src="https://fitwithpulse.ai/PulseProgrammingLogoWhite.png" alt="Pulse Programming Logo" style="width: 150px;"/>
+            <div class="logo">
+              <h1>PULSE</h1>
+              <p style="color: #666666; font-size: 14px; margin: 5px 0 0 0;">PROGRAMMING</p>
             </div>
-            <h1 style="color: #E0FE10; font-size: 24px; margin-bottom: 15px;">Hi ${name},</h1>
-            <p style="font-size: 18px; line-height: 1.6;">Fantastic news! Your application for <strong>Pulse Programming Beta</strong> and the <strong>Founding 100 Coaches Program</strong> has been approved!</p>
+            <h1 style="color: #2563eb; font-size: 24px; margin-bottom: 15px;">Hi ${name},</h1>
+            <p style="font-size: 18px; line-height: 1.6; color: #000000;">Fantastic news! Your application for <strong>Pulse Programming Beta</strong> and the <strong>Founding 100 Coaches Program</strong> has been approved!</p>
             ${gettingStartedGuideSummary}
             ${inspirationalMessage}
              <div class="footer">
