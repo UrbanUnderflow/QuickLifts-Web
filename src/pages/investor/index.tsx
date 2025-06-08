@@ -2113,18 +2113,27 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                         <div className="flex items-start gap-4">
                         <div className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0">
                             <img 
-                            src="/bobbyAdvisor.jpg"
+                            src="/Val.jpg"
                             alt="Advisor 1" 
                             className="w-full h-full object-cover"
                             />
                         </div>
                         <div>
-                            <h4 className="text-white font-semibold mb-1">Bobby Nweke</h4>
-                            <p className="text-[#E0FE10] text-sm font-medium mb-2">Storytelling and Education</p>
+                            <h4 className="text-white font-semibold mb-1">
+                              <a href="https://www.speakhappiness.com/about-valerie/" 
+                                 target="_blank" 
+                                 rel="noopener noreferrer"
+                                 className="hover:text-[#E0FE10] transition-colors underline decoration-dotted flex items-center gap-1">
+                                Valerie Alexander
+                                <ArrowUpRight className="h-3 w-3" />
+                              </a>
+                            </h4>
+                            <p className="text-[#E0FE10] text-sm font-medium mb-2">Happiness, Inclusion & Bias</p>
                             <p className="text-zinc-400 text-sm">
-                            Master storyteller and education leader. Teach for America graduate, former charter school principal, 
-                            TED speaking coach, and executive coach. Harvard graduate in entrepreneurship and future of learning—
-                            bringing unparalleled expertise in crafting compelling narratives that drive engagement and growth.
+                            Bestselling author and creator of the TED talk "How to Outsmart Your Unconscious Bias" (500k+ views). 
+                            Former Silicon Valley securities lawyer, VC consultant, and tech-startup CEO who has advised Fortune 500 teams 
+                            on growth through inclusion. At Pulse, she brings expertise in brand narrative, bias-free community design, 
+                            and helping creators communicate value that converts audiences into loyal users.
                             </p>
                         </div>
                         </div>
@@ -2138,7 +2147,15 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                             />
                         </div>
                         <div>
-                            <h4 className="text-white font-semibold mb-1">DeRay Mckesson</h4>
+                            <h4 className="text-white font-semibold mb-1">
+                              <a href="https://deray.com/" 
+                                 target="_blank" 
+                                 rel="noopener noreferrer"
+                                 className="hover:text-[#E0FE10] transition-colors underline decoration-dotted flex items-center gap-1">
+                                DeRay Mckesson
+                                <ArrowUpRight className="h-3 w-3" />
+                              </a>
+                            </h4>
                             <p className="text-[#E0FE10] text-sm font-medium mb-2">Community Building and Organizing</p>
                             <p className="text-zinc-400 text-sm">
                             Renowned civil rights activist and community organizer who has mastered the art of rallying people 
@@ -2157,7 +2174,15 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                             />
                         </div>
                         <div>
-                            <h4 className="text-white font-semibold mb-1">Marques Zak</h4>
+                            <h4 className="text-white font-semibold mb-1">
+                              <a href="https://www.linkedin.com/in/marqueszak/" 
+                                 target="_blank" 
+                                 rel="noopener noreferrer"
+                                 className="hover:text-[#E0FE10] transition-colors underline decoration-dotted flex items-center gap-1">
+                                Marques Zak
+                                <ArrowUpRight className="h-3 w-3" />
+                              </a>
+                            </h4>
                             <p className="text-[#E0FE10] text-sm font-medium mb-2">Marketing and Growth</p>
                             <p className="text-zinc-400 text-sm">
                             Marketing executive with leadership roles at PepsiCo and American Express. Recent inductee into the 
@@ -2489,10 +2514,10 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                     </div>
                     
                     <div className="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
-                        <a href="mailto:invest@fitwithpulse.ai" className="inline-flex items-center justify-center px-8 py-4 bg-[#E0FE10] hover:bg-[#d8f521] text-black font-bold rounded-lg transition-colors text-center">
+                        <a href="https://calendly.com/tre-aqo7/30min" target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center px-8 py-4 bg-[#E0FE10] hover:bg-[#d8f521] text-black font-bold rounded-lg transition-colors text-center">
                         Schedule Investor Meeting
                         </a>
-                        <a href="#" className="inline-flex items-center justify-center px-8 py-4 border border-zinc-700 hover:border-[#E0FE10] text-white font-medium rounded-lg transition-colors text-center">
+                        <a href="mailto:invest@fitwithpulse.ai?subject=Request%20for%20Due%20Diligence%20Access&body=Hi%2C%20Pulse%20investment%20Team%2C%0A%0AI%20am%20interested%20in%20learning%20more%20about%20Pulse%20and%20would%20like%20to%20request%20access%20to%20your%20due%20diligence%20materials.%0A%0APlease%20provide%20me%20with%20access%20to%3A%0A-%20Detailed%20financial%20statements%0A-%20Legal%20documents%20and%20cap%20table%0A-%20Product%20roadmap%20and%20technical%20documentation%0A-%20Customer%20references%20and%20case%20studies%0A-%20Any%20additional%20materials%20relevant%20for%20investment%20evaluation%0A%0AThank%20you%20for%20your%20time%20and%20consideration.%0A%0ABest%20regards%2C%0A[Your%20Name]" className="inline-flex items-center justify-center px-8 py-4 border border-zinc-700 hover:border-[#E0FE10] text-white font-medium rounded-lg transition-colors text-center">
                         Request Due Diligence Access
                         </a>
                     </div>
@@ -2681,10 +2706,10 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                     </div>
                     
                     <div className="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
-                        <a href="mailto:invest@fitwithpulse.ai" className="inline-flex items-center justify-center px-8 py-4 bg-[#E0FE10] hover:bg-[#d8f521] text-black font-bold rounded-lg transition-colors text-center">
+                        <a href="https://calendly.com/tre-aqo7/30min" target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center px-8 py-4 bg-[#E0FE10] hover:bg-[#d8f521] text-black font-bold rounded-lg transition-colors text-center">
                         Schedule Investor Meeting
                         </a>
-                        <a href="#" className="inline-flex items-center justify-center px-8 py-4 border border-zinc-700 hover:border-[#E0FE10] text-white font-medium rounded-lg transition-colors text-center">
+                        <a href="mailto:invest@fitwithpulse.ai?subject=Request%20for%20Due%20Diligence%20Access&body=Hello%20Pulse%20Team%2C%0A%0AI%20am%20interested%20in%20learning%20more%20about%20Pulse%20and%20would%20like%20to%20request%20access%20to%20your%20due%20diligence%20materials.%0A%0APlease%20provide%20me%20with%20access%20to%3A%0A-%20Detailed%20financial%20statements%0A-%20Legal%20documents%20and%20cap%20table%0A-%20Product%20roadmap%20and%20technical%20documentation%0A-%20Customer%20references%20and%20case%20studies%0A-%20Any%20additional%20materials%20relevant%20for%20investment%20evaluation%0A%0AThank%20you%20for%20your%20time%20and%20consideration.%0A%0ABest%20regards%2C%0A[Your%20Name]" className="inline-flex items-center justify-center px-8 py-4 border border-zinc-700 hover:border-[#E0FE10] text-white font-medium rounded-lg transition-colors text-center">
                         Request Due Diligence Access
                         </a>
                     </div>
