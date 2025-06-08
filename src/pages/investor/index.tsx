@@ -4,7 +4,7 @@ import { useRouter } from 'next/router';
 import dynamic from 'next/dynamic';
 import { GetServerSideProps } from 'next';
 import { ArrowUpRight, Download, ChevronRight, ArrowLeft, TrendingUp } from 'lucide-react';
-import Header from '../../components/Header';
+
 import Footer from '../../components/Footer/Footer';
 import PageHead from '../../components/PageHead';
 import { adminMethods } from '../../api/firebase/admin/methods';
@@ -111,18 +111,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
     investment: null,
   });
 
-  // Header functions
-  const handleHeaderSectionChange = (section: string) => {
-    console.log("Header section change", section);
-  };
-  
-  const toggleMobileMenu = () => {
-    console.log("Toggle mobile menu");
-  };
-  
-  const setIsSignInModalVisible = () => {
-    console.log("Set sign in modal visible");
-  };
+
 
   // Function to scroll to section
   const scrollToSection = (sectionId: string) => {
@@ -306,12 +295,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
         pageOgUrl="https://fitwithpulse.ai/investor" 
       />
 
-      <Header 
-        onSectionChange={handleHeaderSectionChange} 
-        currentSection="home" 
-        toggleMobileMenu={toggleMobileMenu} 
-        setIsSignInModalVisible={setIsSignInModalVisible} 
-      />
+
 
       {/* Hero Section */}
       <section className="relative min-h-[60vh] flex flex-col items-center justify-center text-center px-8 py-20 overflow-hidden">
