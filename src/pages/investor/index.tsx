@@ -2508,24 +2508,6 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                     </div>
                 </section>
 
-                {/* Security & Compliance Footer */}
-                <section className="py-8 bg-zinc-950 border-t border-zinc-800">
-                    <div className="max-w-7xl mx-auto px-4 sm:px-8">
-                    <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-                        <div className="flex items-center gap-2 text-zinc-400 text-sm">
-                        <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-                        <span>Pulse is GDPR-compliant, HIPAA-ready, and SOC-2 roadmap kicking off Q3 2025.</span>
-                        </div>
-                        <div className="flex items-center gap-6 text-zinc-500 text-xs">
-                        <span>🔒 End-to-end encryption</span>
-                        <span>🛡️ Privacy by design</span>
-                        <span>🛡️ Privacy by design</span>
-                        <span>📋 Regular security audits</span>
-                        </div>
-                    </div>
-                    </div>
-                </section>
-
                 {/* Pitch Deck Section */}
                 <section 
                     id="deck" 
@@ -2711,7 +2693,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                         <div className="flex items-center gap-6 text-zinc-500 text-xs">
                         <span>🔒 End-to-end encryption</span>
                         <span>🛡️ Privacy by design</span>
-                        <span>🛡️ Privacy by design</span>
+                        <span>🔐 Data minimization</span>
                         <span>📋 Regular security audits</span>
                         </div>
                     </div>
