@@ -15,7 +15,7 @@ interface PageHeadProps {
 
 const GLOBAL_DEFAULT_TITLE = "Pulse Community Fitness";
 const GLOBAL_DEFAULT_DESCRIPTION = "Real workouts, Real people, move together.";
-const GLOBAL_DEFAULT_OG_IMAGE = "/pulse-logo.svg"; // Assumes pulse-logo.svg is in /public
+const GLOBAL_DEFAULT_OG_IMAGE = "https://fitwithpulse.ai/pulse-logo.svg"; // Must be absolute URL for social media
 
 const PageHead: React.FC<PageHeadProps> = ({
   metaData,
@@ -28,7 +28,11 @@ const PageHead: React.FC<PageHeadProps> = ({
   // they will try to use the page title/description (which could be from metaData or global defaults).
   const ogTitle = metaData?.ogTitle || title;
   const ogDescription = metaData?.ogDescription || description;
-  const ogImage = metaData?.ogImage || GLOBAL_DEFAULT_OG_IMAGE;
+  
+  // Ensure OG image is always an absolute URL for social media platforms
+  const rawOgImage = metaData?.ogImage || GLOBAL_DEFAULT_OG_IMAGE;
+  const ogImage = rawOgImage?.startsWith('http') ? rawOgImage : `https://fitwithpulse.ai${rawOgImage}`;
+  
   const ogUrl = metaData?.ogUrl || pageOgUrl; // ogUrl from metaData takes precedence, then pageOgUrl prop
   const ogType = metaData?.ogType || 'website';
 
@@ -36,7 +40,10 @@ const PageHead: React.FC<PageHeadProps> = ({
   const twitterCard = metaData?.twitterCard || 'summary_large_image';
   const twitterTitle = metaData?.twitterTitle || ogTitle;
   const twitterDescription = metaData?.twitterDescription || ogDescription;
-  const twitterImage = metaData?.twitterImage || ogImage;
+  
+  // Ensure Twitter image is always an absolute URL for social media platforms
+  const rawTwitterImage = metaData?.twitterImage || ogImage;
+  const twitterImage = rawTwitterImage?.startsWith('http') ? rawTwitterImage : `https://fitwithpulse.ai${rawTwitterImage}`;
 
   return (
     <Head>
