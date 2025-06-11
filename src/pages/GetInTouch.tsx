@@ -11,7 +11,7 @@ const GetInTouch: NextPage = () => {
         metaData={{
           pageId: "get-in-touch",
           pageTitle: "Get In Touch - Pulse",
-          metaDescription: "Connect with the Pulse team and join our Morning Mobility Challenge. Learn more about our mission to revolutionize fitness through community.",
+          metaDescription: "Let's make fitness impossible to quit.",
           ogImage: "/pulse-social-card.jpg",
           ogUrl: "https://fitwithpulse.ai/GetInTouch",
           lastUpdated: new Date().toISOString()
@@ -39,8 +39,7 @@ const GetInTouch: NextPage = () => {
             Get In Touch
           </h1>
           <p className="text-zinc-400 text-xl leading-relaxed mb-12 animate-fade-in-up animation-delay-900">
-            Ready to transform your fitness journey? Let's connect and explore how we can work together 
-            to build the future of community fitness.
+            Let's make fitness impossible to quit.
           </p>
         </div>
       </section>
@@ -67,12 +66,14 @@ const GetInTouch: NextPage = () => {
               </p>
             </div>
             
-            {/* Profile placeholder - you can replace with actual image */}
+            {/* Profile Image */}
             <div className="flex justify-center">
-              <div className="w-80 h-80 bg-zinc-800 rounded-2xl flex items-center justify-center border-2 border-[#E0FE10]/20 hover:border-[#E0FE10]/40 transition-colors duration-300">
-                <div className="text-zinc-600 text-6xl">
-                  👤
-                </div>
+              <div className="w-80 h-80 rounded-2xl overflow-hidden border-2 border-[#E0FE10]/20 hover:border-[#E0FE10]/40 transition-colors duration-300 hover:shadow-lg hover:shadow-[#E0FE10]/20">
+                <img 
+                  src="/TremaineFounder.jpg"
+                  alt="Tremaine Grant - Founder & CEO of Pulse" 
+                  className="w-full h-full object-cover"
+                />
               </div>
             </div>
           </div>
@@ -149,7 +150,7 @@ const GetInTouch: NextPage = () => {
             {/* QR Code */}
             <div className="bg-white p-8 rounded-2xl shadow-2xl">
               <img 
-                src="/MorningMobilityChallenge.png" 
+                src="/MorningMobilityQR.png" 
                 alt="Morning Mobility Challenge QR Code" 
                 className="w-64 h-64 mx-auto"
               />
