@@ -226,6 +226,24 @@ const MealLogsManagement: React.FC = () => {
 
   // Render meal log details modal
   const renderMealLogDetails = (mealLog: MealLogEntry) => {
+    // Create raw data object for display
+    const rawData = {
+      id: mealLog.id,
+      userId: mealLog.userId,
+      name: mealLog.name,
+      calories: mealLog.calories,
+      protein: mealLog.protein,
+      fat: mealLog.fat,
+      carbs: mealLog.carbs,
+      ingredients: mealLog.ingredients,
+      image: mealLog.image,
+      entryMethod: mealLog.entryMethod,
+      createdAt: mealLog.createdAt?.toISOString(),
+      updatedAt: mealLog.updatedAt?.toISOString(),
+      userDisplayName: mealLog.userDisplayName,
+      userEmail: mealLog.userEmail
+    };
+
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
         <div className="bg-[#1a1e24] rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
@@ -241,6 +259,30 @@ const MealLogsManagement: React.FC = () => {
               >
                 <XCircle className="w-6 h-6" />
               </button>
+            </div>
+
+            {/* Firebase Document ID */}
+            <div className="bg-[#262a30] rounded-lg p-4 mb-6 border-l-4 border-[#d7ff00]">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Database className="w-4 h-4 text-[#d7ff00]" />
+                    <span className="text-sm text-gray-400">Firebase Document ID</span>
+                  </div>
+                  <p className="text-white font-mono text-sm bg-[#1a1e24] p-2 rounded border">{mealLog.id}</p>
+                </div>
+                <button
+                  onClick={() => copyToClipboard(mealLog.id, `id-${mealLog.id}`)}
+                  className="flex items-center gap-2 px-3 py-2 bg-[#d7ff00] hover:bg-[#c5e600] text-black rounded transition-colors"
+                >
+                  {copiedId === `id-${mealLog.id}` ? (
+                    <Check className="w-4 h-4" />
+                  ) : (
+                    <Copy className="w-4 h-4" />
+                  )}
+                  Copy ID
+                </button>
+              </div>
             </div>
 
             {/* Basic Info */}
@@ -338,6 +380,32 @@ const MealLogsManagement: React.FC = () => {
                 </div>
               </div>
             )}
+
+            {/* Raw Response Data */}
+            <div className="bg-[#262a30] rounded-lg p-4 mb-6">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-white font-semibold flex items-center gap-2">
+                  <Database className="w-4 h-4" />
+                  Raw Response Data
+                </h4>
+                <button
+                  onClick={() => copyToClipboard(JSON.stringify(rawData, null, 2), `raw-${mealLog.id}`)}
+                  className="flex items-center gap-2 px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm transition-colors"
+                >
+                  {copiedId === `raw-${mealLog.id}` ? (
+                    <Check className="w-3 h-3" />
+                  ) : (
+                    <Copy className="w-3 h-3" />
+                  )}
+                  Copy JSON
+                </button>
+              </div>
+              <div className="bg-[#1a1e24] rounded border p-4 max-h-64 overflow-y-auto">
+                <pre className="text-gray-300 text-xs font-mono whitespace-pre-wrap">
+                  {JSON.stringify(rawData, null, 2)}
+                </pre>
+              </div>
+            </div>
 
             {/* Image */}
             {mealLog.image && (
