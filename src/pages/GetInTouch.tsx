@@ -97,8 +97,8 @@ const GetInTouch: NextPage = () => {
               </div>
               <h3 className="text-white text-xl font-semibold mb-2">Email</h3>
               <p className="text-zinc-400 mb-4">For business inquiries and partnerships</p>
-              <a href="mailto:contact@fitwithpulse.ai" className="text-[#E0FE10] hover:text-white transition-colors duration-300">
-                contact@fitwithpulse.ai
+              <a href="mailto:tre@fitwithpulse.ai" className="text-[#E0FE10] hover:text-white transition-colors duration-300">
+                tre@fitwithpulse.ai
               </a>
             </div>
 
@@ -113,24 +113,24 @@ const GetInTouch: NextPage = () => {
               </div>
               <h3 className="text-white text-xl font-semibold mb-2">LinkedIn</h3>
               <p className="text-zinc-400 mb-4">Connect professionally</p>
-              <a href="#" target="_blank" rel="noopener noreferrer" className="text-[#E0FE10] hover:text-white transition-colors duration-300">
+              <a href="https://linkedin.com/in/tremainegrant" target="_blank" rel="noopener noreferrer" className="text-[#E0FE10] hover:text-white transition-colors duration-300">
                 Connect with me
               </a>
             </div>
 
-            {/* Twitter/X */}
+            {/* Instagram */}
             <div className="bg-zinc-800/50 hover:bg-zinc-800 transition-all duration-300 hover:shadow-lg hover:shadow-[#E0FE10]/20 rounded-xl p-8 text-center group cursor-pointer transform hover:-translate-y-2">
               <div className="mb-4">
                 <div className="w-16 h-16 bg-[#E0FE10]/10 rounded-full flex items-center justify-center mx-auto group-hover:bg-[#E0FE10]/20 transition-colors duration-300">
                   <svg className="w-8 h-8 text-[#E0FE10]" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                    <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
                   </svg>
                 </div>
               </div>
-              <h3 className="text-white text-xl font-semibold mb-2">X (Twitter)</h3>
-              <p className="text-zinc-400 mb-4">Follow for updates and insights</p>
-              <a href="#" target="_blank" rel="noopener noreferrer" className="text-[#E0FE10] hover:text-white transition-colors duration-300">
-                @PulseFitness
+              <h3 className="text-white text-xl font-semibold mb-2">Instagram</h3>
+              <p className="text-zinc-400 mb-4">Follow for fitness inspiration</p>
+              <a href="https://instagram.com/fitwithpulse" target="_blank" rel="noopener noreferrer" className="text-[#E0FE10] hover:text-white transition-colors duration-300">
+                @fitwithpulse
               </a>
             </div>
           </div>
@@ -191,10 +191,22 @@ const GetInTouch: NextPage = () => {
                 </div>
               </div>
               
-              <div className="mt-8">
+              <div className="mt-8 flex flex-col sm:flex-row gap-4">
+                <a 
+                  href="https://fitwithpuls.onelink.me/kSfU?pid=user_share&c=round_share&af_referrer_customer_id=Bq6zlqIlSdPUGki6gsv6X9TdVtG3&deep_link_value=round&roundId=pP7O9mx3LIwc3NIbZbSk&id=Bq6zlqIlSdPUGki6gsv6X9TdVtG3&sharedBy=Bq6zlqIlSdPUGki6gsv6X9TdVtG3&af_og_title=Morning%20Mobility%20Challenge&af_og_description=Join%20me%20in%20this%20fitness%20challenge%20on%20Pulse!%20%F0%9F%8F%8B%EF%B8%8F%E2%80%8D%E2%99%82%EF%B8%8F%20Apr%2017,%202025%20-%20Apr%2024,%202025&af_og_image=https://fitwithpulse.ai/round-preview.png"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center gap-2 bg-[#E0FE10] text-black px-6 py-3 rounded-lg font-semibold hover:bg-[#E0FE10]/90 transition-colors duration-300 hover:shadow-lg hover:shadow-[#E0FE10]/20 transform hover:-translate-y-1"
+                >
+                  🏋️‍♂️ Join Challenge Now
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                </a>
+                
                 <a 
                   href="/morning-mobility-challenge" 
-                  className="inline-flex items-center gap-2 bg-[#E0FE10] text-black px-6 py-3 rounded-lg font-semibold hover:bg-[#E0FE10]/90 transition-colors duration-300"
+                  className="inline-flex items-center justify-center gap-2 border-2 border-[#E0FE10] text-[#E0FE10] px-6 py-3 rounded-lg font-semibold hover:bg-[#E0FE10] hover:text-black transition-colors duration-300"
                 >
                   Learn More About the Challenge
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -218,7 +230,7 @@ const GetInTouch: NextPage = () => {
           
           <div className="flex flex-col sm:flex-row gap-6 justify-center">
             <a 
-              href="mailto:contact@fitwithpulse.ai"
+              href="mailto:tre@fitwithpulse.ai"
               className="inline-flex items-center justify-center gap-2 bg-[#E0FE10] text-black px-8 py-4 rounded-lg font-semibold hover:bg-[#E0FE10]/90 transition-colors duration-300"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
