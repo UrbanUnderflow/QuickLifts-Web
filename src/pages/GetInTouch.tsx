@@ -87,7 +87,7 @@ const GetInTouch: NextPage = () => {
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {/* Email */}
-            <div className="bg-zinc-800/50 hover:bg-zinc-800 transition-all duration-300 hover:shadow-lg hover:shadow-[#E0FE10]/20 rounded-xl p-8 text-center group cursor-pointer transform hover:-translate-y-2">
+            <a href="mailto:tre@fitwithpulse.ai" className="bg-zinc-800/50 hover:bg-zinc-800 transition-all duration-300 hover:shadow-lg hover:shadow-[#E0FE10]/20 rounded-xl p-8 text-center group cursor-pointer transform hover:-translate-y-2 block">
               <div className="mb-4">
                 <div className="w-16 h-16 bg-[#E0FE10]/10 rounded-full flex items-center justify-center mx-auto group-hover:bg-[#E0FE10]/20 transition-colors duration-300">
                   <svg className="w-8 h-8 text-[#E0FE10]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -97,13 +97,13 @@ const GetInTouch: NextPage = () => {
               </div>
               <h3 className="text-white text-xl font-semibold mb-2">Email</h3>
               <p className="text-zinc-400 mb-4">For business inquiries and partnerships</p>
-              <a href="mailto:tre@fitwithpulse.ai" className="text-[#E0FE10] hover:text-white transition-colors duration-300">
+              <span className="text-[#E0FE10] group-hover:text-white transition-colors duration-300">
                 tre@fitwithpulse.ai
-              </a>
-            </div>
+              </span>
+            </a>
 
             {/* LinkedIn */}
-            <div className="bg-zinc-800/50 hover:bg-zinc-800 transition-all duration-300 hover:shadow-lg hover:shadow-[#E0FE10]/20 rounded-xl p-8 text-center group cursor-pointer transform hover:-translate-y-2">
+            <a href="https://linkedin.com/in/tremainegrant" target="_blank" rel="noopener noreferrer" className="bg-zinc-800/50 hover:bg-zinc-800 transition-all duration-300 hover:shadow-lg hover:shadow-[#E0FE10]/20 rounded-xl p-8 text-center group cursor-pointer transform hover:-translate-y-2 block">
               <div className="mb-4">
                 <div className="w-16 h-16 bg-[#E0FE10]/10 rounded-full flex items-center justify-center mx-auto group-hover:bg-[#E0FE10]/20 transition-colors duration-300">
                   <svg className="w-8 h-8 text-[#E0FE10]" fill="currentColor" viewBox="0 0 24 24">
@@ -113,13 +113,13 @@ const GetInTouch: NextPage = () => {
               </div>
               <h3 className="text-white text-xl font-semibold mb-2">LinkedIn</h3>
               <p className="text-zinc-400 mb-4">Connect professionally</p>
-              <a href="https://linkedin.com/in/tremainegrant" target="_blank" rel="noopener noreferrer" className="text-[#E0FE10] hover:text-white transition-colors duration-300">
+              <span className="text-[#E0FE10] group-hover:text-white transition-colors duration-300">
                 Connect with me
-              </a>
-            </div>
+              </span>
+            </a>
 
             {/* Instagram */}
-            <div className="bg-zinc-800/50 hover:bg-zinc-800 transition-all duration-300 hover:shadow-lg hover:shadow-[#E0FE10]/20 rounded-xl p-8 text-center group cursor-pointer transform hover:-translate-y-2">
+            <a href="https://instagram.com/fitwithpulse" target="_blank" rel="noopener noreferrer" className="bg-zinc-800/50 hover:bg-zinc-800 transition-all duration-300 hover:shadow-lg hover:shadow-[#E0FE10]/20 rounded-xl p-8 text-center group cursor-pointer transform hover:-translate-y-2 block">
               <div className="mb-4">
                 <div className="w-16 h-16 bg-[#E0FE10]/10 rounded-full flex items-center justify-center mx-auto group-hover:bg-[#E0FE10]/20 transition-colors duration-300">
                   <svg className="w-8 h-8 text-[#E0FE10]" fill="currentColor" viewBox="0 0 24 24">
@@ -129,10 +129,10 @@ const GetInTouch: NextPage = () => {
               </div>
               <h3 className="text-white text-xl font-semibold mb-2">Instagram</h3>
               <p className="text-zinc-400 mb-4">Follow for fitness inspiration</p>
-              <a href="https://instagram.com/fitwithpulse" target="_blank" rel="noopener noreferrer" className="text-[#E0FE10] hover:text-white transition-colors duration-300">
+              <span className="text-[#E0FE10] group-hover:text-white transition-colors duration-300">
                 @fitwithpulse
-              </a>
-            </div>
+              </span>
+            </a>
           </div>
         </div>
       </section>
