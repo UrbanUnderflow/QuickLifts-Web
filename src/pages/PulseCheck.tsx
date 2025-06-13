@@ -1663,7 +1663,10 @@ const PulseCheckPage: NextPage = () => {
                                     className="group relative inline-flex items-center justify-center px-8 py-4 text-lg font-semibold text-zinc-900 bg-gradient-to-r from-[#E0FE10] to-lime-400 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105"
                                 >
                                     <span className="absolute -inset-1 bg-gradient-to-r from-[#E0FE10] to-lime-400 rounded-xl blur opacity-25 group-hover:opacity-50 transition duration-1000"></span>
-                                    <span className="relative">Join the Waitlist</span>
+                                    <span className="relative flex items-center">
+                                    <FaApple className="mr-2 h-5 w-5" />
+                                    Download Now
+                                    </span>
                                 </a>
                                 <a 
                                     href="#features" 
@@ -3080,14 +3083,14 @@ const PulseCheckPage: NextPage = () => {
 
                         {/* Final CTA */}
                         <div className="text-center">
-                            <div className="inline-flex items-center gap-4 px-8 py-4 bg-gradient-to-r from-[#E0FE10] to-lime-400 rounded-2xl shadow-2xl hover:shadow-3xl transition-all duration-300 hover:scale-105 group">
-                                <img src="/app-logo.png" alt="Pulse" className="h-8 w-8" />
+                            <a href="https://apps.apple.com/ca/app/pulse-community-workouts/id6451497729" className="inline-flex items-center gap-4 px-8 py-4 bg-gradient-to-r from-[#E0FE10] to-lime-400 rounded-2xl shadow-2xl hover:shadow-3xl transition-all duration-300 hover:scale-105 group">
+                                <FaApple className="h-8 w-8 text-zinc-900" />
                                 <div className="text-left">
-                                    <div className="text-zinc-900 font-bold text-lg">Ready to optimize your performance?</div>
-                                    <div className="text-zinc-700 text-sm">Join the future of athletic intelligence</div>
+                                    <div className="text-zinc-900 font-bold text-lg">Download Pulse App</div>
+                                    <div className="text-zinc-700 text-sm">Start your athletic intelligence journey</div>
                                 </div>
                                 <FaRocket className="h-6 w-6 text-zinc-900 group-hover:translate-x-1 transition-transform duration-300" />
-                            </div>
+                            </a>
                         </div>
                     </div>
                 </div>
@@ -3111,13 +3114,13 @@ const PulseCheckPage: NextPage = () => {
                         </p>
                         <div className="flex flex-col sm:flex-row items-center justify-center gap-6">
                             <a 
-                                href="#" 
+                                href="https://apps.apple.com/ca/app/pulse-community-workouts/id6451497729" 
                                 className="group relative inline-flex items-center justify-center px-10 py-4 text-lg font-semibold text-zinc-900 bg-gradient-to-r from-[#E0FE10] to-lime-400 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105"
                             >
                                 <span className="absolute -inset-1 bg-gradient-to-r from-[#E0FE10] to-lime-400 rounded-xl blur opacity-25 group-hover:opacity-50 transition duration-1000"></span>
                                 <span className="relative flex items-center">
-                                    <FaRocket className="mr-2 h-5 w-5" />
-                                    Join the Waitlist
+                                    <FaApple className="mr-2 h-5 w-5" />
+                                    Download Now
                                 </span>
                             </a>
                             <a 

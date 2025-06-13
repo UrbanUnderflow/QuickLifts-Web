@@ -17,7 +17,13 @@ interface UserProfileMetaProps {
 const UserProfileMeta: React.FC<UserProfileMetaProps> = ({ userData }) => {
   const title = `${userData.displayName}'s Profile | Pulse`;
   const description = userData.bio || 'Check out this fitness profile on Pulse';
-  const imageUrl = userData.profileImage?.profileImageURL || 'https://fitwithpulse.ai/default-profile.png';
+  
+  // Ensure image URL is absolute
+  let imageUrl = userData.profileImage?.profileImageURL || 'https://fitwithpulse.ai/default-profile.png';
+  if (imageUrl && !imageUrl.startsWith('http')) {
+    imageUrl = `https://fitwithpulse.ai${imageUrl}`;
+  }
+  
   const url = `https://fitwithpulse.ai/${userData.username}`;
 
   return (
@@ -30,6 +36,8 @@ const UserProfileMeta: React.FC<UserProfileMetaProps> = ({ userData }) => {
       <meta property="og:title" content={title} />
       <meta property="og:description" content={description} />
       <meta property="og:image" content={imageUrl} />
+      <meta property="og:image:width" content="400" />
+      <meta property="og:image:height" content="400" />
       <meta property="og:url" content={url} />
       <meta property="og:type" content="profile" />
       <meta property="og:site_name" content="Pulse Fitness" />

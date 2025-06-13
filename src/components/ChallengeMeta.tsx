@@ -23,8 +23,8 @@ const ChallengeMeta: React.FC<ChallengeMetaProps> = ({ challenge, id }) => {
 
   const deepLinkUrl = `pulse://rounds?linkType=round&roundId=${id}`;
   
-  // Use static image from public directory
-  const previewImageUrl = '/round-preview.png'; // Make sure this file exists in public/
+  // Use static image from public directory with absolute URL
+  const previewImageUrl = 'https://fitwithpulse.ai/round-preview.png'; // Make sure this file exists in public/
 
   return (
     <Head>
@@ -37,7 +37,7 @@ const ChallengeMeta: React.FC<ChallengeMetaProps> = ({ challenge, id }) => {
       <meta key="og:type" property="og:type" content="website" />
       <meta key="og:url" property="og:url" content={`https://fitwithpulse.ai/challenge/${id}`} />
       <meta key="og:site_name" property="og:site_name" content="Pulse Fitness" />
-      <meta key="og:image" property="og:image" content={`https://fitwithpulse.ai${previewImageUrl}`} />
+      <meta key="og:image" property="og:image" content={previewImageUrl} />
       <meta key="og:image:width" property="og:image:width" content="1200" />
       <meta key="og:image:height" property="og:image:height" content="630" />
       <meta key="og:image:alt" property="og:image:alt" content={`${challenge.title} preview`} />
@@ -53,7 +53,7 @@ const ChallengeMeta: React.FC<ChallengeMetaProps> = ({ challenge, id }) => {
       <meta key="twitter:creator" name="twitter:creator" content="@fitwithpulse" />
       <meta key="twitter:title" name="twitter:title" content={`Join ${challenge.title} | Pulse`} />
       <meta key="twitter:description" name="twitter:description" content={enrichedDescription} />
-      <meta key="twitter:image" name="twitter:image" content={`https://fitwithpulse.ai${previewImageUrl}`} />
+      <meta key="twitter:image" name="twitter:image" content={previewImageUrl} />
       <meta key="twitter:image:alt" name="twitter:image:alt" content={`${challenge.title} preview`} />
       
       {/* Additional Meta Tags */}
