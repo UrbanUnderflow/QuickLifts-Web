@@ -63,7 +63,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
   const publicRoutes = [
     '/about', '/creator', '/rounds', '/privacyPolicy', '/programming', '/100trainers', 
     '/starter-pack', '/stacks', '/moves', '/terms', '/press', '100Trainers',
-    '/subscribe', '/download', '/morning-mobility-challenge', 'review', '/MoveAndFuelATL', '/investor', '/invest', '/GetInTouch' // Add subscription page
+    '/subscribe', '/download', '/morning-mobility-challenge', 'review', '/MoveAndFuelATL', '/investor', '/invest', '/GetInTouch', '/PulseCheck' // Add subscription page
   ].map(route => route?.toLowerCase());
  
   const publicPathPatterns = [
