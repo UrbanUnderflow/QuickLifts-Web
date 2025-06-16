@@ -70,7 +70,7 @@ async function generateUniqueWorkoutStacks(numberOfStacks, existingWorkouts = []
     // --- End Modified Prompt --- 
 
     const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: 'gpt-4.1-mini',
       messages: [
         {
           role: 'system',
@@ -229,7 +229,7 @@ async function generateFullSchedule(totalNeeded, existingWorkouts = [], retryCou
     // --- End Full Schedule Prompt --- 
 
     const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',  
+              model: 'gpt-4.1-mini',  
       messages: [
         {
           role: 'system',

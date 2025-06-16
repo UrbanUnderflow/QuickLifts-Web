@@ -2,7 +2,7 @@ import * as Brevo from '@getbrevo/brevo';
 
 interface SubscribeOptions {
   email: string;
-  listKey?: 'generic' | 'mobility' | string;
+  listKey?: 'generic' | 'mobility' | 'pulse-check-waitlist' | string;
   utmCampaign?: string;
   attributes?: Record<string, any>;
 }
@@ -20,6 +20,7 @@ export async function handleBrevoSubscribe({ email, listKey, utmCampaign = 'gene
   const LIST_MAP: Record<string, number | undefined> = {
     generic: 5,
     mobility: 6,
+    'pulse-check-waitlist': 7, // You'll need to create this list in Brevo and update the ID
   };
 
   const chosenListId = listKey ? LIST_MAP[listKey] : LIST_MAP.generic;
