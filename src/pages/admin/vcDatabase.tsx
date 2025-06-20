@@ -14,6 +14,7 @@ interface VCFormData {
   linkedin: string;
   continent: string;
   country: string;
+  location: string; // NEW: More flexible location field
   addresses: string;
   email: string;
   description: string;
@@ -38,13 +39,14 @@ const VCDatabasePage: React.FC = () => {
     linkedin: '',
     continent: '',
     country: '',
+    location: '',
     addresses: '',
     email: '',
     description: '',
     stage: '',
-            founder: '',
-        numberOfExits: '',
-        status: 'new'
+    founder: '',
+    numberOfExits: '',
+    status: 'new'
   });
 
   const [loading, setLoading] = useState(false);
@@ -68,13 +70,166 @@ const VCDatabasePage: React.FC = () => {
   const [loadingProspects, setLoadingProspects] = useState(false);
   const [editingStatus, setEditingStatus] = useState<string | null>(null);
   const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
+  
+  // Filter state
+  const [selectedStageFilters, setSelectedStageFilters] = useState<string[]>([]);
+  const [selectedStatusFilters, setSelectedStatusFilters] = useState<string[]>([]);
 
   // Duplicate detection state
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
   const [bulkDuplicates, setBulkDuplicates] = useState<VCFormData[]>([]);
 
+  // AI prompt state
+  const [aiPrompt, setAiPrompt] = useState<string>('');
+
+  // Bulk input type state - NEW!
+  const [bulkInputType, setBulkInputType] = useState<'text' | 'image' | 'prompt'>('text');
+
+  // Email template state
+  const [emailTemplate, setEmailTemplate] = useState<string>('');
+  const [selectedProspectForEmail, setSelectedProspectForEmail] = useState<VCProspect | null>(null);
+  const [generatedEmail, setGeneratedEmail] = useState<string>('');
+  const [generatingEmail, setGeneratingEmail] = useState(false);
+  const [showEmailPreview, setShowEmailPreview] = useState(false);
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [emailSubject, setEmailSubject] = useState<string>('');
+
+  // Stage research state
+  const [researchingStages, setResearchingStages] = useState(false);
+  const [stageResearchProgress, setStageResearchProgress] = useState({ current: 0, total: 0 });
+
   // Storage service instance
   const storageService = new FirebaseStorageService();
+
+  // Helper functions for multiselect filters
+  const toggleStageFilter = (stage: string) => {
+    setSelectedStageFilters(prev => 
+      prev.includes(stage) 
+        ? prev.filter(s => s !== stage)
+        : [...prev, stage]
+    );
+  };
+
+  const toggleStatusFilter = (status: string) => {
+    setSelectedStatusFilters(prev => 
+      prev.includes(status) 
+        ? prev.filter(s => s !== status)
+        : [...prev, status]
+    );
+  };
+
+  const clearAllFilters = () => {
+    setSelectedStageFilters([]);
+    setSelectedStatusFilters([]);
+  };
+
+  // Research stages for prospects with missing stage data
+  const researchMissingStages = async () => {
+    const prospectsWithoutStage = vcProspects.filter(p => !p.stage || p.stage.trim() === '');
+    
+    if (prospectsWithoutStage.length === 0) {
+      showToast('No prospects found without stage information', 'error');
+      return;
+    }
+
+    const confirmMessage = `Research investment stages for ${prospectsWithoutStage.length} prospects without stage data? This will use AI to determine their investment focus.`;
+    if (!window.confirm(confirmMessage)) {
+      return;
+    }
+
+    setResearchingStages(true);
+    setStageResearchProgress({ current: 0, total: prospectsWithoutStage.length });
+
+    let successCount = 0;
+    let errorCount = 0;
+
+    try {
+      for (let i = 0; i < prospectsWithoutStage.length; i++) {
+        const prospect = prospectsWithoutStage[i];
+        setStageResearchProgress({ current: i + 1, total: prospectsWithoutStage.length });
+
+        try {
+          // Research this prospect using our AI service
+          const researchPrompt = `Research the investment stage focus of this VC firm: ${prospect.companies}. 
+          
+          Additional context:
+          - Person: ${prospect.person || 'Unknown'}
+          - Website: ${prospect.urls || 'Unknown'}
+          - LinkedIn: ${prospect.linkedin || 'Unknown'}
+          - Description: ${prospect.description || 'Unknown'}
+          
+          Determine what investment stages they typically focus on (Pre-Seed, Seed, Series A, Series B, Series C, Series D+, Growth, Late Stage, Multi-Stage) and return only the stage names, comma-separated.`;
+
+          const response = await fetch('/api/extract-vc-data', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              inputType: 'prompt',
+              prompt: researchPrompt,
+              singleProspectResearch: true // Flag to indicate this is for stage research only
+            }),
+          });
+
+          if (!response.ok) {
+            throw new Error(`API error: ${response.status}`);
+          }
+
+          const result = await response.json();
+          
+          // Extract stage information from the response
+          let determinedStage = '';
+          if (result.success && result.stageResearch) {
+            determinedStage = result.stageResearch;
+          } else if (result.success && result.prospects && result.prospects.length > 0) {
+            determinedStage = result.prospects[0].stage || '';
+          }
+
+          // Update the prospect in Firebase if we found stage information
+          if (determinedStage && determinedStage.trim() !== '') {
+            const prospectRef = doc(db, 'venture-prospects', prospect.id);
+            await updateDoc(prospectRef, {
+              stage: determinedStage.trim(),
+              updatedAt: new Date()
+            });
+
+            // Update local state
+            setVcProspects(prev => prev.map(p => 
+              p.id === prospect.id 
+                ? { ...p, stage: determinedStage.trim(), updatedAt: new Date() }
+                : p
+            ));
+
+            successCount++;
+            console.log(`✅ Updated stage for ${prospect.person} (${prospect.companies}): ${determinedStage}`);
+          } else {
+            console.log(`⚠️ No stage determined for ${prospect.person} (${prospect.companies})`);
+            errorCount++;
+          }
+
+        } catch (error) {
+          console.error(`❌ Error researching ${prospect.person} (${prospect.companies}):`, error);
+          errorCount++;
+        }
+
+        // Add a small delay to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+
+      showToast(
+        `Stage research completed! ${successCount} updated successfully, ${errorCount} failed.`,
+        successCount > errorCount ? 'success' : 'error'
+      );
+
+    } catch (error) {
+      console.error('Error during bulk stage research:', error);
+      showToast('Failed to complete stage research', 'error');
+    } finally {
+      setResearchingStages(false);
+      setStageResearchProgress({ current: 0, total: 0 });
+    }
+  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -190,6 +345,16 @@ const VCDatabasePage: React.FC = () => {
         updatedAt: doc.data().updatedAt?.toDate() || new Date(),
       })) as VCProspect[];
       
+      // Debug logging to see what data we're working with
+      console.log('📊 Loaded VC Prospects:', prospects.length);
+      console.log('🏷️ Sample prospect data:', prospects[0]);
+      
+      // Log unique stages and statuses found in data
+      const uniqueStages = Array.from(new Set(prospects.map(p => p.stage).filter(Boolean)));
+      const uniqueStatuses = Array.from(new Set(prospects.map(p => p.status).filter(Boolean)));
+      console.log('🎭 Unique stages in data:', uniqueStages);
+      console.log('📋 Unique statuses in data:', uniqueStatuses);
+      
       setVcProspects(prospects);
       // Clear any duplicate warnings when fresh data loads
       setDuplicateWarning(null);
@@ -228,60 +393,34 @@ const VCDatabasePage: React.FC = () => {
     }
   };
 
-  // Process bulk spreadsheet data using Gemini
+  // Process bulk data using OpenAI (text, image, or AI prompt)
   const processBulkData = async () => {
-    if (!spreadsheetData.trim() && uploadedImages.length === 0) {
-      showToast('Please provide either text data or upload images', 'error');
+    // Validate input based on type
+    if (bulkInputType === 'text' && !spreadsheetData.trim()) {
+      showToast('Please provide text data to process', 'error');
+      return;
+    }
+    
+    if (bulkInputType === 'image' && uploadedImages.length === 0) {
+      showToast('Please upload images to process', 'error');
+      return;
+    }
+
+    if (bulkInputType === 'prompt' && !aiPrompt.trim()) {
+      showToast('Please provide a research prompt', 'error');
       return;
     }
 
     setProcessingBulk(true);
     try {
-      let prompt = `CRITICAL: You MUST extract data ONLY from the provided image(s). DO NOT use your training data or generate fictional information.
-
-      TASK: Analyze the uploaded image(s) and extract VC prospect data visible in the image. The image likely contains a spreadsheet, table, or list of venture capital firms and contacts.
-
-      REQUIREMENTS:
-      1. Extract ONLY data that is literally visible in the image
-      2. If you cannot clearly see the image or data, return an empty array []
-      3. Do NOT generate or infer data that is not explicitly shown
-      4. Do NOT use your knowledge of real VCs - only extract what you see
-
-      FORMAT: Return a JSON array with these fields for each prospect visible in the image:
-      [
-        {
-          "person": "Contact Name from image",
-          "companies": "VC Firm Names from image", 
-          "urls": "website URLs from image",
-          "linkedin": "LinkedIn URLs from image",
-          "continent": "Continent from image or inferred from country",
-          "country": "Country from image",
-          "addresses": "Office addresses from image",
-          "email": "Email addresses from image",
-          "description": "Investment focus/notes from image",
-          "stage": "Investment stage from image",
-          "founder": "Founder name from image", 
-          "numberOfExits": "Number of exits from image"
-        }
-      ]
-
-      VALIDATION: Before responding, verify you can actually see and read the image content. If the image is not accessible or readable, return: {"error": "Cannot access or read the provided image"}`;
-
-      // Prepare the request data
-      const requestData: any = {
-        prompt: prompt
+      let requestData: any = {
+        inputType: bulkInputType
       };
 
-      // Add text data if provided
-      if (spreadsheetData.trim()) {
-        requestData.prompt += `\n\nText Data:\n${spreadsheetData}`;
-      }
-
-      // Add images if uploaded
-      if (uploadedImages.length > 0) {
-        requestData.prompt += `\n\nIMAGE PROVIDED: You have been given ${uploadedImages.length} image(s) to analyze. Extract data ONLY from these images.`;
-        
-        // Upload images to Firebase Storage and get URLs
+      if (bulkInputType === 'text') {
+        requestData.data = spreadsheetData;
+      } else if (bulkInputType === 'image') {
+        // Upload images to Firebase Storage first
         const imageUrls = await Promise.all(
           uploadedImages.map(async (file) => {
             try {
@@ -294,116 +433,76 @@ const VCDatabasePage: React.FC = () => {
         );
         
         console.log('🖼️ Uploaded Image URLs:', imageUrls);
-        
-        // Test if image URLs are accessible
-        for (const url of imageUrls) {
-          try {
-            const response = await fetch(url, { method: 'HEAD' });
-            console.log(`✅ Image URL accessible: ${url} (Status: ${response.status})`);
-          } catch (error) {
-            console.error(`❌ Image URL not accessible: ${url}`, error);
-          }
-        }
-        
         requestData.imageUrls = imageUrls;
+      } else if (bulkInputType === 'prompt') {
+        requestData.prompt = aiPrompt;
       }
 
-      // Log the request data being sent to AI
-      console.log('📤 Request Data Sent to AI:', requestData);
-      console.log('📤 Request Data (stringified):', JSON.stringify(requestData, null, 2));
-      
-      // Send prompt to Gemini via Firebase function
-      const generateRef = await addDoc(collection(db, 'generate'), requestData);
+      console.log('📤 Request Data Sent to OpenAI:', requestData);
 
-      // Wait for response with retry logic
-      let attempts = 30;
-      let response = '';
-      while (attempts > 0 && !response) {
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        const snapshot = await getDoc(generateRef);
-        const data = snapshot.data();
-        if (data?.output) {
-          response = data.output;
-          break;
-        }
-        attempts--;
+      // Call our new OpenAI API endpoint
+      const response = await fetch('/api/extract-vc-data', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestData),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to extract VC data');
       }
 
-      if (!response) {
-        throw new Error('No response from AI service');
-      }
-      
-      // Log the raw AI response for debugging
-      console.log('🤖 Raw AI Response:', response);
-      console.log('🤖 Raw AI Response (stringified):', JSON.stringify(response, null, 2));
-      
-      // Clean and parse response
-      let cleanedResponse = response
-        .replace(/```json/g, '')
-        .replace(/```/g, '')
-        .trim();
-      
-      console.log('🧹 Cleaned Response:', cleanedResponse);
-      
-      const parsedData = JSON.parse(cleanedResponse);
-      console.log('📊 Parsed Data:', parsedData);
-      
-      // Check if AI returned an error or couldn't access the image
-      if (parsedData && parsedData.error) {
-        throw new Error(`AI Service Error: ${parsedData.error}`);
-      }
-      
-      // Check if response looks like hallucinated data (famous VCs)
-      const famousVCs = ['roelof botha', 'mary meeker', 'bill gurley', 'peter fenton', 'marc andreessen', 'john doerr'];
-      if (Array.isArray(parsedData) && parsedData.length > 0) {
-        const suspiciousCount = parsedData.filter(item => {
-          const person = (item.person || '').toLowerCase();
-          return famousVCs.some(famous => person.includes(famous));
-        }).length;
-        
-        if (suspiciousCount > 0) {
-          console.warn('⚠️ WARNING: AI appears to have hallucinated famous VC data instead of extracting from image');
-          showToast('Warning: AI may have generated fictional data instead of reading the image. Please verify the results.', 'error');
-        }
-      }
-      
-      if (Array.isArray(parsedData)) {
-        const processedData = parsedData.map(item => ({
-          ...item,
-          status: 'new' // Default status
-        }));
-        
-        console.log('⚙️ Processed Data (with default status):', processedData);
+      const result = await response.json();
+      console.log('🤖 OpenAI Response:', result);
 
-        // Filter out duplicates and track them
-        const uniqueData: VCFormData[] = [];
-        const duplicateData: VCFormData[] = [];
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to process data');
+      }
 
-        processedData.forEach(prospect => {
-          if (isDuplicate(prospect)) {
-            duplicateData.push(prospect);
-          } else {
-            uniqueData.push(prospect);
-          }
-        });
-        
-        console.log('✅ Unique Data (after duplicate filtering):', uniqueData);
-        console.log('🔄 Duplicate Data (filtered out):', duplicateData);
+      const prospects = result.prospects || [];
+      
+      if (prospects.length === 0) {
+        showToast('No VC prospect data found in the provided input', 'error');
+        return;
+      }
 
-        setPreviewData(uniqueData);
-        setBulkDuplicates(duplicateData);
-        
-        if (duplicateData.length > 0) {
-          showToast(`Processed ${uniqueData.length} unique prospects. ${duplicateData.length} duplicates excluded.`, 'success');
+      // Add default status to all prospects
+      const processedData = prospects.map((item: any) => ({
+        ...item,
+        status: 'new' // Default status
+      }));
+      
+      console.log('⚙️ Processed Data (with default status):', processedData);
+
+      // Filter out duplicates and track them
+      const uniqueData: VCFormData[] = [];
+      const duplicateData: VCFormData[] = [];
+
+      processedData.forEach((prospect: VCFormData) => {
+        if (isDuplicate(prospect)) {
+          duplicateData.push(prospect);
         } else {
-          showToast(`Processed ${uniqueData.length} prospects`, 'success');
+          uniqueData.push(prospect);
         }
+      });
+      
+      console.log('✅ Unique Data (after duplicate filtering):', uniqueData);
+      console.log('🔄 Duplicate Data (filtered out):', duplicateData);
+
+      setPreviewData(uniqueData);
+      setBulkDuplicates(duplicateData);
+      
+      if (duplicateData.length > 0) {
+        showToast(`Processed ${uniqueData.length} unique prospects. ${duplicateData.length} duplicates excluded.`, 'success');
       } else {
-        throw new Error('Response is not an array');
+        showToast(`Processed ${uniqueData.length} prospects`, 'success');
       }
+      
     } catch (error) {
       console.error('Error processing bulk data:', error);
-      showToast('Failed to process data. Please check format and try again.', 'error');
+      showToast(error instanceof Error ? error.message : 'Failed to process data', 'error');
     } finally {
       setProcessingBulk(false);
     }
@@ -449,6 +548,148 @@ const VCDatabasePage: React.FC = () => {
       setSavingBulk(false);
     }
   };
+
+  // Generate personalized email using AI
+  const generateEmail = async (prospect: VCProspect) => {
+    if (!emailTemplate.trim()) {
+      showToast('Please provide an email template first', 'error');
+      return;
+    }
+
+    setGeneratingEmail(true);
+    try {
+      const response = await fetch('/api/generate-vc-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          template: emailTemplate,
+          prospect: prospect
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to generate email');
+      }
+
+      const result = await response.json();
+      setGeneratedEmail(result.email);
+      setEmailSubject(result.subject || `Partnership Opportunity with ${prospect.companies}`);
+      setSelectedProspectForEmail(prospect);
+      setShowEmailPreview(true);
+      
+      showToast('Email generated successfully!', 'success');
+    } catch (error) {
+      console.error('Error generating email:', error);
+      showToast(error instanceof Error ? error.message : 'Failed to generate email', 'error');
+    } finally {
+      setGeneratingEmail(false);
+    }
+  };
+
+  // Send email via Brevo with 5-minute delay
+  const sendScheduledEmail = async () => {
+    if (!selectedProspectForEmail || !generatedEmail || !emailSubject) {
+      showToast('Missing email data', 'error');
+      return;
+    }
+
+    setSendingEmail(true);
+    try {
+      const response = await fetch('/api/send-vc-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          to: {
+            email: selectedProspectForEmail.email,
+            name: selectedProspectForEmail.person
+          },
+          subject: emailSubject,
+          htmlContent: generatedEmail,
+          prospectId: selectedProspectForEmail.id
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to send email');
+      }
+
+      const result = await response.json();
+      showToast(`Email scheduled successfully! Will be sent in 5 minutes.`, 'success');
+      
+      // Update prospect status to 'sent email'
+      await updateProspectStatus(selectedProspectForEmail.id, 'sent email');
+      
+      // Close preview
+      setShowEmailPreview(false);
+      setSelectedProspectForEmail(null);
+      setGeneratedEmail('');
+      setEmailSubject('');
+      
+    } catch (error) {
+      console.error('Error sending email:', error);
+      showToast(error instanceof Error ? error.message : 'Failed to send email', 'error');
+    } finally {
+      setSendingEmail(false);
+    }
+  };
+
+  // Filter prospects based on selected filters
+  const filteredProspects = vcProspects.filter(prospect => {
+    // Parse comma-separated stages (e.g., "Seed, Early Stage Venture" -> ["Seed", "Early Stage Venture"])
+    const prospectStages = prospect.stage ? prospect.stage.split(',').map(s => s.trim()) : [];
+    
+    // Debug logging
+    if (selectedStageFilters.length > 0 || selectedStatusFilters.length > 0) {
+      console.log('🔍 Filtering prospect:', {
+        person: prospect.person,
+        rawStage: prospect.stage,
+        parsedStages: prospectStages,
+        status: prospect.status,
+        selectedStageFilters,
+        selectedStatusFilters
+      });
+    }
+    
+    // Check if any of the prospect's stages match any selected stage filter
+    let stageMatch = selectedStageFilters.length === 0;
+    
+    if (selectedStageFilters.length > 0) {
+      // Handle "No Stage" filter
+      if (selectedStageFilters.includes('No Stage')) {
+        const hasNoStage = !prospect.stage || prospect.stage.trim() === '';
+        stageMatch = stageMatch || hasNoStage;
+      }
+      
+      // Handle regular stage filters
+      const regularStageFilters = selectedStageFilters.filter(s => s !== 'No Stage');
+      if (regularStageFilters.length > 0 && prospectStages.length > 0) {
+        const regularStageMatch = regularStageFilters.some(selectedStage => 
+          prospectStages.some(prospectStage => 
+            prospectStage.toLowerCase().includes(selectedStage.toLowerCase()) ||
+            selectedStage.toLowerCase().includes(prospectStage.toLowerCase())
+          )
+        );
+        stageMatch = stageMatch || regularStageMatch;
+      }
+    }
+    
+    // Check exact match for status
+    const statusMatch = selectedStatusFilters.length === 0 || selectedStatusFilters.includes(prospect.status || '');
+    
+    const matches = stageMatch && statusMatch;
+    
+    if (selectedStageFilters.length > 0 || selectedStatusFilters.length > 0) {
+      console.log('🎯 Match result:', { stageMatch, statusMatch, matches });
+    }
+    
+    return matches;
+  });
 
   // Load data on component mount
   useEffect(() => {
@@ -506,6 +747,7 @@ const VCDatabasePage: React.FC = () => {
         linkedin: '',
         continent: '',
         country: '',
+        location: '',
         addresses: '',
         email: '',
         description: '',
@@ -769,6 +1011,25 @@ const VCDatabasePage: React.FC = () => {
                 </div>
               </div>
 
+              {/* Row 4.5: Location Field */}
+              <div className="grid grid-cols-1 gap-6">
+                <div>
+                  <label htmlFor="location" className="block text-gray-300 mb-2 text-sm font-medium flex items-center">
+                    <MapPin className="w-4 h-4 mr-2" />
+                    Location
+                  </label>
+                  <input
+                    type="text"
+                    id="location"
+                    name="location"
+                    value={formData.location}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-3 bg-[#262a30] border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-[#d7ff00] focus:outline-none transition-colors"
+                    placeholder="City, State, Region, or any location info (e.g. San Francisco, CA or New York)"
+                  />
+                </div>
+              </div>
+
               {/* Row 5: Founder and Number of Exits */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
@@ -905,96 +1166,173 @@ const VCDatabasePage: React.FC = () => {
             <div className="space-y-6">
               <h2 className="text-xl font-medium mb-6 text-white">Bulk Import VC Prospects</h2>
               
-              {/* Spreadsheet Input */}
-              <div>
-                <label htmlFor="spreadsheetData" className="block text-gray-300 mb-2 text-sm font-medium">
-                  Paste Spreadsheet Data
-                </label>
-                <textarea
-                  id="spreadsheetData"
-                  value={spreadsheetData}
-                  onChange={(e) => setSpreadsheetData(e.target.value)}
-                  rows={8}
-                  className="w-full px-4 py-3 bg-[#262a30] border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-[#d7ff00] focus:outline-none transition-colors resize-vertical font-mono text-sm"
-                  placeholder="Paste your spreadsheet data here (CSV format or tab-separated values)..."
-                />
-                <p className="mt-2 text-xs text-gray-400">
-                  Paste data from Excel, Google Sheets, or CSV. Include headers: Person, Companies, URLs, LinkedIn, etc.
-                </p>
+              {/* Segment Control for Input Type */}
+              <div className="bg-[#262a30] p-1 rounded-lg inline-flex mb-6">
+                <button
+                  onClick={() => setBulkInputType('text')}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                    bulkInputType === 'text'
+                      ? 'bg-[#d7ff00] text-black'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  📄 Spreadsheet Text
+                </button>
+                <button
+                  onClick={() => setBulkInputType('image')}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                    bulkInputType === 'image'
+                      ? 'bg-[#d7ff00] text-black'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  🖼️ Image Upload
+                </button>
+                <button
+                  onClick={() => setBulkInputType('prompt')}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                    bulkInputType === 'prompt'
+                      ? 'bg-[#d7ff00] text-black'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  🤖 AI Research
+                </button>
               </div>
 
-              {/* Divider */}
-              <div className="flex items-center my-6">
-                <div className="flex-1 h-px bg-gray-600"></div>
-                <span className="px-4 text-gray-400 text-sm">OR</span>
-                <div className="flex-1 h-px bg-gray-600"></div>
-              </div>
-
-              {/* Image Upload */}
-              <div>
-                <label className="block text-gray-300 mb-2 text-sm font-medium">
-                  Upload Screenshots/Images
-                </label>
-                <div className="border-2 border-dashed border-gray-600 rounded-lg p-6 text-center hover:border-gray-500 transition-colors">
-                  <input
-                    type="file"
-                    multiple
-                    accept="image/*"
-                    onChange={handleImageUpload}
-                    className="hidden"
-                    id="imageUpload"
-                  />
-                  <label htmlFor="imageUpload" className="cursor-pointer">
-                    <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                    <p className="text-gray-300 mb-1">Click to upload images or drag and drop</p>
-                    <p className="text-xs text-gray-400">PNG, JPG, JPEG up to 10MB each</p>
-                  </label>
+              {/* Conditional Input Based on Type */}
+              {bulkInputType === 'text' ? (
+                // Text Input Section
+                <div className="space-y-4">
+                  <div>
+                    <label htmlFor="spreadsheetData" className="block text-gray-300 mb-2 text-sm font-medium">
+                      Paste Spreadsheet Data
+                    </label>
+                    <textarea
+                      id="spreadsheetData"
+                      value={spreadsheetData}
+                      onChange={(e) => setSpreadsheetData(e.target.value)}
+                      rows={8}
+                      className="w-full px-4 py-3 bg-[#262a30] border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-[#d7ff00] focus:outline-none transition-colors resize-vertical font-mono text-sm"
+                      placeholder="Paste your VC prospect data here (CSV, tab-separated, or any structured text format)..."
+                    />
+                  </div>
+                  <p className="text-gray-400 text-sm">
+                    Paste data from spreadsheets, CSV files, or any structured text containing VC prospect information. OpenAI will intelligently parse the data structure.
+                  </p>
                 </div>
-                
-                {/* Image Previews */}
-                {uploadedImages.length > 0 && (
-                  <div className="mt-4">
-                    <h4 className="text-sm font-medium text-gray-300 mb-3">Uploaded Images ({uploadedImages.length})</h4>
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                      {uploadedImages.map((file, index) => (
-                        <div key={index} className="relative group">
-                          <img
-                            src={imagePreviewUrls[index]}
-                            alt={`Upload ${index + 1}`}
-                            className="w-full h-24 object-cover rounded-lg border border-gray-600"
-                          />
-                          <button
-                            onClick={() => removeImage(index)}
-                            className="absolute -top-2 -right-2 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
-                          <div className="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-xs p-1 rounded-b-lg truncate">
-                            {file.name}
-                          </div>
-                        </div>
-                      ))}
+              ) : bulkInputType === 'image' ? (
+                // Image Input Section  
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-gray-300 mb-2 text-sm font-medium">
+                      Upload Images
+                    </label>
+                    <div className="border-2 border-dashed border-gray-600 rounded-lg p-8 text-center hover:border-gray-500 transition-colors">
+                      <input
+                        type="file"
+                        multiple
+                        accept="image/*"
+                        onChange={handleImageUpload}
+                        className="hidden"
+                        id="bulk-image-upload"
+                      />
+                      <label htmlFor="bulk-image-upload" className="cursor-pointer">
+                        <Upload className="w-8 h-8 text-gray-400 mx-auto mb-4" />
+                        <p className="text-white mb-2">Click to upload images</p>
+                        <p className="text-gray-400 text-sm">Screenshots of spreadsheets, tables, or VC prospect lists</p>
+                      </label>
                     </div>
                   </div>
-                )}
-                
-                <p className="mt-2 text-xs text-gray-400">
-                  Upload screenshots of VC databases, spreadsheets, or any documents containing prospect information.
-                </p>
-              </div>
+
+                  {/* Image Previews */}
+                  {uploadedImages.length > 0 && (
+                    <div className="mt-4">
+                      <h4 className="text-sm font-medium text-gray-300 mb-3">Uploaded Images ({uploadedImages.length})</h4>
+                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                        {uploadedImages.map((file, index) => (
+                          <div key={index} className="relative group">
+                            <img
+                              src={imagePreviewUrls[index]}
+                              alt={`Upload ${index + 1}`}
+                              className="w-full h-24 object-cover rounded-lg border border-gray-600"
+                            />
+                            <button
+                              onClick={() => removeImage(index)}
+                              className="absolute -top-2 -right-2 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                            <div className="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-xs p-1 rounded-b-lg truncate">
+                              {file.name}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  <p className="text-gray-400 text-sm">
+                    Upload screenshots or photos of VC prospect data. GPT-4 Vision will extract information from spreadsheets, tables, or any structured lists.
+                  </p>
+                </div>
+              ) : (
+                // AI Prompt Input Section
+                <div className="space-y-4">
+                  <div>
+                    <label htmlFor="aiPrompt" className="block text-gray-300 mb-2 text-sm font-medium">
+                      AI Research Prompt
+                    </label>
+                    <textarea
+                      id="aiPrompt"
+                      value={aiPrompt}
+                      onChange={(e) => setAiPrompt(e.target.value)}
+                      rows={6}
+                      className="w-full px-4 py-3 bg-[#262a30] border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-[#d7ff00] focus:outline-none transition-colors resize-vertical"
+                      placeholder="Research this VC and get all the information I would need to reach out (all the fields)
+
+Examples:
+• Research Andreessen Horowitz and get contact info for partners
+• Find information about Sequoia Capital team members and their focus areas  
+• Get details on Bessemer Venture Partners healthcare investors
+• Research early-stage VCs in NYC focusing on fintech"
+                    />
+                  </div>
+                  
+                  <div className="bg-blue-900/20 border border-blue-800 rounded-lg p-4">
+                    <h4 className="text-blue-300 font-medium mb-2 flex items-center">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      AI Research Capabilities
+                    </h4>
+                    <ul className="text-sm text-blue-200 space-y-1">
+                      <li>• Research VC firms and individual partners</li>
+                      <li>• Find contact information and investment focus</li>
+                      <li>• Gather background and portfolio details</li>
+                      <li>• Extract LinkedIn and website information</li>
+                      <li>• Identify recent investments and exits</li>
+                    </ul>
+                  </div>
+
+                  <p className="text-gray-400 text-sm">
+                    Provide specific instructions for what VC information you need. AI will research and return structured prospect data matching all your required fields.
+                  </p>
+                </div>
+              )}
 
               {/* Process Button */}
               <div className="flex justify-between items-center">
                 <div className="flex gap-3">
                   <button
                     onClick={processBulkData}
-                    disabled={processingBulk || (!spreadsheetData.trim() && uploadedImages.length === 0)}
+                    disabled={processingBulk || (bulkInputType === 'text' && !spreadsheetData.trim()) || (bulkInputType === 'image' && uploadedImages.length === 0) || (bulkInputType === 'prompt' && !aiPrompt.trim())}
                     className="flex items-center px-6 py-3 rounded-lg font-medium bg-blue-600 text-white hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {processingBulk ? (
                       <>
                         <Loader2 className="animate-spin h-4 w-4 mr-2" />
-                        Processing...
+                        Processing with OpenAI...
                       </>
                     ) : (
                       <>
@@ -1005,10 +1343,11 @@ const VCDatabasePage: React.FC = () => {
                   </button>
                   
                   {/* Clear All Button */}
-                  {(spreadsheetData.trim() || uploadedImages.length > 0) && (
+                  {(spreadsheetData.trim() || uploadedImages.length > 0 || aiPrompt.trim()) && (
                     <button
-                      onClick={() => {
+                                              onClick={() => {
                         setSpreadsheetData('');
+                        setAiPrompt('');
                         // Clear images
                         imagePreviewUrls.forEach(url => URL.revokeObjectURL(url));
                         setUploadedImages([]);
@@ -1076,32 +1415,62 @@ const VCDatabasePage: React.FC = () => {
                     <div className="grid grid-cols-1 gap-4 p-4">
                       {previewData.map((prospect, index) => (
                         <div key={index} className="bg-[#262a30] rounded-lg p-4 border border-gray-700">
-                          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+                          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 text-sm">
                             <div>
                               <span className="text-gray-400">Person:</span>
-                              <div className="text-white font-medium">{prospect.person}</div>
+                              <div className="text-white font-medium">{prospect.person || '-'}</div>
                             </div>
                             <div>
                               <span className="text-gray-400">Companies:</span>
-                              <div className="text-white">{prospect.companies}</div>
+                              <div className="text-white">{prospect.companies || '-'}</div>
                             </div>
                             <div>
                               <span className="text-gray-400">Email:</span>
-                              <div className="text-white">{prospect.email}</div>
+                              <div className="text-white break-all">{prospect.email || '-'}</div>
+                            </div>
+                            <div>
+                              <span className="text-gray-400">URLs:</span>
+                              <div className="text-blue-400 break-all">{prospect.urls || '-'}</div>
+                            </div>
+                            <div>
+                              <span className="text-gray-400">LinkedIn:</span>
+                              <div className="text-blue-400 break-all">{prospect.linkedin || '-'}</div>
                             </div>
                             <div>
                               <span className="text-gray-400">Stage:</span>
-                              <div className="text-white">{prospect.stage}</div>
+                              <div className="text-white">{prospect.stage || '-'}</div>
                             </div>
                             <div>
                               <span className="text-gray-400">Country:</span>
-                              <div className="text-white">{prospect.country}</div>
+                              <div className="text-white">{prospect.country || '-'}</div>
+                            </div>
+                            <div>
+                              <span className="text-gray-400">Location:</span>
+                              <div className="text-white">{prospect.location || '-'}</div>
+                            </div>
+                            <div>
+                              <span className="text-gray-400">Addresses:</span>
+                              <div className="text-white">{prospect.addresses || '-'}</div>
+                            </div>
+                            <div>
+                              <span className="text-gray-400">Founder:</span>
+                              <div className="text-white">{prospect.founder || '-'}</div>
+                            </div>
+                            <div>
+                              <span className="text-gray-400">Exits:</span>
+                              <div className="text-white">{prospect.numberOfExits || '-'}</div>
                             </div>
                             <div>
                               <span className="text-gray-400">Status:</span>
                               <div className="text-[#d7ff00]">{prospect.status}</div>
                             </div>
                           </div>
+                          {prospect.description && (
+                            <div className="mt-3 pt-3 border-t border-gray-700">
+                              <span className="text-gray-400">Description:</span>
+                              <div className="text-gray-300 mt-1">{prospect.description}</div>
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -1112,6 +1481,106 @@ const VCDatabasePage: React.FC = () => {
           </div>
         )}
 
+        {/* Email Template Section */}
+        <div className="relative bg-[#1a1e24] rounded-xl p-6 shadow-xl overflow-hidden mb-6">
+          {/* Top gradient border */}
+          <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-green-500 via-blue-500 to-[#d7ff00]"></div>
+          
+          {/* Left gradient border */}
+          <div className="absolute top-0 left-0 bottom-0 w-[2px] bg-gradient-to-b from-green-500 via-blue-500 to-[#d7ff00]"></div>
+          
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-medium text-white flex items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2 text-[#d7ff00]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+                Email Template & Outreach
+              </h2>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Email Template Input */}
+              <div className="space-y-4">
+                <div>
+                  <label htmlFor="emailTemplate" className="block text-gray-300 mb-2 text-sm font-medium">
+                    Email Template
+                  </label>
+                  <p className="text-gray-400 text-xs mb-3">
+                    Write your template email. AI will analyze the tone and style to generate personalized emails for each prospect.
+                  </p>
+                  <textarea
+                    id="emailTemplate"
+                    value={emailTemplate}
+                    onChange={(e) => setEmailTemplate(e.target.value)}
+                    rows={12}
+                    className="w-full px-4 py-3 bg-[#262a30] border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-[#d7ff00] focus:outline-none transition-colors resize-vertical"
+                    placeholder="Hi [Name],
+
+I hope this email finds you well. I'm reaching out because...
+
+[Your email template here]
+
+Best regards,
+[Your name]"
+                  />
+                </div>
+                
+                <div className="text-xs text-gray-500 bg-[#262a30] p-3 rounded-lg border border-gray-700">
+                  <strong>💡 Tip:</strong> Write in your natural style. The AI will:
+                  <ul className="mt-1 ml-4 list-disc space-y-1">
+                    <li>Match your tone and voice</li>
+                    <li>Personalize with prospect data</li>
+                    <li>Maintain your email structure</li>
+                    <li>Generate relevant subject lines</li>
+                  </ul>
+                </div>
+              </div>
+
+              {/* Instructions & Preview Area */}
+              <div className="space-y-4">
+                <div className="bg-[#262a30] rounded-lg p-4 border border-gray-700">
+                  <h3 className="text-white font-medium mb-3">How to Use</h3>
+                  <div className="space-y-2 text-sm text-gray-300">
+                    <div className="flex items-start gap-2">
+                      <span className="bg-[#d7ff00] text-black rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">1</span>
+                      <span>Write your email template in your preferred style</span>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <span className="bg-[#d7ff00] text-black rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">2</span>
+                      <span>Click "Generate Email" on any prospect in the table below</span>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <span className="bg-[#d7ff00] text-black rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">3</span>
+                      <span>Review the AI-generated personalized email</span>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <span className="bg-[#d7ff00] text-black rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">4</span>
+                      <span>Send immediately or schedule for 5 minutes later</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-blue-900/20 border border-blue-800 rounded-lg p-4">
+                  <h4 className="text-blue-300 font-medium mb-2 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Email Features
+                  </h4>
+                  <ul className="text-sm text-blue-200 space-y-1">
+                    <li>• Automatic personalization with prospect data</li>
+                    <li>• Smart subject line generation</li>
+                    <li>• Tone and style matching</li>
+                    <li>• 5-minute scheduled sending via Brevo</li>
+                    <li>• Auto-update prospect status to "sent email"</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Existing VC Prospects Table */}
         <div className="relative bg-[#1a1e24] rounded-xl p-6 shadow-xl overflow-hidden">
           {/* Top gradient border */}
@@ -1121,15 +1590,110 @@ const VCDatabasePage: React.FC = () => {
           <div className="absolute top-0 left-0 bottom-0 w-[2px] bg-gradient-to-b from-blue-500 via-purple-500 to-[#d7ff00]"></div>
           
           <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-medium text-white">VC Prospects ({vcProspects.length})</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-medium text-white">
+                VC Prospects ({filteredProspects.length}{filteredProspects.length !== vcProspects.length ? ` of ${vcProspects.length}` : ''})
+              </h2>
+            </div>
+
+            {/* Filter Controls */}
+            <div className="flex flex-wrap gap-6 mb-6 p-4 bg-[#262a30] rounded-lg border border-gray-700">
+              {/* Stage Filter */}
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-gray-300 text-sm font-medium">Stage:</label>
+                  {/* Research Missing Stages Button */}
+                  <button
+                    onClick={researchMissingStages}
+                    disabled={researchingStages}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition flex items-center gap-1 ${
+                      researchingStages
+                        ? 'bg-yellow-900/30 text-yellow-400 border-yellow-900 cursor-wait'
+                        : 'bg-blue-900/30 text-blue-400 border-blue-900 hover:bg-blue-800/40'
+                    }`}
+                    title="Research and update investment stages for prospects missing stage data"
+                  >
+                    {researchingStages ? (
+                      <>
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                        Researching {stageResearchProgress.current}/{stageResearchProgress.total}
+                      </>
+                    ) : (
+                      <>
+                        🤖 Research Missing Stages
+                      </>
+                    )}
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {/* No Stage Button */}
+                  <button
+                    onClick={() => toggleStageFilter('No Stage')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition ${
+                      selectedStageFilters.includes('No Stage')
+                        ? 'bg-orange-600 text-white border-orange-600'
+                        : 'bg-[#1a1e24] text-orange-400 border-orange-700 hover:border-orange-600'
+                    }`}
+                  >
+                    No Stage ({vcProspects.filter(p => !p.stage || p.stage.trim() === '').length})
+                  </button>
+                  
+                  {/* Regular Stage Buttons */}
+                  {stageOptions.map(stage => (
+                    <button
+                      key={stage}
+                      onClick={() => toggleStageFilter(stage)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition ${
+                        selectedStageFilters.includes(stage)
+                          ? 'bg-[#d7ff00] text-black border-[#d7ff00]'
+                          : 'bg-[#1a1e24] text-gray-300 border-gray-600 hover:border-gray-500'
+                      }`}
+                    >
+                      {stage}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Status Filter */}
+              <div className="flex flex-col gap-2">
+                <label className="text-gray-300 text-sm font-medium">Status:</label>
+                <div className="flex flex-wrap gap-2">
+                  {statusOptions.map(status => (
+                    <button
+                      key={status}
+                      onClick={() => toggleStatusFilter(status)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition ${
+                        selectedStatusFilters.includes(status)
+                          ? 'bg-[#d7ff00] text-black border-[#d7ff00]'
+                          : 'bg-[#1a1e24] text-gray-300 border-gray-600 hover:border-gray-500'
+                      }`}
+                    >
+                      {status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ')}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Clear Filters */}
+              {(selectedStageFilters.length > 0 || selectedStatusFilters.length > 0) && (
+                <div className="flex items-end">
+                  <button
+                    onClick={clearAllFilters}
+                    className="px-3 py-2 bg-gray-700/30 text-gray-300 rounded-lg text-sm font-medium hover:bg-gray-700/50 transition border border-gray-600 flex items-center gap-2"
+                  >
+                    <X className="w-4 h-4" />
+                    Clear Filters
+                  </button>
+                </div>
+              )}
             </div>
 
             {loadingProspects ? (
               <div className="flex justify-center py-8">
                 <Loader2 className="animate-spin h-8 w-8 text-[#d7ff00]" />
               </div>
-            ) : vcProspects.length > 0 ? (
+            ) : filteredProspects.length > 0 ? (
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
@@ -1137,20 +1701,37 @@ const VCDatabasePage: React.FC = () => {
                       <th className="text-left py-3 px-4 text-gray-300 font-medium">Person</th>
                       <th className="text-left py-3 px-4 text-gray-300 font-medium">Companies</th>
                       <th className="text-left py-3 px-4 text-gray-300 font-medium">Email</th>
+                      <th className="text-left py-3 px-4 text-gray-300 font-medium">URLs</th>
+                      <th className="text-left py-3 px-4 text-gray-300 font-medium">LinkedIn</th>
                       <th className="text-left py-3 px-4 text-gray-300 font-medium">Stage</th>
-                      <th className="text-left py-3 px-4 text-gray-300 font-medium">Country</th>
+                      <th className="text-left py-3 px-4 text-gray-300 font-medium">Location</th>
                       <th className="text-left py-3 px-4 text-gray-300 font-medium">Status</th>
+                      <th className="text-center py-3 px-4 text-gray-300 font-medium">Email</th>
                       <th className="text-left py-3 px-4 text-gray-300 font-medium">Created</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {vcProspects.map((prospect) => (
+                    {filteredProspects.map((prospect) => (
                       <tr key={prospect.id} className="border-b border-gray-800 hover:bg-[#262a30] transition-colors">
                         <td className="py-3 px-4 text-white font-medium">{prospect.person}</td>
                         <td className="py-3 px-4 text-gray-300 max-w-xs truncate">{prospect.companies}</td>
-                        <td className="py-3 px-4 text-gray-300">{prospect.email}</td>
-                        <td className="py-3 px-4 text-gray-300">{prospect.stage}</td>
-                        <td className="py-3 px-4 text-gray-300">{prospect.country}</td>
+                        <td className="py-3 px-4 text-gray-300 max-w-xs truncate">{prospect.email || '-'}</td>
+                        <td className="py-3 px-4 text-blue-400 max-w-xs truncate">
+                          {prospect.urls ? (
+                            <a href={prospect.urls} target="_blank" rel="noopener noreferrer" className="hover:underline">
+                              {prospect.urls}
+                            </a>
+                          ) : '-'}
+                        </td>
+                        <td className="py-3 px-4 text-blue-400 max-w-xs truncate">
+                          {prospect.linkedin ? (
+                            <a href={prospect.linkedin} target="_blank" rel="noopener noreferrer" className="hover:underline">
+                              LinkedIn
+                            </a>
+                          ) : '-'}
+                        </td>
+                        <td className="py-3 px-4 text-gray-300">{prospect.stage || '-'}</td>
+                        <td className="py-3 px-4 text-gray-300">{prospect.location || prospect.country || '-'}</td>
                         <td className="py-3 px-4">
                           {editingStatus === prospect.id ? (
                             <div className="flex items-center space-x-2">
@@ -1197,6 +1778,43 @@ const VCDatabasePage: React.FC = () => {
                             </div>
                           )}
                         </td>
+                        <td className="py-3 px-4 text-center">
+                          <button
+                            onClick={() => generateEmail(prospect)}
+                            disabled={!emailTemplate.trim() || generatingEmail || !prospect.email}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition flex items-center mx-auto ${
+                              !emailTemplate.trim() || !prospect.email
+                                ? 'bg-gray-700/30 text-gray-500 border-gray-700 cursor-not-allowed'
+                                : generatingEmail
+                                ? 'bg-yellow-900/30 text-yellow-400 border-yellow-900 cursor-wait'
+                                : 'bg-green-900/30 text-green-400 border-green-900 hover:bg-green-800/40'
+                            }`}
+                            title={
+                              !emailTemplate.trim() 
+                                ? "Add email template first" 
+                                : !prospect.email 
+                                ? "No email address available"
+                                : "Generate personalized email"
+                            }
+                          >
+                            {generatingEmail ? (
+                              <>
+                                <svg className="animate-spin h-3 w-3 mr-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                Generating...
+                              </>
+                            ) : (
+                              <>
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                </svg>
+                                Generate Email
+                              </>
+                            )}
+                          </button>
+                        </td>
                         <td className="py-3 px-4 text-gray-400 text-sm">
                           {prospect.createdAt.toLocaleDateString()}
                         </td>
@@ -1204,6 +1822,24 @@ const VCDatabasePage: React.FC = () => {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            ) : vcProspects.length > 0 ? (
+              <div className="text-center py-8 text-gray-400">
+                <div className="flex flex-col items-center gap-3">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                  </svg>
+                  <div>
+                    <p className="text-lg font-medium mb-2">No prospects match your filters</p>
+                    <p className="text-sm">Try adjusting your stage or status filters to see more results.</p>
+                  </div>
+                  <button
+                    onClick={clearAllFilters}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition"
+                  >
+                    Clear All Filters
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="text-center py-8 text-gray-400">
@@ -1214,6 +1850,113 @@ const VCDatabasePage: React.FC = () => {
         </div>
       </div>
     </div>
+
+      {/* Email Preview Modal */}
+      {showEmailPreview && selectedProspectForEmail && generatedEmail && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-[#1a1e24] rounded-xl p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-gray-700">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-[#d7ff00]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+                <h2 className="text-xl font-medium text-white">Email Preview</h2>
+                <span className="px-3 py-1 bg-blue-900/30 text-blue-300 rounded-full text-sm border border-blue-800">
+                  {selectedProspectForEmail.person} ({selectedProspectForEmail.companies})
+                </span>
+              </div>
+              <button
+                onClick={() => setShowEmailPreview(false)}
+                className="p-2 text-gray-400 hover:text-gray-200 transition"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Email Details */}
+            <div className="space-y-4 mb-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-gray-300 mb-1 text-sm font-medium">To:</label>
+                  <div className="bg-[#262a30] rounded-lg p-3 border border-gray-700">
+                    <div className="text-white">{selectedProspectForEmail.person}</div>
+                    <div className="text-gray-400 text-sm">{selectedProspectForEmail.email}</div>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-gray-300 mb-1 text-sm font-medium">Subject:</label>
+                  <input
+                    type="text"
+                    value={emailSubject}
+                    onChange={(e) => setEmailSubject(e.target.value)}
+                    className="w-full px-3 py-3 bg-[#262a30] border border-gray-600 rounded-lg text-white focus:border-[#d7ff00] focus:outline-none transition-colors"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Email Content */}
+            <div className="space-y-4 mb-6">
+              <label className="block text-gray-300 mb-2 text-sm font-medium">Email Content:</label>
+              <div className="bg-[#262a30] rounded-lg border border-gray-700 p-4 max-h-96 overflow-y-auto">
+                <div 
+                  className="text-gray-200 whitespace-pre-wrap"
+                  dangerouslySetInnerHTML={{ __html: generatedEmail }}
+                />
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex justify-between items-center pt-4 border-t border-gray-700">
+              <div className="text-sm text-gray-400">
+                <div className="flex items-center gap-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Email will be sent in 5 minutes via Brevo
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowEmailPreview(false)}
+                  className="px-4 py-2 bg-gray-700/30 text-gray-300 rounded-lg font-medium hover:bg-gray-700/50 transition border border-gray-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={sendScheduledEmail}
+                  disabled={sendingEmail || !emailSubject.trim()}
+                  className={`px-6 py-2 rounded-lg font-medium transition flex items-center ${
+                    sendingEmail || !emailSubject.trim()
+                      ? 'bg-gray-700/30 text-gray-500 cursor-not-allowed border border-gray-700'
+                      : 'bg-gradient-to-r from-green-600 to-blue-600 text-white hover:from-green-700 hover:to-blue-700 border border-green-600'
+                  }`}
+                >
+                  {sendingEmail ? (
+                    <>
+                      <svg className="animate-spin h-4 w-4 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Scheduling...
+                    </>
+                  ) : (
+                    <>
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                      </svg>
+                      Send Email
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Toast Notification */}
       {toastVisible && (
