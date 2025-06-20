@@ -2,7 +2,7 @@ import React from 'react';
 import { useRouter } from 'next/router';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import Head from 'next/head';
-import { Users, Settings, BarChart2, Bell, FileText, CheckSquare, PlusSquare, Image as ImageIcon, Zap, TrendingUp, Dumbbell, Tag, Users2, Activity, Award, Clock, Gift, Edit3, Send, Server, ChevronDown, MessageCircle, Utensils, Code } from 'lucide-react';
+import { Users, Settings, BarChart2, Bell, FileText, CheckSquare, PlusSquare, Image as ImageIcon, Zap, TrendingUp, Dumbbell, Tag, Users2, Activity, Award, Clock, Gift, Edit3, Send, Server, ChevronDown, MessageCircle, Utensils, Code, Building2 } from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '../../redux/store';
 import { toggleDevMode } from '../../redux/devModeSlice';
@@ -166,6 +166,12 @@ const adminCardsData = [
     description: "View and manage all meal logs from the root collection with manual sync functionality.",
     icon: <Utensils className="w-5 h-5" />,
     link: "/admin/mealLogs"
+  },
+  {
+    title: "VC Database",
+    description: "Manage venture capital prospects and investor relationships for fundraising.",
+    icon: <Building2 className="w-5 h-5" />,
+    link: "/admin/vcDatabase"
   }
 ];
 
