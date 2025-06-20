@@ -28,6 +28,9 @@ interface VCProspect extends VCFormData {
   id: string;
   createdAt: Date;
   updatedAt: Date;
+  generatedEmail?: string;
+  generatedEmailSubject?: string;
+  generatedEmailDate?: Date;
 }
 
 const VCDatabasePage: React.FC = () => {
@@ -55,7 +58,7 @@ const VCDatabasePage: React.FC = () => {
   const [toastType, setToastType] = useState<'success' | 'error'>('success');
 
   // Bulk import state
-  const [currentView, setCurrentView] = useState<'form' | 'bulk'>('form');
+  const [currentView, setCurrentView] = useState<'form' | 'bulk' | 'scheduled'>('form');
   const [spreadsheetData, setSpreadsheetData] = useState('');
   const [processingBulk, setProcessingBulk] = useState(false);
   const [previewData, setPreviewData] = useState<VCFormData[]>([]);
@@ -89,14 +92,48 @@ const VCDatabasePage: React.FC = () => {
   const [emailTemplate, setEmailTemplate] = useState<string>('');
   const [selectedProspectForEmail, setSelectedProspectForEmail] = useState<VCProspect | null>(null);
   const [generatedEmail, setGeneratedEmail] = useState<string>('');
-  const [generatingEmail, setGeneratingEmail] = useState(false);
+  const [generatingEmailForProspect, setGeneratingEmailForProspect] = useState<string | null>(null);
   const [showEmailPreview, setShowEmailPreview] = useState(false);
   const [sendingEmail, setSendingEmail] = useState(false);
   const [emailSubject, setEmailSubject] = useState<string>('');
+  
+  // Email template persistence state
+  const [savingTemplate, setSavingTemplate] = useState(false);
+  const [loadingTemplate, setLoadingTemplate] = useState(false);
+
+  // Email attachments state
+  const [emailAttachments, setEmailAttachments] = useState<File[]>([]);
+  const [attachmentUrls, setAttachmentUrls] = useState<string[]>([]);
+
+  // Email editing state
+  const [isEditingEmail, setIsEditingEmail] = useState(false);
+  const [editedEmailContent, setEditedEmailContent] = useState<string>('');
+  const [editedEmailSubject, setEditedEmailSubject] = useState<string>('');
+  const [updatingEmail, setUpdatingEmail] = useState(false);
+
+  // Preview modal attachment state (separate from template attachments)
+  const [previewEmailAttachments, setPreviewEmailAttachments] = useState<File[]>([]);
+  const [previewAttachmentUrls, setPreviewAttachmentUrls] = useState<string[]>([]);
 
   // Stage research state
   const [researchingStages, setResearchingStages] = useState(false);
   const [stageResearchProgress, setStageResearchProgress] = useState({ current: 0, total: 0 });
+
+  // Scheduled emails state
+  interface ScheduledEmail {
+    messageId: string;
+    prospectId: string;
+    prospectName: string;
+    prospectEmail: string;
+    subject: string;
+    scheduledAt: Date;
+    createdAt: Date;
+    status: 'queued' | 'inProgress' | 'processed' | 'cancelled';
+  }
+  
+  const [scheduledEmails, setScheduledEmails] = useState<ScheduledEmail[]>([]);
+  const [loadingScheduledEmails, setLoadingScheduledEmails] = useState(false);
+  const [cancellingEmail, setCancellingEmail] = useState<string | null>(null);
 
   // Storage service instance
   const storageService = new FirebaseStorageService();
@@ -121,6 +158,393 @@ const VCDatabasePage: React.FC = () => {
   const clearAllFilters = () => {
     setSelectedStageFilters([]);
     setSelectedStatusFilters([]);
+  };
+
+  // Handle email attachment upload
+  const handleAttachmentUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    const maxFileSize = 10 * 1024 * 1024; // 10MB limit
+    const allowedTypes = [
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'text/plain',
+      'image/jpeg',
+      'image/png',
+      'image/gif'
+    ];
+
+    const validFiles = files.filter(file => {
+      if (file.size > maxFileSize) {
+        showToast(`File ${file.name} is too large. Maximum size is 10MB.`, 'error');
+        return false;
+      }
+      if (!allowedTypes.includes(file.type)) {
+        showToast(`File ${file.name} type not supported.`, 'error');
+        return false;
+      }
+      return true;
+    });
+
+    setEmailAttachments(prev => [...prev, ...validFiles]);
+
+    // Create preview URLs for images
+    validFiles.forEach(file => {
+      if (file.type.startsWith('image/')) {
+        const url = URL.createObjectURL(file);
+        setAttachmentUrls(prev => [...prev, url]);
+      }
+    });
+  };
+
+  // Remove attachment
+  const removeAttachment = (index: number) => {
+    setEmailAttachments(prev => prev.filter((_, i) => i !== index));
+    // Cleanup preview URLs
+    const file = emailAttachments[index];
+    if (file?.type.startsWith('image/')) {
+      const urlIndex = emailAttachments.slice(0, index).filter(f => f.type.startsWith('image/')).length;
+      if (attachmentUrls[urlIndex]) {
+        URL.revokeObjectURL(attachmentUrls[urlIndex]);
+        setAttachmentUrls(prev => prev.filter((_, i) => i !== urlIndex));
+      }
+    }
+  };
+
+  // Handle preview modal attachment upload
+  const handlePreviewAttachmentUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    const maxFileSize = 10 * 1024 * 1024; // 10MB limit
+    const allowedTypes = [
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'text/plain',
+      'image/jpeg',
+      'image/png',
+      'image/gif'
+    ];
+
+    const validFiles = files.filter(file => {
+      if (file.size > maxFileSize) {
+        showToast(`File ${file.name} is too large. Maximum size is 10MB.`, 'error');
+        return false;
+      }
+      if (!allowedTypes.includes(file.type)) {
+        showToast(`File ${file.name} type not supported.`, 'error');
+        return false;
+      }
+      return true;
+    });
+
+    setPreviewEmailAttachments(prev => [...prev, ...validFiles]);
+
+    // Create preview URLs for images
+    validFiles.forEach(file => {
+      if (file.type.startsWith('image/')) {
+        const url = URL.createObjectURL(file);
+        setPreviewAttachmentUrls(prev => [...prev, url]);
+      }
+    });
+  };
+
+  // Remove preview attachment
+  const removePreviewAttachment = (index: number) => {
+    setPreviewEmailAttachments(prev => prev.filter((_, i) => i !== index));
+    // Cleanup preview URLs
+    const file = previewEmailAttachments[index];
+    if (file?.type.startsWith('image/')) {
+      const urlIndex = previewEmailAttachments.slice(0, index).filter(f => f.type.startsWith('image/')).length;
+      if (previewAttachmentUrls[urlIndex]) {
+        URL.revokeObjectURL(previewAttachmentUrls[urlIndex]);
+        setPreviewAttachmentUrls(prev => prev.filter((_, i) => i !== urlIndex));
+      }
+    }
+  };
+
+  // Clear all preview attachments
+  const clearPreviewAttachments = () => {
+    // Cleanup preview URLs
+    previewAttachmentUrls.forEach(url => URL.revokeObjectURL(url));
+    setPreviewEmailAttachments([]);
+    setPreviewAttachmentUrls([]);
+  };
+
+  // Add scheduled email to local tracking
+  const addScheduledEmail = (messageId: string, prospect: VCProspect, subject: string, scheduledAt: Date) => {
+    const scheduledEmail: ScheduledEmail = {
+      messageId,
+      prospectId: prospect.id,
+      prospectName: prospect.person,
+      prospectEmail: prospect.email,
+      subject,
+      scheduledAt,
+      createdAt: new Date(),
+      status: 'queued'
+    };
+    
+    setScheduledEmails(prev => [scheduledEmail, ...prev]);
+    
+    // Also save to localStorage for persistence
+    const stored = localStorage.getItem('scheduledEmails') || '[]';
+    const existingEmails = JSON.parse(stored);
+    const updatedEmails = [scheduledEmail, ...existingEmails];
+    localStorage.setItem('scheduledEmails', JSON.stringify(updatedEmails));
+  };
+
+  // Load scheduled emails from localStorage
+  const loadScheduledEmails = () => {
+    try {
+      const stored = localStorage.getItem('scheduledEmails') || '[]';
+      const emails = JSON.parse(stored).map((email: any) => ({
+        ...email,
+        scheduledAt: new Date(email.scheduledAt),
+        createdAt: new Date(email.createdAt)
+      }));
+      
+      // Filter out old emails (older than 24 hours)
+      const now = new Date();
+      const recentEmails = emails.filter((email: ScheduledEmail) => {
+        const hoursSinceCreated = (now.getTime() - email.createdAt.getTime()) / (1000 * 60 * 60);
+        return hoursSinceCreated < 24;
+      });
+      
+      setScheduledEmails(recentEmails);
+      
+      // Save filtered list back to localStorage
+      localStorage.setItem('scheduledEmails', JSON.stringify(recentEmails));
+    } catch (error) {
+      console.error('Error loading scheduled emails:', error);
+    }
+  };
+
+  // Cancel scheduled email
+  const cancelScheduledEmail = async (messageId: string) => {
+    setCancellingEmail(messageId);
+    try {
+      const response = await fetch(`/api/cancel-scheduled-email`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ messageId }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to cancel email');
+      }
+
+      // Update local state
+      setScheduledEmails(prev => prev.map(email => 
+        email.messageId === messageId 
+          ? { ...email, status: 'cancelled' as const }
+          : email
+      ));
+
+      // Update localStorage
+      const stored = localStorage.getItem('scheduledEmails') || '[]';
+      const emails = JSON.parse(stored);
+      const updatedEmails = emails.map((email: any) => 
+        email.messageId === messageId 
+          ? { ...email, status: 'cancelled' }
+          : email
+      );
+      localStorage.setItem('scheduledEmails', JSON.stringify(updatedEmails));
+
+      showToast('Email cancelled successfully', 'success');
+    } catch (error) {
+      console.error('Error cancelling email:', error);
+      showToast(error instanceof Error ? error.message : 'Failed to cancel email', 'error');
+    } finally {
+      setCancellingEmail(null);
+    }
+  };
+
+  // Check status of scheduled emails
+  const refreshScheduledEmailsStatus = async () => {
+    setLoadingScheduledEmails(true);
+    try {
+      const activeEmails = scheduledEmails.filter(email => 
+        email.status === 'queued' || email.status === 'inProgress'
+      );
+
+      for (const email of activeEmails) {
+        try {
+          const response = await fetch(`/api/check-email-status`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ messageId: email.messageId }),
+          });
+
+          if (response.ok) {
+            const result = await response.json();
+            if (result.status && result.status !== email.status) {
+              // Update status if changed
+              setScheduledEmails(prev => prev.map(e => 
+                e.messageId === email.messageId 
+                  ? { ...e, status: result.status }
+                  : e
+              ));
+            }
+          }
+        } catch (error) {
+          console.error(`Error checking status for ${email.messageId}:`, error);
+        }
+      }
+    } catch (error) {
+      console.error('Error refreshing email statuses:', error);
+    } finally {
+      setLoadingScheduledEmails(false);
+    }
+  };
+
+  // Preview existing generated email
+  const previewExistingEmail = (prospect: VCProspect) => {
+    if (!prospect.generatedEmail || !prospect.generatedEmailSubject) {
+      showToast('No generated email found for this prospect', 'error');
+      return;
+    }
+
+    setGeneratedEmail(prospect.generatedEmail);
+    setEmailSubject(prospect.generatedEmailSubject);
+    setEditedEmailContent(prospect.generatedEmail);
+    setEditedEmailSubject(prospect.generatedEmailSubject);
+    setSelectedProspectForEmail(prospect);
+    setShowEmailPreview(true);
+    setIsEditingEmail(false); // Start in view mode
+    
+    // Clear any existing preview attachments
+    clearPreviewAttachments();
+  };
+
+  // Toggle email edit mode
+  const toggleEmailEditMode = () => {
+    if (!isEditingEmail) {
+      // Entering edit mode - sync edited content with current content
+      setEditedEmailContent(generatedEmail);
+      setEditedEmailSubject(emailSubject);
+    }
+    setIsEditingEmail(!isEditingEmail);
+  };
+
+  // Cancel email editing
+  const cancelEmailEditing = () => {
+    setEditedEmailContent(generatedEmail);
+    setEditedEmailSubject(emailSubject);
+    setIsEditingEmail(false);
+  };
+
+  // Update email with edits
+  const updateEmailWithEdits = async () => {
+    if (!selectedProspectForEmail || !editedEmailContent.trim() || !editedEmailSubject.trim()) {
+      showToast('Please provide both subject and email content', 'error');
+      return;
+    }
+
+    setUpdatingEmail(true);
+    try {
+      // Update in Firebase
+      const prospectRef = doc(db, 'venture-prospects', selectedProspectForEmail.id);
+      await updateDoc(prospectRef, {
+        generatedEmail: editedEmailContent.trim(),
+        generatedEmailSubject: editedEmailSubject.trim(),
+        generatedEmailDate: new Date(), // Update the generation date to reflect edit time
+        updatedAt: new Date()
+      });
+
+      // Update local state
+      setVcProspects(prev => prev.map(p => 
+        p.id === selectedProspectForEmail.id 
+          ? { 
+              ...p, 
+              generatedEmail: editedEmailContent.trim(),
+              generatedEmailSubject: editedEmailSubject.trim(),
+              generatedEmailDate: new Date(),
+              updatedAt: new Date()
+            }
+          : p
+      ));
+
+      // Update preview state
+      setGeneratedEmail(editedEmailContent.trim());
+      setEmailSubject(editedEmailSubject.trim());
+      
+      // Exit edit mode
+      setIsEditingEmail(false);
+      
+      showToast('Email updated successfully!', 'success');
+      console.log('✅ Email edits saved to prospect record');
+      
+    } catch (error) {
+      console.error('Error updating email:', error);
+      showToast(error instanceof Error ? error.message : 'Failed to update email', 'error');
+    } finally {
+      setUpdatingEmail(false);
+    }
+  };
+
+  // Save email template to Firebase
+  const saveEmailTemplate = async () => {
+    if (!emailTemplate.trim()) {
+      showToast('Please enter an email template first', 'error');
+      return;
+    }
+
+    setSavingTemplate(true);
+    try {
+      const response = await fetch('/api/save-admin-settings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          emailTemplate: emailTemplate
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to save template');
+      }
+
+      showToast('Email template saved successfully!', 'success');
+    } catch (error) {
+      console.error('Error saving email template:', error);
+      showToast(error instanceof Error ? error.message : 'Failed to save template', 'error');
+    } finally {
+      setSavingTemplate(false);
+    }
+  };
+
+  // Load email template from Firebase
+  const loadEmailTemplate = async () => {
+    setLoadingTemplate(true);
+    try {
+      const response = await fetch('/api/load-admin-settings', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to load settings');
+      }
+
+      const result = await response.json();
+      if (result.success && result.settings.emailTemplate) {
+        setEmailTemplate(result.settings.emailTemplate);
+        showToast('Email template loaded successfully!', 'success');
+      }
+    } catch (error) {
+      console.error('Error loading email template:', error);
+      showToast('Failed to load saved template', 'error');
+    } finally {
+      setLoadingTemplate(false);
+    }
   };
 
   // Research stages for prospects with missing stage data
@@ -343,6 +767,7 @@ const VCDatabasePage: React.FC = () => {
         ...doc.data(),
         createdAt: doc.data().createdAt?.toDate() || new Date(),
         updatedAt: doc.data().updatedAt?.toDate() || new Date(),
+        generatedEmailDate: doc.data().generatedEmailDate?.toDate() || null,
       })) as VCProspect[];
       
       // Debug logging to see what data we're working with
@@ -549,43 +974,102 @@ const VCDatabasePage: React.FC = () => {
     }
   };
 
-  // Generate personalized email using AI
+  // Generate personalized email using AI with deep research
   const generateEmail = async (prospect: VCProspect) => {
     if (!emailTemplate.trim()) {
       showToast('Please provide an email template first', 'error');
       return;
     }
 
-    setGeneratingEmail(true);
+    setGeneratingEmailForProspect(prospect.id);
     try {
-      const response = await fetch('/api/generate-vc-email', {
+      // Step 1: Research the VC firm deeply
+      console.log('🔍 Step 1: Researching VC firm for personalization...');
+      
+      const researchResponse = await fetch('/api/research-vc-firm', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          prospect: prospect
+        }),
+      });
+
+      if (!researchResponse.ok) {
+        throw new Error('Failed to research VC firm');
+      }
+
+      const researchResult = await researchResponse.json();
+      console.log('📊 VC Research Results:', researchResult);
+
+      // Step 2: Generate personalized email with research insights
+      console.log('✍️ Step 2: Generating personalized email with research insights...');
+      
+      const emailResponse = await fetch('/api/generate-vc-email', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           template: emailTemplate,
-          prospect: prospect
+          prospect: prospect,
+          researchInsights: researchResult.insights // Pass the research data
         }),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
+      if (!emailResponse.ok) {
+        const errorData = await emailResponse.json();
         throw new Error(errorData.error || 'Failed to generate email');
       }
 
-      const result = await response.json();
+      const result = await emailResponse.json();
       setGeneratedEmail(result.email);
       setEmailSubject(result.subject || `Partnership Opportunity with ${prospect.companies}`);
+      setEditedEmailContent(result.email);
+      setEditedEmailSubject(result.subject || `Partnership Opportunity with ${prospect.companies}`);
       setSelectedProspectForEmail(prospect);
       setShowEmailPreview(true);
+      setIsEditingEmail(false); // Start in view mode
       
-      showToast('Email generated successfully!', 'success');
+      // Clear any existing preview attachments
+      clearPreviewAttachments();
+
+      // Save generated email to the prospect in Firebase
+      try {
+        const prospectRef = doc(db, 'venture-prospects', prospect.id);
+        await updateDoc(prospectRef, {
+          generatedEmail: result.email,
+          generatedEmailSubject: result.subject,
+          generatedEmailDate: new Date(),
+          updatedAt: new Date()
+        });
+
+        // Update local state
+        setVcProspects(prev => prev.map(p => 
+          p.id === prospect.id 
+            ? { 
+                ...p, 
+                generatedEmail: result.email,
+                generatedEmailSubject: result.subject,
+                generatedEmailDate: new Date(),
+                updatedAt: new Date()
+              }
+            : p
+        ));
+
+        console.log('✅ Generated email saved to prospect record');
+      } catch (error) {
+        console.error('Error saving generated email to prospect:', error);
+        // Don't show error toast since email generation was successful
+      }
+      
+      showToast('Personalized email generated successfully!', 'success');
     } catch (error) {
       console.error('Error generating email:', error);
       showToast(error instanceof Error ? error.message : 'Failed to generate email', 'error');
     } finally {
-      setGeneratingEmail(false);
+      setGeneratingEmailForProspect(null);
     }
   };
 
@@ -598,6 +1082,29 @@ const VCDatabasePage: React.FC = () => {
 
     setSendingEmail(true);
     try {
+      // Upload attachments to Firebase Storage if any
+      let attachments: Array<{url: string; filename: string; contentType: string}> = [];
+      if (previewEmailAttachments.length > 0) {
+        try {
+          attachments = await Promise.all(
+            previewEmailAttachments.map(async (file) => {
+              const result = await storageService.uploadImage(file, UploadImageType.Feedback);
+              return {
+                url: result.downloadURL,
+                filename: file.name,
+                contentType: file.type
+              };
+            })
+          );
+          console.log('📎 Uploaded email attachments:', attachments);
+        } catch (error) {
+          console.error('Error uploading attachments:', error);
+          showToast('Failed to upload attachments', 'error');
+          setSendingEmail(false);
+          return;
+        }
+      }
+
       const response = await fetch('/api/send-vc-email', {
         method: 'POST',
         headers: {
@@ -610,7 +1117,8 @@ const VCDatabasePage: React.FC = () => {
           },
           subject: emailSubject,
           htmlContent: generatedEmail,
-          prospectId: selectedProspectForEmail.id
+          prospectId: selectedProspectForEmail.id,
+          attachments: attachments // Include attachments
         }),
       });
 
@@ -620,6 +1128,13 @@ const VCDatabasePage: React.FC = () => {
       }
 
       const result = await response.json();
+      
+      // Add to scheduled emails tracking
+      if (result.messageId && result.scheduledFor) {
+        const scheduledAt = new Date(result.scheduledFor);
+        addScheduledEmail(result.messageId, selectedProspectForEmail, emailSubject, scheduledAt);
+      }
+      
       showToast(`Email scheduled successfully! Will be sent in 5 minutes.`, 'success');
       
       // Update prospect status to 'sent email'
@@ -630,6 +1145,9 @@ const VCDatabasePage: React.FC = () => {
       setSelectedProspectForEmail(null);
       setGeneratedEmail('');
       setEmailSubject('');
+      
+      // Clear preview attachments
+      clearPreviewAttachments();
       
     } catch (error) {
       console.error('Error sending email:', error);
@@ -694,14 +1212,17 @@ const VCDatabasePage: React.FC = () => {
   // Load data on component mount
   useEffect(() => {
     fetchVCProspects();
+    loadEmailTemplate(); // Auto-load saved email template
+    loadScheduledEmails(); // Load scheduled emails from localStorage
   }, []);
 
   // Cleanup image URLs on component unmount
   useEffect(() => {
     return () => {
       imagePreviewUrls.forEach(url => URL.revokeObjectURL(url));
+      previewAttachmentUrls.forEach(url => URL.revokeObjectURL(url));
     };
-  }, [imagePreviewUrls]);
+  }, [imagePreviewUrls, previewAttachmentUrls]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -846,6 +1367,22 @@ const VCDatabasePage: React.FC = () => {
                 >
                   <Upload className="w-4 h-4 mr-2 inline" />
                   Bulk Import
+                </button>
+                <button
+                  onClick={() => setCurrentView('scheduled')}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                    currentView === 'scheduled'
+                      ? 'bg-[#d7ff00] text-black'
+                      : 'text-gray-300 hover:text-white'
+                  }`}
+                >
+                  <Calendar className="w-4 h-4 mr-2 inline" />
+                  Scheduled Emails
+                  {scheduledEmails.filter(e => e.status === 'queued' || e.status === 'inProgress').length > 0 && (
+                    <span className="ml-2 bg-orange-500 text-white text-xs px-2 py-0.5 rounded-full">
+                      {scheduledEmails.filter(e => e.status === 'queued' || e.status === 'inProgress').length}
+                    </span>
+                  )}
                 </button>
               </div>
             </div>
@@ -1481,6 +2018,142 @@ Examples:
           </div>
         )}
 
+        {/* Scheduled Emails View */}
+        {currentView === 'scheduled' && (
+          <div className="relative bg-[#1a1e24] rounded-xl p-6 shadow-xl overflow-hidden mb-6">
+            {/* Top gradient border */}
+            <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-orange-500 via-yellow-500 to-[#d7ff00]"></div>
+            
+            {/* Left gradient border */}
+            <div className="absolute top-0 left-0 bottom-0 w-[2px] bg-gradient-to-b from-orange-500 via-yellow-500 to-[#d7ff00]"></div>
+            
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-medium text-white flex items-center">
+                  <Calendar className="w-6 h-6 mr-2 text-[#d7ff00]" />
+                  Scheduled Emails ({scheduledEmails.length})
+                </h2>
+                <button
+                  onClick={refreshScheduledEmailsStatus}
+                  disabled={loadingScheduledEmails}
+                  className="flex items-center px-3 py-2 rounded-lg text-sm font-medium bg-[#262a30] text-[#d7ff00] hover:bg-[#31363c] border border-gray-700 transition disabled:opacity-70"
+                >
+                  {loadingScheduledEmails ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : <RefreshCw size={16} className="mr-2"/>}
+                  {loadingScheduledEmails ? 'Checking Status...' : 'Refresh Status'}
+                </button>
+              </div>
+
+              {scheduledEmails.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-gray-700">
+                        <th className="text-left py-3 px-4 text-gray-300 font-medium">Prospect</th>
+                        <th className="text-left py-3 px-4 text-gray-300 font-medium">Email</th>
+                        <th className="text-left py-3 px-4 text-gray-300 font-medium">Subject</th>
+                        <th className="text-left py-3 px-4 text-gray-300 font-medium">Scheduled For</th>
+                        <th className="text-left py-3 px-4 text-gray-300 font-medium">Status</th>
+                        <th className="text-left py-3 px-4 text-gray-300 font-medium">Message ID</th>
+                        <th className="text-center py-3 px-4 text-gray-300 font-medium">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {scheduledEmails.map((email) => (
+                        <tr key={email.messageId} className="border-b border-gray-800 hover:bg-[#262a30] transition-colors">
+                          <td className="py-3 px-4 text-white font-medium">{email.prospectName}</td>
+                          <td className="py-3 px-4 text-gray-300 max-w-xs truncate">{email.prospectEmail}</td>
+                          <td className="py-3 px-4 text-gray-300 max-w-xs truncate" title={email.subject}>
+                            {email.subject}
+                          </td>
+                          <td className="py-3 px-4 text-gray-300">
+                            <div className="text-sm">
+                              <div>{email.scheduledAt.toLocaleDateString()}</div>
+                              <div className="text-xs text-gray-400">
+                                {email.scheduledAt.toLocaleTimeString()}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-3 px-4">
+                            <span 
+                              className={`px-2 py-1 rounded text-xs font-medium ${
+                                email.status === 'queued' ? 'bg-blue-900 text-blue-300' :
+                                email.status === 'inProgress' ? 'bg-yellow-900 text-yellow-300' :
+                                email.status === 'processed' ? 'bg-green-900 text-green-300' :
+                                'bg-red-900 text-red-300'
+                              }`}
+                            >
+                              {email.status === 'queued' ? 'Queued' :
+                               email.status === 'inProgress' ? 'In Progress' :
+                               email.status === 'processed' ? 'Sent' :
+                               'Cancelled'}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-gray-400 text-xs font-mono max-w-xs truncate" title={email.messageId}>
+                            {email.messageId}
+                          </td>
+                          <td className="py-3 px-4 text-center">
+                            {(email.status === 'queued' || email.status === 'inProgress') && (
+                              <button
+                                onClick={() => cancelScheduledEmail(email.messageId)}
+                                disabled={cancellingEmail === email.messageId}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition flex items-center ${
+                                  cancellingEmail === email.messageId
+                                    ? 'bg-gray-700/30 text-gray-500 border-gray-700 cursor-wait'
+                                    : 'bg-red-900/30 text-red-400 border-red-900 hover:bg-red-800/40'
+                                }`}
+                              >
+                                {cancellingEmail === email.messageId ? (
+                                  <>
+                                    <Loader2 className="animate-spin h-3 w-3 mr-1" />
+                                    Cancelling...
+                                  </>
+                                ) : (
+                                  <>
+                                    <X className="h-3 w-3 mr-1" />
+                                    Cancel
+                                  </>
+                                )}
+                              </button>
+                            )}
+                            {email.status === 'processed' && (
+                              <span className="text-xs text-green-400">✓ Sent</span>
+                            )}
+                            {email.status === 'cancelled' && (
+                              <span className="text-xs text-red-400">✗ Cancelled</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-400">
+                  <div className="flex flex-col items-center gap-3">
+                    <Calendar className="h-12 w-12 text-gray-600" />
+                    <div>
+                      <p className="text-lg font-medium mb-2">No scheduled emails</p>
+                      <p className="text-sm">Scheduled emails will appear here after you send them from the prospects table.</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {scheduledEmails.length > 0 && (
+                <div className="text-xs text-gray-500 bg-[#262a30] p-3 rounded-lg border border-gray-700">
+                  <strong>💡 Note:</strong> This table tracks emails scheduled in the last 24 hours. 
+                  <ul className="mt-1 ml-4 list-disc space-y-1">
+                    <li><strong>Queued:</strong> Email is scheduled and waiting to be sent</li>
+                    <li><strong>In Progress:</strong> Email is currently being processed</li>
+                    <li><strong>Sent:</strong> Email has been successfully delivered to Brevo</li>
+                    <li><strong>Cancelled:</strong> Email was cancelled before sending</li>
+                  </ul>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Email Template Section */}
         <div className="relative bg-[#1a1e24] rounded-xl p-6 shadow-xl overflow-hidden mb-6">
           {/* Top gradient border */}
@@ -1503,9 +2176,57 @@ Examples:
               {/* Email Template Input */}
               <div className="space-y-4">
                 <div>
-                  <label htmlFor="emailTemplate" className="block text-gray-300 mb-2 text-sm font-medium">
-                    Email Template
-                  </label>
+                  <div className="flex items-center justify-between mb-2">
+                    <label htmlFor="emailTemplate" className="block text-gray-300 text-sm font-medium">
+                      Email Template
+                    </label>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={loadEmailTemplate}
+                        disabled={loadingTemplate}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition flex items-center gap-1 ${
+                          loadingTemplate
+                            ? 'bg-blue-900/30 text-blue-400 border-blue-900 cursor-wait'
+                            : 'bg-gray-700/30 text-gray-300 border-gray-700 hover:bg-gray-700/50'
+                        }`}
+                        title="Load saved email template"
+                      >
+                        {loadingTemplate ? (
+                          <>
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                            Loading...
+                          </>
+                        ) : (
+                          <>
+                            📥 Load
+                          </>
+                        )}
+                      </button>
+                      <button
+                        onClick={saveEmailTemplate}
+                        disabled={savingTemplate || !emailTemplate.trim()}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition flex items-center gap-1 ${
+                          savingTemplate
+                            ? 'bg-green-900/30 text-green-400 border-green-900 cursor-wait'
+                            : !emailTemplate.trim()
+                            ? 'bg-gray-700/30 text-gray-500 border-gray-700 cursor-not-allowed'
+                            : 'bg-green-900/30 text-green-400 border-green-900 hover:bg-green-800/40'
+                        }`}
+                        title="Save email template for future use"
+                      >
+                        {savingTemplate ? (
+                          <>
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                            Saving...
+                          </>
+                        ) : (
+                          <>
+                            💾 Save Template
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
                   <p className="text-gray-400 text-xs mb-3">
                     Write your template email. AI will analyze the tone and style to generate personalized emails for each prospect.
                   </p>
@@ -1526,6 +2247,52 @@ Best regards,
                   />
                 </div>
                 
+                {/* Email Attachments */}
+                <div>
+                  <label className="block text-gray-300 mb-2 text-sm font-medium">
+                    Email Attachments
+                  </label>
+                  <div className="border-2 border-dashed border-gray-600 rounded-lg p-4 text-center hover:border-gray-500 transition-colors">
+                    <input
+                      type="file"
+                      multiple
+                      accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.gif"
+                      onChange={handleAttachmentUpload}
+                      className="hidden"
+                      id="email-attachments"
+                    />
+                    <label htmlFor="email-attachments" className="cursor-pointer">
+                      <Upload className="w-6 h-6 text-gray-400 mx-auto mb-2" />
+                      <p className="text-white mb-1">Click to upload attachments</p>
+                      <p className="text-gray-400 text-xs">PDF, DOC, TXT, Images (Max 10MB each)</p>
+                    </label>
+                  </div>
+
+                  {/* Attachment List */}
+                  {emailAttachments.length > 0 && (
+                    <div className="mt-3">
+                      <h4 className="text-sm font-medium text-gray-300 mb-2">Attachments ({emailAttachments.length})</h4>
+                      <div className="space-y-2">
+                        {emailAttachments.map((file, index) => (
+                          <div key={index} className="flex items-center justify-between bg-[#262a30] p-2 rounded border border-gray-700">
+                            <div className="flex items-center gap-2">
+                              <FileText className="w-4 h-4 text-blue-400" />
+                              <span className="text-sm text-white truncate">{file.name}</span>
+                              <span className="text-xs text-gray-400">({(file.size / 1024 / 1024).toFixed(1)}MB)</span>
+                            </div>
+                            <button
+                              onClick={() => removeAttachment(index)}
+                              className="text-red-400 hover:text-red-300 transition"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 <div className="text-xs text-gray-500 bg-[#262a30] p-3 rounded-lg border border-gray-700">
                   <strong>💡 Tip:</strong> Write in your natural style. The AI will:
                   <ul className="mt-1 ml-4 list-disc space-y-1">
@@ -1569,9 +2336,11 @@ Best regards,
                     Email Features
                   </h4>
                   <ul className="text-sm text-blue-200 space-y-1">
-                    <li>• Automatic personalization with prospect data</li>
-                    <li>• Smart subject line generation</li>
-                    <li>• Tone and style matching</li>
+                    <li>• Deep VC firm research for specific portfolio alignments</li>
+                    <li>• References to actual portfolio companies & investment thesis</li>
+                    <li>• Partner background research and personalization</li>
+                    <li>• Smart subject line generation with research insights</li>
+                    <li>• Tone and style matching from your template</li>
                     <li>• 5-minute scheduled sending via Brevo</li>
                     <li>• Auto-update prospect status to "sent email"</li>
                   </ul>
@@ -1779,41 +2548,58 @@ Best regards,
                           )}
                         </td>
                         <td className="py-3 px-4 text-center">
-                          <button
-                            onClick={() => generateEmail(prospect)}
-                            disabled={!emailTemplate.trim() || generatingEmail || !prospect.email}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition flex items-center mx-auto ${
-                              !emailTemplate.trim() || !prospect.email
-                                ? 'bg-gray-700/30 text-gray-500 border-gray-700 cursor-not-allowed'
-                                : generatingEmail
-                                ? 'bg-yellow-900/30 text-yellow-400 border-yellow-900 cursor-wait'
-                                : 'bg-green-900/30 text-green-400 border-green-900 hover:bg-green-800/40'
-                            }`}
-                            title={
-                              !emailTemplate.trim() 
-                                ? "Add email template first" 
-                                : !prospect.email 
-                                ? "No email address available"
-                                : "Generate personalized email"
-                            }
-                          >
-                            {generatingEmail ? (
-                              <>
-                                <svg className="animate-spin h-3 w-3 mr-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                </svg>
-                                Generating...
-                              </>
-                            ) : (
-                              <>
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                                </svg>
-                                Generate Email
-                              </>
+                          <div className="flex gap-1 justify-center">
+                            {/* Preview Button - show if email exists */}
+                            {prospect.generatedEmail && (
+                              <button
+                                onClick={() => previewExistingEmail(prospect)}
+                                className="px-2 py-1.5 rounded-lg text-xs font-medium border transition flex items-center bg-blue-900/30 text-blue-400 border-blue-900 hover:bg-blue-800/40"
+                                title={`Preview generated email from ${prospect.generatedEmailDate ? new Date(prospect.generatedEmailDate).toLocaleDateString() : 'unknown date'}`}
+                              >
+                                <Eye className="h-3 w-3 mr-1" />
+                                Preview
+                              </button>
                             )}
-                          </button>
+                            
+                            {/* Generate Button */}
+                            <button
+                              onClick={() => generateEmail(prospect)}
+                              disabled={!emailTemplate.trim() || generatingEmailForProspect === prospect.id || !prospect.email}
+                              className={`px-2 py-1.5 rounded-lg text-xs font-medium border transition flex items-center ${
+                                !emailTemplate.trim() || !prospect.email
+                                  ? 'bg-gray-700/30 text-gray-500 border-gray-700 cursor-not-allowed'
+                                  : generatingEmailForProspect === prospect.id
+                                  ? 'bg-yellow-900/30 text-yellow-400 border-yellow-900 cursor-wait'
+                                  : 'bg-green-900/30 text-green-400 border-green-900 hover:bg-green-800/40'
+                              }`}
+                              title={
+                                !emailTemplate.trim() 
+                                  ? "Add email template first" 
+                                  : !prospect.email 
+                                  ? "No email address available"
+                                  : prospect.generatedEmail
+                                  ? "Regenerate personalized email"
+                                  : "Generate personalized email"
+                              }
+                            >
+                              {generatingEmailForProspect === prospect.id ? (
+                                <>
+                                  <svg className="animate-spin h-3 w-3 mr-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                  </svg>
+                                  Researching...
+                                </>
+                              ) : (
+                                <>
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                  </svg>
+                                  {prospect.generatedEmail ? 'Regenerate' : 'Generate'}
+                                </>
+                              )}
+                            </button>
+                          </div>
                         </td>
                         <td className="py-3 px-4 text-gray-400 text-sm">
                           {prospect.createdAt.toLocaleDateString()}
@@ -1861,19 +2647,47 @@ Best regards,
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-[#d7ff00]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                 </svg>
-                <h2 className="text-xl font-medium text-white">Email Preview</h2>
+                <h2 className="text-xl font-medium text-white">
+                  {isEditingEmail ? 'Edit Email' : 'Email Preview'}
+                </h2>
                 <span className="px-3 py-1 bg-blue-900/30 text-blue-300 rounded-full text-sm border border-blue-800">
                   {selectedProspectForEmail.person} ({selectedProspectForEmail.companies})
                 </span>
+                {isEditingEmail && (
+                  <span className="px-2 py-1 bg-orange-900/30 text-orange-300 rounded-full text-xs border border-orange-800">
+                    Editing Mode
+                  </span>
+                )}
               </div>
-              <button
-                onClick={() => setShowEmailPreview(false)}
-                className="p-2 text-gray-400 hover:text-gray-200 transition"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+              <div className="flex items-center gap-2">
+                {/* Edit/Cancel Button */}
+                <button
+                  onClick={isEditingEmail ? cancelEmailEditing : toggleEmailEditMode}
+                  disabled={updatingEmail}
+                  className={`p-2 rounded-lg transition ${
+                    isEditingEmail 
+                      ? 'text-orange-400 hover:text-orange-300 bg-orange-900/20 hover:bg-orange-900/30' 
+                      : 'text-blue-400 hover:text-blue-300 bg-blue-900/20 hover:bg-blue-900/30'
+                  }`}
+                  title={isEditingEmail ? 'Cancel editing' : 'Edit email'}
+                >
+                  {isEditingEmail ? (
+                    <X className="h-5 w-5" />
+                  ) : (
+                    <Edit3 className="h-5 w-5" />
+                  )}
+                </button>
+                
+                {/* Close Button */}
+                <button
+                  onClick={() => setShowEmailPreview(false)}
+                  className="p-2 text-gray-400 hover:text-gray-200 transition"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
             </div>
 
             {/* Email Details */}
@@ -1890,9 +2704,19 @@ Best regards,
                   <label className="block text-gray-300 mb-1 text-sm font-medium">Subject:</label>
                   <input
                     type="text"
-                    value={emailSubject}
-                    onChange={(e) => setEmailSubject(e.target.value)}
-                    className="w-full px-3 py-3 bg-[#262a30] border border-gray-600 rounded-lg text-white focus:border-[#d7ff00] focus:outline-none transition-colors"
+                    value={isEditingEmail ? editedEmailSubject : emailSubject}
+                    onChange={(e) => {
+                      if (isEditingEmail) {
+                        setEditedEmailSubject(e.target.value);
+                      } else {
+                        setEmailSubject(e.target.value);
+                      }
+                    }}
+                    disabled={!isEditingEmail && updatingEmail}
+                    className={`w-full px-3 py-3 bg-[#262a30] border border-gray-600 rounded-lg text-white focus:border-[#d7ff00] focus:outline-none transition-colors ${
+                      !isEditingEmail ? 'cursor-default' : ''
+                    }`}
+                    readOnly={!isEditingEmail}
                   />
                 </div>
               </div>
@@ -1901,57 +2725,191 @@ Best regards,
             {/* Email Content */}
             <div className="space-y-4 mb-6">
               <label className="block text-gray-300 mb-2 text-sm font-medium">Email Content:</label>
-              <div className="bg-[#262a30] rounded-lg border border-gray-700 p-4 max-h-96 overflow-y-auto">
-                <div 
-                  className="text-gray-200 whitespace-pre-wrap"
-                  dangerouslySetInnerHTML={{ __html: generatedEmail }}
+              {isEditingEmail ? (
+                <textarea
+                  value={editedEmailContent}
+                  onChange={(e) => setEditedEmailContent(e.target.value)}
+                  rows={16}
+                  className="w-full px-4 py-3 bg-[#262a30] border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-[#d7ff00] focus:outline-none transition-colors resize-vertical"
+                  placeholder="Email content..."
                 />
+              ) : (
+                <div className="bg-[#262a30] rounded-lg border border-gray-700 p-4 max-h-96 overflow-y-auto">
+                  <div 
+                    className="text-gray-200 whitespace-pre-wrap"
+                    dangerouslySetInnerHTML={{ __html: generatedEmail }}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Email Attachments */}
+            <div className="space-y-4 mb-6">
+              <label className="block text-gray-300 mb-2 text-sm font-medium">
+                Email Attachments
+                {previewEmailAttachments.length > 0 && (
+                  <span className="ml-2 text-xs text-blue-400">({previewEmailAttachments.length} file{previewEmailAttachments.length !== 1 ? 's' : ''})</span>
+                )}
+              </label>
+              
+              {/* Upload Area */}
+              <div className="border-2 border-dashed border-gray-600 rounded-lg p-4 text-center hover:border-gray-500 transition-colors">
+                <input
+                  type="file"
+                  multiple
+                  accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.gif"
+                  onChange={handlePreviewAttachmentUpload}
+                  className="hidden"
+                  id="preview-email-attachments"
+                />
+                <label htmlFor="preview-email-attachments" className="cursor-pointer">
+                  <Upload className="w-6 h-6 text-gray-400 mx-auto mb-2" />
+                  <p className="text-white mb-1">Click to add attachments</p>
+                  <p className="text-gray-400 text-xs">PDF, DOC, TXT, Images (Max 10MB each)</p>
+                </label>
               </div>
+
+              {/* Attachment List */}
+              {previewEmailAttachments.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-medium text-gray-300">Attached Files</h4>
+                    <button
+                      onClick={clearPreviewAttachments}
+                      className="text-xs text-red-400 hover:text-red-300 transition"
+                    >
+                      Clear All
+                    </button>
+                  </div>
+                  <div className="space-y-2">
+                    {previewEmailAttachments.map((file, index) => (
+                      <div key={index} className="flex items-center justify-between bg-[#262a30] p-3 rounded border border-gray-700">
+                        <div className="flex items-center gap-3">
+                          <div className="flex-shrink-0">
+                            {file.type.startsWith('image/') ? (
+                              <div className="w-8 h-8 rounded overflow-hidden bg-gray-700 flex items-center justify-center">
+                                <img
+                                  src={URL.createObjectURL(file)}
+                                  alt={file.name}
+                                  className="w-full h-full object-cover"
+                                />
+                              </div>
+                            ) : (
+                              <FileText className="w-6 h-6 text-blue-400" />
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="text-sm text-white truncate" title={file.name}>
+                              {file.name}
+                            </div>
+                            <div className="text-xs text-gray-400">
+                              {(file.size / 1024 / 1024).toFixed(1)}MB • {file.type.split('/')[1].toUpperCase()}
+                            </div>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => removePreviewAttachment(index)}
+                          className="flex-shrink-0 text-red-400 hover:text-red-300 transition p-1"
+                          title="Remove attachment"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Action Buttons */}
             <div className="flex justify-between items-center pt-4 border-t border-gray-700">
               <div className="text-sm text-gray-400">
-                <div className="flex items-center gap-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  Email will be sent in 5 minutes via Brevo
-                </div>
+                {!isEditingEmail && (
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      Email will be sent in 5 minutes via Brevo
+                    </div>
+                    {previewEmailAttachments.length > 0 && (
+                      <div className="flex items-center gap-2 text-xs">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                        </svg>
+                        <span className="text-green-400">
+                          {previewEmailAttachments.length} attachment{previewEmailAttachments.length !== 1 ? 's' : ''} will be included
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {isEditingEmail && (
+                  <div className="flex items-center gap-2 text-orange-400">
+                    <Edit3 className="h-4 w-4" />
+                    Make changes to personalize the email further
+                  </div>
+                )}
               </div>
               <div className="flex gap-3">
                 <button
                   onClick={() => setShowEmailPreview(false)}
-                  className="px-4 py-2 bg-gray-700/30 text-gray-300 rounded-lg font-medium hover:bg-gray-700/50 transition border border-gray-700"
+                  disabled={updatingEmail}
+                  className="px-4 py-2 bg-gray-700/30 text-gray-300 rounded-lg font-medium hover:bg-gray-700/50 transition border border-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Cancel
+                  {isEditingEmail ? 'Close' : 'Cancel'}
                 </button>
-                <button
-                  onClick={sendScheduledEmail}
-                  disabled={sendingEmail || !emailSubject.trim()}
-                  className={`px-6 py-2 rounded-lg font-medium transition flex items-center ${
-                    sendingEmail || !emailSubject.trim()
-                      ? 'bg-gray-700/30 text-gray-500 cursor-not-allowed border border-gray-700'
-                      : 'bg-gradient-to-r from-green-600 to-blue-600 text-white hover:from-green-700 hover:to-blue-700 border border-green-600'
-                  }`}
-                >
-                  {sendingEmail ? (
-                    <>
-                      <svg className="animate-spin h-4 w-4 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      Scheduling...
-                    </>
-                  ) : (
-                    <>
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                      </svg>
-                      Send Email
-                    </>
-                  )}
-                </button>
+                
+                {isEditingEmail ? (
+                  <button
+                    onClick={updateEmailWithEdits}
+                    disabled={updatingEmail || !editedEmailContent.trim() || !editedEmailSubject.trim()}
+                    className={`px-6 py-2 rounded-lg font-medium transition flex items-center ${
+                      updatingEmail || !editedEmailContent.trim() || !editedEmailSubject.trim()
+                        ? 'bg-gray-700/30 text-gray-500 cursor-not-allowed border border-gray-700'
+                        : 'bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:from-blue-700 hover:to-purple-700 border border-blue-600'
+                    }`}
+                  >
+                    {updatingEmail ? (
+                      <>
+                        <Loader2 className="animate-spin h-4 w-4 mr-2" />
+                        Updating...
+                      </>
+                    ) : (
+                      <>
+                        <Check className="h-4 w-4 mr-2" />
+                        Update Email
+                      </>
+                    )}
+                  </button>
+                ) : (
+                  <button
+                    onClick={sendScheduledEmail}
+                    disabled={sendingEmail || !emailSubject.trim()}
+                    className={`px-6 py-2 rounded-lg font-medium transition flex items-center ${
+                      sendingEmail || !emailSubject.trim()
+                        ? 'bg-gray-700/30 text-gray-500 cursor-not-allowed border border-gray-700'
+                        : 'bg-gradient-to-r from-green-600 to-blue-600 text-white hover:from-green-700 hover:to-blue-700 border border-green-600'
+                    }`}
+                  >
+                    {sendingEmail ? (
+                      <>
+                        <svg className="animate-spin h-4 w-4 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Scheduling...
+                      </>
+                    ) : (
+                      <>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                        </svg>
+                        Send Email
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
             </div>
           </div>

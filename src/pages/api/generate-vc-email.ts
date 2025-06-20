@@ -22,6 +22,7 @@ interface VCProspect {
 interface GenerateEmailRequest {
   template: string;
   prospect: VCProspect;
+  researchInsights?: any; // Research data from the research API
 }
 
 interface GenerateEmailResponse {
@@ -39,7 +40,7 @@ export default async function handler(
   }
 
   try {
-    const { template, prospect } = req.body as GenerateEmailRequest;
+    const { template, prospect, researchInsights } = req.body as GenerateEmailRequest;
 
     // Validate input
     if (!template?.trim()) {
@@ -60,8 +61,8 @@ export default async function handler(
     // Initialize OpenAI client
     const openai = new OpenAI({ apiKey });
 
-    // Create the personalization prompt
-    const prompt = `You are an expert email writer specializing in VC outreach. Your task is to analyze the provided email template and create a personalized email for a specific VC prospect.
+    // Create the personalization prompt with research insights
+    const prompt = `You are an expert email writer specializing in VC outreach. Your task is to analyze the provided email template and create a highly personalized email using deep research insights about the VC prospect.
 
 TEMPLATE TO ANALYZE:
 ${template}
@@ -78,30 +79,44 @@ PROSPECT INFORMATION:
 - Founded Companies: ${prospect.founder || 'Not specified'}
 - Number of Exits: ${prospect.numberOfExits || 'Not specified'}
 
-INSTRUCTIONS:
-1. **Analyze the template's tone, style, and structure** - Match the original writer's voice exactly
-2. **Personalize with prospect data** - Seamlessly integrate relevant prospect information
-3. **Maintain the email flow** - Keep the same structure and progression of ideas
-4. **Generate a compelling subject line** - Create a subject that would appeal to this specific VC
-5. **Make it feel authentic** - Ensure the personalization feels natural, not forced
+RESEARCH INSIGHTS ABOUT THE VC FIRM:
+${researchInsights ? JSON.stringify(researchInsights, null, 2) : 'No additional research insights available'}
+
+ADVANCED PERSONALIZATION INSTRUCTIONS:
+1. **Use specific portfolio companies** - Reference actual portfolio companies that align with Pulse instead of generic descriptions
+2. **Cite investment thesis alignment** - Use their specific investment thesis/values, not generic VC language
+3. **Mention relevant partners** - Reference specific partners who might be interested based on their backgrounds
+4. **Reference recent investments** - Mention recent relevant investments to show current market awareness
+5. **Use their language/values** - Incorporate their firm's specific language, mission, or values
+6. **Create meaningful connections** - Draw specific parallels between Pulse and their portfolio/thesis
+
+EXAMPLE OF GOOD PERSONALIZATION (INSTEAD OF GENERIC):
+❌ Generic: "Given your firm's investment in early-stage tech startups..."
+✅ Specific: "Given your investment in ClassPass and thesis around empowering fitness communities..."
+
+❌ Generic: "Your focus on diverse founders..."
+✅ Specific: "Your partner Sarah's background as a former Nike executive and focus on athlete-founded companies..."
 
 REQUIREMENTS:
-- Keep the same level of formality/casualness as the template
-- Use the prospect's name and firm naturally throughout
-- Reference specific details that show you've researched them
-- Maintain the original email's length and structure
-- Make the email relevant to their investment focus/stage
-- Ensure all personalizations are accurate to the provided data
+- Use SPECIFIC company names, partner names, and thesis points from research insights
+- Replace generic template placeholders with researched facts
+- Maintain the template's tone and structure
+- Make every personalization fact-based and relevant
+- Ensure the research insights naturally enhance the template rather than replace it
+- If research insights are limited, focus on what's available and supplement with prospect data
 
 Return your response as JSON in this exact format:
 {
-  "subject": "Compelling subject line for ${prospect.person} at ${prospect.companies}",
-  "email": "The complete personalized email in HTML format with proper line breaks and formatting"
+  "subject": "Compelling subject line referencing specific research insight for ${prospect.person}",
+  "email": "The complete personalized email in HTML format with proper line breaks and formatting, incorporating specific research insights naturally"
 }
 
-The email should be ready to send - professional, engaging, and tailored specifically for ${prospect.person} at ${prospect.companies}.`;
+The email should demonstrate deep knowledge of ${prospect.companies} and create genuine connection points with Pulse based on researched facts.`;
 
     console.log('🤖 Generating personalized email for:', prospect.person, 'at', prospect.companies);
+    if (researchInsights) {
+      console.log('📊 Using research insights for enhanced personalization');
+    }
 
     // Call OpenAI API
     const response = await openai.chat.completions.create({
