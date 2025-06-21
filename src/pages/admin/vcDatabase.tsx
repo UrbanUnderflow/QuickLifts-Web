@@ -22,6 +22,7 @@ interface VCFormData {
   founder: string;
   numberOfExits: string;
   status: string;
+  source: 'individual_form' | 'bulk_text' | 'bulk_image' | 'ai_research'; // NEW: Track data source
 }
 
 interface VCProspect extends VCFormData {
@@ -49,7 +50,8 @@ const VCDatabasePage: React.FC = () => {
     stage: '',
     founder: '',
     numberOfExits: '',
-    status: 'new'
+    status: 'new',
+    source: 'individual_form'
   });
 
   const [loading, setLoading] = useState(false);
@@ -77,6 +79,7 @@ const VCDatabasePage: React.FC = () => {
   // Filter state
   const [selectedStageFilters, setSelectedStageFilters] = useState<string[]>([]);
   const [selectedStatusFilters, setSelectedStatusFilters] = useState<string[]>([]);
+  const [selectedSourceFilters, setSelectedSourceFilters] = useState<string[]>([]);
 
   // Duplicate detection state
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
@@ -155,9 +158,18 @@ const VCDatabasePage: React.FC = () => {
     );
   };
 
+  const toggleSourceFilter = (source: string) => {
+    setSelectedSourceFilters(prev => 
+      prev.includes(source) 
+        ? prev.filter(s => s !== source)
+        : [...prev, source]
+    );
+  };
+
   const clearAllFilters = () => {
     setSelectedStageFilters([]);
     setSelectedStatusFilters([]);
+    setSelectedSourceFilters([]);
   };
 
   // Handle email attachment upload
@@ -777,8 +789,10 @@ const VCDatabasePage: React.FC = () => {
       // Log unique stages and statuses found in data
       const uniqueStages = Array.from(new Set(prospects.map(p => p.stage).filter(Boolean)));
       const uniqueStatuses = Array.from(new Set(prospects.map(p => p.status).filter(Boolean)));
+      const uniqueSources = Array.from(new Set(prospects.map(p => p.source).filter(Boolean)));
       console.log('🎭 Unique stages in data:', uniqueStages);
       console.log('📋 Unique statuses in data:', uniqueStatuses);
+      console.log('🏷️ Unique sources in data:', uniqueSources);
       
       setVcProspects(prospects);
       // Clear any duplicate warnings when fresh data loads
@@ -896,7 +910,9 @@ const VCDatabasePage: React.FC = () => {
       // Add default status to all prospects
       const processedData = prospects.map((item: any) => ({
         ...item,
-        status: 'new' // Default status
+        status: 'new', // Default status
+        source: bulkInputType === 'text' ? 'bulk_text' : 
+                bulkInputType === 'image' ? 'bulk_image' : 'ai_research' // Set source based on input type
       }));
       
       console.log('⚙️ Processed Data (with default status):', processedData);
@@ -1163,14 +1179,15 @@ const VCDatabasePage: React.FC = () => {
     const prospectStages = prospect.stage ? prospect.stage.split(',').map(s => s.trim()) : [];
     
     // Debug logging
-    if (selectedStageFilters.length > 0 || selectedStatusFilters.length > 0) {
+    if (selectedStageFilters.length > 0 || selectedStatusFilters.length > 0 || selectedSourceFilters.length > 0) {
       console.log('🔍 Filtering prospect:', {
         person: prospect.person,
         rawStage: prospect.stage,
         parsedStages: prospectStages,
         status: prospect.status,
         selectedStageFilters,
-        selectedStatusFilters
+        selectedStatusFilters,
+        selectedSourceFilters
       });
     }
     
@@ -1200,10 +1217,13 @@ const VCDatabasePage: React.FC = () => {
     // Check exact match for status
     const statusMatch = selectedStatusFilters.length === 0 || selectedStatusFilters.includes(prospect.status || '');
     
-    const matches = stageMatch && statusMatch;
+    // Check exact match for source
+    const sourceMatch = selectedSourceFilters.length === 0 || selectedSourceFilters.includes(prospect.source || '');
     
-    if (selectedStageFilters.length > 0 || selectedStatusFilters.length > 0) {
-      console.log('🎯 Match result:', { stageMatch, statusMatch, matches });
+    const matches = stageMatch && statusMatch && sourceMatch;
+    
+    if (selectedStageFilters.length > 0 || selectedStatusFilters.length > 0 || selectedSourceFilters.length > 0) {
+      console.log('🎯 Match result:', { stageMatch, statusMatch, sourceMatch, matches });
     }
     
     return matches;
@@ -1275,7 +1295,8 @@ const VCDatabasePage: React.FC = () => {
         stage: '',
         founder: '',
         numberOfExits: '',
-        status: 'new'
+        status: 'new',
+        source: 'individual_form'
       });
     } catch (error) {
       console.error('Error adding VC:', error);
@@ -2001,6 +2022,22 @@ Examples:
                               <span className="text-gray-400">Status:</span>
                               <div className="text-[#d7ff00]">{prospect.status}</div>
                             </div>
+                            <div>
+                              <span className="text-gray-400">Source:</span>
+                              <div className={`text-sm font-medium ${
+                                prospect.source === 'bulk_text' ? 'text-blue-400' :
+                                prospect.source === 'bulk_image' ? 'text-purple-400' :
+                                prospect.source === 'ai_research' ? 'text-orange-400' :
+                                'text-gray-400'
+                              }`}>
+                                {prospect.source === 'bulk_text' ? 'Bulk Text' :
+                                 prospect.source === 'bulk_image' ? 'Bulk Image' :
+                                 prospect.source === 'ai_research' ? 'AI Research' : prospect.source}
+                                {(prospect.source === 'ai_research' || prospect.source === 'bulk_image') && (
+                                  <span className="ml-1 text-yellow-400" title="Requires verification">⚠️</span>
+                                )}
+                              </div>
+                            </div>
                           </div>
                           {prospect.description && (
                             <div className="mt-3 pt-3 border-t border-gray-700">
@@ -2345,6 +2382,23 @@ Best regards,
                     <li>• Auto-update prospect status to "sent email"</li>
                   </ul>
                 </div>
+                
+                <div className="bg-yellow-900/20 border border-yellow-800 rounded-lg p-4">
+                  <h4 className="text-yellow-300 font-medium mb-2 flex items-center">
+                    <AlertTriangle className="h-4 w-4 mr-2" />
+                    Data Integrity Warning
+                  </h4>
+                  <div className="text-sm text-yellow-200 space-y-2">
+                    <p>Prospects marked with ⚠️ are AI-generated and may contain inaccurate information:</p>
+                    <ul className="ml-4 list-disc space-y-1">
+                      <li><span className="text-orange-400 font-medium">AI Research</span> - Verify contact details, company info, and investment focus</li>
+                      <li><span className="text-purple-400 font-medium">Bulk Image</span> - Confirm extracted data accuracy from screenshots</li>
+                      <li><span className="text-blue-400 font-medium">Bulk Text</span> - Generally reliable from structured data</li>
+                      <li><span className="text-green-400 font-medium">Manual Entry</span> - Highest confidence, manually verified</li>
+                    </ul>
+                    <p className="font-medium text-yellow-300">Always verify AI-generated prospects before sending emails to maintain professional credibility.</p>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -2444,8 +2498,31 @@ Best regards,
                 </div>
               </div>
 
+              {/* Source Filter */}
+              <div className="flex flex-col gap-2">
+                <label className="text-gray-300 text-sm font-medium">Source:</label>
+                <div className="flex flex-wrap gap-2">
+                  {['individual_form', 'bulk_text', 'bulk_image', 'ai_research'].map(source => (
+                    <button
+                      key={source}
+                      onClick={() => toggleSourceFilter(source)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition ${
+                        selectedSourceFilters.includes(source)
+                          ? 'bg-[#d7ff00] text-black border-[#d7ff00]'
+                          : 'bg-[#1a1e24] text-gray-300 border-gray-600 hover:border-gray-500'
+                      }`}
+                    >
+                      {source === 'individual_form' ? 'Individual Form' :
+                       source === 'bulk_text' ? 'Bulk Text' :
+                       source === 'bulk_image' ? 'Bulk Image' :
+                       source === 'ai_research' ? 'AI Research' : source}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {/* Clear Filters */}
-              {(selectedStageFilters.length > 0 || selectedStatusFilters.length > 0) && (
+              {(selectedStageFilters.length > 0 || selectedStatusFilters.length > 0 || selectedSourceFilters.length > 0) && (
                 <div className="flex items-end">
                   <button
                     onClick={clearAllFilters}
@@ -2475,6 +2552,7 @@ Best regards,
                       <th className="text-left py-3 px-4 text-gray-300 font-medium">Stage</th>
                       <th className="text-left py-3 px-4 text-gray-300 font-medium">Location</th>
                       <th className="text-left py-3 px-4 text-gray-300 font-medium">Status</th>
+                      <th className="text-left py-3 px-4 text-gray-300 font-medium">Source</th>
                       <th className="text-center py-3 px-4 text-gray-300 font-medium">Email</th>
                       <th className="text-left py-3 px-4 text-gray-300 font-medium">Created</th>
                     </tr>
@@ -2546,6 +2624,29 @@ Best regards,
                               </button>
                             </div>
                           )}
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-2">
+                            <span 
+                              className={`px-2 py-1 rounded text-xs font-medium ${
+                                prospect.source === 'individual_form' ? 'bg-green-900 text-green-300' :
+                                prospect.source === 'bulk_text' ? 'bg-blue-900 text-blue-300' :
+                                prospect.source === 'bulk_image' ? 'bg-purple-900 text-purple-300' :
+                                prospect.source === 'ai_research' ? 'bg-orange-900 text-orange-300' :
+                                'bg-gray-900 text-gray-300'
+                              }`}
+                            >
+                              {prospect.source === 'individual_form' ? 'Manual Entry' :
+                               prospect.source === 'bulk_text' ? 'Bulk Text' :
+                               prospect.source === 'bulk_image' ? 'Bulk Image' :
+                               prospect.source === 'ai_research' ? 'AI Research' : prospect.source || '-'}
+                            </span>
+                            {(prospect.source === 'ai_research' || prospect.source === 'bulk_image') && (
+                              <span title="Requires extra verification - AI generated data may need fact-checking">
+                                <AlertTriangle className="w-4 h-4 text-yellow-400" />
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="py-3 px-4 text-center">
                           <div className="flex gap-1 justify-center">

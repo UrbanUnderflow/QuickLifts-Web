@@ -448,7 +448,22 @@ const CreatorChecklist = ({ metaData }: HundredTrainersPageProps) => {
 
                   <div>
                     <label htmlFor="clientCount" className="block text-sm font-medium text-gray-300 mb-1">Roughly how many clients or community members do you currently engage with? (Optional)</label>
-                    <input type="text" name="clientCount" id="clientCount" value={formData.clientCount} onChange={handleInputChange} className="w-full bg-[#2a2a2a] border-gray-600 rounded-md p-3 text-white focus:ring-[#E0FE10] focus:border-[#E0FE10]" placeholder="e.g., 50 clients, 1000 followers" />
+                    <select 
+                      name="clientCount" 
+                      id="clientCount" 
+                      value={formData.clientCount} 
+                      onChange={handleInputChange} 
+                      className="w-full bg-[#2a2a2a] border-gray-600 rounded-md p-3 text-white focus:ring-[#E0FE10] focus:border-[#E0FE10]"
+                    >
+                      <option value="">Select a range</option>
+                      <option value="0-10">0-10</option>
+                      <option value="11-50">11-50</option>
+                      <option value="51-100">51-100</option>
+                      <option value="101-500">101-500</option>
+                      <option value="501-1000">501-1000</option>
+                      <option value="1000+">1000+</option>
+                      <option value="Not applicable">Not applicable</option>
+                    </select>
                   </div>
 
                   <div>
