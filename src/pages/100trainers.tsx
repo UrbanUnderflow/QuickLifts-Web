@@ -85,7 +85,7 @@ const FAQ_DATA = [
     answer: "Just your smartphone! While professional equipment can enhance quality, many successful creators start with just their phones and natural lighting."
   },
   {
-    question: "What is the Founding 100 Coaches Program?",
+          question: "What is the Founding 100 Trainers Program?",
     answer: "It's our exclusive early access program for the first 100 fitness professionals on our platform. Members receive lifetime free access to Pulse, direct support from our team, and recognition as founding creators of our community."
   }
 ];
@@ -256,7 +256,7 @@ const CreatorChecklist = ({ metaData }: HundredTrainersPageProps) => {
   const applicationGuideContent = (
     <div className="bg-[#1c1c1c] p-8 rounded-xl shadow-2xl text-left max-w-3xl mx-auto my-12">
       <h2 className="text-3xl font-bold text-[#E0FE10] mb-6">Application Guide: Pulse Founding 100</h2>
-      <p className="text-gray-300 mb-4">Welcome! We're thrilled you're considering joining our Founding 100 Coaches Program. This guide will help you through the application process.</p>
+              <p className="text-gray-300 mb-4">Welcome! We're thrilled you're considering joining our Founding 100 Trainers Program. This guide will help you through the application process.</p>
       
       <div className="space-y-6">
         <div>
@@ -289,7 +289,7 @@ const CreatorChecklist = ({ metaData }: HundredTrainersPageProps) => {
         </div>
       </div>
 
-      <p className="text-gray-300 mt-8">Submitting this form confirms your interest in the Founding 100 Coaches Program. We review applications on a rolling basis.</p>
+              <p className="text-gray-300 mt-8">Submitting this form confirms your interest in the Founding 100 Trainers Program. We review applications on a rolling basis.</p>
       <button
         onClick={handleReturnToForm}
         className="mt-8 w-full sm:w-auto flex items-center justify-center px-8 py-3 border border-transparent text-lg font-medium rounded-full text-black bg-[#E0FE10] hover:bg-opacity-80 transition-colors duration-300 ease-in-out"
@@ -540,7 +540,7 @@ const CreatorChecklist = ({ metaData }: HundredTrainersPageProps) => {
                 <div className="bg-[#1c1c1c] p-8 sm:p-12 rounded-xl shadow-2xl">
                   <Check className="w-20 h-20 text-[#E0FE10] mx-auto mb-6 animate-pulse" />
                   <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">Application Submitted!</h2>
-                  <p className="text-lg text-gray-300 mb-8">Thank you for applying to the Pulse Founding 100 Coaches Program! We've received your application and will review it shortly. We'll be in touch via email with next steps.</p>
+                  <p className="text-lg text-gray-300 mb-8">Thank you for applying to the Pulse Founding 100 Trainers Program! We've received your application and will review it shortly. We'll be in touch via email with next steps.</p>
                   <p className="text-gray-400 text-sm mb-8">In the meantime, feel free to explore Pulse and start creating!</p>
                   <button
                     onClick={() => setCurrentView('landing')}
