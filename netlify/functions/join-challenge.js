@@ -45,7 +45,7 @@ exports.handler = async (event, context) => {
 
   try {
     console.log('📥 Received request:', event.body);
-    const { username, challengeId } = JSON.parse(event.body);
+    const { username, challengeId, sharedBy } = JSON.parse(event.body);
 
     if (!username || !challengeId) {
       return {
@@ -57,6 +57,8 @@ exports.handler = async (event, context) => {
         })
       };
     }
+
+    console.log('🔗 Referral info:', { sharedBy: sharedBy || 'none' });
 
     // Get user by username
     const usersRef = db.collection('users');
@@ -106,6 +108,10 @@ exports.handler = async (event, context) => {
       profileImage: userData.profileImage || {},
       progress: 0,
       completedWorkouts: [],
+      referralChain: {
+        originalHostId: sharedBy || '',
+        sharedBy: sharedBy || ''
+      },
       isCompleted: false,
       uid: userId,
       location: userData.location || null,

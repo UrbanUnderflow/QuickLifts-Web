@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { User as UserIcon, Download, Smartphone, ArrowRight } from 'lucide-react';
 import { Challenge } from '../api/firebase/workout/types';
@@ -21,6 +21,7 @@ const ChallengeCTA: React.FC<ChallengeCTAProps> = ({ challenge, ttclid }) => {
   const dispatch = useDispatch();
   const [showInstructions, setShowInstructions] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
+  const [sharedBy, setSharedBy] = useState<string>('');
   const isPaid = challenge.pricingInfo?.isEnabled && challenge.pricingInfo?.amount > 0;
   
   const steps: OnboardingStep[] = [
@@ -45,11 +46,24 @@ const ChallengeCTA: React.FC<ChallengeCTAProps> = ({ challenge, ttclid }) => {
   
   // Create the base URL with properly encoded parameters for deep linking
   let baseUrl = `https://www.quickliftsapp.com/?linkType=round&roundId=${challenge.id}`;
+  if (sharedBy) {
+    baseUrl += `&sharedBy=${sharedBy}`;
+  }
   if (ttclid) {
     baseUrl += `&ttclid=${ttclid}`;
   }
   const encodedBaseUrl = encodeURIComponent(baseUrl);
   const deepLinkUrl = `https://quicklifts.page.link/?link=${encodedBaseUrl}&apn=com.pulse.fitnessapp&ibi=Tremaine.QuickLifts&isi=6451497729`;
+
+  // Extract sharedBy parameter from URL on component mount
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const sharedByParam = params.get('sharedBy');
+    if (sharedByParam) {
+      setSharedBy(sharedByParam);
+      console.log('[ChallengeCTA] Extracted sharedBy from URL:', sharedByParam);
+    }
+  }, []);
 
   const handleJoinChallenge = async () => {
     setIsJoining(true);

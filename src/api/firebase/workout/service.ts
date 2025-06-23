@@ -1701,10 +1701,12 @@ async deleteWorkoutSession(workoutId: string | null): Promise<void> {
    */
   async joinChallenge({
     username,
-    challengeId
+    challengeId,
+    sharedBy
   }: {
     username: string;
     challengeId: string;
+    sharedBy?: string;
   }): Promise<any> {
     // 1) Make sure we have a signed-in user
     const currentUser = userService.nonUICurrentUser;
@@ -1749,6 +1751,10 @@ async deleteWorkoutSession(workoutId: string | null): Promise<void> {
       profileImage: userData.profileImage || {},
       progress: 0,
       completedWorkouts: [],
+      referralChain: {
+        originalHostId: sharedBy || '',
+        sharedBy: sharedBy || ''
+      },
       isCompleted: false,
       uid: userId,
       location: userData.location || null,
