@@ -443,5 +443,63 @@ export const adminMethods: AdminService = {
       console.error('Error deleting beta application:', error);
       return false;
     }
+  },
+
+  async createBetaApplication(
+    email: string, 
+    displayName: string, 
+    username: string, 
+    approvedBy: string
+  ): Promise<boolean> {
+    try {
+      const now = new Date();
+      
+      // Check if application already exists for this email
+      const existingQuery = query(
+        collection(db, 'beta-applications'),
+        where('email', '==', email.toLowerCase())
+      );
+      const existingSnapshot = await getDocs(existingQuery);
+
+      if (!existingSnapshot.empty) {
+        console.log('Beta application already exists for:', email);
+        return false;
+      }
+
+      // Create new beta application with default values
+      const applicationData = {
+        name: displayName || username || 'Admin Added User',
+        email: email.toLowerCase(),
+        role: {
+          trainer: true,
+          enthusiast: false,
+          coach: false,
+          fitnessInstructor: false
+        },
+        primaryUse: 'Admin added to 100trainers program',
+        useCases: {
+          oneOnOneCoaching: true,
+          communityRounds: false,
+          personalPrograms: false
+        },
+        clientCount: 'Not specified',
+        yearsExperience: 'Not specified',
+        longTermGoal: 'Added directly by admin to 100trainers program',
+        isCertified: false,
+        applyForFoundingCoaches: false,
+        submittedAt: Timestamp.fromDate(now),
+        status: 'approved',
+        approvedAt: Timestamp.fromDate(now),
+        approvedBy: approvedBy,
+        updatedAt: Timestamp.fromDate(now)
+      };
+
+      await addDoc(collection(db, 'beta-applications'), applicationData);
+      console.log('Created new beta application for:', email);
+      return true;
+    } catch (error) {
+      console.error('Error creating beta application:', error);
+      return false;
+    }
   }
 }; 

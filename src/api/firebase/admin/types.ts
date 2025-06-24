@@ -109,4 +109,5 @@ export interface AdminService {
   getBetaApplications: () => Promise<BetaApplication[]>;
   updateBetaApplicationStatus: (id: string, status: 'approved' | 'rejected', approvedBy?: string) => Promise<boolean>;
   deleteBetaApplication: (id: string) => Promise<boolean>;
+  createBetaApplication: (email: string, displayName: string, username: string, approvedBy: string) => Promise<boolean>;
 } 

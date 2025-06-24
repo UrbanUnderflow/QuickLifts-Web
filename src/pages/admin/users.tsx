@@ -92,6 +92,9 @@ const UsersManagement: React.FC = () => {
   const [selectedBetaApplication, setSelectedBetaApplication] = useState<BetaApplication | null>(null);
   // *** END: State for Beta Applications ***
 
+  // State for adding users to 100trainers program
+  const [processingAdd100Trainers, setProcessingAdd100Trainers] = useState<string | null>(null);
+
   // Copy ID to clipboard and show toast
   const copyToClipboard = (id: string) => {
     navigator.clipboard.writeText(id)
@@ -418,11 +421,7 @@ const UsersManagement: React.FC = () => {
 
   useEffect(() => {
     loadAllUsers();
-  }, []);
-
-  // Load programming access requests on component mount
-  useEffect(() => {
-    loadBetaApplications();
+    loadBetaApplications(); // Load beta applications on mount to check for existing ones
   }, []);
 
   // Update filtered users based on search term and active tab
@@ -1094,6 +1093,26 @@ const UsersManagement: React.FC = () => {
             )}
           </button>
           <button
+            onClick={() => handleAddTo100Trainers(user)}
+            disabled={processingAdd100Trainers === user.id || !user.email}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium border flex items-center bg-green-900/30 text-green-400 border-green-900 hover:bg-green-800/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed`}
+          >
+            {processingAdd100Trainers === user.id ? (
+              <>
+                <svg className="animate-spin h-4 w-4 mr-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Adding...
+              </>
+            ) : (
+              <>
+                <Users className="h-4 w-4 mr-1" />
+                Add to 100trainers
+              </>
+            )}
+          </button>
+          <button
             onClick={() => handleDeleteUser(user)}
             disabled={processingDelete === user.id}
             className={`px-3 py-1.5 rounded-lg text-xs font-medium border flex items-center bg-red-900/30 text-red-400 border-red-900 hover:bg-red-800/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed`}
@@ -1490,6 +1509,73 @@ const UsersManagement: React.FC = () => {
       });
     } finally {
       setProcessingApplicationStatus(null);
+    }
+  };
+
+  // Add user to 100trainers program
+  const handleAddTo100Trainers = async (user: User) => {
+    if (!user.email) {
+      setToastMessage({ 
+        type: 'error', 
+        text: 'User must have an email to be added to 100trainers program' 
+      });
+      return;
+    }
+
+    if (!window.confirm(`Add ${user.username || user.email} to the 100trainers program?\n\nThis will create an approved beta application for them.`)) {
+      return;
+    }
+
+    try {
+      setProcessingAdd100Trainers(user.id);
+      
+      const currentUser = auth.currentUser;
+      const approvedBy = currentUser?.email || 'Unknown Admin';
+      
+      // Check if user already has a beta application
+      const existingApplication = betaApplications.find(app => 
+        app.email?.toLowerCase() === user.email?.toLowerCase()
+      );
+      
+      if (existingApplication) {
+        setToastMessage({ 
+          type: 'error', 
+          text: `${user.email} already has a beta application (Status: ${existingApplication.status})` 
+        });
+        return;
+      }
+
+      const success = await adminMethods.createBetaApplication(
+        user.email,
+        user.displayName || '',
+        user.username || '',
+        approvedBy
+      );
+      
+      if (success) {
+        setToastMessage({ 
+          type: 'success', 
+          text: `Successfully added ${user.username || user.email} to 100trainers program` 
+        });
+        
+        // Refresh beta applications if we're on that tab
+        if (activeTab === 'betaApplications') {
+          await loadBetaApplications();
+        }
+      } else {
+        setToastMessage({ 
+          type: 'error', 
+          text: 'Failed to add user to 100trainers program. They may already have an application.' 
+        });
+      }
+    } catch (error) {
+      console.error('Error adding user to 100trainers:', error);
+      setToastMessage({ 
+        type: 'error', 
+        text: `Failed to add user to 100trainers program: ${error instanceof Error ? error.message : 'Unknown error'}` 
+      });
+    } finally {
+      setProcessingAdd100Trainers(null);
     }
   };
   // *** END: Beta Applications Management Functions ***
@@ -2423,26 +2509,43 @@ const UsersManagement: React.FC = () => {
                             }
                           </td>
                           <td className="py-3 px-4 border-b border-gray-700 text-center">
-                            <button
-                              onClick={() => toggleAdminStatus(user)}
-                              disabled={!user.email || processingAdmin === user.email}
-                              className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
-                                user.adminVerified
-                                  ? 'bg-red-900/30 text-red-400 hover:bg-red-900/50 border border-red-900'
-                                  : 'bg-blue-900/30 text-blue-400 hover:bg-blue-900/50 border border-blue-900'
-                              }`}
-                            >
-                              {processingAdmin === user.email ? (
-                                <svg className="animate-spin h-4 w-4 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                </svg>
-                              ) : user.adminVerified ? (
-                                'Remove Admin'
-                              ) : (
-                                'Make Admin'
-                              )}
-                            </button>
+                            <div className="flex gap-1 justify-center">
+                              <button
+                                onClick={() => toggleAdminStatus(user)}
+                                disabled={!user.email || processingAdmin === user.email}
+                                className={`px-2 py-1 rounded-md text-xs font-medium transition-colors ${
+                                  user.adminVerified
+                                    ? 'bg-red-900/30 text-red-400 hover:bg-red-900/50 border border-red-900'
+                                    : 'bg-blue-900/30 text-blue-400 hover:bg-blue-900/50 border border-blue-900'
+                                }`}
+                              >
+                                {processingAdmin === user.email ? (
+                                  <svg className="animate-spin h-4 w-4 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                  </svg>
+                                ) : user.adminVerified ? (
+                                  'Remove Admin'
+                                ) : (
+                                  'Make Admin'
+                                )}
+                              </button>
+                              <button
+                                onClick={() => handleAddTo100Trainers(user)}
+                                disabled={processingAdd100Trainers === user.id || !user.email}
+                                className="px-2 py-1 rounded-md text-xs font-medium transition-colors bg-green-900/30 text-green-400 hover:bg-green-900/50 border border-green-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                                title={`Add ${user.username || user.email} to 100trainers program`}
+                              >
+                                {processingAdd100Trainers === user.id ? (
+                                  <svg className="animate-spin h-3 w-3 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                  </svg>
+                                ) : (
+                                  <Users className="h-3 w-3" />
+                                )}
+                              </button>
+                            </div>
                                   </td>
                           <td className="py-3 px-4 border-b border-gray-700 text-center">
                                     <button

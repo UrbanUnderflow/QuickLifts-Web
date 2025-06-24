@@ -23,6 +23,8 @@ interface VCFormData {
   numberOfExits: string;
   status: string;
   source: 'individual_form' | 'bulk_text' | 'bulk_image' | 'ai_research'; // NEW: Track data source
+  o3AuditDate?: Date; // NEW: Track when prospect was last audited by o3
+  o3AuditStatus?: 'not_audited' | 'audited_clean' | 'audited_with_issues' | 'audited_and_updated'; // NEW: Audit status
 }
 
 interface VCProspect extends VCFormData {
@@ -32,6 +34,8 @@ interface VCProspect extends VCFormData {
   generatedEmail?: string;
   generatedEmailSubject?: string;
   generatedEmailDate?: Date;
+  o3AuditDate?: Date;
+  o3AuditStatus?: 'not_audited' | 'audited_clean' | 'audited_with_issues' | 'audited_and_updated';
 }
 
 const VCDatabasePage: React.FC = () => {
@@ -80,6 +84,7 @@ const VCDatabasePage: React.FC = () => {
   const [selectedStageFilters, setSelectedStageFilters] = useState<string[]>([]);
   const [selectedStatusFilters, setSelectedStatusFilters] = useState<string[]>([]);
   const [selectedSourceFilters, setSelectedSourceFilters] = useState<string[]>([]);
+  const [selectedAuditStatusFilters, setSelectedAuditStatusFilters] = useState<string[]>([]);
 
   // Duplicate detection state
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
@@ -89,7 +94,15 @@ const VCDatabasePage: React.FC = () => {
   const [aiPrompt, setAiPrompt] = useState<string>('');
 
   // Bulk input type state - NEW!
-  const [bulkInputType, setBulkInputType] = useState<'text' | 'image' | 'prompt'>('text');
+  const [bulkInputType, setBulkInputType] = useState<'text' | 'image' | 'prompt' | 'o3'>('text');
+
+  // Source editing state
+  const [editingSource, setEditingSource] = useState<string | null>(null);
+  const [updatingSource, setUpdatingSource] = useState<string | null>(null);
+
+  // Audit status editing state
+  const [editingAuditStatus, setEditingAuditStatus] = useState<string | null>(null);
+  const [updatingAuditStatus, setUpdatingAuditStatus] = useState<string | null>(null);
 
   // Email template state
   const [emailTemplate, setEmailTemplate] = useState<string>('');
@@ -138,6 +151,21 @@ const VCDatabasePage: React.FC = () => {
   const [loadingScheduledEmails, setLoadingScheduledEmails] = useState(false);
   const [cancellingEmail, setCancellingEmail] = useState<string | null>(null);
 
+  // Bulk source labeling state
+  const [showSourceLabeling, setShowSourceLabeling] = useState(false);
+  const [labelingInProgress, setLabelingInProgress] = useState(false);
+  const [labelingProgress, setLabelingProgress] = useState({ current: 0, total: 0 });
+
+  // Audit state
+  const [auditInProgress, setAuditInProgress] = useState(false);
+  const [auditProgress, setAuditProgress] = useState({ current: 0, total: 0 });
+  const [auditResults, setAuditResults] = useState<any[]>([]);
+  const [showAuditReview, setShowAuditReview] = useState(false);
+  const [selectedUpdates, setSelectedUpdates] = useState<Set<string>>(new Set());
+  const [applyingUpdates, setApplyingUpdates] = useState(false);
+  const [auditSummary, setAuditSummary] = useState<any>(null);
+  const [selectedProspectsForAudit, setSelectedProspectsForAudit] = useState<Set<string>>(new Set());
+
   // Storage service instance
   const storageService = new FirebaseStorageService();
 
@@ -166,10 +194,19 @@ const VCDatabasePage: React.FC = () => {
     );
   };
 
+  const toggleAuditStatusFilter = (auditStatus: string) => {
+    setSelectedAuditStatusFilters(prev => 
+      prev.includes(auditStatus) 
+        ? prev.filter(s => s !== auditStatus)
+        : [...prev, auditStatus]
+    );
+  };
+
   const clearAllFilters = () => {
     setSelectedStageFilters([]);
     setSelectedStatusFilters([]);
     setSelectedSourceFilters([]);
+    setSelectedAuditStatusFilters([]);
   };
 
   // Handle email attachment upload
@@ -559,6 +596,288 @@ const VCDatabasePage: React.FC = () => {
     }
   };
 
+  // Audit all VC data with o3
+  const auditVCData = async () => {
+    if (vcProspects.length === 0) {
+      showToast('No prospects to audit', 'error');
+      return;
+    }
+
+    const confirmMessage = `Audit ${vcProspects.length} VC prospects using o3 for data accuracy?\n\nThis will:\n• Verify contact information\n• Check website and LinkedIn URLs\n• Validate investment stages\n• Review company names and roles\n• Identify any inaccuracies\n\nThis may take several minutes.`;
+    
+    if (!window.confirm(confirmMessage)) {
+      return;
+    }
+
+    await performAudit(vcProspects);
+  };
+
+  // Audit selected prospects with o3
+  const auditSelectedProspects = async () => {
+    if (selectedProspectsForAudit.size === 0) {
+      showToast('No prospects selected for audit', 'error');
+      return;
+    }
+
+    const selectedProspects = vcProspects.filter(p => selectedProspectsForAudit.has(p.id));
+    
+    const confirmMessage = `Audit ${selectedProspects.length} selected VC prospects using o3?\n\nThis will:\n• Verify contact information\n• Check website and LinkedIn URLs\n• Validate investment stages\n• Review company names and roles\n• Identify any inaccuracies\n\nThis may take several minutes.`;
+    
+    if (!window.confirm(confirmMessage)) {
+      return;
+    }
+
+    await performAudit(selectedProspects);
+    
+    // Clear selection after audit
+    setSelectedProspectsForAudit(new Set());
+  };
+
+  // Common audit function for both all prospects and selected prospects
+  const performAudit = async (prospectsToAudit: VCProspect[]) => {
+    setAuditInProgress(true);
+    setAuditProgress({ current: 0, total: prospectsToAudit.length });
+    setAuditResults([]);
+
+    try {
+      console.log(`🔍 Starting o3 audit of ${prospectsToAudit.length} VC prospects...`);
+      
+      const response = await fetch('/api/audit-vc-data', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          prospects: prospectsToAudit.map(p => ({
+            id: p.id,
+            person: p.person || '',
+            companies: p.companies || '',
+            urls: p.urls || '',
+            linkedin: p.linkedin || '',
+            continent: p.continent || '',
+            country: p.country || '',
+            location: p.location || '',
+            addresses: p.addresses || '',
+            email: p.email || '',
+            description: p.description || '',
+            stage: p.stage || '',
+            founder: p.founder || '',
+            numberOfExits: p.numberOfExits || '',
+            status: p.status || '',
+            source: p.source || ''
+          })),
+          batchSize: 3 // Process 3 prospects at a time
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to audit VC data');
+      }
+
+      const result = await response.json();
+      console.log('🧠 o3 Audit Results:', result);
+
+      if (!result.success) {
+        throw new Error(result.error || 'Audit failed');
+      }
+
+      setAuditResults(result.auditResults || []);
+      setAuditSummary(result.summary);
+      
+      // Update audit tracking for all audited prospects
+      const auditDate = new Date();
+      const auditPromises = prospectsToAudit.map(async (prospect) => {
+        const auditResult = result.auditResults?.find((ar: any) => ar.prospectId === prospect.id);
+        let auditStatus: VCProspect['o3AuditStatus'] = 'audited_clean';
+        
+        if (auditResult) {
+          if (auditResult.overallScore === 'INACCURATE') {
+            auditStatus = 'audited_with_issues';
+          } else if (auditResult.overallScore === 'NEEDS_REVIEW') {
+            auditStatus = 'audited_with_issues';
+          } else {
+            auditStatus = 'audited_clean';
+          }
+        }
+
+        try {
+          const prospectRef = doc(db, 'venture-prospects', prospect.id);
+          await updateDoc(prospectRef, {
+            o3AuditDate: auditDate,
+            o3AuditStatus: auditStatus,
+            updatedAt: auditDate
+          });
+
+          // Update local state
+          setVcProspects(prev => prev.map(p => 
+            p.id === prospect.id 
+              ? { ...p, o3AuditDate: auditDate, o3AuditStatus: auditStatus, updatedAt: auditDate }
+              : p
+          ));
+
+          console.log(`✅ Updated audit tracking for ${prospect.person} (${prospect.companies}): ${auditStatus}`);
+        } catch (error) {
+          console.error(`❌ Error updating audit tracking for ${prospect.person}:`, error);
+        }
+      });
+
+      // Wait for all audit tracking updates to complete
+      await Promise.all(auditPromises);
+      
+      // Only show review if there are issues to address
+      const hasIssues = result.auditResults?.some((ar: any) => ar.issues && ar.issues.length > 0);
+      
+      if (hasIssues) {
+        setShowAuditReview(true);
+        showToast(`Audit completed! Found ${result.summary?.totalIssues || 0} potential improvements across ${result.summary?.audited || 0} prospects.`, 'success');
+      } else {
+        showToast(`Audit completed! All ${result.summary?.audited || 0} prospects appear to have accurate data.`, 'success');
+      }
+
+    } catch (error) {
+      console.error('Error during VC audit:', error);
+      showToast(error instanceof Error ? error.message : 'Failed to audit VC data', 'error');
+    } finally {
+      setAuditInProgress(false);
+      setAuditProgress({ current: 0, total: 0 });
+    }
+  };
+
+  // Toggle selected update
+  const toggleSelectedUpdate = (updateId: string) => {
+    const newSelected = new Set(selectedUpdates);
+    if (newSelected.has(updateId)) {
+      newSelected.delete(updateId);
+    } else {
+      newSelected.add(updateId);
+    }
+    setSelectedUpdates(newSelected);
+  };
+
+  // Toggle prospect selection for audit
+  const toggleProspectForAudit = (prospectId: string) => {
+    const newSelected = new Set(selectedProspectsForAudit);
+    if (newSelected.has(prospectId)) {
+      newSelected.delete(prospectId);
+    } else {
+      newSelected.add(prospectId);
+    }
+    setSelectedProspectsForAudit(newSelected);
+  };
+
+  // Select all visible prospects for audit
+  const selectAllProspectsForAudit = () => {
+    const allVisibleIds = new Set(filteredProspects.map(p => p.id));
+    setSelectedProspectsForAudit(allVisibleIds);
+  };
+
+  // Clear prospect audit selection
+  const clearProspectAuditSelection = () => {
+    setSelectedProspectsForAudit(new Set());
+  };
+
+  // Apply selected audit updates
+  const applySelectedUpdates = async () => {
+    if (selectedUpdates.size === 0) {
+      showToast('No updates selected', 'error');
+      return;
+    }
+
+    // Safety check: Validate that suggested values are actual data, not recommendations
+    const updatesToApply = auditResults
+      .flatMap(ar => ar.issues.map((issue: any) => ({
+        prospectId: ar.prospectId,
+        field: issue.field,
+        newValue: issue.suggestedValue,
+        updateId: `${ar.prospectId}-${issue.field}`
+      })))
+      .filter(update => selectedUpdates.has(update.updateId));
+
+    // Check for suggestion-like values that shouldn't be applied
+    const suspiciousUpdates = updatesToApply.filter(update => {
+      const value = update.newValue?.toLowerCase() || '';
+      return value.includes('verify') || 
+             value.includes('consider') || 
+             value.includes('check') || 
+             value.includes('update') || 
+             value.includes('confirm') ||
+             value.includes('provide') ||
+             value.includes('ensure') ||
+             value.includes('review');
+    });
+
+    if (suspiciousUpdates.length > 0) {
+      const suspiciousFields = suspiciousUpdates.map(u => `${u.field}: "${u.newValue}"`).join('\n');
+      showToast(`⚠️ Warning: Some selected updates appear to be suggestions rather than corrected data:\n\n${suspiciousFields}\n\nPlease deselect these items and only apply actual corrected values.`, 'error');
+      return;
+    }
+
+    const confirmMessage = `Apply ${selectedUpdates.size} selected data corrections?\n\nThis will update your VC prospect records with the o3-verified information.`;
+    if (!window.confirm(confirmMessage)) {
+      return;
+    }
+
+    setApplyingUpdates(true);
+    let successCount = 0;
+    let errorCount = 0;
+
+    try {
+
+      console.log('📝 Applying updates:', updatesToApply);
+
+      for (const update of updatesToApply) {
+        try {
+          // Update in Firebase
+          const prospectRef = doc(db, 'venture-prospects', update.prospectId);
+          await updateDoc(prospectRef, {
+            [update.field]: update.newValue,
+            o3AuditStatus: 'audited_and_updated', // Mark as updated after applying corrections
+            updatedAt: new Date()
+          });
+
+          // Update local state
+          setVcProspects(prev => prev.map(p => 
+            p.id === update.prospectId 
+              ? { ...p, [update.field]: update.newValue, o3AuditStatus: 'audited_and_updated' as const, updatedAt: new Date() }
+              : p
+          ));
+
+          successCount++;
+          console.log(`✅ Updated ${update.field} for prospect ${update.prospectId}`);
+
+        } catch (error) {
+          console.error(`❌ Error updating ${update.field} for prospect ${update.prospectId}:`, error);
+          errorCount++;
+        }
+      }
+
+      // Remove applied updates from audit results
+      setAuditResults(prev => 
+        prev.map(ar => ({
+          ...ar,
+          issues: ar.issues.filter((issue: any) => 
+            !selectedUpdates.has(`${ar.prospectId}-${issue.field}`)
+          )
+        })).filter(ar => ar.issues.length > 0)
+      );
+
+      // Clear selected updates
+      setSelectedUpdates(new Set());
+
+      showToast(
+        `Applied ${successCount} updates successfully${errorCount > 0 ? `, ${errorCount} failed` : ''}!`,
+        successCount > errorCount ? 'success' : 'error'
+      );
+
+    } catch (error) {
+      console.error('Error applying audit updates:', error);
+      showToast('Failed to apply updates', 'error');
+    } finally {
+      setApplyingUpdates(false);
+    }
+  };
+
   // Research stages for prospects with missing stage data
   const researchMissingStages = async () => {
     const prospectsWithoutStage = vcProspects.filter(p => !p.stage || p.stage.trim() === '');
@@ -664,6 +983,125 @@ const VCDatabasePage: React.FC = () => {
     } finally {
       setResearchingStages(false);
       setStageResearchProgress({ current: 0, total: 0 });
+    }
+  };
+
+  // Label prospects with missing source information
+  const labelMissingSources = async () => {
+    const prospectsWithoutSource = vcProspects.filter(p => !p.source || p.source.trim() === '');
+    
+    if (prospectsWithoutSource.length === 0) {
+      showToast('All prospects already have source labels', 'success');
+      return;
+    }
+
+    const confirmMessage = `Found ${prospectsWithoutSource.length} prospects without source labels. This will:\n\n• Set all unlabeled prospects to "individual_form" (manually entered)\n• You can then manually update specific ones if they were bulk imported\n\nContinue?`;
+    if (!window.confirm(confirmMessage)) {
+      return;
+    }
+
+    setLabelingInProgress(true);
+    setLabelingProgress({ current: 0, total: prospectsWithoutSource.length });
+
+    let successCount = 0;
+    let errorCount = 0;
+
+    try {
+      for (let i = 0; i < prospectsWithoutSource.length; i++) {
+        const prospect = prospectsWithoutSource[i];
+        setLabelingProgress({ current: i + 1, total: prospectsWithoutSource.length });
+
+        try {
+          // Default to individual_form for existing unlabeled prospects
+          const prospectRef = doc(db, 'venture-prospects', prospect.id);
+          await updateDoc(prospectRef, {
+            source: 'individual_form',
+            updatedAt: new Date()
+          });
+
+          // Update local state
+          setVcProspects(prev => prev.map(p => 
+            p.id === prospect.id 
+              ? { ...p, source: 'individual_form' as const, updatedAt: new Date() }
+              : p
+          ));
+
+          successCount++;
+          console.log(`✅ Labeled ${prospect.person} (${prospect.companies}) as individual_form`);
+
+        } catch (error) {
+          console.error(`❌ Error labeling ${prospect.person} (${prospect.companies}):`, error);
+          errorCount++;
+        }
+
+        // Small delay to avoid overwhelming Firebase
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+
+      showToast(
+        `Source labeling completed! ${successCount} labeled successfully, ${errorCount} failed.`,
+        successCount > errorCount ? 'success' : 'error'
+      );
+
+    } catch (error) {
+      console.error('Error during bulk source labeling:', error);
+      showToast('Failed to complete source labeling', 'error');
+    } finally {
+      setLabelingInProgress(false);
+      setLabelingProgress({ current: 0, total: 0 });
+    }
+  };
+
+  // Bulk update sources for selected prospects
+  const bulkUpdateSource = async (prospectIds: string[], newSource: string) => {
+    if (prospectIds.length === 0) return;
+
+    setLabelingInProgress(true);
+    setLabelingProgress({ current: 0, total: prospectIds.length });
+
+    let successCount = 0;
+    let errorCount = 0;
+
+    try {
+      for (let i = 0; i < prospectIds.length; i++) {
+        const prospectId = prospectIds[i];
+        setLabelingProgress({ current: i + 1, total: prospectIds.length });
+
+        try {
+          const prospectRef = doc(db, 'venture-prospects', prospectId);
+          await updateDoc(prospectRef, {
+            source: newSource,
+            updatedAt: new Date()
+          });
+
+          // Update local state
+          setVcProspects(prev => prev.map(p => 
+            p.id === prospectId 
+              ? { ...p, source: newSource as VCFormData['source'], updatedAt: new Date() }
+              : p
+          ));
+
+          successCount++;
+
+        } catch (error) {
+          console.error(`❌ Error updating prospect ${prospectId}:`, error);
+          errorCount++;
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+
+      showToast(
+        `Updated ${successCount} prospects to "${newSource}" source.`,
+        successCount > errorCount ? 'success' : 'error'
+      );
+
+    } catch (error) {
+      console.error('Error during bulk source update:', error);
+      showToast('Failed to update source labels', 'error');
+    } finally {
+      setLabelingInProgress(false);
+      setLabelingProgress({ current: 0, total: 0 });
     }
   };
 
@@ -780,6 +1218,8 @@ const VCDatabasePage: React.FC = () => {
         createdAt: doc.data().createdAt?.toDate() || new Date(),
         updatedAt: doc.data().updatedAt?.toDate() || new Date(),
         generatedEmailDate: doc.data().generatedEmailDate?.toDate() || null,
+        o3AuditDate: doc.data().o3AuditDate?.toDate() || null,
+        o3AuditStatus: doc.data().o3AuditStatus || 'not_audited',
       })) as VCProspect[];
       
       // Debug logging to see what data we're working with
@@ -832,74 +1272,160 @@ const VCDatabasePage: React.FC = () => {
     }
   };
 
+  // Update source for a specific prospect
+  const updateProspectSource = async (prospectId: string, newSource: VCFormData['source']) => {
+    setUpdatingSource(prospectId);
+    try {
+      const prospectRef = doc(db, 'venture-prospects', prospectId);
+      await updateDoc(prospectRef, {
+        source: newSource,
+        updatedAt: new Date()
+      });
+      
+      // Update local state
+      setVcProspects(prev => prev.map(prospect => 
+        prospect.id === prospectId 
+          ? { ...prospect, source: newSource, updatedAt: new Date() }
+          : prospect
+      ));
+      
+      showToast('Source updated successfully', 'success');
+      setEditingSource(null);
+    } catch (error) {
+      console.error('Error updating source:', error);
+      showToast('Failed to update source', 'error');
+    } finally {
+      setUpdatingSource(null);
+    }
+  };
+
+  // Update audit status for a specific prospect
+  const updateProspectAuditStatus = async (prospectId: string, newAuditStatus: VCProspect['o3AuditStatus']) => {
+    setUpdatingAuditStatus(prospectId);
+    try {
+      const updateData: any = {
+        o3AuditStatus: newAuditStatus,
+        updatedAt: new Date()
+      };
+
+      // If manually setting to an audited status, also set the audit date
+      if (newAuditStatus && newAuditStatus !== 'not_audited') {
+        updateData.o3AuditDate = new Date();
+      }
+
+      const prospectRef = doc(db, 'venture-prospects', prospectId);
+      await updateDoc(prospectRef, updateData);
+      
+      // Update local state
+      setVcProspects(prev => prev.map(prospect => 
+        prospect.id === prospectId 
+          ? { 
+              ...prospect, 
+              o3AuditStatus: newAuditStatus, 
+              o3AuditDate: newAuditStatus && newAuditStatus !== 'not_audited' ? new Date() : prospect.o3AuditDate,
+              updatedAt: new Date() 
+            }
+          : prospect
+      ));
+      
+      showToast('Audit status updated successfully', 'success');
+      setEditingAuditStatus(null);
+    } catch (error) {
+      console.error('Error updating audit status:', error);
+      showToast('Failed to update audit status', 'error');
+    } finally {
+      setUpdatingAuditStatus(null);
+    }
+  };
+
   // Process bulk data using OpenAI (text, image, or AI prompt)
   const processBulkData = async () => {
-    // Validate input based on type
+        // Validate input based on type
     if (bulkInputType === 'text' && !spreadsheetData.trim()) {
       showToast('Please provide text data to process', 'error');
       return;
     }
-    
+
     if (bulkInputType === 'image' && uploadedImages.length === 0) {
       showToast('Please upload images to process', 'error');
       return;
     }
 
-    if (bulkInputType === 'prompt' && !aiPrompt.trim()) {
+    if ((bulkInputType === 'prompt' || bulkInputType === 'o3') && !aiPrompt.trim()) {
       showToast('Please provide a research prompt', 'error');
       return;
     }
 
     setProcessingBulk(true);
     try {
-      let requestData: any = {
-        inputType: bulkInputType
-      };
-
-      if (bulkInputType === 'text') {
-        requestData.data = spreadsheetData;
-      } else if (bulkInputType === 'image') {
-        // Upload images to Firebase Storage first
-        const imageUrls = await Promise.all(
-          uploadedImages.map(async (file) => {
-            try {
-              return await uploadImageToStorage(file);
-            } catch (error) {
-              console.error(`Failed to upload image ${file.name}:`, error);
-              throw error;
-            }
-          })
-        );
+      let response;
+      
+      if (bulkInputType === 'o3') {
+        // Use the new o3 research endpoint
+        console.log('🧠 Processing with o3 model for verified research...');
         
-        console.log('🖼️ Uploaded Image URLs:', imageUrls);
-        requestData.imageUrls = imageUrls;
-      } else if (bulkInputType === 'prompt') {
-        requestData.prompt = aiPrompt;
+        response = await fetch('/api/research-vc-o3', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            prompt: aiPrompt,
+            validateUrls: true,
+            maxProspects: 10
+          }),
+        });
+      } else {
+        // Use the existing extract-vc-data endpoint for other types
+        let requestData: any = {
+          inputType: bulkInputType
+        };
+
+        if (bulkInputType === 'text') {
+          requestData.data = spreadsheetData;
+        } else if (bulkInputType === 'image') {
+          // Upload images to Firebase Storage first
+          const imageUrls = await Promise.all(
+            uploadedImages.map(async (file) => {
+              try {
+                return await uploadImageToStorage(file);
+              } catch (error) {
+                console.error(`Failed to upload image ${file.name}:`, error);
+                throw error;
+              }
+            })
+          );
+          
+          console.log('🖼️ Uploaded Image URLs:', imageUrls);
+          requestData.imageUrls = imageUrls;
+        } else if (bulkInputType === 'prompt') {
+          requestData.prompt = aiPrompt;
+        }
+
+        console.log('📤 Request Data Sent to OpenAI:', requestData);
+
+        // Call our OpenAI API endpoint
+        response = await fetch('/api/extract-vc-data', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(requestData),
+        });
       }
-
-      console.log('📤 Request Data Sent to OpenAI:', requestData);
-
-      // Call our new OpenAI API endpoint
-      const response = await fetch('/api/extract-vc-data', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestData),
-      });
 
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to extract VC data');
       }
 
-      const result = await response.json();
-      console.log('🤖 OpenAI Response:', result);
+            const result = await response.json();
+      console.log('🤖 API Response:', result);
 
       if (!result.success) {
         throw new Error(result.error || 'Failed to process data');
       }
-
+      
       const prospects = result.prospects || [];
       
       if (prospects.length === 0) {
@@ -907,13 +1433,24 @@ const VCDatabasePage: React.FC = () => {
         return;
       }
 
-      // Add default status to all prospects
+      // Add default status and source to all prospects
       const processedData = prospects.map((item: any) => ({
-        ...item,
+          ...item,
         status: 'new', // Default status
         source: bulkInputType === 'text' ? 'bulk_text' : 
-                bulkInputType === 'image' ? 'bulk_image' : 'ai_research' // Set source based on input type
-      }));
+                bulkInputType === 'image' ? 'bulk_image' :
+                bulkInputType === 'o3' ? 'ai_research' : 'ai_research' // Set source based on input type
+        }));
+
+      // Show confidence breakdown for o3 results
+      if (bulkInputType === 'o3' && result.confidenceBreakdown) {
+        console.log('🎯 o3 Confidence Breakdown:', result.confidenceBreakdown);
+        const highConfidenceCount = result.highConfidenceResults?.length || 0;
+        showToast(
+          `o3 Research: ${prospects.length} prospects found (${highConfidenceCount} high/medium confidence)`,
+          'success'
+        );
+      }
       
       console.log('⚙️ Processed Data (with default status):', processedData);
 
@@ -1179,15 +1716,17 @@ const VCDatabasePage: React.FC = () => {
     const prospectStages = prospect.stage ? prospect.stage.split(',').map(s => s.trim()) : [];
     
     // Debug logging
-    if (selectedStageFilters.length > 0 || selectedStatusFilters.length > 0 || selectedSourceFilters.length > 0) {
+    if (selectedStageFilters.length > 0 || selectedStatusFilters.length > 0 || selectedSourceFilters.length > 0 || selectedAuditStatusFilters.length > 0) {
       console.log('🔍 Filtering prospect:', {
         person: prospect.person,
         rawStage: prospect.stage,
         parsedStages: prospectStages,
         status: prospect.status,
+        auditStatus: prospect.o3AuditStatus,
         selectedStageFilters,
         selectedStatusFilters,
-        selectedSourceFilters
+        selectedSourceFilters,
+        selectedAuditStatusFilters
       });
     }
     
@@ -1220,10 +1759,13 @@ const VCDatabasePage: React.FC = () => {
     // Check exact match for source
     const sourceMatch = selectedSourceFilters.length === 0 || selectedSourceFilters.includes(prospect.source || '');
     
-    const matches = stageMatch && statusMatch && sourceMatch;
+    // Check exact match for audit status
+    const auditStatusMatch = selectedAuditStatusFilters.length === 0 || selectedAuditStatusFilters.includes(prospect.o3AuditStatus || 'not_audited');
     
-    if (selectedStageFilters.length > 0 || selectedStatusFilters.length > 0 || selectedSourceFilters.length > 0) {
-      console.log('🎯 Match result:', { stageMatch, statusMatch, sourceMatch, matches });
+    const matches = stageMatch && statusMatch && sourceMatch && auditStatusMatch;
+    
+    if (selectedStageFilters.length > 0 || selectedStatusFilters.length > 0 || selectedSourceFilters.length > 0 || selectedAuditStatusFilters.length > 0) {
+      console.log('🎯 Match result:', { stageMatch, statusMatch, sourceMatch, auditStatusMatch, matches });
     }
     
     return matches;
@@ -1296,7 +1838,8 @@ const VCDatabasePage: React.FC = () => {
         founder: '',
         numberOfExits: '',
         status: 'new',
-        source: 'individual_form'
+        source: 'individual_form',
+        o3AuditStatus: 'not_audited'
       });
     } catch (error) {
       console.error('Error adding VC:', error);
@@ -1327,6 +1870,34 @@ const VCDatabasePage: React.FC = () => {
     'diligence',
     'not interested'
   ];
+
+  const sourceOptions: VCFormData['source'][] = [
+    'individual_form',
+    'bulk_text',
+    'bulk_image',
+    'ai_research'
+  ];
+
+  const sourceLabels = {
+    'individual_form': 'Manual Entry',
+    'bulk_text': 'Bulk Text',
+    'bulk_image': 'Bulk Image',
+    'ai_research': 'AI Research'
+  };
+
+  const auditStatusOptions: VCProspect['o3AuditStatus'][] = [
+    'not_audited',
+    'audited_clean',
+    'audited_with_issues',
+    'audited_and_updated'
+  ];
+
+  const auditStatusLabels: Record<NonNullable<VCProspect['o3AuditStatus']>, string> = {
+    'not_audited': '❔ Not Audited',
+    'audited_clean': '✅ Clean',
+    'audited_with_issues': '⚠️ Issues',
+    'audited_and_updated': '🔄 Updated'
+  };
 
   const continentOptions = [
     'North America',
@@ -1725,7 +2296,7 @@ const VCDatabasePage: React.FC = () => {
               <h2 className="text-xl font-medium mb-6 text-white">Bulk Import VC Prospects</h2>
               
               {/* Segment Control for Input Type */}
-              <div className="bg-[#262a30] p-1 rounded-lg inline-flex mb-6">
+              <div className="bg-[#262a30] p-1 rounded-lg inline-flex mb-6 flex-wrap gap-1">
                 <button
                   onClick={() => setBulkInputType('text')}
                   className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
@@ -1754,7 +2325,18 @@ const VCDatabasePage: React.FC = () => {
                       : 'text-gray-400 hover:text-white'
                   }`}
                 >
-                  🤖 AI Research
+                  🤖 AI Research (GPT-4)
+                </button>
+                <button
+                  onClick={() => setBulkInputType('o3')}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                    bulkInputType === 'o3'
+                      ? 'bg-gradient-to-r from-purple-500 to-blue-500 text-white'
+                      : 'text-purple-400 hover:text-purple-300 border border-purple-700 hover:border-purple-600'
+                  }`}
+                  title="Use o3 model for verified, fact-checked VC research"
+                >
+                  🧠 o3 Verified Research
                 </button>
               </div>
 
@@ -1834,12 +2416,94 @@ const VCDatabasePage: React.FC = () => {
                     Upload screenshots or photos of VC prospect data. GPT-4 Vision will extract information from spreadsheets, tables, or any structured lists.
                   </p>
                 </div>
-              ) : (
-                // AI Prompt Input Section
+              ) : bulkInputType === 'o3' ? (
+                // o3 Verified Research Section
                 <div className="space-y-4">
                   <div>
-                    <label htmlFor="aiPrompt" className="block text-gray-300 mb-2 text-sm font-medium">
+                    <label htmlFor="aiPrompt" className="block text-gray-300 mb-2 text-sm font-medium flex items-center gap-2">
+                      🧠 o3 Verified Research Prompt
+                      <span className="px-2 py-1 bg-purple-900/30 text-purple-300 rounded text-xs border border-purple-800">
+                        FACT-CHECKED
+                      </span>
+                    </label>
+                    <textarea
+                      id="aiPrompt"
+                      value={aiPrompt}
+                      onChange={(e) => setAiPrompt(e.target.value)}
+                      rows={6}
+                      className="w-full px-4 py-3 bg-[#262a30] border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-purple-500 focus:outline-none transition-colors resize-vertical"
+                      placeholder="Research this VC and get verified information with fact-checking
+
+Examples:
+• Research Andreessen Horowitz partners and verify their contact information
+• Find factual information about Sequoia Capital team members with validated emails
+• Get verified details on Bessemer Venture Partners healthcare investors
+• Research early-stage VCs in NYC focusing on fintech with confirmed websites"
+                    />
+                  </div>
+                  
+                  <div className="bg-purple-900/20 border border-purple-800 rounded-lg p-4">
+                    <h4 className="text-purple-300 font-medium mb-2 flex items-center">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      o3 Verification Features
+                    </h4>
+                    <ul className="text-sm text-purple-200 space-y-1">
+                      <li>• <strong>Website Validation</strong> - Verifies URLs are active and correct</li>
+                      <li>• <strong>Email Verification</strong> - Uses confirmed patterns and public sources</li>
+                      <li>• <strong>Fact-Checking</strong> - Cross-references information across sources</li>
+                      <li>• <strong>Confidence Scoring</strong> - Rates data accuracy (HIGH/MEDIUM/LOW)</li>
+                      <li>• <strong>Source Verification</strong> - Confirms partner roles and company details</li>
+                      <li>• <strong>Portfolio Validation</strong> - Verifies investment history and focus areas</li>
+                    </ul>
+                  </div>
+
+                  <div className="bg-yellow-900/20 border border-yellow-800 rounded-lg p-4">
+                    <h4 className="text-yellow-300 font-medium mb-2 flex items-center">
+                      <AlertTriangle className="h-4 w-4 mr-2" />
+                      o3 vs GPT-4 Research
+                    </h4>
+                    <div className="text-sm text-yellow-200 space-y-2">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <p className="font-medium text-yellow-300 mb-1">GPT-4 Research:</p>
+                          <ul className="space-y-1">
+                            <li>• ⚠️ May hallucinate information</li>
+                            <li>• ⚠️ No URL validation</li>
+                            <li>• ⚠️ Potentially incorrect emails</li>
+                            <li>• ⚠️ Requires manual verification</li>
+                          </ul>
+                        </div>
+                        <div>
+                          <p className="font-medium text-purple-300 mb-1">o3 Verified Research:</p>
+                          <ul className="space-y-1">
+                            <li>• ✅ Fact-checked information</li>
+                            <li>• ✅ Website validation included</li>
+                            <li>• ✅ Verified email patterns</li>
+                            <li>• ✅ Confidence scoring system</li>
+                          </ul>
+                        </div>
+                      </div>
+                      <p className="font-medium text-yellow-300 mt-3">
+                        Use o3 for critical outreach where accuracy is essential to maintain credibility.
+                      </p>
+                    </div>
+                  </div>
+
+                  <p className="text-gray-400 text-sm">
+                    Provide specific instructions for VC research. o3 will verify information through multiple sources and provide confidence ratings for each data point.
+                  </p>
+                </div>
+              ) : (
+                // AI Prompt Input Section (GPT-4)
+                <div className="space-y-4">
+                  <div>
+                    <label htmlFor="aiPrompt" className="block text-gray-300 mb-2 text-sm font-medium flex items-center gap-2">
                       AI Research Prompt
+                      <span className="px-2 py-1 bg-orange-900/30 text-orange-300 rounded text-xs border border-orange-800">
+                        REQUIRES VERIFICATION
+                      </span>
                     </label>
                     <textarea
                       id="aiPrompt"
@@ -1873,6 +2537,17 @@ Examples:
                     </ul>
                   </div>
 
+                  <div className="bg-orange-900/20 border border-orange-800 rounded-lg p-4">
+                    <h4 className="text-orange-300 font-medium mb-2 flex items-center">
+                      <AlertTriangle className="h-4 w-4 mr-2" />
+                      Verification Required
+                    </h4>
+                    <p className="text-sm text-orange-200">
+                      <strong>Warning:</strong> GPT-4 research may contain hallucinated information including incorrect emails, URLs, and contact details. 
+                      All information should be manually verified before outreach to maintain professional credibility.
+                    </p>
+                  </div>
+
                   <p className="text-gray-400 text-sm">
                     Provide specific instructions for what VC information you need. AI will research and return structured prospect data matching all your required fields.
                   </p>
@@ -1884,18 +2559,33 @@ Examples:
                 <div className="flex gap-3">
                   <button
                     onClick={processBulkData}
-                    disabled={processingBulk || (bulkInputType === 'text' && !spreadsheetData.trim()) || (bulkInputType === 'image' && uploadedImages.length === 0) || (bulkInputType === 'prompt' && !aiPrompt.trim())}
-                    className="flex items-center px-6 py-3 rounded-lg font-medium bg-blue-600 text-white hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={processingBulk || (bulkInputType === 'text' && !spreadsheetData.trim()) || (bulkInputType === 'image' && uploadedImages.length === 0) || ((bulkInputType === 'prompt' || bulkInputType === 'o3') && !aiPrompt.trim())}
+                    className={`flex items-center px-6 py-3 rounded-lg font-medium transition disabled:opacity-50 disabled:cursor-not-allowed ${
+                      bulkInputType === 'o3' 
+                        ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700'
+                        : 'bg-blue-600 text-white hover:bg-blue-700'
+                    }`}
                   >
                     {processingBulk ? (
                       <>
                         <Loader2 className="animate-spin h-4 w-4 mr-2" />
-                        Processing with OpenAI...
+                        {bulkInputType === 'o3' ? 'Processing with o3...' : 'Processing with OpenAI...'}
                       </>
                     ) : (
                       <>
-                        <Eye className="w-4 h-4 mr-2" />
-                        Process & Preview
+                        {bulkInputType === 'o3' ? (
+                          <>
+                            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            Verify & Preview with o3
+                          </>
+                        ) : (
+                          <>
+                            <Eye className="w-4 h-4 mr-2" />
+                            Process & Preview
+                          </>
+                        )}
                       </>
                     )}
                   </button>
@@ -2022,7 +2712,7 @@ Examples:
                               <span className="text-gray-400">Status:</span>
                               <div className="text-[#d7ff00]">{prospect.status}</div>
                             </div>
-                            <div>
+                                                        <div>
                               <span className="text-gray-400">Source:</span>
                               <div className={`text-sm font-medium ${
                                 prospect.source === 'bulk_text' ? 'text-blue-400' :
@@ -2032,12 +2722,28 @@ Examples:
                               }`}>
                                 {prospect.source === 'bulk_text' ? 'Bulk Text' :
                                  prospect.source === 'bulk_image' ? 'Bulk Image' :
-                                 prospect.source === 'ai_research' ? 'AI Research' : prospect.source}
-                                {(prospect.source === 'ai_research' || prospect.source === 'bulk_image') && (
+                                 prospect.source === 'ai_research' ? (bulkInputType === 'o3' ? 'o3 Research' : 'AI Research') : prospect.source}
+                                {(prospect.source === 'ai_research' || prospect.source === 'bulk_image') && bulkInputType !== 'o3' && (
                                   <span className="ml-1 text-yellow-400" title="Requires verification">⚠️</span>
                                 )}
-                              </div>
+                          </div>
                             </div>
+                            {/* Confidence level for o3 results */}
+                            {bulkInputType === 'o3' && (prospect as any).confidence && (
+                              <div>
+                                <span className="text-gray-400">Confidence:</span>
+                                <div className={`text-sm font-medium ${
+                                  (prospect as any).confidence === 'HIGH' ? 'text-green-400' :
+                                  (prospect as any).confidence === 'MEDIUM' ? 'text-yellow-400' :
+                                  'text-red-400'
+                                }`}>
+                                  {(prospect as any).confidence}
+                                  {(prospect as any).confidence === 'HIGH' && <span className="ml-1">✅</span>}
+                                  {(prospect as any).confidence === 'MEDIUM' && <span className="ml-1">⚠️</span>}
+                                  {(prospect as any).confidence === 'LOW' && <span className="ml-1">❌</span>}
+                                </div>
+                              </div>
+                            )}
                           </div>
                           {prospect.description && (
                             <div className="mt-3 pt-3 border-t border-gray-700">
@@ -2447,6 +3153,69 @@ Best regards,
                       </>
                     )}
                   </button>
+
+                  {/* o3 Audit Buttons */}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={auditVCData}
+                      disabled={auditInProgress}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition flex items-center gap-1 ${
+                        auditInProgress
+                          ? 'bg-purple-900/30 text-purple-400 border-purple-900 cursor-wait'
+                          : 'bg-gradient-to-r from-purple-600 to-blue-600 text-white border-purple-600 hover:from-purple-700 hover:to-blue-700'
+                      }`}
+                      title="Audit all prospect data using o3 for accuracy and identify improvements"
+                    >
+                      {auditInProgress ? (
+                        <>
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                          Auditing {auditProgress.current}/{auditProgress.total}
+                        </>
+                      ) : (
+                        <>
+                          🧠 o3 Audit All ({vcProspects.length})
+                        </>
+                      )}
+                    </button>
+
+                    {selectedProspectsForAudit.size > 0 && (
+                      <button
+                        onClick={auditSelectedProspects}
+                        disabled={auditInProgress}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition flex items-center gap-1 ${
+                          auditInProgress
+                            ? 'bg-purple-900/30 text-purple-400 border-purple-900 cursor-wait'
+                            : 'bg-gradient-to-r from-purple-600 to-blue-600 text-white border-purple-600 hover:from-purple-700 hover:to-blue-700'
+                        }`}
+                        title="Audit selected prospects using o3"
+                      >
+                        🧠 o3 Audit Selected ({selectedProspectsForAudit.size})
+                      </button>
+                    )}
+                  </div>
+                  
+                  {/* Label Missing Sources Button */}
+                  <button
+                    onClick={labelMissingSources}
+                    disabled={labelingInProgress}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition flex items-center gap-1 ${
+                      labelingInProgress
+                        ? 'bg-yellow-900/30 text-yellow-400 border-yellow-900 cursor-wait'
+                        : 'bg-purple-900/30 text-purple-400 border-purple-900 hover:bg-purple-800/40'
+                    }`}
+                    title="Label prospects without source information"
+                  >
+                    {labelingInProgress ? (
+                      <>
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                        Labeling {labelingProgress.current}/{labelingProgress.total}
+                      </>
+                    ) : (
+                      <>
+                        🏷️ Label Missing Sources ({vcProspects.filter(p => !p.source || p.source.trim() === '').length})
+                      </>
+                    )}
+                  </button>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {/* No Stage Button */}
@@ -2521,8 +3290,54 @@ Best regards,
                 </div>
               </div>
 
+              {/* Audit Status Filter */}
+              <div className="flex flex-col gap-2">
+                <label className="text-gray-300 text-sm font-medium">o3 Audit Status:</label>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { key: 'not_audited', label: '❔ Not Audited', count: vcProspects.filter(p => !p.o3AuditStatus || p.o3AuditStatus === 'not_audited').length },
+                    { key: 'audited_clean', label: '✅ Clean', count: vcProspects.filter(p => p.o3AuditStatus === 'audited_clean').length },
+                    { key: 'audited_with_issues', label: '⚠️ Issues', count: vcProspects.filter(p => p.o3AuditStatus === 'audited_with_issues').length },
+                    { key: 'audited_and_updated', label: '🔄 Updated', count: vcProspects.filter(p => p.o3AuditStatus === 'audited_and_updated').length }
+                  ].map(({ key, label, count }) => (
+                    <button
+                      key={key}
+                      onClick={() => toggleAuditStatusFilter(key)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition ${
+                        selectedAuditStatusFilters.includes(key)
+                          ? 'bg-purple-600 text-white border-purple-600'
+                          : 'bg-[#1a1e24] text-gray-300 border-gray-600 hover:border-gray-500'
+                      }`}
+                    >
+                      {label} ({count})
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Selection Controls */}
+              <div className="flex flex-col gap-2">
+                <label className="text-gray-300 text-sm font-medium">Select for Audit:</label>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={selectAllProspectsForAudit}
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium border transition bg-blue-900/30 text-blue-400 border-blue-900 hover:bg-blue-800/40"
+                  >
+                    Select All ({filteredProspects.length})
+                  </button>
+                  {selectedProspectsForAudit.size > 0 && (
+                    <button
+                      onClick={clearProspectAuditSelection}
+                      className="px-3 py-1.5 rounded-lg text-xs font-medium border transition bg-gray-700/30 text-gray-300 border-gray-700 hover:bg-gray-700/50"
+                    >
+                      Clear Selection ({selectedProspectsForAudit.size})
+                    </button>
+                  )}
+                </div>
+              </div>
+
               {/* Clear Filters */}
-              {(selectedStageFilters.length > 0 || selectedStatusFilters.length > 0 || selectedSourceFilters.length > 0) && (
+              {(selectedStageFilters.length > 0 || selectedStatusFilters.length > 0 || selectedSourceFilters.length > 0 || selectedAuditStatusFilters.length > 0) && (
                 <div className="flex items-end">
                   <button
                     onClick={clearAllFilters}
@@ -2544,6 +3359,21 @@ Best regards,
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-gray-700">
+                      <th className="text-center py-3 px-2 text-gray-300 font-medium w-12">
+                        <input
+                          type="checkbox"
+                          checked={selectedProspectsForAudit.size === filteredProspects.length && filteredProspects.length > 0}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              selectAllProspectsForAudit();
+                            } else {
+                              clearProspectAuditSelection();
+                            }
+                          }}
+                          className="rounded border-gray-400 text-purple-600 focus:ring-purple-500"
+                          title="Select all visible prospects for audit"
+                        />
+                      </th>
                       <th className="text-left py-3 px-4 text-gray-300 font-medium">Person</th>
                       <th className="text-left py-3 px-4 text-gray-300 font-medium">Companies</th>
                       <th className="text-left py-3 px-4 text-gray-300 font-medium">Email</th>
@@ -2553,6 +3383,7 @@ Best regards,
                       <th className="text-left py-3 px-4 text-gray-300 font-medium">Location</th>
                       <th className="text-left py-3 px-4 text-gray-300 font-medium">Status</th>
                       <th className="text-left py-3 px-4 text-gray-300 font-medium">Source</th>
+                      <th className="text-left py-3 px-4 text-gray-300 font-medium">o3 Audit</th>
                       <th className="text-center py-3 px-4 text-gray-300 font-medium">Email</th>
                       <th className="text-left py-3 px-4 text-gray-300 font-medium">Created</th>
                     </tr>
@@ -2560,6 +3391,15 @@ Best regards,
                   <tbody>
                     {filteredProspects.map((prospect) => (
                       <tr key={prospect.id} className="border-b border-gray-800 hover:bg-[#262a30] transition-colors">
+                        <td className="py-3 px-2 text-center">
+                          <input
+                            type="checkbox"
+                            checked={selectedProspectsForAudit.has(prospect.id)}
+                            onChange={() => toggleProspectForAudit(prospect.id)}
+                            className="rounded border-gray-400 text-purple-600 focus:ring-purple-500"
+                            title="Select for individual audit"
+                          />
+                        </td>
                         <td className="py-3 px-4 text-white font-medium">{prospect.person}</td>
                         <td className="py-3 px-4 text-gray-300 max-w-xs truncate">{prospect.companies}</td>
                         <td className="py-3 px-4 text-gray-300 max-w-xs truncate">{prospect.email || '-'}</td>
@@ -2626,27 +3466,101 @@ Best regards,
                           )}
                         </td>
                         <td className="py-3 px-4">
-                          <div className="flex items-center gap-2">
-                            <span 
-                              className={`px-2 py-1 rounded text-xs font-medium ${
-                                prospect.source === 'individual_form' ? 'bg-green-900 text-green-300' :
-                                prospect.source === 'bulk_text' ? 'bg-blue-900 text-blue-300' :
-                                prospect.source === 'bulk_image' ? 'bg-purple-900 text-purple-300' :
-                                prospect.source === 'ai_research' ? 'bg-orange-900 text-orange-300' :
-                                'bg-gray-900 text-gray-300'
-                              }`}
-                            >
-                              {prospect.source === 'individual_form' ? 'Manual Entry' :
-                               prospect.source === 'bulk_text' ? 'Bulk Text' :
-                               prospect.source === 'bulk_image' ? 'Bulk Image' :
-                               prospect.source === 'ai_research' ? 'AI Research' : prospect.source || '-'}
-                            </span>
-                            {(prospect.source === 'ai_research' || prospect.source === 'bulk_image') && (
-                              <span title="Requires extra verification - AI generated data may need fact-checking">
-                                <AlertTriangle className="w-4 h-4 text-yellow-400" />
-                              </span>
-                            )}
-                          </div>
+                          {editingSource === prospect.id ? (
+                            <div className="flex items-center space-x-2">
+                              <select
+                                value={prospect.source || 'individual_form'}
+                                onChange={(e) => updateProspectSource(prospect.id, e.target.value as VCFormData['source'])}
+                                disabled={updatingSource === prospect.id}
+                                className="bg-[#262a30] border border-gray-600 rounded px-2 py-1 text-sm text-white focus:border-[#d7ff00] focus:outline-none"
+                              >
+                                {sourceOptions.map(source => (
+                                  <option key={source} value={source}>
+                                    {sourceLabels[source]}
+                                  </option>
+                                ))}
+                              </select>
+                              <button
+                                onClick={() => setEditingSource(null)}
+                                className="p-1 text-gray-400 hover:text-white"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => setEditingSource(prospect.id)}
+                                className="flex items-center gap-2 hover:bg-[#262a30] rounded p-1 transition-colors group"
+                              >
+                                <span 
+                                  className={`px-2 py-1 rounded text-xs font-medium ${
+                                    prospect.source === 'individual_form' ? 'bg-green-900 text-green-300' :
+                                    prospect.source === 'bulk_text' ? 'bg-blue-900 text-blue-300' :
+                                    prospect.source === 'bulk_image' ? 'bg-purple-900 text-purple-300' :
+                                    prospect.source === 'ai_research' ? 'bg-orange-900 text-orange-300' :
+                                    'bg-gray-900 text-gray-300'
+                                  }`}
+                                >
+                                  {sourceLabels[prospect.source as keyof typeof sourceLabels] || prospect.source || 'Manual Entry'}
+                                </span>
+                                <Edit3 className="w-4 h-4 text-gray-400 group-hover:text-[#d7ff00] transition-colors opacity-0 group-hover:opacity-100" />
+                              </button>
+                              {(prospect.source === 'ai_research' || prospect.source === 'bulk_image') && (
+                                <span title="Requires extra verification - AI generated data may need fact-checking">
+                                  <AlertTriangle className="w-4 h-4 text-yellow-400" />
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                        <td className="py-3 px-4">
+                          {editingAuditStatus === prospect.id ? (
+                            <div className="flex items-center space-x-2">
+                              <select
+                                value={prospect.o3AuditStatus || 'not_audited'}
+                                onChange={(e) => updateProspectAuditStatus(prospect.id, e.target.value as VCProspect['o3AuditStatus'])}
+                                disabled={updatingAuditStatus === prospect.id}
+                                className="bg-[#262a30] border border-gray-600 rounded px-2 py-1 text-sm text-white focus:border-[#d7ff00] focus:outline-none"
+                              >
+                                {auditStatusOptions.map(status => (
+                                  <option key={status} value={status}>
+                                    {auditStatusLabels[status]}
+                                  </option>
+                                ))}
+                              </select>
+                              <button
+                                onClick={() => setEditingAuditStatus(null)}
+                                className="p-1 text-gray-400 hover:text-white"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex flex-col gap-1">
+                              <button
+                                onClick={() => setEditingAuditStatus(prospect.id)}
+                                className="flex items-center justify-center hover:bg-[#262a30] rounded p-1 transition-colors group"
+                              >
+                                <span 
+                                  className={`px-2 py-1 rounded text-xs font-medium text-center ${
+                                    prospect.o3AuditStatus === 'audited_clean' ? 'bg-green-900 text-green-300' :
+                                    prospect.o3AuditStatus === 'audited_with_issues' ? 'bg-yellow-900 text-yellow-300' :
+                                    prospect.o3AuditStatus === 'audited_and_updated' ? 'bg-blue-900 text-blue-300' :
+                                    'bg-gray-900 text-gray-400'
+                                  }`}
+                                >
+                                  {prospect.o3AuditStatus ? auditStatusLabels[prospect.o3AuditStatus] : auditStatusLabels['not_audited']}
+                                </span>
+                                <Edit3 className="w-4 h-4 text-gray-400 group-hover:text-[#d7ff00] transition-colors opacity-0 group-hover:opacity-100 ml-1" />
+                              </button>
+                              {prospect.o3AuditDate && (
+                                <span className="text-xs text-gray-400 text-center">
+                                  {prospect.o3AuditDate.toLocaleDateString()}
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </td>
                         <td className="py-3 px-4 text-center">
                           <div className="flex gap-1 justify-center">
@@ -3012,6 +3926,244 @@ Best regards,
                   </button>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Audit Review Modal */}
+      {showAuditReview && auditResults.length > 0 && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-[#1a1e24] rounded-xl p-6 max-w-6xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-purple-700">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <h2 className="text-xl font-medium text-white">o3 Audit Review</h2>
+                </div>
+                <div className="flex gap-2">
+                  <span className="px-3 py-1 bg-purple-900/30 text-purple-300 rounded-full text-sm border border-purple-800">
+                    {auditSummary?.totalIssues || 0} Issues Found
+                  </span>
+                  <span className="px-3 py-1 bg-blue-900/30 text-blue-300 rounded-full text-sm border border-blue-800">
+                    {selectedUpdates.size} Selected
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowAuditReview(false)}
+                className="p-2 text-gray-400 hover:text-gray-200 transition"
+                title="Close audit review"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+
+            {/* Audit Summary */}
+            {auditSummary && (
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6 p-4 bg-[#262a30] rounded-lg border border-gray-700">
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-white">{auditSummary.audited}</div>
+                  <div className="text-xs text-gray-400">Audited</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-green-400">{auditSummary.accurate}</div>
+                  <div className="text-xs text-gray-400">Accurate</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-yellow-400">{auditSummary.needsReview}</div>
+                  <div className="text-xs text-gray-400">Needs Review</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-red-400">{auditSummary.inaccurate}</div>
+                  <div className="text-xs text-gray-400">Inaccurate</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-purple-400">{auditSummary.totalIssues}</div>
+                  <div className="text-xs text-gray-400">Total Issues</div>
+                </div>
+              </div>
+            )}
+
+            {/* Bulk Actions */}
+            <div className="flex items-center justify-between mb-6 p-4 bg-[#262a30] rounded-lg border border-gray-700">
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => {
+                    const allIssueIds = auditResults.flatMap(ar => 
+                      ar.issues.map((issue: any) => `${ar.prospectId}-${issue.field}`)
+                    );
+                    setSelectedUpdates(new Set(allIssueIds));
+                  }}
+                  className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition"
+                >
+                  Select All
+                </button>
+                <button
+                  onClick={() => setSelectedUpdates(new Set())}
+                  className="px-3 py-2 bg-gray-600 text-white rounded-lg text-sm font-medium hover:bg-gray-700 transition"
+                >
+                  Clear Selection
+                </button>
+                <button
+                  onClick={() => {
+                    const highConfidenceIds = auditResults.flatMap(ar => 
+                      ar.issues
+                        .filter((issue: any) => issue.confidence === 'HIGH')
+                        .map((issue: any) => `${ar.prospectId}-${issue.field}`)
+                    );
+                    setSelectedUpdates(new Set(highConfidenceIds));
+                  }}
+                  className="px-3 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition"
+                >
+                  Select High Confidence Only
+                </button>
+              </div>
+              
+              <button
+                onClick={applySelectedUpdates}
+                disabled={selectedUpdates.size === 0 || applyingUpdates}
+                className={`px-6 py-2 rounded-lg font-medium transition flex items-center ${
+                  selectedUpdates.size === 0 || applyingUpdates
+                    ? 'bg-gray-700/30 text-gray-500 cursor-not-allowed border border-gray-700'
+                    : 'bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700 border border-purple-600'
+                }`}
+              >
+                {applyingUpdates ? (
+                  <>
+                    <Loader2 className="animate-spin h-4 w-4 mr-2" />
+                    Applying Updates...
+                  </>
+                ) : (
+                  <>
+                    <Check className="h-4 w-4 mr-2" />
+                    Apply {selectedUpdates.size} Selected Updates
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Audit Results */}
+            <div className="space-y-4">
+              {auditResults
+                .filter((ar: any) => ar.issues && ar.issues.length > 0)
+                .map((auditResult: any) => {
+                  const prospect = vcProspects.find(p => p.id === auditResult.prospectId);
+                  if (!prospect) return null;
+
+                  return (
+                    <div key={auditResult.prospectId} className="bg-[#262a30] rounded-lg p-4 border border-gray-700">
+                      {/* Prospect Header */}
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-3">
+                          <div>
+                            <div className="font-medium text-white">{prospect.person}</div>
+                            <div className="text-sm text-gray-400">{prospect.companies}</div>
+                          </div>
+                          <span 
+                            className={`px-2 py-1 rounded text-xs font-medium ${
+                              auditResult.overallScore === 'ACCURATE' ? 'bg-green-900 text-green-300' :
+                              auditResult.overallScore === 'NEEDS_REVIEW' ? 'bg-yellow-900 text-yellow-300' :
+                              'bg-red-900 text-red-300'
+                            }`}
+                          >
+                            {auditResult.overallScore}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Issues */}
+                      <div className="space-y-3">
+                        {auditResult.issues.map((issue: any, issueIndex: number) => {
+                          const updateId = `${auditResult.prospectId}-${issue.field}`;
+                          const isSelected = selectedUpdates.has(updateId);
+
+                          return (
+                            <div 
+                              key={issueIndex} 
+                              className={`p-3 rounded-lg border transition-all ${
+                                isSelected 
+                                  ? 'bg-purple-900/20 border-purple-600'
+                                  : 'bg-[#1a1e24] border-gray-600'
+                              }`}
+                            >
+                              <div className="flex items-start gap-3">
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={() => toggleSelectedUpdate(updateId)}
+                                  className="mt-1 h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
+                                />
+                                
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <span className="text-sm font-medium text-gray-300 capitalize">
+                                      {issue.field}
+                                    </span>
+                                    <span 
+                                      className={`px-2 py-0.5 rounded text-xs font-medium ${
+                                        issue.confidence === 'HIGH' ? 'bg-green-900/30 text-green-400' :
+                                        issue.confidence === 'MEDIUM' ? 'bg-yellow-900/30 text-yellow-400' :
+                                        'bg-red-900/30 text-red-400'
+                                      }`}
+                                    >
+                                      {issue.confidence}
+                                    </span>
+                                  </div>
+                                  
+                                  <div className="text-sm text-gray-400 mb-2">{issue.issue}</div>
+                                  
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-2">
+                                    <div>
+                                      <div className="text-xs text-gray-500 mb-1">Current:</div>
+                                      <div className="text-sm text-red-300 bg-red-900/20 p-2 rounded border border-red-800 break-all">
+                                        {issue.currentValue || '(empty)'}
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <div className="text-xs text-gray-500 mb-1">Suggested:</div>
+                                      <div className="text-sm text-green-300 bg-green-900/20 p-2 rounded border border-green-800 break-all">
+                                        {issue.suggestedValue}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="text-xs text-gray-500">
+                                    <strong>Reasoning:</strong> {issue.reasoning}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+
+            {auditResults.filter((ar: any) => ar.issues && ar.issues.length > 0).length === 0 && (
+              <div className="text-center py-8 text-gray-400">
+                <div className="flex flex-col items-center gap-3">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <div>
+                    <p className="text-lg font-medium mb-2 text-green-400">All Data Looks Good!</p>
+                    <p className="text-sm">o3 didn't find any issues with your VC prospect data.</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Footer Note */}
+            <div className="mt-6 text-xs text-gray-500 bg-[#262a30] p-3 rounded-lg border border-gray-700">
+              <strong>💡 About o3 Audit:</strong> This audit uses OpenAI's o3 model to verify contact information, website URLs, 
+              LinkedIn profiles, investment stages, and other prospect data. High confidence suggestions are typically safe to apply, 
+              while medium/low confidence items should be reviewed manually.
             </div>
           </div>
         </div>
