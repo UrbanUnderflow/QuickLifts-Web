@@ -1885,7 +1885,7 @@ const VCDatabasePage: React.FC = () => {
     'ai_research': 'AI Research'
   };
 
-  const auditStatusOptions: VCProspect['o3AuditStatus'][] = [
+  const auditStatusOptions: NonNullable<VCProspect['o3AuditStatus']>[] = [
     'not_audited',
     'audited_clean',
     'audited_with_issues',
