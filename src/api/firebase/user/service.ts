@@ -899,6 +899,70 @@ class UserService {
       throw error;
     }
   }
+
+  /**
+   * Updates staff onboarding progress for a user
+   * @param userId The user ID
+   * @param progress The onboarding progress data
+   */
+  async updateStaffOnboardingProgress(userId: string, progress: any): Promise<void> {
+    try {
+      const userRef = doc(db, 'users', userId);
+      const updateData = {
+        staffOnboardingProgress: {
+          ...progress,
+          startedAt: progress.startedAt || new Date(),
+        },
+        updatedAt: new Date()
+      };
+      
+      await setDoc(userRef, updateData, { merge: true });
+      console.log('Staff onboarding progress updated for user:', userId);
+    } catch (error) {
+      console.error('Error updating staff onboarding progress:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Marks terms as accepted for staff onboarding
+   * @param userId The user ID
+   */
+  async acceptStaffOnboardingTerms(userId: string): Promise<void> {
+    try {
+      const userRef = doc(db, 'users', userId);
+      const updateData = {
+        'staffOnboardingProgress.termsAcceptedAt': new Date(),
+        updatedAt: new Date()
+      };
+      
+      await setDoc(userRef, updateData, { merge: true });
+      console.log('Staff onboarding terms accepted for user:', userId);
+    } catch (error) {
+      console.error('Error accepting staff onboarding terms:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Marks staff onboarding as complete
+   * @param userId The user ID
+   */
+  async completeStaffOnboarding(userId: string): Promise<void> {
+    try {
+      const userRef = doc(db, 'users', userId);
+      const updateData = {
+        'staffOnboardingProgress.completedAt': new Date(),
+        updatedAt: new Date()
+      };
+      
+      await setDoc(userRef, updateData, { merge: true });
+      console.log('Staff onboarding completed for user:', userId);
+    } catch (error) {
+      console.error('Error completing staff onboarding:', error);
+      throw error;
+    }
+  }
 }
 
 export const userService = new UserService();

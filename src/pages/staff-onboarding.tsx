@@ -3,6 +3,9 @@ import type { NextPage } from 'next';
 import { FaCheckCircle, FaPlay, FaArrowRight, FaArrowLeft, FaUsers, FaLightbulb, FaRocket, FaTools, FaFileContract, FaClock, FaTasks, FaDownload, FaSignature } from 'react-icons/fa';
 import PageHead from '../components/PageHead';
 import Footer from '../components/Footer/Footer';
+import { useUser } from '../hooks/useUser';
+import { userService } from '../api/firebase/user';
+import { StaffOnboardingProgress } from '../api/firebase/user/types';
 
 // Types
 interface PhaseSection {
@@ -24,40 +27,49 @@ interface OnboardingPhase {
   deliverableCompleted?: boolean;
 }
 
-interface OnboardingProgress {
-  currentPhase: number;
-  completedPhases: Set<number>;
-  sectionProgress: { [key: string]: boolean };
-  deliverableProgress: { [key: number]: boolean };
-}
-
 const StaffOnboardingPage: NextPage = () => {
-  const [progress, setProgress] = useState<OnboardingProgress>({
+  const currentUser = useUser();
+  const [progress, setProgress] = useState<StaffOnboardingProgress>({
     currentPhase: 1,
-    completedPhases: new Set(),
+    completedPhases: [],
     sectionProgress: {},
     deliverableProgress: {}
   });
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Load progress from localStorage on mount
+  // Load progress from database on mount
   useEffect(() => {
-    const savedProgress = localStorage.getItem('staff-onboarding-progress');
-    if (savedProgress) {
-      const parsed = JSON.parse(savedProgress);
-      setProgress({
-        ...parsed,
-        completedPhases: new Set(parsed.completedPhases)
-      });
+    if (currentUser?.id) {
+      const savedProgress = currentUser.staffOnboardingProgress;
+      if (savedProgress) {
+        setProgress(savedProgress);
+      }
+      setIsLoading(false);
+    } else if (currentUser === null) {
+      // User is not authenticated, this should be handled by AuthWrapper
+      setError('Authentication required');
+      setIsLoading(false);
     }
-  }, []);
+  }, [currentUser]);
 
-  // Save progress to localStorage
-  useEffect(() => {
-    localStorage.setItem('staff-onboarding-progress', JSON.stringify({
-      ...progress,
-      completedPhases: Array.from(progress.completedPhases)
-    }));
-  }, [progress]);
+  // Save progress to database
+  const saveProgress = async (newProgress: StaffOnboardingProgress) => {
+    if (!currentUser?.id) return;
+    
+    setIsSaving(true);
+    try {
+      await userService.updateStaffOnboardingProgress(currentUser.id, newProgress);
+      setProgress(newProgress);
+      setError(null);
+    } catch (err) {
+      console.error('Error saving onboarding progress:', err);
+      setError('Failed to save progress. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const phases: OnboardingPhase[] = [
     {
@@ -314,47 +326,69 @@ const StaffOnboardingPage: NextPage = () => {
     }
   ];
 
-  const toggleSectionCompletion = (sectionId: string) => {
-    setProgress(prev => ({
-      ...prev,
+  const toggleSectionCompletion = async (sectionId: string) => {
+    const newProgress = {
+      ...progress,
       sectionProgress: {
-        ...prev.sectionProgress,
-        [sectionId]: !prev.sectionProgress[sectionId]
+        ...progress.sectionProgress,
+        [sectionId]: !progress.sectionProgress[sectionId]
       }
-    }));
+    };
+    await saveProgress(newProgress);
   };
 
-  const toggleDeliverableCompletion = (phaseId: number) => {
-    setProgress(prev => {
-      const newDeliverableProgress = {
-        ...prev.deliverableProgress,
-        [phaseId]: !prev.deliverableProgress[phaseId]
-      };
+  const toggleDeliverableCompletion = async (phaseId: number) => {
+    const newDeliverableProgress = {
+      ...progress.deliverableProgress,
+      [phaseId]: !progress.deliverableProgress[phaseId]
+    };
+    
+    let completedPhases = [...progress.completedPhases];
+    if (newDeliverableProgress[phaseId]) {
+      if (!completedPhases.includes(phaseId)) {
+        completedPhases.push(phaseId);
+      }
       
-      const completedPhases = new Set(prev.completedPhases);
-      if (newDeliverableProgress[phaseId]) {
-        completedPhases.add(phaseId);
-      } else {
-        completedPhases.delete(phaseId);
+      // Handle terms acceptance for legal phase (Phase 5)
+      if (phaseId === 5 && currentUser?.id) {
+        try {
+          await userService.acceptStaffOnboardingTerms(currentUser.id);
+        } catch (err) {
+          console.error('Error accepting terms:', err);
+        }
       }
+      
+      // Check if all phases are complete
+      if (completedPhases.length === phases.length && currentUser?.id) {
+        try {
+          await userService.completeStaffOnboarding(currentUser.id);
+        } catch (err) {
+          console.error('Error marking onboarding complete:', err);
+        }
+      }
+    } else {
+      completedPhases = completedPhases.filter(id => id !== phaseId);
+    }
 
-      return {
-        ...prev,
-        deliverableProgress: newDeliverableProgress,
-        completedPhases
-      };
-    });
+    const newProgress = {
+      ...progress,
+      deliverableProgress: newDeliverableProgress,
+      completedPhases
+    };
+    
+    await saveProgress(newProgress);
   };
 
-  const navigateToPhase = (phaseId: number) => {
-    setProgress(prev => ({
-      ...prev,
+  const navigateToPhase = async (phaseId: number) => {
+    const newProgress = {
+      ...progress,
       currentPhase: phaseId
-    }));
+    };
+    await saveProgress(newProgress);
   };
 
   const currentPhaseData = phases.find(p => p.id === progress.currentPhase);
-  const overallProgress = (progress.completedPhases.size / phases.length) * 100;
+  const overallProgress = (progress.completedPhases.length / phases.length) * 100;
 
   const getSectionProgress = (phaseId: number) => {
     const phase = phases.find(p => p.id === phaseId);
@@ -366,6 +400,46 @@ const StaffOnboardingPage: NextPage = () => {
     
     return (completedSections / phase.sections.length) * 100;
   };
+
+  // Show loading while checking authentication or loading progress
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-zinc-950 text-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-[#E0FE10] border-t-transparent rounded-full animate-spin mb-4 mx-auto"></div>
+          <p className="text-zinc-300">Loading onboarding...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error if authentication failed
+  if (error) {
+    return (
+      <div className="min-h-screen bg-zinc-950 text-white flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-red-400 mb-4">{error}</p>
+          <button 
+            onClick={() => window.location.reload()}
+            className="bg-[#E0FE10] text-black px-4 py-2 rounded-lg font-semibold"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Require authentication
+  if (!currentUser) {
+    return (
+      <div className="min-h-screen bg-zinc-950 text-white flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-zinc-300 mb-4">Please sign in to access staff onboarding.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white">
@@ -387,10 +461,16 @@ const StaffOnboardingPage: NextPage = () => {
               <h1 className="text-2xl font-bold text-[#E0FE10]">Pulse Staff Onboarding</h1>
               <p className="text-zinc-400 text-sm">Your comprehensive introduction to the team</p>
             </div>
-            <div className="text-right">
-              <div className="text-sm text-zinc-400">Overall Progress</div>
-              <div className="text-2xl font-bold text-[#E0FE10]">{Math.round(overallProgress)}%</div>
-            </div>
+                              <div className="text-right">
+                <div className="text-sm text-zinc-400">Overall Progress</div>
+                <div className="text-2xl font-bold text-[#E0FE10]">{Math.round(overallProgress)}%</div>
+                {currentUser?.staffOnboardingProgress?.completedAt && (
+                  <div className="text-xs text-green-400 flex items-center gap-1 mt-1">
+                    <FaCheckCircle />
+                    Completed {new Date(currentUser.staffOnboardingProgress.completedAt).toLocaleDateString()}
+                  </div>
+                )}
+              </div>
           </div>
           
           {/* Overall Progress Bar */}
@@ -414,7 +494,7 @@ const StaffOnboardingPage: NextPage = () => {
               <h2 className="text-lg font-semibold mb-4 text-[#E0FE10]">Phases</h2>
               <nav className="space-y-2">
                 {phases.map((phase) => {
-                  const isCompleted = progress.completedPhases.has(phase.id);
+                  const isCompleted = progress.completedPhases.includes(phase.id);
                   const isCurrent = progress.currentPhase === phase.id;
                   const phaseProgress = getSectionProgress(phase.id);
                   
@@ -422,7 +502,8 @@ const StaffOnboardingPage: NextPage = () => {
                     <button
                       key={phase.id}
                       onClick={() => navigateToPhase(phase.id)}
-                      className={`w-full text-left p-3 rounded-lg border transition-all duration-200 ${
+                      disabled={isSaving}
+                      className={`w-full text-left p-3 rounded-lg border transition-all duration-200 disabled:opacity-50 ${
                         isCurrent
                           ? 'border-[#E0FE10] bg-[#E0FE10]/10 text-white'
                           : isCompleted
@@ -493,13 +574,18 @@ const StaffOnboardingPage: NextPage = () => {
                         <div className="flex items-start gap-4">
                           <button
                             onClick={() => toggleSectionCompletion(section.id)}
-                            className={`mt-1 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all duration-200 ${
+                            disabled={isSaving}
+                            className={`mt-1 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all duration-200 disabled:opacity-50 ${
                               isCompleted
                                 ? 'border-green-500 bg-green-500 text-white'
                                 : 'border-zinc-500 hover:border-[#E0FE10]'
                             }`}
                           >
-                            {isCompleted && <FaCheckCircle className="w-4 h-4" />}
+                            {isSaving ? (
+                              <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin"></div>
+                            ) : isCompleted ? (
+                              <FaCheckCircle className="w-4 h-4" />
+                            ) : null}
                           </button>
                           <div className="flex-1">
                             <h3 className="text-lg font-semibold mb-2 text-white">{section.title}</h3>
@@ -521,16 +607,23 @@ const StaffOnboardingPage: NextPage = () => {
                     <p className="text-zinc-300 mb-4">{currentPhaseData.deliverable}</p>
                     <button
                       onClick={() => toggleDeliverableCompletion(currentPhaseData.id)}
-                      className={`px-6 py-3 rounded-lg font-semibold transition-all duration-200 ${
+                      disabled={isSaving}
+                      className={`px-6 py-3 rounded-lg font-semibold transition-all duration-200 disabled:opacity-50 flex items-center gap-2 ${
                         progress.deliverableProgress[currentPhaseData.id]
                           ? 'bg-green-500 text-white'
                           : 'bg-[#E0FE10] text-black hover:bg-[#c8e60e]'
                       }`}
                     >
-                      {progress.deliverableProgress[currentPhaseData.id] 
-                        ? 'Completed ✓' 
-                        : 'Mark as Complete'
-                      }
+                      {isSaving ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
+                          Saving...
+                        </>
+                      ) : progress.deliverableProgress[currentPhaseData.id] ? (
+                        'Completed ✓'
+                      ) : (
+                        'Mark as Complete'
+                      )}
                     </button>
                   </div>
                 </div>
@@ -539,7 +632,7 @@ const StaffOnboardingPage: NextPage = () => {
                 <div className="flex justify-between items-center pt-8 border-t border-zinc-800">
                   <button
                     onClick={() => navigateToPhase(Math.max(1, progress.currentPhase - 1))}
-                    disabled={progress.currentPhase === 1}
+                    disabled={progress.currentPhase === 1 || isSaving}
                     className="flex items-center gap-2 px-4 py-2 text-zinc-400 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <FaArrowLeft />
@@ -550,11 +643,17 @@ const StaffOnboardingPage: NextPage = () => {
                     <div className="text-sm text-zinc-400">
                       Phase {progress.currentPhase} of {phases.length}
                     </div>
+                    {isSaving && (
+                      <div className="text-xs text-[#E0FE10] flex items-center justify-center gap-2 mt-1">
+                        <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin"></div>
+                        Saving progress...
+                      </div>
+                    )}
                   </div>
                   
                   <button
                     onClick={() => navigateToPhase(Math.min(phases.length, progress.currentPhase + 1))}
-                    disabled={progress.currentPhase === phases.length}
+                    disabled={progress.currentPhase === phases.length || isSaving}
                     className="flex items-center gap-2 px-4 py-2 text-zinc-400 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Next Phase

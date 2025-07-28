@@ -45,6 +45,17 @@ export class ProfileImage {
   }
 }
 
+// Staff Onboarding Progress Interface
+export interface StaffOnboardingProgress {
+  currentPhase: number;
+  completedPhases: number[];
+  sectionProgress: { [key: string]: boolean };
+  deliverableProgress: { [key: number]: boolean };
+  termsAcceptedAt?: Date;
+  startedAt?: Date;
+  completedAt?: Date;
+}
+
 export class User {
   id: string;
   displayName: string;
@@ -75,6 +86,7 @@ export class User {
   referrer?: string;
   isCurrentlyActive: boolean;
   videoCount: number;
+  staffOnboardingProgress?: StaffOnboardingProgress;
   createdAt: Date;
   updatedAt: Date;
 
@@ -119,6 +131,19 @@ export class User {
     this.referrer = data.referrer || '';
     this.isCurrentlyActive = data.isCurrentlyActive || false;
     this.videoCount = data.videoCount || 0;
+
+    // Staff onboarding progress
+    if (data.staffOnboardingProgress) {
+      this.staffOnboardingProgress = {
+        currentPhase: data.staffOnboardingProgress.currentPhase || 1,
+        completedPhases: data.staffOnboardingProgress.completedPhases || [],
+        sectionProgress: data.staffOnboardingProgress.sectionProgress || {},
+        deliverableProgress: data.staffOnboardingProgress.deliverableProgress || {},
+        termsAcceptedAt: convertFirestoreTimestamp(data.staffOnboardingProgress.termsAcceptedAt) || null,
+        startedAt: convertFirestoreTimestamp(data.staffOnboardingProgress.startedAt) || null,
+        completedAt: convertFirestoreTimestamp(data.staffOnboardingProgress.completedAt) || null,
+      };
+    }
 
     this.createdAt = convertFirestoreTimestamp(data.createdAt) || null;
 
@@ -175,6 +200,15 @@ export class User {
       referrer: this.referrer,
       isCurrentlyActive: this.isCurrentlyActive,
       videoCount: this.videoCount,
+      staffOnboardingProgress: this.staffOnboardingProgress ? {
+        currentPhase: this.staffOnboardingProgress.currentPhase,
+        completedPhases: this.staffOnboardingProgress.completedPhases,
+        sectionProgress: this.staffOnboardingProgress.sectionProgress,
+        deliverableProgress: this.staffOnboardingProgress.deliverableProgress,
+        termsAcceptedAt: this.staffOnboardingProgress.termsAcceptedAt ? dateToUnixTimestamp(this.staffOnboardingProgress.termsAcceptedAt) : null,
+        startedAt: this.staffOnboardingProgress.startedAt ? dateToUnixTimestamp(this.staffOnboardingProgress.startedAt) : null,
+        completedAt: this.staffOnboardingProgress.completedAt ? dateToUnixTimestamp(this.staffOnboardingProgress.completedAt) : null,
+      } : null,
       createdAt: dateToUnixTimestamp(this.createdAt),
       updatedAt: dateToUnixTimestamp(this.updatedAt),
     };
