@@ -49,20 +49,14 @@ class ExerciseService {
     
     // Verify if an exercise exists in Firestore by its ID field
     async verifyExerciseExists(exerciseId: string): Promise<boolean> {
-      try {
-        console.log('[DEBUG-EXERCISE] Verifying if exercise exists by ID:', exerciseId);
-        
+      try {        
         // Query for documents with this ID field
         const exercisesRef = collection(db, 'exercises');
         const q = query(exercisesRef, where('id', '==', exerciseId));
         const querySnapshot = await getDocs(q);
         
         const exists = !querySnapshot.empty;
-        console.log('[DEBUG-EXERCISE] Exercise verification by ID result:', {
-          exists,
-          id: exerciseId,
-          matchCount: querySnapshot.size
-        });
+        
         
         return exists;
       } catch (error) {
@@ -81,9 +75,7 @@ class ExerciseService {
       try {
         const exerciseRef = doc(db, 'exercises', formattedName);
         const exerciseDoc = await getDoc(exerciseRef);
-        
-        console.log(`[DEBUG-EXERCISE] Exercise verification by name result: {exists: ${exerciseDoc.exists()}, name: '${formattedName.toLowerCase()}', data: ${exerciseDoc.exists() ? 'exists' : 'null'}}`);
-        
+                
         return exerciseDoc.exists();
       } catch (error) {
         console.error(`[DEBUG-EXERCISE] Error verifying exercise: ${error}`);
@@ -139,23 +131,15 @@ class ExerciseService {
     }
 
     // Create a new exercise document in Firestore
-    async createExercise(exercise: any): Promise<void> {
-      console.log(`[DEBUG-EXERCISE] Creating new exercise:`, exercise);
-      
+    async createExercise(exercise: any): Promise<void> {      
       // Ensure consistent capitalization for the exercise name
-      const formattedName = formatExerciseNameForId(exercise.name);
-      console.log(`[DEBUG-EXERCISE] Capitalized exercise name: ${formattedName}`);
-      
-      // Use the formatted name as document ID
-      console.log(`[DEBUG-EXERCISE] Using exercise name as document ID: ${formattedName}`);
+      const formattedName = formatExerciseNameForId(exercise.name);      
       
       try {
         // Create the exercise document with the name as ID (consistently capitalized)
         const exerciseRef = doc(db, 'exercises', formattedName);
         await setDoc(exerciseRef, { ...exercise, name: formattedName });
-        
-        console.log(`[DEBUG-EXERCISE] Exercise created successfully with document ID: ${formattedName}`);
-        
+                
         // Clear cache after creating
         this.clearCache();
         
@@ -167,20 +151,15 @@ class ExerciseService {
 
     // Create a new exercise video document in Firestore
     async createExerciseVideo(video: any): Promise<void> {
-      console.log(`[DEBUG-EXERCISE] Creating new exercise video:`, video);
       
       // Ensure consistent capitalization for the exercise name
       const formattedExerciseName = formatExerciseNameForId(video.exercise);
-      console.log(`[DEBUG-EXERCISE] Capitalized exercise name in video: ${formattedExerciseName}`);
       
       try {
         // Create the exercise video document
         const exerciseVideoRef = doc(db, 'exerciseVideos', video.id);
         await setDoc(exerciseVideoRef, { ...video, exercise: formattedExerciseName });
-        
-        console.log(`[DEBUG-EXERCISE] Exercise video created successfully: ${video.id}`);
-        console.log(`[DEBUG-EXERCISE] Exercise video linked to exercise document: ${formattedExerciseName}`);
-        
+                
         // Clear cache after creating
         this.clearCache();
         
@@ -285,9 +264,7 @@ class ExerciseService {
               // Ensure exercise name is properly capitalized
               exercise: this.capitalizeExerciseName(video.exercise)
             })); // Ensure proper ExerciseVideo instances
-          
-          console.log(`[DEBUG-EXERCISE] Exercise "${exercise.name}" matched with ${videosForExercise.length} videos`);
-            
+                      
           return new Exercise({
             ...exercise, // Keep existing properties
             videos: videosForExercise, // Ensure videos are instances of ExerciseVideo

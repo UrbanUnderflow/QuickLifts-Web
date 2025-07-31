@@ -47,7 +47,7 @@ const StackGrid: React.FC<StackGridProps> = ({
   const router = useRouter();
 
   return (
-    <div className="grid grid-cols-1 gap-4">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
       {stacks.map((stack, index) => (
         <div 
           key={stack.id}
@@ -68,18 +68,76 @@ const StackGrid: React.FC<StackGridProps> = ({
               }`}
             />
           )}
-          <StackCard
-            workout={stack}
-            gifUrls={stack.exercises?.map(ex => ex.exercise.videos?.[0]?.gifURL || '') || []}
-            maxOrder={index}
-            showArrows={false}
-            showCalendar={true}
-            onPrimaryAction={() => {
+          
+          {/* Compact Stack Card */}
+          <div 
+            className="bg-zinc-800 hover:bg-zinc-700 transition-colors cursor-pointer rounded-lg border border-zinc-700/50 hover:border-zinc-600 p-4"
+            onClick={() => {
               if (!isSelecting) {
                 router.push(`/workout/${username || 'unknown'}/${stack.id}`);
               }
             }}
-          />
+          >
+            {/* Header Row */}
+            <div className="flex items-start justify-between mb-3">
+              <div className="flex-1 min-w-0">
+                <h3 className="text-white font-medium text-sm truncate mb-1">
+                  {stack.title || 'Untitled Stack'}
+                </h3>
+                <div className="flex items-center gap-2 text-xs text-zinc-400">
+                  <span>{stack.exercises?.length || 0} moves</span>
+                  <span>•</span>
+                  <span>{stack.estimatedDuration || 0} min</span>
+                  <span>•</span>
+                  <span className="px-2 py-0.5 bg-[#E0FE10]/10 text-[#E0FE10] rounded-full">
+                    {stack.zone}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Exercise Preview Row - Horizontal */}
+            <div className="flex gap-2 overflow-hidden">
+              {stack.exercises?.slice(0, 4).map((exercise, idx) => {
+                const gifUrl = exercise.exercise.videos?.[0]?.gifURL;
+                const thumbnailUrl = exercise.exercise.videos?.[0]?.thumbnail;
+                return (
+                  <div key={idx} className="w-16 h-16 rounded-lg overflow-hidden bg-zinc-900 flex-shrink-0">
+                    {gifUrl || thumbnailUrl ? (
+                      <img 
+                        src={thumbnailUrl || gifUrl} 
+                        alt={exercise.exercise.name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-zinc-700 flex items-center justify-center">
+                        <svg className="w-6 h-6 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              {stack.exercises && stack.exercises.length > 4 && (
+                <div className="w-16 h-16 rounded-lg bg-zinc-700 flex-shrink-0 flex items-center justify-center">
+                  <span className="text-xs text-zinc-400 font-medium">+{stack.exercises.length - 4}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Footer Row */}
+            <div className="flex items-center justify-between mt-3 pt-2 border-t border-zinc-700/50">
+              <span className="text-xs text-zinc-500">
+                Created {new Date(stack.createdAt).toLocaleDateString()}
+              </span>
+              <div className="flex items-center gap-1 text-xs text-zinc-400">
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </div>
+            </div>
+          </div>
         </div>
       ))}
     </div>

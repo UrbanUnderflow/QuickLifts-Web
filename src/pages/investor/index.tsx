@@ -192,19 +192,19 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
         console.log(`[K-Effective] Found ${allUserChallenges.length} total UserChallenge documents`);
         console.log(`[K-Effective] Sample UserChallenge data:`, allUserChallenges.slice(0, 3));
 
-        // Calculate K-effective metrics
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-        console.log(`[K-Effective] Filtering for participants after: ${thirtyDaysAgo.toISOString()}`);
+        // Calculate K-effective metrics for Morning Mobility Challenge (May 6 - June 6)
+        const challengeStartDate = new Date('2025-05-06');
+        const challengeEndDate = new Date('2025-06-06');
+        console.log(`[K-Effective] Filtering for participants between: ${challengeStartDate.toISOString()} and ${challengeEndDate.toISOString()}`);
 
-        // Filter for last 30 days
+        // Filter for first 30 days of challenge (May 6 - June 6)
         const recentParticipants = allUserChallenges.filter((uc: UserChallenge) => {
-          const hasValidJoinDate = uc.joinDate && uc.joinDate >= thirtyDaysAgo;
-          console.log(`[K-Effective] User ${uc.username} (${uc.userId}) - joinDate: ${uc.joinDate?.toISOString()}, isRecent: ${hasValidJoinDate}`);
+          const hasValidJoinDate = uc.joinDate && uc.joinDate >= challengeStartDate && uc.joinDate <= challengeEndDate;
+          console.log(`[K-Effective] User ${uc.username} (${uc.userId}) - joinDate: ${uc.joinDate?.toISOString()}, isInChallengePeriod: ${hasValidJoinDate}`);
           return hasValidJoinDate;
         });
 
-        console.log(`[K-Effective] Recent participants (last 30 days): ${recentParticipants.length}`);
+        console.log(`[K-Effective] Challenge participants (May 6 - June 6): ${recentParticipants.length}`);
 
         // Count active referrers (users who have sharedBy others in their referral chain)
         const activeReferrerIds = new Set<string>();
@@ -1039,7 +1039,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                           <TrendingUp className="h-5 w-5 text-[#E0FE10]" />
                           <h5 className="text-white font-medium">Viral Growth Snapshot</h5>
                         </div>
-                        <span className="text-zinc-400 text-sm">Morning Mobility Challenge • Last 30 Days</span>
+                        <span className="text-zinc-400 text-sm">Morning Mobility Challenge • May 6 - June 6</span>
                       </div>
                       
                       {isLoadingKMetrics ? (
@@ -1051,7 +1051,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                           {/* Main K-Effective Metric */}
                           <div className="text-center mb-6">
                             <div className="inline-flex items-center gap-2 bg-[#E0FE10]/10 rounded-lg px-4 py-2 mb-2">
-                              <span className="text-[#E0FE10] text-sm font-medium">Effective K-Factor (last 30d)</span>
+                              <span className="text-[#E0FE10] text-sm font-medium">Effective K-Factor (May 6 - June 6)</span>
                             </div>
                             <div className="text-white text-4xl font-bold mb-1">{kEffectiveMetrics.kEffective}</div>
                             <p className="text-zinc-400 text-sm">
@@ -1191,47 +1191,49 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                     </div>
                     
                     {/* What the Numbers Really Mean */}
-                    <div className="mb-8">
-                      <h5 className="text-white font-medium mb-4">What the Numbers Really Mean</h5>
-                      <div className="bg-zinc-800/30 rounded-xl overflow-hidden">
-                        <table className="w-full text-left">
-                          <thead>
-                            <tr className="border-b border-zinc-700 bg-zinc-900/50">
-                              <th className="py-3 px-4 text-zinc-400 font-medium text-sm">Metric</th>
-                              <th className="py-3 px-4 text-zinc-400 font-medium text-sm">Interpretation</th>
-                              <th className="py-3 px-4 text-zinc-400 font-medium text-sm">Investor Takeaway</th>
-                            </tr>
-                          </thead>
-                          <tbody className="text-sm">
-                            <tr className="border-b border-zinc-700">
-                              <td className="py-3 px-4 text-[#E0FE10] font-medium">K-eff = 9.83</td>
-                              <td className="py-3 px-4 text-zinc-300">Each active referrer → 9.83 credited sign-ups</td>
-                              <td className="py-3 px-4 text-zinc-300">Viral loop &gt; 1 ⇒ product can grow "for free"</td>
-                            </tr>
-                            <tr className="border-b border-zinc-700">
-                              <td className="py-3 px-4 text-[#E0FE10] font-medium">72.8% via referrals</td>
-                              <td className="py-3 px-4 text-zinc-300">Majority of growth is peer-driven</td>
-                              <td className="py-3 px-4 text-zinc-300"><strong>Paid CAC isn't the growth engine—community is</strong></td>
-                            </tr>
-                            <tr className="border-b border-zinc-700">
-                              <td className="py-3 px-4 text-[#E0FE10] font-medium">6.3d cycle time</td>
-                              <td className="py-3 px-4 text-zinc-300">Host → child joins in under a week</td>
-                              <td className="py-3 px-4 text-zinc-300">Loop spins fast; LTV realized quickly</td>
-                            </tr>
-                            <tr className="border-b border-zinc-700">
-                              <td className="py-3 px-4 text-[#E0FE10] font-medium">78% share-to-workout</td>
-                              <td className="py-3 px-4 text-zinc-300">Referred sign-ups actually finish a Round</td>
-                              <td className="py-3 px-4 text-zinc-300">Referred users are quality users, not tourists</td>
-                            </tr>
-                            <tr>
-                              <td className="py-3 px-4 text-[#E0FE10] font-medium">12d to 2nd share</td>
-                              <td className="py-3 px-4 text-zinc-300">They pay it forward within ~2 weeks</td>
-                              <td className="py-3 px-4 text-zinc-300">Flywheel self-propagates</td>
-                            </tr>
-                          </tbody>
-                        </table>
+                    {kEffectiveMetrics && (
+                      <div className="mb-8">
+                        <h5 className="text-white font-medium mb-4">What the Numbers Really Mean</h5>
+                        <div className="bg-zinc-800/30 rounded-xl overflow-hidden">
+                          <table className="w-full text-left">
+                            <thead>
+                              <tr className="border-b border-zinc-700 bg-zinc-900/50">
+                                <th className="py-3 px-4 text-zinc-400 font-medium text-sm">Metric</th>
+                                <th className="py-3 px-4 text-zinc-400 font-medium text-sm">Interpretation</th>
+                                <th className="py-3 px-4 text-zinc-400 font-medium text-sm">Investor Takeaway</th>
+                              </tr>
+                            </thead>
+                            <tbody className="text-sm">
+                              <tr className="border-b border-zinc-700">
+                                <td className="py-3 px-4 text-[#E0FE10] font-medium">K-eff = {kEffectiveMetrics.kEffective}</td>
+                                <td className="py-3 px-4 text-zinc-300">Each active referrer → {kEffectiveMetrics.kEffective} credited sign-ups</td>
+                                <td className="py-3 px-4 text-zinc-300">Viral loop &gt; 1 ⇒ product can grow "for free"</td>
+                              </tr>
+                              <tr className="border-b border-zinc-700">
+                                <td className="py-3 px-4 text-[#E0FE10] font-medium">{kEffectiveMetrics.viralPercentage}% via referrals</td>
+                                <td className="py-3 px-4 text-zinc-300">Majority of growth is peer-driven</td>
+                                <td className="py-3 px-4 text-zinc-300"><strong>Paid CAC isn't the growth engine—community is</strong></td>
+                              </tr>
+                              <tr className="border-b border-zinc-700">
+                                <td className="py-3 px-4 text-[#E0FE10] font-medium">{kEffectiveMetrics.viralCycleTime}d cycle time</td>
+                                <td className="py-3 px-4 text-zinc-300">Host → child joins in under a week</td>
+                                <td className="py-3 px-4 text-zinc-300">Loop spins fast; LTV realized quickly</td>
+                              </tr>
+                              <tr className="border-b border-zinc-700">
+                                <td className="py-3 px-4 text-[#E0FE10] font-medium">{kEffectiveMetrics.shareToFirstWorkoutRate}% share-to-workout</td>
+                                <td className="py-3 px-4 text-zinc-300">Referred sign-ups actually finish a Round</td>
+                                <td className="py-3 px-4 text-zinc-300">Referred users are quality users, not tourists</td>
+                              </tr>
+                              <tr>
+                                <td className="py-3 px-4 text-[#E0FE10] font-medium">{kEffectiveMetrics.timeToSecondShare}d to 2nd share</td>
+                                <td className="py-3 px-4 text-zinc-300">They pay it forward within ~2 weeks</td>
+                                <td className="py-3 px-4 text-zinc-300">Flywheel self-propagates</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </div>
                 </div>
               </section>

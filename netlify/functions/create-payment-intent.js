@@ -188,32 +188,24 @@ const handler = async (event, context) => {
       ownerAmount
     });
 
-    // Create payment intent with transfer data
-    const paymentIntentOptions = {
-      amount: amount,
-      currency: currency.toLowerCase(),
-      metadata: {
-        challengeId,
-        ownerId: selectedOwnerId,
-        environment: 'live',
-        buyerId: buyerId || 'unknown',
-        buyerEmail: buyerEmail || 'unknown',
-        createdAt: new Date().toISOString(),
-        source: 'fitwithpulse-web'
-      }
-    };
-
-    // Only add transfer_data and application_fee_amount if we have a connected account
-    if (connectedAccountId) {
-      paymentIntentOptions.transfer_data = {
-        destination: connectedAccountId
-      };
-      paymentIntentOptions.application_fee_amount = platformFee;
-    }
-
-    console.log('Creating payment intent with options:', paymentIntentOptions);
-
-    const paymentIntent = await stripe.paymentIntents.create(paymentIntentOptions);
+    // Create payment intent with transfer to trainer's connected account
+    const paymentIntent = await stripe.paymentIntents.create({
+        amount: amount,
+        currency: 'usd',
+        transfer_data: {
+            destination: connectedAccountId,
+            amount: ownerAmount,
+        },
+        application_fee_amount: platformFee,
+        metadata: {
+            platform: 'pulse',
+            challenge_id: challengeId,
+            buyer_user_id: buyerId,
+            trainer_user_id: selectedOwnerId,
+            payment_type: 'trainer_revenue',
+            tax_classification: 'service_income' // For 1099-NEC box 1
+        }
+    });
 
     console.log('Payment intent created successfully:', {
       id: paymentIntent.id,

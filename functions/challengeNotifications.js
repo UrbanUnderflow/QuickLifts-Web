@@ -313,10 +313,39 @@ exports.onChallengeStatusChange = onDocumentUpdated(`${userChallengeCollection}/
 
         if (winner) {
             const isWinner = userId === winner.userId;
-            title = isWinner ? '🏆 Congratulations, Champion!' : '🏆 Challenge Complete!';
-            body = isWinner
-                ? `You won "${challengeTitle}" with a score of ${Math.floor(winner.score)}! Amazing work! 🔥`
-                : `"${challengeTitle}" has ended! ${winner.username || 'A participant'} won with a score of ${Math.floor(winner.score)}! Thanks for participating! 💪`;
+            
+            // Check if this challenge has prize money enabled
+            const challengeData = after.challenge;
+            const hasPrizeMoney = challengeData?.prizeMoney?.isEnabled && 
+                                 challengeData?.prizeMoney?.totalAmount > 0;
+            
+            if (isWinner && hasPrizeMoney) {
+                // Winner with prize money - enhanced notification
+                const prizeAmount = challengeData.prizeMoney.totalAmount / 100; // Convert cents to dollars
+                title = '🏆💰 You Won Prize Money!';
+                body = `Congratulations! You won "${challengeTitle}" and earned $${prizeAmount}! Tap to claim your prize! 🎉`;
+                
+                // Add prize-specific data for app routing
+                dataPayload.type = 'challenge_won_with_prize';
+                dataPayload.prizeAmount = String(prizeAmount);
+                dataPayload.prizeEnabled = 'true';
+                dataPayload.redirectTo = 'prize_redemption';
+            } else if (isWinner) {
+                // Winner without prize money - original notification
+                title = '🏆 Congratulations, Champion!';
+                body = `You won "${challengeTitle}" with a score of ${Math.floor(winner.score)}! Amazing work! 🔥`;
+                dataPayload.type = 'challenge_completed';
+            } else if (hasPrizeMoney) {
+                // Non-winner in a prize challenge
+                const prizeAmount = challengeData.prizeMoney.totalAmount / 100;
+                title = '🏆 Challenge Complete!';
+                body = `"${challengeTitle}" has ended! ${winner.username || 'A participant'} won the $${prizeAmount} prize with a score of ${Math.floor(winner.score)}! Thanks for participating! 💪`;
+                dataPayload.prizeAmount = String(prizeAmount);
+                dataPayload.prizeEnabled = 'true';
+            } else {
+                // Non-winner in regular challenge
+                body = `"${challengeTitle}" has ended! ${winner.username || 'A participant'} won with a score of ${Math.floor(winner.score)}! Thanks for participating! 💪`;
+            }
             
             dataPayload.winnerId = winner.userId;
             dataPayload.winnerUsername = winner.username || '';

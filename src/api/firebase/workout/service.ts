@@ -2051,7 +2051,7 @@ async deleteWorkoutSession(workoutId: string | null): Promise<void> {
     const collectionRef = doc(db, 'sweatlist-collection', collectionId);
 
     try {
-      console.log(`Attempting to clear all sweatlists from collection ${collectionId}`);
+      console.log(`Attempting to clear all sweatlists and workoutIdList from collection ${collectionId}`);
       
       // Check if the document exists before updating
       const docSnap = await getDoc(collectionRef);
@@ -2059,13 +2059,19 @@ async deleteWorkoutSession(workoutId: string | null): Promise<void> {
         throw new Error(`Sweatlist Collection with ID ${collectionId} not found.`);
       }
 
-      // Update the document, setting sweatlistIds to an empty array
+      // Log current state before clearing
+      const currentData = docSnap.data();
+      console.log(`🔍 Current sweatlistIds count: ${currentData.sweatlistIds?.length || 0}`);
+      console.log(`🔍 Current workoutIdList count: ${currentData.workoutIdList?.length || 0}`);
+
+      // Update the document, setting both sweatlistIds and workoutIdList to empty arrays
       await updateDoc(collectionRef, {
         sweatlistIds: [], // Set to empty array
+        workoutIdList: [], // Also clear workoutIdList
         updatedAt: serverTimestamp() // Update the timestamp
       });
 
-      console.log(`Successfully cleared all sweatlists from collection ${collectionId}`);
+      console.log(`✅ Successfully cleared both sweatlistIds and workoutIdList from collection ${collectionId}`);
 
     } catch (error) {
       console.error(`Error clearing sweatlists from collection ${collectionId}:`, error);
@@ -2168,6 +2174,79 @@ async deleteWorkoutSession(workoutId: string | null): Promise<void> {
     }
   }
   // --- End Batch Update User Challenge Status ---
+
+  // --- Bulk Update Challenge Type (Migration) ---
+  /**
+   * Bulk updates all challenges to set challengeType to 'workout' for migration purposes
+   * This is used for migrating existing challenges to the new challenge type system
+   * 
+   * @param challengeType The challenge type to set (defaults to 'workout')
+   * @returns Promise resolving to the number of challenges updated
+   */
+  async bulkUpdateChallengeType(challengeType: string = 'workout'): Promise<{ updated: number, errors: string[] }> {
+    try {
+      console.log(`Starting bulk update to set challengeType to '${challengeType}' for all challenges`);
+      
+      // Fetch all collections
+      const collectionsRef = collection(db, 'sweatlist-collection');
+      const snapshot = await getDocs(collectionsRef);
+      
+      if (snapshot.empty) {
+        console.log('No challenges found to update.');
+        return { updated: 0, errors: [] };
+      }
+
+      const batch = writeBatch(db);
+      const nowTimestamp = serverTimestamp();
+      let updateCount = 0;
+      const errors: string[] = [];
+
+      snapshot.forEach(doc => {
+        try {
+          const data = doc.data();
+          
+          // Only update if challenge exists and doesn't already have challengeType
+          if (data.challenge && !data.challenge.challengeType) {
+            console.log(`Adding challengeType update for challenge: ${doc.id}`);
+            
+            batch.update(doc.ref, {
+              'challenge.challengeType': challengeType,
+              'challenge.dailyStepGoal': 10000, // Default value
+              'challenge.totalStepGoal': 0, // Default value
+              'challenge.allowedMissedDays': 0, // Default value
+              'challenge.updatedAt': nowTimestamp,
+              'updatedAt': nowTimestamp
+            });
+            
+            updateCount++;
+          } else if (data.challenge && data.challenge.challengeType) {
+            console.log(`Challenge ${doc.id} already has challengeType: ${data.challenge.challengeType}`);
+          } else {
+            console.log(`Challenge ${doc.id} has no challenge object, skipping`);
+          }
+        } catch (error) {
+          const errorMsg = `Error processing challenge ${doc.id}: ${error instanceof Error ? error.message : 'Unknown error'}`;
+          console.error(errorMsg);
+          errors.push(errorMsg);
+        }
+      });
+
+      if (updateCount > 0) {
+        await batch.commit();
+        console.log(`Successfully updated challengeType for ${updateCount} challenges`);
+      } else {
+        console.log('No challenges needed updating');
+      }
+
+      return { updated: updateCount, errors };
+
+    } catch (error) {
+      const errorMsg = `Error during bulk challengeType update: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      console.error(errorMsg);
+      throw new Error(errorMsg);
+    }
+  }
+  // --- End Bulk Update Challenge Type ---
 
   /**
    * Creates a test workout session for a specific user

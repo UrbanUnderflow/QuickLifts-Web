@@ -70,6 +70,7 @@ export class User {
   profileImage: ProfileImage;
   registrationComplete: boolean;
   creator: Creator | null;
+  winner: Winner | null; // Add winner property for prize money recipients
   subscriptionType: SubscriptionType;
   subscriptionPlatform: SubscriptionPlatform;
   referrer?: string;
@@ -112,6 +113,13 @@ export class User {
       this.creator = new Creator(data.creator);
     } else {
       this.creator = null;
+    }
+    
+    // Create the Winner instance
+    if (data.winner) {
+      this.winner = new Winner(data.winner);
+    } else {
+      this.winner = null;
     }
     
     this.subscriptionType = data.subscriptionType || SubscriptionType.unsubscribed;
@@ -170,6 +178,7 @@ export class User {
       profileImage: this.profileImage.toDictionary(),
       registrationComplete: this.registrationComplete,
       creator: this.creator,
+      winner: this.winner, // Add winner to dictionary
       subscriptionType: this.subscriptionType,
       subscriptionPlatform: this.subscriptionPlatform,
       referrer: this.referrer,
@@ -469,6 +478,78 @@ export class User {
       };
     }
   }
+
+// Winner class for challenge prize money recipients
+export class Winner {
+  id: string;
+  onboardingPayoutState: string;
+  onboardingExpirationDate?: Date;
+  onboardingLink?: string;
+  onboardingStatus: StripeOnboardingStatus;
+  stripeAccountId?: string;
+  challengeWins: {
+    challengeId: string;
+    challengeTitle: string;
+    placement: number;
+    prizeAmount: number; // in cents
+    status: 'pending' | 'processing' | 'paid' | 'failed';
+    awardedAt: Date;
+    paidAt?: Date;
+  }[];
+  totalEarnings: number; // in cents
+  createdAt: Date;
+  updatedAt: Date;
+
+  constructor(data: any = {}) {
+    this.id = data.id || '';
+    this.onboardingPayoutState = data.onboardingPayoutState || '';
+    this.onboardingExpirationDate = convertFirestoreTimestamp(data.onboardingExpirationDate);
+    this.onboardingLink = data.onboardingLink;
+    this.onboardingStatus = data.onboardingStatus || StripeOnboardingStatus.NotStarted;
+    this.stripeAccountId = data.stripeAccountId;
+    this.challengeWins = Array.isArray(data.challengeWins) 
+      ? data.challengeWins.map((win: any) => ({
+          challengeId: win.challengeId || '',
+          challengeTitle: win.challengeTitle || '',
+          placement: win.placement || 1,
+          prizeAmount: win.prizeAmount || 0,
+          status: win.status || 'pending',
+          awardedAt: convertFirestoreTimestamp(win.awardedAt) || new Date(),
+          paidAt: win.paidAt ? convertFirestoreTimestamp(win.paidAt) : undefined
+        }))
+      : [];
+    this.totalEarnings = data.totalEarnings || 0;
+    this.createdAt = convertFirestoreTimestamp(data.createdAt) || new Date();
+    this.updatedAt = convertFirestoreTimestamp(data.updatedAt) || new Date();
+  }
+
+  toDictionary(): Record<string, any> {
+    return {
+      id: this.id,
+      onboardingPayoutState: this.onboardingPayoutState,
+      onboardingExpirationDate: this.onboardingExpirationDate ? dateToUnixTimestamp(this.onboardingExpirationDate) : null,
+      onboardingLink: this.onboardingLink,
+      onboardingStatus: this.onboardingStatus,
+      stripeAccountId: this.stripeAccountId,
+      challengeWins: this.challengeWins.map(win => ({
+        challengeId: win.challengeId,
+        challengeTitle: win.challengeTitle,
+        placement: win.placement,
+        prizeAmount: win.prizeAmount,
+        status: win.status,
+        awardedAt: dateToUnixTimestamp(win.awardedAt),
+        paidAt: win.paidAt ? dateToUnixTimestamp(win.paidAt) : null
+      })),
+      totalEarnings: this.totalEarnings,
+      createdAt: dateToUnixTimestamp(this.createdAt),
+      updatedAt: dateToUnixTimestamp(this.updatedAt)
+    };
+  }
+
+  static fromDictionary(dict: any): Winner {
+    return new Winner(dict);
+  }
+}
 
 // Add this class definition
 export class Subscription {

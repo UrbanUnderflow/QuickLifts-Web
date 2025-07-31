@@ -9,6 +9,7 @@ if (admin.apps.length === 0) {
 const { syncWorkoutSessionToRoot } = require("./syncWorkoutSessions");
 const { syncWorkoutSummaryToRoot } = require("./syncWorkoutSummaries");
 const { syncMealLogToRoot } = require("./syncMealLogs");
+const { syncStackToRoot } = require("./syncStacks");
 const { manualSyncWorkoutSessions } = require("./manualSync");
 const { manualSyncMealLogs } = require("./manualSyncMealLogs");
 const { updateParticipantCounts } = require("./updateParticipantCounts");
@@ -21,6 +22,7 @@ const { selectMoveOfTheDay } = require("./moveOfTheDay");
 exports.syncWorkoutSessionToRoot = syncWorkoutSessionToRoot;
 exports.syncWorkoutSummaryToRoot = syncWorkoutSummaryToRoot;
 exports.syncMealLogToRoot = syncMealLogToRoot;
+exports.syncStackToRoot = syncStackToRoot;
 exports.manualSyncWorkoutSessions = manualSyncWorkoutSessions;
 exports.manualSyncMealLogs = manualSyncMealLogs;
 exports.updateParticipantCounts = updateParticipantCounts;
@@ -68,3 +70,6 @@ exports.getWorkoutsBatch = require("./getWorkoutsBatch").getWorkoutsBatch;
 // Export notification logger functions for debugging and monitoring
 exports.logNotification = require("./notificationLogger").logNotification;
 exports.logMulticastNotification = require("./notificationLogger").logMulticastNotification; 
+
+// Export the Challenge sync function
+exports.syncChallengeToUserChallenges = require("./syncChallengeToUserChallenges").syncChallengeToUserChallenges; 

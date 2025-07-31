@@ -33,10 +33,6 @@ import {
     MessageSquare,
     Plus,
     History,
-    Settings,
-    Home,
-    Trophy,
-    Target,
 } from 'lucide-react';
 import { Switch } from '@headlessui/react';
 import { useScrollFade } from '../hooks/useScrollFade';
@@ -47,7 +43,6 @@ import { exerciseService } from '../api/firebase/exercise/service';
 import { Exercise, ExerciseDetail, ExerciseCategory, ExerciseVideo, ExerciseReference, WeightTrainingExercise, CardioExercise } from '../api/firebase/exercise/types';
 import { Workout, SweatlistCollection, Challenge, ChallengeStatus, SweatlistIdentifiers, WorkoutStatus, WorkoutSummary, BodyZone } from '../api/firebase/workout/types';
 import { collection, query, where, getDocs, documentId } from 'firebase/firestore';
-import { doc, deleteDoc } from 'firebase/firestore';
 import { db } from '../api/firebase/config';
 import { StackCard } from '../components/Rounds/StackCard'
 import { ExerciseGrid } from '../components/App/ExerciseGrid/ExerciseGrid';
@@ -1215,7 +1210,6 @@ interface ViewModel {
 }
 
 interface ChallengeData {
-  challengeId?: string;
   startDate: Date;
   endDate: Date;
   challengeName: string;
@@ -1315,8 +1309,8 @@ const MobileChallengeSetupView: React.FC<MobileChallengeSetupProps> = ({
     ) => {
         setChallengeData({
             ...currentChallengeData, // preserve existing fields like restDayPreferences
-            startDate: sDate instanceof Date && !isNaN(sDate.getTime()) ? sDate : convertFirestoreTimestamp(sDate),
-            endDate: eDate instanceof Date && !isNaN(eDate.getTime()) ? eDate : convertFirestoreTimestamp(eDate),
+            startDate: convertFirestoreTimestamp(sDate),
+            endDate: convertFirestoreTimestamp(eDate),
             challengeName: name,
             challengeDesc: desc,
             roundType: rType,
@@ -1583,16 +1577,6 @@ interface DesktopChallengeSetupProps {
   conversationHistory: ProgrammingChatMessage[];
   setConversationHistory: (history: ProgrammingChatMessage[]) => void;
   restoredUIState?: any; // UI state to restore from conversation
-  isLoadingConversation: boolean;
-  allConversations: any[];
-  handleCreateNewConversation: () => Promise<void>;
-  handleSwitchConversation: (id: string) => Promise<void>;
-  isConversationPanelCollapsed: boolean;
-  toggleConversationPanel: () => void;
-  isRightPanelCollapsed: boolean;
-  toggleRightPanel: () => void;
-  isLeftPanelCollapsed: boolean;
-  toggleLeftPanel: () => void;
 }
 
 // Stack Detail Modal Component
@@ -1769,7 +1753,6 @@ interface RoundSuccessModalProps {
     collection: any;
     stacks: WorkoutWithRoundId[];
     isUpdate?: boolean;
-    aiThinking?: string;
     scheduleInfo?: {
       startDate: Date;
       endDate: Date;
@@ -1790,8 +1773,6 @@ const RoundSuccessModal: React.FC<RoundSuccessModalProps> = ({
   onViewRound, 
   onContinueEditing 
 }) => {
-  const [isAIReasoningExpanded, setIsAIReasoningExpanded] = useState(false);
-  
   if (!isOpen || !roundData) return null;
 
   const handleBackdropClick = (e: React.MouseEvent) => {
@@ -1834,18 +1815,13 @@ const RoundSuccessModal: React.FC<RoundSuccessModalProps> = ({
           description: 'Recovery and restoration',
         });
       } else {
-        // Cycle through available workout stacks (auto-repeat pattern)
-        const availableWorkouts = roundData.stacks.filter(stack => stack.title !== 'Rest');
-        const workout = availableWorkouts.length > 0 
-          ? availableWorkouts[workoutIndex % availableWorkouts.length]
-          : null;
-          
+        const workout = roundData.stacks[workoutIndex];
         schedule.push({
           type: 'workout',
           dayNumber: dayIndex + 1,
           date: formattedDate,
           dayOfWeek,
-          title: workout?.title || `Workout ${(workoutIndex % availableWorkouts.length) + 1}`,
+          title: workout?.title || `Workout ${workoutIndex + 1}`,
           exercises: workout?.exercises?.length || 0,
           workout: workout
         });
@@ -1983,35 +1959,6 @@ const RoundSuccessModal: React.FC<RoundSuccessModalProps> = ({
               </div>
             </div>
 
-            {/* AI Reasoning - Collapsible Section */}
-            {roundData.aiThinking && (
-              <div className="bg-[#262a30] rounded-lg border border-zinc-700">
-                <button 
-                  className="w-full p-4 text-left flex items-center justify-between hover:bg-zinc-700/50 transition-colors"
-                  onClick={() => setIsAIReasoningExpanded(!isAIReasoningExpanded)}
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-[#E0FE10]">🧠 AI Reasoning</span>
-                    <span className="text-xs text-zinc-500">See how the AI designed your program</span>
-                  </div>
-                  <div className={`transform transition-transform ${isAIReasoningExpanded ? 'rotate-180' : ''}`}>
-                    <svg className="w-4 h-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </div>
-                </button>
-                {isAIReasoningExpanded && (
-                  <div className="px-4 pb-4 border-t border-zinc-700">
-                    <div className="bg-zinc-800/50 rounded-lg p-3 mt-3">
-                      <pre className="text-xs text-zinc-300 whitespace-pre-wrap font-mono">
-                        {roundData.aiThinking}
-                      </pre>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
             {/* Success Message */}
             <div className="bg-[#E0FE10]/10 border border-[#E0FE10]/20 rounded-lg p-4">
               <p className="text-sm text-[#E0FE10]">
@@ -2059,16 +2006,6 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
     conversationHistory: programmingConversationHistory,
     setConversationHistory: setProgrammingConversationHistory,
     restoredUIState,
-    isLoadingConversation,
-    allConversations,
-    handleCreateNewConversation,
-    handleSwitchConversation,
-    isConversationPanelCollapsed,
-    toggleConversationPanel,
-    isRightPanelCollapsed,
-    toggleRightPanel,
-    isLeftPanelCollapsed,
-    toggleLeftPanel,
   }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [allStacks, setAllStacks] = useState<Workout[]>([]);
@@ -2079,21 +2016,8 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
     const [loadingExistingChallenges, setLoadingExistingChallenges] = useState(false);
     const [existingChallengesError, setExistingChallengesError] = useState<string | null>(null);
     const [selectedExistingChallenge, setSelectedExistingChallenge] = useState<any>(null);
-  
-  // Debug logging for selectedExistingChallenge changes
-  useEffect(() => {
-    console.log('🔄 DEBUG: selectedExistingChallenge changed to:', selectedExistingChallenge?.id || 'null');
-  }, [selectedExistingChallenge]);
     const [originalCollections, setOriginalCollections] = useState<any[]>([]); // Store original collections data
-    const [hasChatAreaBeenShown, setHasChatAreaBeenShown] = useState(false); // Track if chat area has been shown for animation
     const currentUser = useUser();
-
-    // Track when chat area should appear for first time animation
-    useEffect(() => {
-      if (programmingConversationHistory.length > 0 && !hasChatAreaBeenShown) {
-        setHasChatAreaBeenShown(true);
-      }
-    }, [programmingConversationHistory.length, hasChatAreaBeenShown]);
 
     // User tagging state
     const [allUsers, setAllUsers] = useState<User[]>([]);
@@ -2169,7 +2093,7 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
     }, []); // Empty dependency array - run only once on mount
 
     // Convert ProgrammingChatMessage to simple format for chat interface
-    const chatMessages = programmingConversationHistory.map(msg => ({
+    const conversationHistory = programmingConversationHistory.map(msg => ({
       role: msg.role,
       content: msg.message
     }));
@@ -2221,13 +2145,6 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
     // Chatbot conversation state
     const [isAIResponding, setIsAIResponding] = useState(false);
     const [showGenerateCard, setShowGenerateCard] = useState(false);
-  
-  // Monitor generate card state changes
-  useEffect(() => {
-    if (showGenerateCard) {
-      console.log('✅ Generate card is now visible');
-    }
-  }, [showGenerateCard]);
     const [questionCount, setQuestionCount] = useState(0);
     const [isAwaitingConfirmation, setIsAwaitingConfirmation] = useState(false);
     const [finalPrompt, setFinalPrompt] = useState('');
@@ -2243,7 +2160,6 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
       collection: any;
       stacks: WorkoutWithRoundId[];
       isUpdate?: boolean;
-      aiThinking?: string;
       scheduleInfo?: {
         startDate: Date;
         endDate: Date;
@@ -2463,19 +2379,12 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
 
     // Handler for selecting an existing challenge
     const handleSelectExistingChallenge = async (challenge: any) => {
-      console.log('🎯 DEBUG: Challenge selected from browse:', challenge);
-      console.log('🎯 DEBUG: Selected challenge ID:', challenge?.id);
-      console.log('🎯 DEBUG: Full challenge object:', JSON.stringify(challenge, null, 2));
-      
       setSelectedExistingChallenge(challenge);
       
       // We need to access the original challenge data from the collection
       // Since the formatted challenge may not have all the detailed configuration
       const originalCollection = originalCollections.find((c: any) => c.id === challenge.id);
       const originalChallenge = originalCollection?.challenge;
-      
-      console.log('🎯 DEBUG: Found original collection:', originalCollection?.id);
-      console.log('🎯 DEBUG: Original collection sweatlistIds count:', originalCollection?.sweatlistIds?.length || 0);
 
       // Validate and fix sweatlistIds count if needed
       if (originalCollection) {
@@ -2491,38 +2400,11 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
       
       
       // Create updated challenge data while preserving conversation context
-      // Use the already-converted dates from the formatted challenge object
-      // The formattedChallenges array already has proper Date objects from convertFirestoreTimestamp
-      let startDate = challenge.startDate;
-      let endDate = challenge.endDate;
-      
-      // If the challenge dates are invalid (empty objects), fall back to original collection dates
-      if (!startDate || !(startDate instanceof Date) || isNaN(startDate.getTime())) {
-        console.warn('⚠️ Challenge startDate is invalid, using original collection data');
-        const fallbackStart = convertFirestoreTimestamp(originalChallenge?.startDate);
-        startDate = (fallbackStart && !isNaN(fallbackStart.getTime())) ? fallbackStart : new Date();
-      }
-      
-      if (!endDate || !(endDate instanceof Date) || isNaN(endDate.getTime())) {
-        console.warn('⚠️ Challenge endDate is invalid, using original collection data');
-        const fallbackEnd = convertFirestoreTimestamp(originalChallenge?.endDate);
-        endDate = (fallbackEnd && !isNaN(fallbackEnd.getTime())) ? fallbackEnd : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-      }
-      
-      // Final safety check: if dates are still identical, force them to be different
-      if (startDate.getTime() === endDate.getTime()) {
-        console.warn('⚠️ Start and end dates are identical, adjusting end date');
-        endDate = new Date(startDate.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 days later
-      }
-      
-      // Dates should now be properly processed without corruption
-      
       const updatedChallengeData = {
-        challengeId: challenge.id, // Set the challenge ID from the selected challenge
         challengeName: challenge.title,
         challengeDesc: challenge.subtitle,
-        startDate: startDate,
-        endDate: endDate,
+        startDate: challenge.startDate, // Already a Date object from convertFirestoreTimestamp
+        endDate: challenge.endDate,     // Already a Date object from convertFirestoreTimestamp
         roundType: challenge.privacy === 'locked' ? SweatlistType.locked : SweatlistType.together,
         pinCode: challenge.pinCode || '',
         
@@ -2581,17 +2463,18 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
         })(),
       };
       
-      // Use setChallengeData (which is updateChallengeDataState) to properly auto-save challenge data changes
-      // Auto-save challenge data to conversation
+      // Apply challenge data update (manual comprehensive save will handle conversation update)
+      setChallengeData(updatedChallengeData);
       
-      setChallengeData(updatedChallengeData); // This will auto-save to conversation
       
-      // Update conversation title and UI state
+      // Update conversation with new challenge data and title (service layer now safely preserves all fields)
       if (currentConversationId && autoSave) {
+        
         try {
           await autoSave({
+            challengeData: updatedChallengeData as any,
+            messages: programmingConversationHistory,
             title: challenge.title,
-            summary: challenge.subtitle || '', // Update summary/description field
             uiState: {
               selectedExistingChallenge: challenge,
               isAIMode: true,
@@ -2619,7 +2502,6 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
 
     // Handler for clearing selected challenge and starting fresh
     const handleClearSelectedChallenge = () => {
-      console.log('🧹 DEBUG: Clearing selectedExistingChallenge');
       setSelectedExistingChallenge(null);
       setChallengeData({
         startDate: new Date(),
@@ -2668,7 +2550,6 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
     // Reset challenges when user logs out
     useEffect(() => {
       if (!currentUser?.id) {
-        console.log('🧹 DEBUG: Clearing selectedExistingChallenge due to no user');
         setExistingChallenges([]);
         setSelectedExistingChallenge(null);
         setExistingChallengesError(null);
@@ -2746,8 +2627,12 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
           .find(msg => msg.role === 'assistant' && msg.readyToGenerate === true);
         
         if (lastAssistantMessage) {
-          // Don't immediately show generate card - let auto-scroll handle timing
-          // The auto-scroll useEffect will check readyToGenerate after scroll completes
+          // Validate current challenge data before showing generate card
+          const currentValidation = validateChallengeInputQuiet();
+          const shouldShowGenerateCard = currentValidation;
+          
+          
+          setShowGenerateCard(shouldShowGenerateCard);
         } else {
           // No ready-to-generate message found, hide generate card
           setShowGenerateCard(false);
@@ -2832,11 +2717,6 @@ const handleSendChatMessage = async (message: string) => {
     const updatedHistoryWithUser = [...programmingConversationHistory, newUserProgrammingMessage];
     setProgrammingConversationHistory(updatedHistoryWithUser);
     
-    // Expand left panel if this is the first message in the conversation
-    if (programmingConversationHistory.length === 0 && isLeftPanelCollapsed) {
-      toggleLeftPanel();
-    }
-    
 
     // Auto-save user message if we have a conversation
     if (autoSave && activeConversationId) {
@@ -2878,7 +2758,7 @@ const handleSendChatMessage = async (message: string) => {
       },
       body: JSON.stringify({
         message,
-        conversationHistory: chatMessages,
+        conversationHistory,
         taggedUsers: convertedTaggedUsers,
         challengeData,
         selectedMoves,
@@ -2943,21 +2823,10 @@ const handleSendChatMessage = async (message: string) => {
       // Update question count and show generate card if ready
       setQuestionCount(data.questionCount || 0);
       
-      const currentValidation = validateChallengeInputQuiet(data.readyToGenerate || false);
+      const currentValidation = validateChallengeInputQuiet();
       const shouldShowGenerateCard = data.readyToGenerate && currentValidation;
       setShowGenerateCard(shouldShowGenerateCard || false);
       setIsAwaitingConfirmation(data.isAwaitingConfirmation || false);
-      
-      // If generate card is being shown after AI response, scroll down to show it
-      if (shouldShowGenerateCard) {
-        setTimeout(() => {
-          console.log('🔍 [DEBUG] Scrolling down to show generate card after AI response...');
-          chatMessagesRef.current?.scrollTo({
-            top: chatMessagesRef.current.scrollHeight,
-            behavior: 'smooth'
-          });
-        }, 300); // Small delay to let the card render and any animations complete
-      }
       
       
       // Handle final prompt and suggested description
@@ -3037,67 +2906,14 @@ const handleSendChatMessage = async (message: string) => {
     const [isGeneralPreferencesCollapsed, setIsGeneralPreferencesCollapsed] = useState(false); // New state for collapsible section
 
     const [isGenerating, setIsGenerating] = useState(false);
+  const [currentAIThinking, setCurrentAIThinking] = useState<string>('');
     const [error, setError] = useState<string | null>(null);
 
-    // Add state to track if this is a regeneration scenario
-    const [isRegenerationMode, setIsRegenerationMode] = useState(false);
-
-      const router = useRouter();
-
-  // Helper function to detect if user has already generated workouts (has stacks)
-  const hasExistingGeneration = (): boolean => {
-    return selectedStacks.length > 0;
-  };
-
-  // Helper function to determine if user is attempting regeneration
-  const detectRegenerationAttempt = (): boolean => {
-    return hasExistingGeneration();
-  };
-
-  // Update regeneration mode when selectedStacks changes
-  useEffect(() => {
-    setIsRegenerationMode(detectRegenerationAttempt());
-  }, [selectedStacks]);
-
-  // Helper function to delete old sweatlist records from database
-  const deleteOldSweatlistRecords = async (sweatlistIds: string[]) => {
-    if (sweatlistIds.length === 0) return;
+    const router = useRouter();
     
-    console.log('🗑️ Deleting old sweatlist records from user collection:', sweatlistIds);
-    try {
-      // Delete sweatlist records in batches to avoid overwhelming the database
-      const batchSize = 10;
-      for (let i = 0; i < sweatlistIds.length; i += batchSize) {
-        const batch = sweatlistIds.slice(i, i + batchSize);
-        const deletePromises = batch.map(async (sweatlistId) => {
-          try {
-            if (!currentUser?.id) {
-              console.warn(`⚠️ No current user ID for deleting sweatlist record ${sweatlistId}`);
-              return;
-            }
-            
-            // Delete from user's MyCreatedWorkouts collection
-            // This will trigger our sync function to also delete from global stacks collection
-            const stackRef = doc(db, 'users', currentUser.id, 'MyCreatedWorkouts', sweatlistId);
-            await deleteDoc(stackRef);
-            console.log(`✅ Deleted sweatlist record: ${sweatlistId}`);
-          } catch (error) {
-            console.warn(`⚠️ Could not delete sweatlist record ${sweatlistId}:`, error);
-            // Don't throw here, continue with other deletions
-          }
-        });
-        await Promise.allSettled(deletePromises);
-      }
-      console.log('✅ Finished deleting old sweatlist records');
-    } catch (error) {
-      console.error('❌ Error during batch deletion of sweatlist records:', error);
-      // Don't throw - regeneration should continue even if cleanup fails
-    }
-  };
-  
-  const filteredStacks = allStacks.filter((stack: Workout) =>
-    stack.title.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+    const filteredStacks = allStacks.filter((stack: Workout) =>
+      stack.title.toLowerCase().includes(searchTerm.toLowerCase())
+    );
 
     const filteredStacksList = () => (
         <div className="space-y-4">
@@ -3227,12 +3043,12 @@ const handleSendChatMessage = async (message: string) => {
     );
 
   const handleLocalSetChallengeData = (partialData: Partial<ChallengeData>) => {
-    // Ensure any dates are properly converted, but don't double-convert valid Date objects
+    // Ensure any dates are properly converted
     const processedData = { ...partialData };
-    if (processedData.startDate && !(processedData.startDate instanceof Date && !isNaN(processedData.startDate.getTime()))) {
+    if (processedData.startDate) {
       processedData.startDate = convertFirestoreTimestamp(processedData.startDate);
     }
-    if (processedData.endDate && !(processedData.endDate instanceof Date && !isNaN(processedData.endDate.getTime()))) {
+    if (processedData.endDate) {
       processedData.endDate = convertFirestoreTimestamp(processedData.endDate);
     }
     setChallengeData({ ...challengeData, ...processedData });
@@ -3305,43 +3121,22 @@ const handleSendChatMessage = async (message: string) => {
   };
 
   // Quiet version of validation for internal checks (no console logging)
-  const validateChallengeInputQuiet = (forReadyToGenerate: boolean = false): boolean => {
+  const validateChallengeInputQuiet = (): boolean => {
     if (challengeData.challengeName.trim().length === 0) {
-      console.log('🔍 [DEBUG] Validation failed: challengeName is empty');
       return false;
     }
     if (challengeData.challengeDesc.trim().length === 0) {
-      console.log('🔍 [DEBUG] Validation failed: challengeDesc is empty');
       return false;
     }
-    // Check if dates are valid Date objects first
-    const isValidStartDate = challengeData.startDate instanceof Date && !isNaN(challengeData.startDate.getTime());
-    const isValidEndDate = challengeData.endDate instanceof Date && !isNaN(challengeData.endDate.getTime());
-    
-    if (!isValidStartDate || !isValidEndDate) {
-      // For readyToGenerate case, allow invalid dates since AI will handle them
-      if (forReadyToGenerate) {
-        return true;
-      }
-      return false;
-    }
-    
     if (challengeData.endDate <= challengeData.startDate) {
-      // For readyToGenerate case, allow even if dates are equal (AI will fix them)
-      if (forReadyToGenerate) {
-        return true;
-      }
       return false;
     }
     if (challengeData.roundType === SweatlistType.locked && challengeData.pinCode.length !== 9) {
-      console.log('🔍 [DEBUG] Validation failed: locked type but pinCode not 9 chars');
       return false;
     }
     if (!isAIMode && selectedStacks.length === 0) {
-      console.log('🔍 [DEBUG] Validation failed: not AI mode but no stacks selected');
       return false;
     }
-    console.log('✅ [DEBUG] Validation passed!');
     return true;
   };
 
@@ -3523,53 +3318,31 @@ const handleSendChatMessage = async (message: string) => {
   };
 
   const handleGenerateAIRound = async () => {
-    // Prevent generation while conversation is loading to avoid race condition with dates
-    if (isLoadingConversation) {
-      console.warn('⏳ Cannot generate while conversation is loading');
+    
+    if (!validateChallengeInput()) {
       return;
     }
     
-    // Set loading state IMMEDIATELY to prevent double clicks
-    if (isGenerating) {
-      return;
-    }
-
-    // Log if this is a regeneration attempt
-    if (isRegenerationMode) {
-      console.log('🔄 Regeneration detected - user has existing stacks:', selectedStacks.length);
-      console.log('🔍 DEBUG: Current selectedExistingChallenge state:', selectedExistingChallenge);
-      console.log('🔍 DEBUG: selectedExistingChallenge ID:', selectedExistingChallenge?.id || 'NO ID FOUND');
-      console.log('🔄 DEBUG: Will generate new stacks first, then clear existing ones to ensure safety');
-    } else {
-      console.log('✨ Initial generation - no existing stacks');
-    }
-    
-    setIsGenerating(true);
-    setError(null);
-    
-    try {
-      const validationPassed = validateChallengeInput();
-      
-      if (!validationPassed) {
-        setIsGenerating(false);
-        return;
-      }
-      
-      // --- NEW: clean up old auto-generated stacks for this round ---
-      if (selectedExistingChallenge && currentUser?.id) {
-        try {
-          const allStacks = await userService.fetchUserStacks(currentUser.id);
-          const stacksToDelete = allStacks.filter(
-            s => s.autoGenerated && s.sourceRoundId === selectedExistingChallenge.id
-          );
-          for (const stack of stacksToDelete) {
-            await userService.deleteStack(stack.id);
-          }
-        } catch (cleanupErr) {
-          console.warn('Cleanup failed – proceeding anyway:', cleanupErr);
+      try {
+    // --- NEW: clean up old auto-generated stacks for this round ---
+    if (selectedExistingChallenge && currentUser?.id) {
+      try {
+        const allStacks = await userService.fetchUserStacks(currentUser.id);
+        const stacksToDelete = allStacks.filter(
+          s => s.autoGenerated && s.sourceRoundId === selectedExistingChallenge.id
+        );
+        for (const stack of stacksToDelete) {
+          await userService.deleteStack(stack.id);
         }
+      } catch (cleanupErr) {
+        console.warn('Cleanup failed – proceeding anyway:', cleanupErr);
       }
-      // -----------------------------------------------------------
+    }
+    // -----------------------------------------------------------
+
+    setIsGenerating(true);
+  setCurrentAIThinking('');
+    setError(null);
   
       const currentRestPrefs = challengeData.restDayPreferences || { includeRestDays: false, restDays: [], preferences: [] };
           // "Create unique stacks for each day." option is deprecated to prevent data explosion
@@ -3629,10 +3402,10 @@ const handleSendChatMessage = async (message: string) => {
       if (finalPrompt) {
         // Use the refined final prompt from chatbot
         comprehensivePrompt = finalPrompt;
-      } else if (chatMessages.length > 0) {
+      } else if (conversationHistory.length > 0) {
         // Build prompt from conversation
         comprehensivePrompt = 'CONVERSATION SUMMARY:\n';
-        chatMessages.forEach((msg, index) => {
+        conversationHistory.forEach((msg, index) => {
           comprehensivePrompt += `${msg.role === 'user' ? 'Coach' : 'AI'}: ${msg.content}\n`;
         });
         
@@ -3702,7 +3475,7 @@ const handleSendChatMessage = async (message: string) => {
           equipmentPreferences: challengeData.equipmentPreferences || { selectedEquipment: [], equipmentOnly: false },
           // Additional context for better generation
           taggedUsers: taggedUsers,
-          conversationHistory: chatMessages,
+          conversationHistory: conversationHistory,
           // Existing round modification support
           existingStacks: existingStacksData,
           modifyExisting: selectedExistingChallenge ? true : false
@@ -3730,7 +3503,10 @@ const handleSendChatMessage = async (message: string) => {
       try {
         parsedRound = JSON.parse(cleanedResponse);
         
-        // AI thinking will be passed directly to success modal
+        // Extract and display AI thinking if available
+        if (parsedRound.thinking) {
+          setCurrentAIThinking(parsedRound.thinking);
+        }
       } catch (error) {
         console.error('❌ Error parsing AI response:', error);
         throw new Error('Failed to parse AI response');
@@ -3744,13 +3520,8 @@ const handleSendChatMessage = async (message: string) => {
         exercises: []
       };
 
-      // Use uniqueStacks if available (contains the generated workout stacks),
-      // otherwise fall back to stacks (for backward compatibility)
-      const stacksToProcess = parsedRound.uniqueStacks || parsedRound.stacks;
-      console.log(`🔄 Processing ${stacksToProcess.length} stacks for modal display`);
-
       // First pass: Create actual workout stacks and collect workout patterns
-      for (const stackData of stacksToProcess) {
+      for (const stackData of parsedRound.stacks) {
         if (stackData.title.toLowerCase() === "rest") {
           // Skip rest days in first pass - we'll handle them in autofill
           continue;
@@ -3860,38 +3631,6 @@ const handleSendChatMessage = async (message: string) => {
       if (createdStacks.length === 0 && !sweatlistIds.some(id => id.isRest)) {
         throw new Error('No stacks or rest days were successfully created');
       }
-      
-      console.log('✅ AI Generation successful - created', createdStacks.length, 'stacks');
-  
-      // NOW CLEAR EXISTING STACKS FOR REGENERATION (only after successful generation)
-      if (isRegenerationMode && selectedExistingChallenge) {
-        console.log('🧹 DEBUG: Generation successful - now clearing existing stacks before adding new ones...');
-        console.log('🔍 DEBUG: Challenge ID to clear:', selectedExistingChallenge.id);
-        
-        try {
-          // Get current data before clearing for cleanup tracking
-          const originalCollection = originalCollections.find((c: any) => c.id === selectedExistingChallenge.id);
-          console.log('🔍 DEBUG: Current sweatlistIds count:', originalCollection?.sweatlistIds?.length || 0);
-          console.log('🔍 DEBUG: Current workoutIdList count:', originalCollection?.workoutIdList?.length || 0);
-          
-          const oldSweatlistIds = originalCollection?.sweatlistIds?.map((item: any) => item.id) || [];
-          
-          console.log('🧹 DEBUG: About to call clearAllStacksFromRound with ID:', selectedExistingChallenge.id);
-          await workoutService.clearAllStacksFromRound(selectedExistingChallenge.id);
-          console.log('✅ DEBUG: Successfully cleared existing stacks after confirming new generation');
-          
-          // Schedule cleanup of old sweatlist records
-          if (oldSweatlistIds.length > 0) {
-            deleteOldSweatlistRecords(oldSweatlistIds);
-          }
-          
-        } catch (error) {
-          console.error('❌ Error clearing existing stacks after generation:', error);
-          setError('New workouts generated but failed to clear old ones. Please try regenerating again.');
-          setIsGenerating(false);
-          return;
-        }
-      }
   
       if (!currentUser?.id) {
         throw new Error("No user logged in");
@@ -3991,15 +3730,6 @@ const handleSendChatMessage = async (message: string) => {
       }
       
       if (updatedCollection) {
-        // Update challenge data with the actual challenge ID from the created/updated collection
-        const updatedChallengeDataWithId = {
-          ...challengeData,
-          challengeId: updatedCollection.id
-        };
-        
-        // Update the challenge data state with the ID
-        setChallengeData(updatedChallengeDataWithId);
-        
         // Convert created stacks to WorkoutWithRoundId format for display
         const stacksForDisplay = createdStacks.map((stack, index) => 
           new WorkoutWithRoundId(stack, `${stack.id}-${index}`)
@@ -4010,11 +3740,10 @@ const handleSendChatMessage = async (message: string) => {
           // For existing rounds, add new stacks to existing ones
           setSelectedStacks(prev => {
             const newStacks = [...prev, ...stacksForDisplay];
-            // Auto-save the updated stacks and challenge data with ID if we have a conversation
+            // Auto-save the updated stacks if we have a conversation
             if (currentConversationId && autoSave) {
               autoSave({ 
                 selectedStacks: newStacks,
-                challengeData: updatedChallengeDataWithId,
                 updatedAt: new Date()
               });
             }
@@ -4023,11 +3752,10 @@ const handleSendChatMessage = async (message: string) => {
         } else {
           // For new rounds, replace with new stacks
           setSelectedStacks(stacksForDisplay);
-          // Auto-save the new stacks and challenge data with ID if we have a conversation
+          // Auto-save the new stacks if we have a conversation
           if (currentConversationId && autoSave) {
             autoSave({ 
               selectedStacks: stacksForDisplay,
-              challengeData: updatedChallengeDataWithId,
               updatedAt: new Date()
             });
           }
@@ -4035,14 +3763,7 @@ const handleSendChatMessage = async (message: string) => {
         
         // Show success modal instead of redirecting
         const isUpdate = !!selectedExistingChallenge;
-        const isRegeneration = isRegenerationMode && selectedExistingChallenge;
-        
-        if (isRegeneration) {
-          console.log('🎉 DEBUG: Regeneration completed successfully!');
-          console.log('📊 DEBUG: New stacks generated:', stacksForDisplay.length);
-        }
-        
-        handleShowSuccessModal(updatedCollection, stacksForDisplay, isUpdate, parsedRound.thinking);
+        handleShowSuccessModal(updatedCollection, stacksForDisplay, isUpdate);
       }
   
     } catch (error) {
@@ -4051,6 +3772,7 @@ const handleSendChatMessage = async (message: string) => {
       setError(errorMessage);
     } finally {
       setIsGenerating(false);
+      setCurrentAIThinking('');
     }
   };
 
@@ -4060,37 +3782,6 @@ const handleSendChatMessage = async (message: string) => {
     try {
       if (!currentUser?.id) {
         throw new Error("No user logged in");
-      }
-
-      console.log('✅ Manual stacks ready for round creation:', selectedStacks.length, 'stacks');
-
-      // NOW CLEAR EXISTING STACKS FOR MANUAL REGENERATION (only after confirming we have new stacks)
-      if (isRegenerationMode && selectedExistingChallenge) {
-        console.log('🧹 DEBUG: Manual stacks confirmed - now clearing existing stacks before adding new ones...');
-        console.log('🔍 DEBUG: Challenge ID to clear:', selectedExistingChallenge.id);
-        
-        try {
-          // Get current data before clearing for cleanup tracking
-          const originalCollection = originalCollections.find((c: any) => c.id === selectedExistingChallenge.id);
-          console.log('🔍 DEBUG: Current sweatlistIds count:', originalCollection?.sweatlistIds?.length || 0);
-          console.log('🔍 DEBUG: Current workoutIdList count:', originalCollection?.workoutIdList?.length || 0);
-          
-          const oldSweatlistIds = originalCollection?.sweatlistIds?.map((item: any) => item.id) || [];
-          
-          console.log('🧹 DEBUG: About to call clearAllStacksFromRound with ID:', selectedExistingChallenge.id);
-          await workoutService.clearAllStacksFromRound(selectedExistingChallenge.id);
-          console.log('✅ DEBUG: Successfully cleared existing stacks after confirming manual stacks');
-          
-          // Schedule cleanup of old sweatlist records
-          if (oldSweatlistIds.length > 0) {
-            deleteOldSweatlistRecords(oldSweatlistIds);
-          }
-          
-        } catch (error) {
-          console.error('❌ Error clearing existing stacks after manual validation:', error);
-          setError('Manual stacks ready but failed to clear old ones. Please try again.');
-          return;
-        }
       }
 
       let updatedCollection;
@@ -4120,13 +3811,11 @@ const handleSendChatMessage = async (message: string) => {
           isRest: false, // Manual stacks are not rest days
         }));
 
-        // Combine existing stacks with new ones (or replace if regenerating)
-        const combinedSweatlistIds = isRegenerationMode 
-          ? newSweatlistIds // Replace all stacks during regeneration
-          : [
-              ...(originalCollection.sweatlistIds || []),
-              ...newSweatlistIds
-            ];
+        // Combine existing stacks with new ones
+        const combinedSweatlistIds = [
+          ...(originalCollection.sweatlistIds || []),
+          ...newSweatlistIds
+        ];
 
         // Update the existing collection with new stacks
         const updatedCollectionData = {
@@ -4198,14 +3887,7 @@ const handleSendChatMessage = async (message: string) => {
       if (updatedCollection) {  
         // Show success modal instead of redirecting
         const isUpdate = !!selectedExistingChallenge;
-        const isRegeneration = isRegenerationMode && selectedExistingChallenge;
-        
-        if (isRegeneration) {
-          console.log('🎉 DEBUG: Manual regeneration completed successfully!');
-          console.log('📊 DEBUG: New stacks created:', selectedStacks.length);
-        }
-        
-        handleShowSuccessModal(updatedCollection, selectedStacks, isUpdate, undefined); // No AI thinking for manual round creation
+        handleShowSuccessModal(updatedCollection, selectedStacks, isUpdate);
       }
     } catch (error) {
       console.error('Error creating round:', error);
@@ -4217,49 +3899,7 @@ const handleSendChatMessage = async (message: string) => {
   const [currentStage, setCurrentStage] = useState(0);
   const [currentExercise, setCurrentExercise] = useState('');
   const [fadeState, setFadeState] = useState('fade-in');
-  
 
-
-  // Initial ChallengeData for early function access
-  const initialStartDate = new Date();
-  const initialEndDate = new Date(initialStartDate.getTime() + 7 * 86400 * 1000);
-  const initialChallengeData: ChallengeData = {
-    startDate: initialStartDate,
-    endDate: initialEndDate,
-    challengeName: '',
-    challengeDesc: '',
-    roundType: SweatlistType.together,
-    pinCode: '',
-    restDayPreferences: {
-      includeRestDays: false,
-      restDays: [],
-      preferences: [],
-    },
-    equipmentPreferences: {
-      selectedEquipment: [],
-      equipmentOnly: false,
-    },
-    challengeType: 'workout',
-    stepConfiguration: {
-      dailyStepGoal: 10000,
-      allowedMissedDays: 2,
-    },
-    mealTracking: {
-      isEnabled: false,
-      configurationType: 'customMacros',
-      pointsPerDay: 100,
-      tolerancePercentage: 0.10,
-      customMacroRanges: {
-        calorieRange: { min: 1800, max: 2200 },
-        proteinRange: { min: 120, max: 180 },
-        carbRange: { min: 200, max: 300 },
-        fatRange: { min: 60, max: 100 },
-      },
-    },
-  };
-
-
-  
   const stages = [
     "Analyzing moves...",
     "Optimizing workout flow...",
@@ -4609,7 +4249,7 @@ const handleSendChatMessage = async (message: string) => {
     };
 
     // Success modal handlers
-    const handleShowSuccessModal = (collection: any, stacks: WorkoutWithRoundId[], isUpdate: boolean = false, aiThinking?: string) => {
+    const handleShowSuccessModal = (collection: any, stacks: WorkoutWithRoundId[], isUpdate: boolean = false) => {
       // Calculate schedule information
       const totalDays = calculateTotalDays(challengeData.startDate, challengeData.endDate);
       const restDays = challengeData.restDayPreferences?.restDays || [];
@@ -4639,16 +4279,7 @@ const handleSendChatMessage = async (message: string) => {
         restDayCount: actualRestDayCount
       };
       
-      console.log('🔍 [SUCCESS MODAL] Data being passed:', {
-        collection: collection?.title,
-        stacksCount: stacks?.length,
-        stacksTitles: stacks?.map(s => s.title),
-        stacksExercises: stacks?.map(s => ({ title: s.title, exerciseCount: s.exercises?.length })),
-        isUpdate,
-        aiThinking: aiThinking?.slice(0, 100) + '...'
-      });
-      
-      setCreatedRoundData({ collection, stacks, isUpdate, scheduleInfo, aiThinking });
+      setCreatedRoundData({ collection, stacks, isUpdate, scheduleInfo });
       setIsSuccessModalOpen(true);
     };
 
@@ -4927,22 +4558,22 @@ const handleSendChatMessage = async (message: string) => {
     if (!isAIResponding) {
       // Small delay to ensure DOM is updated after AI response
       setTimeout(() => {
-              if (chatMessages.length > 0) {
-        // Focus the simple input for continuing conversation
-        chatInputRef.current?.focus();
-      } else {
+        if (conversationHistory.length > 0) {
+          // Focus the simple input for continuing conversation
+          chatInputRef.current?.focus();
+        } else {
           // Focus the textarea for starting conversation
           chatTextareaRef.current?.focus();
         }
       }, 100);
     }
-      }, [isAIResponding, chatMessages.length]);
+  }, [isAIResponding, conversationHistory.length]);
 
   // Initial focus when component mounts
   useEffect(() => {
     // Focus the appropriate input when the component first loads
     setTimeout(() => {
-      if (chatMessages.length > 0) {
+      if (conversationHistory.length > 0) {
         chatInputRef.current?.focus();
       } else {
         chatTextareaRef.current?.focus();
@@ -4952,15 +4583,14 @@ const handleSendChatMessage = async (message: string) => {
 
   // Track if user has manually scrolled up
   const [userHasScrolledUp, setUserHasScrolledUp] = useState(false);
-  const previousMessageCount = useRef(chatMessages.length);
-  
+  const previousMessageCount = useRef(conversationHistory.length);
 
   // Auto-scroll chat to bottom only when appropriate
   useEffect(() => {
     if (chatMessagesRef.current) {
       const scrollContainer = chatMessagesRef.current;
       const isAtBottom = scrollContainer.scrollTop + scrollContainer.clientHeight >= scrollContainer.scrollHeight - 10;
-      const hasNewMessage = chatMessages.length > previousMessageCount.current;
+      const hasNewMessage = conversationHistory.length > previousMessageCount.current;
       
       // Only auto-scroll if user is at bottom and there's a new message, or if AI is responding
       if ((isAtBottom && hasNewMessage) || isAIResponding) {
@@ -4977,51 +4607,9 @@ const handleSendChatMessage = async (message: string) => {
       }
       
       // Update previous message count
-      previousMessageCount.current = chatMessages.length;
+      previousMessageCount.current = conversationHistory.length;
     }
-  }, [chatMessages, isAIResponding, showGenerateCard]);
-
-  // Auto-scroll to bottom when conversation is loaded/switched
-  useEffect(() => {
-    if (programmingConversationHistory.length > 0 && chatMessagesRef.current) {
-      // Small delay to ensure DOM is fully rendered with conversation content
-      const scrollToBottom = () => {
-        chatMessagesRef.current?.scrollTo({
-          top: chatMessagesRef.current.scrollHeight,
-          behavior: 'smooth'
-        });
-        
-        // After scroll completes, check if we should show generate card
-        setTimeout(() => {
-          // Look for the latest assistant message with readyToGenerate: true
-          const lastAssistantMessage = [...programmingConversationHistory]
-            .reverse()
-            .find(msg => msg.role === 'assistant' && msg.readyToGenerate === true);
-          
-          if (lastAssistantMessage) {
-            // Validate current challenge data before showing generate card (lenient for readyToGenerate)
-            const currentValidation = validateChallengeInputQuiet(true);
-            const shouldShowGenerateCard = currentValidation;
-            
-            setShowGenerateCard(shouldShowGenerateCard);
-            
-            // If generate card is being shown, scroll down again to ensure it's visible
-            if (shouldShowGenerateCard) {
-              setTimeout(() => {
-                chatMessagesRef.current?.scrollTo({
-                  top: chatMessagesRef.current.scrollHeight,
-                  behavior: 'smooth'
-                });
-              }, 200); // Small delay to let the card render
-            }
-          }
-        }, 500); // Wait for scroll animation to complete (smooth scroll takes ~300-500ms)
-      };
-      
-      // Delay to ensure chat area is rendered and visible
-      setTimeout(scrollToBottom, 300);
-    }
-  }, [programmingConversationHistory]);
+  }, [conversationHistory, isAIResponding, showGenerateCard]);
 
   // Handle scroll events to detect manual scrolling
   const handleChatScroll = useCallback(() => {
@@ -5058,11 +4646,9 @@ const handleSendChatMessage = async (message: string) => {
                     setError(null);
                     handleGenerateAIRound();
                   }}
-                  disabled={isGenerating || isLoadingConversation}
-                  className="flex-1 px-4 py-2 bg-[#E0FE10] hover:bg-[#E0FE10]/90 text-black rounded-lg transition-colors
-                            disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 px-4 py-2 bg-[#E0FE10] hover:bg-[#E0FE10]/90 text-black rounded-lg transition-colors"
                 >
-                  {isLoadingConversation ? 'Loading...' : 'Try Again'}
+                  Try Again
                 </button>
               </div>
             </div>
@@ -5083,7 +4669,18 @@ const handleSendChatMessage = async (message: string) => {
                 </p>
               </div>
 
-              {/* AI Thinking moved to success modal - no longer shown during loading */}
+              {/* AI Thinking Display */}
+              {currentAIThinking && (
+                <div className="w-full bg-zinc-800 rounded-lg p-4 border border-zinc-600">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Brain className="w-4 h-4 text-[#E0FE10]" />
+                    <span className="text-sm font-medium text-[#E0FE10]">AI Coach Reasoning</span>
+                  </div>
+                  <p className="text-sm text-zinc-300 italic">
+                    "{currentAIThinking}"
+                  </p>
+                </div>
+              )}
               
               <div className={`text-[#E0FE10] text-lg loading-text-ready ${fadeState === 'fade-in' ? 'loading-text-visible' : 'loading-text-hidden'}`}>
                 {stages[currentStage]}
@@ -5101,7 +4698,7 @@ const handleSendChatMessage = async (message: string) => {
                   <div className="w-1 h-1 bg-zinc-500 rounded-full animate-pulse" style={{animationDelay: '0.3s'}}></div>
                   <div className="w-1 h-1 bg-zinc-500 rounded-full animate-pulse" style={{animationDelay: '0.6s'}}></div>
                 </div>
-                <span>Pulse AI is thinking. This may take a moment...</span>
+                <span>This may take a moment...</span>
               </div>
             </div>
           </div>
@@ -5109,106 +4706,22 @@ const handleSendChatMessage = async (message: string) => {
       )}
 
         {/* Left Panel: Title, Prompt, Stes, etc. */}
-        <div className={`${
-          isLeftPanelCollapsed ? 'w-12' : 'w-[400px]'
-        } h-full flex flex-col bg-[#1a1e24] rounded-xl shadow-xl relative overflow-hidden transition-all duration-300 ease-in-out`}>
+        <div className="w-[400px] h-full flex flex-col bg-[#1a1e24] rounded-xl shadow-xl relative overflow-hidden">
           <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-blue-500 via-purple-500 to-[#E0FE10]"></div>
           <div className="absolute top-0 left-0 bottom-0 w-[2px] bg-gradient-to-b from-blue-500 via-purple-500 to-[#E0FE10]"></div>
           <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-[#E0FE10] via-purple-500 to-blue-500"></div>
           <div className="absolute top-0 right-0 bottom-0 w-[2px] bg-gradient-to-t from-[#E0FE10] via-purple-500 to-blue-500"></div>
 
-        {/* Header with collapse icon */}
-        <div className={`flex items-center justify-between p-4 border-b border-zinc-700 ${isLeftPanelCollapsed ? 'opacity-0' : 'opacity-100'} transition-opacity duration-300`}>
-          {!isLeftPanelCollapsed && (
-            <>
-              <div className="flex items-center gap-3">
-                <h3 className="text-lg font-semibold text-white">Round Setup</h3>
-                {/* Programming Access Button - moved from floating position */}
-                {currentUser ? (
-                  <div className="flex items-center gap-2 px-2 py-1 rounded-lg bg-black/20 backdrop-blur-sm border border-zinc-700">
-                    <div className="w-6 h-6 rounded-full bg-gradient-to-r from-[#E0FE10] to-purple-500 flex items-center justify-center">
-                      {currentUser.profileImage?.profileImageURL ? (
-                        <img 
-                          src={currentUser.profileImage.profileImageURL} 
-                          alt={currentUser.displayName || currentUser.username}
-                          className="w-full h-full rounded-full object-cover"
-                        />
-                      ) : (
-                        <UserCircle className="w-4 h-4 text-black" />
-                      )}
-                    </div>
-                    <div className="hidden sm:block">
-                      <p className="text-white text-xs font-medium">
-                        {currentUser.displayName || currentUser.username}
-                      </p>
-                      <p className="text-zinc-400 text-xs">Programming Access</p>
-                    </div>
-                  </div>
-                ) : (
-                  <button 
-                    onClick={() => {
-                      // Redirect to main app for authentication
-                      window.location.href = '/';
-                    }}
-                    className="flex items-center gap-2 px-2 py-1 rounded-lg bg-black/20 backdrop-blur-sm border border-zinc-700 hover:border-[#E0FE10]/50 transition-all"
-                  >
-                    <div className="w-6 h-6 rounded-full bg-zinc-700 flex items-center justify-center">
-                      <UserCircle className="w-4 h-4 text-zinc-400" />
-                    </div>
-                    <div className="hidden sm:block">
-                      <p className="text-zinc-400 text-xs">Sign In</p>
-                      <p className="text-zinc-500 text-xs">Access your rounds</p>
-                    </div>
-                  </button>
-                )}
-              </div>
-              <button
-                onClick={toggleLeftPanel}
-                className="p-1 rounded hover:bg-zinc-700 transition-colors text-zinc-400 hover:text-white"
-                title="Collapse to sidebar"
-              >
-                <ChevronLeft size={16} />
-              </button>
-            </>
-          )}
-        </div>
-
-        {/* Collapsed state overlay - click to expand */}
-        {isLeftPanelCollapsed && (
-          <div 
-            className="absolute inset-0 flex flex-col items-center justify-center cursor-pointer hover:bg-zinc-800/50 transition-all duration-200 group z-10"
-            onClick={toggleLeftPanel}
-            title="Click to expand round setup"
-          >
-            {/* Icon hint */}
-            <div className="p-3 rounded-lg bg-zinc-800 group-hover:bg-zinc-700 transition-colors mb-2">
-              <ChevronRight size={20} className="text-zinc-400 group-hover:text-white transition-colors" />
-            </div>
-            
-            {/* Vertical text hint */}
-            <div 
-              className="text-zinc-500 text-xs font-medium whitespace-nowrap group-hover:text-zinc-300 transition-colors tracking-wide"
-              style={{
-                writingMode: 'vertical-rl',
-                textOrientation: 'mixed',
-                letterSpacing: '0.5px'
-              }}
-            >
-              SETUP
-            </div>
-          </div>
-        )}
-
-        <div className={`h-full overflow-y-auto p-6 scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-zinc-800 hover:scrollbar-thumb-zinc-600 ${isLeftPanelCollapsed ? 'hidden' : ''}`}>
+        <div className="h-full overflow-y-auto p-6 scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-zinc-800 hover:scrollbar-thumb-zinc-600">
             {isAIMode ? (
             <div className="space-y-6">
-                  <div className="flex flex-col items-center">
+                <div className="flex flex-col items-center">
                     <div className="w-48 h-24 flex items-center justify-center mb-2">
-                      <img 
-                        src="/PulseProgrammingLogoWhite.png" 
-                        alt="Pulse Programming Logo" 
-                        className="object-contain max-h-full max-w-full"
-                      />
+                        <img 
+                            src="/PulseProgrammingLogoWhite.png" 
+                            alt="Pulse Programming Logo" 
+                            className="object-contain max-h-full max-w-full"
+                        />
                     </div>
                     <h3 className="text-2xl font-semibold text-white text-center mb-2">
                       {selectedExistingChallenge 
@@ -5222,7 +4735,7 @@ const handleSendChatMessage = async (message: string) => {
                         : "Be specific about your Round's focus—like \"upper body strength with core stability\" or \"progressive leg workout for beginners.\" Include any special considerations, goals, or themes to create the most effective program for your community."
                       }
                     </p>
-                  </div>
+                </div>
 
                 <div>
                   <label className="text-sm text-zinc-400 mb-2 block">Round Title</label>
@@ -5496,6 +5009,7 @@ const handleSendChatMessage = async (message: string) => {
                               </div>
                               <button
                                 onClick={(e) => {
+                                  e.stopPropagation();
                                   setSelectedStacks(prev => prev.filter(s => (s.roundWorkoutId || s.id) !== (stack.roundWorkoutId || stack.id)));
                                 }}
                                 className="ml-2 text-red-400/60 hover:text-red-400 transition-colors p-1"
@@ -5532,8 +5046,6 @@ const handleSendChatMessage = async (message: string) => {
                   </div>
                 )}
 
-
-
                 <button
                 onClick={() => setIsAIMode(false)}
                 className="w-full py-2 text-zinc-400 hover:text-white transition-colors text-sm"
@@ -5556,7 +5068,6 @@ const handleSendChatMessage = async (message: string) => {
             )}
         </div>
         
-        
         {!isAIMode && (
             <div className="absolute bottom-0 left-0 right-0 p-6 bg-[#1a1e24] border-t border-zinc-700">
             <button
@@ -5570,13 +5081,8 @@ const handleSendChatMessage = async (message: string) => {
         )}
         </div>
 
-        {/* Center Container: AI Chat + Round Prompt (Vertical Stack) */}
-        <div className="flex-1 flex flex-col gap-6 min-w-0 h-full">
-          {/* AI Chat Collaboration Area - Conditional with Animation */}
-          {programmingConversationHistory.length > 0 && (
-            <div className={`flex-1 min-w-0 bg-[#1a1e24] rounded-xl shadow-xl relative flex flex-col overflow-hidden ${
-              hasChatAreaBeenShown ? 'chat-area-visible' : 'chat-area-enter'
-            }`}>
+        {/* AI Chat Collaboration Area - Placeholder */}
+        <div className="flex-1 min-w-0 h-full bg-[#1a1e24] rounded-xl shadow-xl relative flex flex-col overflow-hidden">
           {/* Gradient borders */}
           <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-purple-500 via-[#E0FE10] to-purple-500"></div>
           <div className="absolute top-0 left-0 bottom-0 w-[2px] bg-gradient-to-b from-purple-500 via-[#E0FE10] to-purple-500"></div>
@@ -5599,22 +5105,14 @@ const handleSendChatMessage = async (message: string) => {
             onScroll={handleChatScroll}
           >
             <div className="space-y-4">
-              {/* Clean initial state for chat */}
-              {chatMessages.length === 0 && (
-                <div className="h-full flex items-center justify-center">
-                  <div className="text-center max-w-md">
-                    <div className="w-16 h-16 bg-gradient-to-r from-[#E0FE10] to-purple-500 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <Brain className="w-8 h-8 text-black" />
-                    </div>
-                    <p className="text-zinc-400 text-lg mb-2">Ready to collaborate?</p>
-                    <p className="text-zinc-500 text-sm">Describe your fitness round below and I'll help you create it.</p>
-                  </div>
-                </div>
-              )}
-              
-              {/* Hide starter cards for cleaner look */}
-              {chatMessages.length === 0 && false && (
+              {/* Starter Prompt Cards - only show if no conversation yet */}
+              {conversationHistory.length === 0 && (
                 <div className="space-y-4">
+                  <div className="text-center mb-6">
+                    <h3 className="text-xl font-semibold text-white mb-2">Get Started with AI Programming</h3>
+                    <p className="text-lg text-zinc-400">Click on any example below to get started, or write your own prompt</p>
+                  </div>
+                  
                   <div className="grid gap-3">
                     {/* Starter Prompt 1 - Strength & Hypertrophy */}
                     <button
@@ -5672,7 +5170,7 @@ const handleSendChatMessage = async (message: string) => {
               )}
               
               {/* Conversation Messages */}
-              {chatMessages.map((message, index) => (
+              {conversationHistory.map((message, index) => (
                 <div key={index} className={`flex gap-3 ${message.role === 'user' ? 'justify-end' : ''}`}>
                   {message.role === 'assistant' && (
                     <div className="w-8 h-8 rounded-full bg-[#E0FE10] flex items-center justify-center flex-shrink-0">
@@ -5772,41 +5270,21 @@ const handleSendChatMessage = async (message: string) => {
                         </div>
                       </div>
                       
-                      {/* Regeneration mode indicator */}
-                      {isRegenerationMode && (
-                        <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 mb-4">
-                          <div className="flex items-center gap-2 text-blue-400 text-sm">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                            </svg>
-                            <span className="font-medium">Regeneration Mode</span>
-                          </div>
-                          <p className="text-zinc-300 text-xs mt-1">
-                            You have {selectedStacks.length} existing workout{selectedStacks.length !== 1 ? 's' : ''}. 
-                            Regenerating will replace them with new AI-generated workouts.
-                          </p>
-                        </div>
-                      )}
-                      
                       {/* Generate Button */}
                       <button
                         className="w-full py-3 bg-gradient-to-r from-[#E0FE10] via-purple-500 to-[#E0FE10] 
                                   text-black rounded-lg font-semibold hover:opacity-90 transition-opacity
                                   disabled:opacity-50 disabled:cursor-not-allowed"
                         onClick={handleGenerateAIRound}
-                        disabled={isGenerating || isLoadingConversation}
+                        disabled={isGenerating}
                       >
                         <div className="flex items-center justify-center gap-2">
-                          {(isGenerating || isLoadingConversation) ? (
+                          {isGenerating ? (
                             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-black"></div>
                           ) : (
                             <Sparkles className="w-4 h-4" />
                           )}
-                          <span>
-                            {isLoadingConversation ? 'Loading Conversation...' : 
-                             isGenerating ? 'Generating Round...' : 
-                             isRegenerationMode ? 'Regenerate Round' : 'Generate My Round'}
-                          </span>
+                          <span>{isGenerating ? 'Generating Round...' : 'Generate My Round'}</span>
                         </div>
                       </button>
                       
@@ -5823,147 +5301,125 @@ const handleSendChatMessage = async (message: string) => {
               )}
             </div>
           </div>
-
-        </div>
-        )}
-        
-          {/* Pulse Programming Logo - Only show when no conversation */}
-          {programmingConversationHistory.length === 0 && (
-            <img 
-              src="/PulseProgrammingLogoWhite.png" 
-              alt="Pulse Programming" 
-              className="w-32 mx-auto mb-6 opacity-80 block"
-            />
+          
+          {/* Scroll to bottom indicator */}
+          {userHasScrolledUp && (
+            <div className="absolute bottom-20 right-4 z-10">
+              <button
+                onClick={() => {
+                  chatMessagesRef.current?.scrollTo({
+                    top: chatMessagesRef.current.scrollHeight,
+                    behavior: 'smooth'
+                  });
+                  setUserHasScrolledUp(false);
+                }}
+                className="flex items-center gap-2 px-3 py-2 bg-[#E0FE10] text-black rounded-full shadow-lg hover:bg-[#d4e600] transition-all duration-200 text-sm font-medium animate-bounce"
+              >
+                <ChevronDown className="w-4 h-4" />
+                New messages
+              </button>
+            </div>
           )}
           
-          {/* Input Area */}
-          <div className="w-full max-w-3xl mx-auto">
-            <div className="bg-[#1a1e24] rounded-xl shadow-xl p-6">
-              {/* Welcome text - Only show when no conversation */}
-              {programmingConversationHistory.length === 0 && (
-                <div className="text-center mb-8">
-                  <h2 className="text-2xl font-medium text-white mb-2">Ready when you are.</h2>
-                  <p className="text-zinc-400 text-sm">Describe your training goals to start the conversation</p>
-                </div>
-              )}
-            
-            {/* Tagged Users Display */}
-            {taggedUsers.length > 0 && (
-              <div className="mb-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <Users className="w-4 h-4 text-[#E0FE10]" />
-                  <span className="text-sm text-zinc-400">Tagged Users:</span>
-                </div>
-                <div className="relative">
-                  {/* Left Arrow */}
-                  {taggedUsers.length > 1 && canScrollLeft && (
-                    <button
-                      onClick={() => scrollTaggedUsers('left')}
-                      className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-8 h-8 bg-zinc-800/90 hover:bg-zinc-700/90 rounded-full flex items-center justify-center transition-colors shadow-lg border border-zinc-600"
-                    >
-                      <ChevronLeft className="w-4 h-4 text-white" />
-                    </button>
-                  )}
-                  
-                  {/* Right Arrow */}
-                  {taggedUsers.length > 1 && canScrollRight && (
-                    <button
-                      onClick={() => scrollTaggedUsers('right')}
-                      className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-8 h-8 bg-zinc-800/90 hover:bg-zinc-700/90 rounded-full flex items-center justify-center transition-colors shadow-lg border border-zinc-600"
-                    >
-                      <ChevronRight className="w-4 h-4 text-white" />
-                    </button>
-                  )}
-                  
-                  {/* Scrollable container */}
-                                     <div 
-                     className={`flex gap-2 overflow-x-auto scrollbar-none ${taggedUsers.length > 1 ? 'px-10' : ''}`}
-                     style={{ scrollBehavior: 'smooth' }}
-                   >
-                    {taggedUsers.map((user) => (
-                      <div key={user.id} className="flex items-center gap-2 bg-[#E0FE10]/10 border border-[#E0FE10]/30 rounded-lg px-3 py-2 min-w-fit">
-                        <div className="w-6 h-6 rounded-full bg-gradient-to-r from-[#E0FE10] to-purple-500 flex items-center justify-center">
-                          {user.profileImage?.profileImageURL ? (
-                            <img 
-                              src={user.profileImage.profileImageURL} 
-                              alt={user.displayName || user.username}
-                              className="w-full h-full rounded-full object-cover"
-                            />
-                          ) : (
-                            <UserCircle className="w-4 h-4 text-black" />
-                          )}
-                        </div>
-                        <span className="text-white text-sm font-medium">
-                          {user.displayName || user.username}
-                        </span>
-                        <button
-                          onClick={() => handleRemoveTaggedUser(user.id)}
-                          className="text-zinc-400 hover:text-red-400 transition-colors"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+          {/* Chat Input - Ready for conversation */}
+           {/* Round Prompt Section - For starting AI conversation */}
+          <div className="flex justify-center py-4 bg-[#111417] relative">
+            <div className="w-full max-w-6xl bg-[#1a1e24] rounded-xl shadow-xl p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-2 h-2 rounded-full bg-[#E0FE10]"></div>
+                <h3 className="text-lg font-semibold text-white">Round Prompt</h3>
+                <span className="text-sm text-zinc-400">- Describe your training goals to start the conversation</span>
               </div>
-            )}
-
-            {/* Unified Input Area - Works for both starting and continuing conversations */}
-            <div className="flex gap-4 relative">
-                <div className="flex-1 relative">
-                  <textarea
-                    ref={chatTextareaRef}
-                    value={aiPromptText}
-                    onChange={handlePromptTextChange}
-                    placeholder="E.g., Create a 4-week strength program focused on building muscle in my shoulders and upper back. Use @ to tag users for personalized recommendations..."
-                    rows={4}
-                    className="w-full p-4 bg-[#262a30] rounded-lg border border-zinc-700 
-                              text-white placeholder:text-zinc-500 
-                              focus:border-[#E0FE10] focus:outline-none transition-all resize-none"
-                  />
-                  
-                  {/* User Search Dropdown */}
-                  {showUserDropdown && filteredUsers.length > 0 && (
-                    <div className="absolute bottom-full left-0 right-0 mb-1 bg-[#262a30] border border-zinc-700 rounded-lg shadow-xl max-h-48 overflow-y-auto z-50">
-                      {filteredUsers.map((user) => (
-                        <button
-                          key={user.id}
-                          onClick={() => handleUserSelect(user)}
-                          className="w-full p-3 text-left hover:bg-zinc-700 transition-colors flex items-center gap-3"
-                        >
-                          <div className="w-8 h-8 rounded-full bg-gradient-to-r from-[#E0FE10] to-purple-500 flex items-center justify-center">
-                            {user.profileImage?.profileImageURL ? (
-                              <img 
-                                src={user.profileImage.profileImageURL} 
-                                alt={user.displayName || user.username}
-                                className="w-full h-full rounded-full object-cover"
-                              />
-                            ) : (
-                              <UserCircle className="w-4 h-4 text-black" />
-                            )}
+              
+              {/* Tagged Users Display */}
+              {taggedUsers.length > 0 && (
+                <div className="mb-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Users className="w-4 h-4 text-[#E0FE10]" />
+                    <span className="text-sm text-zinc-400">Tagged Users:</span>
+                  </div>
+                  <div className="relative">
+                    {/* Left Arrow */}
+                    {taggedUsers.length > 1 && canScrollLeft && (
+                      <button
+                        onClick={() => scrollTaggedUsers('left')}
+                        className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-8 h-8 bg-zinc-800/90 hover:bg-zinc-700/90 rounded-full flex items-center justify-center transition-colors shadow-lg border border-zinc-600"
+                      >
+                        <ChevronLeft className="w-4 h-4 text-white" />
+                      </button>
+                    )}
+                    
+                    {/* Right Arrow */}
+                    {taggedUsers.length > 1 && canScrollRight && (
+                      <button
+                        onClick={() => scrollTaggedUsers('right')}
+                        className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-8 h-8 bg-zinc-800/90 hover:bg-zinc-700/90 rounded-full flex items-center justify-center transition-colors shadow-lg border border-zinc-600"
+                      >
+                        <ChevronRight className="w-4 h-4 text-white" />
+                      </button>
+                    )}
+                    
+                    <div 
+                      ref={taggedUsersScrollRef}
+                      onScroll={checkTaggedUsersScroll}
+                      className="flex gap-2 overflow-x-auto scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-zinc-800 pb-1"
+                      style={{ scrollbarWidth: 'thin' }}
+                    >
+                      {taggedUsers.map((user) => (
+                        <div key={user.id} className="bg-[#E0FE10]/20 border border-[#E0FE10]/40 rounded-lg px-3 py-2 flex items-center gap-2 flex-shrink-0 min-w-fit">
+                          <div className="w-6 h-6 rounded-full bg-[#E0FE10]/30 flex items-center justify-center">
+                            <UserCircle className="w-4 h-4 text-[#E0FE10]" />
                           </div>
-                          <div>
-                            <p className="text-white text-sm font-medium">
-                              {user.displayName || user.username}
-                            </p>
-                            <p className="text-zinc-400 text-xs">
-                              {user.email}
-                            </p>
+                          <div className="flex flex-col">
+                            <span className="text-sm font-medium text-white whitespace-nowrap">{user.displayName || user.username}</span>
+                            <span className="text-xs text-zinc-400 whitespace-nowrap">@{user.username}</span>
                           </div>
-                        </button>
+                          <button
+                            onClick={() => handleRemoveTaggedUser(user.id)}
+                            className="text-zinc-400 hover:text-white ml-1"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
                       ))}
                     </div>
-                  )}
+                  </div>
                 </div>
-                
-                <div className="flex flex-col gap-2">
+              )}
+              
+              {/* Chat Input Area */}
+              {conversationHistory.length > 0 ? (
+                // Simple input for continuing conversation
+                <div className="flex gap-4 relative">
+                  <div className="flex-1 relative">
+                    <input
+                      type="text"
+                      ref={chatInputRef}
+                      value={aiPromptText}
+                      onChange={(e) => setAiPromptText(e.target.value)}
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          if (aiPromptText.trim() && !isAIResponding) {
+                            handleSendChatMessage(aiPromptText);
+                            setAiPromptText('');
+                          }
+                        }
+                      }}
+                      placeholder="Continue the conversation..."
+                      className="w-full p-4 bg-[#262a30] rounded-lg border border-zinc-700 
+                                text-white placeholder:text-zinc-500 
+                                focus:border-[#E0FE10] focus:outline-none transition-all"
+                      disabled={isAIResponding}
+                    />
+                  </div>
                   <button
-                    className="px-6 py-3 bg-gradient-to-r from-[#E0FE10] via-purple-500 to-[#E0FE10] 
-                              text-black rounded-lg font-semibold hover:opacity-90 transition-opacity whitespace-nowrap disabled:opacity-50"
+                    className="px-6 py-3 bg-[#E0FE10] text-black rounded-lg font-semibold hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
                     onClick={() => {
-                      handleSendChatMessage(aiPromptText);
-                      setAiPromptText(''); // Clear the prompt after sending
+                      if (aiPromptText.trim() && !isAIResponding) {
+                        handleSendChatMessage(aiPromptText);
+                        setAiPromptText('');
+                      }
                     }}
                     disabled={!aiPromptText.trim() || isAIResponding}
                   >
@@ -5971,170 +5427,97 @@ const handleSendChatMessage = async (message: string) => {
                       {isAIResponding ? (
                         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-black"></div>
                       ) : (
-                        programmingConversationHistory.length > 0 ? (
-                          <Send className="w-4 h-4" />
+                        <Send className="w-4 h-4" />
+                      )}
+                    </div>
+                  </button>
+                </div>
+              ) : (
+                // Original textarea for starting conversation
+                <div className="flex gap-4 relative">
+                  <div className="flex-1 relative">
+                    <textarea
+                      ref={chatTextareaRef}
+                      value={aiPromptText}
+                      onChange={handlePromptTextChange}
+                      placeholder="E.g., Create a 4-week strength program focused on building muscle in my shoulders and upper back. Use @ to tag users for personalized recommendations..."
+                      rows={4}
+                      className="w-full p-4 bg-[#262a30] rounded-lg border border-zinc-700 
+                                text-white placeholder:text-zinc-500 
+                                focus:border-[#E0FE10] focus:outline-none transition-all resize-none"
+                    />
+                    
+                    {/* User Search Dropdown */}
+                    {showUserDropdown && filteredUsers.length > 0 && (
+                      <div className="absolute bottom-full left-0 right-0 mb-1 bg-[#262a30] border border-zinc-700 rounded-lg shadow-xl max-h-48 overflow-y-auto z-50">
+                        <div className="p-2 border-b border-zinc-700">
+                          <div className="flex items-center gap-2">
+                            <Users className="w-4 h-4 text-[#E0FE10]" />
+                            <span className="text-xs text-zinc-400">Select user to tag:</span>
+                          </div>
+                        </div>
+                        {filteredUsers.map((user) => (
+                          <button
+                            key={user.id}
+                            onClick={() => handleUserSelect(user)}
+                            className="w-full p-3 flex items-center gap-3 hover:bg-zinc-700/50 transition-colors text-left"
+                          >
+                            <div className="w-8 h-8 rounded-full bg-[#E0FE10]/20 flex items-center justify-center flex-shrink-0">
+                              <UserCircle className="w-5 h-5 text-[#E0FE10]" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-medium text-white">{user.displayName || user.username}</div>
+                              <div className="text-xs text-zinc-400 truncate">@{user.username}</div>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="flex flex-col gap-2">
+                    <button
+                      className="px-6 py-3 bg-gradient-to-r from-[#E0FE10] via-purple-500 to-[#E0FE10] 
+                                text-black rounded-lg font-semibold hover:opacity-90 transition-opacity whitespace-nowrap disabled:opacity-50"
+                      onClick={() => {
+                        handleSendChatMessage(aiPromptText);
+                        setAiPromptText(''); // Clear the prompt after sending
+                      }}
+                      disabled={!aiPromptText.trim() || isAIResponding}
+                    >
+                      <div className="flex items-center justify-center gap-2">
+                        {isAIResponding ? (
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-black"></div>
                         ) : (
                           <Brain className="w-4 h-4" />
-                        )
-                      )}
-                      <span>
-                        {isAIResponding 
-                          ? 'Sending...' 
-                          : programmingConversationHistory.length > 0 
-                            ? 'Send' 
-                            : 'Start Collaborating'
-                        }
-                      </span>
-                    </div>
-                  </button>
-                  
-                  <button
-                    onClick={() => setIsAIMode(false)}
-                    className="px-6 py-2 text-zinc-400 hover:text-white transition-colors text-sm whitespace-nowrap"
-                  >
-                    Manual Setup
-                  </button>
+                        )}
+                        <span>{isAIResponding ? 'Sending...' : 'Start Collaberating'}</span>
+                      </div>
+                    </button>
+                    
+                    <button
+                      onClick={() => setIsAIMode(false)}
+                      className="px-6 py-2 text-zinc-400 hover:text-white transition-colors text-sm whitespace-nowrap"
+                    >
+                      Manual Setup
+                    </button>
+                  </div>
                 </div>
+              )}
+              
+              <div className="mt-4 p-3 bg-zinc-800/50 rounded-lg border border-zinc-700/50">
+                <p className="text-xs text-zinc-400 leading-relaxed">
+                  💡 <strong>Pro tip:</strong> Use @ to tag users for personalized recommendations. Type @ followed by a name to search and select users whose fitness profiles will help the AI create more targeted programs.
+                </p>
               </div>
-            
-            <div className="mt-6 text-center">
-              <p className="text-xs text-zinc-500">
-                💡 Use @ to tag Pulse users for personalized context-aware recommendations
-              </p>
-            </div>
-
-            {/* Suggestion Buttons - Only show when no conversation has started */}
-            {programmingConversationHistory.length === 0 && (
-              <div className="mt-8">
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {/* Suggestion 1 - Strength Focus */}
-                  <button
-                    onClick={() => setAiPromptText("Create a 4-week strength program focused on building muscle in shoulders and upper back")}
-                    className="text-left p-4 bg-zinc-800/30 hover:bg-zinc-700/50 border border-zinc-700/50 rounded-lg transition-colors group"
-                  >
-                    <div className="flex items-center gap-3 mb-2">
-                      <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center group-hover:bg-blue-500/30 transition-colors">
-                        <Dumbbell className="w-4 h-4 text-blue-400" />
-                      </div>
-                      <span className="text-sm font-medium text-white">Strength Program</span>
-                    </div>
-                    <p className="text-xs text-zinc-400">Build muscle and strength</p>
-                  </button>
-
-                  {/* Suggestion 2 - Weight Loss */}
-                  <button
-                    onClick={() => setAiPromptText("Design a beginner-friendly program for weight loss and general fitness")}
-                    className="text-left p-4 bg-zinc-800/30 hover:bg-zinc-700/50 border border-zinc-700/50 rounded-lg transition-colors group"
-                  >
-                    <div className="flex items-center gap-3 mb-2">
-                      <div className="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center group-hover:bg-green-500/30 transition-colors">
-                        <Users className="w-4 h-4 text-green-400" />
-                      </div>
-                      <span className="text-sm font-medium text-white">Weight Loss</span>
-                    </div>
-                    <p className="text-xs text-zinc-400">Beginner-friendly transformation</p>
-                  </button>
-
-                  {/* Suggestion 3 - Athletic Performance */}
-                  <button
-                    onClick={() => setAiPromptText("Create an athletic performance program for explosive power and agility")}
-                    className="text-left p-4 bg-zinc-800/30 hover:bg-zinc-700/50 border border-zinc-700/50 rounded-lg transition-colors group"
-                  >
-                    <div className="flex items-center gap-3 mb-2">
-                      <div className="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center group-hover:bg-purple-500/30 transition-colors">
-                        <Zap className="w-4 h-4 text-purple-400" />
-                      </div>
-                      <span className="text-sm font-medium text-white">Athletic Performance</span>
-                    </div>
-                    <p className="text-xs text-zinc-400">Sport-specific training</p>
-                  </button>
-
-                  {/* Suggestion 4 - Home Workout */}
-                  <button
-                    onClick={() => setAiPromptText("Plan a home workout routine with minimal equipment")}
-                    className="text-left p-4 bg-zinc-800/30 hover:bg-zinc-700/50 border border-zinc-700/50 rounded-lg transition-colors group"
-                  >
-                    <div className="flex items-center gap-3 mb-2">
-                      <div className="w-8 h-8 rounded-full bg-orange-500/20 flex items-center justify-center group-hover:bg-orange-500/30 transition-colors">
-                        <Home className="w-4 h-4 text-orange-400" />
-                      </div>
-                      <span className="text-sm font-medium text-white">Home Workout</span>
-                    </div>
-                    <p className="text-xs text-zinc-400">Minimal equipment needed</p>
-                  </button>
-
-                  {/* Suggestion 5 - Powerlifting */}
-                  <button
-                    onClick={() => setAiPromptText("Build a powerlifting program to increase my squat, bench, and deadlift")}
-                    className="text-left p-4 bg-zinc-800/30 hover:bg-zinc-700/50 border border-zinc-700/50 rounded-lg transition-colors group"
-                  >
-                    <div className="flex items-center gap-3 mb-2">
-                      <div className="w-8 h-8 rounded-full bg-red-500/20 flex items-center justify-center group-hover:bg-red-500/30 transition-colors">
-                        <Trophy className="w-4 h-4 text-red-400" />
-                      </div>
-                      <span className="text-sm font-medium text-white">Powerlifting</span>
-                    </div>
-                    <p className="text-xs text-zinc-400">Squat, bench, deadlift focus</p>
-                  </button>
-
-                  {/* Suggestion 6 - Cutting Program */}
-                  <button
-                    onClick={() => setAiPromptText("Create a cutting program to maintain muscle while losing body fat")}
-                    className="text-left p-4 bg-zinc-800/30 hover:bg-zinc-700/50 border border-zinc-700/50 rounded-lg transition-colors group"
-                  >
-                    <div className="flex items-center gap-3 mb-2">
-                      <div className="w-8 h-8 rounded-full bg-cyan-500/20 flex items-center justify-center group-hover:bg-cyan-500/30 transition-colors">
-                        <Target className="w-4 h-4 text-cyan-400" />
-                      </div>
-                      <span className="text-sm font-medium text-white">Cutting Program</span>
-                    </div>
-                    <p className="text-xs text-zinc-400">Maintain muscle, lose fat</p>
-                  </button>
-                </div>
-              </div>
-            )}
             </div>
           </div>
         </div>
 
         {/* Right Panel: Split into two stacked panels */}
-        <div className={`${
-          isRightPanelCollapsed ? 'w-8' : 'w-[500px]'
-        } h-full flex flex-col gap-4 transition-all duration-300 ease-in-out`}>
+        <div className="w-[500px] h-full flex flex-col gap-4">
           
-          {isRightPanelCollapsed ? (
-            // Collapsed view - optimized for UX
-            <div 
-              className="h-full flex flex-col items-center justify-center cursor-pointer hover:bg-zinc-800/50 transition-all duration-200 group px-1"
-              onClick={toggleRightPanel}
-              title="Click to expand round customization"
-            >
-              {/* Icon hint */}
-              <div className="mb-4 text-zinc-500 group-hover:text-zinc-300 transition-colors">
-                <Settings size={14} />
-              </div>
-              
-              {/* Vertical text with better spacing */}
-              <div 
-                className="text-zinc-400 text-xs font-medium whitespace-nowrap group-hover:text-zinc-200 transition-colors tracking-wide"
-                style={{
-                  writingMode: 'vertical-rl',
-                  textOrientation: 'mixed',
-                  letterSpacing: '0.5px'
-                }}
-              >
-                AI Tools & Round Setup
-              </div>
-              
-              {/* Expand hint */}
-              <div className="mt-4 text-zinc-500 group-hover:text-zinc-300 transition-colors">
-                <ChevronLeft size={12} />
-              </div>
-            </div>
-          ) : (
-            // Expanded view - original content
-            <>
-              {/* Top Panel: Round Customization */}
+          {/* Top Panel: Round Customization */}
           <div className="bg-[#1a1e24] rounded-xl shadow-xl relative flex flex-col overflow-hidden" style={{ height: '45%' }}>
             {/* Gradient borders */}
             <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-blue-500 via-purple-500 to-[#E0FE10]"></div>
@@ -6145,16 +5528,7 @@ const handleSendChatMessage = async (message: string) => {
             {/* --- START: Always Visible Preferences UI Block --- */}
             <div className="p-6 space-y-4 border-b border-zinc-700 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-zinc-800 max-h-[40vh]"> {/* Added max-height */}
                 <div className="bg-zinc-800 rounded-lg p-4 border border-zinc-700">
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="font-medium text-white">Round Customization</h3>
-                    <button
-                      onClick={toggleRightPanel}
-                      className="p-1 rounded hover:bg-zinc-700 transition-colors text-zinc-400 hover:text-white"
-                      title="Collapse to sidebar"
-                    >
-                      <ChevronRight size={16} />
-                    </button>
-                  </div>
+                  <h3 className="font-medium text-white mb-2">Round Customization</h3>
                   <p className="text-sm text-zinc-400">
                     Tailor your round with these options. These apply to both AI-generated and manually built rounds.
                   </p>
@@ -6862,126 +6236,6 @@ const handleSendChatMessage = async (message: string) => {
             </div>
           </div>
           {/* End of bottom panel */}
-            </>
-          )}
-        </div>
-
-          {/* Conversation History Panel */}
-        <div className={`${
-          isConversationPanelCollapsed ? 'w-8' : 'w-80'
-        } h-full bg-zinc-900 border-l border-zinc-700 flex flex-col transition-all duration-300 ease-in-out`}>
-                     {isConversationPanelCollapsed ? (
-             // Collapsed view - optimized for UX
-             <div 
-               className="h-full flex flex-col items-center justify-center cursor-pointer hover:bg-zinc-800/50 transition-all duration-200 group px-1"
-               onClick={toggleConversationPanel}
-               title="Click to expand conversations"
-             >
-               {/* Icon hint with count badge */}
-               <div className="mb-4 text-zinc-500 group-hover:text-zinc-300 transition-colors relative">
-                 <History size={16} />
-                 {allConversations.length > 0 && (
-                   <div 
-                     className="absolute -top-1 -right-1 bg-[#E0FE10] text-black text-xs font-bold rounded-full min-w-[16px] h-4 flex items-center justify-center px-1 shadow-sm"
-                     style={{ transform: 'rotate(90deg)' }}
-                   >
-                     {allConversations.length > 99 ? '99+' : allConversations.length}
-                   </div>
-                 )}
-               </div>
-               
-               {/* Vertical text with better spacing */}
-               <div 
-                 className="text-zinc-400 text-xs font-medium whitespace-nowrap group-hover:text-zinc-200 transition-colors tracking-wide"
-                 style={{
-                   writingMode: 'vertical-rl',
-                   textOrientation: 'mixed',
-                   letterSpacing: '0.5px'
-                 }}
-               >
-                 {allConversations.length > 0 ? 'Past Sessions' : 'History'}
-               </div>
-               
-               {/* Visual expand hint */}
-               <div className="mt-4 text-zinc-500 group-hover:text-zinc-300 transition-colors">
-                 <ChevronRight size={12} />
-               </div>
-             </div>
-          ) : (
-            // Expanded view - normal content
-            <>
-              <div className="flex items-center justify-between p-4 border-b border-zinc-700">
-                <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                  <History size={20} />
-                  Conversations
-                </h3>
-                <button
-                  onClick={toggleConversationPanel}
-                  className="p-1 rounded hover:bg-zinc-800 transition-colors text-zinc-400 hover:text-white"
-                  title="Collapse to sidebar"
-                >
-                  <ChevronLeft size={16} />
-                </button>
-              </div>
-              
-              <div className="p-4 border-b border-zinc-700">
-                <button
-                  onClick={handleCreateNewConversation}
-                  disabled={isLoadingConversation}
-                  className="w-full flex items-center justify-center gap-2 p-3 bg-[#E0FE10] text-black rounded-lg hover:bg-[#d4e600] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <Plus size={16} />
-                  {isLoadingConversation ? 'Loading...' : 'New Conversation'}
-                </button>
-              </div>
-              
-              <div className="flex-1 overflow-y-auto">
-                {allConversations.length === 0 ? (
-                  <div className="p-4 text-center text-zinc-500">
-                    <MessageSquare size={48} className="mx-auto mb-2 opacity-50" />
-                    <p>No conversations yet</p>
-                    <p className="text-sm">Start chatting to create your first conversation!</p>
-                  </div>
-                ) : (
-                  <div className="space-y-2 p-4">
-                    {allConversations.map((conversation: any) => (
-                      <button
-                        key={conversation.id}
-                        onClick={() => {
-                          console.log('🖱️ [DEBUG] Conversation button clicked:', conversation.id);
-                          handleSwitchConversation(conversation.id);
-                        }}
-                        className={`w-full p-3 rounded-lg text-left transition-colors border ${
-                          conversation.id === currentConversationId
-                            ? 'bg-zinc-800 border-[#E0FE10] text-white'
-                            : 'bg-zinc-800/50 border-zinc-700 text-zinc-300 hover:bg-zinc-800'
-                        }`}
-                      >
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1 min-w-0">
-                            <h4 className="font-medium text-sm truncate">
-                              {conversation.title || 'Untitled Session'}
-                            </h4>
-                            <p className="text-xs text-zinc-500 mt-1">
-                              {conversation.messages.length} messages
-                            </p>
-                            {conversation.challengeData.challengeName && (
-                              <p className="text-xs text-zinc-400 mt-1 truncate">
-                                Round: {conversation.challengeData.challengeName}
-                              </p>
-                            )}
-                          </div>
-                          <div className="text-xs text-zinc-500 ml-2">
-                            {new Date(conversation.updatedAt).toLocaleDateString()}
-                          </div>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </>
-          )}
         </div>
         {/* End of right panels wrapper */}
 
@@ -7245,17 +6499,6 @@ const PulseProgrammingPage: NextPage<PulseProgrammingPageProps> = ({ metaData })
   const [showApp, setShowApp] = useState(false); // New state to track when user wants to enter the app
   const [isTransitioning, setIsTransitioning] = useState(false); // New state for transition animation
 
-  // Programming conversation state  
-  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
-  const [isLoadingConversation, setIsLoadingConversation] = useState(false);
-  const [conversationHistory, setConversationHistory] = useState<ProgrammingChatMessage[]>([]);
-  const [allConversations, setAllConversations] = useState<ProgrammingConversation[]>([]);
-  const [showConversationPanel, setShowConversationPanel] = useState(false);
-  const [restoredUIState, setRestoredUIState] = useState<any>(null);
-  const [isConversationPanelCollapsed, setIsConversationPanelCollapsed] = useState(true);
-  const [isRightPanelCollapsed, setIsRightPanelCollapsed] = useState(true);
-  const [isLeftPanelCollapsed, setIsLeftPanelCollapsed] = useState(true);
-
   // ViewModel definition - this will be constructed to match the ViewModel interface
   const constructedViewModel: ViewModel = {
     appCoordinator: {
@@ -7327,8 +6570,20 @@ const PulseProgrammingPage: NextPage<PulseProgrammingPageProps> = ({ metaData })
   const [challengeData, setChallengeData] = useState<ChallengeData>(initialChallengeData);
   const [selectedStacks, setSelectedStacks] = useState<WorkoutWithRoundId[]>([]);
   
+  // Programming conversation state
+  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
+  const [isLoadingConversation, setIsLoadingConversation] = useState(false);
+  const [conversationHistory, setConversationHistory] = useState<ProgrammingChatMessage[]>([]);
+  
+  // Conversation management state
+  const [allConversations, setAllConversations] = useState<ProgrammingConversation[]>([]);
+  const [showConversationPanel, setShowConversationPanel] = useState(false);
+  
   // New state for tutorial modal
   const [showTutorialModal, setShowTutorialModal] = useState(false);
+  
+  // State for restored UI state from conversation
+  const [restoredUIState, setRestoredUIState] = useState<any>(null);
 
   // Check localStorage on mount to determine if tutorial should be shown
   useEffect(() => {
@@ -7366,7 +6621,7 @@ const PulseProgrammingPage: NextPage<PulseProgrammingPageProps> = ({ metaData })
         return;
       }
       
-      // Auto-save conversation updates to Firestore
+      // Auto-save conversation updates
       
       try {
         // First check if the conversation exists
@@ -7379,6 +6634,7 @@ const PulseProgrammingPage: NextPage<PulseProgrammingPageProps> = ({ metaData })
         }
         
         // Update conversation in Firestore
+        
         await programmingConversationService.updateConversation(currentConversationId, updates);
         
         // Auto-save completed successfully
@@ -7436,16 +6692,43 @@ const PulseProgrammingPage: NextPage<PulseProgrammingPageProps> = ({ metaData })
         const cleanedConversations = await programmingConversationService.fetchUserConversations(currentUser.id);
         setAllConversations(cleanedConversations);
         
-        // Instead of auto-loading the latest conversation, start with a fresh state
-        // Users can manually load previous conversations from the conversation panel
+        // Get the latest conversation (first in the sorted list)
+        const latestConversation = cleanedConversations.length > 0 ? cleanedConversations[0] : null;
         
-        // Always start with a new conversation state for clean initial experience
-        setCurrentConversationId(null);
-        setConversationHistory([]);
-        setRestoredUIState(null);
-        
-        // Keep challengeData and selectedStacks at their default initial values
-        // (they're already set in the component's initial state)
+        if (latestConversation) {
+          // Load existing conversation
+          const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+          
+          setCurrentConversationId(latestConversation.id);
+          
+          // Ensure message timestamps are properly converted to Date objects
+          const processedMessages = (latestConversation.messages || []).map(msg => ({
+            ...msg,
+            timestamp: convertFirestoreTimestamp(msg.timestamp)
+          }));
+          setConversationHistory(processedMessages);
+          
+          // Ensure dates are properly converted to Date objects
+          const properChallengeData = {
+            ...latestConversation.challengeData,
+            startDate: convertFirestoreTimestamp(latestConversation.challengeData.startDate),
+            endDate: convertFirestoreTimestamp(latestConversation.challengeData.endDate)
+          } as ChallengeData;
+          
+          setChallengeData(properChallengeData);
+          setSelectedStacks(latestConversation.selectedStacks);
+          
+          // Restore UI state if available
+          if (latestConversation.uiState) {
+            setRestoredUIState(latestConversation.uiState);
+          } else {
+            setRestoredUIState(null);
+          }
+          
+        } else {
+          // No existing conversation found - we'll create one when the first message is sent
+          setCurrentConversationId(null);
+        }
       } catch (error) {
         console.error('❌ Error initializing conversation:', error);
         console.error('Error details:', {
@@ -7473,7 +6756,6 @@ const PulseProgrammingPage: NextPage<PulseProgrammingPageProps> = ({ metaData })
         // Add escape key listener
         const handleEscape = (e: KeyboardEvent) => {
           if (e.key === 'Escape') {
-            console.log('🔒 [DEBUG] Escape key pressed, closing conversation panel');
             setShowConversationPanel(false);
           }
         };
@@ -7507,7 +6789,7 @@ const PulseProgrammingPage: NextPage<PulseProgrammingPageProps> = ({ metaData })
       const updatedData = { ...prevData, ...newData };
       
       // Auto-save challenge data changes only if we have a conversation and auto-save is not skipped
-              if (currentConversationId && !skipAutoSave) {
+      if (currentConversationId && !skipAutoSave) {
         debouncedAutoSave({ 
           challengeData: updatedData as any,
           updatedAt: new Date()
@@ -7606,13 +6888,15 @@ const PulseProgrammingPage: NextPage<PulseProgrammingPageProps> = ({ metaData })
     setIsLoadingConversation(true);
     try {
       const conversation = await programmingConversationService.fetchConversation(conversationId);
-      console.log('✅ [DEBUG] Fetched conversation:', conversation);
       if (conversation) {
+        setCurrentConversationId(conversation.id);
+        
         // Ensure message timestamps are properly converted to Date objects
         const processedMessages = conversation.messages.map(msg => ({
           ...msg,
           timestamp: convertFirestoreTimestamp(msg.timestamp)
         }));
+        setConversationHistory(processedMessages);
         
         // Ensure dates are properly converted to Date objects
         const properChallengeData = {
@@ -7621,18 +6905,7 @@ const PulseProgrammingPage: NextPage<PulseProgrammingPageProps> = ({ metaData })
           endDate: convertFirestoreTimestamp(conversation.challengeData.endDate)
         } as ChallengeData;
         
-        console.log('🔄 [RACE FIX] Conversation loaded with dates:', {
-          startDate: properChallengeData.startDate?.toISOString(),
-          endDate: properChallengeData.endDate?.toISOString()
-        });
-        
-        // Batch all state updates to prevent race condition
-        // Update conversation data first
-        setCurrentConversationId(conversation.id);
-        setConversationHistory(processedMessages);
-        
-        // Use updateChallengeDataState with skipAutoSave to prevent overwriting conversation data
-        updateChallengeDataState(properChallengeData, true); // Skip auto-save during conversation loading
+        setChallengeData(properChallengeData);
         setSelectedStacks(conversation.selectedStacks);
         
         // Restore UI state if available
@@ -7642,21 +6915,11 @@ const PulseProgrammingPage: NextPage<PulseProgrammingPageProps> = ({ metaData })
           setRestoredUIState(null);
         }
         
-        // Expand left panel if this conversation has messages and panel is currently collapsed
-        if (processedMessages.length > 0 && isLeftPanelCollapsed) {
-          setIsLeftPanelCollapsed(false);
-        }
-        
-        // Use setTimeout to ensure all state updates have been processed before clearing loading state
-        setTimeout(() => {
-          setIsLoadingConversation(false);
-        }, 0);
-        
-      } else {
-        setIsLoadingConversation(false);
+        // Keep panel open for smoother UX (no auto-close)
       }
     } catch (error) {
       console.error('❌ Error switching conversation:', error);
+    } finally {
       setIsLoadingConversation(false);
     }
   };
@@ -7671,6 +6934,7 @@ const PulseProgrammingPage: NextPage<PulseProgrammingPageProps> = ({ metaData })
     setIsLoadingConversation(true);
     
     try {
+      
       // Reset all form data to initial defaults - ensure dates are proper Date objects
       const now = new Date();
       const freshChallengeData: ChallengeData = {
@@ -7685,6 +6949,7 @@ const PulseProgrammingPage: NextPage<PulseProgrammingPageProps> = ({ metaData })
         challengeData: freshChallengeData as any,
         selectedStacks: freshSelectedStacks
       });
+      
       
       // Reset all conversation and form state for new conversation
       setCurrentConversationId(conversationId);
@@ -7711,20 +6976,115 @@ const PulseProgrammingPage: NextPage<PulseProgrammingPageProps> = ({ metaData })
     }
   };
 
-  const toggleConversationPanel = () => {
-    setIsConversationPanelCollapsed(!isConversationPanelCollapsed);
-  };
-
-  const toggleRightPanel = () => {
-    setIsRightPanelCollapsed(!isRightPanelCollapsed);
-  };
-
-  const toggleLeftPanel = () => {
-    setIsLeftPanelCollapsed(!isLeftPanelCollapsed);
-  };
-
   // Enhanced Conversation Panel rendered with React Portal
+  const ConversationPanel = () => {
+    if (!showConversationPanel || typeof window === 'undefined') return null;
 
+    const panelContent = (
+      <>
+        {/* Backdrop overlay */}
+        <div 
+          className="conversation-backdrop fixed inset-0 bg-black/50 backdrop-blur-sm z-[9998] transition-opacity duration-300"
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowConversationPanel(false);
+          }}
+          style={{ pointerEvents: 'all' }}
+        />
+        
+        {/* Panel */}
+        <div className={`conversation-panel fixed top-0 right-0 h-full w-80 bg-zinc-900 border-l border-zinc-700 transform transition-transform duration-300 z-[9999] ${
+          showConversationPanel ? 'translate-x-0' : 'translate-x-full'
+        }`}
+          style={{ pointerEvents: 'all' }}
+        >
+          <div className="flex flex-col h-full">
+            <div className="flex items-center justify-between p-4 border-b border-zinc-700">
+              <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                <History size={20} />
+                Conversations
+              </h3>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowConversationPanel(false);
+                }}
+                className="text-zinc-400 hover:text-white transition-colors p-1 rounded-md hover:bg-zinc-800"
+                style={{ pointerEvents: 'all' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="p-4 border-b border-zinc-700">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleCreateNewConversation();
+                }}
+                disabled={isLoadingConversation}
+                className="w-full flex items-center justify-center gap-2 p-3 bg-[#E0FE10] text-black rounded-lg hover:bg-[#d4e600] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{ pointerEvents: 'all' }}
+              >
+                <Plus size={16} />
+                {isLoadingConversation ? 'Creating...' : 'New Conversation'}
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto">
+              {allConversations.length === 0 ? (
+                <div className="p-4 text-center text-zinc-500">
+                  <MessageSquare size={48} className="mx-auto mb-2 opacity-50" />
+                  <p>No conversations yet</p>
+                  <p className="text-sm">Start chatting to create your first conversation!</p>
+                </div>
+              ) : (
+                <div className="space-y-2 p-4">
+                  {allConversations.map((conversation) => (
+                    <div
+                      key={conversation.id}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleSwitchConversation(conversation.id);
+                      }}
+                      className={`p-3 rounded-lg cursor-pointer transition-colors border ${
+                        conversation.id === currentConversationId
+                          ? 'bg-zinc-800 border-[#E0FE10] text-white'
+                          : 'bg-zinc-800/50 border-zinc-700 text-zinc-300 hover:bg-zinc-800'
+                      }`}
+                      style={{ pointerEvents: 'all' }}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-medium text-sm truncate">
+                            {conversation.title || 'Untitled Session'}
+                          </h4>
+                          <p className="text-xs text-zinc-500 mt-1">
+                            {conversation.messages.length} messages
+                          </p>
+                          {conversation.challengeData.challengeName && (
+                            <p className="text-xs text-zinc-400 mt-1 truncate">
+                              Round: {conversation.challengeData.challengeName}
+                            </p>
+                          )}
+                        </div>
+                        <div className="text-xs text-zinc-500 ml-2">
+                          {new Date(conversation.updatedAt).toLocaleDateString()}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </>
+    );
+
+    // Render in portal to avoid stacking-context issues
+    return createPortal(panelContent, document.body);
+  };
 
   return (
     <div className="min-h-screen bg-[#111417]">
@@ -7734,7 +7094,8 @@ const PulseProgrammingPage: NextPage<PulseProgrammingPageProps> = ({ metaData })
         pageOgUrl="https://fitwithpulse.ai/programming"
       />
       
-
+      {/* Conversation Panel */}
+      <ConversationPanel />
       
       {/* Add custom CSS for transitions and conversation panel */}
       <style jsx>{`
@@ -7811,29 +7172,7 @@ const PulseProgrammingPage: NextPage<PulseProgrammingPageProps> = ({ metaData })
         
         /* Prevent clicks from bubbling through backdrop */
         .conversation-backdrop {
-          pointer-events: none !important;
-        }
-        
-        /* Chat area slide-in animation */
-        @keyframes slideInFromRight {
-          from {
-            opacity: 0;
-            transform: translateX(100%);
-          }
-          to {
-            opacity: 1;
-            transform: translateX(0);
-          }
-        }
-        
-        .chat-area-enter {
-          animation: slideInFromRight 0.5s ease-out forwards;
-        }
-        
-        /* Prevent animation re-trigger when switching conversations */
-        .chat-area-visible {
-          opacity: 1;
-          transform: translateX(0);
+          pointer-events: all !important;
         }
       `}</style>
       
@@ -7875,6 +7214,69 @@ const PulseProgrammingPage: NextPage<PulseProgrammingPageProps> = ({ metaData })
       {/* Only show the actual app if the user has access AND has clicked "Get Started" */}
       {hasAccess && showApp && (
         <div className="app-container">
+          {/* Conversation Toggle Button - Fixed Position */}
+          <div className="fixed top-6 right-6 z-10">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowConversationPanel(true);
+              }}
+              disabled={showConversationPanel}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-black/20 backdrop-blur-sm border border-zinc-800 text-white hover:bg-black/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{ pointerEvents: 'all' }}
+            >
+              <MessageSquare size={18} />
+              <span className="text-sm font-medium">Conversations</span>
+              {allConversations.length > 0 && (
+                <span className="bg-[#E0FE10] text-black text-xs px-2 py-1 rounded-full">
+                  {allConversations.length}
+                </span>
+              )}
+            </button>
+          </div>
+
+          {/* User Authentication Badge - Fixed Position */}
+          <div className="fixed top-6 left-6 z-10">
+            <div className="group relative">
+              {currentUser ? (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-black/20 backdrop-blur-sm border border-zinc-800">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-r from-[#E0FE10] to-purple-500 flex items-center justify-center">
+                    {currentUser.profileImage?.profileImageURL ? (
+                      <img 
+                        src={currentUser.profileImage.profileImageURL} 
+                        alt={currentUser.displayName || currentUser.username}
+                        className="w-full h-full rounded-full object-cover"
+                      />
+                    ) : (
+                      <UserCircle className="w-5 h-5 text-black" />
+                    )}
+                  </div>
+                  <div className="hidden sm:block">
+                    <p className="text-white text-sm font-medium">
+                      {currentUser.displayName || currentUser.username}
+                    </p>
+                    <p className="text-zinc-400 text-xs">Programming Access</p>
+                  </div>
+                </div>
+              ) : (
+                <button 
+                  onClick={() => {
+                    // Redirect to main app for authentication
+                    window.location.href = '/';
+                  }}
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg bg-black/20 backdrop-blur-sm border border-zinc-800 hover:border-[#E0FE10]/50 transition-all"
+                >
+                  <div className="w-8 h-8 rounded-full bg-zinc-700 flex items-center justify-center">
+                    <UserCircle className="w-5 h-5 text-zinc-400" />
+                  </div>
+                  <div className="hidden sm:block">
+                    <p className="text-zinc-400 text-sm">Sign In</p>
+                    <p className="text-zinc-500 text-xs">Access your rounds</p>
+                  </div>
+                </button>
+              )}
+            </div>
+          </div>
 
           {/* Mobile view */}
           <div className="block lg:hidden bg-[#111417] min-h-screen">
@@ -7890,16 +7292,7 @@ const PulseProgrammingPage: NextPage<PulseProgrammingPageProps> = ({ metaData })
               </div>
               <div className="flex-grow overflow-y-auto p-6 scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-zinc-800 hover:scrollbar-thumb-zinc-600 pb-24">
                 <MobileChallengeSetupView
-                  setChallengeData={(data: ChallengeData) => {
-                    console.log('🔍 [DEBUG] Mobile setChallengeData wrapper called with:', {
-                      startDate: data.startDate,
-                      endDate: data.endDate,
-                      startTime: data.startDate?.getTime?.(),
-                      endTime: data.endDate?.getTime?.(),
-                      datesEqual: data.startDate?.getTime?.() === data.endDate?.getTime?.()
-                    });
-                    updateChallengeDataState(data, false); // Explicitly don't skip auto-save
-                  }}
+                  setChallengeData={updateChallengeDataState}
                   currentChallengeData={challengeData}
                   selectedStacks={selectedStacks}
                   setSelectedStacks={setSelectedStacks}
@@ -7941,33 +7334,19 @@ const PulseProgrammingPage: NextPage<PulseProgrammingPageProps> = ({ metaData })
           </div>
       
           {/* Desktop view */}
-          <div className="hidden lg:block bg-[#111417] flex">
-            <div className="flex-1">
-              <DesktopChallengeSetupView
-                challengeData={challengeData}
-                                      setChallengeData={(data: ChallengeData) => {
-                        updateChallengeDataState(data, false); // Explicitly don't skip auto-save
-                      }}
-                viewModel={constructedViewModel} // Use the correctly structured ViewModel
-                autoSave={debouncedAutoSave} // Pass auto-save function
-                currentConversationId={currentConversationId}
-                setCurrentConversationId={setCurrentConversationId}
-                refreshConversations={refreshConversations}
-                conversationHistory={conversationHistory}
-                setConversationHistory={setConversationHistory}
-                restoredUIState={restoredUIState}
-                isLoadingConversation={isLoadingConversation}
-                allConversations={allConversations}
-                handleCreateNewConversation={handleCreateNewConversation}
-                handleSwitchConversation={handleSwitchConversation}
-                isConversationPanelCollapsed={isConversationPanelCollapsed}
-                toggleConversationPanel={toggleConversationPanel}
-                isRightPanelCollapsed={isRightPanelCollapsed}
-                toggleRightPanel={toggleRightPanel}
-                isLeftPanelCollapsed={isLeftPanelCollapsed}
-                toggleLeftPanel={toggleLeftPanel}
-              />
-            </div>
+          <div className="hidden lg:block bg-[#111417]">
+            <DesktopChallengeSetupView
+              challengeData={challengeData}
+              setChallengeData={updateChallengeDataState}
+              viewModel={constructedViewModel} // Use the correctly structured ViewModel
+              autoSave={debouncedAutoSave} // Pass auto-save function
+              currentConversationId={currentConversationId}
+              setCurrentConversationId={setCurrentConversationId}
+              refreshConversations={refreshConversations}
+              conversationHistory={conversationHistory}
+              setConversationHistory={setConversationHistory}
+              restoredUIState={restoredUIState}
+            />
           </div>
         </div>
       )}

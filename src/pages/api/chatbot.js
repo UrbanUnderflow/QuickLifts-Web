@@ -179,18 +179,45 @@ SMART INFORMATION RECOGNITION:
 
 VALIDATION FLOW (only when ready to generate):
 - If user confirms ready to build, check validation status
-- Missing name → Ask: "What should we call this program?" → Return suggestedName
-- Missing description → Ask: "Brief description for this program?" → Return suggestedDescription  
-- Missing/invalid dates → Ask: "Start and end dates for the program?"
-- Default dates → Ask: "I see ${validationStatus.startDate} to ${validationStatus.endDate} (${validationStatus.programDuration} days). Use these dates?"
+- Missing name → Ask: "What should we call this program?" → If they provide name, set suggestedName + shouldAnimateName: true
+- Missing description → Ask: "Brief description for this program?" → If they provide description, set suggestedDescription + shouldAnimateDescription: true
+- Missing/invalid dates → Ask: "How long should the program be?" → Calculate dates and set suggestedStartDate + suggestedEndDate
+- Default dates → Ask: "I see ${validationStatus.startDate} to ${validationStatus.endDate} (${validationStatus.programDuration} days). How long should the program actually be?" → Calculate new dates
 - Once validated AND confirmed → set readyToGenerate: true
 
+INSTANT FORM FILLING TRIGGERS:
+- ANY mention of program duration → Calculate and set dates immediately
+- ANY mention of program name → Extract and set name immediately  
+- ANY description provided → Set description immediately
+- Don't wait for validation - fill fields as soon as user provides info
+
 SMART FORM FILLING:
-When user provides program name or description, auto-populate form fields:
+When user provides program name, description, or duration, auto-populate form fields:
+
+NAME DETECTION:
 - User says: "Sarah's Glute Plan" → Set suggestedName: "Sarah's Glute Plan", shouldAnimateName: true
-- User provides description → Set suggestedDescription: "[description]", shouldAnimateDescription: true
+- User mentions program names → Extract and set suggestedName, shouldAnimateName: true
+- Always acknowledge: "Perfect, I'll call it 'Sarah's Glute Plan'" or "Got it, updating the program name now."
+
+DESCRIPTION GENERATION:
+- User provides description → Set suggestedDescription: "[description]", shouldAnimateDescription: true  
 - AI creates description → Set suggestedDescription: "[AI description]", shouldAnimateDescription: true
-- Always acknowledge: "Perfect, I'll call it 'Sarah's Glute Plan'" or "Got it, updating the description now."
+- Always acknowledge: "Got it, updating the description now."
+
+DATE CALCULATION FROM DURATION:
+When user mentions duration (weeks, days, months), calculate exact dates:
+- "5 weeks" → startDate: today, endDate: today + 35 days
+- "4 weeks" → startDate: today, endDate: today + 28 days  
+- "2 months" → startDate: today, endDate: today + 60 days
+- "30 days" → startDate: today, endDate: today + 30 days
+
+CALCULATION EXAMPLES:
+If today is 2024-01-15:
+- "5 weeks" → suggestedStartDate: "2024-01-15", suggestedEndDate: "2024-02-19"
+- "4 weeks" → suggestedStartDate: "2024-01-15", suggestedEndDate: "2024-02-12"
+- "8 weeks" → suggestedStartDate: "2024-01-15", suggestedEndDate: "2024-03-11"
+
+Always acknowledge: "Got it, setting dates for a [X week] program starting today."
 
 RESPONSE TONE EXAMPLES:
 ❌ "That's a great question! I'd love to help you explore the best options for your client's upper body development journey..."
@@ -201,6 +228,7 @@ RESPONSE TONE EXAMPLES:
 
 RESPONSE FORMAT (JSON only):
 {
+  "thinking": "Brief explanation of your programming approach and reasoning (1-2 sentences)",
   "message": "Direct, confident response - max 2-3 sentences",
   "readyToGenerate": false,
   "questionCount": 1,
@@ -215,6 +243,56 @@ RESPONSE FORMAT (JSON only):
   "shouldEnableRestDays": false, // Set to true when rest days are configured
   "shouldAnimateName": false, // Set to true when name should be typed into form
   "shouldAnimateDescription": false // Set to true when description should be typed into form
+}
+
+FORM FILLING EXAMPLES:
+
+DURATION → DATE CALCULATION:
+IMPORTANT: Calculate dates dynamically using actual current date.
+
+DURATION CONVERSION:
+- 1 week = 7 days
+- 2 weeks = 14 days  
+- 3 weeks = 21 days
+- 4 weeks = 28 days
+- 5 weeks = 35 days
+- 6 weeks = 42 days
+- 8 weeks = 56 days
+- 1 month = 30 days
+- 2 months = 60 days
+
+User: "I want a 5-week program"
+Response: {
+  "message": "Got it, setting up a 5-week program starting today.",
+  "suggestedStartDate": "2024-01-15", // Today's date in YYYY-MM-DD format
+  "suggestedEndDate": "2024-02-19",   // Today + 35 days in YYYY-MM-DD format
+  "questionCount": 1
+}
+
+User: "Make it 4 weeks long"
+Response: {
+  "message": "Perfect, 4-week program locked in.",
+  "suggestedStartDate": "2024-01-15", // Today
+  "suggestedEndDate": "2024-02-12",   // Today + 28 days
+  "questionCount": 2
+}
+
+NAME EXTRACTION:
+User: "Let's call it Sarah's Glute Builder"
+Response: {
+  "message": "Perfect, I'll call it Sarah's Glute Builder.",
+  "suggestedName": "Sarah's Glute Builder",
+  "shouldAnimateName": true,
+  "questionCount": 2
+}
+
+DESCRIPTION SETTING:
+User: "It's for building stronger glutes and better hip mobility"
+Response: {
+  "message": "Got it, updating the description now.",
+  "suggestedDescription": "A focused program for building stronger glutes and improving hip mobility",
+  "shouldAnimateDescription": true,
+  "questionCount": 3
 }
 
 CRITICAL MESSAGE RULES:
@@ -332,6 +410,9 @@ ${userContext}${currentConfig}${conversationContext}`;
     }
 
     // Ensure required fields exist
+    if (typeof parsedResponse.thinking !== 'string') {
+      parsedResponse.thinking = '';
+    }
     if (!parsedResponse.message) {
       parsedResponse.message = aiResponse;
     }

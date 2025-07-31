@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import Head from 'next/head';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import { workoutService } from '../../api/firebase/workout/service';
-import { SweatlistCollection, UserChallenge, Challenge, ChallengeStatus, WorkoutStatus, WorkoutSession } from '../../api/firebase/workout/types';
+import { SweatlistCollection, UserChallenge, Challenge, ChallengeStatus, ChallengeType, WorkoutStatus, WorkoutSession } from '../../api/firebase/workout/types';
 import debounce from 'lodash.debounce';
 import { SweatlistIdentifiers } from '../../api/firebase/workout/types'; // Added SweatlistIdentifiers
 
@@ -63,6 +63,20 @@ const ChallengeStatusPage: React.FC = () => {
   const [userChallengesError, setUserChallengesError] = useState<string | null>(null);
   const [clearingAllStacks, setClearingAllStacks] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  
+  // Migration state
+  const [migrationLoading, setMigrationLoading] = useState(false);
+  const [migrationResult, setMigrationResult] = useState<{updated: number, errors: string[]} | null>(null);
+  const [migrationError, setMigrationError] = useState<string | null>(null);
+  
+  // Challenge Type editing state
+  const [isEditingChallengeType, setIsEditingChallengeType] = useState(false);
+  const [isUpdatingChallengeType, setIsUpdatingChallengeType] = useState(false);
+  
+  // Daily Step Goal editing state
+  const [isEditingDailyStepGoal, setIsEditingDailyStepGoal] = useState(false);
+  const [isUpdatingDailyStepGoal, setIsUpdatingDailyStepGoal] = useState(false);
+  const [dailyStepGoalInput, setDailyStepGoalInput] = useState('');
   
   // New state variables for workout testing
   const [testingWorkout, setTestingWorkout] = useState<{ [key: string]: boolean }>({});
@@ -333,6 +347,165 @@ const ChallengeStatusPage: React.FC = () => {
   const handleViewParticipantDetails = (userChallenge: UserChallenge) => {
     setSelectedUserChallengeDetails(userChallenge);
     setShowParticipantDetailsModal(true);
+  };
+
+  // --- Handler for challenge type migration ---
+  const handleChallengeTypeMigration = async () => {
+    if (!window.confirm('Are you sure you want to run the challenge type migration? This will update all challenges that don\'t have a challengeType to use "workout" as the default type.')) {
+      return;
+    }
+
+    setMigrationLoading(true);
+    setMigrationError(null);
+    setMigrationResult(null);
+
+    try {
+      const result = await workoutService.bulkUpdateChallengeType('workout');
+      setMigrationResult(result);
+      
+      // Refresh the challenges list to show updated data
+      const refreshedCollections = await workoutService.fetchAllAdminCollections();
+      setSweatlistChallenges(refreshedCollections);
+      setFilteredChallenges(refreshedCollections);
+      
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to run challenge type migration';
+      setMigrationError(errorMessage);
+      console.error('Migration error:', error);
+    } finally {
+      setMigrationLoading(false);
+    }
+  };
+
+  // --- Handler for updating challenge type ---
+  const handleChallengeTypeUpdate = async (newChallengeType: ChallengeType) => {
+    if (!selectedChallenge) return;
+    
+    const currentType = selectedChallenge.challenge?.challengeType;
+    if (currentType === newChallengeType) {
+      setIsEditingChallengeType(false);
+      return;
+    }
+
+    setIsUpdatingChallengeType(true);
+    
+    try {
+      console.log(`Updating challenge type from '${currentType || 'none'}' to '${newChallengeType}' for challenge ${selectedChallenge.id}`);
+      
+      // Update the challenge in Firebase using the same pattern as status update
+      const { db } = await import('../../api/firebase/config');
+      const { doc, updateDoc } = await import('firebase/firestore');
+      
+      const updateData = {
+        'challenge.challengeType': newChallengeType,
+        'challenge.updatedAt': new Date(),
+        'updatedAt': new Date()
+      };
+      
+      await updateDoc(doc(db, 'sweatlist-collection', selectedChallenge.id), updateData);
+      
+      // Update local state immediately
+      setSelectedChallenge(current => {
+        if (current && current.id === selectedChallenge.id && current.challenge) {
+          const updatedChallenge = {
+            ...current.challenge,
+            challengeType: newChallengeType,
+            updatedAt: new Date()
+          };
+          
+          return {
+            ...current,
+            challenge: updatedChallenge,
+            updatedAt: new Date()
+          } as SweatlistCollection;
+        }
+        return current;
+      });
+      
+      console.log(`Successfully updated challenge type to ${newChallengeType}`);
+      console.log('🔥 This should trigger the Firebase sync function to update all UserChallenges!');
+      
+    } catch (error) {
+      console.error(`Failed to update challenge type:`, error);
+      alert(`Error updating challenge type: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsUpdatingChallengeType(false);
+      setIsEditingChallengeType(false);
+    }
+  };
+
+  // --- Handler for updating daily step goal ---
+  const handleDailyStepGoalUpdate = async (newDailyStepGoal: number) => {
+    if (!selectedChallenge) return;
+    
+    const currentGoal = selectedChallenge.challenge?.dailyStepGoal;
+    if (currentGoal === newDailyStepGoal) {
+      setIsEditingDailyStepGoal(false);
+      return;
+    }
+
+    setIsUpdatingDailyStepGoal(true);
+    
+    try {
+      console.log(`Updating daily step goal from '${currentGoal || 'none'}' to '${newDailyStepGoal}' for challenge ${selectedChallenge.id}`);
+      
+      // Update the challenge in Firebase using the same pattern as challenge type update
+      const { db } = await import('../../api/firebase/config');
+      const { doc, updateDoc } = await import('firebase/firestore');
+      
+      const updateData = {
+        'challenge.dailyStepGoal': newDailyStepGoal,
+        'challenge.updatedAt': new Date(),
+        'updatedAt': new Date()
+      };
+      
+      await updateDoc(doc(db, 'sweatlist-collection', selectedChallenge.id), updateData);
+      
+      // Update local state immediately
+      setSelectedChallenge(current => {
+        if (current && current.id === selectedChallenge.id && current.challenge) {
+          const updatedChallenge = {
+            ...current.challenge,
+            dailyStepGoal: newDailyStepGoal,
+            updatedAt: new Date()
+          };
+          
+          return {
+            ...current,
+            challenge: updatedChallenge,
+            updatedAt: new Date()
+          } as SweatlistCollection;
+        }
+        return current;
+      });
+      
+      console.log(`Successfully updated daily step goal to ${newDailyStepGoal}`);
+      console.log('🔥 This should trigger the Firebase sync function to update all UserChallenges!');
+      
+    } catch (error) {
+      console.error(`Failed to update daily step goal:`, error);
+      alert(`Error updating daily step goal: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsUpdatingDailyStepGoal(false);
+      setIsEditingDailyStepGoal(false);
+      setDailyStepGoalInput('');
+    }
+  };
+
+  // --- Handler for starting daily step goal edit ---
+  const handleStartDailyStepGoalEdit = () => {
+    setDailyStepGoalInput((selectedChallenge?.challenge?.dailyStepGoal || 10000).toString());
+    setIsEditingDailyStepGoal(true);
+  };
+
+  // --- Handler for submitting daily step goal ---
+  const handleSubmitDailyStepGoal = () => {
+    const newGoal = parseInt(dailyStepGoalInput.trim());
+    if (isNaN(newGoal) || newGoal <= 0) {
+      alert('Please enter a valid positive number for daily step goal');
+      return;
+    }
+    handleDailyStepGoalUpdate(newGoal);
   };
 
   // Placeholder function for deleting a sweatlist
@@ -668,6 +841,81 @@ const ChallengeStatusPage: React.FC = () => {
               </button>
             </div>
             
+            {/* Challenge Type Migration Section */}
+            <div className="border-t border-gray-700 pt-6 mt-6">
+              <h3 className="text-lg font-medium mb-4 text-white flex items-center">
+                <span className="text-purple-400 mr-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+                    <path d="M21.731 2.269a2.625 2.625 0 00-3.712 0l-1.157 1.157 3.712 3.712 1.157-1.157a2.625 2.625 0 000-3.712zM19.513 8.199l-3.712-3.712-8.4 8.4a5.25 5.25 0 00-1.32 2.214l-.8 2.685a.75.75 0 00.933.933l2.685-.8a5.25 5.25 0 002.214-1.32l8.4-8.4z" />
+                    <path d="M5.25 5.25a3 3 0 00-3 3v10.5a3 3 0 003 3h10.5a3 3 0 003-3V13.5a.75.75 0 00-1.5 0v5.25a1.5 1.5 0 01-1.5 1.5H5.25a1.5 1.5 0 01-1.5-1.5V8.25a1.5 1.5 0 011.5-1.5h5.25a.75.75 0 000-1.5H5.25z" />
+                  </svg>
+                </span>
+                Challenge Type Migration
+              </h3>
+              
+              <p className="text-gray-400 text-sm mb-4">
+                Migrate existing challenges to use the new challengeType system. This will set challengeType to "workout" for all challenges that don't already have this field.
+              </p>
+              
+              <button
+                onClick={handleChallengeTypeMigration}
+                disabled={migrationLoading}
+                className={`px-4 py-3 rounded-lg font-medium transition ${
+                  migrationLoading
+                    ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                    : 'bg-purple-600 text-white border border-purple-700 hover:bg-purple-700'
+                }`}
+              >
+                <span className="flex items-center">
+                  {migrationLoading ? (
+                    <svg className="animate-spin h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                  ) : (
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                  )}
+                  {migrationLoading ? 'Running Migration...' : 'Run Challenge Type Migration'}
+                </span>
+              </button>
+              
+              {/* Migration Results */}
+              {migrationError && (
+                <div className="flex items-center gap-2 text-red-400 mt-4 p-3 bg-red-900/20 rounded-lg">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                  </svg>
+                  <span>{migrationError}</span>
+                </div>
+              )}
+
+              {migrationResult && (
+                <div className="flex items-center gap-2 text-green-400 mt-4 p-3 bg-green-900/20 rounded-lg">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                  <div className="flex-1">
+                    <span>Migration completed successfully</span>
+                    <div className="mt-2 text-sm">
+                      <p>Challenges updated: {migrationResult.updated}</p>
+                      {migrationResult.errors.length > 0 && (
+                        <div className="mt-2">
+                          <p className="text-orange-400">Errors encountered:</p>
+                          <ul className="text-xs text-gray-400 mt-1">
+                            {migrationResult.errors.map((error, index) => (
+                              <li key={index}>• {error}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+            
             {/* Update Result */}
             {updateError && (
               <div className="flex items-center gap-2 text-red-400 mt-4 p-3 bg-red-900/20 rounded-lg relative overflow-hidden mb-6">
@@ -937,6 +1185,152 @@ const ChallengeStatusPage: React.FC = () => {
                                              </div>
                                           </div>
                                         </div>
+                                        
+                                        {/* New Challenge Type Properties - Interactive */}
+                                        <div>
+                                          <div className="text-gray-400 text-xs mb-1">Challenge Type</div>
+                                          {!isEditingChallengeType ? (
+                                            <div className="text-gray-300 text-sm mt-1 flex items-center gap-2">
+                                              {selectedChallenge.challenge?.challengeType ? (
+                                                <span className="px-2 py-1 bg-purple-900/30 text-purple-400 rounded-full text-xs font-medium border border-purple-900 capitalize">
+                                                  {selectedChallenge.challenge.challengeType}
+                                                </span>
+                                              ) : (
+                                                <span className="text-orange-400 text-xs">Not Set (Legacy Challenge)</span>
+                                              )}
+                                              <button
+                                                onClick={() => setIsEditingChallengeType(true)}
+                                                disabled={isUpdatingChallengeType}
+                                                className="ml-2 text-blue-400 hover:text-blue-300 text-xs underline"
+                                                title="Click to edit challenge type"
+                                              >
+                                                {selectedChallenge.challenge?.challengeType ? 'Edit' : 'Set Type'}
+                                              </button>
+                                            </div>
+                                          ) : (
+                                            <div className="mt-1">
+                                              <select
+                                                onChange={(e) => handleChallengeTypeUpdate(e.target.value as ChallengeType)}
+                                                disabled={isUpdatingChallengeType}
+                                                defaultValue={selectedChallenge.challenge?.challengeType || ''}
+                                                className="bg-[#262a30] border border-gray-600 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-purple-400"
+                                                autoFocus
+                                              >
+                                                <option value="" disabled>Select Challenge Type</option>
+                                                <option value={ChallengeType.Workout}>Workout</option>
+                                                <option value={ChallengeType.Steps}>Steps</option>
+                                                <option value={ChallengeType.Calories}>Calories</option>
+                                                <option value={ChallengeType.Hybrid}>Hybrid</option>
+                                              </select>
+                                              <div className="flex gap-1 mt-1">
+                                                <button
+                                                  onClick={() => setIsEditingChallengeType(false)}
+                                                  disabled={isUpdatingChallengeType}
+                                                  className="text-xs text-gray-400 hover:text-gray-300 underline"
+                                                >
+                                                  Cancel
+                                                </button>
+                                                {isUpdatingChallengeType && (
+                                                  <span className="text-xs text-blue-400">Updating...</span>
+                                                )}
+                                              </div>
+                                            </div>
+                                          )}
+                                        </div>
+                                        
+                                        {/* Daily Step Goal - Interactive */}
+                                        <div>
+                                          <div className="text-gray-400 text-xs mb-1">Daily Step Goal</div>
+                                          {!isEditingDailyStepGoal ? (
+                                            <div className="text-gray-300 text-sm mt-1 flex items-center gap-2">
+                                              {selectedChallenge.challenge?.dailyStepGoal ? (
+                                                <span className="font-mono px-2 py-1 bg-blue-900/30 text-blue-400 rounded text-xs border border-blue-900">
+                                                  {selectedChallenge.challenge.dailyStepGoal.toLocaleString()} steps
+                                                </span>
+                                              ) : (
+                                                <span className="text-gray-500 text-xs">Not Set</span>
+                                              )}
+                                              <button
+                                                onClick={handleStartDailyStepGoalEdit}
+                                                disabled={isUpdatingDailyStepGoal}
+                                                className="ml-2 text-blue-400 hover:text-blue-300 text-xs underline"
+                                                title="Click to edit daily step goal"
+                                              >
+                                                {selectedChallenge.challenge?.dailyStepGoal ? 'Edit' : 'Set Goal'}
+                                              </button>
+                                            </div>
+                                          ) : (
+                                            <div className="mt-1 flex items-center gap-2">
+                                              <input
+                                                type="number"
+                                                value={dailyStepGoalInput}
+                                                onChange={(e) => setDailyStepGoalInput(e.target.value)}
+                                                onKeyPress={(e) => {
+                                                  if (e.key === 'Enter') {
+                                                    handleSubmitDailyStepGoal();
+                                                  } else if (e.key === 'Escape') {
+                                                    setIsEditingDailyStepGoal(false);
+                                                    setDailyStepGoalInput('');
+                                                  }
+                                                }}
+                                                disabled={isUpdatingDailyStepGoal}
+                                                placeholder="Enter daily step goal"
+                                                min="1"
+                                                max="100000"
+                                                className="bg-[#262a30] border border-gray-600 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-400 w-32"
+                                                autoFocus
+                                              />
+                                              <span className="text-gray-400 text-xs">steps</span>
+                                              <div className="flex gap-1">
+                                                <button
+                                                  onClick={handleSubmitDailyStepGoal}
+                                                  disabled={isUpdatingDailyStepGoal}
+                                                  className="text-xs text-green-400 hover:text-green-300 underline"
+                                                  title="Save (or press Enter)"
+                                                >
+                                                  Save
+                                                </button>
+                                                <button
+                                                  onClick={() => {
+                                                    setIsEditingDailyStepGoal(false);
+                                                    setDailyStepGoalInput('');
+                                                  }}
+                                                  disabled={isUpdatingDailyStepGoal}
+                                                  className="text-xs text-gray-400 hover:text-gray-300 underline"
+                                                  title="Cancel (or press Escape)"
+                                                >
+                                                  Cancel
+                                                </button>
+                                                {isUpdatingDailyStepGoal && (
+                                                  <span className="text-xs text-blue-400">Updating...</span>
+                                                )}
+                                              </div>
+                                            </div>
+                                          )}
+                                        </div>
+                                        
+                                        <div>
+                                          <div className="text-gray-400 text-xs">Total Step Goal</div>
+                                          <div className="text-gray-300 text-sm">
+                                            {selectedChallenge.challenge?.totalStepGoal ? (
+                                              <span className="font-mono">{selectedChallenge.challenge.totalStepGoal.toLocaleString()} steps</span>
+                                            ) : (
+                                              <span className="text-gray-500">Not Set</span>
+                                            )}
+                                          </div>
+                                        </div>
+                                        
+                                        <div>
+                                          <div className="text-gray-400 text-xs">Allowed Missed Days</div>
+                                          <div className="text-gray-300 text-sm">
+                                            {selectedChallenge.challenge?.allowedMissedDays !== undefined ? (
+                                              <span className="font-mono">{selectedChallenge.challenge.allowedMissedDays} days</span>
+                                            ) : (
+                                              <span className="text-gray-500">Not Set</span>
+                                            )}
+                                          </div>
+                                        </div>
+                                        
                                        </div>
                                     </div>
                                     <div className="space-y-4">
@@ -1321,6 +1715,112 @@ const ChallengeStatusPage: React.FC = () => {
                 <div className="md:col-span-2">
                   <p className="text-gray-400">Ignoring Notifications For:</p>
                   <p className="text-orange-400 font-mono break-all">{selectedUserChallengeDetails.ignoreNotifications.join(', ')}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Nested Challenge Details Section */}
+            <h4 className="text-gray-300 font-medium mb-3 mt-6 border-b border-gray-700 pb-1">Nested Challenge Details</h4>
+            <div className="bg-[#262a30] rounded-lg p-4 border border-gray-700 mb-6">
+              {selectedUserChallengeDetails.challenge ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <p className="text-gray-400">Challenge Title:</p>
+                    <p className="text-gray-200">{selectedUserChallengeDetails.challenge.title || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-400">Challenge Status:</p>
+                    <div className="mt-1">
+                      {selectedUserChallengeDetails.challenge.status === ChallengeStatus.Active ? (
+                        <span className="px-2 py-1 bg-green-900/30 text-green-400 rounded-full text-xs font-medium border border-green-900">Active</span>
+                      ) : selectedUserChallengeDetails.challenge.status === ChallengeStatus.Completed ? (
+                        <span className="px-2 py-1 bg-blue-900/30 text-blue-400 rounded-full text-xs font-medium border border-blue-900">Completed</span>
+                      ) : selectedUserChallengeDetails.challenge.status === ChallengeStatus.Published ? (
+                        <span className="px-2 py-1 bg-yellow-900/30 text-yellow-400 rounded-full text-xs font-medium border border-yellow-900">Published</span>
+                      ) : selectedUserChallengeDetails.challenge.status === ChallengeStatus.Draft ? (
+                        <span className="px-2 py-1 bg-gray-900/30 text-gray-400 rounded-full text-xs font-medium border border-gray-700">Draft</span>
+                      ) : (
+                        <span className="px-2 py-1 bg-gray-900/30 text-gray-400 rounded-full text-xs font-medium border border-gray-700">{selectedUserChallengeDetails.challenge.status || 'N/A'}</span>
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-gray-400">Challenge Type:</p>
+                    <div className="mt-1">
+                      {selectedUserChallengeDetails.challenge.challengeType ? (
+                        <span className="px-2 py-1 bg-purple-900/30 text-purple-400 rounded-full text-xs font-medium border border-purple-900 capitalize">
+                          {selectedUserChallengeDetails.challenge.challengeType}
+                        </span>
+                      ) : (
+                        <span className="text-orange-400 text-xs">Not Set (Legacy)</span>
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-gray-400">Daily Step Goal:</p>
+                    <p className="text-gray-200 font-mono">
+                      {selectedUserChallengeDetails.challenge.dailyStepGoal ? 
+                        `${selectedUserChallengeDetails.challenge.dailyStepGoal.toLocaleString()} steps` : 
+                        <span className="text-gray-500">Not Set</span>
+                      }
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-gray-400">Total Step Goal:</p>
+                    <p className="text-gray-200 font-mono">
+                      {selectedUserChallengeDetails.challenge.totalStepGoal ? 
+                        `${selectedUserChallengeDetails.challenge.totalStepGoal.toLocaleString()} steps` : 
+                        <span className="text-gray-500">Not Set</span>
+                      }
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-gray-400">Allowed Missed Days:</p>
+                    <p className="text-gray-200 font-mono">
+                      {selectedUserChallengeDetails.challenge.allowedMissedDays !== undefined ? 
+                        `${selectedUserChallengeDetails.challenge.allowedMissedDays} days` : 
+                        <span className="text-gray-500">Not Set</span>
+                      }
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-gray-400">Duration:</p>
+                    <p className="text-gray-200 font-mono">
+                      {selectedUserChallengeDetails.challenge.durationInDays ? 
+                        `${selectedUserChallengeDetails.challenge.durationInDays} days` : 
+                        <span className="text-gray-500">Not Set</span>
+                      }
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-gray-400">Challenge Ended:</p>
+                    <p className="text-gray-200">
+                      {selectedUserChallengeDetails.challenge.isChallengeEnded ? (
+                        <span className="text-red-400">Yes</span>
+                      ) : (
+                        <span className="text-green-400">No</span>
+                      )}
+                    </p>
+                  </div>
+                  <div className="md:col-span-2">
+                    <p className="text-gray-400">Challenge Dates:</p>
+                    <p className="text-gray-200 text-xs">
+                      <span className="font-mono">Start:</span> {formatDate(selectedUserChallengeDetails.challenge.startDate)} 
+                      <span className="mx-2">→</span>
+                      <span className="font-mono">End:</span> {formatDate(selectedUserChallengeDetails.challenge.endDate)}
+                    </p>
+                  </div>
+                  <div className="md:col-span-2">
+                    <p className="text-gray-400">Challenge Last Updated:</p>
+                    <p className="text-gray-200 text-xs font-mono">{formatDate(selectedUserChallengeDetails.challenge.updatedAt)}</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-orange-400 text-sm">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.728-.833-2.498 0L4.316 15.5c-.77.833.192 2.5 1.732 2.5z" />
+                  </svg>
+                  <span>No nested challenge object found in this UserChallenge</span>
                 </div>
               )}
             </div>

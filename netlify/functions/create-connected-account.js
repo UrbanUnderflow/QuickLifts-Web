@@ -117,20 +117,29 @@ const handler = async (event) => {
       }
     }
 
-    // Create new Stripe Connect Express account
-    console.log('[CreateConnectedAccount] Creating new Stripe Express account...');
+    // Create Stripe Express account with tax reporting capabilities
     const account = await stripe.accounts.create({
-      type: 'express',
-      country: 'US',
-      capabilities: {
-        card_payments: { requested: true },
-        transfers: { requested: true },
-      },
-      business_type: 'individual',
-      business_profile: {
-        product_description: 'Fitness training and workout programs',
-        url: `${process.env.SITE_URL || 'https://fitwithpulse.ai'}/profile/${userData.username}`,
-      },
+        type: 'express',
+        country: 'US',
+        capabilities: {
+            card_payments: { requested: true },
+            transfers: { requested: true },
+            tax_reporting_us_1099_k: { requested: true },
+            tax_reporting_us_1099_misc: { requested: true }
+        },
+        business_type: 'individual',
+        business_profile: {
+            product_description: 'Fitness training and workout programs',
+            url: `https://fitwithpulse.ai/profile/${userData.username}`,
+            mcc: '7991' // Physical fitness facilities
+        },
+        metadata: {
+            platform: 'pulse',
+            account_type: 'trainer',
+            user_id: userId,
+            username: userData.username,
+            purpose: 'creator_earnings'
+        }
     });
 
     console.log('[CreateConnectedAccount] Account created:', account.id);

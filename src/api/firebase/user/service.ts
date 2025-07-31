@@ -308,14 +308,11 @@ class UserService {
         // Fetch logs for this stack
         const logsRef = collection(doc.ref, 'logs');
         const logsSnapshot = await getDocs(logsRef);
-        console.log("log data:", logsSnapshot.docs.map(logDoc => logDoc.data()));
 
         const logs = logsSnapshot.docs.map(logDoc => 
           new ExerciseLog({ id: logDoc.id, ...logDoc.data() })
         );
   
-        console.log("logs after construction:", logs);
-
         return new Workout({
           ...stackData,
           id: doc.id,

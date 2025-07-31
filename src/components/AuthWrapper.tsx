@@ -61,7 +61,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
 
   // Add subscription routes to public routes
   const publicRoutes = [
-    '/about', '/creator', '/rounds', '/privacyPolicy', '/programming', '/100trainers', 
+    '/', '/about', '/creator', '/rounds', '/privacyPolicy', '/programming', '/100trainers', 
     '/starter-pack', '/stacks', '/moves', '/terms', '/press', '100Trainers',
     '/subscribe', '/download', '/morning-mobility-challenge', 'review', '/MoveAndFuelATL', '/investor', '/invest', '/GetInTouch', '/PulseCheck' // Add subscription page
   ].map(route => route?.toLowerCase());
@@ -76,16 +76,36 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
            publicPathPatterns.some(pattern => normalizedPath.startsWith(pattern));
   };
  
-    // Add debug useEffect to track currentUser changes
+    // Add debug useEffect to track currentUser changes with Safari-specific logging
   useEffect(() => {
-    console.log('Current User State:', {
+    const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+    console.log('🔍 [AuthWrapper] Current User State:', {
       user: currentUser,
       subscription: currentUser?.subscriptionType,
       isNull: currentUser === null,
+      isSafari,
+      userAgent: navigator.userAgent,
       timestamp: new Date().toISOString()
     });
 
-  }, [currentUser]);
+    // Safari-specific user state validation
+    if (isSafari && currentUser === null) {
+      console.warn('🚨 [AuthWrapper] Safari user state is null - checking Firebase auth state...');
+      const firebaseUser = auth.currentUser;
+      if (firebaseUser) {
+        console.log('🔄 [AuthWrapper] Safari: Firebase user exists but Redux state is null, triggering re-fetch');
+        userService.fetchUserFromFirestore(firebaseUser.uid).then(firestoreUser => {
+          if (firestoreUser) {
+            console.log('✅ [AuthWrapper] Safari: Re-fetched user successfully');
+            dispatch(setUser(firestoreUser.toDictionary()));
+          }
+        }).catch(error => {
+          console.error('❌ [AuthWrapper] Safari: Error re-fetching user:', error);
+        });
+      }
+    }
+
+  }, [currentUser, auth, dispatch]);
     
   // This is the main auth effect that should contain our logs
   useEffect(() => {

@@ -2,7 +2,7 @@ import React from 'react';
 import { useRouter } from 'next/router';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import Head from 'next/head';
-import { Users, Settings, BarChart2, Bell, FileText, CheckSquare, PlusSquare, Image as ImageIcon, Zap, TrendingUp, Dumbbell, Tag, Users2, Activity, Award, Clock, Gift, Edit3, Send, Server, ChevronDown, MessageCircle, Utensils, Code, Building2 } from 'lucide-react';
+import { Users, Settings, BarChart2, Bell, FileText, CheckSquare, PlusSquare, Image as ImageIcon, Zap, TrendingUp, Dumbbell, Tag, Users2, Activity, Award, Clock, Gift, Edit3, Send, Server, ChevronDown, MessageCircle, Utensils, Code, Building2, Kanban } from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '../../redux/store';
 import { toggleDevMode } from '../../redux/devModeSlice';
@@ -60,13 +60,19 @@ const adminCardsData = [
     link: "/admin/programmingAccess"
   },
   {
+    title: "Project Management",
+    description: "Kanban board for tracking development tasks and project progress across todo, in-progress, and done states.",
+    icon: <Kanban className="w-5 h-5" />,
+    link: "/admin/projectManagement"
+  },
+  {
     title: "Application Metrics",
     description: "Monitor key application metrics, user engagement, and performance data.",
     icon: <BarChart2 className="w-5 h-5" />,
     link: "/admin/metrics"
   },
   {
-    title: "Round Managment",
+    title: "Challenge Managment",
     description: "Oversee and manage ongoing rounds and their statuses.",
     icon: <Award className="w-5 h-5" />,
     link: "/admin/challengestatus"

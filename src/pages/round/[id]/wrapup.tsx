@@ -667,6 +667,84 @@ const RoundWrapup: React.FC = () => {
         <h2 className="text-xl text-zinc-400">{challenge?.title}</h2>
       </div>
 
+      {/* Prize Money Section - Only show if challenge has prize money enabled */}
+      {challenge?.prizeMoney?.isEnabled && challenge?.prizeMoney?.totalAmount > 0 && (
+        <div className="mb-12">
+          {(() => {
+            // Check if current user is a winner
+            const currentUserParticipant = participants.find(p => p.userId === currentUser?.id);
+            const sortedParticipants = [...participants].sort((a, b) => b.pulsePoints.totalPoints - a.pulsePoints.totalPoints);
+            const userRank = currentUserParticipant ? sortedParticipants.findIndex(p => p.userId === currentUserParticipant.userId) + 1 : 0;
+            
+            // Calculate if user won a prize based on prizeMoney configuration
+            const prizeDistribution = challenge.prizeMoney.calculatePrizeDistribution();
+            const isWinner = userRank > 0 && userRank <= prizeDistribution.length && prizeDistribution[userRank - 1] > 0;
+            const prizeAmount = isWinner ? prizeDistribution[userRank - 1] / 100 : 0; // Convert cents to dollars
+            
+            if (isWinner) {
+              return (
+                <div className="bg-gradient-to-r from-yellow-900/30 to-yellow-800/30 border border-yellow-500/50 rounded-xl p-6 text-center">
+                  <div className="mb-4">
+                    <div className="text-6xl mb-2">🏆💰</div>
+                    <h3 className="text-2xl font-bold text-yellow-400">Congratulations!</h3>
+                    <p className="text-lg text-yellow-200">You won {userRank === 1 ? '1st' : userRank === 2 ? '2nd' : userRank === 3 ? '3rd' : `${userRank}th`} place!</p>
+                  </div>
+                  
+                  <div className="bg-yellow-900/50 rounded-lg p-4 mb-6">
+                    <div className="text-3xl font-bold text-yellow-300">${prizeAmount.toFixed(2)}</div>
+                    <div className="text-yellow-200">Prize Money Earned</div>
+                  </div>
+                  
+                  <button
+                    onClick={() => router.push(`/winner/connect-account?challengeId=${challenge.id}&placement=${userRank}`)}
+                    className="bg-yellow-500 hover:bg-yellow-400 text-black font-bold py-3 px-8 rounded-xl transition-colors duration-200 text-lg"
+                  >
+                    💰 Redeem Your Prize
+                  </button>
+                  
+                  <p className="text-sm text-yellow-200 mt-4">
+                    Set up your payment account to receive your winnings!
+                  </p>
+                </div>
+              );
+            } else {
+              // Show prize pool info for non-winners
+              const totalPrize = challenge.prizeMoney.totalAmount / 100;
+              const topWinners = sortedParticipants.slice(0, Math.min(3, prizeDistribution.filter(p => p > 0).length));
+              
+              return (
+                <div className="bg-zinc-800 rounded-xl p-6 text-center">
+                  <div className="mb-4">
+                    <div className="text-4xl mb-2">🏆</div>
+                    <h3 className="text-xl font-bold">Prize Challenge Results</h3>
+                  </div>
+                  
+                  <div className="bg-zinc-700 rounded-lg p-4 mb-4">
+                    <div className="text-2xl font-bold text-zinc-200">${totalPrize.toFixed(2)}</div>
+                    <div className="text-zinc-400">Total Prize Pool</div>
+                  </div>
+                  
+                  <div className="text-sm text-zinc-400">
+                    {topWinners.map((winner, index) => {
+                      const winnerPrize = prizeDistribution[index] / 100;
+                      if (winnerPrize > 0) {
+                        return (
+                          <div key={winner.userId} className="flex justify-between items-center py-1">
+                            <span>{index + 1}. {winner.username}</span>
+                            <span className="text-yellow-400">${winnerPrize.toFixed(2)}</span>
+                          </div>
+                        );
+                      }
+                      return null;
+                    })}
+                  </div>
+                </div>
+              );
+            }
+          })()}
+        </div>
+      )}
+
       {/* Podium Section */}
       <div className="mb-12">
         <div className="flex justify-center items-end space-x-4">
