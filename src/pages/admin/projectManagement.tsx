@@ -151,6 +151,10 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, isOpen, onClose
   const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
   const [editingSubtaskTitle, setEditingSubtaskTitle] = useState('');
 
+  // Drag and drop states
+  const [draggedSubtaskId, setDraggedSubtaskId] = useState<string | null>(null);
+  const [dropPosition, setDropPosition] = useState<{ taskId: string; position: 'above' | 'below' } | null>(null);
+
   // Project and Theme autocomplete states
   const [existingProjects, setExistingProjects] = useState<string[]>([]);
   const [existingThemes, setExistingThemes] = useState<string[]>([]);
@@ -312,13 +316,17 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, isOpen, onClose
   };
 
   // Subtask management functions
-  const handleAddSubtask = async () => {
+  const handleAddSubtask = async (continueAdding = false) => {
     if (!task || !newSubtaskTitle.trim()) return;
     
     try {
       await kanbanService.addSubtask(task.id, newSubtaskTitle.trim());
       setNewSubtaskTitle('');
-      setIsAddingSubtask(false);
+      
+      if (!continueAdding) {
+        setIsAddingSubtask(false);
+      }
+      
       // Refresh the task list
       if (onRefresh) {
         onRefresh();
@@ -326,6 +334,10 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, isOpen, onClose
     } catch (error) {
       console.error('Error adding subtask:', error);
     }
+  };
+
+  const handleAddSubtaskAndContinue = () => {
+    handleAddSubtask(true);
   };
 
   const handleToggleSubtask = async (subtaskId: string) => {
@@ -382,6 +394,78 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, isOpen, onClose
   const cancelEditingSubtask = () => {
     setEditingSubtaskId(null);
     setEditingSubtaskTitle('');
+  };
+
+  // Drag and drop handlers for subtasks
+  const handleSubtaskDragStart = (e: React.DragEvent, subtaskId: string) => {
+    setDraggedSubtaskId(subtaskId);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleSubtaskDragOver = (e: React.DragEvent, subtaskId: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    
+    // Calculate if we're dropping above or below the middle of the element
+    const rect = e.currentTarget.getBoundingClientRect();
+    const midY = rect.top + rect.height / 2;
+    const position = e.clientY < midY ? 'above' : 'below';
+    
+    setDropPosition({ taskId: subtaskId, position });
+  };
+
+  const handleSubtaskDragLeave = (e: React.DragEvent) => {
+    // Only clear if we're actually leaving the drop zone
+    const rect = e.currentTarget.getBoundingClientRect();
+    if (
+      e.clientX < rect.left ||
+      e.clientX > rect.right ||
+      e.clientY < rect.top ||
+      e.clientY > rect.bottom
+    ) {
+      setDropPosition(null);
+    }
+  };
+
+  const handleSubtaskDrop = async (e: React.DragEvent, targetSubtaskId: string) => {
+    e.preventDefault();
+    
+    if (!task || !draggedSubtaskId || !dropPosition || draggedSubtaskId === targetSubtaskId) {
+      setDraggedSubtaskId(null);
+      setDropPosition(null);
+      return;
+    }
+
+    try {
+      const currentSubtasks = [...task.subtasks];
+      const draggedIndex = currentSubtasks.findIndex(s => s.id === draggedSubtaskId);
+      const targetIndex = currentSubtasks.findIndex(s => s.id === targetSubtaskId);
+
+      if (draggedIndex === -1 || targetIndex === -1) return;
+
+      // Remove the dragged item
+      const [draggedSubtask] = currentSubtasks.splice(draggedIndex, 1);
+      
+      // Calculate the insertion index based on drop position
+      const adjustedTargetIndex = draggedIndex < targetIndex ? targetIndex - 1 : targetIndex;
+      const insertIndex = dropPosition.position === 'above' ? adjustedTargetIndex : adjustedTargetIndex + 1;
+      
+      // Insert the item at the calculated position
+      currentSubtasks.splice(insertIndex, 0, draggedSubtask);
+
+      // Update the task with the new subtask order
+      await kanbanService.reorderSubtasks(task.id, currentSubtasks);
+      
+      // Refresh the task list
+      if (onRefresh) {
+        onRefresh();
+      }
+    } catch (error) {
+      console.error('Error reordering subtasks:', error);
+    } finally {
+      setDraggedSubtaskId(null);
+      setDropPosition(null);
+    }
   };
 
   const formatDate = (date: Date) => {
@@ -548,18 +632,40 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, isOpen, onClose
                   {task.subtasks.map((subtask) => (
                     <div
                       key={subtask.id}
-                      className="flex items-center gap-3 p-2 bg-[#1a1e24] rounded-lg group"
-                    >
-                      <button
-                        onClick={() => handleToggleSubtask(subtask.id)}
-                        className="flex-shrink-0"
-                      >
-                        {subtask.completed ? (
-                          <CheckSquare className="w-4 h-4 text-green-400" />
+                      draggable={!editingSubtaskId && editingSubtaskId !== subtask.id}
+                      onDragStart={(e) => handleSubtaskDragStart(e, subtask.id)}
+                      onDragOver={(e) => handleSubtaskDragOver(e, subtask.id)}
+                      onDragLeave={(e) => handleSubtaskDragLeave(e)}
+                      onDrop={(e) => handleSubtaskDrop(e, subtask.id)}
+                      className={`flex items-center gap-3 p-2 bg-[#1a1e24] rounded-lg group transition-all relative ${
+                        editingSubtaskId === subtask.id 
+                          ? 'cursor-default'
+                          : 'cursor-move'
+                      } ${
+                        draggedSubtaskId === subtask.id 
+                          ? 'opacity-50 scale-95' 
+                          : 'border border-transparent'
+                      }`}
+                                          >
+                        {/* Drag handle - always visible */}
+                        {editingSubtaskId !== subtask.id ? (
+                          <div className="flex-shrink-0 cursor-grab active:cursor-grabbing p-1 hover:bg-zinc-700/50 rounded transition-colors">
+                            <GripVertical className="w-3 h-3 text-zinc-500 hover:text-zinc-400" />
+                          </div>
                         ) : (
-                          <Square className="w-4 h-4 text-zinc-500 hover:text-zinc-400" />
+                          <div className="flex-shrink-0 w-5 h-5"></div>
                         )}
-                      </button>
+                        
+                        <button
+                          onClick={() => handleToggleSubtask(subtask.id)}
+                          className="flex-shrink-0"
+                        >
+                          {subtask.completed ? (
+                            <CheckSquare className="w-4 h-4 text-green-400" />
+                          ) : (
+                            <Square className="w-4 h-4 text-zinc-500 hover:text-zinc-400" />
+                          )}
+                        </button>
                       
                       {editingSubtaskId === subtask.id ? (
                         <div className="flex-1 flex items-center gap-2">
@@ -613,6 +719,15 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, isOpen, onClose
                           </div>
                         </>
                       )}
+                      
+                      {/* Drop line indicator */}
+                      {dropPosition && dropPosition.taskId === subtask.id && (
+                        <div
+                          className={`absolute left-0 right-0 h-0.5 bg-blue-500 z-10 ${
+                            dropPosition.position === 'above' ? '-top-px' : '-bottom-px'
+                          }`}
+                        />
+                      )}
                     </div>
                   ))}
 
@@ -626,7 +741,7 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, isOpen, onClose
                         onChange={(e) => setNewSubtaskTitle(e.target.value)}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
-                            handleAddSubtask();
+                            handleAddSubtaskAndContinue();
                           } else if (e.key === 'Escape') {
                             setIsAddingSubtask(false);
                             setNewSubtaskTitle('');
@@ -637,7 +752,7 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, isOpen, onClose
                         autoFocus
                       />
                       <button
-                        onClick={handleAddSubtask}
+                        onClick={() => handleAddSubtask(false)}
                         className="p-1 text-green-400 hover:text-green-300"
                       >
                         <CheckSquare className="w-3 h-3" />
@@ -1376,6 +1491,24 @@ const ProjectManagement: React.FC = () => {
     }
   }, []);
 
+  // Function to refresh tasks and update selected task in modal
+  const refreshTasksAndUpdateModal = useCallback(async () => {
+    try {
+      const fetchedTasks = await kanbanService.fetchAllTasks();
+      setTasks(fetchedTasks);
+      
+      // Update selectedTask if it exists and the modal is open
+      if (selectedTask && taskDetailModalOpen) {
+        const updatedSelectedTask = fetchedTasks.find(task => task.id === selectedTask.id);
+        if (updatedSelectedTask) {
+          setSelectedTask(updatedSelectedTask);
+        }
+      }
+    } catch (error) {
+      console.error('Error refreshing tasks:', error);
+    }
+  }, [selectedTask, taskDetailModalOpen]);
+
   useEffect(() => {
     fetchTasks();
   }, [fetchTasks]);
@@ -1658,7 +1791,7 @@ const ProjectManagement: React.FC = () => {
             onClose={() => setTaskDetailModalOpen(false)}
             onSave={handleSaveTask}
             onDelete={handleDeleteTask}
-            onRefresh={fetchTasks}
+            onRefresh={refreshTasksAndUpdateModal}
           />
         </div>
       </div>

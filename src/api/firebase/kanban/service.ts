@@ -246,6 +246,19 @@ class KanbanService {
   }
 
   /**
+   * Reorder subtasks within a task
+   */
+  async reorderSubtasks(taskId: string, newSubtaskOrder: Subtask[]): Promise<void> {
+    try {
+      await this.updateTask(taskId, { subtasks: newSubtaskOrder });
+      console.log('Subtasks reordered for task:', taskId);
+    } catch (error) {
+      console.error('Error reordering subtasks:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Fetch tasks by project
    */
   async fetchTasksByProject(project: string): Promise<KanbanTask[]> {
