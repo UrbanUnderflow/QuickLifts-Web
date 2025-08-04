@@ -15,8 +15,22 @@ const pageFileNames = [
   'createStack', 'subscription-success', 'subscribe', 'mobility', 'morningMobilityRedirect', 
   'join-challenge', 'index', 'download', 'trim-video', 'create', 'rounds', 
   'privacyPolicy', 'terms', 'stacks', 'moves', 'update-challenge-status', 
-  'user-dashboard', 'Support', 'connect', 'notification-test', 'creator', 'press', 'MoveAndFuelATL', 'investor', 'invest'
+  'user-dashboard', 'Support', 'connect', 'notification-test', 'creator', 'press', 'MoveAndFuelATL', 'investor', 'invest',
+  'winner--connect-account', 'winner--success', 'winner--error'
 ].sort(); // Sort it once here
+
+// Helper functions to handle forward slashes in page IDs
+const encodePageId = (pageId: string): string => {
+  return pageId.replace(/\//g, '--');
+};
+
+const decodePageId = (encodedPageId: string): string => {
+  return encodedPageId.replace(/--/g, '/');
+};
+
+const getDisplayName = (pageId: string): string => {
+  return decodePageId(pageId);
+};
 
 const ManageMetaPage: React.FC = () => {
   const [pageId, setPageId] = useState(''); // This will store the final selected Page ID
@@ -101,20 +115,16 @@ const ManageMetaPage: React.FC = () => {
     }
   };
 
-  const fetchMetaData = useCallback(async (idToFetch?: string) => {
-    const currentId = idToFetch || pageId;
-    if (!currentId.trim()) {
-      setFormData({});
-      setOgImageFile(null);
-      setTwitterImageFile(null);
-      setOgImageUrl(null);
-      setTwitterImageUrl(null);
-      return;
-    }
+  const fetchPageData = useCallback(async () => {
+    const currentId = pageId;
+    if (!currentId) return;
+
     setIsFetching(true);
     resetMessages();
     try {
-      const data = await adminMethods.getPageMetaData(currentId.trim());
+      // Encode the page ID for Firestore (replace / with --)
+      const encodedPageId = encodePageId(currentId.trim());
+      const data = await adminMethods.getPageMetaData(encodedPageId);
       if (data) {
         setFormData(data);
         setOgImageUrl(data.ogImage || null);
@@ -134,7 +144,7 @@ const ManageMetaPage: React.FC = () => {
     } finally {
       setIsFetching(false);
     }
-  }, [pageId]); // Make sure pageId is a dependency if it's used as fallback
+  }, [pageId]);
 
   const handlePageIdInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
@@ -158,7 +168,7 @@ const ManageMetaPage: React.FC = () => {
     setPageIdInputValue(selectedPageId);
     setIsDropdownOpen(false);
     resetMessages();
-    fetchMetaData(selectedPageId); // Fetch data for the newly selected page ID
+    // Set the page ID first, then fetch data will be triggered by useEffect
     setFormData({}); // Clear previous form data immediately
     setOgImageFile(null);
     setTwitterImageFile(null);
@@ -179,6 +189,13 @@ const ManageMetaPage: React.FC = () => {
     };
   }, []);
 
+  // Fetch data when pageId changes
+  useEffect(() => {
+    if (pageId.trim()) {
+      fetchPageData();
+    }
+  }, [pageId, fetchPageData]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!pageId.trim()) {
@@ -188,10 +205,13 @@ const ManageMetaPage: React.FC = () => {
     setIsLoading(true);
     resetMessages();
 
-    let finalOgImageUrl = formData.ogImage || null;
-    let finalTwitterImageUrl = formData.twitterImage || null;
-
     try {
+      // Use encoded page ID for Firestore operations
+      const encodedPageId = encodePageId(pageId.trim());
+      
+      let finalOgImageUrl = formData.ogImage;
+      let finalTwitterImageUrl = formData.twitterImage;
+
       // Handle OG Image Upload
       if (ogImageFile) {
         setIsUploadingOg(true);
@@ -199,12 +219,12 @@ const ManageMetaPage: React.FC = () => {
         if (formData.ogImage && formData.ogImage !== ogImageUrl) {
             await deleteFile(formData.ogImage);
         }
-        finalOgImageUrl = await uploadFile(ogImageFile, `metaData/${pageId}/ogImage_${Date.now()}`);
+        finalOgImageUrl = await uploadFile(ogImageFile, `metaData/${encodedPageId}/ogImage_${Date.now()}`);
         setIsUploadingOg(false);
       } else if (finalOgImageUrl && finalOgImageUrl !== ogImageUrl) { 
         // This means the user removed the image without uploading a new one
         await deleteFile(finalOgImageUrl);
-        finalOgImageUrl = null;
+        finalOgImageUrl = undefined;
       }
 
 
@@ -214,40 +234,39 @@ const ManageMetaPage: React.FC = () => {
          if (formData.twitterImage && formData.twitterImage !== twitterImageUrl) {
             await deleteFile(formData.twitterImage);
         }
-        finalTwitterImageUrl = await uploadFile(twitterImageFile, `metaData/${pageId}/twitterImage_${Date.now()}`);
+        finalTwitterImageUrl = await uploadFile(twitterImageFile, `metaData/${encodedPageId}/twitterImage_${Date.now()}`);
         setIsUploadingTwitter(false);
       } else if (finalTwitterImageUrl && finalTwitterImageUrl !== twitterImageUrl) {
         await deleteFile(finalTwitterImageUrl);
-        finalTwitterImageUrl = null;
+        finalTwitterImageUrl = undefined;
       }
 
       const dataToSave: PageMetaData = {
         ...formData,
-        pageId: pageId.trim(),
+        pageId: pageId.trim(), // Store the decoded page ID in the metadata
         ogImage: finalOgImageUrl || undefined, // Store undefined if null
         twitterImage: finalTwitterImageUrl || undefined, // Store undefined if null
         lastUpdated: Timestamp.now(),
       };
 
-      const success = await adminMethods.setPageMetaData(dataToSave);
+      // Use encoded page ID for the Firestore document ID
+      const success = await adminMethods.setPageMetaData({ ...dataToSave, pageId: encodedPageId });
       if (success) {
         setSuccessMessage('Meta data saved successfully!');
         setFormData(dataToSave); // Update local state with saved data (including new URLs)
         setOgImageFile(null); // Clear file input
         setTwitterImageFile(null); // Clear file input
-        // Update preview URLs to reflect saved state
-        setOgImageUrl(finalOgImageUrl); 
-        setTwitterImageUrl(finalTwitterImageUrl);
+        // Keep current ogImageUrl and twitterImageUrl for display
       } else {
         setErrorMessage('Failed to save meta data.');
       }
     } catch (error) {
       console.error('Error saving meta data:', error);
-      setErrorMessage('An error occurred while saving.');
-      setIsUploadingOg(false);
-      setIsUploadingTwitter(false);
+      setErrorMessage('Error occurred while saving meta data.');
     } finally {
       setIsLoading(false);
+      setIsUploadingOg(false);
+      setIsUploadingTwitter(false);
     }
   };
   
@@ -347,10 +366,10 @@ const ManageMetaPage: React.FC = () => {
                         filteredPageIds.map(name => (
                           <li
                             key={name}
-                            onClick={() => handlePageIdSelect(name)}
+                            onClick={() => handlePageIdSelect(getDisplayName(name))}
                             className="px-4 py-2 text-white hover:bg-[#31363c] cursor-pointer"
                           >
-                            {name}
+                            {getDisplayName(name)}
                           </li>
                         ))
                       ) : (
