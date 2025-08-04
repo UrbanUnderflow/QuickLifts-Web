@@ -13,7 +13,7 @@ import {
   serverTimestamp
 } from 'firebase/firestore';
 import { db } from '../config';
-import { KanbanTask, KanbanTaskData } from './types';
+import { KanbanTask, KanbanTaskData, Subtask } from './types';
 import { adminMethods } from '../admin/methods';
 
 class KanbanService {
@@ -134,6 +134,113 @@ class KanbanService {
       await this.updateTask(taskId, { status });
     } catch (error) {
       console.error('Error updating task status:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Add a subtask to a task
+   */
+  async addSubtask(taskId: string, subtaskTitle: string): Promise<void> {
+    try {
+      const taskRef = doc(db, 'kanbanTasks', taskId);
+      const taskDoc = await getDoc(taskRef);
+      
+      if (!taskDoc.exists()) {
+        throw new Error('Task not found');
+      }
+
+      const task = KanbanTask.fromFirestore(taskDoc.data(), taskId);
+      const newSubtask: Subtask = {
+        id: Date.now().toString(), // Simple ID generation for subtasks
+        title: subtaskTitle,
+        completed: false,
+        createdAt: new Date()
+      };
+
+      const updatedSubtasks = [...task.subtasks, newSubtask];
+      await this.updateTask(taskId, { subtasks: updatedSubtasks });
+      
+      console.log('Subtask added successfully to task:', taskId);
+    } catch (error) {
+      console.error('Error adding subtask:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update a subtask within a task
+   */
+  async updateSubtask(taskId: string, subtaskId: string, updates: Partial<Pick<Subtask, 'title' | 'completed'>>): Promise<void> {
+    try {
+      const taskRef = doc(db, 'kanbanTasks', taskId);
+      const taskDoc = await getDoc(taskRef);
+      
+      if (!taskDoc.exists()) {
+        throw new Error('Task not found');
+      }
+
+      const task = KanbanTask.fromFirestore(taskDoc.data(), taskId);
+      const updatedSubtasks = task.subtasks.map(subtask => 
+        subtask.id === subtaskId 
+          ? { ...subtask, ...updates }
+          : subtask
+      );
+
+      await this.updateTask(taskId, { subtasks: updatedSubtasks });
+      console.log('Subtask updated successfully:', subtaskId);
+    } catch (error) {
+      console.error('Error updating subtask:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete a subtask from a task
+   */
+  async deleteSubtask(taskId: string, subtaskId: string): Promise<void> {
+    try {
+      const taskRef = doc(db, 'kanbanTasks', taskId);
+      const taskDoc = await getDoc(taskRef);
+      
+      if (!taskDoc.exists()) {
+        throw new Error('Task not found');
+      }
+
+      const task = KanbanTask.fromFirestore(taskDoc.data(), taskId);
+      const updatedSubtasks = task.subtasks.filter(subtask => subtask.id !== subtaskId);
+
+      await this.updateTask(taskId, { subtasks: updatedSubtasks });
+      console.log('Subtask deleted successfully:', subtaskId);
+    } catch (error) {
+      console.error('Error deleting subtask:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Toggle subtask completion status
+   */
+  async toggleSubtaskCompletion(taskId: string, subtaskId: string): Promise<void> {
+    try {
+      const taskRef = doc(db, 'kanbanTasks', taskId);
+      const taskDoc = await getDoc(taskRef);
+      
+      if (!taskDoc.exists()) {
+        throw new Error('Task not found');
+      }
+
+      const task = KanbanTask.fromFirestore(taskDoc.data(), taskId);
+      const updatedSubtasks = task.subtasks.map(subtask => 
+        subtask.id === subtaskId 
+          ? { ...subtask, completed: !subtask.completed }
+          : subtask
+      );
+
+      await this.updateTask(taskId, { subtasks: updatedSubtasks });
+      console.log('Subtask completion toggled:', subtaskId);
+    } catch (error) {
+      console.error('Error toggling subtask completion:', error);
       throw error;
     }
   }

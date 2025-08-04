@@ -3,7 +3,7 @@ import Head from 'next/head';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import { kanbanService } from '../../api/firebase/kanban/service';
 import { KanbanTask } from '../../api/firebase/kanban/types';
-import { Plus, Edit, Trash2, Calendar, User, Tag, GripVertical, Clock, Filter, ChevronDown } from 'lucide-react';
+import { Plus, Edit, Trash2, Calendar, User, Tag, GripVertical, Clock, Filter, ChevronDown, CheckSquare, Square, X } from 'lucide-react';
 import { collection, query, orderBy, getDocs } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
 import { adminMethods } from '../../api/firebase/admin/methods';
@@ -71,6 +71,25 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onDragStart
       {task.description && (
         <p className="text-zinc-400 text-xs mb-3 line-clamp-2">{task.description}</p>
       )}
+
+      {/* Subtask progress indicator */}
+      {task.subtasks.length > 0 && (
+        <div className="mb-3">
+          <div className="flex items-center justify-between text-xs text-zinc-500 mb-1">
+            <span className="flex items-center gap-1">
+              <CheckSquare className="w-3 h-3" />
+              Subtasks
+            </span>
+            <span>{task.getSubtaskProgress().completed}/{task.getSubtaskProgress().total}</span>
+          </div>
+          <div className="w-full bg-zinc-700 rounded-full h-1">
+            <div
+              className="bg-blue-500 h-1 rounded-full transition-all duration-300"
+              style={{ width: `${task.getSubtaskProgress().percentage}%` }}
+            ></div>
+          </div>
+        </div>
+      )}
       
       <div className="space-y-2">
         {task.project && (
@@ -112,9 +131,10 @@ interface TaskDetailModalProps {
   onClose: () => void;
   onSave: (task: Partial<KanbanTask>) => void;
   onDelete: (taskId: string) => void;
+  onRefresh?: () => void;
 }
 
-const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, isOpen, onClose, onSave, onDelete }) => {
+const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, isOpen, onClose, onSave, onDelete, onRefresh }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
@@ -124,6 +144,12 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, isOpen, onClose
     assignee: '',
     status: 'todo' as TaskStatus
   });
+
+  // Subtask management states
+  const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
+  const [isAddingSubtask, setIsAddingSubtask] = useState(false);
+  const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null);
+  const [editingSubtaskTitle, setEditingSubtaskTitle] = useState('');
 
   // Project and Theme autocomplete states
   const [existingProjects, setExistingProjects] = useState<string[]>([]);
@@ -285,6 +311,79 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, isOpen, onClose
     }
   };
 
+  // Subtask management functions
+  const handleAddSubtask = async () => {
+    if (!task || !newSubtaskTitle.trim()) return;
+    
+    try {
+      await kanbanService.addSubtask(task.id, newSubtaskTitle.trim());
+      setNewSubtaskTitle('');
+      setIsAddingSubtask(false);
+      // Refresh the task list
+      if (onRefresh) {
+        onRefresh();
+      }
+    } catch (error) {
+      console.error('Error adding subtask:', error);
+    }
+  };
+
+  const handleToggleSubtask = async (subtaskId: string) => {
+    if (!task) return;
+    
+    try {
+      await kanbanService.toggleSubtaskCompletion(task.id, subtaskId);
+      // Refresh the task list
+      if (onRefresh) {
+        onRefresh();
+      }
+    } catch (error) {
+      console.error('Error toggling subtask:', error);
+    }
+  };
+
+  const handleEditSubtask = async (subtaskId: string) => {
+    if (!task || !editingSubtaskTitle.trim()) return;
+    
+    try {
+      await kanbanService.updateSubtask(task.id, subtaskId, { title: editingSubtaskTitle.trim() });
+      setEditingSubtaskId(null);
+      setEditingSubtaskTitle('');
+      // Refresh the task list
+      if (onRefresh) {
+        onRefresh();
+      }
+    } catch (error) {
+      console.error('Error editing subtask:', error);
+    }
+  };
+
+  const handleDeleteSubtask = async (subtaskId: string) => {
+    if (!task) return;
+    
+    if (confirm('Are you sure you want to delete this subtask?')) {
+      try {
+        await kanbanService.deleteSubtask(task.id, subtaskId);
+        // Refresh the task list
+        if (onRefresh) {
+          onRefresh();
+        }
+      } catch (error) {
+        console.error('Error deleting subtask:', error);
+      }
+    }
+  };
+
+  const startEditingSubtask = (subtaskId: string, currentTitle: string) => {
+    setEditingSubtaskId(subtaskId);
+    setEditingSubtaskTitle(currentTitle);
+  };
+
+  const cancelEditingSubtask = () => {
+    setEditingSubtaskId(null);
+    setEditingSubtaskTitle('');
+  };
+
   const formatDate = (date: Date) => {
     return new Intl.DateTimeFormat('en-US', {
       month: 'long',
@@ -419,6 +518,164 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, isOpen, onClose
                     <p className="text-xs text-zinc-500 mt-1">Updated: {formatDate(task.updatedAt)}</p>
                   )}
                 </div>
+              </div>
+
+              {/* Subtasks Section */}
+              <div className="bg-[#262a30] rounded-lg p-4">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <CheckSquare className="w-4 h-4 text-blue-400" />
+                    <span className="text-sm font-medium text-zinc-400">Subtasks</span>
+                    {task.subtasks.length > 0 && (
+                      <span className="text-xs text-zinc-500">
+                        {task.getSubtaskProgress().completed}/{task.getSubtaskProgress().total} completed
+                      </span>
+                    )}
+                  </div>
+                  {!isEditing && (
+                    <button
+                      onClick={() => setIsAddingSubtask(true)}
+                      className="text-xs bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700 transition-colors flex items-center gap-1"
+                    >
+                      <Plus className="w-3 h-3" />
+                      Add
+                    </button>
+                  )}
+                </div>
+
+                {/* Subtasks List */}
+                <div className="space-y-2">
+                  {task.subtasks.map((subtask) => (
+                    <div
+                      key={subtask.id}
+                      className="flex items-center gap-3 p-2 bg-[#1a1e24] rounded-lg group"
+                    >
+                      <button
+                        onClick={() => handleToggleSubtask(subtask.id)}
+                        className="flex-shrink-0"
+                      >
+                        {subtask.completed ? (
+                          <CheckSquare className="w-4 h-4 text-green-400" />
+                        ) : (
+                          <Square className="w-4 h-4 text-zinc-500 hover:text-zinc-400" />
+                        )}
+                      </button>
+                      
+                      {editingSubtaskId === subtask.id ? (
+                        <div className="flex-1 flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={editingSubtaskTitle}
+                            onChange={(e) => setEditingSubtaskTitle(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                handleEditSubtask(subtask.id);
+                              } else if (e.key === 'Escape') {
+                                cancelEditingSubtask();
+                              }
+                            }}
+                            className="flex-1 px-2 py-1 bg-[#262a30] border border-zinc-600 rounded text-white text-sm focus:outline-none focus:border-blue-500"
+                            autoFocus
+                          />
+                          <button
+                            onClick={() => handleEditSubtask(subtask.id)}
+                            className="p-1 text-green-400 hover:text-green-300"
+                          >
+                            <CheckSquare className="w-3 h-3" />
+                          </button>
+                          <button
+                            onClick={cancelEditingSubtask}
+                            className="p-1 text-zinc-400 hover:text-zinc-300"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <span
+                            className={`flex-1 text-sm ${subtask.completed ? 'text-zinc-500 line-through' : 'text-white'}`}
+                          >
+                            {subtask.title}
+                          </span>
+                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={() => startEditingSubtask(subtask.id, subtask.title)}
+                              className="p-1 text-zinc-400 hover:text-blue-400"
+                            >
+                              <Edit className="w-3 h-3" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteSubtask(subtask.id)}
+                              className="p-1 text-zinc-400 hover:text-red-400"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ))}
+
+                  {/* Add new subtask input */}
+                  {isAddingSubtask && (
+                    <div className="flex items-center gap-2 p-2 bg-[#1a1e24] rounded-lg border border-blue-500/30">
+                      <Square className="w-4 h-4 text-zinc-500 flex-shrink-0" />
+                      <input
+                        type="text"
+                        value={newSubtaskTitle}
+                        onChange={(e) => setNewSubtaskTitle(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            handleAddSubtask();
+                          } else if (e.key === 'Escape') {
+                            setIsAddingSubtask(false);
+                            setNewSubtaskTitle('');
+                          }
+                        }}
+                        placeholder="Enter subtask title..."
+                        className="flex-1 px-2 py-1 bg-transparent border-none text-white text-sm placeholder-zinc-500 focus:outline-none"
+                        autoFocus
+                      />
+                      <button
+                        onClick={handleAddSubtask}
+                        className="p-1 text-green-400 hover:text-green-300"
+                      >
+                        <CheckSquare className="w-3 h-3" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          setIsAddingSubtask(false);
+                          setNewSubtaskTitle('');
+                        }}
+                        className="p-1 text-zinc-400 hover:text-zinc-300"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  )}
+
+                  {task.subtasks.length === 0 && !isAddingSubtask && (
+                    <div className="text-center py-4 text-zinc-500 text-sm">
+                      No subtasks yet. Click "Add" to create one.
+                    </div>
+                  )}
+                </div>
+
+                {/* Progress bar for subtasks */}
+                {task.subtasks.length > 0 && (
+                  <div className="mt-4">
+                    <div className="flex items-center justify-between text-xs text-zinc-500 mb-1">
+                      <span>Progress</span>
+                      <span>{task.getSubtaskProgress().percentage}%</span>
+                    </div>
+                    <div className="w-full bg-zinc-700 rounded-full h-2">
+                      <div
+                        className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+                        style={{ width: `${task.getSubtaskProgress().percentage}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                )}
               </div>
             </>
           ) : (
@@ -1193,7 +1450,8 @@ const ProjectManagement: React.FC = () => {
           project: taskData.project!,
           theme: taskData.theme!,
           assignee: taskData.assignee!,
-          status: taskData.status!
+          status: taskData.status!,
+          subtasks: []
         });
       } else if (selectedTask) {
         await kanbanService.updateTask(selectedTask.id, {
@@ -1400,6 +1658,7 @@ const ProjectManagement: React.FC = () => {
             onClose={() => setTaskDetailModalOpen(false)}
             onSave={handleSaveTask}
             onDelete={handleDeleteTask}
+            onRefresh={fetchTasks}
           />
         </div>
       </div>

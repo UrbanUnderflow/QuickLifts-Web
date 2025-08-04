@@ -258,7 +258,7 @@ const OverviewModal: React.FC<OverviewModalProps> = ({ isOpen, onClose }) => {
       const elevatorPitchContent = document.createElement('p');
       elevatorPitchContent.style.marginBottom = '24px';
       elevatorPitchContent.style.lineHeight = '1.6';
-      elevatorPitchContent.textContent = 'Pulse is a fitness app where creators capture and share their Moves—we turn those into gamified, community-driven fitness experiences for their audiences. At its core, we help people move together.';
+      elevatorPitchContent.textContent = 'On Pulse, creators earn by turning their workouts into multiplayer games their communities can play to compete, level up, and win together.';
       
       main.appendChild(elevatorPitchTitle);
       main.appendChild(elevatorPitchContent);
@@ -444,7 +444,7 @@ const OverviewModal: React.FC<OverviewModalProps> = ({ isOpen, onClose }) => {
             <div className="bg-zinc-900/80 border border-zinc-800 rounded-xl p-6 hover:border-[#E0FE10]/20 transition-colors duration-300">
               <h4 className="text-white text-xl font-semibold mb-4">Elevator Pitch</h4>
               <p className="text-zinc-400 text-lg mb-6">
-                Pulse is a fitness app where creators capture and share their Moves—we turn those into gamified, community-driven fitness experiences for their audiences. At its core, we help people move together.
+                On Pulse, creators earn by turning their workouts into multiplayer games their communities can play to compete, level up, and win together.
               </p>
               
               <h4 className="text-white text-xl font-semibold mb-4 mt-8">Why Now? Narrative</h4>
@@ -1265,7 +1265,7 @@ const PressKit: React.FC<PressKitPageProps> = ({ metaData }) => {
                         <div className="bg-zinc-900/80 border border-zinc-800 rounded-xl p-8 mb-8 hover:border-[#E0FE10]/20 transition-colors duration-300">
                             <h4 className="text-white text-xl font-semibold mb-4">Elevator Pitch</h4>
                                                 <p className="text-zinc-400 text-lg mb-6">
-                            Pulse is a fitness app where creators capture and share their Moves—we turn those into gamified, community-driven fitness experiences for their audiences. At its core, we help people move together.
+                            On Pulse, creators earn by turning their workouts into multiplayer games their communities can play to compete, level up, and win together.
                             </p>
                             
                             <h4 className="text-white text-xl font-semibold mb-4 mt-8">Why Now? Narrative</h4>
