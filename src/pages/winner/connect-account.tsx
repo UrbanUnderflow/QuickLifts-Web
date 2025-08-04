@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useSelector } from 'react-redux';
 import { GetServerSideProps } from 'next';
-import Head from 'next/head';
+import PageHead from '../../components/PageHead';
 import { RootState } from '../../redux/store';
 import { userService } from '../../api/firebase/user/service';
 import { StripeOnboardingStatus } from '../../api/firebase/user/types';
@@ -178,19 +178,10 @@ const WinnerConnectAccountPage: React.FC<WinnerConnectAccountPageProps> = ({ met
   if (isLoading) {
     return (
       <>
-        <Head>
-          <title>{metaData?.pageTitle || 'Claim Your Prize - Pulse'}</title>
-          <meta name="description" content={metaData?.metaDescription || `Congratulations! You've won a challenge. Connect your payment account to receive your prize money securely.`} />
-          <meta property="og:title" content={metaData?.ogTitle || 'Claim Your Prize - Pulse'} />
-          <meta property="og:description" content={metaData?.ogDescription || `Congratulations! You've won a challenge. Connect your payment account to receive your prize money securely.`} />
-          <meta property="og:image" content={metaData?.ogImage || '/ai-poster.png'} />
-          <meta property="og:url" content={metaData?.ogUrl || `https://fitwithpulse.ai/winner/connect-account`} />
-          <meta property="og:type" content={metaData?.ogType || 'website'} />
-          <meta name="twitter:card" content={metaData?.twitterCard || 'summary_large_image'} />
-          <meta name="twitter:title" content={metaData?.twitterTitle || 'Claim Your Prize - Pulse'} />
-          <meta name="twitter:description" content={metaData?.twitterDescription || `Congratulations! You've won a challenge. Connect your payment account to receive your prize money securely.`} />
-          <meta name="twitter:image" content={metaData?.twitterImage || '/ai-poster.png'} />
-        </Head>
+        <PageHead
+          metaData={metaData}
+          pageOgUrl="https://fitwithpulse.ai/winner/connect-account"
+        />
         <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
           <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#E0FE10]"></div>
         </div>
@@ -200,19 +191,10 @@ const WinnerConnectAccountPage: React.FC<WinnerConnectAccountPageProps> = ({ met
 
   return (
     <>
-      <Head>
-        <title>{metaData?.pageTitle || 'Claim Your Prize - Pulse'}</title>
-        <meta name="description" content={metaData?.metaDescription || `Congratulations! You've won a challenge. Connect your payment account to receive your prize money securely.`} />
-        <meta property="og:title" content={metaData?.ogTitle || 'Claim Your Prize - Pulse'} />
-        <meta property="og:description" content={metaData?.ogDescription || `Congratulations! You've won a challenge. Connect your payment account to receive your prize money securely.`} />
-        <meta property="og:image" content={metaData?.ogImage || '/ai-poster.png'} />
-        <meta property="og:url" content={metaData?.ogUrl || `https://fitwithpulse.ai/winner/connect-account`} />
-        <meta property="og:type" content={metaData?.ogType || 'website'} />
-        <meta name="twitter:card" content={metaData?.twitterCard || 'summary_large_image'} />
-        <meta name="twitter:title" content={metaData?.twitterTitle || 'Claim Your Prize - Pulse'} />
-        <meta name="twitter:description" content={metaData?.twitterDescription || `Congratulations! You've won a challenge. Connect your payment account to receive your prize money securely.`} />
-        <meta name="twitter:image" content={metaData?.twitterImage || '/ai-poster.png'} />
-      </Head>
+      <PageHead
+        metaData={metaData}
+        pageOgUrl="https://fitwithpulse.ai/winner/connect-account"
+      />
       <div className="min-h-screen bg-zinc-950 text-white py-10">
         <div className="max-w-md mx-auto px-6">
           <h1 className="text-3xl font-bold mb-4">🏆 Congratulations!</h1>
