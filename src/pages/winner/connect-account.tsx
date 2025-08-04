@@ -44,10 +44,9 @@ const WinnerConnectAccountPage: React.FC<WinnerConnectAccountPageProps> = ({ met
       return;
     }
     
-    // Check if user is already logged in
+    // Only proceed if user is authenticated (AuthWrapper will handle redirect if not)
     if (!currentUser) {
-      console.log('[WinnerConnectAccount] No user found, redirecting to login');
-      router.push(`/login?redirect=/winner/connect-account?challengeId=${challengeId}&placement=${placement}`);
+      console.log('[WinnerConnectAccount] No user found, AuthWrapper will handle redirect');
       return;
     }
 
@@ -187,17 +186,17 @@ const WinnerConnectAccountPage: React.FC<WinnerConnectAccountPageProps> = ({ met
   return (
     <div className="min-h-screen bg-zinc-950 text-white py-10">
       <Head>
-        <title>{metaData?.pageTitle || 'Connect Your Payment Account - Pulse'}</title>
-        <meta name="description" content={metaData?.metaDescription || `Connect your payment account to receive your prize money for the ${challengeInfo?.title || 'challenge'}.`} />
-        <meta property="og:title" content={metaData?.ogTitle || 'Connect Your Payment Account - Pulse'} />
-        <meta property="og:description" content={metaData?.ogDescription || `Connect your payment account to receive your prize money for the ${challengeInfo?.title || 'challenge'}.`} />
-        <meta property="og:image" content={metaData?.ogImage || '/logo.png'} />
-        <meta property="og:url" content={metaData?.ogUrl || `${process.env.NEXT_PUBLIC_SITE_URL}/winner/connect-account?challengeId=${challengeId}&placement=${placement}`} />
+        <title>{metaData?.pageTitle || 'Claim Your Prize - Pulse'}</title>
+        <meta name="description" content={metaData?.metaDescription || `Congratulations! You've won a challenge. Connect your payment account to receive your prize money securely.`} />
+        <meta property="og:title" content={metaData?.ogTitle || 'Claim Your Prize - Pulse'} />
+        <meta property="og:description" content={metaData?.ogDescription || `Congratulations! You've won a challenge. Connect your payment account to receive your prize money securely.`} />
+        <meta property="og:image" content={metaData?.ogImage || '/ai-poster.png'} />
+        <meta property="og:url" content={metaData?.ogUrl || `https://fitwithpulse.ai/winner/connect-account`} />
         <meta property="og:type" content={metaData?.ogType || 'website'} />
         <meta name="twitter:card" content={metaData?.twitterCard || 'summary_large_image'} />
-        <meta name="twitter:title" content={metaData?.twitterTitle || 'Connect Your Payment Account - Pulse'} />
-        <meta name="twitter:description" content={metaData?.twitterDescription || `Connect your payment account to receive your prize money for the ${challengeInfo?.title || 'challenge'}.`} />
-        <meta name="twitter:image" content={metaData?.twitterImage || '/logo.png'} />
+        <meta name="twitter:title" content={metaData?.twitterTitle || 'Claim Your Prize - Pulse'} />
+        <meta name="twitter:description" content={metaData?.twitterDescription || `Congratulations! You've won a challenge. Connect your payment account to receive your prize money securely.`} />
+        <meta name="twitter:image" content={metaData?.twitterImage || '/ai-poster.png'} />
       </Head>
              <div className="max-w-md mx-auto px-6">
         <h1 className="text-3xl font-bold mb-4">🏆 Congratulations!</h1>
