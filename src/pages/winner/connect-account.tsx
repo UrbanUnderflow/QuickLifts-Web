@@ -177,14 +177,29 @@ const WinnerConnectAccountPage: React.FC<WinnerConnectAccountPageProps> = ({ met
   // Show loading state if Redux is loading
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#E0FE10]"></div>
-      </div>
+      <>
+        <Head>
+          <title>{metaData?.pageTitle || 'Claim Your Prize - Pulse'}</title>
+          <meta name="description" content={metaData?.metaDescription || `Congratulations! You've won a challenge. Connect your payment account to receive your prize money securely.`} />
+          <meta property="og:title" content={metaData?.ogTitle || 'Claim Your Prize - Pulse'} />
+          <meta property="og:description" content={metaData?.ogDescription || `Congratulations! You've won a challenge. Connect your payment account to receive your prize money securely.`} />
+          <meta property="og:image" content={metaData?.ogImage || '/ai-poster.png'} />
+          <meta property="og:url" content={metaData?.ogUrl || `https://fitwithpulse.ai/winner/connect-account`} />
+          <meta property="og:type" content={metaData?.ogType || 'website'} />
+          <meta name="twitter:card" content={metaData?.twitterCard || 'summary_large_image'} />
+          <meta name="twitter:title" content={metaData?.twitterTitle || 'Claim Your Prize - Pulse'} />
+          <meta name="twitter:description" content={metaData?.twitterDescription || `Congratulations! You've won a challenge. Connect your payment account to receive your prize money securely.`} />
+          <meta name="twitter:image" content={metaData?.twitterImage || '/ai-poster.png'} />
+        </Head>
+        <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#E0FE10]"></div>
+        </div>
+      </>
     );
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-white py-10">
+    <>
       <Head>
         <title>{metaData?.pageTitle || 'Claim Your Prize - Pulse'}</title>
         <meta name="description" content={metaData?.metaDescription || `Congratulations! You've won a challenge. Connect your payment account to receive your prize money securely.`} />
@@ -198,79 +213,81 @@ const WinnerConnectAccountPage: React.FC<WinnerConnectAccountPageProps> = ({ met
         <meta name="twitter:description" content={metaData?.twitterDescription || `Congratulations! You've won a challenge. Connect your payment account to receive your prize money securely.`} />
         <meta name="twitter:image" content={metaData?.twitterImage || '/ai-poster.png'} />
       </Head>
-             <div className="max-w-md mx-auto px-6">
-        <h1 className="text-3xl font-bold mb-4">🏆 Congratulations!</h1>
-        
-        {challengeInfo && (
-          <div className="bg-gradient-to-r from-yellow-400/20 to-orange-400/20 border border-yellow-400/30 p-6 rounded-xl mb-8">
-            <h2 className="text-xl font-semibold mb-2">Challenge Winner</h2>
-            <p className="text-lg mb-2">
-              <strong>{challengeInfo.title}</strong>
-            </p>
-            <p className="text-2xl font-bold text-[#E0FE10]">
-              Prize: ${(challengeInfo.prizeAmount / 100).toFixed(2)}
-            </p>
-            <p className="text-zinc-300 text-sm mt-2">
-              {challengeInfo.placement === 1 ? '🥇 1st Place' : 
-               challengeInfo.placement === 2 ? '🥈 2nd Place' : 
-               challengeInfo.placement === 3 ? '🥉 3rd Place' : 
-               `#${challengeInfo.placement} Place`}
-            </p>
-          </div>
-        )}
-        
-        <div className="bg-zinc-900 p-6 rounded-xl mb-8">
-          <h2 className="text-xl font-semibold mb-4">Claim Your Prize</h2>
-          <p className="mb-6">
-            To receive your prize money, you need to connect a payment account. 
-            This allows us to securely transfer your winnings directly to your bank account.
-          </p>
+      <div className="min-h-screen bg-zinc-950 text-white py-10">
+        <div className="max-w-md mx-auto px-6">
+          <h1 className="text-3xl font-bold mb-4">🏆 Congratulations!</h1>
           
-          {error && (
-            <div className="bg-red-900/30 border border-red-500 text-red-200 p-3 mb-4 rounded">
-              {error}
-            </div>
-          )}
-          
-          {onboardingLink ? (
-            <div>
-              <p className="mb-4">Your payment account is ready to be set up. Click the button below to complete your onboarding:</p>
-              <a 
-                href={onboardingLink}
-                className="bg-[#E0FE10] text-black py-3 px-6 w-full block text-center rounded-xl font-semibold"
-              >
-                Complete Payment Setup
-              </a>
-              <p className="mt-4 text-sm text-zinc-400">
-                You'll be redirected to Stripe to provide your banking information securely.
+          {challengeInfo && (
+            <div className="bg-gradient-to-r from-yellow-400/20 to-orange-400/20 border border-yellow-400/30 p-6 rounded-xl mb-8">
+              <h2 className="text-xl font-semibold mb-2">Challenge Winner</h2>
+              <p className="text-lg mb-2">
+                <strong>{challengeInfo.title}</strong>
+              </p>
+              <p className="text-2xl font-bold text-[#E0FE10]">
+                Prize: ${(challengeInfo.prizeAmount / 100).toFixed(2)}
+              </p>
+              <p className="text-zinc-300 text-sm mt-2">
+                {challengeInfo.placement === 1 ? '🥇 1st Place' : 
+                 challengeInfo.placement === 2 ? '🥈 2nd Place' : 
+                 challengeInfo.placement === 3 ? '🥉 3rd Place' : 
+                 `#${challengeInfo.placement} Place`}
               </p>
             </div>
-          ) : (
-            <button 
-              onClick={handleStartOnboarding}
-              disabled={loading}
-              className={`
-                w-full py-3 px-6 rounded-xl font-semibold
-                ${loading ? 'bg-[#E0FE10]/50' : 'bg-[#E0FE10]'} 
-                text-black transition-all
-              `}
-            >
-              {loading ? 'Setting Up...' : 'Set Up Payment Account'}
-            </button>
           )}
-        </div>
-        
-        <div className="text-sm text-zinc-400">
-          <h3 className="font-semibold mb-2">What happens next?</h3>
-          <ul className="space-y-1">
-            <li>• You'll provide banking information to Stripe (our payment processor)</li>
-            <li>• Stripe will verify your identity (standard requirement)</li>
-            <li>• Once approved, your prize money will be transferred</li>
-            <li>• You'll have access to a dashboard to track your payment</li>
-          </ul>
+          
+          <div className="bg-zinc-900 p-6 rounded-xl mb-8">
+            <h2 className="text-xl font-semibold mb-4">Claim Your Prize</h2>
+            <p className="mb-6">
+              To receive your prize money, you need to connect a payment account. 
+              This allows us to securely transfer your winnings directly to your bank account.
+            </p>
+            
+            {error && (
+              <div className="bg-red-900/30 border border-red-500 text-red-200 p-3 mb-4 rounded">
+                {error}
+              </div>
+            )}
+            
+            {onboardingLink ? (
+              <div>
+                <p className="mb-4">Your payment account is ready to be set up. Click the button below to complete your onboarding:</p>
+                <a 
+                  href={onboardingLink}
+                  className="bg-[#E0FE10] text-black py-3 px-6 w-full block text-center rounded-xl font-semibold"
+                >
+                  Complete Payment Setup
+                </a>
+                <p className="mt-4 text-sm text-zinc-400">
+                  You'll be redirected to Stripe to provide your banking information securely.
+                </p>
+              </div>
+            ) : (
+              <button 
+                onClick={handleStartOnboarding}
+                disabled={loading}
+                className={`
+                  w-full py-3 px-6 rounded-xl font-semibold
+                  ${loading ? 'bg-[#E0FE10]/50' : 'bg-[#E0FE10]'} 
+                  text-black transition-all
+                `}
+              >
+                {loading ? 'Setting Up...' : 'Set Up Payment Account'}
+              </button>
+            )}
+          </div>
+          
+          <div className="text-sm text-zinc-400">
+            <h3 className="font-semibold mb-2">What happens next?</h3>
+            <ul className="space-y-1">
+              <li>• You'll provide banking information to Stripe (our payment processor)</li>
+              <li>• Stripe will verify your identity (standard requirement)</li>
+              <li>• Once approved, your prize money will be transferred</li>
+              <li>• You'll have access to a dashboard to track your payment</li>
+            </ul>
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 };
 
