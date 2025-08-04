@@ -4,11 +4,24 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useSelector } from 'react-redux';
+import { GetServerSideProps } from 'next';
+import Head from 'next/head';
 import { RootState } from '../../redux/store';
 import { userService } from '../../api/firebase/user/service';
 import { StripeOnboardingStatus } from '../../api/firebase/user/types';
+import { adminMethods } from '../../api/firebase/admin/methods';
+import { PageMetaData as FirestorePageMetaData } from '../../api/firebase/admin/types';
 
-const WinnerConnectAccountPage = () => {
+// Define a serializable version of PageMetaData for this page's props
+interface SerializablePageMetaData extends Omit<FirestorePageMetaData, 'lastUpdated'> {
+  lastUpdated: string;
+}
+
+interface WinnerConnectAccountPageProps {
+  metaData: SerializablePageMetaData | null;
+}
+
+const WinnerConnectAccountPage: React.FC<WinnerConnectAccountPageProps> = ({ metaData }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [onboardingLink, setOnboardingLink] = useState<string | null>(null);
@@ -173,7 +186,20 @@ const WinnerConnectAccountPage = () => {
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white py-10">
-      <div className="max-w-md mx-auto px-6">
+      <Head>
+        <title>{metaData?.pageTitle || 'Connect Your Payment Account - Pulse'}</title>
+        <meta name="description" content={metaData?.metaDescription || `Connect your payment account to receive your prize money for the ${challengeInfo?.title || 'challenge'}.`} />
+        <meta property="og:title" content={metaData?.ogTitle || 'Connect Your Payment Account - Pulse'} />
+        <meta property="og:description" content={metaData?.ogDescription || `Connect your payment account to receive your prize money for the ${challengeInfo?.title || 'challenge'}.`} />
+        <meta property="og:image" content={metaData?.ogImage || '/logo.png'} />
+        <meta property="og:url" content={metaData?.ogUrl || `${process.env.NEXT_PUBLIC_SITE_URL}/winner/connect-account?challengeId=${challengeId}&placement=${placement}`} />
+        <meta property="og:type" content={metaData?.ogType || 'website'} />
+        <meta name="twitter:card" content={metaData?.twitterCard || 'summary_large_image'} />
+        <meta name="twitter:title" content={metaData?.twitterTitle || 'Connect Your Payment Account - Pulse'} />
+        <meta name="twitter:description" content={metaData?.twitterDescription || `Connect your payment account to receive your prize money for the ${challengeInfo?.title || 'challenge'}.`} />
+        <meta name="twitter:image" content={metaData?.twitterImage || '/logo.png'} />
+      </Head>
+             <div className="max-w-md mx-auto px-6">
         <h1 className="text-3xl font-bold mb-4">🏆 Congratulations!</h1>
         
         {challengeInfo && (
@@ -247,6 +273,29 @@ const WinnerConnectAccountPage = () => {
       </div>
     </div>
   );
+};
+
+export const getServerSideProps: GetServerSideProps<WinnerConnectAccountPageProps> = async (context) => {
+  let rawMetaData: FirestorePageMetaData | null = null;
+  try {
+    rawMetaData = await adminMethods.getPageMetaData('winner--connect-account');
+  } catch (error) {
+    console.error("Error fetching page meta data for winner connect-account page:", error);
+  }
+
+  let serializableMetaData: SerializablePageMetaData | null = null;
+  if (rawMetaData) {
+    serializableMetaData = {
+      ...rawMetaData,
+      lastUpdated: rawMetaData.lastUpdated.toDate().toISOString(),
+    };
+  }
+
+  return {
+    props: {
+      metaData: serializableMetaData,
+    },
+  };
 };
 
 export default WinnerConnectAccountPage; 
