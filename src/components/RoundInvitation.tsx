@@ -209,6 +209,9 @@ const UserBadge: React.FC = () => {
       await signOut(auth);
       dispatch(setUser(null));
       setIsMenuOpen(false);
+      
+      // Clear the localStorage flag so user sees marketing content instead of dashboard
+      localStorage.removeItem('pulse_has_seen_marketing');
     } catch (error) {
       console.error('Error signing out:', error);
     }

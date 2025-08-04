@@ -105,6 +105,10 @@ const Subscribe: React.FC = () => {
   const handleSignOut = async () => {
     try {
       await signOut(auth); // Use direct Firebase signOut
+      
+      // Clear the localStorage flag so user sees marketing content instead of dashboard
+      localStorage.removeItem('pulse_has_seen_marketing');
+      
       // Redirect or update UI after sign out
       window.location.reload(); // Simple reload for now
     } catch (error) {

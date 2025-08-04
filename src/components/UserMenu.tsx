@@ -2,12 +2,14 @@ import React, { useState, useRef, useEffect } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { getAuth, signOut } from 'firebase/auth';
 import { useDispatch } from 'react-redux';
+import { useRouter } from 'next/router';
 import { setUser } from '../redux/userSlice';
 
 const UserMenu: React.FC = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const dispatch = useDispatch();
+  const router = useRouter();
   const auth = getAuth();
 
   // Close menu when clicking outside
@@ -26,10 +28,24 @@ const UserMenu: React.FC = () => {
 
   const handleSignOut = async () => {
     try {
+      console.log('[UserMenu] Starting sign out process...');
+      setIsMenuOpen(false); // Close the menu immediately
+      
+      // Sign out from Firebase
       await signOut(auth);
+      
+      // Clear user state in Redux
       dispatch(setUser(null));
+      
+      // Clear the localStorage flag so user sees marketing content instead of dashboard
+      localStorage.removeItem('pulse_has_seen_marketing');
+      
+      // Redirect to homepage
+      await router.push('/');
+      
+      console.log('[UserMenu] Sign out completed successfully');
     } catch (error) {
-      console.error('Error signing out:', error);
+      console.error('[UserMenu] Error signing out:', error);
     }
   };
 
