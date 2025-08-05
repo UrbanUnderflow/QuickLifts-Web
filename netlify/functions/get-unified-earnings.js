@@ -182,7 +182,12 @@ async function fetchCreatorEarnings(userId, stripeAccountId) {
     const responseData = JSON.parse(response.body);
     
     if (responseData.success && responseData.earnings) {
-      console.log('Creator earnings fetched successfully');
+      console.log('Creator earnings fetched successfully:', {
+        hasRecentSales: !!responseData.earnings.recentSales,
+        recentSalesLength: responseData.earnings.recentSales ? responseData.earnings.recentSales.length : 0,
+        earningsKeys: Object.keys(responseData.earnings),
+        firstSale: responseData.earnings.recentSales ? responseData.earnings.recentSales[0] : null
+      });
       return responseData.earnings;
     } else {
       console.warn('Creator earnings fetch failed:', responseData.error);
@@ -255,11 +260,18 @@ function buildUnifiedEarningsResponse({ userId, userData, creatorEarnings, winne
 
   // Populate creator earnings data
   if (creatorEarnings) {
+    console.log('Processing creator earnings:', {
+      hasRecentSales: !!creatorEarnings.recentSales,
+      recentSalesLength: creatorEarnings.recentSales ? creatorEarnings.recentSales.length : 0,
+      recentSalesType: typeof creatorEarnings.recentSales,
+      creatorEarningsKeys: Object.keys(creatorEarnings)
+    });
     creatorData.totalEarned = creatorEarnings.totalEarned || 0;
     creatorData.availableBalance = creatorEarnings.availableBalance || 0;
     creatorData.pendingPayout = creatorEarnings.pendingPayout || 0;
     creatorData.roundsSold = creatorEarnings.roundsSold || 0;
     creatorData.recentSales = creatorEarnings.recentSales || [];
+    console.log('After processing, creatorData.recentSales length:', creatorData.recentSales.length);
   }
 
   // Populate winner prize data (convert cents to dollars)
