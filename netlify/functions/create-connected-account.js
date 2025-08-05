@@ -154,19 +154,35 @@ const handler = async (event) => {
 
     console.log('[CreateConnectedAccount] Account link created');
 
-    // Update user document with Stripe account info
-    await db.collection("users").doc(userId).update({
-      'creator.stripeAccountId': account.id,
-      'creator.onboardingStatus': 'incomplete',
-      'creator.onboardingLink': accountLink.url,
-      'creator.onboardingExpirationDate': accountLink.expires_at,
-      'creator.onboardingPayoutState': 'introduction'
-    });
+    // CRITICAL: Update user document with Stripe account info
+    // This is the most important step - if this fails, the user will lose their account linking
+    try {
+      await db.collection("users").doc(userId).update({
+        'creator.stripeAccountId': account.id,
+        'creator.onboardingStatus': 'incomplete',
+        'creator.onboardingLink': accountLink.url,
+        'creator.onboardingExpirationDate': accountLink.expires_at,
+        'creator.onboardingPayoutState': 'introduction'
+      });
+      console.log(`[CreateConnectedAccount] CRITICAL SUCCESS: Stripe account ID ${account.id} saved to Firestore for user ${userId}`);
+    } catch (firestoreError) {
+      console.error(`[CreateConnectedAccount] CRITICAL FAILURE: Failed to save Stripe account ID to Firestore for user ${userId}:`, firestoreError);
+      
+      // This is a critical failure - the Stripe account was created but we can't link it
+      // We should return an error so the user knows something went wrong
+      throw new Error(`Failed to save account information to database: ${firestoreError.message}`);
+    }
 
-    // Create or update StripeConnect document
-    await createOrUpdateStripeConnect(userId, account.id, userData.email);
+    // Create or update StripeConnect document (less critical, can fail without breaking the flow)
+    try {
+      await createOrUpdateStripeConnect(userId, account.id, userData.email);
+      console.log('[CreateConnectedAccount] StripeConnect document updated successfully');
+    } catch (stripeConnectError) {
+      console.warn('[CreateConnectedAccount] StripeConnect document update failed (non-critical):', stripeConnectError);
+      // Don't throw here - the main account linking succeeded
+    }
 
-    console.log('[CreateConnectedAccount] User document and StripeConnect document updated successfully');
+    console.log('[CreateConnectedAccount] Account creation and linking completed successfully');
 
     return {
       statusCode: 200,
