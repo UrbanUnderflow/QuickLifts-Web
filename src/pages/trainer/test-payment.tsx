@@ -110,7 +110,7 @@ const TestPaymentPage = () => {
           
           {success && (
             <button
-              onClick={() => router.push('/trainer/dashboard')}
+              onClick={() => router.push(`/${currentUser?.username}/earnings`)}
               className="w-full mt-4 py-3 px-6 rounded-xl font-semibold bg-zinc-800 text-white hover:bg-zinc-700 transition-all"
             >
               View Dashboard

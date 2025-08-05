@@ -37,7 +37,7 @@ const AboutPage: NextPage<AboutPageProps> = ({ metaData }) => {
     },
     {
       question: "Is Pulse available for both iOS and Android?",
-      answer: "We are currently only on iOS, but you can use the web app on Android devices <a className='text-blue-500 hover:text-blue-700 focus:text-blue-700' href='https://fitwithpulse.ai/dashboard'>here</a>"
+      answer: "We are currently only on iOS, but you can use the web app on Android devices <a className='text-blue-500 hover:text-blue-700 focus:text-blue-700' href='https://fitwithpulse.ai'>here</a>"
     },
     {
       question: "How do I get started?",
@@ -1110,7 +1110,7 @@ const AboutPage: NextPage<AboutPageProps> = ({ metaData }) => {
                 </div>
                 
                 <a 
-                  href="/dashboard" 
+                  href="/" 
                   className="inline-flex items-center gap-2 text-[#E0FE10] hover:text-lime-400 font-medium transition-colors group-hover:gap-3 duration-300"
                 >
                   Open Pulse Platform

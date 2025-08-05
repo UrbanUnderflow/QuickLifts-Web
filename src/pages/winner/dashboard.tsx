@@ -5,6 +5,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useSelector } from 'react-redux';
 import { RootState } from '../../redux/store';
+import { trackEvent } from '../../lib/analytics';
 
 interface PrizeRecord {
   id: string;
@@ -31,6 +32,16 @@ interface WinnerSummary {
 }
 
 const WinnerDashboard: React.FC = () => {
+  const router = useRouter();
+  const { complete, challengeId, placement } = router.query;
+
+  const currentUser = useSelector((state: RootState) => state.user.currentUser);
+  const isLoading = useSelector((state: RootState) => state.user.loading);
+
+  // Migration state
+  const [showRedirectNotice, setShowRedirectNotice] = useState(!complete); // Don't show notice if completing onboarding
+  
+  // Legacy state (kept for compatibility during transition)
   const [loading, setLoading] = useState(false);
   const [onboardingComplete, setOnboardingComplete] = useState(false);
   const [prizeRecords, setPrizeRecords] = useState<PrizeRecord[]>([]);
@@ -38,17 +49,58 @@ const WinnerDashboard: React.FC = () => {
   const [isLoadingData, setIsLoadingData] = useState(false);
   const [dashboardUrl, setDashboardUrl] = useState<string>('');
   const [isDashboardLinkLoading, setIsDashboardLinkLoading] = useState(false);
-  
-  const router = useRouter();
-  const { complete, challengeId, placement } = router.query;
 
-  const currentUser = useSelector((state: RootState) => state.user.currentUser);
-  const isLoading = useSelector((state: RootState) => state.user.loading);
+  // Redirect effect for migration to unified earnings (unless completing onboarding)
+  useEffect(() => {
+    // Don't redirect if completing Stripe onboarding
+    if (complete === 'true' || isLoading || !currentUser) {
+      return;
+    }
+
+    // Preserve challenge context if available
+    const queryParams = new URLSearchParams();
+    if (challengeId) queryParams.append('challengeId', challengeId as string);
+    if (placement) queryParams.append('placement', placement as string);
+    queryParams.append('migrated', 'winner');
+    
+    const redirectUrl = `/${currentUser.username}/earnings?${queryParams.toString()}`;
+    
+    // Track legacy dashboard access
+    if (currentUser?.email) {
+      trackEvent(currentUser.email, 'LegacyWinnerDashboardAccessed', {
+        userId: currentUser.id,
+        username: currentUser.username,
+        hasRedirectNotice: showRedirectNotice,
+        redirectDelay: showRedirectNotice ? 3000 : 0,
+        challengeId: challengeId || null,
+        placement: placement || null,
+        redirectUrl: redirectUrl
+      });
+    }
+    
+    // Automatic redirect to unified earnings (with delay for notice)
+    if (showRedirectNotice) {
+      const redirectTimer = setTimeout(() => {
+        if (currentUser?.email) {
+          trackEvent(currentUser.email, 'LegacyDashboardRedirectExecuted', {
+            userId: currentUser.id,
+            fromDashboard: 'winner',
+            targetUrl: redirectUrl,
+            challengeContext: !!(challengeId || placement)
+          });
+        }
+        router.push(redirectUrl);
+      }, 3000);
+
+      return () => clearTimeout(redirectTimer);
+    }
+  }, [currentUser, isLoading, router, showRedirectNotice, challengeId, placement, complete]);
 
   useEffect(() => {
     // Check if this is a Stripe onboarding completion redirect
     if (complete === 'true') {
       setOnboardingComplete(true);
+      setShowRedirectNotice(false); // Don't show redirect notice when completing onboarding
       
       // If user is logged in, mark their onboarding as complete
       if (currentUser?.id) {
@@ -58,11 +110,11 @@ const WinnerDashboard: React.FC = () => {
   }, [complete, currentUser]);
 
   useEffect(() => {
-    // Fetch prize data when user is available
-    if (currentUser?.id && !isLoading) {
+    // Fetch prize data when user is available (only if not redirecting or completing onboarding)
+    if (currentUser?.id && !isLoading && (!showRedirectNotice || complete === 'true')) {
       fetchPrizeHistory();
     }
-  }, [currentUser, isLoading]);
+  }, [currentUser, isLoading, showRedirectNotice, complete]);
 
   const markOnboardingComplete = async () => {
     if (!currentUser?.id) return;
@@ -327,9 +379,94 @@ const WinnerDashboard: React.FC = () => {
     );
   };
 
+  // Show redirect notice for migration to unified earnings (unless completing onboarding)
+  if (showRedirectNotice && currentUser && complete !== 'true') {
+    const queryParams = new URLSearchParams();
+    if (challengeId) queryParams.append('challengeId', challengeId as string);
+    if (placement) queryParams.append('placement', placement as string);
+    queryParams.append('migrated', 'winner');
+    
+    const redirectUrl = `/${currentUser.username}/earnings?${queryParams.toString()}`;
+
+    return (
+      <div className="min-h-screen bg-zinc-950 text-white flex items-center justify-center">
+        <div className="max-w-md mx-auto px-6 text-center">
+          <div className="bg-zinc-900 p-8 rounded-xl">
+            <div className="text-6xl mb-6">🏆</div>
+            <h1 className="text-2xl font-bold mb-4">Dashboard Upgraded!</h1>
+            <p className="text-zinc-400 mb-6">
+              We've consolidated your prize winnings with all your other Pulse earnings 
+              into one unified dashboard for a better experience.
+            </p>
+            
+            <div className="bg-zinc-800 p-4 rounded-lg mb-6">
+              <p className="text-sm text-zinc-300">
+                <strong>Redirecting to:</strong><br/>
+                <span className="text-[#E0FE10]">/{currentUser.username}/earnings</span>
+              </p>
+              {(challengeId || placement) && (
+                <p className="text-xs text-zinc-500 mt-2">
+                  (Challenge context will be preserved)
+                </p>
+              )}
+            </div>
+
+            <div className="flex items-center justify-center gap-2 mb-6">
+              <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-[#E0FE10]"></div>
+              <span className="text-sm text-zinc-400">Redirecting in 3 seconds...</span>
+            </div>
+
+            <div className="space-y-3">
+              <button
+                onClick={() => router.push(redirectUrl)}
+                className="w-full bg-[#E0FE10] text-black py-3 px-6 rounded-xl font-semibold"
+              >
+                Go Now
+              </button>
+              
+              <button
+                onClick={() => setShowRedirectNotice(false)}
+                className="w-full bg-zinc-800 text-white py-3 px-6 rounded-xl font-semibold"
+              >
+                Stay on Legacy Dashboard
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-zinc-950 text-white py-10">
       <div className="max-w-4xl mx-auto px-6">
+        {/* Legacy Dashboard Warning */}
+        {!onboardingComplete && complete !== 'true' && !showRedirectNotice && (
+          <div className="bg-yellow-900/30 border border-yellow-500/50 rounded-xl p-4 mb-6">
+            <div className="flex items-center gap-3">
+              <span className="text-yellow-400 text-xl">⚠️</span>
+              <div>
+                <p className="font-semibold text-yellow-200">Legacy Dashboard</p>
+                <p className="text-sm text-yellow-300">
+                  This dashboard is deprecated. Please use the 
+                  <button 
+                    onClick={() => {
+                      const queryParams = new URLSearchParams();
+                      if (challengeId) queryParams.append('challengeId', challengeId as string);
+                      if (placement) queryParams.append('placement', placement as string);
+                      const redirectUrl = `/${currentUser?.username}/earnings?${queryParams.toString()}`;
+                      router.push(redirectUrl);
+                    }}
+                    className="underline ml-1 text-[#E0FE10] hover:text-[#C5E609]"
+                  >
+                    unified earnings dashboard
+                  </button> instead.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {onboardingComplete ? (
           // Stripe onboarding completion success
           <div className="text-center mb-8">

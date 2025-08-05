@@ -10,8 +10,7 @@ export default function StartupRunway() {
   };
 
   const handleWebApp = () => {
-    window.location.href = 'https://fitwithpulse.ai/dashboard';
-
+    window.location.href = 'https://fitwithpulse.ai';
   }
 
   const handleJaidusChallenge = () => {

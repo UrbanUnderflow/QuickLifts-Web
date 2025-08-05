@@ -100,9 +100,16 @@ const WinnerConnectAccountPage: React.FC<WinnerConnectAccountPageProps> = ({ met
           );
         }
         
-        // Redirect to winner dashboard because user has a Stripe account
-        console.log('[WinnerConnectAccount] Redirecting to winner dashboard');
-        router.push('/winner/dashboard');
+        // Redirect to unified earnings dashboard because user has a Stripe account
+        console.log('[WinnerConnectAccount] Redirecting to unified earnings dashboard');
+        
+        // Preserve challenge context if available
+        const queryParams = new URLSearchParams();
+        if (challengeId) queryParams.append('challengeId', challengeId as string);
+        if (placement) queryParams.append('placement', placement as string);
+        
+        const redirectUrl = `/${currentUser.username}/earnings${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+        router.push(redirectUrl);
       } else if (refreshedUser?.winner?.onboardingStatus === StripeOnboardingStatus.Complete) {
         // If status is complete but no stripeAccountId, fix the inconsistency
         console.log('[WinnerConnectAccount] Fixing inconsistency: status is complete but no stripeAccountId');

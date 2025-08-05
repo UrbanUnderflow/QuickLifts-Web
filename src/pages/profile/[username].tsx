@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { GetServerSideProps } from 'next';
 import { useRouter } from 'next/router';
+import { useSelector } from 'react-redux';
+import { RootState } from '../../redux/store';
 import { FollowRequest } from '../../api/firebase/user';
 import { User } from '../../api/firebase/user';
 import ExerciseGrid from '../../components/ExerciseGrid';
@@ -14,6 +16,7 @@ import { parseActivityType } from '../../utils/activityParser';
 import { UserActivity } from '../../types/Activity';
 import FullScreenExerciseView from '../FullscreenExerciseView';
 import UserProfileMeta from '../../components/UserProfileMeta';
+import Link from 'next/link';
 
 interface ProfileViewProps {
   initialUserData: User | null;
@@ -32,6 +35,7 @@ const TABS = {
   ACTIVITY: 'activity',
   EXERICSES: 'moves',
   CHALLENGES: 'challenges',
+  EARNINGS: 'earnings',
 } as const;
 
 type TabType = typeof TABS[keyof typeof TABS];
@@ -39,6 +43,13 @@ type TabType = typeof TABS[keyof typeof TABS];
 export default function ProfileView({ initialUserData, error: serverError }: ProfileViewProps) {
   const router = useRouter();
   const { username } = router.query;
+
+  // Redux state for current authenticated user
+  const currentUser = useSelector((state: RootState) => state.user.currentUser);
+  const isAuthLoading = useSelector((state: RootState) => state.user.loading);
+
+  // Determine if current user is viewing their own profile
+  const isOwnProfile = currentUser && initialUserData && currentUser.id === initialUserData.id;
 
   const [selectedTab, setSelectedTab] = useState<TabType>(TABS.EXERICSES);
   const [user, setUser] = useState<User | null>(initialUserData);
@@ -342,7 +353,9 @@ useEffect(() => {
             <div className="mt-8 border-b border-zinc-700 overflow-x-auto">
               <nav className="flex whitespace-nowrap min-w-full sm:min-w-0 px-4 sm:px-0">
                 <div className="flex gap-8 pb-2 sm:pb-0">
-                  {Object.values(TABS).map((tab) => (
+                  {Object.values(TABS)
+                    .filter(tab => tab !== 'earnings' || isOwnProfile) // Only show earnings tab for profile owner
+                    .map((tab) => (
                     <button
                       key={tab}
                       onClick={() => setSelectedTab(tab)}
@@ -419,6 +432,23 @@ useEffect(() => {
                     console.log(challenge);
                   }}
                 />
+              )}
+              {selectedTab === TABS.EARNINGS && isOwnProfile && (
+                <div className="px-5">
+                  <div className="flex flex-col items-center justify-center p-8 bg-zinc-900 rounded-xl">
+                    <div className="text-6xl mb-4">💰</div>
+                    <h3 className="text-xl font-semibold mb-4">Your Earnings Dashboard</h3>
+                    <p className="text-zinc-400 text-center mb-6">
+                      View your complete earnings from creator programs and challenge prizes in one place.
+                    </p>
+                    <button
+                      onClick={() => router.push(`/${user.username}/earnings`)}
+                      className="bg-[#E0FE10] text-black py-3 px-6 rounded-xl font-semibold hover:bg-[#C5E609] transition-colors"
+                    >
+                      View Full Earnings Dashboard
+                    </button>
+                  </div>
+                </div>
               )}
             </div>
           </div>

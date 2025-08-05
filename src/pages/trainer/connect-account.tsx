@@ -71,9 +71,9 @@ const ConnectAccountPage = () => {
           );
         }
         
-        // Redirect to dashboard because user has a Stripe account
-        console.log('[ConnectAccount] Redirecting to dashboard');
-        router.push('/trainer/dashboard');
+        // Redirect to unified earnings dashboard because user has a Stripe account
+        console.log('[ConnectAccount] Redirecting to unified earnings dashboard');
+        router.push(`/${currentUser.username}/earnings`);
       } 
       // If status is complete but no stripeAccountId, fix the inconsistency
       else if (refreshedUser?.creator?.onboardingStatus === StripeOnboardingStatus.Complete) {

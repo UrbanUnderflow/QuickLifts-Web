@@ -8,6 +8,7 @@ import { RootState } from '../../redux/store';
 import { userService } from '../../api/firebase/user/service';
 import Image from 'next/image';
 import Link from 'next/link';
+import { trackEvent } from '../../lib/analytics';
 
 interface EarningsData {
   totalEarned: number;
@@ -33,6 +34,13 @@ interface BuyerInfo {
 }
 
 const TrainerDashboard = () => {
+  const router = useRouter();
+  
+  // Get user from Redux store
+  const currentUser = useSelector((state: RootState) => state.user.currentUser);
+  const isLoading = useSelector((state: RootState) => state.user.loading);
+  
+  // Legacy state (kept for compatibility during transition)
   const [dashboardUrl, setDashboardUrl] = useState<string>('');
   const [accountStatus, setAccountStatus] = useState<'loading' | 'not_started' | 'incomplete' | 'complete' | 'error'>('loading');
   const [earningsData, setEarningsData] = useState<EarningsData | null>(null);
@@ -40,11 +48,7 @@ const TrainerDashboard = () => {
   const [isEarningsLoading, setIsEarningsLoading] = useState(true);
   const [isDashboardLinkLoading, setIsDashboardLinkLoading] = useState(false);
   const [buyerInfoMap, setBuyerInfoMap] = useState<Map<string, BuyerInfo>>(new Map());
-  const router = useRouter();
-  
-  // Get user from Redux store
-  const currentUser = useSelector((state: RootState) => state.user.currentUser);
-  const isLoading = useSelector((state: RootState) => state.user.loading);
+  const [showRedirectNotice, setShowRedirectNotice] = useState(true);
 
   // Function to fetch buyer information for all sales
   const fetchBuyerInformation = async (sales: EarningsData['recentSales']) => {
@@ -107,6 +111,7 @@ const TrainerDashboard = () => {
     }
   };
 
+  // Redirect effect for migration to unified earnings
   useEffect(() => {
     // If still loading, wait
     if (isLoading) {
@@ -119,14 +124,50 @@ const TrainerDashboard = () => {
       return;
     }
 
+    // Check for legacy parameters that need to be preserved
+    const preserveParams = router.query.complete ? '?migrated=trainer' : '?migrated=trainer';
+    
+    // Track legacy dashboard access
+    if (currentUser?.email) {
+      trackEvent(currentUser.email, 'LegacyTrainerDashboardAccessed', {
+        userId: currentUser.id,
+        username: currentUser.username,
+        hasRedirectNotice: showRedirectNotice,
+        redirectDelay: showRedirectNotice ? 3000 : 0,
+        preservedParams: preserveParams
+      });
+    }
+
+    // Automatic redirect to unified earnings (with delay for notice)
+    const redirectTimer = setTimeout(() => {
+      if (currentUser?.email) {
+        trackEvent(currentUser.email, 'LegacyDashboardRedirectExecuted', {
+          userId: currentUser.id,
+          fromDashboard: 'trainer',
+          targetUrl: `/${currentUser.username}/earnings${preserveParams}`
+        });
+      }
+      router.push(`/${currentUser.username}/earnings${preserveParams}`);
+    }, showRedirectNotice ? 3000 : 0);
+
+    return () => clearTimeout(redirectTimer);
+  }, [currentUser, isLoading, router, showRedirectNotice]);
+
+  // Legacy effect (deprecated but kept for any edge cases)
+  useEffect(() => {
+    if (isLoading || !currentUser) return;
+
     // Check if the user completed the onboarding from a redirect
     if (router.query.complete) {
       markOnboardingComplete();
     }
 
-    fetchAccountStatus();
-    fetchEarningsData();
-  }, [router.query, currentUser, isLoading, router]);
+    // Only fetch legacy data if not redirecting
+    if (!showRedirectNotice) {
+      fetchAccountStatus();
+      fetchEarningsData();
+    }
+  }, [router.query, currentUser, isLoading, router, showRedirectNotice]);
 
   // Update to fetch buyer info when earnings data changes
   useEffect(() => {
@@ -532,7 +573,53 @@ const TrainerDashboard = () => {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-zinc-900"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#E0FE10]"></div>
+      </div>
+    );
+  }
+
+  // Show redirect notice for migration to unified earnings
+  if (showRedirectNotice && currentUser) {
+    return (
+      <div className="min-h-screen bg-zinc-950 text-white flex items-center justify-center">
+        <div className="max-w-md mx-auto px-6 text-center">
+          <div className="bg-zinc-900 p-8 rounded-xl">
+            <div className="text-6xl mb-6">🚀</div>
+            <h1 className="text-2xl font-bold mb-4">Dashboard Upgraded!</h1>
+            <p className="text-zinc-400 mb-6">
+              We've consolidated your trainer earnings with all your other Pulse earnings 
+              into one unified dashboard for a better experience.
+            </p>
+            
+            <div className="bg-zinc-800 p-4 rounded-lg mb-6">
+              <p className="text-sm text-zinc-300">
+                <strong>Redirecting to:</strong><br/>
+                <span className="text-[#E0FE10]">/{currentUser.username}/earnings</span>
+              </p>
+            </div>
+
+            <div className="flex items-center justify-center gap-2 mb-6">
+              <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-[#E0FE10]"></div>
+              <span className="text-sm text-zinc-400">Redirecting in 3 seconds...</span>
+            </div>
+
+            <div className="space-y-3">
+              <button
+                onClick={() => router.push(`/${currentUser.username}/earnings?migrated=trainer`)}
+                className="w-full bg-[#E0FE10] text-black py-3 px-6 rounded-xl font-semibold"
+              >
+                Go Now
+              </button>
+              
+              <button
+                onClick={() => setShowRedirectNotice(false)}
+                className="w-full bg-zinc-800 text-white py-3 px-6 rounded-xl font-semibold"
+              >
+                Stay on Legacy Dashboard
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -540,7 +627,25 @@ const TrainerDashboard = () => {
   return (
     <div className="min-h-screen bg-zinc-950 text-white py-10">
       <div className="max-w-6xl mx-auto px-6">
-        <h1 className="text-3xl font-bold mb-6">Trainer Dashboard</h1>
+        <div className="bg-yellow-900/30 border border-yellow-500/50 rounded-xl p-4 mb-6">
+          <div className="flex items-center gap-3">
+            <span className="text-yellow-400 text-xl">⚠️</span>
+            <div>
+              <p className="font-semibold text-yellow-200">Legacy Dashboard</p>
+              <p className="text-sm text-yellow-300">
+                This dashboard is deprecated. Please use the 
+                <button 
+                  onClick={() => router.push(`/${currentUser?.username}/earnings`)}
+                  className="underline ml-1 text-[#E0FE10] hover:text-[#C5E609]"
+                >
+                  unified earnings dashboard
+                </button> instead.
+              </p>
+            </div>
+          </div>
+        </div>
+        
+        <h1 className="text-3xl font-bold mb-6">Trainer Dashboard (Legacy)</h1>
         
         {renderAccountStatus()}
         
