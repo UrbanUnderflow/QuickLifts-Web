@@ -269,20 +269,41 @@ function buildUnifiedEarningsResponse({ userId, userData, creatorEarnings, winne
 
   // Populate creator earnings data
   if (creatorEarnings) {
-    console.log('Processing creator earnings:', {
-      hasRecentSales: !!creatorEarnings.recentSales,
-      recentSalesLength: creatorEarnings.recentSales ? creatorEarnings.recentSales.length : 0,
-      recentSalesType: typeof creatorEarnings.recentSales,
-      creatorEarningsKeys: Object.keys(creatorEarnings)
-    });
     creatorData.totalEarned = creatorEarnings.totalEarned || 0;
     creatorData.availableBalance = creatorEarnings.availableBalance || 0;
     creatorData.pendingPayout = creatorEarnings.pendingPayout || 0;
     creatorData.roundsSold = creatorEarnings.roundsSold || 0;
     creatorData.recentSales = creatorEarnings.recentSales || [];
-    console.log('After processing, creatorData.recentSales length:', creatorData.recentSales.length);
+    
+    // DEBUG: Return debug info instead of proceeding
+    if (event.queryStringParameters?.debug === 'true') {
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({
+          success: true,
+          debug: true,
+          creatorEarnings: creatorEarnings,
+          creatorDataRecentSales: creatorData.recentSales,
+          recentSalesLength: creatorData.recentSales.length,
+          message: 'Debug mode - showing creator earnings data'
+        })
+      };
+    }
   } else {
-    console.warn('Creator earnings is null/undefined, using empty data');
+    // DEBUG: Return debug info for null case
+    if (event.queryStringParameters?.debug === 'true') {
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({
+          success: false,
+          debug: true,
+          creatorEarnings: null,
+          message: 'Debug mode - creator earnings is null'
+        })
+      };
+    }
   }
 
   // Populate winner prize data (convert cents to dollars)
@@ -303,13 +324,17 @@ function buildUnifiedEarningsResponse({ userId, userData, creatorEarnings, winne
   // Build combined transaction history (with error handling)
   let transactions = [];
   try {
-    console.log('Building transaction history with:', {
+    console.log('===== BUILDING TRANSACTION HISTORY =====');
+    console.log('creatorData.recentSales:', JSON.stringify(creatorData.recentSales, null, 2));
+    console.log('winnerData.prizeRecords:', JSON.stringify(winnerData.prizeRecords, null, 2));
+    console.log('About to call buildCombinedTransactionHistory with:', {
       creatorSalesCount: creatorData.recentSales ? creatorData.recentSales.length : 0,
-      prizeRecordsCount: winnerData.prizeRecords ? winnerData.prizeRecords.length : 0,
-      creatorSalesData: creatorData.recentSales
+      prizeRecordsCount: winnerData.prizeRecords ? winnerData.prizeRecords.length : 0
     });
     transactions = buildCombinedTransactionHistory(creatorData.recentSales, winnerData.prizeRecords);
+    console.log('===== TRANSACTION HISTORY RESULT =====');
     console.log('Transaction history built successfully, transaction count:', transactions.length);
+    console.log('Final transactions:', JSON.stringify(transactions, null, 2));
   } catch (transactionError) {
     console.error('Error building transaction history:', transactionError);
     transactions = []; // Fallback to empty array
@@ -404,13 +429,12 @@ function buildUnifiedEarningsResponse({ userId, userData, creatorEarnings, winne
 
 // Helper function to build combined transaction history
 function buildCombinedTransactionHistory(creatorSales, prizeRecords) {
-  console.log('[buildCombinedTransactionHistory] Starting with:', {
-    creatorSales: creatorSales,
-    creatorSalesType: typeof creatorSales,
-    isArray: Array.isArray(creatorSales),
-    prizeRecords: prizeRecords,
-    prizeRecordsType: typeof prizeRecords
-  });
+  console.log('[buildCombinedTransactionHistory] ===== STARTING =====');
+  console.log('[buildCombinedTransactionHistory] creatorSales:', JSON.stringify(creatorSales, null, 2));
+  console.log('[buildCombinedTransactionHistory] creatorSalesType:', typeof creatorSales);
+  console.log('[buildCombinedTransactionHistory] isArray:', Array.isArray(creatorSales));
+  console.log('[buildCombinedTransactionHistory] prizeRecords:', JSON.stringify(prizeRecords, null, 2));
+  console.log('[buildCombinedTransactionHistory] prizeRecordsType:', typeof prizeRecords);
   
   const transactions = [];
 
