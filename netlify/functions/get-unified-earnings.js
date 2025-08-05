@@ -229,6 +229,8 @@ async function fetchWinnerPrizeData(userId) {
 // Helper function to build unified earnings response
 function buildUnifiedEarningsResponse({ userId, userData, creatorEarnings, winnerPrizes, hasCreatorAccount, hasWinnerAccount }) {
   console.log('Building unified earnings response...');
+  
+  try {
 
   // Initialize earnings data with defaults
   const creatorData = {
@@ -275,8 +277,14 @@ function buildUnifiedEarningsResponse({ userId, userData, creatorEarnings, winne
   const totalEarned = creatorData.totalEarned + winnerData.totalEarned;
   const pendingPayout = creatorData.pendingPayout + winnerData.pendingPayout;
 
-  // Build combined transaction history
-  const transactions = buildCombinedTransactionHistory(creatorData.recentSales, winnerData.prizeRecords);
+  // Build combined transaction history (with error handling)
+  let transactions = [];
+  try {
+    transactions = buildCombinedTransactionHistory(creatorData.recentSales, winnerData.prizeRecords);
+  } catch (transactionError) {
+    console.error('Error building transaction history:', transactionError);
+    transactions = []; // Fallback to empty array
+  }
 
   // Determine payout capabilities
   const canRequestPayout = totalBalance >= 10.00; // Minimum $10 payout
@@ -314,7 +322,7 @@ function buildUnifiedEarningsResponse({ userId, userData, creatorEarnings, winne
     // Payout capabilities
     canRequestPayout,
     minimumPayoutAmount,
-    nextPayoutDate: calculateNextPayoutDate(totalBalance),
+    nextPayoutDate: totalBalance >= 10 ? 'Available now' : 'When balance reaches $10',
     
     // Account status
     hasCreatorAccount,
@@ -327,6 +335,42 @@ function buildUnifiedEarningsResponse({ userId, userData, creatorEarnings, winne
   };
 
   return unifiedEarnings;
+  
+  } catch (error) {
+    console.error('Error in buildUnifiedEarningsResponse:', error);
+    // Return a safe fallback response
+    return {
+      totalBalance: 0,
+      totalEarned: 0,
+      pendingPayout: 0,
+      creatorEarnings: {
+        totalEarned: 0,
+        availableBalance: 0,
+        pendingPayout: 0,
+        roundsSold: 0,
+        stripeAccountId: userData.creator?.stripeAccountId || null,
+        onboardingStatus: userData.creator?.onboardingStatus || 'not_started'
+      },
+      prizeWinnings: {
+        totalEarned: 0,
+        availableBalance: 0,
+        pendingPayout: 0,
+        totalWins: 0,
+        stripeAccountId: userData.winner?.stripeAccountId || null,
+        onboardingStatus: userData.winner?.onboardingStatus || 'not_started'
+      },
+      transactions: [],
+      canRequestPayout: false,
+      minimumPayoutAmount: 10.00,
+      nextPayoutDate: 'When balance reaches $10',
+      hasCreatorAccount: hasCreatorAccount || false,
+      hasWinnerAccount: hasWinnerAccount || false,
+      needsAccountSetup: false,
+      lastUpdated: new Date().toISOString(),
+      isNewAccount: true,
+      error: 'Error building earnings response'
+    };
+  }
 }
 
 // Helper function to build combined transaction history

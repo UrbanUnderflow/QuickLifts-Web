@@ -198,7 +198,7 @@ const TrainerDashboard = () => {
         
         try {
           // Call the health check function to find and relink missing stripeAccountId
-          const response = await fetch(`/.netlify/functions/health-check-stripe-accounts`, {
+          const response = await fetch(`/.netlify/functions/health-check-stripe-accounts?userId=${currentUser.id}`, {
             method: 'GET',
             headers: {
               'Content-Type': 'application/json',
@@ -239,6 +239,9 @@ const TrainerDashboard = () => {
                   
                   if (hasValidStripeAccount) {
                     setAccountStatus('complete');
+                    console.log('✅ Auto-fix successful: stripeAccountId restored and onboarding status should be complete');
+                  } else {
+                    console.warn('⚠️ Auto-fix may not have worked completely - stripeAccountId still missing');
                   }
                 } catch (error) {
                   console.error('Error refreshing account status after auto-fix:', error);
@@ -257,7 +260,7 @@ const TrainerDashboard = () => {
                   console.error('Error refreshing earnings after auto-fix:', error);
                 }
               }
-            }, 2000);
+            }, 3000); // Increased delay to give database time to update
           }
         } catch (error) {
           console.error('❌ Auto-fix attempt failed:', error);

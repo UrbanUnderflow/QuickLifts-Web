@@ -176,7 +176,7 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
         
         try {
           // Call the health check function to find and relink missing stripeAccountId
-          const response = await fetch(`${API_BASE_URL}/health-check-stripe-accounts`, {
+          const response = await fetch(`${API_BASE_URL}/health-check-stripe-accounts?userId=${profileUser.id}`, {
             method: 'GET',
             headers: {
               'Content-Type': 'application/json',
@@ -227,7 +227,7 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
                   setIsEarningsLoading(false);
                 }
               }
-            }, 2000);
+            }, 3000); // Increased delay to give database time to update
           }
         } catch (error) {
           console.error('❌ Auto-fix attempt failed:', error);

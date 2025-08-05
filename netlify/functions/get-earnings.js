@@ -102,9 +102,33 @@ const handler = async (event) => {
       
       try {
         console.log('About to retrieve balance from Stripe for connected account:', connectedAccountId);
+        console.log('Stripe SDK initialized:', !!stripe);
+        console.log('Environment check:', {
+          hasStripeKey: !!process.env.STRIPE_SECRET_KEY,
+          keyPrefix: process.env.STRIPE_SECRET_KEY ? process.env.STRIPE_SECRET_KEY.substring(0, 10) + '...' : 'none'
+        });
         
-        // First, let's try to get just the balance to see if that's working
+        // First, let's verify the connected account exists and is accessible
         try {
+          console.log('Step 1: Verifying connected account details...');
+          const accountDetails = await stripe.accounts.retrieve(connectedAccountId);
+          console.log('Account verification successful:', {
+            id: accountDetails.id,
+            object: accountDetails.object,
+            country: accountDetails.country,
+            charges_enabled: accountDetails.charges_enabled,
+            payouts_enabled: accountDetails.payouts_enabled,
+            details_submitted: accountDetails.details_submitted,
+            restricted: accountDetails.restricted
+          });
+        } catch (accountError) {
+          console.error('Failed to retrieve account details:', accountError);
+          throw new Error(`Connected account verification failed: ${accountError.message}`);
+        }
+        
+        // Now try to get the balance
+        try {
+          console.log('Step 2: Retrieving balance from Stripe...');
           const balanceResult = await stripe.balance.retrieve({
             stripeAccount: connectedAccountId
           });

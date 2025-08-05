@@ -47,12 +47,14 @@ async function verifyAndFixStripeAccount(userId, userData) {
 
     // Use the first matching account
     const stripeAccount = userAccounts[0];
-    console.log(`Found and linking Stripe account: ${stripeAccount.id} for user ${userId}`);
+    console.log(`Found and linking Stripe account: ${stripeAccount.id} for user ${userId} and setting onboarding to complete`);
 
-    // Update the user's profile with the found account ID
+    // Update the user's profile with the found account ID and set onboarding to complete
     await db.collection("users").doc(userId).update({
       'creator.stripeAccountId': stripeAccount.id,
       'creator.accountType': stripeAccount.type,
+      'creator.onboardingStatus': 'complete', // Set to complete since Stripe account exists
+      'creator.onboardingCompletedAt': new Date(),
       'creator.lastLinked': new Date()
     });
 

@@ -39,12 +39,34 @@ const handler = async (event) => {
       throw new Error('Stripe not available');
     }
 
-    // Get all users who have completed onboarding but might be missing stripeAccountId
-    const usersSnapshot = await db.collection('users')
-      .where('creator.onboardingStatus', '==', 'complete')
-      .get();
+    // Check if a specific userId was provided for targeted fixing
+    const userId = event.queryStringParameters?.userId;
+    let usersSnapshot;
+    
+    if (userId) {
+      console.log(`[HealthCheck] Running targeted health check for user: ${userId}`);
+      const userDoc = await db.collection('users').doc(userId).get();
+      if (userDoc.exists) {
+        usersSnapshot = { docs: [userDoc], size: 1 };
+      } else {
+        console.error(`[HealthCheck] User ${userId} not found`);
+        return {
+          statusCode: 404,
+          headers,
+          body: JSON.stringify({
+            success: false,
+            error: 'User not found'
+          })
+        };
+      }
+    } else {
+      // Get all users who have completed onboarding but might be missing stripeAccountId
+      usersSnapshot = await db.collection('users')
+        .where('creator.onboardingStatus', '==', 'complete')
+        .get();
+    }
 
-    console.log(`[HealthCheck] Found ${usersSnapshot.size} users with completed onboarding`);
+    console.log(`[HealthCheck] Found ${usersSnapshot.size} users to check`);
 
     const issues = [];
     const fixedAccounts = [];
@@ -54,8 +76,8 @@ const handler = async (event) => {
       const userId = userDoc.id;
       const userData = userDoc.data();
       
-      // Check if they're missing stripeAccountId
-      if (!userData.creator?.stripeAccountId) {
+      // Check if they're missing stripeAccountId but have a creator object (indicating they tried to set up payments)
+      if (userData.creator && !userData.creator.stripeAccountId) {
         console.warn(`[HealthCheck] User ${userId} has completed onboarding but missing stripeAccountId`);
         
         const issue = {
@@ -79,15 +101,34 @@ const handler = async (event) => {
           if (userAccounts.length > 0) {
             const stripeAccount = userAccounts[0];
             
-            // Auto-fix the missing account ID
+            // Validate the Stripe account before using it
+            let accountValid = false;
+            try {
+              const accountDetails = await stripe.accounts.retrieve(stripeAccount.id);
+              accountValid = accountDetails && !accountDetails.restricted;
+              console.log(`[HealthCheck] Stripe account ${stripeAccount.id} validation:`, {
+                exists: !!accountDetails,
+                restricted: accountDetails?.restricted || false,
+                detailsSubmitted: accountDetails?.details_submitted || false,
+                chargesEnabled: accountDetails?.charges_enabled || false,
+                payoutsEnabled: accountDetails?.payouts_enabled || false
+              });
+            } catch (validateError) {
+              console.error(`[HealthCheck] Failed to validate Stripe account ${stripeAccount.id}:`, validateError);
+            }
+            
+            // Auto-fix the missing account ID and set onboarding to complete
             await db.collection("users").doc(userId).update({
               'creator.stripeAccountId': stripeAccount.id,
               'creator.accountType': stripeAccount.type,
+              'creator.onboardingStatus': accountValid ? 'complete' : 'incomplete', // Only set complete if account is valid
+              'creator.onboardingCompletedAt': accountValid ? new Date() : null,
+              'creator.accountValidated': accountValid,
               'creator.healthCheckFixed': new Date(),
               'creator.lastLinked': new Date()
             });
 
-            console.log(`[HealthCheck] AUTO-FIXED: Linked account ${stripeAccount.id} to user ${userId}`);
+            console.log(`[HealthCheck] AUTO-FIXED: Linked account ${stripeAccount.id} to user ${userId}, onboarding: ${accountValid ? 'complete' : 'incomplete'}, valid: ${accountValid}`);
             
             fixedAccounts.push({
               ...issue,
