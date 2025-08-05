@@ -117,30 +117,95 @@ const handler = async (event) => {
       }
     }
 
-    // Create Stripe Express account with tax reporting capabilities
-    const account = await stripe.accounts.create({
-        type: 'express',
-        country: 'US',
-        capabilities: {
-            card_payments: { requested: true },
-            transfers: { requested: true },
-            tax_reporting_us_1099_k: { requested: true },
-            tax_reporting_us_1099_misc: { requested: true }
-        },
-        business_type: 'individual',
-        business_profile: {
-            product_description: 'Fitness training and workout programs',
-            url: `https://fitwithpulse.ai/profile/${userData.username}`,
-            mcc: '7991' // Physical fitness facilities
-        },
-        metadata: {
-            platform: 'pulse',
-            account_type: 'trainer',
-            user_id: userId,
-            username: userData.username,
-            purpose: 'creator_earnings'
+    // CRITICAL: Check if account already exists before creating new one
+    console.log(`[CreateConnectedAccount] Checking for existing accounts for email: ${userData.email}`);
+    
+    let account;
+    try {
+      // Search for existing Connect accounts with this email
+      const existingAccounts = await stripe.accounts.list({ limit: 100 });
+      const userAccounts = existingAccounts.data.filter(acc => 
+        acc.email === userData.email || 
+        (acc.business_profile && acc.business_profile.support_email === userData.email)
+      );
+      
+      if (userAccounts.length > 0) {
+        console.log(`[CreateConnectedAccount] Found ${userAccounts.length} existing accounts for ${userData.email}`);
+        
+        // Use smart selection logic to pick the best account
+        if (userAccounts.length === 1) {
+          account = userAccounts[0];
+          console.log(`[CreateConnectedAccount] Using existing account: ${account.id}`);
+        } else {
+          // Priority 1: Account with activity (balance or transfers)
+          for (const existingAccount of userAccounts) {
+            try {
+              const balance = await stripe.balance.retrieve({ stripeAccount: existingAccount.id });
+              const hasBalance = balance.available.some(b => b.amount > 0) || balance.pending.some(b => b.amount > 0);
+              
+              if (hasBalance) {
+                account = existingAccount;
+                console.log(`[CreateConnectedAccount] Using existing account with balance: ${account.id}`);
+                break;
+              }
+              
+              const transfers = await stripe.transfers.list({ 
+                destination: existingAccount.id, 
+                limit: 1 
+              });
+              
+              if (transfers.data.length > 0) {
+                account = existingAccount;
+                console.log(`[CreateConnectedAccount] Using existing account with transfers: ${account.id}`);
+                break;
+              }
+            } catch (error) {
+              console.warn(`[CreateConnectedAccount] Could not check activity for ${existingAccount.id}:`, error.message);
+            }
+          }
+          
+          // Priority 2: Most recent account if no activity found
+          if (!account) {
+            account = userAccounts.reduce((latest, current) => 
+              current.created > latest.created ? current : latest
+            );
+            console.log(`[CreateConnectedAccount] Using most recent existing account: ${account.id}`);
+          }
         }
-    });
+      } else {
+        console.log(`[CreateConnectedAccount] No existing accounts found, creating new account`);
+        
+        // Create Stripe Express account with tax reporting capabilities
+        account = await stripe.accounts.create({
+            type: 'express',
+            country: 'US',
+            capabilities: {
+                card_payments: { requested: true },
+                transfers: { requested: true },
+                tax_reporting_us_1099_k: { requested: true },
+                tax_reporting_us_1099_misc: { requested: true }
+            },
+            business_type: 'individual',
+            business_profile: {
+                product_description: 'Fitness training and workout programs',
+                url: `https://fitwithpulse.ai/profile/${userData.username}`,
+                mcc: '7991' // Physical fitness facilities
+            },
+            metadata: {
+                platform: 'pulse',
+                account_type: 'trainer',
+                user_id: userId,
+                username: userData.username,
+                purpose: 'creator_earnings'
+            }
+        });
+        
+        console.log('[CreateConnectedAccount] New account created:', account.id);
+      }
+    } catch (error) {
+      console.error('[CreateConnectedAccount] Error checking/creating account:', error);
+      throw error;
+    }
 
     console.log('[CreateConnectedAccount] Account created:', account.id);
 
