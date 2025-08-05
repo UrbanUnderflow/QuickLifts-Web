@@ -41,9 +41,32 @@ exports.handler = async (event, context) => {
   console.log('Processing username:', username);
 
   try {
-    // Query Firestore for user
+    // Query Firestore for user - case insensitive
     const usersRef = db.collection('users');
-    const snapshot = await usersRef.where('username', '==', username).get();
+    const normalizedUsername = username.toLowerCase().trim();
+    console.log(`Looking up username: "${username}" (normalized: "${normalizedUsername}")`);
+    
+    // First try exact match with normalized username
+    let snapshot = await usersRef.where('username', '==', normalizedUsername).get();
+    
+    // If no exact match found, try case-insensitive search
+    if (snapshot.empty) {
+      console.log('No exact match found, trying case-insensitive search...');
+      const allUsersSnapshot = await usersRef.get();
+      const matchingDocs = allUsersSnapshot.docs.filter(doc => {
+        const userData = doc.data();
+        return userData.username && userData.username.toLowerCase().trim() === normalizedUsername;
+      });
+      
+      if (matchingDocs.length > 0) {
+        console.log(`Found case-insensitive match: "${matchingDocs[0].data().username}"`);
+        // Create a fake snapshot object for consistency
+        snapshot = {
+          empty: false,
+          docs: matchingDocs
+        };
+      }
+    }
 
     if (snapshot.empty) {
       return {

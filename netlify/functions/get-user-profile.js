@@ -50,17 +50,49 @@ async function getUserByUsername(username) {
   try {
     // If using mock data, return mocked user
     if (useMockData) {
-      console.log(`[DEV MODE] Returning mock data for username: ${username}`);
-      const mockUser = mockUsers[username];
+      console.log(`[DEV MODE] Looking up mock data for username: ${username}`);
+      const normalizedUsername = username.toLowerCase().trim();
+      
+      // Try case-insensitive lookup in mock data
+      const mockUserKey = Object.keys(mockUsers).find(key => 
+        key.toLowerCase().trim() === normalizedUsername
+      );
+      
+      const mockUser = mockUserKey ? mockUsers[mockUserKey] : null;
       if (!mockUser) {
+        console.log(`[DEV MODE] No mock user found for: ${username} (normalized: ${normalizedUsername})`);
         throw new Error('User not found');
       }
+      console.log(`[DEV MODE] Found mock user: ${mockUserKey}`);
       return mockUser;
     }
 
-    // Real implementation
+    // Real implementation - case insensitive username lookup
     const usersRef = db.collection('users');
-    const snapshot = await usersRef.where('username', '==', username).get();
+    const normalizedUsername = username.toLowerCase().trim();
+    console.log(`Looking up username: "${username}" (normalized: "${normalizedUsername}")`);
+    
+    // First try exact match with normalized username
+    let snapshot = await usersRef.where('username', '==', normalizedUsername).get();
+    
+    // If no exact match found, try case-insensitive search
+    if (snapshot.empty) {
+      console.log('No exact match found, trying case-insensitive search...');
+      const allUsersSnapshot = await usersRef.get();
+      const matchingDocs = allUsersSnapshot.docs.filter(doc => {
+        const userData = doc.data();
+        return userData.username && userData.username.toLowerCase().trim() === normalizedUsername;
+      });
+      
+      if (matchingDocs.length > 0) {
+        console.log(`Found case-insensitive match: "${matchingDocs[0].data().username}"`);
+        // Create a fake snapshot object for consistency
+        snapshot = {
+          empty: false,
+          docs: matchingDocs
+        };
+      }
+    }
 
     if (snapshot.empty) {
       throw new Error('User not found');

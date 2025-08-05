@@ -83,6 +83,7 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
     showTransactionCount: false,
     showRecentActivity: false
   });
+  const [autoFixAttempted, setAutoFixAttempted] = useState(false);
 
   const API_BASE_URL = process.env.NODE_ENV === 'development' 
     ? 'http://localhost:8888/.netlify/functions'
@@ -148,6 +149,62 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
 
          fetchEarningsData();
    }, [profileUser?.id, isActualOwner, API_BASE_URL]);
+
+  // Auto-fix missing stripeAccountId when conditions are met
+  useEffect(() => {
+    const attemptAutoFix = async () => {
+      // Only attempt auto-fix if:
+      // 1. User is viewing their own earnings page
+      // 2. Account shows as new but user seems to have setup (hasCreatorAccount or hasWinnerAccount)
+      // 3. We haven't already attempted an auto-fix
+      // 4. Not currently loading
+      if (
+        isActualOwner &&
+        earningsData?.isNewAccount === true && 
+        (earningsData?.hasCreatorAccount || earningsData?.hasWinnerAccount) &&
+        !autoFixAttempted && 
+        !isEarningsLoading &&
+        profileUser?.id
+      ) {
+        console.log('🔧 Auto-fix triggered on earnings page: Account appears set up but no transactions found. Attempting to relink Stripe account...');
+        setAutoFixAttempted(true);
+        
+        try {
+          // Call the health check function to find and relink missing stripeAccountId
+          const response = await fetch(`${API_BASE_URL}/health-check-stripe-accounts`);
+          const result = await response.json();
+          
+          console.log('Health check result:', result);
+          
+          if (result.success) {
+            console.log('✅ Auto-fix completed successfully. Refreshing earnings data...');
+            // Wait a moment for database updates to propagate, then refresh
+            setTimeout(() => {
+              if (profileUser?.id) {
+                // Re-fetch earnings data
+                const refetchEarnings = async () => {
+                  try {
+                    const response = await fetch(`${API_BASE_URL}/get-unified-earnings?userId=${profileUser.id}`);
+                    const data = await response.json();
+                    if (data.success) {
+                      setEarningsData(data.earnings);
+                    }
+                  } catch (error) {
+                    console.error('Error refetching earnings after auto-fix:', error);
+                  }
+                };
+                refetchEarnings();
+              }
+            }, 2000);
+          }
+        } catch (error) {
+          console.error('❌ Auto-fix attempt failed:', error);
+        }
+      }
+    };
+
+    attemptAutoFix();
+  }, [isActualOwner, earningsData?.isNewAccount, earningsData?.hasCreatorAccount, earningsData?.hasWinnerAccount, autoFixAttempted, isEarningsLoading, profileUser?.id, API_BASE_URL]);
 
   // Generate dashboard link
   const generateDashboardLink = async () => {
@@ -255,12 +312,12 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
     
     const hasCreatorEarnings = earningsData.creatorEarnings.totalEarned > 0;
     const hasPrizeWinnings = earningsData.prizeWinnings.totalEarned > 0;
-    const hasAnyEarnings = hasCreatorEarnings || hasPrizeWinnings;
-    const hasAnyAccount = earningsData.hasCreatorAccount || earningsData.hasWinnerAccount;
     
-    // Show setup if they have earnings but no connected accounts
-    // OR if the backend explicitly says they need setup
-    return (hasAnyEarnings && !hasAnyAccount) || earningsData.needsAccountSetup;
+    // Only show setup if they have specific earnings but no corresponding account
+    const needsCreatorSetup = hasCreatorEarnings && !earningsData.hasCreatorAccount;
+    const needsWinnerSetup = hasPrizeWinnings && !earningsData.hasWinnerAccount;
+    
+    return needsCreatorSetup || needsWinnerSetup;
   };
 
   const getAccountSetupDetails = () => {
@@ -483,7 +540,93 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
     );
   };
 
-  // Not owner viewing someone else's earnings (public view)
+  // Authentication mismatch - user trying to access someone else's earnings while logged in
+  if (!isActualOwner && currentUser && profileUser) {
+    return (
+      <div className="min-h-screen bg-zinc-950 text-white py-10">
+        <div className="max-w-4xl mx-auto px-6">
+          <div className="text-center mb-8">
+            <div className="flex items-center justify-center mb-6">
+              {profileUser?.profileImage?.profileImageURL ? (
+                <Image
+                  src={profileUser.profileImage.profileImageURL}
+                  alt={profileUser.displayName}
+                  width={96}
+                  height={96}
+                  className="rounded-full"
+                />
+              ) : (
+                <div className="w-24 h-24 rounded-full bg-zinc-800 flex items-center justify-center">
+                  <span className="text-2xl">{profileUser?.displayName?.charAt(0) || 'U'}</span>
+                </div>
+              )}
+            </div>
+            
+            <h1 className="text-3xl font-bold mb-2">{profileUser?.displayName}'s Earnings</h1>
+            <p className="text-zinc-400 mb-6">@{profileUser?.username}</p>
+          </div>
+
+          <div className="bg-orange-900/30 border border-orange-500/50 rounded-xl p-8 text-center">
+            <div className="text-6xl mb-4">🔐</div>
+            <h2 className="text-xl font-semibold mb-4">Account Access Required</h2>
+            <p className="text-zinc-300 mb-6">
+              You're currently signed in as <strong className="text-[#E0FE10]">@{currentUser.username}</strong>, 
+              but this earnings dashboard belongs to <strong>@{profileUser.username}</strong>.
+            </p>
+            
+            <div className="bg-zinc-900 rounded-lg p-4 mb-6">
+              <p className="text-sm text-zinc-400 mb-4">
+                To access this earnings dashboard, you need to:
+              </p>
+              <div className="text-left space-y-2">
+                <div className="flex items-center gap-3">
+                  <span className="text-orange-400">•</span>
+                  <span className="text-sm">Sign out of your current account</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-orange-400">•</span>
+                  <span className="text-sm">Sign in as @{profileUser.username}</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-orange-400">•</span>
+                  <span className="text-sm">Then return to this page</span>
+                </div>
+              </div>
+            </div>
+            
+            <div className="space-y-4">
+              <button
+                onClick={() => {
+                  // Use the logout API to properly sign out and redirect
+                  const redirectUrl = `/${profileUser.username}/earnings`;
+                  window.location.href = `/api/auth/logout?redirect=${encodeURIComponent(redirectUrl)}`;
+                }}
+                className="w-full bg-[#E0FE10] text-black py-3 px-6 rounded-xl font-semibold hover:bg-[#C5E609] transition-colors"
+              >
+                Sign Out & Switch Accounts
+              </button>
+              
+              <div className="flex gap-4">
+                <Link href={`/profile/${profileUser.username}`} className="flex-1">
+                  <button className="w-full bg-zinc-800 text-white py-3 px-6 rounded-xl font-semibold hover:bg-zinc-700 transition-colors">
+                    View {profileUser.displayName}'s Profile
+                  </button>
+                </Link>
+                
+                <Link href={`/${currentUser.username}/earnings`} className="flex-1">
+                  <button className="w-full bg-zinc-800 text-white py-3 px-6 rounded-xl font-semibold hover:bg-zinc-700 transition-colors">
+                    View My Earnings
+                  </button>
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Not logged in but trying to access someone's earnings (public view)
   if (!isActualOwner) {
     return (
       <div className="min-h-screen bg-zinc-950 text-white py-10">

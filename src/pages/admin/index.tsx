@@ -178,6 +178,12 @@ const adminCardsData = [
     description: "Manage venture capital prospects and investor relationships for fundraising.",
     icon: <Building2 className="w-5 h-5" />,
     link: "/admin/vcDatabase"
+  },
+  {
+    title: "Assign Prize Money",
+    description: "Add and manage prize money for challenges. Set prize amounts and distribution types.",
+    icon: <Award className="w-5 h-5" />,
+    link: "/admin/assign-prize-money"
   }
 ];
 

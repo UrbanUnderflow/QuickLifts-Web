@@ -177,8 +177,8 @@ export class User {
       macros: this.macros,
       profileImage: this.profileImage.toDictionary(),
       registrationComplete: this.registrationComplete,
-      creator: this.creator,
-      winner: this.winner, // Add winner to dictionary
+      creator: this.creator?.toDictionary(),
+      winner: this.winner?.toDictionary(), // Add winner to dictionary
       subscriptionType: this.subscriptionType,
       subscriptionPlatform: this.subscriptionPlatform,
       referrer: this.referrer,

@@ -8,6 +8,7 @@ import { PageMetaData as FirestorePageMetaData } from '../api/firebase/admin/typ
 import { FaTrophy, FaCoins, FaGamepad, FaChartLine, FaXmark, FaFire, FaStar, FaRocket, FaBolt, FaArrowRight, FaArrowsRotate } from 'react-icons/fa6';
 import { FaApple, FaUser, FaCheck} from 'react-icons/fa';
 import HomeContent from './HomeContent';
+import { useUser } from '../hooks/useUser';
 
 interface SerializablePageMetaData extends Omit<FirestorePageMetaData, 'lastUpdated'> {
   lastUpdated: string; 
@@ -1607,6 +1608,7 @@ const MarketingContent: React.FC<{ onUseWebApp: () => void; metaData: Serializab
 const HomePage: NextPage<HomePageProps> = ({ metaData }) => {
   const [showMarketing, setShowMarketing] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
+  const currentUser = useUser();
 
   useEffect(() => {
     // Check if user has seen marketing content before
@@ -1618,9 +1620,17 @@ const HomePage: NextPage<HomePageProps> = ({ metaData }) => {
   }, []);
 
   const handleUseWebApp = () => {
-    // Set flag that user has seen marketing and wants to use web app
-    localStorage.setItem(STORAGE_KEY, 'true');
-    setShowMarketing(false);
+    // Only allow web app access if user is authenticated
+    if (currentUser) {
+      // Set flag that user has seen marketing and wants to use web app
+      localStorage.setItem(STORAGE_KEY, 'true');
+      setShowMarketing(false);
+    } else {
+      // If not authenticated, AuthWrapper will handle showing the sign-in modal
+      // since we'll be trying to access protected content
+      localStorage.setItem(STORAGE_KEY, 'true');
+      setShowMarketing(false);
+    }
   };
 
   const handleBackToMarketing = () => {
@@ -1638,8 +1648,17 @@ const HomePage: NextPage<HomePageProps> = ({ metaData }) => {
     );
   }
 
-  // Show web app if user has seen marketing
+  // Show web app if user has seen marketing AND is authenticated
   if (!showMarketing) {
+    // If user is not authenticated, show marketing instead and clear the flag
+    if (!currentUser) {
+      // Clear the localStorage flag since user is not authenticated
+      localStorage.removeItem(STORAGE_KEY);
+      // Reset to show marketing
+      setShowMarketing(true);
+      return <MarketingContent onUseWebApp={handleUseWebApp} metaData={metaData} />;
+    }
+    
     return (
       <div className="h-screen relative">
         <HomeContent />

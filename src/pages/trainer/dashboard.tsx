@@ -49,6 +49,7 @@ const TrainerDashboard = () => {
   const [isDashboardLinkLoading, setIsDashboardLinkLoading] = useState(false);
   const [buyerInfoMap, setBuyerInfoMap] = useState<Map<string, BuyerInfo>>(new Map());
   const [showRedirectNotice, setShowRedirectNotice] = useState(true);
+  const [autoFixAttempted, setAutoFixAttempted] = useState(false);
 
   // Function to fetch buyer information for all sales
   const fetchBuyerInformation = async (sales: EarningsData['recentSales']) => {
@@ -175,6 +176,49 @@ const TrainerDashboard = () => {
       fetchBuyerInformation(earningsData.recentSales);
     }
   }, [earningsData]);
+
+  // Auto-fix missing stripeAccountId when conditions are met
+  useEffect(() => {
+    const attemptAutoFix = async () => {
+      // Only attempt auto-fix if:
+      // 1. Account status is complete (they have access to dashboard)
+      // 2. Earnings show as new account (no transactions found)
+      // 3. We haven't already attempted an auto-fix
+      // 4. Not currently loading
+      if (
+        accountStatus === 'complete' && 
+        earningsData?.isNewAccount === true && 
+        !autoFixAttempted && 
+        !isEarningsLoading &&
+        !isAccountLoading &&
+        currentUser?.id
+      ) {
+        console.log('🔧 Auto-fix triggered: Account appears set up but no transactions found. Attempting to relink Stripe account...');
+        setAutoFixAttempted(true);
+        
+        try {
+          // Call the health check function to find and relink missing stripeAccountId
+          const response = await fetch(`/.netlify/functions/health-check-stripe-accounts`);
+          const result = await response.json();
+          
+          console.log('Health check result:', result);
+          
+          if (result.success) {
+            console.log('✅ Auto-fix completed successfully. Refreshing earnings data...');
+            // Wait a moment for database updates to propagate, then refresh
+            setTimeout(() => {
+              fetchEarningsData();
+              fetchAccountStatus();
+            }, 2000);
+          }
+        } catch (error) {
+          console.error('❌ Auto-fix attempt failed:', error);
+        }
+      }
+    };
+
+    attemptAutoFix();
+  }, [accountStatus, earningsData?.isNewAccount, autoFixAttempted, isEarningsLoading, isAccountLoading, currentUser?.id, fetchEarningsData, fetchAccountStatus]);
 
   const markOnboardingComplete = async () => {
     if (!currentUser?.id) return;
@@ -653,10 +697,21 @@ const TrainerDashboard = () => {
           <>
             {earningsData && earningsData.isNewAccount && !isEarningsLoading && (
               <div className="bg-zinc-900 p-6 rounded-xl mb-8">
-                <h2 className="text-xl font-semibold mb-4">No Transactions Yet</h2>
+                <h2 className="text-xl font-semibold mb-4">
+                  {autoFixAttempted ? 'Checking Account Status...' : 'No Transactions Yet'}
+                </h2>
                 <p className="mb-6">
-                  Your payment account is set up and ready to receive payments, but you haven't
-                  received any payments yet. When payments are received, they'll appear here.
+                  {autoFixAttempted ? (
+                    <>
+                      🔧 We're automatically checking for any missing account connections. 
+                      If you have existing transactions, they should appear shortly...
+                    </>
+                  ) : (
+                    <>
+                      Your payment account is set up and ready to receive payments, but you haven't
+                      received any payments yet. When payments are received, they'll appear here.
+                    </>
+                  )}
                 </p>
                 <div className="flex items-center justify-center p-8 border border-zinc-800 rounded-lg">
                   <div className="text-center">
