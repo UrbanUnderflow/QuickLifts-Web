@@ -131,19 +131,109 @@ const handler = async (event) => {
         };
       }
 
-      // Test 3: Payment intents list (basic API access test)
+      // Test 3: Payment intents list
       try {
         const paymentIntents = await stripe.paymentIntents.list({
-          limit: 1
+          limit: 10
         }, {
           stripeAccount: accountIdToTest
         });
         results.tests.paymentIntentsList = {
           success: true,
-          count: paymentIntents.data.length
+          count: paymentIntents.data.length,
+          recent: paymentIntents.data.slice(0, 3).map(pi => ({
+            id: pi.id,
+            amount: pi.amount,
+            currency: pi.currency,
+            status: pi.status,
+            created: new Date(pi.created * 1000).toISOString()
+          }))
         };
       } catch (error) {
         results.tests.paymentIntentsList = {
+          success: false,
+          error: error.message,
+          code: error.code,
+          type: error.type
+        };
+      }
+
+      // Test 4: Transfers to this account
+      try {
+        const transfers = await stripe.transfers.list({
+          destination: accountIdToTest,
+          limit: 10
+        });
+        results.tests.transfersToAccount = {
+          success: true,
+          count: transfers.data.length,
+          totalAmount: transfers.data.reduce((sum, transfer) => sum + transfer.amount, 0),
+          recent: transfers.data.slice(0, 3).map(transfer => ({
+            id: transfer.id,
+            amount: transfer.amount,
+            currency: transfer.currency,
+            created: new Date(transfer.created * 1000).toISOString()
+          }))
+        };
+      } catch (error) {
+        results.tests.transfersToAccount = {
+          success: false,
+          error: error.message,
+          code: error.code,
+          type: error.type
+        };
+      }
+
+      // Test 5: Charges for this account
+      try {
+        const charges = await stripe.charges.list({
+          limit: 10
+        }, {
+          stripeAccount: accountIdToTest
+        });
+        results.tests.chargesOnAccount = {
+          success: true,
+          count: charges.data.length,
+          totalAmount: charges.data.reduce((sum, charge) => sum + charge.amount, 0),
+          recent: charges.data.slice(0, 3).map(charge => ({
+            id: charge.id,
+            amount: charge.amount,
+            currency: charge.currency,
+            status: charge.status,
+            created: new Date(charge.created * 1000).toISOString()
+          }))
+        };
+      } catch (error) {
+        results.tests.chargesOnAccount = {
+          success: false,
+          error: error.message,
+          code: error.code,
+          type: error.type
+        };
+      }
+
+      // Test 6: Search for accounts with your email to see if there are others
+      try {
+        const allAccounts = await stripe.accounts.list({ limit: 100 });
+        const userEmail = results.user?.email;
+        const matchingAccounts = allAccounts.data.filter(account => 
+          account.email === userEmail || 
+          (account.business_profile && account.business_profile.support_email === userEmail)
+        );
+        results.tests.allMatchingAccounts = {
+          success: true,
+          count: matchingAccounts.length,
+          accounts: matchingAccounts.map(account => ({
+            id: account.id,
+            email: account.email,
+            type: account.type,
+            charges_enabled: account.charges_enabled,
+            payouts_enabled: account.payouts_enabled,
+            created: new Date(account.created * 1000).toISOString()
+          }))
+        };
+      } catch (error) {
+        results.tests.allMatchingAccounts = {
           success: false,
           error: error.message,
           code: error.code,
