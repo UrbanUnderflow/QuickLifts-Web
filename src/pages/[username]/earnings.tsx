@@ -153,20 +153,25 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
   // Auto-fix missing stripeAccountId when conditions are met
   useEffect(() => {
     const attemptAutoFix = async () => {
-      // Only attempt auto-fix if:
+      // Trigger auto-fix if:
       // 1. User is viewing their own earnings page
-      // 2. Account shows as new but user seems to have setup (hasCreatorAccount or hasWinnerAccount)
+      // 2. Either: Account shows as new but has setup, OR there's an error loading earnings (likely missing stripeAccountId)
       // 3. We haven't already attempted an auto-fix
       // 4. Not currently loading
-      if (
-        isActualOwner &&
-        earningsData?.isNewAccount === true && 
-        (earningsData?.hasCreatorAccount || earningsData?.hasWinnerAccount) &&
+      const shouldAutoFix = isActualOwner &&
         !autoFixAttempted && 
         !isEarningsLoading &&
-        profileUser?.id
-      ) {
-        console.log('🔧 Auto-fix triggered on earnings page: Account appears set up but no transactions found. Attempting to relink Stripe account...');
+        profileUser?.id && (
+          // Case 1: Account setup but showing as new (normal auto-fix trigger)
+          (earningsData?.isNewAccount === true && (earningsData?.hasCreatorAccount || earningsData?.hasWinnerAccount)) ||
+          // Case 2: Error loading earnings (likely missing stripeAccountId)
+          (error && error.includes('Failed to fetch earnings data'))
+        );
+
+      if (shouldAutoFix) {
+        console.log('🔧 Auto-fix triggered on earnings page:', 
+          earningsData?.isNewAccount ? 'Account appears set up but no transactions found' : 'Error loading earnings data',
+          '- Attempting to relink Stripe account...');
         setAutoFixAttempted(true);
         
         try {
@@ -181,9 +186,10 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
             // Wait a moment for database updates to propagate, then refresh
             setTimeout(() => {
               if (profileUser?.id) {
-                // Re-fetch earnings data
+                // Re-fetch earnings data and clear any error state
                 const refetchEarnings = async () => {
                   try {
+                    setError(null); // Clear error state
                     const response = await fetch(`${API_BASE_URL}/get-unified-earnings?userId=${profileUser.id}`);
                     const data = await response.json();
                     if (data.success) {
@@ -204,7 +210,7 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
     };
 
     attemptAutoFix();
-  }, [isActualOwner, earningsData?.isNewAccount, earningsData?.hasCreatorAccount, earningsData?.hasWinnerAccount, autoFixAttempted, isEarningsLoading, profileUser?.id, API_BASE_URL]);
+  }, [isActualOwner, earningsData?.isNewAccount, earningsData?.hasCreatorAccount, earningsData?.hasWinnerAccount, autoFixAttempted, isEarningsLoading, profileUser?.id, API_BASE_URL, error]);
 
   // Generate dashboard link
   const generateDashboardLink = async () => {
@@ -385,14 +391,30 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
     return (
       <div className="min-h-screen bg-zinc-950 text-white py-10">
         <div className="max-w-4xl mx-auto px-6 text-center">
-          <h1 className="text-3xl font-bold mb-4">Error Loading Earnings</h1>
-          <p className="text-zinc-400 mb-6">{error}</p>
-          <button
-            onClick={() => router.back()}
-            className="bg-[#E0FE10] text-black py-3 px-6 rounded-xl font-semibold"
-          >
-            Go Back
-          </button>
+          <h1 className="text-3xl font-bold mb-4">
+            {autoFixAttempted ? '🔧 Fixing Account Connection...' : 'Error Loading Earnings'}
+          </h1>
+          <p className={`mb-6 ${autoFixAttempted ? 'text-yellow-300' : 'text-zinc-400'}`}>
+            {autoFixAttempted ? (
+              'We detected a missing account connection and are automatically fixing it. Your earnings should appear shortly...'
+            ) : (
+              error
+            )}
+          </p>
+          {!autoFixAttempted && (
+            <button
+              onClick={() => router.back()}
+              className="bg-[#E0FE10] text-black py-3 px-6 rounded-xl font-semibold"
+            >
+              Go Back
+            </button>
+          )}
+          {autoFixAttempted && (
+            <div className="flex items-center justify-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-yellow-300"></div>
+              <span className="ml-3 text-yellow-300">Fixing connection...</span>
+            </div>
+          )}
         </div>
       </div>
     );

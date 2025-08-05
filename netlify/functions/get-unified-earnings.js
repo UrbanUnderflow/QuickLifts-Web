@@ -70,20 +70,26 @@ const handler = async (event) => {
     const userData = userDoc.data();
     console.log('User data retrieved, checking for earnings sources...');
     
-    const hasCreatorAccount = !!(userData.creator && userData.creator.stripeAccountId);
-    const hasWinnerAccount = !!(userData.winner && userData.winner.stripeAccountId);
+    // Consider someone as having an account if they've completed onboarding, even if stripeAccountId is temporarily missing
+    // This allows auto-fix logic to trigger when stripeAccountId goes missing
+    const hasCreatorAccount = !!(userData.creator && 
+      (userData.creator.stripeAccountId || userData.creator.onboardingStatus === 'complete'));
+    const hasWinnerAccount = !!(userData.winner && 
+      (userData.winner.stripeAccountId || userData.winner.onboardingStatus === 'complete'));
     
     console.log('Earnings sources available:', {
       hasCreatorAccount,
       hasWinnerAccount,
       creatorOnboardingStatus: userData.creator?.onboardingStatus || 'none',
-      winnerOnboardingStatus: userData.winner?.onboardingStatus || 'none'
+      winnerOnboardingStatus: userData.winner?.onboardingStatus || 'none',
+      creatorStripeAccountId: userData.creator?.stripeAccountId || 'missing',
+      winnerStripeAccountId: userData.winner?.stripeAccountId || 'missing'
     });
 
     // Fetch earnings data from both sources in parallel
     const [creatorEarningsData, winnerPrizeData] = await Promise.allSettled([
       // Fetch creator earnings (only if they have a creator account)
-      hasCreatorAccount ? fetchCreatorEarnings(userId) : Promise.resolve(null),
+      hasCreatorAccount ? fetchCreatorEarnings(userId, userData.creator?.stripeAccountId) : Promise.resolve(null),
       
       // Fetch winner prize data (always fetch, as they might have pending prizes)
       fetchWinnerPrizeData(userId)
@@ -144,9 +150,25 @@ const handler = async (event) => {
 };
 
 // Helper function to fetch creator earnings data
-async function fetchCreatorEarnings(userId) {
+async function fetchCreatorEarnings(userId, stripeAccountId) {
   try {
-    console.log('Fetching creator earnings for userId:', userId);
+    console.log('Fetching creator earnings for userId:', userId, 'stripeAccountId:', stripeAccountId || 'missing');
+    
+    // If stripeAccountId is missing, return empty earnings data (new account state)
+    // This allows auto-fix logic to trigger instead of failing
+    if (!stripeAccountId) {
+      console.warn('No stripeAccountId found for creator - returning empty earnings (triggers auto-fix)');
+      return {
+        totalEarned: 0,
+        pendingPayout: 0,
+        availableBalance: 0,
+        roundsSold: 0,
+        recentSales: [],
+        lastUpdated: new Date().toISOString(),
+        isNewAccount: true,
+        missingStripeAccount: true // Flag to indicate this is due to missing stripeAccountId
+      };
+    }
     
     // Import and call the existing get-earnings function
     const { handler: getEarningsHandler } = require('./get-earnings');
