@@ -443,7 +443,27 @@ const handler = async (event) => {
         recentSales.sort((a, b) => new Date(b.date) - new Date(a.date));
         
         // Limit to 10 sales to keep response size manageable
-        const limitedSales = recentSales.slice(0, 10);
+        let limitedSales = recentSales.slice(0, 10);
+        
+        // If no sales records exist but we have transfers, create transaction records from transfers
+        if (limitedSales.length === 0 && transfers.data.length > 0) {
+          console.log('No sales records found, creating transactions from transfers');
+          const transferTransactions = transfers.data.map(transfer => ({
+            date: new Date(transfer.created * 1000).toISOString().split('T')[0],
+            roundTitle: 'Program Sales', // Generic title since we don't have specific round info
+            amount: transfer.amount / 100, // Convert cents to dollars
+            status: 'completed',
+            source: 'stripe_transfer',
+            id: transfer.id,
+            buyerId: 'aggregated' // These are aggregated transfers
+          }));
+          
+          // Sort by date (newest first) and limit to 10
+          transferTransactions.sort((a, b) => new Date(b.date) - new Date(a.date));
+          limitedSales = transferTransactions.slice(0, 10);
+          
+          console.log(`Created ${limitedSales.length} transaction records from transfers`);
+        }
         
         // Real data structure - all zeros is fine for new accounts
         const earningsData = {
