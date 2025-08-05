@@ -280,7 +280,13 @@ function buildUnifiedEarningsResponse({ userId, userData, creatorEarnings, winne
   // Build combined transaction history (with error handling)
   let transactions = [];
   try {
+    console.log('Building transaction history with:', {
+      creatorSalesCount: creatorData.recentSales ? creatorData.recentSales.length : 0,
+      prizeRecordsCount: winnerData.prizeRecords ? winnerData.prizeRecords.length : 0,
+      creatorSalesData: creatorData.recentSales
+    });
     transactions = buildCombinedTransactionHistory(creatorData.recentSales, winnerData.prizeRecords);
+    console.log('Transaction history built successfully, transaction count:', transactions.length);
   } catch (transactionError) {
     console.error('Error building transaction history:', transactionError);
     transactions = []; // Fallback to empty array
@@ -375,11 +381,21 @@ function buildUnifiedEarningsResponse({ userId, userData, creatorEarnings, winne
 
 // Helper function to build combined transaction history
 function buildCombinedTransactionHistory(creatorSales, prizeRecords) {
+  console.log('[buildCombinedTransactionHistory] Starting with:', {
+    creatorSales: creatorSales,
+    creatorSalesType: typeof creatorSales,
+    isArray: Array.isArray(creatorSales),
+    prizeRecords: prizeRecords,
+    prizeRecordsType: typeof prizeRecords
+  });
+  
   const transactions = [];
 
   // Add creator sales to transaction history
   if (creatorSales && Array.isArray(creatorSales)) {
-    creatorSales.forEach(sale => {
+    console.log(`[buildCombinedTransactionHistory] Processing ${creatorSales.length} creator sales`);
+    creatorSales.forEach((sale, index) => {
+      console.log(`[buildCombinedTransactionHistory] Processing sale ${index}:`, sale);
       transactions.push({
         id: sale.id || `creator_${Date.now()}_${Math.random()}`,
         type: 'creator_sale',
@@ -422,7 +438,9 @@ function buildCombinedTransactionHistory(creatorSales, prizeRecords) {
   transactions.sort((a, b) => new Date(b.date) - new Date(a.date));
 
   // Limit to most recent 20 transactions for performance
-  return transactions.slice(0, 20);
+  const finalTransactions = transactions.slice(0, 20);
+  console.log(`[buildCombinedTransactionHistory] Returning ${finalTransactions.length} transactions:`, finalTransactions);
+  return finalTransactions;
 }
 
 // Helper function to get placement text
