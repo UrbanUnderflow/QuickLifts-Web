@@ -198,17 +198,65 @@ const TrainerDashboard = () => {
         
         try {
           // Call the health check function to find and relink missing stripeAccountId
-          const response = await fetch(`/.netlify/functions/health-check-stripe-accounts`);
+          const response = await fetch(`/.netlify/functions/health-check-stripe-accounts`, {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          });
+          
+          if (!response.ok) {
+            throw new Error(`Health check failed: ${response.status}`);
+          }
+          
           const result = await response.json();
           
           console.log('Health check result:', result);
           
           if (result.success) {
             console.log('✅ Auto-fix completed successfully. Refreshing earnings data...');
+          } else {
+            // If health check didn't succeed, try alternative approach
+            console.log('Health check did not fix issue, trying alternative approach...');
+            const altResponse = await fetch(`/.netlify/functions/complete-stripe-onboarding?userId=${currentUser.id}`);
+            if (altResponse.ok) {
+              console.log('Alternative fix attempt completed');
+            }
+          }
+          
+          // Always try to refresh data regardless of which method was used
+          if (true) {
             // Wait a moment for database updates to propagate, then refresh
-            setTimeout(() => {
-              fetchEarningsData();
-              fetchAccountStatus();
+            setTimeout(async () => {
+              // Refresh account status
+              if (currentUser?.id) {
+                try {
+                  const userData = await userService.fetchUserFromFirestore(currentUser.id);
+                  const hasValidStripeAccount = 
+                    userData?.creator && 
+                    typeof userData.creator.stripeAccountId === 'string' && 
+                    userData.creator.stripeAccountId.trim() !== '';
+                  
+                  if (hasValidStripeAccount) {
+                    setAccountStatus('complete');
+                  }
+                } catch (error) {
+                  console.error('Error refreshing account status after auto-fix:', error);
+                }
+              }
+              
+              // Refresh earnings data
+              if (currentUser?.id) {
+                try {
+                  const response = await fetch(`/.netlify/functions/get-earnings?userId=${currentUser.id}`);
+                  const data = await response.json();
+                  if (data.success && data.earnings) {
+                    setEarningsData(data.earnings);
+                  }
+                } catch (error) {
+                  console.error('Error refreshing earnings after auto-fix:', error);
+                }
+              }
             }, 2000);
           }
         } catch (error) {
@@ -218,7 +266,7 @@ const TrainerDashboard = () => {
     };
 
     attemptAutoFix();
-  }, [accountStatus, earningsData?.isNewAccount, autoFixAttempted, isEarningsLoading, isAccountLoading, currentUser?.id, fetchEarningsData, fetchAccountStatus]);
+  }, [accountStatus, earningsData?.isNewAccount, autoFixAttempted, isEarningsLoading, isAccountLoading, currentUser?.id]);
 
   const markOnboardingComplete = async () => {
     if (!currentUser?.id) return;
@@ -697,21 +745,10 @@ const TrainerDashboard = () => {
           <>
             {earningsData && earningsData.isNewAccount && !isEarningsLoading && (
               <div className="bg-zinc-900 p-6 rounded-xl mb-8">
-                <h2 className="text-xl font-semibold mb-4">
-                  {autoFixAttempted ? 'Checking Account Status...' : 'No Transactions Yet'}
-                </h2>
+                <h2 className="text-xl font-semibold mb-4">No Transactions Yet</h2>
                 <p className="mb-6">
-                  {autoFixAttempted ? (
-                    <>
-                      🔧 We're automatically checking for any missing account connections. 
-                      If you have existing transactions, they should appear shortly...
-                    </>
-                  ) : (
-                    <>
-                      Your payment account is set up and ready to receive payments, but you haven't
-                      received any payments yet. When payments are received, they'll appear here.
-                    </>
-                  )}
+                  Your payment account is set up and ready to receive payments, but you haven't
+                  received any payments yet. When payments are received, they'll appear here.
                 </p>
                 <div className="flex items-center justify-center p-8 border border-zinc-800 rounded-lg">
                   <div className="text-center">

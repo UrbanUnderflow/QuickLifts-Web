@@ -176,30 +176,56 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
         
         try {
           // Call the health check function to find and relink missing stripeAccountId
-          const response = await fetch(`${API_BASE_URL}/health-check-stripe-accounts`);
+          const response = await fetch(`${API_BASE_URL}/health-check-stripe-accounts`, {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          });
+          
+          if (!response.ok) {
+            throw new Error(`Health check failed: ${response.status}`);
+          }
+          
           const result = await response.json();
           
           console.log('Health check result:', result);
           
           if (result.success) {
             console.log('✅ Auto-fix completed successfully. Refreshing earnings data...');
+          } else {
+            // If health check didn't succeed, try alternative approach
+            console.log('Health check did not fix issue, trying alternative approach...');
+            if (profileUser?.id) {
+              const altResponse = await fetch(`${API_BASE_URL}/complete-stripe-onboarding?userId=${profileUser.id}`);
+              if (altResponse.ok) {
+                console.log('Alternative fix attempt completed');
+              }
+            }
+          }
+          
+          // Always try to refresh data regardless of which method was used
+          if (profileUser?.id) {
             // Wait a moment for database updates to propagate, then refresh
-            setTimeout(() => {
+            setTimeout(async () => {
               if (profileUser?.id) {
-                // Re-fetch earnings data and clear any error state
-                const refetchEarnings = async () => {
-                  try {
-                    setError(null); // Clear error state
-                    const response = await fetch(`${API_BASE_URL}/get-unified-earnings?userId=${profileUser.id}`);
-                    const data = await response.json();
-                    if (data.success) {
-                      setEarningsData(data.earnings);
-                    }
-                  } catch (error) {
-                    console.error('Error refetching earnings after auto-fix:', error);
+                try {
+                  setError(null); // Clear error state
+                  setIsEarningsLoading(true);
+                  
+                  const response = await fetch(`${API_BASE_URL}/get-unified-earnings?userId=${profileUser.id}`);
+                  const data = await response.json();
+                  
+                  if (data.success) {
+                    setEarningsData(data.earnings);
+                  } else {
+                    console.warn('Still getting error after auto-fix:', data.error);
                   }
-                };
-                refetchEarnings();
+                } catch (error) {
+                  console.error('Error refetching earnings after auto-fix:', error);
+                } finally {
+                  setIsEarningsLoading(false);
+                }
               }
             }, 2000);
           }
@@ -391,29 +417,25 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
     return (
       <div className="min-h-screen bg-zinc-950 text-white py-10">
         <div className="max-w-4xl mx-auto px-6 text-center">
-          <h1 className="text-3xl font-bold mb-4">
-            {autoFixAttempted ? '🔧 Fixing Account Connection...' : 'Error Loading Earnings'}
-          </h1>
-          <p className={`mb-6 ${autoFixAttempted ? 'text-yellow-300' : 'text-zinc-400'}`}>
-            {autoFixAttempted ? (
-              'We detected a missing account connection and are automatically fixing it. Your earnings should appear shortly...'
-            ) : (
-              error
-            )}
-          </p>
-          {!autoFixAttempted && (
-            <button
-              onClick={() => router.back()}
-              className="bg-[#E0FE10] text-black py-3 px-6 rounded-xl font-semibold"
-            >
-              Go Back
-            </button>
-          )}
-          {autoFixAttempted && (
-            <div className="flex items-center justify-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-yellow-300"></div>
-              <span className="ml-3 text-yellow-300">Fixing connection...</span>
+          {autoFixAttempted ? (
+            // Silent auto-fix in progress - show normal loading
+            <div className="flex flex-col items-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#E0FE10] mb-4"></div>
+              <h1 className="text-3xl font-bold mb-4">Loading your earnings...</h1>
+              <p className="text-zinc-400">Please wait while we load your earnings data.</p>
             </div>
+          ) : (
+            // Show error only if auto-fix hasn't been attempted
+            <>
+              <h1 className="text-3xl font-bold mb-4">Error Loading Earnings</h1>
+              <p className="text-zinc-400 mb-6">{error}</p>
+              <button
+                onClick={() => router.back()}
+                className="bg-[#E0FE10] text-black py-3 px-6 rounded-xl font-semibold"
+              >
+                Go Back
+              </button>
+            </>
           )}
         </div>
       </div>
