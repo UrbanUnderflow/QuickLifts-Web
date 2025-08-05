@@ -111,9 +111,24 @@ function formatTransactions(recentSales: any[], prizeRecords: any[]) {
       transactions.push({
         id: record.id || `prize_${Date.now()}_${index}`,
         type: 'prize_winning',
-        date: record.createdAt?.toDate ? 
-          record.createdAt.toDate().toISOString().split('T')[0] : 
-          new Date(record.createdAt).toISOString().split('T')[0],
+        date: (() => {
+          try {
+            if (record.createdAt?.toDate) {
+              return record.createdAt.toDate().toISOString().split('T')[0];
+            } else if (record.createdAt) {
+              const date = new Date(record.createdAt);
+              if (isNaN(date.getTime())) {
+                return new Date().toISOString().split('T')[0]; // fallback to today
+              }
+              return date.toISOString().split('T')[0];
+            } else {
+              return new Date().toISOString().split('T')[0]; // fallback to today
+            }
+          } catch (error) {
+            console.error('Error parsing createdAt date:', record.createdAt, error);
+            return new Date().toISOString().split('T')[0]; // fallback to today
+          }
+        })(),
         amount: (record.prizeAmount || 0) / 100, // Convert cents to dollars
         description: `${getPlacementText(record.placement)} - ${record.challengeTitle}`,
         status: record.status || 'pending',

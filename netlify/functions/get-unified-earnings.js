@@ -119,7 +119,8 @@ const handler = async (event) => {
     console.log('Returning unified earnings data:', {
       totalBalance: unifiedEarnings.totalBalance,
       totalEarned: unifiedEarnings.totalEarned,
-      transactionCount: unifiedEarnings.transactions.length,
+      recentSalesCount: (unifiedEarnings.recentSales || []).length,
+      prizeRecordsCount: (unifiedEarnings.prizeRecords || []).length,
       hasCreatorEarnings: !!creatorEarnings,
       hasWinnerPrizes: !!winnerPrizes
     });
@@ -368,7 +369,8 @@ function buildUnifiedEarningsResponse({ userId, userData, creatorEarnings, winne
         stripeAccountId: userData.winner?.stripeAccountId || null,
         onboardingStatus: userData.winner?.onboardingStatus || 'not_started'
       },
-      transactions: [],
+      recentSales: [],
+      prizeRecords: [],
       canRequestPayout: false,
       minimumPayoutAmount: 10.00,
       nextPayoutDate: 'When balance reaches $10',
