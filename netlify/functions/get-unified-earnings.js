@@ -191,7 +191,16 @@ async function fetchCreatorEarnings(userId, stripeAccountId) {
       return responseData.earnings;
     } else {
       console.warn('Creator earnings fetch failed:', responseData.error);
-      return null;
+      // Return empty structure instead of null to ensure recentSales property exists
+      return {
+        totalEarned: 0,
+        availableBalance: 0,
+        pendingPayout: 0,
+        roundsSold: 0,
+        recentSales: [],
+        lastUpdated: new Date().toISOString(),
+        isNewAccount: true
+      };
     }
   } catch (error) {
     console.error('Error fetching creator earnings:', error);
@@ -272,6 +281,8 @@ function buildUnifiedEarningsResponse({ userId, userData, creatorEarnings, winne
     creatorData.roundsSold = creatorEarnings.roundsSold || 0;
     creatorData.recentSales = creatorEarnings.recentSales || [];
     console.log('After processing, creatorData.recentSales length:', creatorData.recentSales.length);
+  } else {
+    console.warn('Creator earnings is null/undefined, using empty data');
   }
 
   // Populate winner prize data (convert cents to dollars)
