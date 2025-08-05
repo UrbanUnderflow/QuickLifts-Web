@@ -99,7 +99,50 @@ const handler = async (event) => {
           );
 
           if (userAccounts.length > 0) {
-            const stripeAccount = userAccounts[0];
+            console.log(`[HealthCheck] Found ${userAccounts.length} accounts for ${userData.email}`);
+            
+            // Smart account selection - prefer accounts with activity
+            let stripeAccount;
+            if (userAccounts.length === 1) {
+              stripeAccount = userAccounts[0];
+            } else {
+              console.log(`[HealthCheck] Multiple accounts found - selecting best one`);
+              
+              // Priority 1: Account with balance or transfer history
+              for (const account of userAccounts) {
+                try {
+                  const balance = await stripe.balance.retrieve({ stripeAccount: account.id });
+                  const hasBalance = balance.available.some(b => b.amount > 0) || balance.pending.some(b => b.amount > 0);
+                  
+                  if (hasBalance) {
+                    console.log(`[HealthCheck] Selected account with balance: ${account.id}`);
+                    stripeAccount = account;
+                    break;
+                  }
+                  
+                  const transfers = await stripe.transfers.list({ 
+                    destination: account.id, 
+                    limit: 1 
+                  });
+                  
+                  if (transfers.data.length > 0) {
+                    console.log(`[HealthCheck] Selected account with transfers: ${account.id}`);
+                    stripeAccount = account;
+                    break;
+                  }
+                } catch (error) {
+                  console.warn(`[HealthCheck] Could not check activity for ${account.id}:`, error.message);
+                }
+              }
+              
+              // Priority 2: Most recent account if no activity
+              if (!stripeAccount) {
+                stripeAccount = userAccounts.reduce((latest, current) => 
+                  current.created > latest.created ? current : latest
+                );
+                console.log(`[HealthCheck] Selected most recent account: ${stripeAccount.id}`);
+              }
+            }
             
             // Validate the Stripe account before using it
             let accountValid = false;

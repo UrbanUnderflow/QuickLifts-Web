@@ -45,9 +45,56 @@ async function verifyAndFixStripeAccount(userId, userData) {
       throw new Error(`No Stripe accounts found for email: ${userEmail}`);
     }
 
-    // Use the first matching account
-    const stripeAccount = userAccounts[0];
-    console.log(`Found and linking Stripe account: ${stripeAccount.id} for user ${userId} and setting onboarding to complete`);
+    console.log(`Found ${userAccounts.length} Stripe accounts for ${userEmail}:`, 
+      userAccounts.map(acc => ({ id: acc.id, type: acc.type, created: new Date(acc.created * 1000) })));
+
+    // If multiple accounts found, try to pick the best one
+    let stripeAccount;
+    if (userAccounts.length === 1) {
+      stripeAccount = userAccounts[0];
+      console.log(`Single account found: ${stripeAccount.id}`);
+    } else {
+      console.warn(`Multiple accounts found (${userAccounts.length}) - selecting based on priority`);
+      
+      // Priority 1: Account with recent activity/balance
+      for (const account of userAccounts) {
+        try {
+          console.log(`Checking account ${account.id} for activity...`);
+          const balance = await stripe.balance.retrieve({ stripeAccount: account.id });
+          const hasBalance = balance.available.some(b => b.amount > 0) || balance.pending.some(b => b.amount > 0);
+          
+          if (hasBalance) {
+            console.log(`Found account with balance: ${account.id}`);
+            stripeAccount = account;
+            break;
+          }
+          
+          // Check for recent transfers
+          const transfers = await stripe.transfers.list({ 
+            destination: account.id, 
+            limit: 1 
+          });
+          
+          if (transfers.data.length > 0) {
+            console.log(`Found account with transfer history: ${account.id}`);
+            stripeAccount = account;
+            break;
+          }
+        } catch (error) {
+          console.warn(`Could not check activity for account ${account.id}:`, error.message);
+        }
+      }
+      
+      // Priority 2: Most recently created account if no activity found
+      if (!stripeAccount) {
+        stripeAccount = userAccounts.reduce((latest, current) => 
+          current.created > latest.created ? current : latest
+        );
+        console.log(`No activity found, using most recent account: ${stripeAccount.id}`);
+      }
+    }
+
+    console.log(`Selected and linking Stripe account: ${stripeAccount.id} for user ${userId} and setting onboarding to complete`);
 
     // Update the user's profile with the found account ID and set onboarding to complete
     await db.collection("users").doc(userId).update({
