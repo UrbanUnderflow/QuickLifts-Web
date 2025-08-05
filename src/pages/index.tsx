@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import type { NextPage, GetServerSideProps } from 'next';
+import type { NextPage, GetStaticProps } from 'next';
 import Footer from '../components/Footer/Footer';
 import FAQ from '../components/FAQ';
 import PageHead from '../components/PageHead';
@@ -1678,7 +1678,8 @@ const HomePage: NextPage<HomePageProps> = ({ metaData }) => {
   return <MarketingContent onUseWebApp={handleUseWebApp} metaData={metaData} />;
 };
 
-export const getServerSideProps: GetServerSideProps<HomePageProps> = async (context) => {
+// Convert to static generation for better performance
+export const getStaticProps: GetStaticProps<HomePageProps> = async () => {
   try {
     const metaData = await adminMethods.getPageMetaData('about');
     
@@ -1691,14 +1692,16 @@ export const getServerSideProps: GetServerSideProps<HomePageProps> = async (cont
       return {
         props: {
           metaData: serializedMetaData
-        }
+        },
+        revalidate: 3600 // Revalidate every hour
       };
     }
     
     return {
       props: {
         metaData: null
-      }
+      },
+      revalidate: 3600
     };
   } catch (error) {
     console.error('Error fetching meta data:', error);
@@ -1706,7 +1709,8 @@ export const getServerSideProps: GetServerSideProps<HomePageProps> = async (cont
     return {
       props: {
         metaData: null
-      }
+      },
+      revalidate: 3600
     };
   }
 };
