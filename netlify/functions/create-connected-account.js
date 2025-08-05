@@ -92,7 +92,7 @@ const handler = async (event) => {
         const accountLink = await stripe.accountLinks.create({
           account: userData.creator.stripeAccountId,
           refresh_url: `${process.env.SITE_URL || 'https://fitwithpulse.ai'}/trainer/connect-account`,
-          return_url: `${process.env.SITE_URL || 'https://fitwithpulse.ai'}/trainer/dashboard?complete=true`,
+          return_url: `${process.env.SITE_URL || 'https://fitwithpulse.ai'}/${userData.username}/earnings?complete=true`,
           type: "account_onboarding",
         });
 
@@ -213,7 +213,7 @@ const handler = async (event) => {
     const accountLink = await stripe.accountLinks.create({
       account: account.id,
       refresh_url: `${process.env.SITE_URL || 'https://fitwithpulse.ai'}/trainer/connect-account`,
-      return_url: `${process.env.SITE_URL || 'https://fitwithpulse.ai'}/trainer/dashboard?complete=true`,
+      return_url: `${process.env.SITE_URL || 'https://fitwithpulse.ai'}/${userData.username}/earnings?complete=true`,
       type: "account_onboarding",
     });
 
