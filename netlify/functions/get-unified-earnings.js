@@ -274,36 +274,6 @@ function buildUnifiedEarningsResponse({ userId, userData, creatorEarnings, winne
     creatorData.pendingPayout = creatorEarnings.pendingPayout || 0;
     creatorData.roundsSold = creatorEarnings.roundsSold || 0;
     creatorData.recentSales = creatorEarnings.recentSales || [];
-    
-    // DEBUG: Return debug info instead of proceeding
-    if (event.queryStringParameters?.debug === 'true') {
-      return {
-        statusCode: 200,
-        headers,
-        body: JSON.stringify({
-          success: true,
-          debug: true,
-          creatorEarnings: creatorEarnings,
-          creatorDataRecentSales: creatorData.recentSales,
-          recentSalesLength: creatorData.recentSales.length,
-          message: 'Debug mode - showing creator earnings data'
-        })
-      };
-    }
-  } else {
-    // DEBUG: Return debug info for null case
-    if (event.queryStringParameters?.debug === 'true') {
-      return {
-        statusCode: 200,
-        headers,
-        body: JSON.stringify({
-          success: false,
-          debug: true,
-          creatorEarnings: null,
-          message: 'Debug mode - creator earnings is null'
-        })
-      };
-    }
   }
 
   // Populate winner prize data (convert cents to dollars)
@@ -321,24 +291,8 @@ function buildUnifiedEarningsResponse({ userId, userData, creatorEarnings, winne
   const totalEarned = creatorData.totalEarned + winnerData.totalEarned;
   const pendingPayout = creatorData.pendingPayout + winnerData.pendingPayout;
 
-  // Build combined transaction history (with error handling)
-  let transactions = [];
-  try {
-    console.log('===== BUILDING TRANSACTION HISTORY =====');
-    console.log('creatorData.recentSales:', JSON.stringify(creatorData.recentSales, null, 2));
-    console.log('winnerData.prizeRecords:', JSON.stringify(winnerData.prizeRecords, null, 2));
-    console.log('About to call buildCombinedTransactionHistory with:', {
-      creatorSalesCount: creatorData.recentSales ? creatorData.recentSales.length : 0,
-      prizeRecordsCount: winnerData.prizeRecords ? winnerData.prizeRecords.length : 0
-    });
-    transactions = buildCombinedTransactionHistory(creatorData.recentSales, winnerData.prizeRecords);
-    console.log('===== TRANSACTION HISTORY RESULT =====');
-    console.log('Transaction history built successfully, transaction count:', transactions.length);
-    console.log('Final transactions:', JSON.stringify(transactions, null, 2));
-  } catch (transactionError) {
-    console.error('Error building transaction history:', transactionError);
-    transactions = []; // Fallback to empty array
-  }
+  // Return raw data - let frontend format transactions as needed
+  // No more server-side transaction building complexity!
 
   // Determine payout capabilities
   const canRequestPayout = totalBalance >= 10.00; // Minimum $10 payout
@@ -370,8 +324,9 @@ function buildUnifiedEarningsResponse({ userId, userData, creatorEarnings, winne
       onboardingStatus: winnerData.onboardingStatus
     },
     
-    // Combined transaction history
-    transactions,
+    // Raw transaction data for frontend formatting
+    recentSales: creatorData.recentSales || [],
+    prizeRecords: winnerData.prizeRecords || [],
     
     // Payout capabilities
     canRequestPayout,
@@ -385,7 +340,7 @@ function buildUnifiedEarningsResponse({ userId, userData, creatorEarnings, winne
     
     // Metadata
     lastUpdated: new Date().toISOString(),
-    isNewAccount: totalEarned === 0 && transactions.length === 0
+    isNewAccount: totalEarned === 0 && (creatorData.recentSales || []).length === 0 && (winnerData.prizeRecords || []).length === 0
   };
 
   return unifiedEarnings;
@@ -427,90 +382,7 @@ function buildUnifiedEarningsResponse({ userId, userData, creatorEarnings, winne
   }
 }
 
-// Helper function to build combined transaction history
-function buildCombinedTransactionHistory(creatorSales, prizeRecords) {
-  console.log('[buildCombinedTransactionHistory] ===== STARTING =====');
-  console.log('[buildCombinedTransactionHistory] creatorSales:', JSON.stringify(creatorSales, null, 2));
-  console.log('[buildCombinedTransactionHistory] creatorSalesType:', typeof creatorSales);
-  console.log('[buildCombinedTransactionHistory] isArray:', Array.isArray(creatorSales));
-  console.log('[buildCombinedTransactionHistory] prizeRecords:', JSON.stringify(prizeRecords, null, 2));
-  console.log('[buildCombinedTransactionHistory] prizeRecordsType:', typeof prizeRecords);
-  
-  const transactions = [];
-
-  // Add creator sales to transaction history
-  if (creatorSales && Array.isArray(creatorSales)) {
-    console.log(`[buildCombinedTransactionHistory] Processing ${creatorSales.length} creator sales`);
-    creatorSales.forEach((sale, index) => {
-      console.log(`[buildCombinedTransactionHistory] Processing sale ${index}:`, sale);
-      transactions.push({
-        id: sale.id || `creator_${Date.now()}_${Math.random()}`,
-        type: 'creator_sale',
-        date: sale.date || new Date().toISOString().split('T')[0],
-        amount: sale.amount || 0,
-        description: sale.roundTitle || 'Training Program',
-        status: sale.status || 'completed',
-        metadata: {
-          buyerId: sale.buyerId || 'anonymous',
-          programTitle: sale.roundTitle || 'Training Program',
-          source: sale.source || 'stripe'
-        }
-      });
-    });
-  }
-
-  // Add prize winnings to transaction history
-  if (prizeRecords && Array.isArray(prizeRecords)) {
-    prizeRecords.forEach(record => {
-      transactions.push({
-        id: record.id || `prize_${Date.now()}_${Math.random()}`,
-        type: 'prize_winning',
-        date: record.createdAt?.toDate ? 
-          record.createdAt.toDate().toISOString().split('T')[0] : 
-          new Date(record.createdAt).toISOString().split('T')[0],
-        amount: (record.prizeAmount || 0) / 100, // Convert cents to dollars
-        description: `${getPlacementText(record.placement)} - ${record.challengeTitle}`,
-        status: record.status || 'pending',
-        metadata: {
-          challengeId: record.challengeId,
-          challengeTitle: record.challengeTitle,
-          placement: record.placement,
-          score: record.score
-        }
-      });
-    });
-  }
-
-  // Sort transactions by date (newest first)
-  transactions.sort((a, b) => new Date(b.date) - new Date(a.date));
-
-  // Limit to most recent 20 transactions for performance
-  const finalTransactions = transactions.slice(0, 20);
-  console.log(`[buildCombinedTransactionHistory] Returning ${finalTransactions.length} transactions:`, finalTransactions);
-  return finalTransactions;
-}
-
-// Helper function to get placement text
-function getPlacementText(placement) {
-  switch (placement) {
-    case 1: return '🥇 1st Place';
-    case 2: return '🥈 2nd Place';
-    case 3: return '🥉 3rd Place';
-    default: return `🏆 ${placement}th Place`;
-  }
-}
-
-// Helper function to calculate next payout date
-function calculateNextPayoutDate(totalBalance) {
-  if (totalBalance < 10.00) {
-    return null; // Not eligible for payout
-  }
-  
-  // Stripe typically processes payouts within 2-7 business days
-  const nextPayout = new Date();
-  nextPayout.setDate(nextPayout.getDate() + 3); // 3 business days estimate
-  
-  return nextPayout.toISOString().split('T')[0];
-}
+// Removed complex server-side transaction building
+// Frontend will handle formatting of recentSales and prizeRecords
 
 module.exports = { handler }; 

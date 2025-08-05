@@ -30,14 +30,24 @@ interface UnifiedEarnings {
     stripeAccountId?: string;
     onboardingStatus: string;
   };
-  transactions: Array<{
-    id: string;
-    type: 'creator_sale' | 'prize_winning';
+  recentSales: Array<{
+    id?: string;
     date: string;
     amount: number;
-    description: string;
-    status: string;
-    metadata: any;
+    roundTitle?: string;
+    status?: string;
+    buyerId?: string;
+    source?: string;
+  }>;
+  prizeRecords: Array<{
+    id?: string;
+    createdAt: any;
+    prizeAmount: number;
+    challengeTitle: string;
+    placement: number;
+    status?: string;
+    challengeId?: string;
+    score?: number;
   }>;
   canRequestPayout: boolean;
   minimumPayoutAmount: number;
@@ -53,6 +63,75 @@ interface EarningsPageProps {
   profileUser: User | null;
   isOwner: boolean;
   error: string | null;
+}
+
+// Helper function to format raw sales and prize data into transaction format
+function formatTransactions(recentSales: any[], prizeRecords: any[]) {
+  const transactions: Array<{
+    id: string;
+    type: 'creator_sale' | 'prize_winning';
+    date: string;
+    amount: number;
+    description: string;
+    status: string;
+    metadata: any;
+  }> = [];
+
+  // Add creator sales to transaction history
+  if (recentSales && Array.isArray(recentSales)) {
+    recentSales.forEach((sale, index) => {
+      transactions.push({
+        id: sale.id || `creator_${Date.now()}_${index}`,
+        type: 'creator_sale',
+        date: sale.date || new Date().toISOString().split('T')[0],
+        amount: sale.amount || 0,
+        description: sale.roundTitle || 'Training Program',
+        status: sale.status || 'completed',
+        metadata: {
+          buyerId: sale.buyerId || 'anonymous',
+          programTitle: sale.roundTitle || 'Training Program',
+          source: sale.source || 'stripe'
+        }
+      });
+    });
+  }
+
+  // Add prize winnings to transaction history
+  if (prizeRecords && Array.isArray(prizeRecords)) {
+    prizeRecords.forEach((record, index) => {
+      const getPlacementText = (placement: number) => {
+        switch (placement) {
+          case 1: return '🥇 1st Place';
+          case 2: return '🥈 2nd Place';
+          case 3: return '🥉 3rd Place';
+          default: return `🏆 ${placement}th Place`;
+        }
+      };
+
+      transactions.push({
+        id: record.id || `prize_${Date.now()}_${index}`,
+        type: 'prize_winning',
+        date: record.createdAt?.toDate ? 
+          record.createdAt.toDate().toISOString().split('T')[0] : 
+          new Date(record.createdAt).toISOString().split('T')[0],
+        amount: (record.prizeAmount || 0) / 100, // Convert cents to dollars
+        description: `${getPlacementText(record.placement)} - ${record.challengeTitle}`,
+        status: record.status || 'pending',
+        metadata: {
+          challengeId: record.challengeId,
+          challengeTitle: record.challengeTitle,
+          placement: record.placement,
+          score: record.score
+        }
+      });
+    });
+  }
+
+  // Sort transactions by date (newest first)
+  transactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+  // Limit to most recent 20 transactions for performance
+  return transactions.slice(0, 20);
 }
 
 const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({ 
@@ -84,6 +163,11 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
     showRecentActivity: false
   });
   const [autoFixAttempted, setAutoFixAttempted] = useState(false);
+
+  // Format transactions client-side from raw data
+  const formattedTransactions = earningsData ? 
+    formatTransactions(earningsData.recentSales || [], earningsData.prizeRecords || []) : 
+    [];
 
   const API_BASE_URL = process.env.NODE_ENV === 'development' 
     ? 'http://localhost:8888/.netlify/functions'
@@ -936,7 +1020,7 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
             <div className="bg-zinc-900 p-6 rounded-xl">
               <h3 className="text-xl font-semibold mb-6">Recent Transactions</h3>
               
-              {earningsData.transactions.length === 0 ? (
+              {formattedTransactions.length === 0 ? (
                 <div className="text-center py-8">
                   <div className="text-4xl mb-4">📊</div>
                   <p className="text-zinc-400 mb-2">No transactions yet</p>
@@ -944,7 +1028,7 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {earningsData.transactions.map((transaction) => (
+                  {formattedTransactions.map((transaction) => (
                     <div key={transaction.id} className="flex items-center justify-between p-4 bg-zinc-800 rounded-lg">
                       <div className="flex items-center gap-4">
                         <div className="text-2xl">

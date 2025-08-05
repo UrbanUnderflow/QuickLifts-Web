@@ -63,7 +63,7 @@ const EarningsSummaryCard: React.FC<EarningsSummaryCardProps> = ({
             availableBalance: earnings.totalBalance,
             creatorEarnings: earnings.creatorEarnings.totalEarned,
             prizeWinnings: earnings.prizeWinnings.totalEarned,
-            totalTransactions: earnings.transactions.length,
+            totalTransactions: (earnings.recentSales?.length || 0) + (earnings.prizeRecords?.length || 0),
             isNewAccount: earnings.isNewAccount
           });
         } else {
