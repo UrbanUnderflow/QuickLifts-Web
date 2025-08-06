@@ -73,54 +73,105 @@ exports.handler = async (event, context) => {
           depositedBy,
           depositorName,
           depositorEmail,
-          prizeAmount,
+          // New partial deposit fields
+          fullPrizeAmount,
+          existingEscrowAmount,
+          amountToDeposit,
           platformFee,
+          totalChargeAmount,
+          existingEscrowRecordId,
+          // Legacy fields for backward compatibility
+          prizeAmount,
           totalAmount
         } = paymentIntent.metadata;
 
-        // Parse amounts from metadata (they're stored as strings)
-        const prizeAmountCents = parseInt(prizeAmount) || paymentIntent.amount;
+        // Parse amounts from metadata (handle both new and legacy formats)
+        const fullPrizeAmountCents = parseInt(fullPrizeAmount || prizeAmount) || paymentIntent.amount;
+        const existingEscrowAmountCents = parseInt(existingEscrowAmount) || 0;
+        const amountToDepositCents = parseInt(amountToDeposit || prizeAmount) || paymentIntent.amount;
         const platformFeeCents = parseInt(platformFee) || 0;
-        const totalAmountCents = parseInt(totalAmount) || paymentIntent.amount;
+        const totalChargeAmountCents = parseInt(totalChargeAmount || totalAmount) || paymentIntent.amount;
+        const isPartialDeposit = existingEscrowAmountCents > 0;
 
-        console.log(`[StripeDepositWebhook] Processing deposit with fee structure:`, {
-          prizeAmount: prizeAmountCents,
+        console.log(`[StripeDepositWebhook] Processing ${isPartialDeposit ? 'partial' : 'full'} deposit:`, {
+          fullPrizeAmount: fullPrizeAmountCents,
+          existingEscrowAmount: existingEscrowAmountCents,
+          amountToDeposit: amountToDepositCents,
           platformFee: platformFeeCents,
-          totalCharged: totalAmountCents,
-          paymentIntentAmount: paymentIntent.amount
+          totalCharged: totalChargeAmountCents,
+          paymentIntentAmount: paymentIntent.amount,
+          isPartialDeposit: isPartialDeposit,
+          existingEscrowRecordId: existingEscrowRecordId
         });
 
-        // Create escrow record
-        const escrowData = {
-          challengeId,
-          challengeTitle,
-          amount: prizeAmountCents, // ONLY the prize amount (not including platform fee)
-          totalAmountCharged: totalAmountCents, // Total amount charged to host
-          currency: paymentIntent.currency,
-          status: 'held',
-          paymentIntentId: paymentIntent.id,
-          stripeChargeId: paymentIntent.latest_charge,
-          depositedBy,
-          depositorName,
-          depositorEmail,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          metadata: {
-            prizeAmount: prizeAmountCents,
-            platformFee: platformFeeCents,
-            totalAmountCharged: totalAmountCents,
-            fees: {
-              stripeFee: Math.round(totalAmountCents * 0.029 + 30), // Estimated Stripe fee on total
-              platformFee: platformFeeCents // Platform fee paid by host
-            },
-            paymentMethod: paymentIntent.payment_method,
-            paymentIntent: true,
-            feeStructure: 'host_pays_platform_fee'
-          }
-        };
+        let escrowRecordId;
+        let existingEscrowDoc = null;
 
-        const escrowRef = await db.collection('prize-escrow').add(escrowData);
-        console.log(`[StripeDepositWebhook] Created escrow record: ${escrowRef.id}`);
+        if (isPartialDeposit && existingEscrowRecordId) {
+          // Update existing escrow record
+          console.log(`[StripeDepositWebhook] Updating existing escrow record: ${existingEscrowRecordId}`);
+          
+          const escrowRef = db.collection('prize-escrow').doc(existingEscrowRecordId);
+          existingEscrowDoc = await escrowRef.get();
+          
+          if (existingEscrowDoc.exists) {
+            const existingData = existingEscrowDoc.data();
+            const newTotalAmount = existingData.amount + amountToDepositCents;
+            const newTotalCharged = (existingData.totalAmountCharged || 0) + totalChargeAmountCents;
+            
+            await escrowRef.update({
+              amount: newTotalAmount, // Combined amount held in escrow
+              totalAmountCharged: newTotalCharged, // Combined amount charged to host
+              updatedAt: new Date(),
+              additionalDeposits: admin.firestore.FieldValue.arrayUnion({
+                paymentIntentId: paymentIntent.id,
+                stripeChargeId: paymentIntent.latest_charge,
+                amountAdded: amountToDepositCents,
+                platformFeeCharged: platformFeeCents,
+                totalChargedForThis: totalChargeAmountCents,
+                depositedAt: new Date()
+              })
+            });
+            
+            escrowRecordId = existingEscrowRecordId;
+            console.log(`[StripeDepositWebhook] Updated escrow record ${escrowRecordId} - new total: $${newTotalAmount/100}`);
+          } else {
+            throw new Error(`Existing escrow record ${existingEscrowRecordId} not found`);
+          }
+        } else {
+          // Create new escrow record
+          const escrowData = {
+            challengeId,
+            challengeTitle,
+            amount: fullPrizeAmountCents, // Full prize amount (what winners get)
+            totalAmountCharged: totalChargeAmountCents, // Total amount charged to host so far
+            currency: paymentIntent.currency,
+            status: 'held',
+            paymentIntentId: paymentIntent.id,
+            stripeChargeId: paymentIntent.latest_charge,
+            depositedBy,
+            depositorName,
+            depositorEmail,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            metadata: {
+              fullPrizeAmount: fullPrizeAmountCents,
+              platformFee: platformFeeCents,
+              totalAmountCharged: totalChargeAmountCents,
+              fees: {
+                stripeFee: Math.round(totalChargeAmountCents * 0.029 + 30), // Estimated Stripe fee on total
+                platformFee: platformFeeCents // Platform fee paid by host
+              },
+              paymentMethod: paymentIntent.payment_method,
+              paymentIntent: true,
+              feeStructure: 'host_pays_platform_fee'
+            }
+          };
+
+          const escrowRef = await db.collection('prize-escrow').add(escrowData);
+          escrowRecordId = escrowRef.id;
+          console.log(`[StripeDepositWebhook] Created new escrow record: ${escrowRecordId}`);
+        }
 
         // Update challenge funding status (if challenge exists in main collection)
         try {
@@ -129,10 +180,12 @@ exports.handler = async (event, context) => {
             await db.collection('challenges').doc(challengeId).update({
               fundingStatus: 'funded',
               fundingDetails: {
-                prizeAmount: prizeAmountCents, // Prize amount available to winners
-                totalAmountCharged: totalAmountCents, // Total charged to host
-                platformFee: platformFeeCents, // Platform fee collected
-                escrowRecordId: escrowRef.id,
+                prizeAmount: fullPrizeAmountCents, // Full prize amount available to winners
+                totalAmountCharged: isPartialDeposit ? 
+                  (existingEscrowDoc.data().totalAmountCharged || 0) + totalChargeAmountCents : 
+                  totalChargeAmountCents, // Total charged to host
+                platformFee: platformFeeCents, // Platform fee for this deposit
+                escrowRecordId: escrowRecordId,
                 fundedAt: new Date(),
                 fundedBy: depositedBy
               },
@@ -156,10 +209,12 @@ exports.handler = async (event, context) => {
             const prizeDoc = prizeQuery.docs[0];
             await prizeDoc.ref.update({
               fundingStatus: 'funded',
-              depositedAmount: prizeAmountCents, // Prize amount (what winners get)
-              totalAmountCharged: totalAmountCents, // Total charged to host
-              platformFeeCollected: platformFeeCents, // Platform fee collected
-              escrowRecordId: escrowRef.id,
+              depositedAmount: fullPrizeAmountCents, // Full prize amount (what winners get)
+              totalAmountCharged: isPartialDeposit && existingEscrowDoc ? 
+                (existingEscrowDoc.data().totalAmountCharged || 0) + totalChargeAmountCents : 
+                totalChargeAmountCents, // Total charged to host
+              platformFeeCollected: platformFeeCents, // Platform fee for this deposit
+              escrowRecordId: escrowRecordId,
               depositedAt: new Date(),
               depositedBy,
               updatedAt: new Date()

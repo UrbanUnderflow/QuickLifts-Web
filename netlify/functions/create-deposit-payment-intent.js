@@ -127,6 +127,41 @@ exports.handler = async (event, context) => {
       challengeData = challengeDoc.data();
     }
 
+    // Check for existing escrow record to calculate difference
+    let existingEscrowAmount = 0;
+    let existingEscrowRecord = null;
+    const escrowQuery = await db.collection('prize-escrow')
+      .where('challengeId', '==', challengeId)
+      .where('status', '==', 'held')
+      .limit(1)
+      .get();
+      
+    if (!escrowQuery.empty) {
+      existingEscrowRecord = escrowQuery.docs[0];
+      const existingData = existingEscrowRecord.data();
+      existingEscrowAmount = existingData.amount || 0; // amount in cents
+      console.log(`[CreateDepositPaymentIntent] Found existing escrow: $${existingEscrowAmount / 100} for challenge ${challengeId}`);
+    }
+
+    // Calculate the difference needed
+    const amountToDeposit = prizeAmount - existingEscrowAmount; // both in cents
+    
+    if (amountToDeposit <= 0) {
+      console.log(`[CreateDepositPaymentIntent] No additional deposit needed. Prize: $${prizeAmount / 100}, Existing: $${existingEscrowAmount / 100}`);
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({
+          success: false,
+          error: `Prize is already fully funded. Current escrow: $${(existingEscrowAmount / 100).toFixed(2)}, Requested: $${(prizeAmount / 100).toFixed(2)}`,
+          existingAmount: existingEscrowAmount,
+          requestedAmount: prizeAmount
+        })
+      };
+    }
+
+    console.log(`[CreateDepositPaymentIntent] Partial deposit: Prize $${prizeAmount / 100}, Existing $${existingEscrowAmount / 100}, Need to deposit: $${amountToDeposit / 100}`);
+
     // Create Stripe customer if needed
     let customerId = userData.stripeCustomerId;
     if (!customerId) {
@@ -147,23 +182,25 @@ exports.handler = async (event, context) => {
       });
     }
 
-    // Calculate total amount: prize + platform fee (covers Stripe + profit)
+    // Calculate fee based on amount being deposited (not full prize amount)
     const platformFeeRate = 0.035; // 3.5%
     const platformFixedFee = 50; // $0.50 fixed fee to cover Stripe's $0.30 + profit
-    const platformFee = Math.round(prizeAmount * platformFeeRate) + platformFixedFee;
-    const totalAmount = prizeAmount + platformFee;
+    const platformFee = Math.round(amountToDeposit * platformFeeRate) + platformFixedFee;
+    const totalChargeAmount = amountToDeposit + platformFee;
 
-    console.log(`[CreateDepositPaymentIntent] Fee calculation:`, {
-      prizeAmount: prizeAmount,
+    console.log(`[CreateDepositPaymentIntent] Partial deposit fee calculation:`, {
+      fullPrizeAmount: prizeAmount,
+      existingEscrowAmount: existingEscrowAmount,
+      amountToDeposit: amountToDeposit,
       platformFee: platformFee,
-      totalAmount: totalAmount,
-      feeStructure: '3.5% + $0.50 (internal calculation)'
+      totalChargeAmount: totalChargeAmount,
+      feeStructure: '3.5% + $0.50 on deposit amount only'
     });
 
     // Create Payment Intent exactly like round purchases (supports Link automatically)
-    // Host pays: prize amount + platform fee, winner gets: full prize amount
+    // Host pays: deposit amount + platform fee, winner gets: full prize amount (from combined escrow)
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: totalAmount, // Prize + platform fee
+      amount: totalChargeAmount, // Deposit amount + platform fee
       currency: 'usd',
       customer: customerId,
       automatic_payment_methods: {
@@ -178,11 +215,17 @@ exports.handler = async (event, context) => {
         depositorName: depositorName || userData.username,
         depositorEmail: depositorEmail || userData.email,
         payment_type: 'escrow_deposit',
-        prizeAmount: prizeAmount.toString(),
+        // Full prize amount information
+        fullPrizeAmount: prizeAmount.toString(),
+        existingEscrowAmount: existingEscrowAmount.toString(),
+        // This deposit information
+        amountToDeposit: amountToDeposit.toString(),
         platformFee: platformFee.toString(),
-        totalAmount: totalAmount.toString()
+        totalChargeAmount: totalChargeAmount.toString(),
+        // Escrow record reference (if updating existing)
+        existingEscrowRecordId: existingEscrowRecord ? existingEscrowRecord.id : null
       },
-      description: `Prize deposit: $${prizeAmount/100} + $${platformFee/100} service fee for "${challengeData.title}"`,
+      description: `Prize deposit: $${amountToDeposit/100} + $${platformFee/100} service fee for "${challengeData.title}" ${existingEscrowAmount > 0 ? `(additional to existing $${existingEscrowAmount/100})` : ''}`,
       receipt_email: depositorEmail || userData.email,
     });
 
@@ -196,14 +239,22 @@ exports.handler = async (event, context) => {
         clientSecret: paymentIntent.client_secret,
         paymentIntentId: paymentIntent.id,
         challengeTitle: challengeData.title,
-        prizeAmount: prizeAmount,
+        // Full prize information
+        fullPrizeAmount: prizeAmount,
+        existingEscrowAmount: existingEscrowAmount,
+        // This deposit information
+        amountToDeposit: amountToDeposit,
         platformFee: platformFee,
-        totalAmount: totalAmount,
+        totalChargeAmount: totalChargeAmount,
+        // Display breakdown
         breakdown: {
-          prizeAmount: `$${prizeAmount/100}`,
-          platformFee: `$${platformFee/100}`,
-          totalCharged: `$${totalAmount/100}`
-        }
+          depositAmount: `$${amountToDeposit/100}`,
+          serviceFee: `$${platformFee/100}`,
+          totalCharged: `$${totalChargeAmount/100}`
+        },
+        // Additional context
+        isPartialDeposit: existingEscrowAmount > 0,
+        existingEscrowRecordId: existingEscrowRecord ? existingEscrowRecord.id : null
       })
     };
 

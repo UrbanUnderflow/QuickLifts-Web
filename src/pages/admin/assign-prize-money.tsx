@@ -210,7 +210,13 @@ const AssignPrizeMoneyPage: React.FC = () => {
         })
       });
 
-      const { clientSecret, paymentIntentId, breakdown } = await createResponse.json();
+      const response = await createResponse.json();
+      
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to create payment intent');
+      }
+
+      const { clientSecret, paymentIntentId, breakdown, isPartialDeposit, existingEscrowAmount, amountToDeposit } = response;
       
       if (!clientSecret) {
         throw new Error('Failed to create payment intent');
@@ -243,25 +249,37 @@ const AssignPrizeMoneyPage: React.FC = () => {
       const modalHtml = `
         <div id="payment-modal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 9999; display: flex; align-items: center; justify-content: center;">
           <div style="background: #18181b; padding: 24px; border-radius: 12px; width: 90%; max-width: 500px; color: white;">
-            <h3 style="margin: 0 0 16px 0; color: white;">Prize Money Deposit</h3>
+            <h3 style="margin: 0 0 16px 0; color: white;">${isPartialDeposit ? 'Additional' : ''} Prize Money Deposit</h3>
             <p style="margin: 0 0 8px 0; color: #a1a1aa;">Challenge: ${prizeAssignment.challengeTitle}</p>
+            ${isPartialDeposit ? `<p style="margin: 0 0 8px 0; color: #fbbf24; font-size: 14px;">⚡ Adding to existing deposit of $${(existingEscrowAmount / 100).toFixed(2)}</p>` : ''}
             
             <div style="background: #27272a; border-radius: 8px; padding: 16px; margin: 16px 0;">
               <h4 style="margin: 0 0 12px 0; color: white; font-size: 14px;">Payment Breakdown:</h4>
-              <div style="display: flex; justify-content: space-between; margin: 4px 0; color: #a1a1aa;">
-                <span>Prize Amount:</span>
-                <span>${breakdown.prizeAmount}</span>
-              </div>
+              ${isPartialDeposit ? `
+                <div style="display: flex; justify-content: space-between; margin: 4px 0; color: #fbbf24;">
+                  <span>Existing in Escrow:</span>
+                  <span>$${(existingEscrowAmount / 100).toFixed(2)}</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin: 4px 0; color: #a1a1aa;">
+                  <span>Additional Deposit:</span>
+                  <span>${breakdown.depositAmount}</span>
+                </div>
+              ` : `
+                <div style="display: flex; justify-content: space-between; margin: 4px 0; color: #a1a1aa;">
+                  <span>Prize Deposit:</span>
+                  <span>${breakdown.depositAmount}</span>
+                </div>
+              `}
               <div style="display: flex; justify-content: space-between; margin: 4px 0; color: #a1a1aa;">
                 <span>Service Fee:</span>
-                <span>${breakdown.platformFee}</span>
+                <span>${breakdown.serviceFee}</span>
               </div>
               <hr style="border: none; border-top: 1px solid #3f3f46; margin: 8px 0;">
               <div style="display: flex; justify-content: space-between; margin: 4px 0; color: white; font-weight: 600;">
                 <span>Total Charge:</span>
                 <span>${breakdown.totalCharged}</span>
               </div>
-              <p style="margin: 8px 0 0 0; font-size: 12px; color: #71717a;">Winner receives the full prize amount (${breakdown.prizeAmount})</p>
+              <p style="margin: 8px 0 0 0; font-size: 12px; color: #71717a;">Winner will receive $${prizeAssignment.prizeAmount.toFixed(2)} total</p>
             </div>
             
             <div id="payment-element" style="margin: 16px 0;"></div>
@@ -307,7 +325,12 @@ const AssignPrizeMoneyPage: React.FC = () => {
         } else {
           // Payment succeeded
           document.getElementById('payment-modal')?.remove();
-          alert(`Prize money deposited successfully!\nPayment Intent: ${paymentIntentId}\n\nPrize Amount: ${breakdown.prizeAmount}\nPlatform Fee: ${breakdown.platformFee}\nTotal Charged: ${breakdown.totalCharged}\n\nWinner will receive the full ${breakdown.prizeAmount}!`);
+          
+          const successMessage = isPartialDeposit 
+            ? `Additional prize money deposited successfully!\n\nAdditional Deposit: ${breakdown.depositAmount}\nService Fee: ${breakdown.serviceFee}\nTotal Charged: ${breakdown.totalCharged}\n\nTotal in Escrow: $${(existingEscrowAmount + amountToDeposit) / 100}\nWinner will receive $${prizeAssignment.prizeAmount.toFixed(2)} total!`
+            : `Prize money deposited successfully!\n\nDeposit Amount: ${breakdown.depositAmount}\nService Fee: ${breakdown.serviceFee}\nTotal Charged: ${breakdown.totalCharged}\n\nWinner will receive $${prizeAssignment.prizeAmount.toFixed(2)}!`;
+            
+          alert(successMessage);
           fetchPrizeAssignments(); // Refresh assignments
           fetchEscrowRecords(); // Refresh escrow records
         }
