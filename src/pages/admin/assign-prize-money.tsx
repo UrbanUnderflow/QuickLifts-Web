@@ -530,11 +530,16 @@ const AssignPrizeMoneyPage: React.FC = () => {
     console.log(`[getFundingStatus] Challenge ${challengeId}:`, {
       escrowRecord,
       totalEscrowRecords: escrowRecords.length,
-      escrowRecordIds: escrowRecords.map(r => r.challengeId)
+      escrowRecordIds: escrowRecords.map(r => r.challengeId),
+      searchingFor: challengeId,
+      exactMatches: escrowRecords.filter(r => r.challengeId === challengeId),
+      allRecords: escrowRecords
     });
     if (!escrowRecord) {
+      console.log(`[getFundingStatus] No escrow record found for challenge ${challengeId}`);
       return { status: 'pending' };
     }
+    console.log(`[getFundingStatus] Found escrow record with status: ${escrowRecord.status}`);
     return { status: escrowRecord.status === 'held' ? 'funded' : escrowRecord.status, escrowRecord };
   };
 
