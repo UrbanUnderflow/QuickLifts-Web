@@ -504,6 +504,11 @@ const AssignPrizeMoneyPage: React.FC = () => {
 
   const getFundingStatus = (challengeId: string): { status: string; escrowRecord?: any } => {
     const escrowRecord = escrowRecords.find(record => record.challengeId === challengeId);
+    console.log(`[getFundingStatus] Challenge ${challengeId}:`, {
+      escrowRecord,
+      totalEscrowRecords: escrowRecords.length,
+      escrowRecordIds: escrowRecords.map(r => r.challengeId)
+    });
     if (!escrowRecord) {
       return { status: 'pending' };
     }
@@ -846,7 +851,20 @@ const AssignPrizeMoneyPage: React.FC = () => {
 
           {/* Existing Prize Assignments */}
           <div className="mt-12">
-            <h2 className="text-2xl font-bold mb-6">Existing Prize Assignments</h2>
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold">Existing Prize Assignments</h2>
+              <button
+                onClick={() => {
+                  console.log('Escrow Records:', escrowRecords);
+                  console.log('Prize Assignments:', prizeAssignments);
+                  fetchEscrowRecords();
+                  fetchPrizeAssignments();
+                }}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm"
+              >
+                Debug & Refresh
+              </button>
+            </div>
             
             {prizeAssignments.length > 0 ? (
               <div className="bg-zinc-900 rounded-xl overflow-hidden">
