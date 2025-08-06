@@ -147,16 +147,17 @@ exports.handler = async (event, context) => {
       });
     }
 
-    // Calculate total amount: prize + 3% platform fee
-    const platformFeeRate = 0.03; // 3%
-    const platformFee = Math.round(prizeAmount * platformFeeRate);
+    // Calculate total amount: prize + platform fee (covers Stripe + profit)
+    const platformFeeRate = 0.035; // 3.5%
+    const platformFixedFee = 50; // $0.50 fixed fee to cover Stripe's $0.30 + profit
+    const platformFee = Math.round(prizeAmount * platformFeeRate) + platformFixedFee;
     const totalAmount = prizeAmount + platformFee;
 
     console.log(`[CreateDepositPaymentIntent] Fee calculation:`, {
       prizeAmount: prizeAmount,
       platformFee: platformFee,
       totalAmount: totalAmount,
-      feePercentage: '3%'
+      feeStructure: '3.5% + $0.50 (internal calculation)'
     });
 
     // Create Payment Intent exactly like round purchases (supports Link automatically)
@@ -181,7 +182,7 @@ exports.handler = async (event, context) => {
         platformFee: platformFee.toString(),
         totalAmount: totalAmount.toString()
       },
-      description: `Prize deposit: $${prizeAmount/100} + $${platformFee/100} platform fee for "${challengeData.title}"`,
+      description: `Prize deposit: $${prizeAmount/100} + $${platformFee/100} service fee for "${challengeData.title}"`,
       receipt_email: depositorEmail || userData.email,
     });
 
@@ -200,7 +201,7 @@ exports.handler = async (event, context) => {
         totalAmount: totalAmount,
         breakdown: {
           prizeAmount: `$${prizeAmount/100}`,
-          platformFee: `$${platformFee/100} (3%)`,
+          platformFee: `$${platformFee/100}`,
           totalCharged: `$${totalAmount/100}`
         }
       })

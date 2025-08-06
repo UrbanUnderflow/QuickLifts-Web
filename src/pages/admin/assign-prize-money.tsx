@@ -253,7 +253,7 @@ const AssignPrizeMoneyPage: React.FC = () => {
                 <span>${breakdown.prizeAmount}</span>
               </div>
               <div style="display: flex; justify-content: space-between; margin: 4px 0; color: #a1a1aa;">
-                <span>Platform Fee:</span>
+                <span>Service Fee:</span>
                 <span>${breakdown.platformFee}</span>
               </div>
               <hr style="border: none; border-top: 1px solid #3f3f46; margin: 8px 0;">
