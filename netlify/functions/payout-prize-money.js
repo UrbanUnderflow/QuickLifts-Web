@@ -94,31 +94,61 @@ const handler = async (event) => {
 
     console.log(`[PayoutPrizeMoney] Winner Stripe account: ${winnerStripeAccountId}`);
 
+    // PHASE 2: Verify escrow funds are available for this challenge
+    const escrowQuery = await db.collection('prize-escrow')
+      .where('challengeId', '==', prizeRecord.challengeId || challengeId)
+      .where('status', '==', 'held')
+      .limit(1)
+      .get();
+
+    if (escrowQuery.empty) {
+      await db.collection("prizeRecords").doc(prizeRecordId).update({
+        status: 'failed',
+        failureReason: 'No escrow funds found for this challenge',
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      return {
+        statusCode: 400,
+        body: JSON.stringify({
+          success: false,
+          error: 'No escrow funds available for this challenge'
+        })
+      };
+    }
+
+    const escrowRecord = escrowQuery.docs[0];
+    const escrowData = escrowRecord.data();
+    
+    console.log(`[PayoutPrizeMoney] Found escrow record: ${escrowRecord.id}, amount: $${escrowData.amount / 100}`);
+
     // Update prize record to processing
     await db.collection("prizeRecords").doc(prizeRecordId).update({
       status: 'processing',
       processingStartedAt: admin.firestore.FieldValue.serverTimestamp(),
+      escrowRecordId: escrowRecord.id, // Link to escrow record
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
     });
 
-    // Create transfer to winner's connected account
+    // For prize money: NO platform fee (Phase 2 requirement)
     const transferAmount = prizeRecord.prizeAmount; // Amount in cents
-    const platformFee = Math.round(transferAmount * 0.03); // 3% platform fee
-    const winnerAmount = transferAmount - platformFee;
+    const platformFee = 0; // NO FEE for prize money
+    const winnerAmount = transferAmount; // Winner gets full amount
 
-    console.log(`[PayoutPrizeMoney] Transfer breakdown:`, {
+    console.log(`[PayoutPrizeMoney] Prize transfer breakdown:`, {
       totalPrize: transferAmount,
       platformFee: platformFee,
-      winnerAmount: winnerAmount
+      winnerAmount: winnerAmount,
+      type: 'prize_money_escrow'
     });
 
     try {
-      // Create Stripe transfer for prize money
+      // Create Stripe transfer for prize money (from escrow)
       const transfer = await stripe.transfers.create({
-          amount: winnerAmount, // Amount after platform fee
+          amount: winnerAmount, // Full amount (no platform fee for prizes)
           currency: 'usd',
           destination: winnerStripeAccountId,
-          description: `Prize money for challenge: ${prizeRecord.challengeTitle}`,
+          description: `Prize money from escrow: ${prizeRecord.challengeTitle}`,
           metadata: {
               platform: 'pulse',
               challenge_id: prizeRecord.challengeId,
@@ -126,25 +156,43 @@ const handler = async (event) => {
               winner_user_id: prizeRecord.userId,
               winner_placement: prizeRecord.placement,
               original_amount: prizeRecord.prizeAmount,
-              platform_fee: platformFee,
-              payment_type: 'prize_money',
+              platform_fee: platformFee, // 0 for prizes
+              payment_type: 'prize_money_escrow',
+              escrow_record_id: escrowRecord.id,
+              transfer_source: 'platform_escrow',
               tax_classification: 'prize_income' // For 1099-MISC box 3
           }
       });
 
       console.log(`[PayoutPrizeMoney] Transfer created: ${transfer.id}`);
 
-      // Update prize record with success
+      // Update records with success
       const batch = db.batch();
       
+      // Update prize record
       const prizeRef = db.collection("prizeRecords").doc(prizeRecordId);
       batch.update(prizeRef, {
         status: 'paid',
         stripeTransferId: transfer.id,
         winnerAmount: winnerAmount,
-        platformFee: platformFee,
+        platformFee: platformFee, // 0 for prizes
         paidAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        escrowRecordId: escrowRecord.id
+      });
+
+      // PHASE 2: Update escrow record to mark funds as distributed
+      const escrowRef = db.collection('prize-escrow').doc(escrowRecord.id);
+      batch.update(escrowRef, {
+        status: 'distributed',
+        distributedAmount: (escrowData.distributedAmount || 0) + winnerAmount,
+        distributedTo: admin.firestore.FieldValue.arrayUnion({
+          userId: prizeRecord.userId,
+          amount: winnerAmount,
+          transferId: transfer.id,
+          distributedAt: new Date()
+        }),
+        updatedAt: new Date()
       });
 
       // Update user's winner field
@@ -174,7 +222,7 @@ const handler = async (event) => {
       // Commit all updates
       await batch.commit();
 
-      console.log(`[PayoutPrizeMoney] Successfully paid $${winnerAmount / 100} to ${prizeRecord.username}`);
+      console.log(`[PayoutPrizeMoney] Successfully paid $${winnerAmount / 100} from escrow to ${prizeRecord.username}`);
 
       return {
         statusCode: 200,
@@ -182,9 +230,12 @@ const handler = async (event) => {
           success: true,
           transferId: transfer.id,
           winnerAmount: winnerAmount,
-          platformFee: platformFee,
+          platformFee: platformFee, // 0 for prizes
           recipient: prizeRecord.username,
-          challengeTitle: prizeRecord.challengeTitle
+          challengeTitle: prizeRecord.challengeTitle,
+          escrowRecordId: escrowRecord.id,
+          transferType: 'prize_money_escrow',
+          message: 'Prize money transferred from escrow successfully'
         })
       };
 

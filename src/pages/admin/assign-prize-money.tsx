@@ -4,7 +4,7 @@ import { useSelector } from 'react-redux';
 import { RootState } from '../../redux/store';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import Head from 'next/head';
-import { Search, DollarSign, Trophy, Save, Edit, Trash2, Calendar, Users, Target, Mail, Send } from 'lucide-react';
+import { Search, DollarSign, Trophy, Save, Edit, Trash2, Calendar, Users, Target, Mail, Send, CreditCard, AlertCircle } from 'lucide-react';
 
 interface Challenge {
   id: string;
@@ -38,6 +38,12 @@ interface PrizeAssignment {
   hostConfirmed?: boolean;
   hostConfirmedAt?: any;
   distributionStatus?: 'pending' | 'processing' | 'distributed' | 'partially_distributed' | 'failed';
+  // Funding fields
+  fundingStatus?: 'pending' | 'funded' | 'distributed' | 'refunded';
+  depositedAmount?: number;
+  escrowRecordId?: string;
+  depositedAt?: any;
+  depositedBy?: string;
 }
 
 interface PrizeFormData {
@@ -56,8 +62,12 @@ const AssignPrizeMoneyPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [editingPrize, setEditingPrize] = useState<PrizeAssignment | null>(null);
+  const [newPrizeAmount, setNewPrizeAmount] = useState('');
   const [justAssignedPrize, setJustAssignedPrize] = useState<PrizeAssignment | null>(null);
   const [sendingHostEmail, setSendingHostEmail] = useState(false);
+  const [depositorPrize, setDepositorPrize] = useState<PrizeAssignment | null>(null);
+  const [isDepositing, setIsDepositing] = useState(false);
+  const [escrowRecords, setEscrowRecords] = useState<any[]>([]);
   
   const [formData, setFormData] = useState<PrizeFormData>({
     challengeId: '',
@@ -73,10 +83,60 @@ const AssignPrizeMoneyPage: React.FC = () => {
 
   const currentUser = useSelector((state: RootState) => state.user.currentUser);
 
+  // Helper function to find existing assignment for selected challenge
+  const getExistingAssignment = (challengeId: string): PrizeAssignment | null => {
+    return prizeAssignments.find(assignment => assignment.challengeId === challengeId) || null;
+  };
+
+  // Check if we're in reassignment mode
+  const existingAssignment = selectedChallenge ? getExistingAssignment(selectedChallenge.id) : null;
+  const isReassigning = !!existingAssignment;
+
   useEffect(() => {
     fetchChallenges();
     fetchPrizeAssignments();
+    fetchEscrowRecords();
+    
+    // Check for successful deposit in URL parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('deposit_success') === 'true') {
+      const sessionId = urlParams.get('session_id');
+      alert(`Prize money deposit completed successfully!\nCheckout Session: ${sessionId}`);
+      
+      // Clean up URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+      
+      // Refresh data
+      setTimeout(() => {
+        fetchPrizeAssignments();
+        fetchEscrowRecords();
+      }, 3000); // Give webhook time to process
+    }
+    
+    if (urlParams.get('deposit_cancelled') === 'true') {
+      alert('Prize money deposit was cancelled.');
+      
+      // Clean up URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
   }, []);
+
+  // Pre-populate form when selecting a challenge with existing assignment
+  useEffect(() => {
+    if (existingAssignment) {
+      setFormData({
+        challengeId: existingAssignment.challengeId,
+        prizeAmount: existingAssignment.prizeAmount,
+        prizeStructure: existingAssignment.prizeStructure,
+        description: existingAssignment.description || '',
+        customDistribution: existingAssignment.customDistribution || [
+          { rank: 1, percentage: 50 },
+          { rank: 2, percentage: 30 },
+          { rank: 3, percentage: 20 }
+        ]
+      });
+    }
+  }, [existingAssignment]);
 
   const fetchChallenges = async () => {
     setIsLoading(true);
@@ -102,6 +162,162 @@ const AssignPrizeMoneyPage: React.FC = () => {
       }
     } catch (error) {
       console.error('Error fetching prize assignments:', error);
+    }
+  };
+
+  const fetchEscrowRecords = async () => {
+    try {
+      const response = await fetch('/.netlify/functions/get-prize-escrow');
+      const data = await response.json();
+      if (data.success && data.escrowRecords) {
+        setEscrowRecords(data.escrowRecords);
+      }
+    } catch (error) {
+      console.error('Error fetching escrow records:', error);
+    }
+  };
+
+  const handleDepositPrizeMoney = async (prizeAssignment: PrizeAssignment) => {
+    if (!currentUser) return;
+
+    setIsDepositing(true);
+    try {
+      // Initialize Stripe
+      const stripeKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+      if (!stripeKey) {
+        alert('Stripe configuration error. Please contact support.');
+        setIsDepositing(false);
+        return;
+      }
+      const stripe = window.Stripe ? window.Stripe(stripeKey) : null;
+      
+      if (!stripe) {
+        alert('Stripe not loaded. Please refresh the page and try again.');
+        setIsDepositing(false);
+        return;
+      }
+
+      // Step 1: Create payment intent on the backend
+      const createResponse = await fetch('/.netlify/functions/create-deposit-payment-intent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          challengeId: prizeAssignment.challengeId,
+          prizeAmount: Math.round(prizeAssignment.prizeAmount * 100), // Convert to cents
+          depositedBy: currentUser.id,
+          depositorName: currentUser.username,
+          depositorEmail: currentUser.email
+        })
+      });
+
+      const { clientSecret, paymentIntentId, breakdown } = await createResponse.json();
+      
+      if (!clientSecret) {
+        throw new Error('Failed to create payment intent');
+      }
+
+      // Step 2: Use Elements for Payment (like round purchases - supports Link automatically)
+      console.log('Payment Intent created:', paymentIntentId);
+      console.log('Client Secret:', clientSecret);
+      console.log('Fee breakdown:', breakdown);
+      
+      // Create Elements and Payment Element
+      const elements = stripe.elements({
+        clientSecret,
+        appearance: {
+          theme: 'night', // Dark theme to match our UI
+        }
+      });
+      
+      // Create and mount Payment Element
+      const paymentElement = elements.create('payment', {
+        defaultValues: {
+          billingDetails: {
+            email: currentUser.email,
+            name: currentUser.username
+          }
+        }
+      });
+      
+      // Create modal for payment with fee breakdown
+      const modalHtml = `
+        <div id="payment-modal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 9999; display: flex; align-items: center; justify-content: center;">
+          <div style="background: #18181b; padding: 24px; border-radius: 12px; width: 90%; max-width: 500px; color: white;">
+            <h3 style="margin: 0 0 16px 0; color: white;">Prize Money Deposit</h3>
+            <p style="margin: 0 0 8px 0; color: #a1a1aa;">Challenge: ${prizeAssignment.challengeTitle}</p>
+            
+            <div style="background: #27272a; border-radius: 8px; padding: 16px; margin: 16px 0;">
+              <h4 style="margin: 0 0 12px 0; color: white; font-size: 14px;">Payment Breakdown:</h4>
+              <div style="display: flex; justify-content: space-between; margin: 4px 0; color: #a1a1aa;">
+                <span>Prize Amount:</span>
+                <span>${breakdown.prizeAmount}</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; margin: 4px 0; color: #a1a1aa;">
+                <span>Platform Fee:</span>
+                <span>${breakdown.platformFee}</span>
+              </div>
+              <hr style="border: none; border-top: 1px solid #3f3f46; margin: 8px 0;">
+              <div style="display: flex; justify-content: space-between; margin: 4px 0; color: white; font-weight: 600;">
+                <span>Total Charge:</span>
+                <span>${breakdown.totalCharged}</span>
+              </div>
+              <p style="margin: 8px 0 0 0; font-size: 12px; color: #71717a;">Winner receives the full prize amount (${breakdown.prizeAmount})</p>
+            </div>
+            
+            <div id="payment-element" style="margin: 16px 0;"></div>
+            <div style="display: flex; gap: 12px; margin-top: 16px;">
+              <button id="cancel-payment" style="flex: 1; padding: 12px; background: #3f3f46; color: white; border: none; border-radius: 6px; cursor: pointer;">Cancel</button>
+              <button id="submit-payment" style="flex: 1; padding: 12px; background: #E0FE10; color: black; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">Pay ${breakdown.totalCharged}</button>
+            </div>
+            <div id="payment-messages" style="margin-top: 12px; color: #ef4444;"></div>
+          </div>
+        </div>
+      `;
+      
+      // Add modal to page
+      document.body.insertAdjacentHTML('beforeend', modalHtml);
+      
+      // Mount payment element
+      paymentElement.mount('#payment-element');
+      
+      // Handle cancel
+      document.getElementById('cancel-payment')?.addEventListener('click', () => {
+        document.getElementById('payment-modal')?.remove();
+        setIsDepositing(false);
+      });
+      
+      // Handle payment submission
+      document.getElementById('submit-payment')?.addEventListener('click', async () => {
+        const submitButton = document.getElementById('submit-payment');
+        const messagesDiv = document.getElementById('payment-messages');
+        
+        if (submitButton) submitButton.textContent = 'Processing...';
+        
+        const { error } = await stripe.confirmPayment({
+          elements,
+          confirmParams: {
+            return_url: `${window.location.origin}/admin/assign-prize-money?deposit_success=true&pi=${paymentIntentId}`,
+          },
+          redirect: 'if_required'
+        });
+
+        if (error) {
+          if (messagesDiv) messagesDiv.textContent = error.message || 'Payment failed';
+          if (submitButton) submitButton.textContent = `Pay $${prizeAssignment.prizeAmount}`;
+        } else {
+          // Payment succeeded
+          document.getElementById('payment-modal')?.remove();
+          alert(`Prize money deposited successfully!\nPayment Intent: ${paymentIntentId}\n\nPrize Amount: ${breakdown.prizeAmount}\nPlatform Fee: ${breakdown.platformFee}\nTotal Charged: ${breakdown.totalCharged}\n\nWinner will receive the full ${breakdown.prizeAmount}!`);
+          fetchPrizeAssignments(); // Refresh assignments
+          fetchEscrowRecords(); // Refresh escrow records
+        }
+      });
+    } catch (error) {
+      console.error('Error depositing prize money:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      alert(`Failed to deposit prize money: ${errorMessage}`);
+    } finally {
+      setIsDepositing(false);
     }
   };
 
@@ -170,45 +386,71 @@ const AssignPrizeMoneyPage: React.FC = () => {
 
     setIsSaving(true);
     try {
-      const payload = {
-        challengeId: formData.challengeId,
-        challengeTitle: selectedChallenge.title,
-        prizeAmount: formData.prizeAmount,
-        prizeStructure: formData.prizeStructure,
-        description: formData.description,
-        customDistribution: formData.prizeStructure === 'custom' ? formData.customDistribution : null,
-        createdBy: currentUser.id,
-        status: 'assigned'
-      };
-
-      const response = await fetch('/.netlify/functions/assign-challenge-prize', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      const data = await response.json();
-      if (data.success) {
-        alert('Prize money assigned successfully!');
-        // Set the just assigned prize to show the host email button
-        setJustAssignedPrize(data.prizeData);
-        fetchPrizeAssignments();
-        // Reset form
-        setSelectedChallenge(null);
-        setFormData({
-          challengeId: '',
-          prizeAmount: 1000,
-          prizeStructure: 'winner_takes_all',
-          description: '',
-          customDistribution: [
-            { rank: 1, percentage: 50 },
-            { rank: 2, percentage: 30 },
-            { rank: 3, percentage: 20 }
-          ]
+      if (isReassigning && existingAssignment) {
+        // Handle reassignment - update existing assignment
+        const response = await fetch('/.netlify/functions/update-prize-assignment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            assignmentId: existingAssignment.id,
+            prizeAmount: formData.prizeAmount,
+            prizeStructure: formData.prizeStructure,
+            description: formData.description,
+            customDistribution: formData.prizeStructure === 'custom' ? formData.customDistribution : null,
+            updatedBy: currentUser.id
+          })
         });
+
+        const data = await response.json();
+        if (data.success) {
+          alert('Prize money reassigned successfully!');
+          fetchPrizeAssignments();
+          // Keep the form populated for further edits
+        } else {
+          console.error('Prize reassignment failed:', data.error);
+          alert(`Error reassigning prize: ${data.error}`);
+        }
       } else {
-        console.error('Prize assignment failed:');
-        console.error(data.error);
+        // Handle new assignment
+        const payload = {
+          challengeId: formData.challengeId,
+          challengeTitle: selectedChallenge.title,
+          prizeAmount: formData.prizeAmount,
+          prizeStructure: formData.prizeStructure,
+          description: formData.description,
+          customDistribution: formData.prizeStructure === 'custom' ? formData.customDistribution : null,
+          createdBy: currentUser.id,
+          status: 'assigned'
+        };
+
+        const response = await fetch('/.netlify/functions/assign-challenge-prize', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await response.json();
+        if (data.success) {
+          alert('Prize money assigned successfully!');
+          // Set the just assigned prize to show the host email button
+          setJustAssignedPrize(data.prizeData);
+          fetchPrizeAssignments();
+          // Reset form
+          setSelectedChallenge(null);
+          setFormData({
+            challengeId: '',
+            prizeAmount: 1000,
+            prizeStructure: 'winner_takes_all',
+            description: '',
+            customDistribution: [
+              { rank: 1, percentage: 50 },
+              { rank: 2, percentage: 30 },
+              { rank: 3, percentage: 20 }
+            ]
+          });
+        } else {
+          console.error('Prize assignment failed:');
+          console.error(data.error);
         
         // Extract and log Firebase console URL if present
         if (data.error && data.error.includes('console.firebase.google.com')) {
@@ -221,6 +463,7 @@ const AssignPrizeMoneyPage: React.FC = () => {
         
         console.error('Full response:', data);
         alert(`Error: ${data.error}\n\nFull details logged to console (F12 > Console tab)`);
+        }
       }
     } catch (error) {
       console.error('Error assigning prize:');
@@ -257,6 +500,14 @@ const AssignPrizeMoneyPage: React.FC = () => {
       style: 'currency',
       currency: 'USD'
     }).format(amount);
+  };
+
+  const getFundingStatus = (challengeId: string): { status: string; escrowRecord?: any } => {
+    const escrowRecord = escrowRecords.find(record => record.challengeId === challengeId);
+    if (!escrowRecord) {
+      return { status: 'pending' };
+    }
+    return { status: escrowRecord.status === 'held' ? 'funded' : escrowRecord.status, escrowRecord };
   };
 
   const handleSendHostEmail = async (prizeAssignment: PrizeAssignment) => {
@@ -301,6 +552,7 @@ const AssignPrizeMoneyPage: React.FC = () => {
     <AdminRouteGuard>
       <Head>
         <title>Assign Prize Money - Admin Dashboard</title>
+        <script src="https://js.stripe.com/v3/"></script>
       </Head>
       
       <div className="min-h-screen bg-zinc-950 text-white py-10">
@@ -403,10 +655,22 @@ const AssignPrizeMoneyPage: React.FC = () => {
 
                   <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
-                      <label className="block text-sm font-medium mb-2">Selected Challenge</label>
-                      <div className="p-3 bg-zinc-800 rounded-lg">
+                      <label className="block text-sm font-medium mb-2">
+                        Selected Challenge
+                        {isReassigning && (
+                          <span className="ml-2 px-2 py-1 bg-yellow-900/50 text-yellow-400 text-xs font-semibold rounded-full">
+                            REASSIGNING
+                          </span>
+                        )}
+                      </label>
+                      <div className={`p-3 rounded-lg ${isReassigning ? 'bg-yellow-900/20 border border-yellow-600/30' : 'bg-zinc-800'}`}>
                         <p className="font-semibold">{selectedChallenge.title}</p>
                         <p className="text-sm text-zinc-400">{selectedChallenge.description}</p>
+                        {isReassigning && existingAssignment && (
+                          <p className="text-sm text-yellow-400 mt-2">
+                            Current prize: ${existingAssignment.prizeAmount} ({existingAssignment.prizeStructure})
+                          </p>
+                        )}
                       </div>
                     </div>
 
@@ -507,12 +771,12 @@ const AssignPrizeMoneyPage: React.FC = () => {
                       {isSaving ? (
                         <>
                           <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-black"></div>
-                          Assigning Prize...
+                          {isReassigning ? 'Reassigning Prize...' : 'Assigning Prize...'}
                         </>
                       ) : (
                         <>
                           <Save className="w-4 h-4" />
-                          Assign Prize Money
+                          {isReassigning ? 'Reassign Prize Money' : 'Assign Prize Money'}
                         </>
                       )}
                     </button>
@@ -593,6 +857,7 @@ const AssignPrizeMoneyPage: React.FC = () => {
                         <th className="px-6 py-3 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider">Challenge</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider">Prize Amount</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider">Structure</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider">Funding</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider">Status</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider">Host Status</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider">Created</th>
@@ -613,6 +878,21 @@ const AssignPrizeMoneyPage: React.FC = () => {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="text-sm text-white">{getPrizeStructureDescription(prize.prizeStructure)}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            {(() => {
+                              const fundingInfo = getFundingStatus(prize.challengeId);
+                              return (
+                                <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                  fundingInfo.status === 'pending' ? 'bg-red-900/50 text-red-400' :
+                                  fundingInfo.status === 'funded' ? 'bg-green-900/50 text-green-400' :
+                                  fundingInfo.status === 'distributed' ? 'bg-blue-900/50 text-blue-400' :
+                                  'bg-gray-900/50 text-gray-400'
+                                }`}>
+                                  {fundingInfo.status}
+                                </span>
+                              );
+                            })()}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
@@ -656,7 +936,20 @@ const AssignPrizeMoneyPage: React.FC = () => {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                             <div className="flex items-center gap-2">
-                              {!prize.hostEmailSent && (
+                              {(() => {
+                                const fundingInfo = getFundingStatus(prize.challengeId);
+                                return fundingInfo.status === 'pending' && (
+                                  <button
+                                    onClick={() => handleDepositPrizeMoney(prize)}
+                                    disabled={isDepositing}
+                                    className="text-yellow-400 hover:text-yellow-300 disabled:opacity-50"
+                                    title="Deposit Prize Money"
+                                  >
+                                    <CreditCard className="w-4 h-4" />
+                                  </button>
+                                );
+                              })()}
+                              {!prize.hostEmailSent && getFundingStatus(prize.challengeId).status === 'funded' && (
                                 <button
                                   onClick={() => handleSendHostEmail(prize)}
                                   disabled={sendingHostEmail}
@@ -667,7 +960,10 @@ const AssignPrizeMoneyPage: React.FC = () => {
                                 </button>
                               )}
                               <button
-                                onClick={() => setEditingPrize(prize)}
+                                onClick={() => {
+                                  setEditingPrize(prize);
+                                  setNewPrizeAmount(prize.prizeAmount.toString());
+                                }}
                                 className="text-blue-400 hover:text-blue-300"
                                 title="Edit"
                               >
@@ -700,8 +996,216 @@ const AssignPrizeMoneyPage: React.FC = () => {
               </div>
             )}
           </div>
+
+          {/* Escrow Summary */}
+          {escrowRecords.length > 0 && (
+            <div className="mt-12">
+              <h2 className="text-2xl font-bold mb-6">Prize Money Escrow Status</h2>
+              
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+                <div className="bg-zinc-900 rounded-xl p-6">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-yellow-500/20 rounded-lg">
+                      <CreditCard className="w-6 h-6 text-yellow-400" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-zinc-400">Total Held</p>
+                      <p className="text-xl font-bold text-white">
+                        {formatCurrency(escrowRecords
+                          .filter(record => record.status === 'held')
+                          .reduce((sum, record) => sum + (record.amount || 0), 0) / 100
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-zinc-900 rounded-xl p-6">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-green-500/20 rounded-lg">
+                      <Trophy className="w-6 h-6 text-green-400" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-zinc-400">Total Distributed</p>
+                      <p className="text-xl font-bold text-white">
+                        {formatCurrency(escrowRecords
+                          .reduce((sum, record) => sum + (record.distributedAmount || 0), 0) / 100
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-zinc-900 rounded-xl p-6">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-blue-500/20 rounded-lg">
+                      <Users className="w-6 h-6 text-blue-400" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-zinc-400">Active Escrows</p>
+                      <p className="text-xl font-bold text-white">
+                        {escrowRecords.filter(record => record.status === 'held').length}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-zinc-900 rounded-xl p-6">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-red-500/20 rounded-lg">
+                      <AlertCircle className="w-6 h-6 text-red-400" />
+                    </div>
+                    <div>
+                      <p className="text-sm text-zinc-400">Unfunded Prizes</p>
+                      <p className="text-xl font-bold text-white">
+                        {prizeAssignments.filter(prize => getFundingStatus(prize.challengeId).status === 'pending').length}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-zinc-900 rounded-xl overflow-hidden">
+                <div className="px-6 py-4 border-b border-zinc-800">
+                  <h3 className="text-lg font-semibold">Escrow Records</h3>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-zinc-800">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider">Challenge</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider">Total Amount</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider">Remaining</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider">Distributed</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider">Status</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider">Deposited By</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider">Created</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-800">
+                      {escrowRecords.map((record) => (
+                        <tr key={record.id} className="hover:bg-zinc-800/50">
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div>
+                              <div className="text-sm font-medium text-white">{record.challengeTitle}</div>
+                              <div className="text-sm text-zinc-400">{record.challengeId}</div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm font-semibold text-white">{formatCurrency((record.totalAmountCharged || 0) / 100)}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                                                            <div className="text-sm font-semibold text-green-400">{formatCurrency((record.amount || 0) / 100)}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm font-semibold text-blue-400">{formatCurrency((record.distributedAmount || 0) / 100)}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                              record.status === 'held' ? 'bg-green-900/50 text-green-400' :
+                              record.status === 'distributing' ? 'bg-yellow-900/50 text-yellow-400' :
+                              record.status === 'distributed' ? 'bg-blue-900/50 text-blue-400' :
+                              'bg-gray-900/50 text-gray-400'
+                            }`}>
+                              {record.status}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-white">{record.depositedByUsername || 'Unknown'}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-zinc-400">
+                            {record.createdAt ? new Date(record.createdAt).toLocaleDateString() : 'Unknown'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Edit Prize Modal */}
+      {editingPrize && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-zinc-900 rounded-lg p-6 w-full max-w-md">
+            <h3 className="text-lg font-bold text-white mb-4">Edit Prize Amount</h3>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-white mb-2">
+                  Challenge: {editingPrize.challengeTitle}
+                </label>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-white mb-2">
+                  Prize Amount ($)
+                </label>
+                <input
+                  type="number"
+                  value={newPrizeAmount}
+                  onChange={(e) => setNewPrizeAmount(e.target.value)}
+                  className="w-full px-3 py-2 bg-zinc-800 text-white rounded-lg border border-zinc-700 focus:border-[#E0FE10] focus:outline-none"
+                  placeholder="Enter prize amount"
+                  min="0"
+                  step="0.01"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={async () => {
+                  if (!newPrizeAmount || parseFloat(newPrizeAmount) <= 0) {
+                    alert('Please enter a valid prize amount');
+                    return;
+                  }
+
+                  try {
+                    const response = await fetch('/.netlify/functions/update-prize-assignment', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        assignmentId: editingPrize.id,
+                        prizeAmount: parseFloat(newPrizeAmount)
+                      })
+                    });
+
+                    const data = await response.json();
+                    if (data.success) {
+                      alert('Prize amount updated successfully!');
+                      setEditingPrize(null);
+                      setNewPrizeAmount('');
+                      fetchPrizeAssignments();
+                    } else {
+                      alert(`Error updating prize: ${data.error}`);
+                    }
+                  } catch (error) {
+                    console.error('Error updating prize:', error);
+                    alert('Failed to update prize amount');
+                  }
+                }}
+                className="flex-1 bg-[#E0FE10] text-black px-4 py-2 rounded-lg font-semibold hover:bg-[#d0ee00] transition-colors"
+              >
+                Save Changes
+              </button>
+              
+              <button
+                onClick={() => {
+                  setEditingPrize(null);
+                  setNewPrizeAmount('');
+                }}
+                className="flex-1 bg-zinc-700 text-white px-4 py-2 rounded-lg font-semibold hover:bg-zinc-600 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AdminRouteGuard>
   );
 };
