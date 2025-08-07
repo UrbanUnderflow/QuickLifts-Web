@@ -8,6 +8,8 @@ import { User } from '../../api/firebase/user';
 import Image from 'next/image';
 import Link from 'next/link';
 import { trackEvent } from '../../lib/analytics';
+import { useEmailMismatchDetection } from '../../hooks/useEmailMismatchDetection';
+import EmailMismatchModal from '../../components/EmailMismatchModal';
 
 // Define interfaces for unified earnings data
 interface UnifiedEarnings {
@@ -179,6 +181,18 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
   });
   const [autoFixAttempted, setAutoFixAttempted] = useState(false);
 
+  // Email mismatch detection
+  const {
+    hasEmailMismatch,
+    mismatchDetails,
+    isChecking: isCheckingEmailMismatch,
+    recheckEmailMismatch
+  } = useEmailMismatchDetection(
+    currentUser?.id,
+    currentUser?.email,
+    earningsData
+  );
+
   // Format transactions client-side from raw data
   const formattedTransactions = earningsData ? 
     formatTransactions(earningsData.recentSales || [], earningsData.prizeRecords || []) : 
@@ -248,6 +262,28 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
 
          fetchEarningsData();
    }, [profileUser?.id, isActualOwner, API_BASE_URL]);
+
+  // Handle email mismatch fix completion
+  const handleEmailMismatchFixComplete = async () => {
+    // Refresh earnings data to get updated account information
+    try {
+      const response = await fetch(`${API_BASE_URL}/get-unified-earnings?userId=${profileUser?.id}`);
+      const data = await response.json();
+      
+      if (data.success) {
+        setEarningsData(data.earnings);
+      }
+      
+      // Recheck for email mismatches
+      await recheckEmailMismatch();
+      
+      // Show success message or redirect to onboarding
+      alert('Email mismatch fixed! Please complete your account setup to access earnings.');
+      
+    } catch (error) {
+      console.error('Error refreshing after email fix:', error);
+    }
+  };
 
   // Auto-fix missing stripeAccountId when conditions are met
   useEffect(() => {
@@ -859,6 +895,40 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
           </button>
         </div>
 
+        {/* Email Mismatch Warning Banner */}
+        {(isCheckingEmailMismatch || hasEmailMismatch) && (
+          <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-lg p-4 mb-6">
+            <div className="flex items-start">
+              <div className="flex-shrink-0">
+                {isCheckingEmailMismatch ? (
+                  <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-amber-500"></div>
+                ) : (
+                  <svg className="w-5 h-5 text-amber-500 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                  </svg>
+                )}
+              </div>
+              <div className="ml-3 flex-1">
+                {isCheckingEmailMismatch ? (
+                  <p className="text-sm text-amber-700">
+                    Checking your account setup...
+                  </p>
+                ) : (
+                  <>
+                    <h3 className="text-sm font-medium text-amber-800">
+                      Account Setup Required
+                    </h3>
+                    <p className="text-sm text-amber-700 mt-1">
+                      We've detected an email mismatch that needs to be fixed before you can access your earnings. 
+                      Please follow the setup process to continue.
+                    </p>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Loading state for earnings */}
         {!earningsData ? (
           <div className="text-center py-20">
@@ -1261,6 +1331,15 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
             </div>
           </div>
         )}
+
+        {/* Email Mismatch Modal */}
+        <EmailMismatchModal
+          isOpen={hasEmailMismatch && isActualOwner}
+          userEmail={currentUser?.email || ''}
+          mismatchDetails={mismatchDetails}
+          onFixComplete={handleEmailMismatchFixComplete}
+          userId={currentUser?.id || ''}
+        />
       </div>
     </div>
   );

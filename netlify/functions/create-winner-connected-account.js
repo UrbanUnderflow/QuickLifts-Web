@@ -170,9 +170,18 @@ const handler = async (event) => {
       } else {
         console.log(`[CreateWinnerConnectedAccount] No existing accounts found, creating new account`);
         
+        // CRITICAL: Validate email before creating account
+        const pulseEmail = userData.email;
+        if (!pulseEmail) {
+          throw new Error('User does not have a valid email address in their Pulse profile');
+        }
+
+        console.log(`[CreateWinnerConnectedAccount] Creating account with Pulse email: ${pulseEmail}`);
+
         // Create Stripe Express account for winner with tax reporting capabilities
         account = await stripe.accounts.create({
             type: 'express',
+            email: pulseEmail, // FORCE same email as Pulse profile
             country: 'US',
             capabilities: {
                 card_payments: { requested: true },
@@ -191,7 +200,8 @@ const handler = async (event) => {
                 account_type: 'winner',
                 user_id: userId,
                 username: userData.username,
-                purpose: 'prize_money'
+                purpose: 'prize_money',
+                pulse_email: pulseEmail // Store for verification
             }
         });
         

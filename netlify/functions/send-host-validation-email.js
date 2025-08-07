@@ -160,6 +160,7 @@ const handler = async (event) => {
     // Determine current challenge winners to include in email
     let winnersInfo = [];
     let challengeHasEnded = false;
+    let winnerData = [];
     try {
       console.log('[SendHostValidationEmail] Determining current winners...');
       
@@ -273,6 +274,17 @@ const handler = async (event) => {
         winnersInfo.showingCompletedOnly = challengeHasEnded;
         
         console.log('[SendHostValidationEmail] Current leaderboard:', winnersInfo);
+        
+        // Store winner data for confirmation (so we don't have to re-determine)
+        winnerData = winnersInfo.map((winner, index) => ({
+          userId: winner.userId,
+          username: winner.username,
+          rank: index + 1,
+          score: winner.score,
+          placement: index + 1
+        }));
+        
+        console.log('[SendHostValidationEmail] Storing winner data for confirmation:', winnerData);
       }
     } catch (error) {
       console.error('[SendHostValidationEmail] Error determining winners:', error);
@@ -495,7 +507,7 @@ const handler = async (event) => {
       };
     }
 
-    // Update prize assignment with email sent status
+    // Update prize assignment with email sent status and winner data
     const updateData = {
       hostEmailSent: true,
       hostEmailSentAt: new Date(),
@@ -505,7 +517,11 @@ const handler = async (event) => {
       updatedAt: new Date(),
       emailsSentToHosts: validHosts.length,
       emailsSuccessful: successfulEmails.length,
-      emailsFailed: failedEmails.length
+      emailsFailed: failedEmails.length,
+      // Store winner data for confirmation process
+      winnerDataSnapshot: winnerData || [],
+      winnerDataCapturedAt: new Date(),
+      challengeEndedWhenEmailSent: challengeHasEnded
     };
 
     await db.collection('challenge-prizes').doc(prizeAssignmentId).update(updateData);

@@ -119,8 +119,34 @@ const handler = async (event) => {
 
     console.log(`[ConfirmPrizeDistribution] Host confirmed prize ${prizeId}`);
 
-    // Get challenge participants and determine winners
-    const winners = await determineWinners(prizeData.challengeId, prizeData.distributionPlan);
+    // Use stored winner data from email instead of re-determining
+    console.log('[ConfirmPrizeDistribution] Checking for stored winner data...');
+    
+    let winners = [];
+    if (prizeData.winnerDataSnapshot && prizeData.winnerDataSnapshot.length > 0) {
+      console.log('[ConfirmPrizeDistribution] Using stored winner data:', prizeData.winnerDataSnapshot);
+      
+      // Convert stored winner data to the format expected by distributePrizes
+      winners = prizeData.winnerDataSnapshot.map((winner, index) => {
+        // Calculate prize amount based on structure
+        const prizeAmount = calculatePrizeForRank(index + 1, prizeData.prizeAmount, prizeData.prizeStructure);
+        return {
+          userId: winner.userId,
+          username: winner.username,
+          rank: winner.rank,
+          score: winner.score,
+          prizeAmount: prizeAmount,
+          percentage: (prizeAmount / prizeData.prizeAmount) * 100,
+          userChallengeId: `${prizeData.challengeId}_${winner.userId}` // Construct if needed
+        };
+      }).filter(winner => winner.prizeAmount > 0); // Only include winners with prize money
+      
+      console.log('[ConfirmPrizeDistribution] Processed winners:', winners);
+    } else {
+      console.log('[ConfirmPrizeDistribution] No stored winner data, falling back to live determination...');
+      // Fallback to original method if no stored data
+      winners = await determineWinners(prizeData.challengeId, prizeData.distributionPlan);
+    }
     
     if (winners.length === 0) {
       // No winners found, update status
@@ -145,6 +171,39 @@ const handler = async (event) => {
     // Distribute prizes to winners
     const distributionResults = await distributePrizes(prizeId, winners, prizeData);
 
+    // Send winner notification emails
+    try {
+      console.log(`[ConfirmPrizeDistribution] Sending winner notification emails...`);
+      
+      const winnerNotificationPayload = {
+        winners: winners.map(winner => ({
+          userId: winner.userId,
+          username: winner.username,
+          rank: winner.rank,
+          prizeAmount: Math.round(winner.prizeAmount * 100) // Convert to cents
+        })),
+        challengeTitle: prizeData.challengeTitle,
+        challengeId: prizeData.challengeId
+      };
+
+      // Call the winner notification function
+      const notificationResponse = await fetch(`https://fitwithpulse.ai/.netlify/functions/send-winner-notification-email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(winnerNotificationPayload)
+      });
+
+      if (notificationResponse.ok) {
+        const notificationData = await notificationResponse.json();
+        console.log(`[ConfirmPrizeDistribution] Winner notifications sent: ${notificationData.emailsSent}/${notificationData.totalWinners}`);
+      } else {
+        console.error(`[ConfirmPrizeDistribution] Failed to send winner notifications:`, notificationResponse.status);
+      }
+    } catch (error) {
+      console.error(`[ConfirmPrizeDistribution] Error sending winner notifications:`, error);
+      // Don't fail the whole process if email sending fails
+    }
+
     // Update final status
     const allSuccessful = distributionResults.every(result => result.success);
     await db.collection('challenge-prizes').doc(prizeId).update({
@@ -167,7 +226,7 @@ const handler = async (event) => {
       },
       body: generateSuccessPage(
         'Prize Distribution Confirmed!',
-        `Successfully distributed prizes to ${distributionResults.filter(r => r.success).length} winner(s).`,
+        `Successfully distributed prizes to ${distributionResults.filter(r => r.success).length} winner(s). Winner notification emails have been sent.`,
         prizeData,
         false,
         distributionResults
@@ -267,15 +326,49 @@ async function distributePrizes(prizeId, winners, prizeData) {
     try {
       console.log(`[DistributePrizes] Processing prize for user ${winner.userId}: $${winner.prizeAmount}`);
 
-      // Create a prize record in the winners collection (similar to existing system)
+      // First, verify the winner has a valid Stripe Connect account
+      const userDoc = await db.collection('users').doc(winner.userId).get();
+      if (!userDoc.exists) {
+        throw new Error(`User ${winner.userId} not found`);
+      }
+
+      const userData = userDoc.data();
+      const winnerStripeAccountId = userData.winner?.stripeAccountId;
+
+      if (!winnerStripeAccountId) {
+        throw new Error(`User ${winner.userId} does not have a connected Stripe account`);
+      }
+
+      // Validate that the Stripe account email matches the user's Pulse email
+      try {
+        const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+        const stripeAccount = await stripe.accounts.retrieve(winnerStripeAccountId);
+        
+        if (stripeAccount.email && stripeAccount.email !== userData.email) {
+          console.warn(`[DistributePrizes] Email mismatch for user ${winner.userId}: Stripe(${stripeAccount.email}) vs Pulse(${userData.email})`);
+          throw new Error(`Email mismatch: Stripe account email (${stripeAccount.email}) does not match Pulse profile email (${userData.email}). Please update your Stripe account to use the same email.`);
+        }
+
+        // Check if the account is properly set up for payouts
+        if (!stripeAccount.payouts_enabled) {
+          throw new Error(`Stripe account ${winnerStripeAccountId} is not enabled for payouts. Please complete your account setup.`);
+        }
+
+      } catch (stripeError) {
+        console.error(`[DistributePrizes] Stripe account validation failed for ${winner.userId}:`, stripeError.message);
+        throw new Error(`Invalid Stripe account: ${stripeError.message}`);
+      }
+
+      // Create a prize record in the prizeRecords collection (matching the payout-prize-money function expectation)
       const prizeRecord = {
         challengeId: prizeData.challengeId,
         challengeTitle: prizeData.challengeTitle,
         userId: winner.userId,
+        username: winner.username,
         placement: winner.rank,
         score: winner.score,
         prizeAmount: Math.round(winner.prizeAmount * 100), // Convert to cents for consistency
-        status: 'pending', // Will be processed by existing winner payout system
+        status: 'pending', // Will be processed by payout function
         createdAt: new Date(),
         updatedAt: new Date(),
         // Additional metadata
@@ -285,24 +378,68 @@ async function distributePrizes(prizeId, winners, prizeData) {
         userChallengeId: winner.userChallengeId
       };
 
-      // Save to winners collection (or whatever collection you use for prize records)
-      const prizeRecordRef = await db.collection('challenge-prize-winners').add(prizeRecord);
-
+      // Save to prizeRecords collection (matching what payout-prize-money expects)
+      const prizeRecordRef = await db.collection('prizeRecords').add(prizeRecord);
       console.log(`[DistributePrizes] Created prize record ${prizeRecordRef.id} for user ${winner.userId}`);
 
-      results.push({
-        userId: winner.userId,
-        rank: winner.rank,
-        prizeAmount: winner.prizeAmount,
-        prizeRecordId: prizeRecordRef.id,
-        success: true,
-        message: 'Prize record created successfully'
-      });
+      // Now actually transfer the money using the payout function
+      try {
+        const payoutResponse = await fetch(`https://fitwithpulse.ai/.netlify/functions/payout-prize-money`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            prizeRecordId: prizeRecordRef.id,
+            challengeId: prizeData.challengeId
+          })
+        });
+
+        const payoutData = await payoutResponse.json();
+        
+        if (!payoutResponse.ok || !payoutData.success) {
+          throw new Error(payoutData.error || `Payout failed with status ${payoutResponse.status}`);
+        }
+
+        console.log(`[DistributePrizes] Successfully paid out $${winner.prizeAmount} to ${winner.userId} via transfer ${payoutData.transferId}`);
+
+        results.push({
+          userId: winner.userId,
+          username: winner.username,
+          rank: winner.rank,
+          prizeAmount: winner.prizeAmount,
+          prizeRecordId: prizeRecordRef.id,
+          transferId: payoutData.transferId,
+          success: true,
+          message: 'Prize transferred successfully',
+          stripeAccountId: winnerStripeAccountId
+        });
+
+      } catch (payoutError) {
+        console.error(`[DistributePrizes] Payout failed for ${winner.userId}:`, payoutError.message);
+        
+        // Update the prize record to reflect the failure
+        await db.collection('prizeRecords').doc(prizeRecordRef.id).update({
+          status: 'failed',
+          failureReason: payoutError.message,
+          updatedAt: new Date()
+        });
+
+        results.push({
+          userId: winner.userId,
+          username: winner.username,
+          rank: winner.rank,
+          prizeAmount: winner.prizeAmount,
+          prizeRecordId: prizeRecordRef.id,
+          success: false,
+          error: `Payout failed: ${payoutError.message}`,
+          stripeAccountId: winnerStripeAccountId
+        });
+      }
 
     } catch (error) {
       console.error(`[DistributePrizes] Error processing prize for user ${winner.userId}:`, error);
       results.push({
         userId: winner.userId,
+        username: winner.username || 'Unknown',
         rank: winner.rank,
         prizeAmount: winner.prizeAmount,
         success: false,
@@ -312,6 +449,34 @@ async function distributePrizes(prizeId, winners, prizeData) {
   }
 
   return results;
+}
+
+// Helper function to calculate prize amount for a specific rank
+function calculatePrizeForRank(rank, totalPrizeAmount, prizeStructure) {
+  console.log(`[CalculatePrizeForRank] Rank: ${rank}, Total: ${totalPrizeAmount}, Structure: ${prizeStructure}`);
+  
+  switch (prizeStructure) {
+    case 'winner_takes_all':
+      return rank === 1 ? totalPrizeAmount : 0;
+    
+    case 'top_three_split':
+      if (rank === 1) return totalPrizeAmount * 0.60; // 60%
+      if (rank === 2) return totalPrizeAmount * 0.25; // 25%
+      if (rank === 3) return totalPrizeAmount * 0.15; // 15%
+      return 0;
+    
+    case 'top_five_split':
+      if (rank === 1) return totalPrizeAmount * 0.40; // 40%
+      if (rank === 2) return totalPrizeAmount * 0.25; // 25%
+      if (rank === 3) return totalPrizeAmount * 0.20; // 20%
+      if (rank === 4) return totalPrizeAmount * 0.10; // 10%
+      if (rank === 5) return totalPrizeAmount * 0.05; // 5%
+      return 0;
+    
+    default:
+      // For custom or unknown structures, winner takes all
+      return rank === 1 ? totalPrizeAmount : 0;
+  }
 }
 
 // Helper function to generate secure token (same as in email sender)

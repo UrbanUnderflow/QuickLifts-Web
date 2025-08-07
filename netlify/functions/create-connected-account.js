@@ -175,9 +175,18 @@ const handler = async (event) => {
       } else {
         console.log(`[CreateConnectedAccount] No existing accounts found, creating new account`);
         
+        // CRITICAL: Validate email before creating account
+        const pulseEmail = userData.email;
+        if (!pulseEmail) {
+          throw new Error('User does not have a valid email address in their Pulse profile');
+        }
+
+        console.log(`[CreateConnectedAccount] Creating account with Pulse email: ${pulseEmail}`);
+
         // Create Stripe Express account with tax reporting capabilities
         account = await stripe.accounts.create({
             type: 'express',
+            email: pulseEmail, // FORCE same email as Pulse profile
             country: 'US',
             capabilities: {
                 card_payments: { requested: true },
@@ -196,7 +205,8 @@ const handler = async (event) => {
                 account_type: 'trainer',
                 user_id: userId,
                 username: userData.username,
-                purpose: 'creator_earnings'
+                purpose: 'creator_earnings',
+                pulse_email: pulseEmail // Store for verification
             }
         });
         
