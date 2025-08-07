@@ -320,7 +320,7 @@ function generateSecureToken(prizeAssignmentId) {
   const secret = process.env.JWT_SECRET || 'fallback-secret-key';
   return crypto
     .createHmac('sha256', secret)
-    .update(prizeAssignmentId + Date.now())
+    .update(prizeAssignmentId)
     .digest('hex')
     .substring(0, 32);
 }

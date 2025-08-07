@@ -68,6 +68,7 @@ const AssignPrizeMoneyPage: React.FC = () => {
   const [depositorPrize, setDepositorPrize] = useState<PrizeAssignment | null>(null);
   const [isDepositing, setIsDepositing] = useState(false);
   const [escrowRecords, setEscrowRecords] = useState<any[]>([]);
+  const [dataLoaded, setDataLoaded] = useState(false);
   
   const [formData, setFormData] = useState<PrizeFormData>({
     challengeId: '',
@@ -93,9 +94,17 @@ const AssignPrizeMoneyPage: React.FC = () => {
   const isReassigning = !!existingAssignment;
 
   useEffect(() => {
-    fetchChallenges();
-    fetchPrizeAssignments();
-    fetchEscrowRecords();
+    const loadAllData = async () => {
+      setDataLoaded(false);
+      await Promise.all([
+        fetchChallenges(),
+        fetchPrizeAssignments(),
+        fetchEscrowRecords()
+      ]);
+      setDataLoaded(true);
+    };
+    
+    loadAllData();
     
     // Check for successful deposit in URL parameters
     const urlParams = new URLSearchParams(window.location.search);
@@ -526,21 +535,40 @@ const AssignPrizeMoneyPage: React.FC = () => {
   };
 
   const getFundingStatus = (challengeId: string): { status: string; escrowRecord?: any } => {
-    const escrowRecord = escrowRecords.find(record => record.challengeId === challengeId);
-    console.log(`[getFundingStatus] Challenge ${challengeId}:`, {
-      escrowRecord,
-      totalEscrowRecords: escrowRecords.length,
-      escrowRecordIds: escrowRecords.map(r => r.challengeId),
-      searchingFor: challengeId,
-      exactMatches: escrowRecords.filter(r => r.challengeId === challengeId),
-      allRecords: escrowRecords
-    });
-    if (!escrowRecord) {
-      console.log(`[getFundingStatus] No escrow record found for challenge ${challengeId}`);
-      return { status: 'pending' };
+    // Don't check funding status until all data is loaded
+    if (!dataLoaded) {
+      return { status: 'loading' };
     }
-    console.log(`[getFundingStatus] Found escrow record with status: ${escrowRecord.status}`);
-    return { status: escrowRecord.status === 'held' ? 'funded' : escrowRecord.status, escrowRecord };
+    
+    console.log('=== FUNDING STATUS DEBUG ===');
+    console.log('Looking for challengeId:', challengeId);
+    console.log('PRIZE ASSIGNMENT RECORDS:', prizeAssignments);
+    console.log('ESCROW RECORDS (PRIZE MONEY):', escrowRecords);
+    console.log('Escrow records count:', escrowRecords.length);
+    console.log('Prize assignments count:', prizeAssignments.length);
+    
+    // Debug each escrow record
+    escrowRecords.forEach((record, index) => {
+      console.log(`Escrow Record ${index}:`, {
+        challengeId: record.challengeId,
+        matches: record.challengeId === challengeId,
+        typeof_recordId: typeof record.challengeId,
+        typeof_searchId: typeof challengeId,
+        status: record.status,
+        amount: record.amount
+      });
+    });
+    
+    const matchingRecords = escrowRecords.filter(record => record.challengeId === challengeId);
+    console.log('Matching records:', matchingRecords);
+    console.log('================================');
+    
+    if (matchingRecords.length > 0) {
+      const escrowRecord = matchingRecords[0];
+      return { status: 'funded', escrowRecord };
+    }
+    
+    return { status: 'pending' };
   };
 
   const handleSendHostEmail = async (prizeAssignment: PrizeAssignment) => {
@@ -548,6 +576,17 @@ const AssignPrizeMoneyPage: React.FC = () => {
 
     setSendingHostEmail(true);
     try {
+      console.log('Sending host email for prizeAssignment:', prizeAssignment.id);
+
+      console.log('Send-host payload →', {
+        prizeAssignmentId : prizeAssignment.id,
+        challengeId       : prizeAssignment.challengeId,
+        challengeTitle    : prizeAssignment.challengeTitle,
+        prizeAmount       : prizeAssignment.prizeAmount,
+        prizeStructure    : prizeAssignment.prizeStructure,
+        requestedBy       : currentUser.id
+      });
+      
       const response = await fetch('/.netlify/functions/send-host-validation-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -930,12 +969,13 @@ const AssignPrizeMoneyPage: React.FC = () => {
                               const fundingInfo = getFundingStatus(prize.challengeId);
                               return (
                                 <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                  fundingInfo.status === 'loading' ? 'bg-blue-900/50 text-blue-400' :
                                   fundingInfo.status === 'pending' ? 'bg-red-900/50 text-red-400' :
                                   fundingInfo.status === 'funded' ? 'bg-green-900/50 text-green-400' :
                                   fundingInfo.status === 'distributed' ? 'bg-blue-900/50 text-blue-400' :
                                   'bg-gray-900/50 text-gray-400'
                                 }`}>
-                                  {fundingInfo.status}
+                                  {fundingInfo.status === 'loading' ? 'Loading...' : fundingInfo.status}
                                 </span>
                               );
                             })()}
@@ -999,10 +1039,17 @@ const AssignPrizeMoneyPage: React.FC = () => {
                                 <button
                                   onClick={() => handleSendHostEmail(prize)}
                                   disabled={sendingHostEmail}
-                                  className="text-green-400 hover:text-green-300 disabled:opacity-50"
-                                  title="Send Host Validation Email"
+                                  className="flex items-center gap-2 text-green-400 hover:text-green-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                                  title={sendingHostEmail ? "Sending email..." : "Send Host Validation Email"}
                                 >
-                                  <Mail className="w-4 h-4" />
+                                  {sendingHostEmail ? (
+                                    <>
+                                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-400"></div>
+                                      <span className="text-xs">Sending...</span>
+                                    </>
+                                  ) : (
+                                    <Mail className="w-4 h-4" />
+                                  )}
                                 </button>
                               )}
                               <button
