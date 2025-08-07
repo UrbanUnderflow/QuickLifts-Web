@@ -290,14 +290,16 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
     const attemptAutoFix = async () => {
       // Trigger auto-fix if:
       // 1. User is viewing their own earnings page
-      // 2. Account onboarding shows complete but stripeAccountId missing, OR there's an error loading earnings (likely missing stripeAccountId)
+      // 2. stripeAccountId is missing (regardless of earnings), OR onboarding shows complete but missing
       // 3. We haven't already attempted an auto-fix
       // 4. Not currently loading
       const shouldAutoFix = isActualOwner &&
         !autoFixAttempted && 
         !isEarningsLoading &&
         profileUser?.id && (
-          // Case 1: Onboarding complete but stripeAccountId missing (explicit repair case)
+          // Case 1: stripeAccountId missing entirely (hard requirement)
+          (!earningsData?.creatorEarnings?.stripeAccountId && !earningsData?.prizeWinnings?.stripeAccountId) ||
+          // Case 2: Onboarding complete but stripeAccountId missing (explicit repair case)
           (
             (
               earningsData?.creatorEarnings?.onboardingStatus === 'complete' && !earningsData?.creatorEarnings?.stripeAccountId
@@ -305,7 +307,7 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
               earningsData?.prizeWinnings?.onboardingStatus === 'complete' && !earningsData?.prizeWinnings?.stripeAccountId
             )
           ) ||
-          // Case 2: Error loading earnings (likely missing stripeAccountId)
+          // Case 3: Error loading earnings (likely missing stripeAccountId)
           (error && error.includes('Failed to fetch earnings data'))
         );
 
@@ -479,18 +481,16 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
     }
   };
 
-  // Enhanced account setup logic with better detection
+  // Enhanced account setup logic: require at least one valid stripeAccountId
   const needsAnyAccountSetup = () => {
     if (!earningsData) return false;
-    
-    const hasCreatorEarnings = earningsData.creatorEarnings.totalEarned > 0;
-    const hasPrizeWinnings = earningsData.prizeWinnings.totalEarned > 0;
-    
-    // Only show setup if they have specific earnings but no corresponding account
-    const needsCreatorSetup = hasCreatorEarnings && !earningsData.hasCreatorAccount;
-    const needsWinnerSetup = hasPrizeWinnings && !earningsData.hasWinnerAccount;
-    
-    return needsCreatorSetup || needsWinnerSetup;
+
+    const hasCreatorStripeAccount = !!earningsData?.creatorEarnings?.stripeAccountId;
+    const hasWinnerStripeAccount = !!earningsData?.prizeWinnings?.stripeAccountId;
+
+    // If the user has neither creator nor winner stripeAccountId, force setup view
+    const hasAnyStripeAccount = hasCreatorStripeAccount || hasWinnerStripeAccount;
+    return !hasAnyStripeAccount;
   };
 
   const getAccountSetupDetails = () => {

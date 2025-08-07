@@ -125,7 +125,13 @@ const handler = async (event) => {
 
     return {
       statusCode: 200,
-      headers,
+      headers: {
+        ...headers,
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+        Pragma: 'no-cache',
+        Expires: '0',
+        'Surrogate-Control': 'no-store'
+      },
       body: JSON.stringify({
         success: true,
         earnings: unifiedEarnings,
@@ -139,7 +145,10 @@ const handler = async (event) => {
     
     return {
       statusCode: 500,
-      headers,
+      headers: {
+        ...headers,
+        'Cache-Control': 'no-store'
+      },
       body: JSON.stringify({
         success: false,
         error: error.message || 'Internal server error'
