@@ -70,12 +70,10 @@ const handler = async (event) => {
     const userData = userDoc.data();
     console.log('User data retrieved, checking for earnings sources...');
     
-    // Consider someone as having an account if they've completed onboarding, even if stripeAccountId is temporarily missing
-    // This allows auto-fix logic to trigger when stripeAccountId goes missing
-    const hasCreatorAccount = !!(userData.creator && 
-      (userData.creator.stripeAccountId || userData.creator.onboardingStatus === 'complete'));
-    const hasWinnerAccount = !!(userData.winner && 
-      (userData.winner.stripeAccountId || userData.winner.onboardingStatus === 'complete'));
+    // STRICT definition: user MUST have a real stripeAccountId to be considered as having an account
+    // We still expose onboardingStatus in the response for UI/repair flows
+    const hasCreatorAccount = !!(userData.creator && userData.creator.stripeAccountId);
+    const hasWinnerAccount = !!(userData.winner && userData.winner.stripeAccountId);
     
     console.log('Earnings sources available:', {
       hasCreatorAccount,

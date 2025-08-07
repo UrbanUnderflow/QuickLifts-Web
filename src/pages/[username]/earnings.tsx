@@ -290,15 +290,21 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
     const attemptAutoFix = async () => {
       // Trigger auto-fix if:
       // 1. User is viewing their own earnings page
-      // 2. Either: Account shows as new but has setup, OR there's an error loading earnings (likely missing stripeAccountId)
+      // 2. Account onboarding shows complete but stripeAccountId missing, OR there's an error loading earnings (likely missing stripeAccountId)
       // 3. We haven't already attempted an auto-fix
       // 4. Not currently loading
       const shouldAutoFix = isActualOwner &&
         !autoFixAttempted && 
         !isEarningsLoading &&
         profileUser?.id && (
-          // Case 1: Account setup but showing as new (normal auto-fix trigger)
-          (earningsData?.isNewAccount === true && (earningsData?.hasCreatorAccount || earningsData?.hasWinnerAccount)) ||
+          // Case 1: Onboarding complete but stripeAccountId missing (explicit repair case)
+          (
+            (
+              earningsData?.creatorEarnings?.onboardingStatus === 'complete' && !earningsData?.creatorEarnings?.stripeAccountId
+            ) || (
+              earningsData?.prizeWinnings?.onboardingStatus === 'complete' && !earningsData?.prizeWinnings?.stripeAccountId
+            )
+          ) ||
           // Case 2: Error loading earnings (likely missing stripeAccountId)
           (error && error.includes('Failed to fetch earnings data'))
         );
