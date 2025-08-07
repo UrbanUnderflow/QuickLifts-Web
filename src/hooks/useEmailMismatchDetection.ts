@@ -25,17 +25,14 @@ export const useEmailMismatchDetection = (
   const [error, setError] = useState<string | null>(null);
 
   const checkEmailMismatch = async () => {
-    if (!userId || !userEmail || !earningsData) {
+    if (!userId || !userEmail) {
+      console.log('[EmailMismatchDetection] Missing userId or userEmail, skipping check');
       return;
     }
 
-    // Only check if user has Stripe accounts
-    const hasCreatorAccount = earningsData.creatorEarnings?.stripeAccountId;
-    const hasWinnerAccount = earningsData.prizeWinnings?.stripeAccountId;
-
-    if (!hasCreatorAccount && !hasWinnerAccount) {
-      return;
-    }
+    // Always check for email mismatches - don't rely on earningsData having accounts
+    // because mismatched accounts might not appear properly in earnings data
+    console.log('[EmailMismatchDetection] Starting check for user:', userId);
 
     setIsChecking(true);
     setError(null);
@@ -88,10 +85,10 @@ export const useEmailMismatchDetection = (
     await checkEmailMismatch();
   };
 
-  // Auto-check when component mounts and when earningsData changes
+  // Auto-check when component mounts and when user data is available
   useEffect(() => {
     checkEmailMismatch();
-  }, [userId, userEmail, earningsData?.creatorEarnings?.stripeAccountId, earningsData?.prizeWinnings?.stripeAccountId]);
+  }, [userId, userEmail]);
 
   return {
     hasEmailMismatch,
