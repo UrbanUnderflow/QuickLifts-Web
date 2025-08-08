@@ -160,13 +160,34 @@ const handler = async (event) => {
               console.error(`[HealthCheck] Failed to validate Stripe account ${stripeAccount.id}:`, validateError);
             }
             
-            // Auto-fix the missing account ID and set onboarding to complete
+            // If not valid or requirements due, create a fresh onboarding link so the user can continue
+            let onboardingLink = null;
+            let onboardingExpiresAt = null;
+            if (!accountValid) {
+              try {
+                const link = await stripe.accountLinks.create({
+                  account: stripeAccount.id,
+                  refresh_url: `${process.env.SITE_URL || 'https://fitwithpulse.ai'}/trainer/connect-account`,
+                  return_url: `${process.env.SITE_URL || 'https://fitwithpulse.ai'}/${userData.username || 'me'}/earnings?complete=true`,
+                  type: 'account_onboarding'
+                });
+                onboardingLink = link.url;
+                onboardingExpiresAt = link.expires_at;
+                console.log(`[HealthCheck] Generated onboarding link for ${stripeAccount.id}`);
+              } catch (linkErr) {
+                console.warn('[HealthCheck] Failed to create onboarding link:', linkErr.message);
+              }
+            }
+
+            // Auto-fix the missing account ID and set onboarding status
             await db.collection("users").doc(userId).update({
               'creator.stripeAccountId': stripeAccount.id,
               'creator.accountType': stripeAccount.type,
-              'creator.onboardingStatus': accountValid ? 'complete' : 'incomplete', // Only set complete if account is valid
+              'creator.onboardingStatus': accountValid ? 'complete' : 'incomplete',
               'creator.onboardingCompletedAt': accountValid ? new Date() : null,
               'creator.accountValidated': accountValid,
+              'creator.onboardingLink': onboardingLink || admin.firestore.FieldValue.delete?.() || null,
+              'creator.onboardingExpirationDate': onboardingExpiresAt || null,
               'creator.healthCheckFixed': new Date(),
               'creator.lastLinked': new Date()
             });

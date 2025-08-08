@@ -173,6 +173,8 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const [dashboardUrl, setDashboardUrl] = useState<string>('');
   const [isDashboardLinkLoading, setIsDashboardLinkLoading] = useState(false);
+  const [isEditingCreator, setIsEditingCreator] = useState(false);
+  const [isEditingWinner, setIsEditingWinner] = useState(false);
   const [earningsPrivacy, setEarningsPrivacy] = useState({
     showTotalEarnings: false,
     showEarningsBreakdown: false,
@@ -282,6 +284,27 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
       
     } catch (error) {
       console.error('Error refreshing after email fix:', error);
+    }
+  };
+
+  // Open Stripe account update/onboarding link for editing payout details
+  const handleEditStripeInfo = async (accountType: 'creator' | 'winner') => {
+    if (!profileUser?.id) return;
+    const setLoading = accountType === 'creator' ? setIsEditingCreator : setIsEditingWinner;
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/create-account-update-link?userId=${profileUser.id}&accountType=${accountType}`);
+      const data = await res.json();
+      if (res.ok && data.success && data.link) {
+        window.location.href = data.link;
+      } else {
+        alert(`Unable to open Stripe ${accountType} settings. ${data.error || ''}`);
+      }
+    } catch (e) {
+      console.error('Edit Stripe Info error:', e);
+      alert('Unable to open Stripe settings. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -1007,9 +1030,19 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
                     <span className="text-sm text-zinc-400">
                       {earningsData.creatorEarnings.onboardingStatus === 'complete' 
                         ? 'Account Active' 
-                        : 'Setup Required'}
+                        : 'Missing Stripe info'}
                     </span>
                   </div>
+
+                  {earningsData.creatorEarnings.onboardingStatus !== 'complete' && (
+                    <button
+                      onClick={() => handleEditStripeInfo('creator')}
+                      className="mt-3 w-full bg-[#E0FE10] text-black py-2 px-4 rounded-md font-semibold disabled:opacity-50"
+                      disabled={isEditingCreator}
+                    >
+                      {isEditingCreator ? 'Opening…' : 'Edit Stripe Info'}
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -1045,9 +1078,19 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
                     <span className="text-sm text-zinc-400">
                       {earningsData.prizeWinnings.onboardingStatus === 'complete' 
                         ? 'Account Active' 
-                        : 'Setup Required'}
+                        : 'Missing Stripe info'}
                     </span>
                   </div>
+
+                  {earningsData.prizeWinnings.onboardingStatus !== 'complete' && (
+                    <button
+                      onClick={() => handleEditStripeInfo('winner')}
+                      className="mt-3 w-full bg-[#E0FE10] text-black py-2 px-4 rounded-md font-semibold disabled:opacity-50"
+                      disabled={isEditingWinner}
+                    >
+                      {isEditingWinner ? 'Opening…' : 'Edit Stripe Info'}
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
