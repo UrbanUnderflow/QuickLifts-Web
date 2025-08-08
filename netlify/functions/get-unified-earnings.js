@@ -1,6 +1,15 @@
 // Function to get unified earnings data combining trainer earnings and winner prize money
 
 const { db, headers } = require('./config/firebase');
+const Stripe = require('stripe');
+let stripe;
+try {
+  if (process.env.STRIPE_SECRET_KEY) {
+    stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+  }
+} catch (e) {
+  console.error('[UnifiedEarnings] Failed to init Stripe:', e);
+}
 
 console.log('Starting get-unified-earnings function initialization...');
 
@@ -84,6 +93,41 @@ const handler = async (event) => {
       winnerStripeAccountId: userData.winner?.stripeAccountId || 'missing'
     });
 
+    // Determine live Stripe restriction status (prefer live check; fallback to stored flag)
+    let creatorAccountRestricted = false;
+    let winnerAccountRestricted = false;
+    if (stripe) {
+      try {
+        if (userData.creator?.stripeAccountId) {
+          const acct = await stripe.accounts.retrieve(userData.creator.stripeAccountId);
+          creatorAccountRestricted = !!(
+            acct?.requirements?.disabled_reason ||
+            (Array.isArray(acct?.requirements?.currently_due) && acct.requirements.currently_due.length > 0) ||
+            acct?.details_submitted !== true
+          );
+        }
+      } catch (e) {
+        console.warn('[UnifiedEarnings] Creator account restriction check failed; falling back:', e.message);
+        creatorAccountRestricted = !!userData.creator?.accountRestricted;
+      }
+      try {
+        if (userData.winner?.stripeAccountId) {
+          const acctW = await stripe.accounts.retrieve(userData.winner.stripeAccountId);
+          winnerAccountRestricted = !!(
+            acctW?.requirements?.disabled_reason ||
+            (Array.isArray(acctW?.requirements?.currently_due) && acctW.requirements.currently_due.length > 0) ||
+            acctW?.details_submitted !== true
+          );
+        }
+      } catch (e) {
+        console.warn('[UnifiedEarnings] Winner account restriction check failed; falling back:', e.message);
+        winnerAccountRestricted = !!userData.winner?.accountRestricted;
+      }
+    } else {
+      creatorAccountRestricted = !!userData.creator?.accountRestricted;
+      winnerAccountRestricted = !!userData.winner?.accountRestricted;
+    }
+
     // Fetch earnings data from both sources in parallel
     const [creatorEarningsData, winnerPrizeData] = await Promise.allSettled([
       // Fetch creator earnings (only if they have a creator account)
@@ -111,7 +155,9 @@ const handler = async (event) => {
       creatorEarnings,
       winnerPrizes,
       hasCreatorAccount,
-      hasWinnerAccount
+      hasWinnerAccount,
+      creatorAccountRestricted,
+      winnerAccountRestricted
     });
 
     console.log('Returning unified earnings data:', {
@@ -249,7 +295,7 @@ async function fetchWinnerPrizeData(userId) {
 }
 
 // Helper function to build unified earnings response
-function buildUnifiedEarningsResponse({ userId, userData, creatorEarnings, winnerPrizes, hasCreatorAccount, hasWinnerAccount }) {
+function buildUnifiedEarningsResponse({ userId, userData, creatorEarnings, winnerPrizes, hasCreatorAccount, hasWinnerAccount, creatorAccountRestricted, winnerAccountRestricted }) {
   console.log('Building unified earnings response...');
   
   try {
@@ -262,6 +308,7 @@ function buildUnifiedEarningsResponse({ userId, userData, creatorEarnings, winne
     roundsSold: 0,
     stripeAccountId: userData.creator?.stripeAccountId || null,
     onboardingStatus: userData.creator?.onboardingStatus || 'not_started',
+    accountRestricted: !!creatorAccountRestricted,
     recentSales: []
   };
 
@@ -272,7 +319,7 @@ function buildUnifiedEarningsResponse({ userId, userData, creatorEarnings, winne
     totalWins: 0,
     stripeAccountId: userData.winner?.stripeAccountId || null,
     onboardingStatus: userData.winner?.onboardingStatus || 'not_started',
-    accountRestricted: userData.winner?.accountRestricted || false,
+    accountRestricted: !!winnerAccountRestricted,
     prizeRecords: []
   };
 

@@ -93,8 +93,8 @@ const handler = async (event) => {
       };
     }
 
-    // Check if already confirmed
-    if (prizeData.hostConfirmed) {
+    // Only short-circuit as "already confirmed" when distribution reached a terminal state
+    if (prizeData.hostConfirmed && ['distributed', 'partially_distributed'].includes(prizeData.distributionStatus)) {
       return {
         statusCode: 200,
         headers: {
@@ -109,10 +109,10 @@ const handler = async (event) => {
       };
     }
 
-    // Mark as host confirmed
+    // Mark as host confirmed (idempotent) and move into processing state
     await db.collection('challenge-prizes').doc(prizeId).update({
       hostConfirmed: true,
-      hostConfirmedAt: new Date(),
+      hostConfirmedAt: prizeData.hostConfirmedAt || new Date(),
       distributionStatus: 'processing',
       updatedAt: new Date()
     });
@@ -170,6 +170,24 @@ const handler = async (event) => {
 
     // Distribute prizes to winners
     const distributionResults = await distributePrizes(prizeId, winners, prizeData);
+
+    // If nothing succeeded, keep link actionable and do not claim completion
+    const anySuccess = distributionResults.some(r => r.success);
+    if (!anySuccess) {
+      await db.collection('challenge-prizes').doc(prizeId).update({
+        distributionStatus: 'failed',
+        distributionResults,
+        updatedAt: new Date()
+      });
+      return {
+        statusCode: 200,
+        headers: { 'Content-Type': 'text/html' },
+        body: generateErrorPage(
+          'Transfer Failed',
+          'We could not complete any prize transfers. Please fix the highlighted issues (e.g., missing Stripe setup) and re-open this link to retry.'
+        )
+      };
+    }
 
     // Send winner notification emails
     try {

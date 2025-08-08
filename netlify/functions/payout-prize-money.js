@@ -49,15 +49,19 @@ const handler = async (event) => {
     const prizeRecord = prizeRecordDoc.data();
     console.log(`[PayoutPrizeMoney] Prize record: ${prizeRecord.username} - $${prizeRecord.prizeAmount / 100}`);
 
-    // Check if already paid
-    if (prizeRecord.status === 'paid') {
-      return {
-        statusCode: 400,
-        body: JSON.stringify({
-          success: false,
-          error: 'Prize already paid'
-        })
-      };
+    // If already paid AND we have a transferId, verify it on Stripe, else allow retry (idempotent)
+    if (prizeRecord.status === 'paid' && prizeRecord.stripeTransferId) {
+      try {
+        const existing = await stripe.transfers.retrieve(prizeRecord.stripeTransferId);
+        if (existing && existing.status === 'paid') {
+          return {
+            statusCode: 200,
+            body: JSON.stringify({ success: true, transferId: existing.id, message: 'Already paid' })
+          };
+        }
+      } catch (e) {
+        console.warn('[PayoutPrizeMoney] Could not verify existing transfer, will reattempt with idempotency:', e.message);
+      }
     }
 
     // Get user document to check Stripe account
@@ -143,7 +147,8 @@ const handler = async (event) => {
     });
 
     try {
-      // Create Stripe transfer for prize money (from escrow)
+      // Create Stripe transfer for prize money (from escrow) with idempotency
+      const idempotencyKey = `${prizeRecord.prizeAssignmentId || prizeRecordId}:${prizeRecord.userId}`;
       const transfer = await stripe.transfers.create({
           amount: winnerAmount, // Full amount (no platform fee for prizes)
           currency: 'usd',
@@ -162,7 +167,7 @@ const handler = async (event) => {
               transfer_source: 'platform_escrow',
               tax_classification: 'prize_income' // For 1099-MISC box 3
           }
-      });
+      }, { idempotencyKey });
 
       console.log(`[PayoutPrizeMoney] Transfer created: ${transfer.id}`);
 
@@ -181,11 +186,14 @@ const handler = async (event) => {
         escrowRecordId: escrowRecord.id
       });
 
-      // PHASE 2: Update escrow record to mark funds as distributed
+      // Update escrow record status based on remaining funds
       const escrowRef = db.collection('prize-escrow').doc(escrowRecord.id);
+      const newDistributedAmount = (escrowData.distributedAmount || 0) + winnerAmount;
+      const remaining = Math.max((escrowData.amount || 0) - newDistributedAmount, 0);
+      const newStatus = remaining > 0 ? 'held' : 'distributed';
       batch.update(escrowRef, {
-        status: 'distributed',
-        distributedAmount: (escrowData.distributedAmount || 0) + winnerAmount,
+        status: newStatus,
+        distributedAmount: newDistributedAmount,
         distributedTo: admin.firestore.FieldValue.arrayUnion({
           userId: prizeRecord.userId,
           amount: winnerAmount,
