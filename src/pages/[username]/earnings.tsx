@@ -23,6 +23,7 @@ interface UnifiedEarnings {
     roundsSold: number;
     stripeAccountId?: string;
     onboardingStatus: string;
+    accountRestricted?: boolean;
   };
   prizeWinnings: {
     totalEarned: number;
@@ -31,6 +32,7 @@ interface UnifiedEarnings {
     totalWins: number;
     stripeAccountId?: string;
     onboardingStatus: string;
+    accountRestricted?: boolean;
   };
   recentSales: Array<{
     id?: string;
@@ -1023,26 +1025,20 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
                 <div className="mt-4 pt-4 border-t border-zinc-800">
                   <div className="flex items-center gap-2">
                     <div className={`w-2 h-2 rounded-full ${
-                      earningsData.creatorEarnings.onboardingStatus === 'complete' 
-                        ? 'bg-green-400' 
-                        : 'bg-yellow-400'
+                      earningsData.creatorEarnings.accountRestricted ? 'bg-yellow-400' : 'bg-green-400'
                     }`}></div>
                     <span className="text-sm text-zinc-400">
-                      {earningsData.creatorEarnings.onboardingStatus === 'complete' 
-                        ? 'Account Active' 
-                        : 'Missing Stripe info'}
+                      {earningsData.creatorEarnings.accountRestricted ? 'Missing Stripe info' : 'Account Active'}
                     </span>
                   </div>
 
-                  {earningsData.creatorEarnings.onboardingStatus !== 'complete' && (
-                    <button
-                      onClick={() => handleEditStripeInfo('creator')}
-                      className="mt-3 w-full bg-[#E0FE10] text-black py-2 px-4 rounded-md font-semibold disabled:opacity-50"
-                      disabled={isEditingCreator}
-                    >
-                      {isEditingCreator ? 'Opening…' : 'Edit Stripe Info'}
-                    </button>
-                  )}
+                  <button
+                    onClick={() => handleEditStripeInfo('creator')}
+                    className="mt-3 w-full bg-[#E0FE10] text-black py-2 px-4 rounded-md font-semibold disabled:opacity-50"
+                    disabled={isEditingCreator}
+                  >
+                    {isEditingCreator ? 'Opening…' : 'Edit Stripe Info'}
+                  </button>
                 </div>
               </div>
 
@@ -1071,26 +1067,20 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
                 <div className="mt-4 pt-4 border-t border-zinc-800">
                   <div className="flex items-center gap-2">
                     <div className={`w-2 h-2 rounded-full ${
-                      earningsData.prizeWinnings.onboardingStatus === 'complete' 
-                        ? 'bg-green-400' 
-                        : 'bg-yellow-400'
+                      earningsData.prizeWinnings.accountRestricted ? 'bg-yellow-400' : 'bg-green-400'
                     }`}></div>
                     <span className="text-sm text-zinc-400">
-                      {earningsData.prizeWinnings.onboardingStatus === 'complete' 
-                        ? 'Account Active' 
-                        : 'Missing Stripe info'}
+                      {earningsData.prizeWinnings.accountRestricted ? 'Missing Stripe info' : 'Account Active'}
                     </span>
                   </div>
 
-                  {earningsData.prizeWinnings.onboardingStatus !== 'complete' && (
-                    <button
-                      onClick={() => handleEditStripeInfo('winner')}
-                      className="mt-3 w-full bg-[#E0FE10] text-black py-2 px-4 rounded-md font-semibold disabled:opacity-50"
-                      disabled={isEditingWinner}
-                    >
-                      {isEditingWinner ? 'Opening…' : 'Edit Stripe Info'}
-                    </button>
-                  )}
+                  <button
+                    onClick={() => handleEditStripeInfo('winner')}
+                    className="mt-3 w-full bg-[#E0FE10] text-black py-2 px-4 rounded-md font-semibold disabled:opacity-50"
+                    disabled={isEditingWinner}
+                  >
+                    {isEditingWinner ? 'Opening…' : 'Edit Stripe Info'}
+                  </button>
                 </div>
               </div>
             </div>

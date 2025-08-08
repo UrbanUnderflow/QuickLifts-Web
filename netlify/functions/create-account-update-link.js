@@ -50,7 +50,17 @@ exports.handler = async (event) => {
     }
 
     const userData = userDoc.data();
-    const accountId = userData?.[accountType]?.stripeAccountId;
+    // Prefer the requested accountType; if winner is missing, fall back to creator (we use one account for both)
+    let accountId = userData?.[accountType]?.stripeAccountId;
+    if (!accountId && accountType === 'winner' && userData?.creator?.stripeAccountId) {
+      accountId = userData.creator.stripeAccountId;
+      // Best-effort: backfill winner.stripeAccountId for future calls
+      try {
+        await db.collection('users').doc(userId).update({ 'winner.stripeAccountId': accountId });
+      } catch (e) {
+        console.warn('[CreateAccountUpdateLink] Could not backfill winner.stripeAccountId:', e.message);
+      }
+    }
     const username = userData?.username || 'me';
 
     if (!accountId) {
@@ -63,21 +73,46 @@ exports.handler = async (event) => {
 
     // Check current account state to choose link type
     const acct = await stripe.accounts.retrieve(accountId);
-    const isValid = !!acct && !acct.restricted && acct.details_submitted === true;
-    const linkType = isValid ? 'account_update' : 'account_onboarding';
+    const isRestricted = !!(
+      acct?.requirements?.disabled_reason ||
+      (Array.isArray(acct?.requirements?.currently_due) && acct.requirements.currently_due.length > 0) ||
+      acct?.details_submitted !== true
+    );
+    const isValid = !!acct && !isRestricted;
 
-    const link = await stripe.accountLinks.create({
-      account: accountId,
-      refresh_url: `${process.env.SITE_URL || 'https://fitwithpulse.ai'}/${accountType}/connect-account`,
-      return_url: `${process.env.SITE_URL || 'https://fitwithpulse.ai'}/${username}/earnings?complete=true`,
-      type: linkType,
-    });
+    // Prefer account_update for active accounts, but gracefully fallback to onboarding if not allowed
+    let linkType = isValid ? 'account_update' : 'account_onboarding';
+    let link;
+    try {
+      link = await stripe.accountLinks.create({
+        account: accountId,
+        refresh_url: `${process.env.SITE_URL || 'https://fitwithpulse.ai'}/${accountType}/connect-account`,
+        return_url: `${process.env.SITE_URL || 'https://fitwithpulse.ai'}/${username}/earnings?complete=true`,
+        type: linkType,
+      });
+    } catch (err) {
+      const message = err?.message || '';
+      const notAllowed = message.includes('You cannot create `account_update` type Account Links');
+      if (linkType === 'account_update' && notAllowed) {
+        // Fallback to onboarding which is always permitted
+        linkType = 'account_onboarding';
+        link = await stripe.accountLinks.create({
+          account: accountId,
+          refresh_url: `${process.env.SITE_URL || 'https://fitwithpulse.ai'}/${accountType}/connect-account`,
+          return_url: `${process.env.SITE_URL || 'https://fitwithpulse.ai'}/${username}/earnings?complete=true`,
+          type: 'account_onboarding',
+        });
+      } else {
+        throw err;
+      }
+    }
 
     // Persist for clients to reuse
     const update = {};
     update[`${accountType}.onboardingLink`] = link.url;
     update[`${accountType}.onboardingExpirationDate`] = link.expires_at;
     update[`${accountType}.onboardingStatus`] = isValid ? 'complete' : 'incomplete';
+    update[`${accountType}.accountRestricted`] = !isValid;
     await db.collection('users').doc(userId).update(update);
 
     return {

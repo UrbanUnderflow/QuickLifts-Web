@@ -272,6 +272,7 @@ function buildUnifiedEarningsResponse({ userId, userData, creatorEarnings, winne
     totalWins: 0,
     stripeAccountId: userData.winner?.stripeAccountId || null,
     onboardingStatus: userData.winner?.onboardingStatus || 'not_started',
+    accountRestricted: userData.winner?.accountRestricted || false,
     prizeRecords: []
   };
 
@@ -320,7 +321,8 @@ function buildUnifiedEarningsResponse({ userId, userData, creatorEarnings, winne
       pendingPayout: creatorData.pendingPayout,
       roundsSold: creatorData.roundsSold,
       stripeAccountId: creatorData.stripeAccountId,
-      onboardingStatus: creatorData.onboardingStatus
+      onboardingStatus: creatorData.onboardingStatus,
+      accountRestricted: userData.creator?.accountRestricted || false
     },
     
     prizeWinnings: {
@@ -329,7 +331,8 @@ function buildUnifiedEarningsResponse({ userId, userData, creatorEarnings, winne
       pendingPayout: winnerData.pendingPayout,
       totalWins: winnerData.totalWins,
       stripeAccountId: winnerData.stripeAccountId,
-      onboardingStatus: winnerData.onboardingStatus
+      onboardingStatus: winnerData.onboardingStatus,
+      accountRestricted: winnerData.accountRestricted
     },
     
     // Raw transaction data for frontend formatting
