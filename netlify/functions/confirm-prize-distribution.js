@@ -208,7 +208,7 @@ const handler = async (event) => {
       const notificationResponse = await fetch(`https://fitwithpulse.ai/.netlify/functions/send-winner-notification-email`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(winnerNotificationPayload)
+        body: JSON.stringify({ ...winnerNotificationPayload, bcc: 'info@fitwithpulse.ai' })
       });
 
       if (notificationResponse.ok) {

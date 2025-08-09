@@ -447,6 +447,7 @@ const handler = async (event) => {
             name: host.name,
           },
         ],
+        bcc: [ { email: 'info@fitwithpulse.ai', name: 'Pulse Info' } ],
         subject: `🏆 Confirm Prize Distribution - ${challengeTitle}`,
         htmlContent: htmlContent,
         headers: {
