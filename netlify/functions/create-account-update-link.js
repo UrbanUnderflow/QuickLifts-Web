@@ -30,13 +30,14 @@ exports.handler = async (event) => {
 
   try {
     const userId = event.queryStringParameters?.userId;
-    const accountType = (event.queryStringParameters?.accountType || 'creator').toLowerCase();
+    const accountTypeRaw = (event.queryStringParameters?.accountType || 'auto').toLowerCase();
+    const accountType = ['creator', 'winner'].includes(accountTypeRaw) ? accountTypeRaw : 'auto';
 
-    if (!userId || !['creator', 'winner'].includes(accountType)) {
+    if (!userId) {
       return {
         statusCode: 400,
         headers: { 'Access-Control-Allow-Origin': '*' },
-        body: JSON.stringify({ success: false, error: 'Missing userId or invalid accountType' }),
+        body: JSON.stringify({ success: false, error: 'Missing userId' }),
       };
     }
 
@@ -50,16 +51,14 @@ exports.handler = async (event) => {
     }
 
     const userData = userDoc.data();
-    // Prefer the requested accountType; if winner is missing, fall back to creator (we use one account for both)
-    let accountId = userData?.[accountType]?.stripeAccountId;
-    if (!accountId && accountType === 'winner' && userData?.creator?.stripeAccountId) {
-      accountId = userData.creator.stripeAccountId;
-      // Best-effort: backfill winner.stripeAccountId for future calls
-      try {
-        await db.collection('users').doc(userId).update({ 'winner.stripeAccountId': accountId });
-      } catch (e) {
-        console.warn('[CreateAccountUpdateLink] Could not backfill winner.stripeAccountId:', e.message);
-      }
+    // Single-account model: use creator if present, else winner, then backfill creator with the chosen id
+    let accountId = null;
+    if (accountType === 'creator') {
+      accountId = userData?.creator?.stripeAccountId || userData?.winner?.stripeAccountId || null;
+    } else if (accountType === 'winner') {
+      accountId = userData?.winner?.stripeAccountId || userData?.creator?.stripeAccountId || null;
+    } else { // auto
+      accountId = userData?.creator?.stripeAccountId || userData?.winner?.stripeAccountId || null;
     }
     const username = userData?.username || 'me';
 
@@ -69,6 +68,15 @@ exports.handler = async (event) => {
         headers: { 'Access-Control-Allow-Origin': '*' },
         body: JSON.stringify({ success: false, error: 'No stripeAccountId on user. Run setup first.' }),
       };
+    }
+
+    // If we selected a winner account but creator is empty, backfill creator with this id
+    try {
+      if (accountId && (!userData.creator || !userData.creator.stripeAccountId)) {
+        await db.collection('users').doc(userId).update({ 'creator.stripeAccountId': accountId });
+      }
+    } catch (bfErr) {
+      console.warn('[CreateAccountUpdateLink] Backfill creator.stripeAccountId failed:', bfErr.message);
     }
 
     // Check current account state to choose link type

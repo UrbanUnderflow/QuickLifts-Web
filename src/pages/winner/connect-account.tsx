@@ -8,7 +8,6 @@ import { GetServerSideProps } from 'next';
 import PageHead from '../../components/PageHead';
 import { RootState } from '../../redux/store';
 import { userService } from '../../api/firebase/user/service';
-import { StripeOnboardingStatus } from '../../api/firebase/user/types';
 import { adminMethods } from '../../api/firebase/admin/methods';
 import { PageMetaData as FirestorePageMetaData } from '../../api/firebase/admin/types';
 
@@ -86,20 +85,9 @@ const WinnerConnectAccountPage: React.FC<WinnerConnectAccountPageProps> = ({ met
       // Fetch fresh user data directly from Firestore using userService
       const refreshedUser = await userService.fetchUserFromFirestore(currentUser.id);
       
-      // Check if the user has a Stripe account ID in the winner field
-      if (refreshedUser?.winner?.stripeAccountId) {
-        console.log('[WinnerConnectAccount] User has Stripe account ID:', refreshedUser.winner.stripeAccountId);
-        
-        // If onboardingStatus doesn't match the presence of stripeAccountId, fix it
-        if (refreshedUser.winner.onboardingStatus !== StripeOnboardingStatus.Complete) {
-          console.log('[WinnerConnectAccount] Fixing inconsistent onboarding status');
-          
-          // Call the complete-winner-stripe-onboarding function to fix the status
-          await fetch(
-            `/.netlify/functions/complete-winner-stripe-onboarding?userId=${currentUser.id}`
-          );
-        }
-        
+      // Single-account model: use creator as canonical Stripe account
+      if (refreshedUser?.creator?.stripeAccountId) {
+        console.log('[WinnerConnectAccount] User has Stripe account ID:', refreshedUser.creator.stripeAccountId);
         // Redirect to unified earnings dashboard because user has a Stripe account
         console.log('[WinnerConnectAccount] Redirecting to unified earnings dashboard');
         
@@ -110,29 +98,6 @@ const WinnerConnectAccountPage: React.FC<WinnerConnectAccountPageProps> = ({ met
         
         const redirectUrl = `/${currentUser.username}/earnings${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
         router.push(redirectUrl);
-      } else if (refreshedUser?.winner?.onboardingStatus === StripeOnboardingStatus.Complete) {
-        // If status is complete but no stripeAccountId, fix the inconsistency
-        console.log('[WinnerConnectAccount] Fixing inconsistency: status is complete but no stripeAccountId');
-        
-        await fetch(
-          `/.netlify/functions/reset-winner-onboarding?userId=${currentUser.id}`
-        );
-        
-        // Continue with normal flow after reset
-      }
-      
-      // Check if there's an existing onboarding link
-      if (refreshedUser?.winner?.onboardingLink) {
-        const expirationDate = new Date(refreshedUser.winner.onboardingExpirationDate || 0);
-        const now = new Date();
-        
-        if (now < expirationDate) {
-          console.log('[WinnerConnectAccount] Found valid existing onboarding link');
-          setOnboardingLink(refreshedUser.winner.onboardingLink);
-          return;
-        } else {
-          console.log('[WinnerConnectAccount] Onboarding link expired, will create new one');
-        }
       }
       
     } catch (error) {
@@ -151,25 +116,11 @@ const WinnerConnectAccountPage: React.FC<WinnerConnectAccountPageProps> = ({ met
     setError(null);
 
     try {
-      console.log('[WinnerConnectAccount] Starting onboarding for user:', currentUser.id);
-      
-      const response = await fetch('/.netlify/functions/create-winner-connected-account', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          userId: currentUser.id,
-          challengeId: challengeId,
-          placement: placement
-        }),
-      });
-
-      const data = await response.json();
-      console.log('[WinnerConnectAccount] Response from create-winner-connected-account:', data);
-
-      if (data.success && data.accountLink) {
-        setOnboardingLink(data.accountLink);
+      console.log('[WinnerConnectAccount] Starting onboarding (auto) for user:', currentUser.id);
+      const res = await fetch(`/.netlify/functions/create-account-update-link?userId=${currentUser.id}&accountType=auto`);
+      const data = await res.json();
+      if (res.ok && data.success && data.link) {
+        setOnboardingLink(data.link);
       } else {
         throw new Error(data.error || 'Failed to create account link');
       }

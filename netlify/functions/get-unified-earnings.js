@@ -82,7 +82,8 @@ const handler = async (event) => {
     // STRICT definition: user MUST have a real stripeAccountId to be considered as having an account
     // We still expose onboardingStatus in the response for UI/repair flows
     const hasCreatorAccount = !!(userData.creator && userData.creator.stripeAccountId);
-    const hasWinnerAccount = !!(userData.winner && userData.winner.stripeAccountId);
+    // Single-account model: treat creator as the canonical account container
+    const hasWinnerAccount = hasCreatorAccount;
     
     console.log('Earnings sources available:', {
       hasCreatorAccount,
@@ -111,8 +112,8 @@ const handler = async (event) => {
         creatorAccountRestricted = !!userData.creator?.accountRestricted;
       }
       try {
-        if (userData.winner?.stripeAccountId) {
-          const acctW = await stripe.accounts.retrieve(userData.winner.stripeAccountId);
+        if (userData.creator?.stripeAccountId || userData.winner?.stripeAccountId) {
+          const acctW = await stripe.accounts.retrieve(userData.creator?.stripeAccountId || userData.winner?.stripeAccountId);
           winnerAccountRestricted = !!(
             acctW?.requirements?.disabled_reason ||
             (Array.isArray(acctW?.requirements?.currently_due) && acctW.requirements.currently_due.length > 0) ||
@@ -317,7 +318,7 @@ function buildUnifiedEarningsResponse({ userId, userData, creatorEarnings, winne
     availableBalance: 0,
     pendingPayout: 0,
     totalWins: 0,
-    stripeAccountId: userData.winner?.stripeAccountId || null,
+    stripeAccountId: userData.creator?.stripeAccountId || userData.winner?.stripeAccountId || null,
     onboardingStatus: userData.winner?.onboardingStatus || 'not_started',
     accountRestricted: !!winnerAccountRestricted,
     prizeRecords: []

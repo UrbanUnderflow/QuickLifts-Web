@@ -115,7 +115,7 @@ const handler = async (event) => {
     console.log('User data retrieved, checking for Stripe accounts...');
     
     const hasCreatorAccount = !!(userData.creator && userData.creator.stripeAccountId);
-    const hasWinnerAccount = !!(userData.winner && userData.winner.stripeAccountId);
+    const hasWinnerAccount = !!(userData.creator && userData.creator.stripeAccountId);
     
     console.log('Stripe accounts available:', {
       hasCreatorAccount,

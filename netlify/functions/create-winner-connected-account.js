@@ -85,7 +85,7 @@ const handler = async (event) => {
       console.log('[CreateWinnerConnectedAccount] User already has Stripe account, creating new onboarding link');
       try {
         const accountLink = await stripe.accountLinks.create({
-          account: userData.winner.stripeAccountId,
+          account: userData.creator?.stripeAccountId || userData.winner?.stripeAccountId,
           refresh_url: `${process.env.SITE_URL || 'https://fitwithpulse.ai'}/winner/connect-account?challengeId=${challengeId}&placement=${placement}`,
           return_url: `${process.env.SITE_URL || 'https://fitwithpulse.ai'}/winner/dashboard?complete=true`,
           type: "account_onboarding",
@@ -226,7 +226,7 @@ const handler = async (event) => {
 
     // Update user document with Stripe account info in winner field
     await db.collection("users").doc(userId).update({
-      'winner.stripeAccountId': account.id,
+      'creator.stripeAccountId': account.id,
       'winner.onboardingStatus': 'incomplete',
       'winner.onboardingLink': accountLink.url,
       'winner.onboardingExpirationDate': accountLink.expires_at,

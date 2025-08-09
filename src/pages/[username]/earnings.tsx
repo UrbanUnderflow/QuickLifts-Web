@@ -1006,61 +1006,67 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
                   <span className="text-2xl">📈</span>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-3">
-                    <div className="flex justify-between">
-                      <span className="text-zinc-400">Creator: Total Earned</span>
+                <div className="grid grid-cols-1 gap-4">
+                  {/* Programs block */}
+                  <div className="bg-zinc-800/40 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xl">🎯</span>
+                        <span className="font-medium">Programs</span>
+                      </div>
+                      <span className="text-sm text-zinc-400">Sold: <span className="text-white font-semibold">{earningsData.creatorEarnings.roundsSold}</span></span>
+                    </div>
+                    <div className="flex justify-between py-1">
+                      <span className="text-zinc-400">Revenue (lifetime)</span>
                       <span className="font-semibold">${earningsData.creatorEarnings.totalEarned.toFixed(2)}</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-zinc-400">Creator: Available</span>
+                    <div className="flex justify-between py-1">
+                      <span className="text-zinc-400">Available</span>
                       <span className="font-semibold text-green-400">${earningsData.creatorEarnings.availableBalance.toFixed(2)}</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-zinc-400">Programs Sold</span>
-                      <span className="font-semibold">{earningsData.creatorEarnings.roundsSold}</span>
-                    </div>
                   </div>
-                  <div className="space-y-3">
-                    <div className="flex justify-between">
-                      <span className="text-zinc-400">Prizes: Total Earned</span>
+
+                  {/* Prizes block */}
+                  <div className="bg-zinc-800/40 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xl">🏆</span>
+                        <span className="font-medium">Prizes</span>
+                      </div>
+                      <span className="text-sm text-zinc-400">Wins: <span className="text-white font-semibold">{earningsData.prizeWinnings.totalWins}</span></span>
+                    </div>
+                    <div className="flex justify-between py-1">
+                      <span className="text-zinc-400">Winnings (lifetime)</span>
                       <span className="font-semibold">${earningsData.prizeWinnings.totalEarned.toFixed(2)}</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-zinc-400">Prizes: Available</span>
+                    <div className="flex justify-between py-1">
+                      <span className="text-zinc-400">Available</span>
                       <span className="font-semibold text-green-400">${earningsData.prizeWinnings.availableBalance.toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-zinc-400">Challenges Won</span>
-                      <span className="font-semibold">{earningsData.prizeWinnings.totalWins}</span>
                     </div>
                   </div>
                 </div>
 
-                <div className="mt-4 pt-4 border-t border-zinc-800 grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="mt-4 pt-4 border-t border-zinc-800">
                   <div className="flex items-center gap-2">
-                    <div className={`w-2 h-2 rounded-full ${earningsData.creatorEarnings.accountRestricted ? 'bg-yellow-400' : 'bg-green-400'}`}></div>
-                    <span className="text-sm text-zinc-400">Creator {earningsData.creatorEarnings.accountRestricted ? 'Missing Stripe info' : 'Account Active'}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className={`w-2 h-2 rounded-full ${earningsData.prizeWinnings.accountRestricted ? 'bg-yellow-400' : 'bg-green-400'}`}></div>
-                    <span className="text-sm text-zinc-400">Prizes {earningsData.prizeWinnings.accountRestricted ? 'Missing Stripe info' : 'Account Active'}</span>
+                    <div className={`w-2 h-2 rounded-full ${
+                      (earningsData.creatorEarnings.accountRestricted || earningsData.prizeWinnings.accountRestricted)
+                        ? 'bg-yellow-400'
+                        : 'bg-green-400'
+                    }`}></div>
+                    <span className="text-sm text-zinc-400">
+                      {(earningsData.creatorEarnings.accountRestricted || earningsData.prizeWinnings.accountRestricted)
+                        ? 'Missing Stripe info'
+                        : 'Stripe Account Active'}
+                    </span>
                   </div>
 
-                  <div className="col-span-1 md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
+                  <div className="mt-2">
                     <button
                       onClick={() => handleEditStripeInfo('creator')}
                       className="w-full bg-[#E0FE10] text-black py-2 px-4 rounded-md font-semibold disabled:opacity-50"
-                      disabled={isEditingCreator}
+                      disabled={isEditingCreator || isEditingWinner}
                     >
-                      {isEditingCreator ? 'Opening…' : 'Edit Stripe Info (Creator)'}
-                    </button>
-                    <button
-                      onClick={() => handleEditStripeInfo('winner')}
-                      className="w-full bg-[#E0FE10] text-black py-2 px-4 rounded-md font-semibold disabled:opacity-50"
-                      disabled={isEditingWinner}
-                    >
-                      {isEditingWinner ? 'Opening…' : 'Edit Stripe Info (Winner)'}
+                      {isEditingCreator || isEditingWinner ? 'Opening…' : 'Edit Stripe Info'}
                     </button>
                   </div>
                 </div>

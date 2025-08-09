@@ -82,7 +82,7 @@ async function validateSingleUser(userId, shouldFix) {
   // Check winner account
   if (userData.winner?.stripeAccountId) {
     const winnerResult = await checkStripeAccount(
-      userData.winner.stripeAccountId, 
+      userData.creator?.stripeAccountId || userData.winner?.stripeAccountId, 
       pulseEmail, 
       'winner', 
       userId,
@@ -141,7 +141,7 @@ async function validateAllUsers(shouldFix) {
     // Check winner account
     if (userData.winner?.stripeAccountId) {
       const winnerResult = await checkStripeAccount(
-        userData.winner.stripeAccountId, 
+        userData.creator?.stripeAccountId || userData.winner?.stripeAccountId, 
         pulseEmail, 
         'winner', 
         userId,

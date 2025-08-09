@@ -86,7 +86,7 @@ const handler = async (event) => {
         .filter(record => record.status === 'paid')
         .reduce((sum, record) => sum + record.prizeAmount, 0),
       onboardingStatus: winner.onboardingStatus || 'not_started',
-      stripeAccountId: winner.stripeAccountId || null,
+      stripeAccountId: (userData?.creator?.stripeAccountId || winner.stripeAccountId || null),
       lastPayoutDate: prizeRecords
         .filter(record => record.status === 'paid' && record.paidAt)
         .map(record => record.paidAt)

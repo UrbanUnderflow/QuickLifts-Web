@@ -89,7 +89,7 @@ const handler = async (event) => {
     if (userData.winner?.stripeAccountId) {
       try {
         const winnerResult = await fixStripeAccount(
-          userData.winner.stripeAccountId,
+          userData.creator?.stripeAccountId || userData.winner?.stripeAccountId,
           pulseEmail,
           'winner',
           userId,
