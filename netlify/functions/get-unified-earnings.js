@@ -336,11 +336,30 @@ function buildUnifiedEarningsResponse({ userId, userData, creatorEarnings, winne
   // Populate winner prize data (convert cents to dollars)
   if (winnerPrizes && winnerPrizes.summary) {
     const summary = winnerPrizes.summary;
-    winnerData.totalEarned = (summary.totalEarnings || 0) / 100; // Convert cents to dollars
+    // Prefer totalEarnings; fallback to paidAmount to better reflect reality when totalEarnings isn't populated
+    winnerData.totalEarned = ((summary.totalEarnings != null ? summary.totalEarnings : summary.paidAmount) || 0) / 100;
     winnerData.availableBalance = (summary.paidAmount || 0) / 100; // Paid amount is what's available
     winnerData.pendingPayout = (summary.pendingAmount || 0) / 100; // Convert cents to dollars  
     winnerData.totalWins = summary.totalWins || 0;
     winnerData.prizeRecords = winnerPrizes.prizeRecords || [];
+  }
+
+  // Avoid double counting when a user only has prize winnings and no program sales.
+  // Stripe connected account balance will include prize payouts; attribute it to prizes when no creator sales exist.
+  if ((creatorData.roundsSold || 0) === 0) {
+    // If creator totals are simply reflecting the Stripe balance with no sales, shift to prize bucket
+    if (creatorData.availableBalance > 0) {
+      winnerData.availableBalance += creatorData.availableBalance;
+      creatorData.availableBalance = 0;
+    }
+    if ((creatorData.totalEarned || 0) > 0) {
+      creatorData.totalEarned = 0;
+    }
+    if ((creatorData.pendingPayout || 0) > 0) {
+      // With no creator sales, pending creator payout shouldn't exist
+      winnerData.pendingPayout += creatorData.pendingPayout;
+      creatorData.pendingPayout = 0;
+    }
   }
 
   // Calculate combined totals

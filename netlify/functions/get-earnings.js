@@ -263,9 +263,11 @@ const handler = async (event) => {
           sample: payouts.data.length > 0 ? payouts.data[0].id : 'No payouts found'
         });
         
-        console.log('Stripe transfers:', {
-          count: transfers.data.length,
-          sample: transfers.data.length > 0 ? transfers.data[0].id : 'No transfers found'
+        // Filter out prize escrow transfers from creator revenue computation
+        const filteredTransfers = transfers.data.filter(t => t.metadata?.payment_type !== 'prize_money_escrow');
+        console.log('Stripe transfers (creator revenue only):', {
+          count: filteredTransfers.length,
+          sample: filteredTransfers.length > 0 ? filteredTransfers[0].id : 'No transfers found'
         });
         
         console.log('Stripe charges:', {
@@ -385,7 +387,7 @@ const handler = async (event) => {
         });
         
         // Calculate total earned (from transfers to the connected account)
-        const totalTransferred = transfers.data.reduce((sum, transfer) => sum + transfer.amount, 0) / 100;
+        const totalTransferred = filteredTransfers.reduce((sum, transfer) => sum + transfer.amount, 0) / 100;
         console.log('Total transferred amount:', totalTransferred);
         
         // Calculate available and pending balance
