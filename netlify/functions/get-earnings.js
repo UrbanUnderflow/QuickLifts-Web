@@ -445,32 +445,16 @@ const handler = async (event) => {
         // Limit to 10 sales to keep response size manageable
         let limitedSales = recentSales.slice(0, 10);
         
-        // If no sales records exist but we have transfers, create transaction records from transfers
-        if (limitedSales.length === 0 && transfers.data.length > 0) {
-          console.log('No sales records found, creating transactions from transfers');
-          const transferTransactions = transfers.data.map(transfer => ({
-            date: new Date(transfer.created * 1000).toISOString().split('T')[0],
-            roundTitle: 'Program Sales', // Generic title since we don't have specific round info
-            amount: transfer.amount / 100, // Convert cents to dollars
-            status: 'completed',
-            source: 'stripe_transfer',
-            id: transfer.id,
-            buyerId: 'aggregated' // These are aggregated transfers
-          }));
-          
-          // Sort by date (newest first) and limit to 10
-          transferTransactions.sort((a, b) => new Date(b.date) - new Date(a.date));
-          limitedSales = transferTransactions.slice(0, 10);
-          
-          console.log(`Created ${limitedSales.length} transaction records from transfers`);
-        }
+        // NOTE: Do not synthesize transactions from transfers.
+        // We only display real sales (payment intents/charges or Firestore payments).
+        // Prize payouts and other transfers must NOT appear as program sales.
         
         // Real data structure - all zeros is fine for new accounts
         const earningsData = {
           totalEarned: totalEarned || 0,
           pendingPayout: pendingBalance || 0,
           availableBalance: availableBalance || 0,
-          roundsSold: allPayments.length || transfers.data.length || 0,
+          roundsSold: allPayments.length || 0,
           recentSales: limitedSales,
           lastUpdated: new Date().toISOString(),
           isNewAccount: transfers.data.length === 0 && allPayments.length === 0
