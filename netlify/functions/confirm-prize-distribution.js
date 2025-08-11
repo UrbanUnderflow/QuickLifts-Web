@@ -182,9 +182,11 @@ const handler = async (event) => {
       return {
         statusCode: 200,
         headers: { 'Content-Type': 'text/html' },
-        body: generateErrorPage(
+        body: generateTransferFailurePage(
           'Transfer Failed',
-          'We could not complete any prize transfers. Please fix the highlighted issues (e.g., missing Stripe setup) and re-open this link to retry.'
+          'We could not complete any prize transfers. Please fix the highlighted issues and re-open this link to retry.',
+          winners,
+          distributionResults
         )
       };
     }
@@ -463,7 +465,9 @@ async function distributePrizes(prizeId, winners, prizeData) {
         rank: winner.rank,
         prizeAmount: winner.prizeAmount,
         success: false,
-        error: error.message
+        error: error.message,
+        // Attempt to surface the stripe account id when validation failed before payout
+        stripeAccountId: (typeof winnerStripeAccountId !== 'undefined') ? winnerStripeAccountId : null
       });
     }
   }
@@ -606,3 +610,71 @@ function generateErrorPage(title, message) {
 }
 
 module.exports = { handler }; 
+ 
+// Detailed failure page with per-winner diagnostics
+function generateTransferFailurePage(title, message, winners = [], results = []) {
+  const diagnostics = results.map((r, idx) => {
+    const username = r.username || winners[idx]?.username || `user:${r.userId}`;
+    const reason = r.error || 'Unknown error';
+    const stripeInfo = r.stripeAccountId ? ` • Stripe: ${r.stripeAccountId}` : '';
+    return `
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; padding:10px 0; border-bottom:1px solid #eee;">
+        <div style="text-align:left;">
+          <div style="font-weight:600;">@${username}</div>
+          <div style="color:#b91c1c; font-size:14px; margin-top:4px;">${reason}${stripeInfo}</div>
+        </div>
+        <div style="color:#999; font-size:12px;">Rank ${r.rank ?? winners[idx]?.rank ?? '?'}</div>
+      </div>
+    `;
+  }).join('');
+
+  // Helpful hints
+  const hints = `
+    <ul style="text-align:left; color:#444; line-height:1.6;">
+      <li>Ensure each winner has completed Stripe onboarding (payouts enabled)</li>
+      <li>Email on Stripe account must match Pulse profile email</li>
+      <li>If the account shows "Restricted", use Edit Stripe Info from the earnings dashboard</li>
+    </ul>
+  `;
+
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>${title} - Pulse</title>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
+        .container { max-width: 700px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+        .header { background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%); color: white; padding: 40px 30px; text-align: center; }
+        .content { padding: 30px; }
+        .section { background:#fafafa; border:1px solid #eee; border-radius:8px; padding:16px; margin-top:16px; }
+        .footer { text-align: center; padding: 20px; color: #666; font-size: 14px; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1 style="margin:0; font-size:28px;">⚠️ ${title}</h1>
+        </div>
+        <div class="content">
+          <p style="font-size:16px; color:#333;">${message}</p>
+          <div class="section">
+            <h3 style="margin:0 0 10px 0;">Per‑winner diagnostics</h3>
+            ${diagnostics || '<div style="color:#666;">No diagnostic details available.</div>'}
+          </div>
+          <div class="section">
+            <h4 style="margin:0 0 8px 0;">How to fix</h4>
+            ${hints}
+          </div>
+          <p style="margin-top:20px; color:#666;">If you continue to experience issues, please contact support at tre@fitwithpulse.ai</p>
+        </div>
+        <div class="footer">
+          <p>Pulse Prize Distribution System</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+}
