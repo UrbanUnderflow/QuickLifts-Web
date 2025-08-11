@@ -147,27 +147,45 @@ const handler = async (event) => {
     });
 
     try {
-      // Create Stripe transfer for prize money (from escrow) with idempotency
-      const idempotencyKey = `${prizeRecord.prizeAssignmentId || prizeRecordId}:${prizeRecord.userId}`;
-      const transfer = await stripe.transfers.create({
+      // Create Stripe transfer for prize money (from escrow) with robust idempotency strategy
+      const baseIdempotencyKey = `${prizeRecordId}:${winnerStripeAccountId}:${winnerAmount}:${escrowRecord.id}`;
+
+      async function createTransferWithKey(key) {
+        return await stripe.transfers.create({
           amount: winnerAmount, // Full amount (no platform fee for prizes)
           currency: 'usd',
           destination: winnerStripeAccountId,
           description: `Prize money from escrow: ${prizeRecord.challengeTitle}`,
           metadata: {
-              platform: 'pulse',
-              challenge_id: prizeRecord.challengeId,
-              prize_record_id: prizeRecordId,
-              winner_user_id: prizeRecord.userId,
-              winner_placement: prizeRecord.placement,
-              original_amount: prizeRecord.prizeAmount,
-              platform_fee: platformFee, // 0 for prizes
-              payment_type: 'prize_money_escrow',
-              escrow_record_id: escrowRecord.id,
-              transfer_source: 'platform_escrow',
-              tax_classification: 'prize_income' // For 1099-MISC box 3
+            platform: 'pulse',
+            challenge_id: prizeRecord.challengeId,
+            prize_record_id: prizeRecordId,
+            winner_user_id: prizeRecord.userId,
+            winner_placement: prizeRecord.placement,
+            original_amount: prizeRecord.prizeAmount,
+            platform_fee: platformFee, // 0 for prizes
+            payment_type: 'prize_money_escrow',
+            escrow_record_id: escrowRecord.id,
+            transfer_source: 'platform_escrow',
+            tax_classification: 'prize_income' // For 1099-MISC box 3
           }
-      }, { idempotencyKey });
+        }, { idempotencyKey: key });
+      }
+
+      let transfer;
+      try {
+        transfer = await createTransferWithKey(baseIdempotencyKey);
+      } catch (e) {
+        // If Stripe complains about idempotency due to previous params, retry once with a new suffix
+        const isIdempotencyError = e?.type === 'StripeIdempotencyError' || e?.code === 'idempotency_error';
+        if (isIdempotencyError) {
+          console.warn('[PayoutPrizeMoney] Idempotency error, retrying with new key…');
+          const retryKey = `${baseIdempotencyKey}:r${Date.now()}`;
+          transfer = await createTransferWithKey(retryKey);
+        } else {
+          throw e;
+        }
+      }
 
       console.log(`[PayoutPrizeMoney] Transfer created: ${transfer.id}`);
 
