@@ -64,7 +64,19 @@ const handler = async (event) => {
         createdBy: data.createdBy,
         createdAt: data.createdAt?.toDate?.() || data.createdAt,
         updatedAt: data.updatedAt?.toDate?.() || data.updatedAt,
-        distributionPlan: data.distributionPlan || []
+        distributionPlan: data.distributionPlan || [],
+        // Include funding-related fields
+        fundingStatus: data.fundingStatus || 'pending',
+        depositedAmount: data.depositedAmount || 0,
+        escrowRecordId: data.escrowRecordId || null,
+        totalAmountCharged: data.totalAmountCharged || 0,
+        platformFeeCollected: data.platformFeeCollected || 0,
+        depositedAt: data.depositedAt?.toDate?.() || data.depositedAt || null,
+        depositedBy: data.depositedBy || null,
+        // Include host email fields
+        hostEmailSent: data.hostEmailSent || false,
+        hostEmailSentAt: data.hostEmailSentAt?.toDate?.() || data.hostEmailSentAt || null,
+        hostConfirmedAt: data.hostConfirmedAt?.toDate?.() || data.hostConfirmedAt || null
       };
 
       assignments.push(assignment);

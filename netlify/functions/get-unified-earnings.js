@@ -339,7 +339,8 @@ function buildUnifiedEarningsResponse({ userId, userData, creatorEarnings, winne
     // Prefer totalEarnings; fallback to paidAmount to better reflect reality when totalEarnings isn't populated
     winnerData.totalEarned = ((summary.totalEarnings != null ? summary.totalEarnings : summary.paidAmount) || 0) / 100;
     winnerData.availableBalance = (summary.paidAmount || 0) / 100; // Paid amount is what's available
-    winnerData.pendingPayout = (summary.pendingAmount || 0) / 100; // Convert cents to dollars  
+    // Clamp pending to never be negative
+    winnerData.pendingPayout = Math.max(0, (summary.pendingAmount || 0) / 100);
     winnerData.totalWins = summary.totalWins || 0;
     winnerData.prizeRecords = winnerPrizes.prizeRecords || [];
   }
@@ -363,9 +364,11 @@ function buildUnifiedEarningsResponse({ userId, userData, creatorEarnings, winne
   }
 
   // Calculate combined totals
-  const totalBalance = creatorData.availableBalance + winnerData.availableBalance;
+  // Available funds live in ONE Stripe balance (creator account).
+  // Do not add winnerData.availableBalance again to avoid double counting.
+  const totalBalance = creatorData.availableBalance;
   const totalEarned = creatorData.totalEarned + winnerData.totalEarned;
-  const pendingPayout = creatorData.pendingPayout + winnerData.pendingPayout;
+  const pendingPayout = Math.max(0, creatorData.pendingPayout + winnerData.pendingPayout);
 
   // Return raw data - let frontend format transactions as needed
   // No more server-side transaction building complexity!

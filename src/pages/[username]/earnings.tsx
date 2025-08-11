@@ -3,6 +3,7 @@ import { GetServerSideProps } from 'next';
 import { useRouter } from 'next/router';
 import { useSelector } from 'react-redux';
 import { RootState } from '../../redux/store';
+import { adminMethods } from '../../api/firebase/admin/methods';
 import { userService } from '../../api/firebase/user/service';
 import { User } from '../../api/firebase/user';
 import Image from 'next/image';
@@ -160,10 +161,49 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
 }) => {
   const router = useRouter();
   const { username } = router.query;
-  
+  // Temporary public-view override via query param: ?public=1
+  const [allowPublicView, setAllowPublicView] = useState(false);
+  const [isAdminViewer, setIsAdminViewer] = useState<boolean>(false);
+  useEffect(() => {
+    // Prefer router.query first
+    let v: string | null = null;
+    const rq = router.query?.public as string | string[] | undefined;
+    if (typeof rq === 'string') {
+      v = rq;
+    } else if (Array.isArray(rq) && rq.length > 0) {
+      v = rq[0];
+    }
+    // Fallback to window.location for first render during hydration
+    if (!v && typeof window !== 'undefined') {
+      const urlV = new URLSearchParams(window.location.search).get('public');
+      v = urlV;
+    }
+    const normalized = String(v || '').toLowerCase();
+    const requestedPublic = normalized === '1' || normalized === 'true' || normalized === 'yes';
+    setAllowPublicView(requestedPublic);
+  }, [router.query.public]);
+
   // Redux state
   const currentUser = useSelector((state: RootState) => state.user.currentUser);
   const isLoading = useSelector((state: RootState) => state.user.loading);
+
+  // Only allow public=1 for admins (after we know who is logged in)
+  useEffect(() => {
+    const checkAdmin = async () => {
+      try {
+        if (currentUser?.email) {
+          const ok = await adminMethods.isAdmin(currentUser.email);
+          setIsAdminViewer(!!ok);
+        } else {
+          setIsAdminViewer(false);
+        }
+      } catch {
+        setIsAdminViewer(false);
+      }
+    };
+    checkAdmin();
+  }, [currentUser?.email]);
+
 
   // Local state
   const [earningsData, setEarningsData] = useState<UnifiedEarnings | null>(null);
@@ -202,12 +242,24 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
     formatTransactions(earningsData.recentSales || [], earningsData.prizeRecords || []) : 
     [];
 
+  // Derive lifetime totals directly from the formatted transactions to ensure
+  // totals match exactly what is shown in the list (programs + prizes)
+  const derivedCreatorLifetime = formattedTransactions
+    .filter(t => t.type === 'creator_sale')
+    .reduce((sum, t) => sum + (t.amount || 0), 0);
+  const derivedPrizeLifetime = formattedTransactions
+    .filter(t => t.type === 'prize_winning')
+    .reduce((sum, t) => sum + (t.amount || 0), 0);
+  const derivedTotalLifetime = derivedCreatorLifetime + derivedPrizeLifetime;
+
   const API_BASE_URL = process.env.NODE_ENV === 'development' 
     ? 'http://localhost:8888/.netlify/functions'
     : 'https://fitwithpulse.ai/.netlify/functions';
 
   // Determine if current user is viewing their own earnings
   const isActualOwner = currentUser && profileUser && currentUser.id === profileUser.id;
+  const isOwnerOrPublic = !!isActualOwner || (allowPublicView && isAdminViewer);
+  const isViewOnly = !isActualOwner && allowPublicView && isAdminViewer;
 
   // Authentication check
   useEffect(() => {
@@ -220,7 +272,7 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
   // Fetch earnings data
   useEffect(() => {
     const fetchEarningsData = async () => {
-      if (!profileUser?.id || !isActualOwner) {
+        if (!profileUser?.id || !isOwnerOrPublic) {
         setIsEarningsLoading(false);
         return;
       }
@@ -265,7 +317,7 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
     };
 
          fetchEarningsData();
-   }, [profileUser?.id, isActualOwner, API_BASE_URL]);
+   }, [profileUser?.id, isOwnerOrPublic, API_BASE_URL]);
 
   // Handle email mismatch fix completion
   const handleEmailMismatchFixComplete = async () => {
@@ -751,7 +803,7 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
   };
 
   // Authentication mismatch - user trying to access someone else's earnings while logged in
-  if (!isActualOwner && currentUser && profileUser) {
+  if (!allowPublicView && !isActualOwner && currentUser && profileUser) {
     return (
       <div className="min-h-screen bg-zinc-950 text-white py-10">
         <div className="max-w-4xl mx-auto px-6">
@@ -837,7 +889,7 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
   }
 
   // Not logged in but trying to access someone's earnings (public view)
-  if (!isActualOwner) {
+  if (!allowPublicView && !isActualOwner) {
     return (
       <div className="min-h-screen bg-zinc-950 text-white py-10">
         <div className="max-w-4xl mx-auto px-6">
@@ -983,7 +1035,7 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
               <div className="bg-zinc-900 p-6 rounded-xl">
                 <h3 className="text-zinc-400 text-sm mb-2">Total Earned</h3>
                 <p className="text-3xl font-bold">
-                  ${earningsData.totalEarned.toFixed(2)}
+                  ${derivedTotalLifetime.toFixed(2)}
                 </p>
                 <p className="text-xs text-zinc-500 mt-1">Lifetime earnings</p>
               </div>
@@ -1018,11 +1070,7 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
                     </div>
                     <div className="flex justify-between py-1">
                       <span className="text-zinc-400">Revenue (lifetime)</span>
-                      <span className="font-semibold">${earningsData.creatorEarnings.totalEarned.toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between py-1">
-                      <span className="text-zinc-400">Available</span>
-                      <span className="font-semibold text-green-400">${earningsData.creatorEarnings.availableBalance.toFixed(2)}</span>
+                      <span className="font-semibold">${derivedCreatorLifetime.toFixed(2)}</span>
                     </div>
                   </div>
 
@@ -1037,11 +1085,7 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
                     </div>
                     <div className="flex justify-between py-1">
                       <span className="text-zinc-400">Winnings (lifetime)</span>
-                      <span className="font-semibold">${earningsData.prizeWinnings.totalEarned.toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between py-1">
-                      <span className="text-zinc-400">Available</span>
-                      <span className="font-semibold text-green-400">${earningsData.prizeWinnings.availableBalance.toFixed(2)}</span>
+                      <span className="font-semibold">${derivedPrizeLifetime.toFixed(2)}</span>
                     </div>
                   </div>
                 </div>
@@ -1063,10 +1107,10 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
                   <div className="mt-2">
                     <button
                       onClick={() => handleEditStripeInfo('creator')}
-                      className="w-full bg-[#E0FE10] text-black py-2 px-4 rounded-md font-semibold disabled:opacity-50"
-                      disabled={isEditingCreator || isEditingWinner}
+                      className={`w-full ${isViewOnly ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed' : 'bg-[#E0FE10] text-black'} py-2 px-4 rounded-md font-semibold disabled:opacity-50`}
+                      disabled={isViewOnly || isEditingCreator || isEditingWinner}
                     >
-                      {isEditingCreator || isEditingWinner ? 'Opening…' : 'Edit Stripe Info'}
+                      {isViewOnly ? 'View Only' : (isEditingCreator || isEditingWinner ? 'Opening…' : 'Edit Stripe Info')}
                     </button>
                   </div>
                 </div>
@@ -1076,7 +1120,14 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
             {/* Action Buttons */}
             <div className="flex flex-col sm:flex-row gap-4 mb-8">
               {/* Payout Button */}
-              {earningsData.canRequestPayout ? (
+              {isViewOnly ? (
+                <button
+                  disabled
+                  className="flex-1 bg-zinc-800 text-zinc-500 py-3 px-6 rounded-xl font-semibold cursor-not-allowed"
+                >
+                  Public View (No Actions)
+                </button>
+              ) : earningsData.canRequestPayout ? (
                 <button
                   onClick={() => setShowPayoutModal(true)}
                   disabled={earningsData.totalBalance < earningsData.minimumPayoutAmount}
@@ -1101,7 +1152,7 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
               )}
 
               {/* Dashboard Link */}
-              {(earningsData.hasCreatorAccount || earningsData.hasWinnerAccount) && (
+              {!isViewOnly && (!!earningsData.hasCreatorAccount || !!earningsData.hasWinnerAccount) && (
                 <>
                   {isDashboardLinkLoading ? (
                     <div className="flex-1 bg-zinc-800 py-3 px-6 rounded-xl font-semibold flex items-center justify-center">
@@ -1361,7 +1412,7 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
 
         {/* Email Mismatch Modal */}
         <EmailMismatchModal
-          isOpen={hasEmailMismatch && isActualOwner}
+          isOpen={!!(hasEmailMismatch && isActualOwner)}
           userEmail={currentUser?.email || ''}
           mismatchDetails={mismatchDetails}
           onFixComplete={handleEmailMismatchFixComplete}

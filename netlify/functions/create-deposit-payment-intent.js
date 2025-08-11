@@ -54,6 +54,7 @@ exports.handler = async (event, context) => {
 
   try {
     const { 
+      assignmentId,
       challengeId, 
       prizeAmount, // in cents
       depositedBy, // userId
@@ -127,20 +128,22 @@ exports.handler = async (event, context) => {
       challengeData = challengeDoc.data();
     }
 
-    // Check for existing escrow record to calculate difference
+    // Check for existing escrow record for THIS assignment (not the whole challenge)
     let existingEscrowAmount = 0;
     let existingEscrowRecord = null;
-    const escrowQuery = await db.collection('prize-escrow')
-      .where('challengeId', '==', challengeId)
-      .where('status', '==', 'held')
-      .limit(1)
-      .get();
-      
-    if (!escrowQuery.empty) {
-      existingEscrowRecord = escrowQuery.docs[0];
-      const existingData = existingEscrowRecord.data();
-      existingEscrowAmount = existingData.amount || 0; // amount in cents
-      console.log(`[CreateDepositPaymentIntent] Found existing escrow: $${existingEscrowAmount / 100} for challenge ${challengeId}`);
+    if (assignmentId) {
+      const escrowQuery = await db.collection('prize-escrow')
+        .where('challengeId', '==', challengeId)
+        .where('prizeAssignmentId', '==', assignmentId)
+        .where('status', '==', 'held')
+        .limit(1)
+        .get();
+      if (!escrowQuery.empty) {
+        existingEscrowRecord = escrowQuery.docs[0];
+        const existingData = existingEscrowRecord.data();
+        existingEscrowAmount = existingData.amount || 0;
+        console.log(`[CreateDepositPaymentIntent] Found existing escrow for assignment ${assignmentId}: $${existingEscrowAmount / 100}`);
+      }
     }
 
     // Calculate the difference needed
@@ -215,6 +218,7 @@ exports.handler = async (event, context) => {
         depositorName: depositorName || userData.username,
         depositorEmail: depositorEmail || userData.email,
         payment_type: 'escrow_deposit',
+        prizeAssignmentId: assignmentId || '',
         // Full prize amount information
         fullPrizeAmount: prizeAmount.toString(),
         existingEscrowAmount: existingEscrowAmount.toString(),

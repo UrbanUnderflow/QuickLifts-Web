@@ -292,9 +292,10 @@ async function determineWinners(challengeId, distributionPlan) {
       };
     });
 
-    // Filter to only completed challenges and sort by score (highest first)
+    // Since the challenge has ended (we're distributing prizes), all participants are considered "complete"
+    // Filter to only participants with scores and sort by score (highest first)
     const completedParticipants = participants
-      .filter(p => p.isComplete)
+      .filter(p => p.score > 0) // Only include participants who actually participated
       .sort((a, b) => b.score - a.score);
 
     console.log(`[DetermineWinners] Found ${completedParticipants.length} completed participants`);
@@ -351,7 +352,8 @@ async function distributePrizes(prizeId, winners, prizeData) {
       }
 
       const userData = userDoc.data();
-      const winnerStripeAccountId = userData.winner?.stripeAccountId;
+      // Use the single creator account for all earnings (migrated from dual account model)
+      const winnerStripeAccountId = userData.creator?.stripeAccountId || userData.winner?.stripeAccountId;
 
       if (!winnerStripeAccountId) {
         throw new Error(`User ${winner.userId} does not have a connected Stripe account`);

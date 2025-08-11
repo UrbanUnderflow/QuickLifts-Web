@@ -36,15 +36,19 @@ const handler = async (event) => {
 
     console.log(`[TestCompleteChallenge] Starting test completion for challenge: ${challengeId}`);
 
-    // 1. Get challenge data
-    const challengeDoc = await db.collection('challenges').doc(challengeId).get();
+    // 1. Get challenge data - check both collections
+    let challengeDoc = await db.collection('challenges').doc(challengeId).get();
+    if (!challengeDoc.exists) {
+      challengeDoc = await db.collection('sweatlist-collection').doc(challengeId).get();
+    }
+    
     if (!challengeDoc.exists) {
       return {
         statusCode: 404,
         headers: { 'Access-Control-Allow-Origin': '*' },
         body: JSON.stringify({
           success: false,
-          error: 'Challenge not found'
+          error: 'Challenge not found in challenges or sweatlist-collection'
         })
       };
     }
@@ -93,6 +97,7 @@ const handler = async (event) => {
       // Update user challenge status to completed
       batch.update(doc.ref, {
         status: 'completed',
+        isComplete: true, // Required for prize distribution winner detection
         completedAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp()
       });

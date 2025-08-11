@@ -386,18 +386,15 @@ const handler = async (event) => {
           totalUniquePayments: allPayments.length
         });
         
-        // Calculate total earned (from transfers to the connected account)
-        const totalTransferred = filteredTransfers.reduce((sum, transfer) => sum + transfer.amount, 0) / 100;
-        console.log('Total transferred amount:', totalTransferred);
-        
-        // Calculate available and pending balance
+        // Calculate available and pending balance (real-time from Stripe)
         const availableBalance = balance.available.reduce((sum, item) => sum + item.amount, 0) / 100;
-        const pendingBalance = balance.pending.reduce((sum, item) => sum + item.amount, 0) / 100;
+        // Pending from Stripe should not go negative; clamp safely
+        const pendingBalance = Math.max(0, balance.pending.reduce((sum, item) => sum + item.amount, 0) / 100);
         console.log('Available balance:', availableBalance);
         console.log('Pending balance:', pendingBalance);
         
-        // Calculate total earnings (transferred + available + pending)
-        const totalEarned = totalTransferred + availableBalance;
+        // Calculate creator lifetime revenue strictly from real payment records (no transfers, no synthetic)
+        const totalEarned = allPayments.reduce((sum, p) => sum + ((p.amount || 0) / 100), 0);
         console.log('Total earned:', totalEarned);
         
         // Format payments data for the frontend

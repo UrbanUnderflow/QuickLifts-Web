@@ -107,7 +107,7 @@ exports.handler = async (event, context) => {
         let escrowRecordId;
         let existingEscrowDoc = null;
 
-        if (isPartialDeposit && existingEscrowRecordId) {
+          if (isPartialDeposit && existingEscrowRecordId) {
           // Update existing escrow record
           console.log(`[StripeDepositWebhook] Updating existing escrow record: ${existingEscrowRecordId}`);
           
@@ -138,7 +138,7 @@ exports.handler = async (event, context) => {
           } else {
             throw new Error(`Existing escrow record ${existingEscrowRecordId} not found`);
           }
-        } else {
+          } else {
           // Create new escrow record
           const escrowData = {
             challengeId,
@@ -152,6 +152,7 @@ exports.handler = async (event, context) => {
             depositedBy,
             depositorName,
             depositorEmail,
+              prizeAssignmentId: assignmentIdMeta || null,
             createdAt: new Date(),
             updatedAt: new Date(),
             metadata: {
@@ -200,13 +201,23 @@ exports.handler = async (event, context) => {
 
         // Update prize assignment status
         try {
-          const prizeQuery = await db.collection('challenge-prizes')
-            .where('challengeId', '==', challengeId)
-            .limit(1)
-            .get();
+          // Prefer direct assignmentId when provided to avoid updating older versions
+          let prizeDoc = null;
+          const assignmentIdMeta = paymentIntent.metadata?.prizeAssignmentId;
+          if (assignmentIdMeta) {
+            const direct = await db.collection('challenge-prizes').doc(assignmentIdMeta).get();
+            if (direct.exists) prizeDoc = direct;
+          }
+          if (!prizeDoc) {
+            const querySnap = await db.collection('challenge-prizes')
+              .where('challengeId', '==', challengeId)
+              .orderBy('createdAt', 'desc')
+              .limit(1)
+              .get();
+            if (!querySnap.empty) prizeDoc = querySnap.docs[0];
+          }
             
-          if (!prizeQuery.empty) {
-            const prizeDoc = prizeQuery.docs[0];
+          if (prizeDoc) {
             await prizeDoc.ref.update({
               fundingStatus: 'funded',
               depositedAmount: fullPrizeAmountCents, // Full prize amount (what winners get)

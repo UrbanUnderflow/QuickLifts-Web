@@ -69,6 +69,7 @@ const AssignPrizeMoneyPage: React.FC = () => {
   const [isDepositing, setIsDepositing] = useState(false);
   const [escrowRecords, setEscrowRecords] = useState<any[]>([]);
   const [dataLoaded, setDataLoaded] = useState(false);
+  const [isCloning, setIsCloning] = useState(false);
   
   const [formData, setFormData] = useState<PrizeFormData>({
     challengeId: '',
@@ -93,6 +94,37 @@ const AssignPrizeMoneyPage: React.FC = () => {
   const existingAssignment = selectedChallenge ? getExistingAssignment(selectedChallenge.id) : null;
   const isReassigning = !!existingAssignment;
 
+  const autoRepairDeposits = async () => {
+    try {
+      console.log('🔧 Running auto-repair for failed deposits...');
+      const response = await fetch('/.netlify/functions/auto-repair-deposits');
+      const data = await response.json();
+      
+      if (data.success && data.repaired && data.repaired.length > 0) {
+        console.log(`✅ Auto-repaired ${data.repaired.length} failed deposits:`, data.repaired);
+        // Reload data to show updated funding status
+        setDataLoaded(false);
+        await Promise.all([
+          fetchChallenges(),
+          fetchPrizeAssignments(),
+          fetchEscrowRecords()
+        ]);
+        setDataLoaded(true);
+        
+        // Show success message
+        const repairSummary = data.repaired.map((r: any) => `$${r.totalCharged} for assignment ${r.assignmentId}`).join(', ');
+        alert(`🔧 Auto-repaired ${data.repaired.length} failed deposits: ${repairSummary}`);
+      } else if (data.success) {
+        console.log('✅ Auto-repair scan complete, no repairs needed');
+      } else {
+        console.warn('⚠️ Auto-repair failed:', data.error);
+      }
+    } catch (error) {
+      console.warn('⚠️ Auto-repair error:', error);
+      // Don't throw - auto-repair is optional
+    }
+  };
+
   useEffect(() => {
     const loadAllData = async () => {
       setDataLoaded(false);
@@ -105,6 +137,11 @@ const AssignPrizeMoneyPage: React.FC = () => {
     };
     
     loadAllData();
+    
+    // Auto-repair any failed deposits on page load
+    setTimeout(() => {
+      autoRepairDeposits();
+    }, 1000); // Small delay to let initial data load
     
     // Check for successful deposit in URL parameters
     const urlParams = new URLSearchParams(window.location.search);
@@ -211,6 +248,7 @@ const AssignPrizeMoneyPage: React.FC = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          assignmentId: prizeAssignment.id,
           challengeId: prizeAssignment.challengeId,
           prizeAmount: Math.round(prizeAssignment.prizeAmount * 100), // Convert to cents
           depositedBy: currentUser.id,
@@ -330,7 +368,7 @@ const AssignPrizeMoneyPage: React.FC = () => {
 
         if (error) {
           if (messagesDiv) messagesDiv.textContent = error.message || 'Payment failed';
-          if (submitButton) submitButton.textContent = `Pay $${prizeAssignment.prizeAmount}`;
+          if (submitButton) submitButton.textContent = `Pay $${breakdown.totalCharged}`;
         } else {
           // Payment succeeded
           document.getElementById('payment-modal')?.remove();
@@ -342,6 +380,12 @@ const AssignPrizeMoneyPage: React.FC = () => {
           alert(successMessage);
           fetchPrizeAssignments(); // Refresh assignments
           fetchEscrowRecords(); // Refresh escrow records
+          
+          // Auto-refresh after 3 seconds in case webhook fails
+          setTimeout(() => {
+            console.log('🔄 Auto-refreshing page after deposit to ensure webhook processed...');
+            window.location.reload();
+          }, 3000);
         }
       });
     } catch (error) {
@@ -534,41 +578,53 @@ const AssignPrizeMoneyPage: React.FC = () => {
     }).format(amount);
   };
 
-  const getFundingStatus = (challengeId: string): { status: string; escrowRecord?: any } => {
+  const getFundingStatus = (challengeId: string, assignment?: PrizeAssignment): { status: string; escrowRecord?: any } => {
     // Don't check funding status until all data is loaded
     if (!dataLoaded) {
       return { status: 'loading' };
     }
+
+    // Use the assignment parameter if provided, otherwise find by challengeId
+    const currentAssignment = assignment || prizeAssignments.find(pa => pa.challengeId === challengeId);
     
-    console.log('=== FUNDING STATUS DEBUG ===');
-    console.log('Looking for challengeId:', challengeId);
-    console.log('PRIZE ASSIGNMENT RECORDS:', prizeAssignments);
-    console.log('ESCROW RECORDS (PRIZE MONEY):', escrowRecords);
-    console.log('Escrow records count:', escrowRecords.length);
-    console.log('Prize assignments count:', prizeAssignments.length);
-    
-    // Debug each escrow record
-    escrowRecords.forEach((record, index) => {
-      console.log(`Escrow Record ${index}:`, {
-        challengeId: record.challengeId,
-        matches: record.challengeId === challengeId,
-        typeof_recordId: typeof record.challengeId,
-        typeof_searchId: typeof challengeId,
-        status: record.status,
-        amount: record.amount
-      });
-    });
-    
-    const matchingRecords = escrowRecords.filter(record => record.challengeId === challengeId);
-    console.log('Matching records:', matchingRecords);
-    console.log('================================');
-    
-    if (matchingRecords.length > 0) {
-      const escrowRecord = matchingRecords[0];
+    if (!currentAssignment) {
+      return { status: 'not deposited' };
+    }
+
+    // Check if deposit has actually been made based on depositedBy and depositedAt
+    if (currentAssignment.depositedBy && currentAssignment.depositedAt) {
+      // Find the escrow record if available
+      let escrowRecord = null;
+      if (currentAssignment.escrowRecordId) {
+        escrowRecord = escrowRecords.find(rec => rec.id === currentAssignment.escrowRecordId);
+      }
       return { status: 'funded', escrowRecord };
     }
     
-    return { status: 'pending' };
+    // No deposit made yet
+    return { status: 'not deposited' };
+  };
+
+  const clonePrizeAssignment = async (assignment: PrizeAssignment, newAmount?: number) => {
+    try {
+      setIsCloning(true);
+      const res = await fetch('/.netlify/functions/clone-prize-assignment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assignmentId: assignment.id, overridePrizeAmount: newAmount, requestedBy: currentUser?.id })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to clone prize assignment');
+      }
+      alert('Cloned prize assignment created. You can now deposit and re-send confirmation.');
+      await fetchPrizeAssignments();
+      return data.newAssignment;
+    } catch (e: any) {
+      alert(e.message || 'Failed to clone prize assignment');
+    } finally {
+      setIsCloning(false);
+    }
   };
 
   const handleSendHostEmail = async (prizeAssignment: PrizeAssignment) => {
@@ -966,16 +1022,18 @@ const AssignPrizeMoneyPage: React.FC = () => {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             {(() => {
-                              const fundingInfo = getFundingStatus(prize.challengeId);
+                              const fundingInfo = getFundingStatus(prize.challengeId, prize);
                               return (
                                 <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
                                   fundingInfo.status === 'loading' ? 'bg-blue-900/50 text-blue-400' :
-                                  fundingInfo.status === 'pending' ? 'bg-red-900/50 text-red-400' :
+                                  fundingInfo.status === 'not deposited' ? 'bg-red-900/50 text-red-400' :
                                   fundingInfo.status === 'funded' ? 'bg-green-900/50 text-green-400' :
                                   fundingInfo.status === 'distributed' ? 'bg-blue-900/50 text-blue-400' :
                                   'bg-gray-900/50 text-gray-400'
                                 }`}>
-                                  {fundingInfo.status === 'loading' ? 'Loading...' : fundingInfo.status}
+                                  {fundingInfo.status === 'loading' ? 'Loading...' : 
+                                   fundingInfo.status === 'not deposited' ? 'Not Deposited' : 
+                                   fundingInfo.status}
                                 </span>
                               );
                             })()}
@@ -1023,8 +1081,8 @@ const AssignPrizeMoneyPage: React.FC = () => {
                           <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                             <div className="flex items-center gap-2">
                               {(() => {
-                                const fundingInfo = getFundingStatus(prize.challengeId);
-                                return fundingInfo.status === 'pending' && (
+                              const fundingInfo = getFundingStatus(prize.challengeId, prize);
+                                return fundingInfo.status === 'not deposited' && (
                                   <button
                                     onClick={() => handleDepositPrizeMoney(prize)}
                                     disabled={isDepositing}
@@ -1035,7 +1093,7 @@ const AssignPrizeMoneyPage: React.FC = () => {
                                   </button>
                                 );
                               })()}
-                              {!prize.hostEmailSent && getFundingStatus(prize.challengeId).status === 'funded' && (
+                               {!prize.hostEmailSent && getFundingStatus(prize.challengeId, prize).status === 'funded' && (
                                 <button
                                   onClick={() => handleSendHostEmail(prize)}
                                   disabled={sendingHostEmail}
@@ -1062,10 +1120,31 @@ const AssignPrizeMoneyPage: React.FC = () => {
                               >
                                 <Edit className="w-4 h-4" />
                               </button>
+                              {/* Clone to new version to re-run flow */}
                               <button
-                                onClick={() => {
-                                  if (confirm('Are you sure you want to delete this prize assignment?')) {
-                                    // TODO: Implement delete functionality
+                                onClick={() => clonePrizeAssignment(prize)}
+                                disabled={isCloning}
+                                className="text-purple-400 hover:text-purple-300 disabled:opacity-50"
+                                title={isCloning ? 'Cloning...' : 'Clone Assignment (New Version)'}
+                              >
+                                <Send className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  if (!confirm('Delete this prize assignment? If it has escrow linked it will be archived.')) return;
+                                  try {
+                                    const res = await fetch('/.netlify/functions/delete-prize-assignment', {
+                                      method: 'POST',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({ assignmentId: prize.id })
+                                    });
+                                    const data = await res.json();
+                                    if (!res.ok || !data.success) {
+                                      throw new Error(data.error || 'Failed to delete');
+                                    }
+                                    await fetchPrizeAssignments();
+                                  } catch (e: any) {
+                                    alert(e.message || 'Failed to delete');
                                   }
                                 }}
                                 className="text-red-400 hover:text-red-300"
@@ -1151,7 +1230,7 @@ const AssignPrizeMoneyPage: React.FC = () => {
                     <div>
                       <p className="text-sm text-zinc-400">Unfunded Prizes</p>
                       <p className="text-xl font-bold text-white">
-                        {prizeAssignments.filter(prize => getFundingStatus(prize.challengeId).status === 'pending').length}
+                         {prizeAssignments.filter(prize => getFundingStatus(prize.challengeId, prize).status === 'not deposited').length}
                       </p>
                     </div>
                   </div>
