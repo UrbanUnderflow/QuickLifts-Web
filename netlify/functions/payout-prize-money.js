@@ -151,6 +151,7 @@ const handler = async (event) => {
       const baseIdempotencyKey = `${prizeRecordId}:${winnerStripeAccountId}:${winnerAmount}:${escrowRecord.id}`;
 
       async function createTransferWithKey(key) {
+        console.log(`[PayoutPrizeMoney] Creating transfer with idempotency key: ${key}`);
         return await stripe.transfers.create({
           amount: winnerAmount, // Full amount (no platform fee for prizes)
           currency: 'usd',

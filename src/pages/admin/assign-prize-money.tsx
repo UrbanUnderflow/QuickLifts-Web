@@ -1093,12 +1093,12 @@ const AssignPrizeMoneyPage: React.FC = () => {
                                   </button>
                                 );
                               })()}
-                               {!prize.hostEmailSent && getFundingStatus(prize.challengeId, prize).status === 'funded' && (
+                               {getFundingStatus(prize.challengeId, prize).status === 'funded' && (
                                 <button
                                   onClick={() => handleSendHostEmail(prize)}
                                   disabled={sendingHostEmail}
                                   className="flex items-center gap-2 text-green-400 hover:text-green-300 disabled:opacity-50 disabled:cursor-not-allowed"
-                                  title={sendingHostEmail ? "Sending email..." : "Send Host Validation Email"}
+                                  title={sendingHostEmail ? "Sending email..." : (prize.hostEmailSent ? "Resend Host Validation Email" : "Send Host Validation Email")}
                                 >
                                   {sendingHostEmail ? (
                                     <>
