@@ -250,19 +250,52 @@ const handler = async (event) => {
     } catch (stripeError) {
       console.error('[PayoutPrizeMoney] Stripe transfer error:', stripeError);
 
-      // Update prize record with failure
-      await db.collection("prizeRecords").doc(prizeRecordId).update({
+      // Build Firestore-safe update object (no undefined fields)
+      const failureUpdate = {
         status: 'failed',
-        failureReason: stripeError.message,
-        stripeErrorCode: stripeError.code,
+        failureReason: stripeError?.message || 'Stripe transfer error',
         updatedAt: admin.firestore.FieldValue.serverTimestamp()
-      });
+      };
+      if (stripeError && typeof stripeError.code !== 'undefined' && stripeError.code !== null) {
+        failureUpdate.stripeErrorCode = stripeError.code;
+      }
+      if (stripeError && typeof stripeError.decline_code !== 'undefined' && stripeError.decline_code !== null) {
+        failureUpdate.stripeDeclineCode = stripeError.decline_code;
+      }
+      if (stripeError && typeof stripeError.type !== 'undefined' && stripeError.type !== null) {
+        failureUpdate.stripeErrorType = stripeError.type;
+      }
+
+      // Update prize record with sanitized failure fields
+      await db.collection("prizeRecords").doc(prizeRecordId).update(failureUpdate);
+
+      // Also log to errorLogs for admin visibility (non-blocking)
+      try {
+        await db.collection('errorLogs').doc(`${new Date().toISOString()}-payout-${prizeRecordId}`).set({
+          username: prizeRecord.username || 'unknown',
+          userId: prizeRecord.userId,
+          errorMessage: `[PayoutPrizeMoney] ${failureUpdate.failureReason}`,
+          createdAt: new Date().toISOString(),
+          context: {
+            source: 'payout-prize-money',
+            prizeRecordId,
+            challengeId: prizeRecord.challengeId,
+            prizeAmountCents: prizeRecord.prizeAmount,
+            stripeAccountId: winnerStripeAccountId || null,
+            errorCode: failureUpdate.stripeErrorCode || null,
+            declineCode: failureUpdate.stripeDeclineCode || null,
+            errorType: failureUpdate.stripeErrorType || null
+          }
+        }, { merge: true });
+      } catch (e) {
+        console.warn('[PayoutPrizeMoney] Failed to write error log:', e.message);
+      }
 
       return {
         statusCode: 500,
         body: JSON.stringify({
           success: false,
-          error: `Transfer failed: ${stripeError.message}`
+          error: `Transfer failed: ${failureUpdate.failureReason}`
         })
       };
     }

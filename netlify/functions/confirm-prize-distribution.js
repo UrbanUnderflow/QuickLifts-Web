@@ -174,6 +174,13 @@ const handler = async (event) => {
     // If nothing succeeded, keep link actionable and do not claim completion
     const anySuccess = distributionResults.some(r => r.success);
     if (!anySuccess) {
+      // Persist detailed diagnostics to Firestore instead of showing to users
+      try {
+        await logDistributionErrors(prizeId, prizeData, winners, distributionResults);
+      } catch (e) {
+        console.error('[ConfirmPrizeDistribution] Failed to write error logs:', e);
+      }
+
       await db.collection('challenge-prizes').doc(prizeId).update({
         distributionStatus: 'failed',
         distributionResults,
@@ -182,11 +189,9 @@ const handler = async (event) => {
       return {
         statusCode: 200,
         headers: { 'Content-Type': 'text/html' },
-        body: generateTransferFailurePage(
+        body: generateErrorPage(
           'Transfer Failed',
-          'We could not complete any prize transfers. Please fix the highlighted issues and re-open this link to retry.',
-          winners,
-          distributionResults
+          'We could not complete any prize transfers. We have logged the issue. Please ensure each winner has a working Stripe account with payouts enabled and matching email, then re-open this link to retry.'
         )
       };
     }
@@ -677,4 +682,37 @@ function generateTransferFailurePage(title, message, winners = [], results = [])
     </body>
     </html>
   `;
+}
+
+// Write error diagnostics to Firestore errorLogs for admin review
+async function logDistributionErrors(prizeId, prizeData, winners, results) {
+  const batch = db.batch();
+  const errorCollection = db.collection('errorLogs');
+
+  const now = new Date();
+  results.forEach((r, idx) => {
+    const username = r.username || winners[idx]?.username || 'unknown';
+    const userId = r.userId || winners[idx]?.userId || 'unknown';
+    const docRef = errorCollection.doc(`${now.toISOString()}-prize-${prizeId}-user-${userId}`);
+
+    const payload = {
+      username,
+      userId,
+      errorMessage: r.error || 'Distribution failed',
+      createdAt: now.toISOString(),
+      context: {
+        source: 'confirm-prize-distribution',
+        prizeId,
+        challengeId: prizeData.challengeId,
+        challengeTitle: prizeData.challengeTitle,
+        rankTried: r.rank ?? winners[idx]?.rank ?? null,
+        prizeAmountTriedCents: Math.round((r.prizeAmount || winners[idx]?.prizeAmount || 0) * 100),
+        stripeAccountId: r.stripeAccountId || null
+      }
+    };
+
+    batch.set(docRef, payload, { merge: true });
+  });
+
+  await batch.commit();
 }
