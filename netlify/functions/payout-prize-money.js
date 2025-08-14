@@ -147,6 +147,23 @@ const handler = async (event) => {
     });
 
     try {
+      // Check platform balance before attempting transfer
+      try {
+        const balance = await stripe.balance.retrieve();
+        console.log(`[PayoutPrizeMoney] Current Stripe balance:`, balance.available, balance.pending);
+        
+        const usdAvailable = balance.available.find(b => b.currency === 'usd')?.amount || 0;
+        const usdPending = balance.pending.find(b => b.currency === 'usd')?.amount || 0;
+        
+        console.log(`[PayoutPrizeMoney] USD available: $${usdAvailable/100}, pending: $${usdPending/100}, transfer needed: $${winnerAmount/100}`);
+        
+        if (usdAvailable < winnerAmount) {
+          console.warn(`[PayoutPrizeMoney] Insufficient available balance! Available: $${usdAvailable/100}, needed: $${winnerAmount/100}`);
+        }
+      } catch (balanceError) {
+        console.error('[PayoutPrizeMoney] Could not retrieve balance:', balanceError.message);
+      }
+
       // Create Stripe transfer for prize money (from escrow) with robust idempotency strategy
       const baseIdempotencyKey = `${prizeRecordId}:${winnerStripeAccountId}:${winnerAmount}:${escrowRecord.id}`;
 
@@ -157,6 +174,7 @@ const handler = async (event) => {
           currency: 'usd',
           destination: winnerStripeAccountId,
           description: `Prize money from escrow: ${prizeRecord.challengeTitle}`,
+          source_type: 'card', // Use available balance from card payments
           metadata: {
             platform: 'pulse',
             challenge_id: prizeRecord.challengeId,
@@ -269,12 +287,28 @@ const handler = async (event) => {
     } catch (stripeError) {
       console.error('[PayoutPrizeMoney] Stripe transfer error:', stripeError);
 
+      // Determine if this is an insufficient funds error
+      const isInsufficientFunds = stripeError?.message?.includes('insufficient funds');
+      
+      // Enhanced error message for insufficient funds
+      let enhancedErrorMessage = stripeError?.message || 'Stripe transfer error';
+      if (isInsufficientFunds) {
+        enhancedErrorMessage = `Insufficient funds in platform Stripe account. The deposited prize money likely hasn't cleared yet. This payout will be automatically retried once funds are available. Current error: ${stripeError.message}`;
+      }
+
       // Build Firestore-safe update object (no undefined fields)
       const failureUpdate = {
-        status: 'failed',
-        failureReason: stripeError?.message || 'Stripe transfer error',
+        status: isInsufficientFunds ? 'pending_funds' : 'failed',
+        failureReason: enhancedErrorMessage,
         updatedAt: admin.firestore.FieldValue.serverTimestamp()
       };
+      
+      // Add auto-retry flag for insufficient funds
+      if (isInsufficientFunds) {
+        failureUpdate.autoRetryEligible = true;
+        failureUpdate.nextRetryAfter = admin.firestore.FieldValue.serverTimestamp();
+        console.log(`[PayoutPrizeMoney] Marked record ${prizeRecordId} as pending_funds for auto-retry`);
+      }
       if (stripeError && typeof stripeError.code !== 'undefined' && stripeError.code !== null) {
         failureUpdate.stripeErrorCode = stripeError.code;
       }

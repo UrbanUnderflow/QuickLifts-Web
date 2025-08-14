@@ -1,0 +1,242 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && 
+             request.auth.token.get('admin', false) == true;
+    }
+    
+
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isCoachOwner(coachId) {
+      return isAuthenticated() && request.auth.uid == coachId;
+    }
+    
+    // Users collection rules
+    match /users/{userId} {
+      // Allow read/write for the user themselves or admin
+      allow read, write: if isOwner(userId) || isAdmin();
+      
+      // Allow coaches to read their linked athletes
+      allow read: if isAuthenticated() && 
+                     resource.data.linkedCoachId == request.auth.uid;
+    }
+    
+    // Coaches collection rules
+    match /coaches/{coachId} {
+      // Only the coach themselves can read/write their coach document
+      allow read, write: if isCoachOwner(coachId) || isAdmin();
+      
+      // Allow creation only if the userId matches the authenticated user
+      allow create: if isAuthenticated() && 
+                       request.resource.data.userId == request.auth.uid;
+    }
+    
+    // Coach-Athlete relationships
+    match /coachAthletes/{relationshipId} {
+      // Coach can read/write relationships where they are the coach
+      allow read, write: if isAuthenticated() && 
+                            resource.data.coachId == request.auth.uid;
+      
+      // Athletes can read their own relationships
+      allow read: if isAuthenticated() && 
+                     resource.data.athleteUserId == request.auth.uid;
+      
+      // Allow creation if user is the coach
+      allow create: if isAuthenticated() && 
+                       request.resource.data.coachId == request.auth.uid;
+      
+      // Admin can do everything
+      allow read, write: if isAdmin();
+    }
+    
+    // Coach referrals
+    match /coachReferrals/{referralId} {
+      // Referring coach can read their referrals
+      allow read: if isAuthenticated() && 
+                     resource.data.referrerCoachId == request.auth.uid;
+      
+      // Referred coach can read referrals where they are the referred coach
+      allow read: if isAuthenticated() && 
+                     resource.data.referredCoachId == request.auth.uid;
+      
+      // Only referring coach can create referrals
+      allow create: if isAuthenticated() && 
+                       request.resource.data.referrerCoachId == request.auth.uid;
+      
+      // Admin can do everything
+      allow read, write: if isAdmin();
+    }
+    
+    // Existing collections - preserve current functionality
+    // Note: Add your existing rules here for other collections
+    
+    // Example structure for other collections (customize as needed):
+    
+    // Daily health summaries
+    match /daily-health-summaries/{summaryId} {
+      allow read, write: if isOwner(resource.data.userId) || isAdmin();
+      allow create: if isAuthenticated() && 
+                       request.resource.data.userId == request.auth.uid;
+    }
+    
+    // Conversations (PulseCheck)
+    match /conversations/{conversationId} {
+      allow read, write: if isOwner(resource.data.userId) || isAdmin();
+      allow create: if isAuthenticated() && 
+                       request.resource.data.userId == request.auth.uid;
+    }
+    
+    // Programming conversations
+    match /programming-conversations/{conversationId} {
+      allow read, write: if isOwner(resource.data.userId) || isAdmin();
+      allow create: if isAuthenticated() && 
+                       request.resource.data.userId == request.auth.uid;
+    }
+    
+    // Exercise videos
+    match /exerciseVideos/{videoId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && 
+                      (isOwner(resource.data.get('userId', '')) || isAdmin());
+    }
+    
+    // Manual entries
+    match /manualEntries/{entryId} {
+      allow read, write: if isOwner(resource.data.userId) || isAdmin();
+      allow create: if isAuthenticated() && 
+                       request.resource.data.userId == request.auth.uid;
+    }
+    
+    // Workout summaries
+    match /workout-summaries/{summaryId} {
+      allow read, write: if isOwner(resource.data.userId) || isAdmin();
+      allow create: if isAuthenticated() && 
+                       request.resource.data.userId == request.auth.uid;
+    }
+    
+    // Daily progress
+    match /daily-progress/{progressId} {
+      allow read, write: if isOwner(resource.data.userId) || isAdmin();
+      allow create: if isAuthenticated() && 
+                       request.resource.data.userId == request.auth.uid;
+    }
+    
+    // Plans
+    match /plans/{planId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+    
+    // Macro recommendations
+    match /macro-recommendations/{macroId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+    
+    // Meal plans
+    match /meal-plan/{mealPlanId} {
+      allow read, write: if isOwner(resource.data.userId) || isAdmin();
+      allow create: if isAuthenticated() && 
+                       request.resource.data.userId == request.auth.uid;
+    }
+    
+    // Notes
+    match /notes/{noteId} {
+      allow read, write: if isOwner(resource.data.get('userId', '')) || isAdmin();
+    }
+    
+    // Timezone history
+    match /timezone-history/{historyId} {
+      allow read, write: if isOwner(resource.data.userId) || isAdmin();
+      allow create: if isAuthenticated() && 
+                       request.resource.data.userId == request.auth.uid;
+    }
+    
+    // Prize records
+    match /prizeRecords/{recordId} {
+      allow read, write: if isOwner(resource.data.userId) || isAdmin();
+    }
+    
+    // Challenge prizes
+    match /challenge-prizes/{prizeId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+    
+    // Payments
+    match /payments/{paymentId} {
+      allow read, write: if isOwner(resource.data.ownerId) || isAdmin();
+    }
+    
+    // Chats
+    match /chats/{chatId} {
+      allow read, write: if isAuthenticated() && 
+                            request.auth.uid in resource.data.participantIds;
+      allow create: if isAuthenticated() && 
+                       request.auth.uid in request.resource.data.participantIds;
+    }
+    
+    // Messages within chats
+    match /chats/{chatId}/messages/{messageId} {
+      allow read: if isAuthenticated() && 
+                     request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participantIds;
+      allow create: if isAuthenticated() && 
+                       request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participantIds &&
+                       request.resource.data.senderId == request.auth.uid;
+    }
+    
+    // Sweatlist collections
+    match /sweatlist-collections/{collectionId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && 
+                      (request.auth.uid in resource.data.ownerId || isAdmin());
+    }
+    
+    // Checkins
+    match /checkins/{checkinId} {
+      allow read, write: if isOwner(resource.data.get('userId', '')) || isAdmin();
+    }
+    
+    // Encouragement
+    match /encouragement/{encouragementId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && 
+                       request.resource.data.fromUser.id == request.auth.uid;
+    }
+    
+    // Logs
+    match /logs/{logId} {
+      allow read, write: if isOwner(resource.data.userId) || isAdmin();
+      allow create: if isAuthenticated() && 
+                       request.resource.data.userId == request.auth.uid;
+    }
+    
+    // Workouts
+    match /workouts/{workoutId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && 
+                      (isOwner(resource.data.fromUser.id) || isAdmin());
+    }
+    
+    // Daily reflections
+    match /daily-reflections/{reflectionId} {
+      allow read, write: if isOwner(resource.data.get('userId', '')) || isAdmin();
+    }
+    
+    // Default deny rule for any unmatched documents
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

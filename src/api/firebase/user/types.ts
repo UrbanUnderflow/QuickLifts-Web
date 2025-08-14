@@ -76,6 +76,8 @@ export class User {
   referrer?: string;
   isCurrentlyActive: boolean;
   videoCount: number;
+  role: 'athlete' | 'coach';
+  linkedCoachId?: string;
   createdAt: Date;
   updatedAt: Date;
 
@@ -127,6 +129,8 @@ export class User {
     this.referrer = data.referrer || '';
     this.isCurrentlyActive = data.isCurrentlyActive || false;
     this.videoCount = data.videoCount || 0;
+    this.role = data.role || 'athlete';
+    this.linkedCoachId = data.linkedCoachId || undefined;
 
     this.createdAt = convertFirestoreTimestamp(data.createdAt) || null;
 
@@ -184,6 +188,8 @@ export class User {
       referrer: this.referrer,
       isCurrentlyActive: this.isCurrentlyActive,
       videoCount: this.videoCount,
+      role: this.role,
+      linkedCoachId: this.linkedCoachId,
       createdAt: dateToUnixTimestamp(this.createdAt),
       updatedAt: dateToUnixTimestamp(this.updatedAt),
     };

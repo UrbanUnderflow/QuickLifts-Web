@@ -59,7 +59,8 @@ const handler = async (event) => {
       challengeTitle,
       prizeAmount,
       prizeStructure,
-      requestedBy
+      requestedBy,
+      isRetryAttempt = false
     } = JSON.parse(event.body || '{}');
 
     console.log('[SendHostValidationEmail] Processing request:', {
@@ -317,8 +318,12 @@ const handler = async (event) => {
       <div style="max-width: 600px; margin: 0 auto; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
         <!-- Header -->
         <div style="background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%); padding: 40px 30px; text-align: center; border-radius: 12px 12px 0 0;">
-          <h1 style="color: #E0FE10; margin: 0; font-size: 28px; font-weight: bold;">🏆 Prize Distribution Confirmation</h1>
-          <p style="color: #ffffff; margin: 10px 0 0 0; font-size: 16px;">Your challenge is ready for winner rewards!</p>
+          <h1 style="color: #E0FE10; margin: 0; font-size: 28px; font-weight: bold;">
+            ${isRetryAttempt ? '🔄 Prize Distribution - RETRY' : '🏆 Prize Distribution Confirmation'}
+          </h1>
+          <p style="color: #ffffff; margin: 10px 0 0 0; font-size: 16px;">
+            ${isRetryAttempt ? 'Funds are now available - ready to distribute prizes!' : 'Your challenge is ready for winner rewards!'}
+          </p>
         </div>
 
         <!-- Content -->
@@ -327,8 +332,20 @@ const handler = async (event) => {
             Hi there,
           </p>
 
+          ${isRetryAttempt ? `
+          <div style="background: #e8f4fd; border-left: 4px solid #2196F3; padding: 20px; margin: 25px 0; border-radius: 0 8px 8px 0;">
+            <h4 style="color: #1976D2; margin: 0 0 10px 0; font-size: 16px;">🔄 Retry Notification</h4>
+            <p style="color: #555555; margin: 0; font-size: 14px; line-height: 1.6;">
+              This is a follow-up to your previous prize distribution request. Our system detected that sufficient funds are now available 
+              in our platform account, and we're ready to complete the prize distribution that was previously delayed.
+            </p>
+          </div>
+          ` : ''}
+
           <p style="color: #333333; font-size: 16px; line-height: 1.6; margin-bottom: 25px;">
-            Great news! Prize money has been assigned to your challenge and is ready for distribution to the winners.
+            ${isRetryAttempt 
+              ? 'Great news! Sufficient funds are now available and prize money is ready for distribution to the winners.' 
+              : 'Great news! Prize money has been assigned to your challenge and is ready for distribution to the winners.'}
           </p>
 
           <!-- Challenge Details Card -->
@@ -448,7 +465,9 @@ const handler = async (event) => {
           },
         ],
         bcc: [ { email: 'info@fitwithpulse.ai', name: 'Pulse Info' } ],
-        subject: `🏆 Confirm Prize Distribution - ${challengeTitle}`,
+        subject: isRetryAttempt 
+          ? `🔄 RETRY: Prize Distribution Ready - ${challengeTitle}` 
+          : `🏆 Confirm Prize Distribution - ${challengeTitle}`,
         htmlContent: htmlContent,
         headers: {
           'X-Prize-Assignment-ID': prizeAssignmentId,

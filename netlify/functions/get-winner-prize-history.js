@@ -77,10 +77,13 @@ const handler = async (event) => {
     const winner = userData?.winner || {};
 
     const summary = {
-      totalEarnings: winner.totalEarnings || 0,
-      totalWins: prizeRecords.length,
+      // Calculate totalEarnings from actual paid records only, not the stored winner.totalEarnings which may include failed transactions
+      totalEarnings: prizeRecords
+        .filter(record => record.status === 'paid')
+        .reduce((sum, record) => sum + record.prizeAmount, 0),
+      totalWins: prizeRecords.filter(record => record.status === 'paid').length, // Only count successful wins
       pendingAmount: prizeRecords
-        .filter(record => record.status === 'pending' || record.status === 'processing')
+        .filter(record => record.status === 'pending' || record.status === 'processing' || record.status === 'pending_funds' || record.status === 'failed')
         .reduce((sum, record) => sum + record.prizeAmount, 0),
       paidAmount: prizeRecords
         .filter(record => record.status === 'paid')

@@ -101,9 +101,11 @@ function formatTransactions(recentSales: any[], prizeRecords: any[]) {
     });
   }
 
-  // Add prize winnings to transaction history
+  // Add prize winnings to transaction history (only include successful/paid prizes)
   if (prizeRecords && Array.isArray(prizeRecords)) {
-    prizeRecords.forEach((record, index) => {
+    prizeRecords
+      .filter(record => record.status === 'paid') // Only include successful prizes
+      .forEach((record, index) => {
       const getPlacementText = (placement: number) => {
         switch (placement) {
           case 1: return '🥇 1st Place';
@@ -501,8 +503,8 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
     if (!profileUser?.id || !payoutAmount) return;
     
     const amount = parseFloat(payoutAmount);
-    if (isNaN(amount) || amount < 10) {
-      alert('Please enter a valid amount (minimum $10.00)');
+    if (isNaN(amount) || amount < 100) {
+      alert('Please enter a valid amount (minimum $100.00)');
       return;
     }
 
@@ -548,7 +550,16 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
           });
         }
         
-        alert(`Payout failed: ${data.error}`);
+        // Handle auto-payout detection
+        if (data.error === 'auto_payout_pending') {
+          alert(`${data.message}\n\nNo additional action needed - your funds are already on the way!`);
+          setShowPayoutModal(false);
+          setPayoutAmount('');
+          // Refresh to update UI
+          window.location.reload();
+        } else {
+          alert(`Payout failed: ${data.error}`);
+        }
       }
     } catch (err) {
       console.error('Error initiating payout:', err);
@@ -1035,18 +1046,18 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
               <div className="bg-zinc-900 p-6 rounded-xl">
                 <h3 className="text-zinc-400 text-sm mb-2">Total Earned</h3>
                 <p className="text-3xl font-bold">
-                  ${derivedTotalLifetime.toFixed(2)}
+                  ${(earningsData?.totalEarned || 0).toFixed(2)}
                 </p>
                 <p className="text-xs text-zinc-500 mt-1">Lifetime earnings</p>
               </div>
 
-              {/* Pending */}
+              {/* In-Progress */}
               <div className="bg-zinc-900 p-6 rounded-xl">
-                <h3 className="text-zinc-400 text-sm mb-2">Pending Payout</h3>
+                <h3 className="text-zinc-400 text-sm mb-2">In-Progress Payout</h3>
                 <p className="text-3xl font-bold text-yellow-400">
                   ${earningsData.pendingPayout.toFixed(2)}
                 </p>
-                <p className="text-xs text-zinc-500 mt-1">Processing</p>
+                <p className="text-xs text-zinc-500 mt-1">Being processed automatically</p>
               </div>
             </div>
 
@@ -1070,7 +1081,7 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
                     </div>
                     <div className="flex justify-between py-1">
                       <span className="text-zinc-400">Revenue (lifetime)</span>
-                      <span className="font-semibold">${derivedCreatorLifetime.toFixed(2)}</span>
+                      <span className="font-semibold">${(earningsData?.creatorEarnings?.totalEarned || 0).toFixed(2)}</span>
                     </div>
                   </div>
 
@@ -1085,8 +1096,14 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
                     </div>
                     <div className="flex justify-between py-1">
                       <span className="text-zinc-400">Winnings (lifetime)</span>
-                      <span className="font-semibold">${derivedPrizeLifetime.toFixed(2)}</span>
+                      <span className="font-semibold">${(earningsData?.prizeWinnings?.totalEarned || 0).toFixed(2)}</span>
                     </div>
+                    {earningsData.prizeWinnings.pendingPayout > 0 && (
+                      <div className="flex justify-between py-1">
+                        <span className="text-zinc-400">In-Progress</span>
+                        <span className="font-semibold text-yellow-400">${earningsData.prizeWinnings.pendingPayout.toFixed(2)}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -1107,10 +1124,10 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
                   <div className="mt-2">
                     <button
                       onClick={() => handleEditStripeInfo('creator')}
-                      className={`w-full ${isViewOnly ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed' : 'bg-[#E0FE10] text-black'} py-2 px-4 rounded-md font-semibold disabled:opacity-50`}
-                      disabled={isViewOnly || isEditingCreator || isEditingWinner}
+                      className="w-full bg-[#E0FE10] text-black py-2 px-4 rounded-md font-semibold disabled:opacity-50"
+                      disabled={isEditingCreator || isEditingWinner}
                     >
-                      {isViewOnly ? 'View Only' : (isEditingCreator || isEditingWinner ? 'Opening…' : 'Edit Stripe Info')}
+                      {isEditingCreator || isEditingWinner ? 'Opening…' : 'Edit Stripe Info'}
                     </button>
                   </div>
                 </div>
@@ -1120,14 +1137,7 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
             {/* Action Buttons */}
             <div className="flex flex-col sm:flex-row gap-4 mb-8">
               {/* Payout Button */}
-              {isViewOnly ? (
-                <button
-                  disabled
-                  className="flex-1 bg-zinc-800 text-zinc-500 py-3 px-6 rounded-xl font-semibold cursor-not-allowed"
-                >
-                  Public View (No Actions)
-                </button>
-              ) : earningsData.canRequestPayout ? (
+              {earningsData.canRequestPayout ? (
                 <button
                   onClick={() => setShowPayoutModal(true)}
                   disabled={earningsData.totalBalance < earningsData.minimumPayoutAmount}
@@ -1152,7 +1162,7 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
               )}
 
               {/* Dashboard Link */}
-              {!isViewOnly && (!!earningsData.hasCreatorAccount || !!earningsData.hasWinnerAccount) && (
+              {(!!earningsData.hasCreatorAccount || !!earningsData.hasWinnerAccount) && (
                 <>
                   {isDashboardLinkLoading ? (
                     <div className="flex-1 bg-zinc-800 py-3 px-6 rounded-xl font-semibold flex items-center justify-center">
@@ -1235,12 +1245,18 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
         {showPayoutModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
             <div className="bg-zinc-900 rounded-xl p-6 max-w-md w-full">
-              <h3 className="text-xl font-semibold mb-4">Request Payout</h3>
+              <h3 className="text-xl font-semibold mb-4">Request Faster Payout</h3>
               
               <div className="mb-4">
                 <p className="text-sm text-zinc-400 mb-2">Available Balance</p>
                 <p className="text-2xl font-bold text-[#E0FE10]">
                   ${earningsData?.totalBalance.toFixed(2)}
+                </p>
+              </div>
+
+              <div className="mb-4 p-3 bg-blue-900/20 border border-blue-500/30 rounded-lg">
+                <p className="text-sm text-blue-300">
+                  ℹ️ <strong>Automatic Payouts Enabled:</strong> Your funds are automatically transferred to your bank account on Stripe's schedule. Use "Faster Payout" to receive funds sooner.
                 </p>
               </div>
 
@@ -1283,7 +1299,7 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
                   disabled={payoutLoading || !payoutAmount || parseFloat(payoutAmount) < (earningsData?.minimumPayoutAmount || 10)}
                   className="flex-1 bg-[#E0FE10] text-black py-3 px-4 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {payoutLoading ? 'Processing...' : 'Request Payout'}
+                  {payoutLoading ? 'Processing...' : 'Request Faster Payout'}
                 </button>
               </div>
             </div>

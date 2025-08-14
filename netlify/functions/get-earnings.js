@@ -135,6 +135,8 @@ const handler = async (event) => {
           
           console.log('SUCCESS! Balance retrieved successfully:', JSON.stringify(balanceResult, null, 2));
           console.log('Available balance:', balanceResult.available);
+          console.log('DEBUGGING - Connected Account ID:', connectedAccountId);
+          console.log('DEBUGGING - Full balance object:', balanceResult);
           console.log('Pending balance:', balanceResult.pending);
           
           // Log individual available balance items

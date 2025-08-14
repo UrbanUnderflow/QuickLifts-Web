@@ -336,46 +336,47 @@ function buildUnifiedEarningsResponse({ userId, userData, creatorEarnings, winne
   // Populate winner prize data (convert cents to dollars)
   if (winnerPrizes && winnerPrizes.summary) {
     const summary = winnerPrizes.summary;
-    // Prefer totalEarnings; fallback to paidAmount to better reflect reality when totalEarnings isn't populated
-    winnerData.totalEarned = ((summary.totalEarnings != null ? summary.totalEarnings : summary.paidAmount) || 0) / 100;
-    winnerData.availableBalance = (summary.paidAmount || 0) / 100; // Paid amount is what's available
+    // Use totalEarnings from summary (now correctly calculated from paid records only)
+    winnerData.totalEarned = (summary.totalEarnings || 0) / 100;
+    // availableBalance should come from Stripe, not prize calculations
+    winnerData.availableBalance = 0; // Will be set from Stripe balance below
     // Clamp pending to never be negative
     winnerData.pendingPayout = Math.max(0, (summary.pendingAmount || 0) / 100);
     winnerData.totalWins = summary.totalWins || 0;
     winnerData.prizeRecords = winnerPrizes.prizeRecords || [];
   }
 
-  // Avoid double counting when a user only has prize winnings and no program sales.
-  // Stripe connected account balance will include prize payouts; attribute it to prizes when no creator sales exist.
+  // Balance attribution: Stripe balance should be attributed to the correct earning type
+  // If user has no creator sales, any Stripe balance is from prizes
   if ((creatorData.roundsSold || 0) === 0) {
-    // If creator totals are simply reflecting the Stripe balance with no sales, shift to prize bucket
-    if (creatorData.availableBalance > 0) {
-      winnerData.availableBalance += creatorData.availableBalance;
-      creatorData.availableBalance = 0;
-    }
-    if ((creatorData.totalEarned || 0) > 0) {
-      creatorData.totalEarned = 0;
-    }
-    if ((creatorData.pendingPayout || 0) > 0) {
-      // With no creator sales, pending creator payout shouldn't exist
-      winnerData.pendingPayout += creatorData.pendingPayout;
-      creatorData.pendingPayout = 0;
-    }
+    // Stripe balance comes from prizes, not creator sales
+    winnerData.availableBalance = creatorData.availableBalance;
+    creatorData.availableBalance = 0;
+    // Also ensure creator earned total reflects only sales (zero if no sales)
+    creatorData.totalEarned = 0;
+  } else {
+    // User has creator sales, so keep Stripe balance in creator bucket
+    // Winner balance stays at 0 since prizes are transferred out to external accounts
+  }
+
+  // Add pending Stripe payouts to the pending amount
+  let stripePendingAmount = 0;
+  if (userData.creator?.pendingPayouts?.totalAmount) {
+    stripePendingAmount = userData.creator.pendingPayouts.totalAmount;
   }
 
   // Calculate combined totals
-  // Available funds live in ONE Stripe balance (creator account).
-  // Do not add winnerData.availableBalance again to avoid double counting.
-  const totalBalance = creatorData.availableBalance;
+  // Available funds live in ONE Stripe balance, properly attributed above
+  const totalBalance = creatorData.availableBalance + winnerData.availableBalance;
   const totalEarned = creatorData.totalEarned + winnerData.totalEarned;
-  const pendingPayout = Math.max(0, creatorData.pendingPayout + winnerData.pendingPayout);
+  const pendingPayout = Math.max(0, creatorData.pendingPayout + winnerData.pendingPayout + stripePendingAmount);
 
   // Return raw data - let frontend format transactions as needed
   // No more server-side transaction building complexity!
 
   // Determine payout capabilities
-  const canRequestPayout = totalBalance >= 10.00; // Minimum $10 payout
-  const minimumPayoutAmount = 10.00;
+  const canRequestPayout = totalBalance >= 100.00; // Minimum $100 payout
+  const minimumPayoutAmount = 100.00;
 
   // Build the unified response
   const unifiedEarnings = {
@@ -412,7 +413,7 @@ function buildUnifiedEarningsResponse({ userId, userData, creatorEarnings, winne
     // Payout capabilities
     canRequestPayout,
     minimumPayoutAmount,
-    nextPayoutDate: totalBalance >= 10 ? 'Available now' : 'When balance reaches $10',
+    nextPayoutDate: totalBalance >= 100 ? 'Available now' : 'When balance reaches $100',
     
     // Account status
     hasCreatorAccount,
@@ -452,8 +453,8 @@ function buildUnifiedEarningsResponse({ userId, userData, creatorEarnings, winne
       recentSales: [],
       prizeRecords: [],
       canRequestPayout: false,
-      minimumPayoutAmount: 10.00,
-      nextPayoutDate: 'When balance reaches $10',
+      minimumPayoutAmount: 100.00,
+      nextPayoutDate: 'When balance reaches $100',
       hasCreatorAccount: hasCreatorAccount || false,
       hasWinnerAccount: hasWinnerAccount || false,
       needsAccountSetup: false,

@@ -84,13 +84,13 @@ const handler = async (event) => {
       };
     }
 
-    if (!amount || amount < 10) {
+    if (!amount || amount < 100) {
       return {
         statusCode: 400,
         headers,
         body: JSON.stringify({ 
           success: false, 
-          error: 'Invalid amount. Minimum payout is $10.00' 
+          error: 'Invalid amount. Minimum payout is $100.00' 
         })
       };
     }
@@ -112,6 +112,58 @@ const handler = async (event) => {
     }
 
     const userData = userDoc.data();
+    const connectedAccountId = userData.creator?.stripeAccountId;
+
+    if (!connectedAccountId) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ success: false, error: 'No connected Stripe account found' })
+      };
+    }
+
+    // Check if automatic payouts are enabled and if there are recent/pending payouts
+    try {
+      const account = await stripe.accounts.retrieve(connectedAccountId);
+      const isAutoPayoutEnabled = account.settings?.payouts?.schedule?.interval !== 'manual';
+      
+      if (isAutoPayoutEnabled) {
+        // Check for recent automatic payouts (last 24 hours)
+        const recentPayouts = await stripe.payouts.list({
+          stripeAccount: connectedAccountId,
+          limit: 5,
+          created: {
+            gte: Math.floor(Date.now() / 1000) - (24 * 60 * 60) // Last 24 hours
+          }
+        });
+
+        const pendingAutoPayouts = recentPayouts.data.filter(p => p.status === 'pending' || p.status === 'in_transit');
+        
+        if (pendingAutoPayouts.length > 0) {
+          // There are already pending automatic payouts
+          const totalPendingAmount = pendingAutoPayouts.reduce((sum, p) => sum + (p.amount / 100), 0);
+          
+          return {
+            statusCode: 200,
+            headers,
+            body: JSON.stringify({
+              success: false,
+              error: 'auto_payout_pending',
+              message: `Automatic payout of $${totalPendingAmount.toFixed(2)} is already in progress. Funds are on the way to your bank account.`,
+              pendingPayouts: pendingAutoPayouts.map(p => ({
+                amount: p.amount / 100,
+                status: p.status,
+                arrival_date: p.arrival_date,
+                created: p.created
+              }))
+            })
+          };
+        }
+      }
+    } catch (error) {
+      console.warn('[InitiateUnifiedPayout] Could not check automatic payout status:', error.message);
+      // Continue with manual payout if we can't check auto status
+    }
     console.log('User data retrieved, checking for payout accounts...');
     
     const hasCreatorAccount = !!(userData.creator && userData.creator.stripeAccountId);

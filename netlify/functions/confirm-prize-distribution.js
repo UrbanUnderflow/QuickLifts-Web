@@ -386,28 +386,56 @@ async function distributePrizes(prizeId, winners, prizeData) {
         throw new Error(`Invalid Stripe account: ${stripeError.message}`);
       }
 
-      // Create a prize record in the prizeRecords collection (matching the payout-prize-money function expectation)
-      const prizeRecord = {
-        challengeId: prizeData.challengeId,
-        challengeTitle: prizeData.challengeTitle,
-        userId: winner.userId,
-        username: winner.username,
-        placement: winner.rank,
-        score: winner.score,
-        prizeAmount: Math.round(winner.prizeAmount * 100), // Convert to cents for consistency
-        status: 'pending', // Will be processed by payout function
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        // Additional metadata
-        prizeAssignmentId: prizeId,
-        distributionPercentage: winner.percentage,
-        distributionType: prizeData.prizeStructure,
-        userChallengeId: winner.userChallengeId
-      };
+      // Check if a prize record already exists for this user/challenge/placement combination
+      const existingRecordQuery = await db.collection('prizeRecords')
+        .where('challengeId', '==', prizeData.challengeId)
+        .where('userId', '==', winner.userId)
+        .where('placement', '==', winner.rank)
+        .limit(1)
+        .get();
 
-      // Save to prizeRecords collection (matching what payout-prize-money expects)
-      const prizeRecordRef = await db.collection('prizeRecords').add(prizeRecord);
-      console.log(`[DistributePrizes] Created prize record ${prizeRecordRef.id} for user ${winner.userId}`);
+      let prizeRecordRef;
+      
+      if (!existingRecordQuery.empty) {
+        // Update existing record instead of creating new one
+        const existingDoc = existingRecordQuery.docs[0];
+        prizeRecordRef = { id: existingDoc.id };
+        
+        await db.collection('prizeRecords').doc(existingDoc.id).update({
+          status: 'pending', // Reset to pending for retry
+          updatedAt: new Date(),
+          // Update metadata in case prize structure changed
+          prizeAssignmentId: prizeId,
+          distributionPercentage: winner.percentage,
+          distributionType: prizeData.prizeStructure,
+          prizeAmount: Math.round(winner.prizeAmount * 100), // Update amount in case it changed
+          // Keep original createdAt to preserve first attempt time
+        });
+        
+        console.log(`[DistributePrizes] Updated existing prize record ${existingDoc.id} for user ${winner.userId} (retry attempt)`);
+      } else {
+        // Create new prize record for first-time distribution
+        const prizeRecord = {
+          challengeId: prizeData.challengeId,
+          challengeTitle: prizeData.challengeTitle,
+          userId: winner.userId,
+          username: winner.username,
+          placement: winner.rank,
+          score: winner.score,
+          prizeAmount: Math.round(winner.prizeAmount * 100), // Convert to cents for consistency
+          status: 'pending', // Will be processed by payout function
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          // Additional metadata
+          prizeAssignmentId: prizeId,
+          distributionPercentage: winner.percentage,
+          distributionType: prizeData.prizeStructure,
+          userChallengeId: winner.userChallengeId
+        };
+
+        prizeRecordRef = await db.collection('prizeRecords').add(prizeRecord);
+        console.log(`[DistributePrizes] Created new prize record ${prizeRecordRef.id} for user ${winner.userId}`);
+      }
 
       // Now actually transfer the money using the payout function
       try {

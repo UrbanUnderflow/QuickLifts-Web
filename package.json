@@ -70,7 +70,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint src/**/*.{ts,tsx} --max-warnings 0",
-    "netlify-dev": "netlify dev"
+    "netlify-dev": "netlify dev",
+    "env-check": "node env-check.js",
+    "stripe:create-products": "node scripts/create-stripe-products.js"
   },
   "eslintConfig": {
     "extends": [
