@@ -1169,20 +1169,20 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
                       <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-white"></div>
                     </div>
                   ) : dashboardUrl ? (
-                    <a 
-                      href={dashboardUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex-1 bg-zinc-800 text-white py-3 px-6 rounded-xl font-semibold text-center"
+                    <button
+                      onClick={() => window.open(dashboardUrl, '_blank', 'noopener,noreferrer')}
+                      className="flex-1 text-white py-3 px-6 rounded-xl font-semibold text-center transition-all hover:opacity-90"
+                      style={{ backgroundColor: '#665BFF' }}
                     >
-                      View Stripe Dashboard
-                    </a>
+                      View on Stripe
+                    </button>
                   ) : (
                     <button 
                       onClick={generateDashboardLink}
-                      className="flex-1 bg-zinc-800 text-white py-3 px-6 rounded-xl font-semibold"
+                      className="flex-1 text-white py-3 px-6 rounded-xl font-semibold transition-all hover:opacity-90"
+                      style={{ backgroundColor: '#665BFF' }}
                     >
-                      Load Dashboard Link
+                      View on Stripe
                     </button>
                   )}
                 </>
@@ -1237,6 +1237,15 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
               <p className="text-xs text-zinc-500">
                 Last updated: {new Date(earningsData.lastUpdated).toLocaleString()}
               </p>
+            </div>
+
+            {/* Powered by Stripe Badge */}
+            <div className="text-center mt-6 mb-8">
+              <img 
+                src="/poweredByStripe.png" 
+                alt="Powered by Stripe" 
+                className="h-8 mx-auto opacity-70 hover:opacity-100 transition-opacity"
+              />
             </div>
           </>
         )}
