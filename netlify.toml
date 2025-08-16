@@ -43,6 +43,21 @@
   to = "/"
   status = 200
 
+[[redirects]]
+  from = "/coach/*"
+  to = "/"
+  status = 200
+
+[[redirects]]
+  from = "/partner/*"
+  to = "/"
+  status = 200
+
+[[redirects]]
+  from = "/PulseCheck/*"
+  to = "/"
+  status = 200
+
 # Catch-all for SPA routes - this should be last and more specific
 [[redirects]]
   from = "/*"
@@ -110,3 +125,30 @@
 # Mark trigger functions as background functions without schedules
 [functions.triggerCalorieAnalysis]
   is_background = true
+
+# Coach Partnership Functions
+[functions.create-coach-checkout-session]
+  external_node_modules = ["stripe"]
+
+[functions.create-athlete-checkout-session]
+  external_node_modules = ["stripe"]
+
+[functions.create-partner-profile]
+  # Partner profile creation (no Stripe needed)
+
+[functions.stripe-coach-webhook]
+  external_node_modules = ["stripe"]
+
+[functions.manage-subscription]
+  external_node_modules = ["stripe"]
+
+[functions.calculate-coach-revenue]
+  external_node_modules = ["stripe"]
+  # Run revenue calculation daily at 6 AM UTC
+  schedule = "0 6 * * *"
+
+[functions.validate-promo-code]
+  external_node_modules = ["stripe"]
+
+[functions.get-coach-profile]
+  external_node_modules = ["firebase-admin"]

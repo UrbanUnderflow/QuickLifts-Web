@@ -1,16 +1,16 @@
 import type { NextPage } from 'next';
 import React, { useState } from 'react';
 import { FaBolt, FaCoins, FaHandshake, FaChartLine, FaArrowRight, FaClock, FaUsers, FaDiagramProject, FaCircleCheck } from 'react-icons/fa6';
-import Footer from '../components/Footer/Footer';
-import PageHead from '../components/PageHead';
-import PartnerJoinModal from '../components/PartnerJoinModal';
+import Footer from '../../components/Footer/Footer';
+import PageHead from '../../components/PageHead';
+import PartnerJoinModal from '../../components/PartnerJoinModal';
 
 const PartnerPage: NextPage = () => {
   const [isPartnerModalOpen, setIsPartnerModalOpen] = useState(false);
 
   return (
     <div className="min-h-screen bg-zinc-900">
-      <PageHead pageOgUrl="https://fitwithpulse.ai/partner" />
+      <PageHead pageOgUrl="https://fitwithpulse.ai/PulseCheck/partner" />
 
       {/* Hero */}
       <section className="relative min-h-[70vh] flex flex-col items-center justify-center text-center px-8 py-24 overflow-hidden">

@@ -234,6 +234,18 @@ service cloud.firestore {
       allow read, write: if isOwner(resource.data.get('userId', '')) || isAdmin();
     }
     
+    // Promo codes collection rules
+    match /promoCodes/{promoCodeId} {
+      allow read: if isAdmin(); // Only admins can read promo codes directly
+      allow write: if isAdmin(); // Only admins can create/update promo codes
+    }
+
+    // Promo code usage tracking
+    match /promoCodeUsage/{usageId} {
+      allow read: if resource.data.userId == request.auth.uid || isAdmin();
+      allow write: if false; // Only backend can track usage
+    }
+    
     // Default deny rule for any unmatched documents
     match /{document=**} {
       allow read, write: if false;

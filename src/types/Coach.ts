@@ -34,10 +34,12 @@ export interface UserCoachExtension {
 export interface CoachFirestoreData {
   userId: string;
   referralCode: string;
-  referredByCoachId?: string;
+  referredByCoachId?: string; // Legacy field, may still exist in old data
+  linkedPartnerId?: string; // For standard coaches: which partner they're linked to for revenue sharing
   stripeCustomerId?: string;
-  subscriptionStatus: 'active' | 'past_due' | 'canceled';
-  schedulingUrl?: string;
+  subscriptionStatus: 'active' | 'past_due' | 'canceled' | 'partner';
+  promoCodeUsed?: string; // For partners: track which promo code was used (if any)
+  userType?: 'coach' | 'partner'; // Distinguish between paying coaches and partners
   createdAt: number | string | Date;
   updatedAt: number | string | Date;
 }
@@ -62,9 +64,11 @@ export class CoachModel {
   userId: string;
   referralCode: string;
   referredByCoachId?: string;
+  linkedPartnerId?: string;
   stripeCustomerId?: string;
-  subscriptionStatus: 'active' | 'past_due' | 'canceled';
-  schedulingUrl?: string;
+  subscriptionStatus: 'active' | 'past_due' | 'canceled' | 'partner';
+  promoCodeUsed?: string;
+  userType?: 'coach' | 'partner';
   createdAt: Date;
   updatedAt: Date;
 
@@ -73,24 +77,41 @@ export class CoachModel {
     this.userId = data.userId;
     this.referralCode = data.referralCode;
     this.referredByCoachId = data.referredByCoachId;
+    this.linkedPartnerId = data.linkedPartnerId;
     this.stripeCustomerId = data.stripeCustomerId;
     this.subscriptionStatus = data.subscriptionStatus;
-    this.schedulingUrl = data.schedulingUrl;
+    this.promoCodeUsed = data.promoCodeUsed;
+    this.userType = data.userType;
     this.createdAt = convertFirestoreTimestamp(data.createdAt);
     this.updatedAt = convertFirestoreTimestamp(data.updatedAt);
   }
 
   toDictionary(): Record<string, any> {
-    return {
+    const dict: Record<string, any> = {
       userId: this.userId,
       referralCode: this.referralCode,
-      referredByCoachId: this.referredByCoachId,
-      stripeCustomerId: this.stripeCustomerId,
       subscriptionStatus: this.subscriptionStatus,
-      schedulingUrl: this.schedulingUrl,
       createdAt: dateToUnixTimestamp(this.createdAt),
       updatedAt: dateToUnixTimestamp(this.updatedAt),
     };
+
+    if (this.referredByCoachId) {
+      dict.referredByCoachId = this.referredByCoachId;
+    }
+    if (this.linkedPartnerId) {
+      dict.linkedPartnerId = this.linkedPartnerId;
+    }
+    if (this.stripeCustomerId) {
+      dict.stripeCustomerId = this.stripeCustomerId;
+    }
+    if (this.promoCodeUsed) {
+      dict.promoCodeUsed = this.promoCodeUsed;
+    }
+    if (this.userType) {
+      dict.userType = this.userType;
+    }
+
+    return dict;
   }
 }
 
