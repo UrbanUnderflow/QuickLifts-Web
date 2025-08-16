@@ -13,8 +13,8 @@ const SecurePage: React.FC = () => {
   const [copied, setCopied] = useState(false);
 
   // The actual password - loaded from environment variable
-  const SECURE_PASSWORD = process.env.NEXT_PUBLIC_SECURE_PASSWORD || 'SecurePulse2025!';
-  const SSN = '999-999-9999';
+  const SECURE_PASSWORD = process.env.NEXT_PUBLIC_SECURE_PASSWORD;
+  const SSN = process.env.NEXT_PUBLIC_SECURE;
   const MAX_ATTEMPTS = 3;
   const LOCKOUT_DURATION = 300; // 5 minutes in seconds
 
@@ -93,7 +93,7 @@ const SecurePage: React.FC = () => {
 
   const copyToClipboard = async () => {
     try {
-      await navigator.clipboard.writeText(SSN);
+      await navigator.clipboard.writeText(SSN || '');
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
@@ -111,8 +111,12 @@ const SecurePage: React.FC = () => {
     return (
       <>
         <PageHead 
-          title="Secure Information - Pulse"
-          description="Secure access to sensitive information"
+          metaData={{
+            pageTitle: "Secure Information - Pulse",
+            metaDescription: "Secure access to sensitive information",
+            lastUpdated: new Date().toISOString()
+          }}
+          pageOgUrl="https://fitwithpulse.ai/secure"
         />
         <div className="min-h-screen bg-black flex items-center justify-center px-4">
           <div className="max-w-md w-full">
@@ -189,8 +193,12 @@ const SecurePage: React.FC = () => {
   return (
     <>
       <PageHead 
-        title="Secure Access - Pulse"
-        description="Password protected secure access"
+        metaData={{
+          pageTitle: "Secure Access - Pulse",
+          metaDescription: "Password protected secure access",
+          lastUpdated: new Date().toISOString()
+        }}
+        pageOgUrl="https://fitwithpulse.ai/secure"
       />
       <div className="min-h-screen bg-black flex items-center justify-center px-4">
         <div className="max-w-md w-full">
