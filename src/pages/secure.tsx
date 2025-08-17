@@ -112,6 +112,7 @@ const SecurePage: React.FC = () => {
       <>
         <PageHead 
           metaData={{
+            pageId: "secure-info",
             pageTitle: "Secure Information - Pulse",
             metaDescription: "Secure access to sensitive information",
             lastUpdated: new Date().toISOString()
@@ -194,6 +195,7 @@ const SecurePage: React.FC = () => {
     <>
       <PageHead 
         metaData={{
+          pageId: "secure-access",
           pageTitle: "Secure Access - Pulse",
           metaDescription: "Password protected secure access",
           lastUpdated: new Date().toISOString()

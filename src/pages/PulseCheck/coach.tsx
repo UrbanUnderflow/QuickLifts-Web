@@ -1,6 +1,6 @@
 import type { NextPage } from 'next';
 import React, { useState } from 'react';
-import { FaBrain, FaUsers, FaChartLine, FaArrowRight, FaCheck, FaBolt, FaHeart, FaComments, FaCalendarAlt, FaShield, FaMobile } from 'react-icons/fa6';
+import { FaBrain, FaUsers, FaChartLine, FaArrowRight, FaCheck, FaBolt, FaHeart, FaComments, FaCalendar, FaShield, FaMobile } from 'react-icons/fa6';
 import Footer from '../../components/Footer/Footer';
 import PageHead from '../../components/PageHead';
 import CoachProductModal from '../../components/CoachProductModal';
