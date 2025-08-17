@@ -153,9 +153,13 @@ const CoachNotifications: React.FC = () => {
   return (
     <>
       <PageHead 
-        title="Notifications - Coach Dashboard"
-        description="Stay updated with athlete progress, revenue updates, and important system notifications."
-        url="https://fitwithpulse.ai/coach/notifications"
+        metaData={{
+          pageId: "coach-notifications",
+          pageTitle: "Notifications - Coach Dashboard",
+          metaDescription: "Stay updated with athlete progress, revenue updates, and important system notifications.",
+          lastUpdated: new Date().toISOString()
+        }}
+        pageOgUrl="https://fitwithpulse.ai/coach/notifications"
       />
       
       <CoachLayout>

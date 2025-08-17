@@ -149,9 +149,13 @@ const CoachAthletes: React.FC = () => {
   return (
     <>
       <PageHead 
-        title="Manage Athletes - Coach Dashboard"
-        description="View and manage your athletes, track their progress, and grow your coaching business."
-        url="https://fitwithpulse.ai/coach/athletes"
+        metaData={{
+          pageId: "coach-athletes",
+          pageTitle: "Manage Athletes - Coach Dashboard",
+          metaDescription: "View and manage your athletes, track their progress, and grow your coaching business.",
+          lastUpdated: new Date().toISOString()
+        }}
+        pageOgUrl="https://fitwithpulse.ai/coach/athletes"
       />
       
       <CoachLayout>

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import type { NextPage } from 'next';
 import PageHead from '../../components/PageHead';
-import Header from '../../components/Header';
+import Header, { Section } from '../../components/Header';
 import Footer from '../../components/Footer/Footer';
 import { FaCheckCircle, FaDownload, FaShare, FaArrowRight, FaUsers, FaTachometerAlt, FaDollarSign, FaCrown } from 'react-icons/fa';
 import { useUser } from '../../hooks/useUser';
@@ -11,6 +11,20 @@ const PartnerOnboardingSuccess: NextPage = () => {
   const router = useRouter();
   const currentUser = useUser();
   const [isLoading, setIsLoading] = useState(true);
+  const [currentSection, setCurrentSection] = useState<Section>('home');
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  const handleSectionChange = (section: Section) => {
+    setCurrentSection(section);
+  };
+
+  const toggleMobileMenu = () => {
+    setIsMobileMenuOpen(!isMobileMenuOpen);
+  };
+
+  const setIsSignInModalVisible = () => {
+    console.log('Sign in modal triggered from onboarding success');
+  };
 
   useEffect(() => {
     // Check if user completed partner signup
@@ -64,7 +78,13 @@ const PartnerOnboardingSuccess: NextPage = () => {
   return (
     <div className="min-h-screen bg-zinc-900">
       <PageHead pageOgUrl="https://fitwithpulse.ai/partner/onboarding-success" />
-      <Header />
+      <Header 
+        onSectionChange={handleSectionChange}
+        currentSection={currentSection}
+        toggleMobileMenu={toggleMobileMenu}
+        setIsSignInModalVisible={setIsSignInModalVisible}
+        theme="dark"
+      />
 
       {/* Success Hero */}
       <section className="relative min-h-[80vh] flex flex-col items-center justify-center text-center px-8 py-24 overflow-hidden">

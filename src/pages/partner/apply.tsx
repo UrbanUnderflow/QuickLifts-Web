@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/router';
 import { useUser } from '../../hooks/useUser';
-import Header from '../../components/Header';
+import Header, { Section } from '../../components/Header';
 import Footer from '../../components/Footer/Footer';
 import PageHead from '../../components/PageHead';
 import { 
@@ -18,6 +18,20 @@ const PartnerApplication: React.FC = () => {
   const [referralCode, setReferralCode] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [currentSection, setCurrentSection] = useState<Section>('home');
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  const handleSectionChange = (section: Section) => {
+    setCurrentSection(section);
+  };
+
+  const toggleMobileMenu = () => {
+    setIsMobileMenuOpen(!isMobileMenuOpen);
+  };
+
+  const setIsSignInModalVisible = () => {
+    console.log('Sign in modal triggered from partner apply');
+  };
 
   const handleSubmitApplication = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -93,13 +107,23 @@ const PartnerApplication: React.FC = () => {
   return (
     <>
       <PageHead 
-        title="Partner Application - Pulse"
-        description="Apply to become a Pulse partner coach and start earning revenue from your athletes."
-        url="https://fitwithpulse.ai/partner/apply"
+        metaData={{
+          pageId: "partner-apply",
+          pageTitle: "Partner Application - Pulse",
+          metaDescription: "Apply to become a Pulse partner coach and start earning revenue from your athletes.",
+          lastUpdated: new Date().toISOString()
+        }}
+        pageOgUrl="https://fitwithpulse.ai/partner/apply"
       />
       
       <div className="min-h-screen bg-black text-white">
-        <Header />
+        <Header 
+          onSectionChange={handleSectionChange}
+          currentSection={currentSection}
+          toggleMobileMenu={toggleMobileMenu}
+          setIsSignInModalVisible={setIsSignInModalVisible}
+          theme="dark"
+        />
         
         <main className="pt-20 pb-16">
           <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -113,7 +137,7 @@ const PartnerApplication: React.FC = () => {
                 Partner Application
               </h1>
               <p className="text-xl text-zinc-400 max-w-2xl mx-auto">
-                Welcome, {currentUser.firstName}! Complete your application to become a Pulse partner coach.
+                Welcome, {currentUser.displayName || currentUser.email}! Complete your application to become a Pulse partner coach.
               </p>
             </div>
 
@@ -160,7 +184,7 @@ const PartnerApplication: React.FC = () => {
                   <div>
                     <label className="block text-white font-medium mb-2">Name</label>
                     <div className="px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-xl text-zinc-400">
-                      {currentUser.firstName} {currentUser.lastName}
+                      {currentUser.displayName || currentUser.email || 'User'}
                     </div>
                   </div>
                   <div>

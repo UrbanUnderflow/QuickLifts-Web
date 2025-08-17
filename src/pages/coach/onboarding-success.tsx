@@ -3,7 +3,7 @@ import { useRouter } from 'next/router';
 import type { NextPage } from 'next';
 import PageHead from '../../components/PageHead';
 import Footer from '../../components/Footer/Footer';
-import { FaCheckCircle, FaDownload, FaShare, FaArrowRight, FaDashboard, FaUsers, FaCoins } from 'react-icons/fa6';
+import { FaCircleCheck, FaDownload, FaShare, FaArrowRight, FaChartLine, FaUsers, FaCoins } from 'react-icons/fa6';
 import { useUser } from '../../hooks/useUser';
 
 const CoachOnboardingSuccess: NextPage = () => {
@@ -75,7 +75,7 @@ const CoachOnboardingSuccess: NextPage = () => {
         <div className="relative z-10 max-w-4xl mx-auto">
           {/* Success Icon */}
           <div className="w-24 h-24 bg-gradient-to-r from-[#E0FE10] to-lime-400 rounded-full flex items-center justify-center mx-auto mb-8">
-            <FaCheckCircle className="h-12 w-12 text-black" />
+            <FaCircleCheck className="h-12 w-12 text-black" />
           </div>
 
           <h1 className="text-white text-4xl sm:text-5xl lg:text-6xl font-bold mb-6">
@@ -111,7 +111,7 @@ const CoachOnboardingSuccess: NextPage = () => {
               onClick={handleGetStarted}
               className="inline-flex items-center gap-3 bg-gradient-to-r from-[#E0FE10] to-lime-400 text-black px-8 py-4 rounded-2xl font-bold text-lg hover:shadow-lg hover:shadow-[#E0FE10]/20 transition-all"
             >
-              <FaDashboard className="h-5 w-5" />
+              <FaChartLine className="h-5 w-5" />
               Access Coach Dashboard
               <FaArrowRight className="h-5 w-5" />
             </button>
@@ -182,7 +182,7 @@ const CoachOnboardingSuccess: NextPage = () => {
             {/* Step 3: Access Dashboard */}
             <div className="bg-zinc-800/50 backdrop-blur-sm border border-zinc-700 rounded-2xl p-8 text-center">
               <div className="w-16 h-16 bg-gradient-to-r from-[#E0FE10] to-lime-400 rounded-full flex items-center justify-center mx-auto mb-6">
-                <FaDashboard className="h-8 w-8 text-black" />
+                <FaChartLine className="h-8 w-8 text-black" />
               </div>
               <h3 className="text-xl font-bold text-white mb-4">3. Use Your Dashboard</h3>
               <p className="text-zinc-400 mb-6">
@@ -192,7 +192,7 @@ const CoachOnboardingSuccess: NextPage = () => {
                 onClick={handleGetStarted}
                 className="inline-flex items-center gap-2 bg-[#E0FE10] text-black px-6 py-3 rounded-xl font-semibold hover:bg-lime-400 transition-colors"
               >
-                <FaDashboard className="h-4 w-4" />
+                <FaChartLine className="h-4 w-4" />
                 Open Dashboard
               </button>
             </div>

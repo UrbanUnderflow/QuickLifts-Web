@@ -8,8 +8,8 @@ import {
   FaCalendarAlt,
   FaDownload,
   FaInfoCircle,
-  FaTrendUp,
-  FaTrendDown
+  FaArrowUp,
+  FaArrowDown
 } from 'react-icons/fa';
 
 interface RevenueData {
@@ -83,9 +83,13 @@ const CoachRevenue: React.FC = () => {
   return (
     <>
       <PageHead 
-        title="Revenue & Earnings - Coach Dashboard"
-        description="Track your coaching revenue, view payout history, and analyze your earnings growth."
-        url="https://fitwithpulse.ai/coach/revenue"
+        metaData={{
+          pageId: "coach-revenue",
+          pageTitle: "Revenue & Earnings - Coach Dashboard",
+          metaDescription: "Track your coaching revenue, view payout history, and analyze your earnings growth.",
+          lastUpdated: new Date().toISOString()
+        }}
+        pageOgUrl="https://fitwithpulse.ai/coach/revenue"
       />
       
       <CoachLayout>
@@ -131,7 +135,7 @@ const CoachRevenue: React.FC = () => {
                   <div className={`flex items-center gap-1 text-sm ${
                     monthlyGrowth >= 0 ? 'text-green-400' : 'text-red-400'
                   }`}>
-                    {monthlyGrowth >= 0 ? <FaTrendUp className="h-3 w-3" /> : <FaTrendDown className="h-3 w-3" />}
+                    {monthlyGrowth >= 0 ? <FaArrowUp className="h-3 w-3" /> : <FaArrowDown className="h-3 w-3" />}
                     {Math.abs(monthlyGrowth).toFixed(1)}%
                   </div>
                 </div>
