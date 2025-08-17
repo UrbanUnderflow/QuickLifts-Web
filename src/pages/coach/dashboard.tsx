@@ -3,12 +3,14 @@ import { useRouter } from 'next/router';
 import { useUser, useUserLoading } from '../../hooks/useUser';
 import { coachService } from '../../api/firebase/coach';
 import { CoachModel } from '../../types/Coach';
+import AthleteCard from '../../components/AthleteCard';
 
 const CoachDashboard: React.FC = () => {
   const currentUser = useUser();
   const userLoading = useUserLoading();
   const router = useRouter();
   const [coachProfile, setCoachProfile] = useState<CoachModel | null>(null);
+  const [athletes, setAthletes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -36,6 +38,13 @@ const CoachDashboard: React.FC = () => {
         }
 
         setCoachProfile(coachProfile);
+        
+        // Fetch connected athletes
+        console.log('Fetching athletes for coach:', coachProfile.id);
+        const connectedAthletes = await coachService.getConnectedAthletes(coachProfile.id);
+        console.log('Initial athlete fetch result:', connectedAthletes);
+        setAthletes(connectedAthletes);
+        
         setLoading(false);
       } catch (err) {
         console.error('Error fetching coach profile:', err);
@@ -45,7 +54,7 @@ const CoachDashboard: React.FC = () => {
     };
 
     fetchCoachProfile();
-  }, [currentUser, userLoading, router]);
+  }, [currentUser?.id, userLoading]); // Fixed: removed router and used currentUser.id instead of currentUser object
 
   if (loading || userLoading) {
     return (
@@ -89,7 +98,7 @@ const CoachDashboard: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="bg-zinc-900 rounded-xl p-6">
             <h3 className="text-lg font-semibold mb-2">Total Athletes</h3>
-            <div className="text-3xl font-bold text-[#E0FE10]">0</div>
+            <div className="text-3xl font-bold text-[#E0FE10]">{athletes.length}</div>
           </div>
           
           <div className="bg-zinc-900 rounded-xl p-6">
@@ -115,6 +124,67 @@ const CoachDashboard: React.FC = () => {
               View Analytics
             </button>
           </div>
+        </div>
+
+        {/* Athletes Section */}
+        <div className="mt-8">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-2xl font-bold">Your Athletes</h3>
+            {athletes.length > 0 && (
+              <span className="text-zinc-400">{athletes.length} connected</span>
+            )}
+          </div>
+          
+          {athletes.length === 0 ? (
+            <div className="bg-zinc-900 rounded-xl p-8 text-center">
+              <div className="text-zinc-400 mb-4">No athletes connected yet</div>
+              <p className="text-zinc-500 mb-6">
+                Share your referral code <span className="text-[#E0FE10] font-bold">{coachProfile?.referralCode}</span> with athletes to get started
+              </p>
+              <div className="flex justify-center space-x-4">
+                <button 
+                  onClick={() => navigator.clipboard.writeText(coachProfile?.referralCode || '')}
+                  className="bg-[#E0FE10] text-black px-6 py-3 rounded-lg hover:bg-lime-400 transition-colors"
+                >
+                  Copy Referral Code
+                </button>
+                <button 
+                  onClick={async () => {
+                    if (coachProfile) {
+                      console.log('Refreshing athletes for coach:', coachProfile.id);
+                      try {
+                        const connectedAthletes = await coachService.getConnectedAthletes(coachProfile.id);
+                        console.log('Found athletes:', connectedAthletes);
+                        setAthletes(connectedAthletes);
+                      } catch (error) {
+                        console.error('Error refreshing athletes:', error);
+                      }
+                    }
+                  }}
+                  className="bg-zinc-700 text-white px-6 py-3 rounded-lg hover:bg-zinc-600 transition-colors"
+                >
+                  Refresh Athletes
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {athletes.map((athlete) => (
+                <AthleteCard
+                  key={athlete.id}
+                  athlete={athlete}
+                  onViewDetails={(athleteId) => {
+                    console.log('View details for athlete:', athleteId);
+                    // TODO: Navigate to athlete details page
+                  }}
+                  onMessageAthlete={(athleteId) => {
+                    console.log('Message athlete:', athleteId);
+                    // TODO: Open messaging interface
+                  }}
+                />
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

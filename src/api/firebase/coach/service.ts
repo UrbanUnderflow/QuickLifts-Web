@@ -1,6 +1,34 @@
-import { doc, getDoc, setDoc, collection, query, where, getDocs, writeBatch, serverTimestamp, addDoc, deleteDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, query, where, getDocs, writeBatch, serverTimestamp, addDoc, deleteDoc, orderBy, limit } from 'firebase/firestore';
 import { db } from '../config';
 import { CoachModel, CoachFirestoreData } from '../../../types/Coach';
+import { convertFirestoreTimestamp } from '../../../utils/formatDate';
+
+export interface DailySentimentRecord {
+  id: string;
+  userId: string;
+  date: string; // YYYY-MM-DD
+  sentimentScore: number; // -1 to 1
+  messageCount: number;
+  lastAnalyzedAt: Date;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface ConversationMessage {
+  id: string;
+  content: string;
+  sender: 'user' | 'ai' | 'system';
+  timestamp: Date;
+  type: 'text' | 'image' | 'system';
+}
+
+export interface ConversationSession {
+  id: string;
+  athleteUserId: string;
+  startTime: Date;
+  endTime: Date;
+  messages: ConversationMessage[];
+}
 
 class CoachService {
   /**
@@ -423,7 +451,7 @@ class CoachService {
   }
 
   /**
-   * Get coach's athletes
+   * Get coach's athletes (simple list of IDs)
    */
   async getCoachAthletes(coachId: string): Promise<string[]> {
     try {
@@ -434,6 +462,668 @@ class CoachService {
       return querySnapshot.docs.map(doc => doc.data().athleteUserId);
     } catch (error) {
       console.error('Error fetching coach athletes:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get detailed athlete data for coach dashboard
+   */
+  async getConnectedAthletes(coachId: string): Promise<any[]> {
+    try {
+      console.log(`[CoachService] Fetching connected athletes for coach: ${coachId}`);
+
+      // Query coachAthletes collection for active connections
+      const coachAthletesRef = collection(db, 'coachAthletes');
+      const q = query(coachAthletesRef, where('coachId', '==', coachId));
+      const coachAthletesSnapshot = await getDocs(q);
+      
+      console.log(`[CoachService] Found ${coachAthletesSnapshot.docs.length} coachAthletes documents`);
+      
+      const athletes = [];
+      const seenAthleteIds = new Set<string>(); // Track unique athlete IDs
+
+      for (const coachAthleteDoc of coachAthletesSnapshot.docs) {
+        const coachAthleteData = coachAthleteDoc.data();
+        const athleteUserId = coachAthleteData.athleteUserId;
+        
+        console.log(`[CoachService] Processing coachAthlete document:`, {
+          docId: coachAthleteDoc.id,
+          athleteUserId,
+          status: coachAthleteData.status,
+          linkedAt: coachAthleteData.linkedAt
+        });
+
+        // Skip if we've already processed this athlete (deduplication)
+        if (seenAthleteIds.has(athleteUserId)) {
+          console.log(`[CoachService] Skipping duplicate athlete: ${athleteUserId}`);
+          continue;
+        }
+        
+        // Only include active connections (skip disconnected ones)
+        if (coachAthleteData.status && coachAthleteData.status !== 'active') {
+          console.log(`[CoachService] Skipping inactive athlete: ${athleteUserId} (status: ${coachAthleteData.status})`);
+          continue;
+        }
+
+        seenAthleteIds.add(athleteUserId);
+
+        // Fetch user profile for each athlete
+        const userRef = doc(db, 'users', athleteUserId);
+        const userDoc = await getDoc(userRef);
+        
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          
+          // Get additional stats (conversations, sessions, etc.)
+          const athleteStats = await this.getAthleteStats(athleteUserId);
+          
+          athletes.push({
+            id: athleteUserId,
+            displayName: userData.displayName || userData.username || 'Unknown User',
+            email: userData.email || '',
+            profileImageUrl: userData.profileImageUrl,
+            linkedAt: coachAthleteData.linkedAt?.toDate?.() || new Date(),
+            lastActiveDate: userData.updatedAt?.toDate?.() || new Date(),
+            ...athleteStats
+          });
+        }
+      }
+
+      console.log(`[CoachService] Found ${athletes.length} unique connected athletes`);
+      return athletes;
+
+    } catch (error) {
+      console.error('[CoachService] Error fetching connected athletes:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get athlete statistics and sentiment analysis
+   */
+  private async getAthleteStats(athleteUserId: string): Promise<{
+    conversationCount: number;
+    totalSessions: number;
+    weeklyGoalProgress: number;
+    sentimentScore: number;
+    lastConversationDate?: Date;
+  }> {
+    try {
+      console.log(`[CoachService] Fetching real stats for athlete: ${athleteUserId}`);
+
+      // 1. Get conversation count and messages for sentiment analysis
+      const conversationsRef = collection(db, 'conversations');
+      const conversationQuery = query(conversationsRef, where('userId', '==', athleteUserId));
+      const conversationSnapshot = await getDocs(conversationQuery);
+      
+      let totalMessages = 0;
+      let lastConversationDate: Date | undefined;
+      let allMessageContent: string[] = [];
+
+      // Process each conversation document
+      for (const conversationDoc of conversationSnapshot.docs) {
+        const conversationData = conversationDoc.data();
+        
+        // Count messages in this conversation
+        if (conversationData.messages && Array.isArray(conversationData.messages)) {
+          totalMessages += conversationData.messages.length;
+          
+          // Extract message content for sentiment analysis
+          conversationData.messages.forEach((message: any) => {
+            if (message.content && typeof message.content === 'string') {
+              allMessageContent.push(message.content);
+            }
+          });
+        }
+        
+        // Track most recent conversation
+        if (conversationData.updatedAt) {
+          const conversationDate = conversationData.updatedAt.toDate ? 
+            conversationData.updatedAt.toDate() : 
+            new Date(conversationData.updatedAt);
+          
+          if (!lastConversationDate || conversationDate > lastConversationDate) {
+            lastConversationDate = conversationDate;
+          }
+        }
+      }
+
+      console.log(`[CoachService] Found ${conversationSnapshot.docs.length} conversations with ${totalMessages} total messages`);
+
+      // 2. Get workout sessions (you might have a different collection name)
+      // For now, we'll check if you have workout-related collections
+      let totalSessions = 0;
+      try {
+        // Try to query common workout collection names
+        const workoutCollections = ['workouts', 'sessions', 'exercises', 'detailed-workouts'];
+        
+        for (const collectionName of workoutCollections) {
+          try {
+            const workoutRef = collection(db, collectionName);
+            const workoutQuery = query(workoutRef, where('userId', '==', athleteUserId));
+            const workoutSnapshot = await getDocs(workoutQuery);
+            
+            if (workoutSnapshot.docs.length > 0) {
+              totalSessions += workoutSnapshot.docs.length;
+              console.log(`[CoachService] Found ${workoutSnapshot.docs.length} documents in ${collectionName}`);
+              break; // Use the first collection that has data
+            }
+          } catch (collectionError) {
+            // Collection might not exist, continue to next one
+            continue;
+          }
+        }
+      } catch (workoutError) {
+        console.log('[CoachService] No workout data found, using 0 sessions');
+      }
+
+      // 3. Calculate weekly goal progress (placeholder - you'll need to implement based on your goals structure)
+      let weeklyGoalProgress = 0;
+      try {
+        // You might have a goals or challenges collection
+        const goalsRef = collection(db, 'user-challenge'); // Based on your existing structure
+        const goalsQuery = query(goalsRef, where('userId', '==', athleteUserId));
+        const goalsSnapshot = await getDocs(goalsQuery);
+        
+        if (goalsSnapshot.docs.length > 0) {
+          // Calculate average progress from active challenges
+          let totalProgress = 0;
+          let activeGoals = 0;
+          
+          goalsSnapshot.docs.forEach(doc => {
+            const goalData = doc.data();
+            if (goalData.progress !== undefined) {
+              totalProgress += goalData.progress;
+              activeGoals++;
+            }
+          });
+          
+          if (activeGoals > 0) {
+            weeklyGoalProgress = Math.round(totalProgress / activeGoals);
+          }
+        }
+      } catch (goalsError) {
+        console.log('[CoachService] No goals data found, using 0% progress');
+      }
+
+      // 4. Basic sentiment analysis (temporary fallback)
+      let sentimentScore = 0;
+      if (allMessageContent.length > 0) {
+        sentimentScore = this.calculateBasicSentiment(allMessageContent);
+      }
+
+      const stats = {
+        conversationCount: totalMessages,
+        totalSessions,
+        weeklyGoalProgress,
+        sentimentScore,
+        lastConversationDate
+      };
+
+      console.log(`[CoachService] Calculated stats for ${athleteUserId}:`, stats);
+      return stats;
+
+    } catch (error) {
+      console.error('[CoachService] Error fetching athlete stats:', error);
+      return {
+        conversationCount: 0,
+        totalSessions: 0,
+        weeklyGoalProgress: 0,
+        sentimentScore: 0
+      };
+    }
+  }
+
+  /**
+   * Advanced sentiment analysis using Hugging Face API
+   */
+  private async analyzeSentimentWithHF(messages: string[]): Promise<number> {
+    try {
+      console.log(`[CoachService] Analyzing sentiment for ${messages.length} messages using Hugging Face`);
+      
+      // Call our Netlify function
+      const response = await fetch('/.netlify/functions/analyze-sentiment', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ messages })
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Sentiment API responded with status: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      
+      if (result.error) {
+        throw new Error(`Sentiment API error: ${result.error}`);
+      }
+      
+      console.log(`[CoachService] HF Sentiment analysis result:`, result);
+      return result.sentimentScore || 0;
+      
+    } catch (error) {
+      console.error('[CoachService] Hugging Face sentiment analysis failed:', error);
+      throw error; // Re-throw to trigger fallback
+    }
+  }
+
+  /**
+   * Analyze sentiment using unified API endpoint
+   */
+  private async analyzeSentimentWithAPI(messages: string[], userId: string): Promise<number> {
+    try {
+      console.log(`[CoachService] Calling sentiment API for ${messages.length} messages`);
+      
+      const response = await fetch('/.netlify/functions/analyze-sentiment', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messages,
+          userId,
+          platform: 'web',
+          strategy: 'hybrid'
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Sentiment API error: ${response.status}`);
+      }
+
+      const result = await response.json();
+      
+      if (result.error) {
+        throw new Error(`Sentiment API error: ${result.error}`);
+      }
+
+      console.log(`[CoachService] Sentiment API result: ${result.sentimentScore} (${result.metadata?.strategy})`);
+      return result.sentimentScore;
+
+    } catch (error) {
+      console.error('[CoachService] Sentiment API failed, using fallback:', error);
+      // Fallback to basic analysis if API fails
+      return this.calculateBasicSentiment(messages);
+    }
+  }
+
+  /**
+   * Basic sentiment analysis using keyword matching (fallback)
+   */
+  private calculateBasicSentiment(messages: string[]): number {
+    const positiveWords = [
+      // Basic positive
+      'good', 'great', 'awesome', 'excellent', 'happy', 'love', 'amazing', 'perfect', 'wonderful', 'fantastic',
+      // Emotions & feelings
+      'excited', 'motivated', 'proud', 'confident', 'strong', 'energetic', 'optimistic', 'cheerful', 'joyful',
+      'grateful', 'blessed', 'content', 'satisfied', 'pleased', 'delighted', 'thrilled', 'ecstatic',
+      // Performance & achievement
+      'successful', 'accomplished', 'achieved', 'improved', 'progress', 'better', 'best', 'winning', 'victory',
+      'breakthrough', 'milestone', 'personal record', 'pr', 'crushed', 'nailed', 'killed it', 'smashed',
+      // Physical & mental state
+      'strong', 'powerful', 'fit', 'healthy', 'energized', 'refreshed', 'recovered', 'ready', 'focused',
+      'determined', 'committed', 'dedicated', 'disciplined', 'consistent', 'resilient',
+      // Social & support
+      'supported', 'encouraged', 'inspired', 'uplifted', 'connected', 'understood', 'appreciated',
+      // General positive
+      'yes', 'absolutely', 'definitely', 'certainly', 'outstanding', 'incredible', 'remarkable', 'impressive'
+    ];
+    
+    const negativeWords = [
+      // Basic negative
+      'bad', 'terrible', 'awful', 'hate', 'sad', 'angry', 'frustrated', 'disappointed', 'horrible', 'worst',
+      // Emotions & feelings
+      'depressed', 'anxious', 'worried', 'stressed', 'overwhelmed', 'discouraged', 'hopeless', 'defeated',
+      'miserable', 'upset', 'annoyed', 'irritated', 'furious', 'devastated', 'heartbroken', 'lonely',
+      // Physical & mental state
+      'tired', 'exhausted', 'weak', 'sick', 'injured', 'hurt', 'pain', 'painful', 'sore', 'aching',
+      'drained', 'burnt out', 'burnout', 'fatigued', 'sluggish', 'unmotivated', 'lazy', 'lethargic',
+      // Performance & setbacks
+      'failed', 'failure', 'struggling', 'stuck', 'plateau', 'regression', 'setback', 'disappointed',
+      'underperformed', 'missed', 'skipped', 'quit', 'gave up', 'surrender', 'defeated', 'lost',
+      // Mental challenges
+      'confused', 'lost', 'uncertain', 'doubtful', 'insecure', 'self-doubt', 'imposter', 'inadequate',
+      'worthless', 'useless', 'hopeless', 'helpless', 'powerless', 'overwhelmed', 'stressed out',
+      // Social & isolation
+      'alone', 'isolated', 'unsupported', 'misunderstood', 'ignored', 'rejected', 'abandoned',
+      // General negative
+      'no', 'never', 'impossible', 'can\'t', 'won\'t', 'shouldn\'t', 'terrible', 'disaster', 'nightmare'
+    ];
+    
+    let positiveCount = 0;
+    let negativeCount = 0;
+    let totalWords = 0;
+    
+    messages.forEach(message => {
+      const words = message.toLowerCase().split(/\s+/);
+      totalWords += words.length;
+      
+      words.forEach(word => {
+        if (positiveWords.includes(word)) positiveCount++;
+        if (negativeWords.includes(word)) negativeCount++;
+      });
+    });
+    
+    if (totalWords === 0) return 0;
+    
+    // Calculate sentiment score between -1 and 1
+    const sentimentRatio = (positiveCount - negativeCount) / totalWords;
+    return Math.max(-1, Math.min(1, sentimentRatio * 10)); // Scale and clamp
+  }
+
+  /**
+   * Process sentiment analysis for the last N days for a specific athlete
+   */
+  async processSentimentForAthlete(athleteUserId: string, days: number = 28): Promise<DailySentimentRecord[]> {
+    try {
+      console.log(`[CoachService] Processing sentiment for athlete ${athleteUserId} for last ${days} days`);
+      
+      // First, get all conversation dates for this user
+      const conversationDates = await this.getConversationDates(athleteUserId);
+      console.log(`[CoachService] Found conversations on dates:`, conversationDates);
+      
+      // Filter to only the last N days
+      const today = new Date();
+      const cutoffDate = new Date(today);
+      cutoffDate.setDate(today.getDate() - days);
+      
+      const recentDates = conversationDates.filter(dateString => {
+        const conversationDate = new Date(dateString);
+        return conversationDate >= cutoffDate;
+      });
+      
+      console.log(`[CoachService] Processing ${recentDates.length} conversation dates from last ${days} days:`, recentDates);
+      
+      const results: DailySentimentRecord[] = [];
+      
+      // Process each conversation date
+      for (const dateString of recentDates) {
+        console.log(`[CoachService] Processing sentiment for conversation date: ${dateString}`);
+        
+        // Get messages for this specific date
+        const messagesForDate = await this.getMessagesForDate(athleteUserId, dateString);
+        
+        // Create or update sentiment record
+        const sentimentRecord = await this.createOrUpdateDailySentiment(athleteUserId, dateString, messagesForDate);
+        
+        if (sentimentRecord) {
+          results.push(sentimentRecord);
+        }
+      }
+      
+      // Sort results by date (newest first)
+      results.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      
+      console.log(`[CoachService] Processed ${results.length} days of sentiment data`);
+      return results;
+      
+    } catch (error) {
+      console.error('[CoachService] Error processing sentiment for athlete:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get all unique conversation dates for a user
+   */
+  private async getConversationDates(userId: string): Promise<string[]> {
+    try {
+      const conversationsRef = collection(db, 'conversations');
+      const conversationQuery = query(conversationsRef, where('userId', '==', userId));
+      const conversationSnapshot = await getDocs(conversationQuery);
+      
+      const dates = new Set<string>();
+      
+      conversationSnapshot.docs.forEach(docSnapshot => {
+        const conversationData = docSnapshot.data();
+        const conversationDate = convertFirestoreTimestamp(conversationData.createdAt);
+        const dateString = conversationDate.toISOString().split('T')[0];
+        dates.add(dateString);
+      });
+      
+      // Return sorted dates (newest first)
+      return Array.from(dates).sort((a, b) => b.localeCompare(a));
+    } catch (error) {
+      console.error('[CoachService] Error getting conversation dates:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get messages for a specific date - using conversation timestamps instead of message timestamps
+   */
+  private async getMessagesForDate(userId: string, dateString: string): Promise<string[]> {
+    try {
+      console.log(`[CoachService] Searching for messages for user ${userId} on date ${dateString}`);
+      
+      const conversationsRef = collection(db, 'conversations');
+      const conversationQuery = query(conversationsRef, where('userId', '==', userId));
+      const conversationSnapshot = await getDocs(conversationQuery);
+      
+      console.log(`[CoachService] Found ${conversationSnapshot.docs.length} conversation documents`);
+      
+      const messagesForDate: string[] = [];
+      let totalMessagesChecked = 0;
+      let userMessagesFound = 0;
+      let conversationsMatchingDate = 0;
+      
+      conversationSnapshot.docs.forEach(docSnapshot => {
+        const conversationData = docSnapshot.data();
+        
+        // Use conversation createdAt timestamp instead of individual message timestamps
+        const conversationDate = convertFirestoreTimestamp(conversationData.createdAt);
+        const conversationDateString = conversationDate.toISOString().split('T')[0];
+        
+        console.log(`[CoachService] Processing conversation ${docSnapshot.id}:`, {
+          hasMessages: !!conversationData.messages,
+          messageCount: conversationData.messages?.length || 0,
+          conversationDate: conversationDateString,
+          targetDate: dateString,
+          matches: conversationDateString === dateString
+        });
+        
+        // Only process conversations that match the target date
+        if (conversationDateString === dateString && conversationData.messages && Array.isArray(conversationData.messages)) {
+          conversationsMatchingDate++;
+          
+          conversationData.messages.forEach((message: any, index: number) => {
+            totalMessagesChecked++;
+            
+            if (message.isFromUser === true && message.content) {
+              userMessagesFound++;
+              messagesForDate.push(message.content);
+              
+              console.log(`[CoachService] ✅ Added user message from ${conversationDateString}: "${message.content.substring(0, 50)}..."`);
+            }
+          });
+        }
+      });
+      
+      console.log(`[CoachService] Summary for ${dateString}: Found ${messagesForDate.length} messages from ${conversationsMatchingDate} conversations (checked ${totalMessagesChecked} total messages, ${userMessagesFound} user messages)`);
+      return messagesForDate;
+    } catch (error) {
+      console.error(`[CoachService] Error getting messages for ${dateString}:`, error);
+      return [];
+    }
+  }
+
+  /**
+   * Create or update daily sentiment record
+   */
+  private async createOrUpdateDailySentiment(userId: string, dateString: string, messages: string[]): Promise<DailySentimentRecord | null> {
+    try {
+      const recordId = `${userId}_${dateString}`;
+      const sentimentRef = doc(db, 'dailySentimentAnalysis', recordId);
+      
+      // Analyze sentiment using unified API
+      const sentimentScore = messages.length > 0 ? await this.analyzeSentimentWithAPI(messages, userId) : 0;
+      
+      const recordData = {
+        id: recordId,
+        userId,
+        date: dateString,
+        sentimentScore,
+        messageCount: messages.length,
+        lastAnalyzedAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      };
+      
+      // Check if record exists
+      const existingDoc = await getDoc(sentimentRef);
+      
+      if (existingDoc.exists()) {
+        // Update existing record
+        await setDoc(sentimentRef, recordData, { merge: true });
+        console.log(`[CoachService] Updated sentiment for ${dateString}: ${sentimentScore} (${messages.length} messages)`);
+      } else {
+        // Create new record
+        await setDoc(sentimentRef, {
+          ...recordData,
+          createdAt: serverTimestamp()
+        });
+        console.log(`[CoachService] Created sentiment for ${dateString}: ${sentimentScore} (${messages.length} messages)`);
+      }
+      
+      // Return the record with proper dates
+      return {
+        id: recordId,
+        userId,
+        date: dateString,
+        sentimentScore,
+        messageCount: messages.length,
+        lastAnalyzedAt: new Date(),
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+      
+    } catch (error) {
+      console.error(`[CoachService] Error creating/updating sentiment for ${dateString}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Get existing sentiment history for a user
+   */
+  async getDailySentimentHistory(userId: string, days: number = 28): Promise<DailySentimentRecord[]> {
+    try {
+      const sentimentRef = collection(db, 'dailySentimentAnalysis');
+      const q = query(
+        sentimentRef,
+        where('userId', '==', userId),
+        orderBy('date', 'desc'),
+        limit(days)
+      );
+      
+      const snapshot = await getDocs(q);
+      const sentimentHistory: DailySentimentRecord[] = [];
+      
+      snapshot.docs.forEach(docSnapshot => {
+        const data = docSnapshot.data();
+        sentimentHistory.push({
+          id: data.id,
+          userId: data.userId,
+          date: data.date,
+          sentimentScore: data.sentimentScore,
+          messageCount: data.messageCount,
+          lastAnalyzedAt: data.lastAnalyzedAt?.toDate?.() || new Date(data.lastAnalyzedAt),
+          createdAt: data.createdAt?.toDate?.() || new Date(data.createdAt),
+          updatedAt: data.updatedAt?.toDate?.() || new Date(data.updatedAt)
+        });
+      });
+      
+      return sentimentHistory; // Return in reverse chronological order (newest first)
+    } catch (error) {
+      console.error('[CoachService] Error fetching sentiment history:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get conversation history for an athlete
+   */
+  async getAthleteConversations(athleteUserId: string): Promise<ConversationSession[]> {
+    try {
+      console.log(`[CoachService] Fetching conversations for athlete: ${athleteUserId}`);
+      
+      const conversationsRef = collection(db, 'conversations');
+      const conversationQuery = query(conversationsRef, where('userId', '==', athleteUserId));
+      const conversationSnapshot = await getDocs(conversationQuery);
+      
+      const sessions: ConversationSession[] = [];
+      
+      conversationSnapshot.docs.forEach(docSnapshot => {
+        const conversationData = docSnapshot.data();
+        
+        if (conversationData.messages && Array.isArray(conversationData.messages)) {
+          // Group messages by session (assuming each conversation document is a session)
+          const session: ConversationSession = {
+            id: docSnapshot.id,
+            athleteUserId,
+            startTime: convertFirestoreTimestamp(conversationData.createdAt),
+            endTime: convertFirestoreTimestamp(conversationData.updatedAt),
+            messages: conversationData.messages.map((msg: any) => ({
+              id: msg.id || `${docSnapshot.id}_${msg.timestamp}`,
+              content: msg.content || '',
+              sender: msg.sender || (msg.isFromUser === false ? 'ai' : 'user'),
+              timestamp: convertFirestoreTimestamp(msg.timestamp),
+              type: msg.type || 'text'
+            }))
+          };
+          
+          // Sort messages by timestamp
+          session.messages.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+          
+          sessions.push(session);
+        }
+      });
+      
+      // Sort sessions by start time (newest first)
+      sessions.sort((a, b) => b.startTime.getTime() - a.startTime.getTime());
+      
+      console.log(`[CoachService] Found ${sessions.length} conversation sessions with ${sessions.reduce((total, session) => total + session.messages.length, 0)} total messages`);
+      
+      return sessions;
+    } catch (error) {
+      console.error('[CoachService] Error fetching athlete conversations:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Create mock athlete data for testing (temporary method)
+   */
+  async createMockAthlete(coachId: string, athleteName: string, athleteEmail: string): Promise<void> {
+    try {
+      // Create a mock user document
+      const mockUserId = `mock_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const userRef = doc(db, 'users', mockUserId);
+      
+      await setDoc(userRef, {
+        id: mockUserId,
+        displayName: athleteName,
+        email: athleteEmail,
+        username: athleteName.toLowerCase().replace(/\s+/g, ''),
+        profileImageUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(athleteName)}&background=E0FE10&color=000000&size=128`,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+
+      // Create coach-athlete relationship
+      const coachAthleteRef = doc(collection(db, 'coachAthletes'));
+      await setDoc(coachAthleteRef, {
+        coachId: coachId,
+        athleteUserId: mockUserId,
+        linkedAt: serverTimestamp(),
+        status: 'active'
+      });
+
+      console.log(`[CoachService] Created mock athlete: ${athleteName} (${mockUserId})`);
+    } catch (error) {
+      console.error('[CoachService] Error creating mock athlete:', error);
       throw error;
     }
   }

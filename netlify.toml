@@ -152,3 +152,8 @@
 
 [functions.get-coach-profile]
   external_node_modules = ["firebase-admin"]
+
+[functions.analyze-sentiment]
+  # Unified sentiment analysis for web and iOS
+  timeout = 30
+

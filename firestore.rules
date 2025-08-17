@@ -246,6 +246,12 @@ service cloud.firestore {
       allow write: if false; // Only backend can track usage
     }
     
+    // Secure access logs - admin only (sensitive security data)
+    match /secureAccessLogs/{logId} {
+      allow read: if isAdmin(); // Only admins can read security logs
+      allow write: if false; // Only server-side functions can write logs
+    }
+    
     // Default deny rule for any unmatched documents
     match /{document=**} {
       allow read, write: if false;
