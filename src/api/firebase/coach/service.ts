@@ -2,6 +2,7 @@ import { doc, getDoc, setDoc, collection, query, where, getDocs, writeBatch, ser
 import { db } from '../config';
 import { CoachModel, CoachFirestoreData } from '../../../types/Coach';
 import { convertFirestoreTimestamp } from '../../../utils/formatDate';
+import { privacyService } from '../privacy/service';
 
 export interface DailySentimentRecord {
   id: string;
@@ -819,35 +820,60 @@ class CoachService {
    */
   async processSentimentForAthlete(athleteUserId: string, days: number = 28): Promise<DailySentimentRecord[]> {
     try {
-      console.log(`[CoachService] Processing sentiment for athlete ${athleteUserId} for last ${days} days`);
+      console.log(`🔄 [CoachService] STEP 1: Starting sentiment processing for athlete ${athleteUserId} for last ${days} days`);
+      console.log(`📅 [CoachService] Current date: ${new Date().toISOString()}`);
       
       // First, get all conversation dates for this user
       const conversationDates = await this.getConversationDates(athleteUserId);
-      console.log(`[CoachService] Found conversations on dates:`, conversationDates);
+      console.log(`📊 [CoachService] STEP 2: Found ${conversationDates.length} unique conversation dates:`, conversationDates);
       
-      // Filter to only the last N days
+      // Process ALL conversation dates (no filtering)
       const today = new Date();
-      const cutoffDate = new Date(today);
-      cutoffDate.setDate(today.getDate() - days);
       
-      const recentDates = conversationDates.filter(dateString => {
+      console.log(`🗓️ [CoachService] STEP 3: Processing ALL conversation dates - Today: ${today.toISOString().split('T')[0]}`);
+      
+      const recentDates = conversationDates.map(dateString => {
         const conversationDate = new Date(dateString);
-        return conversationDate >= cutoffDate;
+        const daysAgo = Math.floor((today.getTime() - conversationDate.getTime()) / (1000 * 60 * 60 * 24));
+        console.log(`   📅 Date ${dateString}: ✅ INCLUDED (${daysAgo} days ago)`);
+        return dateString;
       });
       
-      console.log(`[CoachService] Processing ${recentDates.length} conversation dates from last ${days} days:`, recentDates);
+      console.log(`🎯 [CoachService] STEP 4: Processing ${recentDates.length} conversation dates:`, recentDates);
+      
+      // Generate complete date range for the last N days (including days with no conversations)
+      const completeDateRange: string[] = [];
+      for (let i = 0; i < days; i++) {
+        const date = new Date(today);
+        date.setDate(today.getDate() - i);
+        const dateString = date.toISOString().split('T')[0];
+        completeDateRange.push(dateString);
+      }
+      
+      console.log(`📅 [CoachService] STEP 4b: Complete ${days}-day range:`, completeDateRange);
       
       const results: DailySentimentRecord[] = [];
       
-      // Process each conversation date
-      for (const dateString of recentDates) {
-        console.log(`[CoachService] Processing sentiment for conversation date: ${dateString}`);
+      // Process each day in the complete range
+      for (let i = 0; i < completeDateRange.length; i++) {
+        const dateString = completeDateRange[i];
+        const hasConversation = recentDates.includes(dateString);
         
-        // Get messages for this specific date
-        const messagesForDate = await this.getMessagesForDate(athleteUserId, dateString);
+        console.log(`\n🔍 [CoachService] STEP 5.${i + 1}: Processing ${dateString} ${hasConversation ? '(HAS CONVERSATIONS)' : '(NO CONVERSATIONS)'}`);
         
-        // Create or update sentiment record
+        let messagesForDate: string[] = [];
+        
+        if (hasConversation) {
+          // Get messages for this specific date
+          messagesForDate = await this.getMessagesForDate(athleteUserId, dateString);
+          console.log(`📝 [CoachService] STEP 5.${i + 1}a: Found ${messagesForDate.length} messages for ${dateString}`);
+        } else {
+          console.log(`📝 [CoachService] STEP 5.${i + 1}a: No conversations on ${dateString} - will create "No Data" record`);
+        }
+        
+        // Create or update sentiment record (will be "No Data" if no messages)
         const sentimentRecord = await this.createOrUpdateDailySentiment(athleteUserId, dateString, messagesForDate);
+        console.log(`💭 [CoachService] STEP 5.${i + 1}b: Sentiment record for ${dateString}:`, sentimentRecord ? `✅ Created (sentiment: ${sentimentRecord.sentimentScore}, messages: ${sentimentRecord.messageCount})` : '❌ Failed');
         
         if (sentimentRecord) {
           results.push(sentimentRecord);
@@ -857,77 +883,111 @@ class CoachService {
       // Sort results by date (newest first)
       results.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       
-      console.log(`[CoachService] Processed ${results.length} days of sentiment data`);
+      console.log(`\n🎉 [CoachService] STEP 6: FINAL RESULTS - Processed ${results.length} days of sentiment data:`);
+      results.forEach((result, index) => {
+        console.log(`   ${index + 1}. ${result.date}: ${result.sentimentScore.toFixed(3)} sentiment (${result.messageCount} messages)`);
+      });
+      
       return results;
       
     } catch (error) {
-      console.error('[CoachService] Error processing sentiment for athlete:', error);
+      console.error('❌ [CoachService] Error processing sentiment for athlete:', error);
       return [];
     }
   }
 
   /**
-   * Get all unique conversation dates for a user
+   * Get all unique conversation dates for a user - USING SAME LOGIC AS CONVERSATION MODAL
    */
   private async getConversationDates(userId: string): Promise<string[]> {
     try {
+      console.log(`🔍 [CoachService] Getting conversation dates for user: ${userId} - USING CONVERSATION MODAL LOGIC`);
+      
+      // Use EXACT same logic as getAthleteConversations
       const conversationsRef = collection(db, 'conversations');
       const conversationQuery = query(conversationsRef, where('userId', '==', userId));
       const conversationSnapshot = await getDocs(conversationQuery);
       
-      const dates = new Set<string>();
+      console.log(`📄 [CoachService] Found ${conversationSnapshot.docs.length} conversation documents`);
       
+      const dates = new Set<string>();
+      const sessions: Array<{id: string, startTime: Date}> = [];
+      
+      // Create sessions EXACTLY like the conversation modal does
       conversationSnapshot.docs.forEach(docSnapshot => {
         const conversationData = docSnapshot.data();
-        const conversationDate = convertFirestoreTimestamp(conversationData.createdAt);
-        const dateString = conversationDate.toISOString().split('T')[0];
-        dates.add(dateString);
+        
+        if (conversationData.messages && Array.isArray(conversationData.messages)) {
+          const session = {
+            id: docSnapshot.id,
+            startTime: convertFirestoreTimestamp(conversationData.createdAt)
+          };
+          sessions.push(session);
+        }
       });
       
-      // Return sorted dates (newest first)
-      return Array.from(dates).sort((a, b) => b.localeCompare(a));
+      // Sort sessions by start time (newest first) - SAME as conversation modal
+      sessions.sort((a, b) => b.startTime.getTime() - a.startTime.getTime());
+      
+      // Extract dates from sessions - SAME display logic as conversation modal
+      sessions.forEach((session, index) => {
+        // Use LOCAL DATE STRING like the conversation modal displays
+        const localDateString = session.startTime.toLocaleDateString('en-CA'); // YYYY-MM-DD format
+        
+        console.log(`   📅 Session ${index + 1} (${session.id}): startTime=${session.startTime.toISOString()}, localDate=${localDateString}`);
+        
+        // Special logging for Aug 11
+        if (localDateString === '2025-08-11') {
+          console.log(`🚨 FOUND AUG 11 SESSION: ${session.id} at ${session.startTime.toISOString()}`);
+        }
+        
+        dates.add(localDateString);
+      });
+      
+      const sortedDates = Array.from(dates).sort((a, b) => b.localeCompare(a));
+      console.log(`📊 [CoachService] Extracted ${dates.size} unique LOCAL dates from ${sessions.length} sessions:`, sortedDates);
+      
+      return sortedDates;
     } catch (error) {
-      console.error('[CoachService] Error getting conversation dates:', error);
+      console.error('❌ [CoachService] Error getting conversation dates:', error);
       return [];
     }
   }
 
   /**
-   * Get messages for a specific date - using conversation timestamps instead of message timestamps
+   * Get messages for a specific date - USING SAME LOCAL DATE LOGIC AS CONVERSATION MODAL
    */
   private async getMessagesForDate(userId: string, dateString: string): Promise<string[]> {
     try {
-      console.log(`[CoachService] Searching for messages for user ${userId} on date ${dateString}`);
+      console.log(`🔍 [CoachService] Searching for messages for user ${userId} on date ${dateString}`);
       
       const conversationsRef = collection(db, 'conversations');
       const conversationQuery = query(conversationsRef, where('userId', '==', userId));
       const conversationSnapshot = await getDocs(conversationQuery);
       
-      console.log(`[CoachService] Found ${conversationSnapshot.docs.length} conversation documents`);
+      console.log(`📄 [CoachService] Found ${conversationSnapshot.docs.length} conversation documents to check`);
       
       const messagesForDate: string[] = [];
       let totalMessagesChecked = 0;
       let userMessagesFound = 0;
       let conversationsMatchingDate = 0;
+      let conversationsProcessed = 0;
       
       conversationSnapshot.docs.forEach(docSnapshot => {
+        conversationsProcessed++;
         const conversationData = docSnapshot.data();
         
-        // Use conversation createdAt timestamp instead of individual message timestamps
+        // Use SAME LOCAL DATE logic as conversation modal
         const conversationDate = convertFirestoreTimestamp(conversationData.createdAt);
-        const conversationDateString = conversationDate.toISOString().split('T')[0];
+        const localDateString = conversationDate.toLocaleDateString('en-CA'); // YYYY-MM-DD format
         
-        console.log(`[CoachService] Processing conversation ${docSnapshot.id}:`, {
-          hasMessages: !!conversationData.messages,
-          messageCount: conversationData.messages?.length || 0,
-          conversationDate: conversationDateString,
-          targetDate: dateString,
-          matches: conversationDateString === dateString
-        });
+        const matches = localDateString === dateString;
+        console.log(`   📅 Conversation ${conversationsProcessed} (${docSnapshot.id.substring(0, 8)}...): ${localDateString} ${matches ? '✅ MATCHES' : '❌ NO MATCH'} (target: ${dateString})`);
         
         // Only process conversations that match the target date
-        if (conversationDateString === dateString && conversationData.messages && Array.isArray(conversationData.messages)) {
+        if (matches && conversationData.messages && Array.isArray(conversationData.messages)) {
           conversationsMatchingDate++;
+          console.log(`      📝 Processing ${conversationData.messages.length} messages from matching conversation`);
           
           conversationData.messages.forEach((message: any, index: number) => {
             totalMessagesChecked++;
@@ -936,16 +996,24 @@ class CoachService {
               userMessagesFound++;
               messagesForDate.push(message.content);
               
-              console.log(`[CoachService] ✅ Added user message from ${conversationDateString}: "${message.content.substring(0, 50)}..."`);
+              console.log(`      ✅ Message ${index + 1}: "${message.content.substring(0, 30)}..." (${message.content.length} chars)`);
+            } else {
+              console.log(`      ⏭️ Message ${index + 1}: ${!message.isFromUser ? 'AI message' : 'No content'} - skipped`);
             }
           });
         }
       });
       
-      console.log(`[CoachService] Summary for ${dateString}: Found ${messagesForDate.length} messages from ${conversationsMatchingDate} conversations (checked ${totalMessagesChecked} total messages, ${userMessagesFound} user messages)`);
+      console.log(`📊 [CoachService] SUMMARY for ${dateString}:`);
+      console.log(`   📄 Conversations processed: ${conversationsProcessed}`);
+      console.log(`   ✅ Conversations matching date: ${conversationsMatchingDate}`);
+      console.log(`   📝 Total messages checked: ${totalMessagesChecked}`);
+      console.log(`   👤 User messages found: ${userMessagesFound}`);
+      console.log(`   💬 Final message count: ${messagesForDate.length}`);
+      
       return messagesForDate;
     } catch (error) {
-      console.error(`[CoachService] Error getting messages for ${dateString}:`, error);
+      console.error(`❌ [CoachService] Error getting messages for ${dateString}:`, error);
       return [];
     }
   }
@@ -959,7 +1027,9 @@ class CoachService {
       const sentimentRef = doc(db, 'dailySentimentAnalysis', recordId);
       
       // Analyze sentiment using unified API
+      console.log(`🤖 [CoachService] Analyzing sentiment for ${messages.length} messages on ${dateString}`);
       const sentimentScore = messages.length > 0 ? await this.analyzeSentimentWithAPI(messages, userId) : 0;
+      console.log(`📊 [CoachService] Sentiment analysis result for ${dateString}: ${sentimentScore}`);
       
       const recordData = {
         id: recordId,
@@ -1008,8 +1078,19 @@ class CoachService {
   /**
    * Get existing sentiment history for a user
    */
-  async getDailySentimentHistory(userId: string, days: number = 28): Promise<DailySentimentRecord[]> {
+  async getDailySentimentHistory(userId: string, days: number = 28, coachId?: string): Promise<DailySentimentRecord[]> {
     try {
+      console.log(`📊 [CoachService] Loading existing sentiment history for user: ${userId}`);
+      
+      // Check privacy settings if coachId is provided
+      if (coachId) {
+        const canAccess = await privacyService.canCoachAccessSentiment(userId, coachId);
+        if (!canAccess) {
+          console.log(`[CoachService] Coach ${coachId} does not have permission to access sentiment data for athlete ${userId}`);
+          return []; // Return empty array if no permission
+        }
+      }
+      
       const sentimentRef = collection(db, 'dailySentimentAnalysis');
       const q = query(
         sentimentRef,
@@ -1019,10 +1100,27 @@ class CoachService {
       );
       
       const snapshot = await getDocs(q);
+      console.log(`📄 [CoachService] Found ${snapshot.docs.length} existing sentiment records`);
+      
       const sentimentHistory: DailySentimentRecord[] = [];
       
-      snapshot.docs.forEach(docSnapshot => {
+      snapshot.docs.forEach((docSnapshot, index) => {
         const data = docSnapshot.data();
+        
+        // 🚨 Special logging for Aug 11 records
+        if (data.date === '2025-08-11') {
+          console.log(`🚨 FOUND EXISTING AUG 11 SENTIMENT RECORD:`, {
+            id: data.id,
+            date: data.date,
+            sentimentScore: data.sentimentScore,
+            messageCount: data.messageCount,
+            lastAnalyzedAt: data.lastAnalyzedAt,
+            createdAt: data.createdAt
+          });
+        }
+        
+        console.log(`   📊 Record ${index + 1}: ${data.date} → sentiment: ${data.sentimentScore}, messages: ${data.messageCount}`);
+        
         sentimentHistory.push({
           id: data.id,
           userId: data.userId,
@@ -1035,6 +1133,8 @@ class CoachService {
         });
       });
       
+      console.log(`📊 [CoachService] Loaded ${sentimentHistory.length} sentiment records, dates: ${sentimentHistory.map(r => r.date).join(', ')}`);
+      
       return sentimentHistory; // Return in reverse chronological order (newest first)
     } catch (error) {
       console.error('[CoachService] Error fetching sentiment history:', error);
@@ -1045,9 +1145,18 @@ class CoachService {
   /**
    * Get conversation history for an athlete
    */
-  async getAthleteConversations(athleteUserId: string): Promise<ConversationSession[]> {
+  async getAthleteConversations(athleteUserId: string, coachId?: string): Promise<ConversationSession[]> {
     try {
       console.log(`[CoachService] Fetching conversations for athlete: ${athleteUserId}`);
+      
+      // Check privacy settings if coachId is provided
+      if (coachId) {
+        const canAccess = await privacyService.canCoachAccessConversations(athleteUserId, coachId);
+        if (!canAccess) {
+          console.log(`[CoachService] Coach ${coachId} does not have permission to access conversations for athlete ${athleteUserId}`);
+          return []; // Return empty array if no permission
+        }
+      }
       
       const conversationsRef = collection(db, 'conversations');
       const conversationQuery = query(conversationsRef, where('userId', '==', athleteUserId));
@@ -1090,6 +1199,93 @@ class CoachService {
     } catch (error) {
       console.error('[CoachService] Error fetching athlete conversations:', error);
       return [];
+    }
+  }
+
+  /**
+   * Connect an athlete to a coach using referral code
+   */
+  async connectAthleteToCoach(athleteUserId: string, referralCode: string): Promise<boolean> {
+    try {
+      console.log(`[CoachService] Connecting athlete ${athleteUserId} to coach with referral code: ${referralCode}`);
+      
+      // Find coach by referral code
+      const coachesRef = collection(db, 'coaches');
+      const coachQuery = query(coachesRef, where('referralCode', '==', referralCode));
+      const coachSnapshot = await getDocs(coachQuery);
+      
+      if (coachSnapshot.empty) {
+        console.error(`[CoachService] No coach found with referral code: ${referralCode}`);
+        return false;
+      }
+      
+      const coachDoc = coachSnapshot.docs[0];
+      const coachId = coachDoc.id;
+      
+      console.log(`[CoachService] Found coach: ${coachId}`);
+      
+      // Check if connection already exists
+      const coachAthletesRef = collection(db, 'coachAthletes');
+      const existingQuery = query(
+        coachAthletesRef,
+        where('coachId', '==', coachId),
+        where('athleteUserId', '==', athleteUserId)
+      );
+      const existingSnapshot = await getDocs(existingQuery);
+      
+      if (!existingSnapshot.empty) {
+        console.log(`[CoachService] Connection already exists between coach ${coachId} and athlete ${athleteUserId}`);
+        return true; // Already connected
+      }
+      
+      // Create coach-athlete relationship
+      const connectionData = {
+        coachId,
+        athleteUserId,
+        status: 'active',
+        linkedAt: serverTimestamp(),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      };
+      
+      await addDoc(coachAthletesRef, connectionData);
+      
+      // Update athlete's profile to include coach reference
+      const athleteRef = doc(db, 'users', athleteUserId);
+      await setDoc(athleteRef, {
+        linkedCoachId: coachId,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+      
+      console.log(`[CoachService] Successfully connected athlete ${athleteUserId} to coach ${coachId}`);
+      return true;
+      
+    } catch (error) {
+      console.error('[CoachService] Error connecting athlete to coach:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Find coach by referral code
+   */
+  async findCoachByReferralCode(referralCode: string): Promise<CoachModel | null> {
+    try {
+      const coachesRef = collection(db, 'coaches');
+      const coachQuery = query(coachesRef, where('referralCode', '==', referralCode));
+      const coachSnapshot = await getDocs(coachQuery);
+      
+      if (coachSnapshot.empty) {
+        return null;
+      }
+      
+      const coachDoc = coachSnapshot.docs[0];
+      const coachData = coachDoc.data();
+      
+      return new CoachModel(coachDoc.id, coachData as CoachFirestoreData);
+    } catch (error) {
+      console.error('[CoachService] Error finding coach by referral code:', error);
+      return null;
     }
   }
 

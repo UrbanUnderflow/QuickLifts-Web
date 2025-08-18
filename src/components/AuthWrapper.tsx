@@ -62,8 +62,8 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
   // Add subscription routes to public routes
   const publicRoutes = [
     '/', '/about', '/creator', '/rounds', '/privacyPolicy', '/programming', '/100trainers', 
-    '/starter-pack', '/stacks', '/moves', '/terms', '/press', '100Trainers',
-    '/subscribe', '/download', '/morning-mobility-challenge', 'review', '/MoveAndFuelATL', '/investor', '/invest', '/GetInTouch', '/PulseCheck', '/coach/dashboard', '/secure' // Add secure page to public routes
+    '/starter-pack', '/stacks', '/moves', '/terms', '/press', '/100trainers',
+    '/subscribe', '/download', '/morning-mobility-challenge', '/review', '/MoveAndFuelATL', '/investor', '/invest', '/GetInTouch', '/PulseCheck', '/coach/dashboard', '/secure' // Add secure page to public routes
   ].map(route => route?.toLowerCase());
  
   const publicPathPatterns = [
@@ -72,8 +72,21 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
  
   const isPublicRoute = (path: string) => {
     const normalizedPath = path.toLowerCase();
-    return publicRoutes.includes(normalizedPath) || 
+    const isPublic = publicRoutes.includes(normalizedPath) || 
            publicPathPatterns.some(pattern => normalizedPath.startsWith(pattern));
+    
+    // Add debugging for starter-pack specifically
+    if (normalizedPath.includes('starter-pack')) {
+      console.log('[AuthWrapper] Starter-pack route check:', {
+        originalPath: path,
+        normalizedPath,
+        isPublic,
+        publicRoutes: publicRoutes.filter(route => route.includes('starter')),
+        allPublicRoutes: publicRoutes
+      });
+    }
+    
+    return isPublic;
   };
  
     // Add debug useEffect to track currentUser changes with Safari-specific logging
@@ -167,6 +180,9 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
                 console.log('[AuthWrapper] User onboarded and subscribed. Hiding modal if shown.');
                 setShowSignInModal(false);
               }
+            } else {
+              console.log(`[AuthWrapper] User authenticated on public route: ${router.pathname}. No authentication checks needed.`);
+              setShowSignInModal(false);
             }
           } else {
             console.log('No firebase user, clearing state');
@@ -176,6 +192,8 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
               console.log(`[AuthWrapper] User not authenticated on protected route: ${router.asPath}. Setting redirect path and showing modal.`);
               dispatch(setLoginRedirectPath(router.asPath));
               setShowSignInModal(true);
+            } else {
+              console.log(`[AuthWrapper] User not authenticated but on public route: ${router.pathname}. No modal needed.`);
             }
           }
         } catch (error) {

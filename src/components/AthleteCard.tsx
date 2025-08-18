@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { FaUser, FaHeart, FaComments, FaCalendar, FaChartLine, FaSync } from 'react-icons/fa';
 import { coachService, DailySentimentRecord } from '../api/firebase/coach/service';
 import ConversationModal from './ConversationModal';
+import CoachAthleteMessagingModal from './CoachAthleteMessagingModal';
+import AthleteDetailsModal from './AthleteDetailsModal';
+import { useUser } from '../hooks/useUser';
 
 interface AthleteData {
   id: string;
@@ -33,6 +36,9 @@ const AthleteCard: React.FC<AthleteCardProps> = ({
   const [hoveredDot, setHoveredDot] = useState<DailySentimentRecord | null>(null);
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
   const [isConversationModalOpen, setIsConversationModalOpen] = useState(false);
+  const [isMessagingModalOpen, setIsMessagingModalOpen] = useState(false);
+  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+  const currentUser = useUser();
 
   // Load existing sentiment data on component mount
   useEffect(() => {
@@ -344,14 +350,14 @@ const AthleteCard: React.FC<AthleteCardProps> = ({
       {/* Action Buttons */}
       <div className="flex space-x-2">
         <button
-          onClick={() => onViewDetails?.(athlete.id)}
+          onClick={() => setIsDetailsModalOpen(true)}
           className="flex-1 bg-zinc-700 hover:bg-zinc-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center space-x-2"
         >
           <FaChartLine className="text-xs" />
           <span>View Details</span>
         </button>
         <button
-          onClick={() => onMessageAthlete?.(athlete.id)}
+          onClick={() => setIsMessagingModalOpen(true)}
           className="flex-1 bg-[#E0FE10] hover:bg-lime-400 text-black px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center space-x-2"
         >
           <FaComments className="text-xs" />
@@ -416,6 +422,27 @@ const AthleteCard: React.FC<AthleteCardProps> = ({
         onClose={() => setIsConversationModalOpen(false)}
         athleteId={athlete.id}
         athleteName={athlete.displayName}
+      />
+
+      {/* Coach-Athlete Messaging Modal */}
+      {currentUser && (
+        <CoachAthleteMessagingModal
+          isOpen={isMessagingModalOpen}
+          onClose={() => setIsMessagingModalOpen(false)}
+          athleteId={athlete.id}
+          athleteName={athlete.displayName}
+          coachId={currentUser.id}
+          coachName={currentUser.displayName || currentUser.username || 'Coach'}
+        />
+      )}
+
+      {/* Athlete Details Modal */}
+      <AthleteDetailsModal
+        isOpen={isDetailsModalOpen}
+        onClose={() => setIsDetailsModalOpen(false)}
+        athleteId={athlete.id}
+        athleteName={athlete.displayName}
+        onStartMessaging={() => setIsMessagingModalOpen(true)}
       />
     </div>
   );

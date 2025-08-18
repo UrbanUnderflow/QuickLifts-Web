@@ -4,6 +4,7 @@ import { useUser, useUserLoading } from '../../hooks/useUser';
 import { coachService } from '../../api/firebase/coach';
 import { CoachModel } from '../../types/Coach';
 import AthleteCard from '../../components/AthleteCard';
+import { FaCopy, FaQrcode, FaLink, FaUsers } from 'react-icons/fa';
 
 const CoachDashboard: React.FC = () => {
   const currentUser = useUser();
@@ -13,6 +14,10 @@ const CoachDashboard: React.FC = () => {
   const [athletes, setAthletes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [inviteLink, setInviteLink] = useState<string>('');
+  const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
+  const [showQrCode, setShowQrCode] = useState(false);
+  const [copySuccess, setCopySuccess] = useState(false);
 
   useEffect(() => {
     const fetchCoachProfile = async () => {
@@ -38,6 +43,15 @@ const CoachDashboard: React.FC = () => {
         }
 
         setCoachProfile(coachProfile);
+        
+        // Generate invite link
+        const baseUrl = window.location.origin;
+        const inviteUrl = `${baseUrl}/coach-invite/${coachProfile.referralCode}`;
+        setInviteLink(inviteUrl);
+        
+        // Generate QR code using Google Charts API
+        const qrCodeApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=${encodeURIComponent(inviteUrl)}`;
+        setQrCodeUrl(qrCodeApiUrl);
         
         // Fetch connected athletes
         console.log('Fetching athletes for coach:', coachProfile.id);
@@ -95,34 +109,119 @@ const CoachDashboard: React.FC = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-1 gap-6">
           <div className="bg-zinc-900 rounded-xl p-6">
-            <h3 className="text-lg font-semibold mb-2">Total Athletes</h3>
-            <div className="text-3xl font-bold text-[#E0FE10]">{athletes.length}</div>
-          </div>
-          
-          <div className="bg-zinc-900 rounded-xl p-6">
-            <h3 className="text-lg font-semibold mb-2">Monthly Revenue</h3>
-            <div className="text-3xl font-bold text-green-400">$0</div>
-          </div>
-          
-          <div className="bg-zinc-900 rounded-xl p-6">
-            <h3 className="text-lg font-semibold mb-2">Account Type</h3>
-            <div className="text-xl font-bold text-blue-400">
-              {coachProfile?.userType === 'partner' ? 'Partner' : 'Coach'}
+            <div className="flex items-center space-x-3 mb-2">
+              <FaUsers className="text-[#E0FE10] text-xl" />
+              <h3 className="text-lg font-semibold">Total Athletes</h3>
             </div>
+            <div className="text-3xl font-bold text-[#E0FE10]">{athletes.length}</div>
+            <p className="text-zinc-400 text-sm mt-1">Connected athletes</p>
           </div>
         </div>
 
+        {/* Invite Athletes Section */}
         <div className="mt-8 bg-zinc-900 rounded-xl p-6">
-          <h3 className="text-lg font-semibold mb-4">Quick Actions</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <button className="bg-[#E0FE10] text-black px-6 py-3 rounded-lg hover:bg-lime-400 transition-colors">
-              Invite Athletes
-            </button>
-            <button className="bg-zinc-800 text-white px-6 py-3 rounded-lg hover:bg-zinc-700 transition-colors">
-              View Analytics
-            </button>
+          <div className="flex items-center space-x-3 mb-4">
+            <FaLink className="text-[#E0FE10] text-xl" />
+            <h3 className="text-lg font-semibold">Invite Athletes</h3>
+          </div>
+          
+          <div className="space-y-4">
+            {/* Invite Link */}
+            <div>
+              <label className="block text-sm font-medium text-zinc-300 mb-2">
+                Invite Link
+              </label>
+              <div className="flex items-center space-x-2">
+                <input
+                  type="text"
+                  value={inviteLink}
+                  readOnly
+                  className="flex-1 bg-zinc-800 text-white px-4 py-2 rounded-lg border border-zinc-700 focus:border-[#E0FE10] focus:outline-none"
+                />
+                <button
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(inviteLink);
+                      setCopySuccess(true);
+                      setTimeout(() => setCopySuccess(false), 2000);
+                    } catch (err) {
+                      console.error('Failed to copy:', err);
+                    }
+                  }}
+                  className="bg-[#E0FE10] text-black px-4 py-2 rounded-lg hover:bg-lime-400 transition-colors flex items-center space-x-2"
+                >
+                  <FaCopy className="text-sm" />
+                  <span>{copySuccess ? 'Copied!' : 'Copy'}</span>
+                </button>
+              </div>
+              <p className="text-xs text-zinc-500 mt-1">
+                Athletes can click this link to automatically connect to you
+              </p>
+            </div>
+
+            {/* QR Code Section */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-sm font-medium text-zinc-300">
+                  QR Code
+                </label>
+                <button
+                  onClick={() => setShowQrCode(!showQrCode)}
+                  className="text-[#E0FE10] hover:text-lime-400 transition-colors flex items-center space-x-1 text-sm"
+                >
+                  <FaQrcode />
+                  <span>{showQrCode ? 'Hide' : 'Show'} QR Code</span>
+                </button>
+              </div>
+              
+              {showQrCode && qrCodeUrl && (
+                <div className="bg-white p-4 rounded-lg inline-block">
+                  <img src={qrCodeUrl} alt="Invite QR Code" className="w-48 h-48" />
+                  <p className="text-center text-black text-xs mt-2">
+                    Scan to connect with {coachProfile?.referralCode}
+                  </p>
+                </div>
+              )}
+              
+              <p className="text-xs text-zinc-500 mt-1">
+                Athletes can scan this QR code to instantly connect
+              </p>
+            </div>
+
+            {/* Legacy Referral Code */}
+            <div>
+              <label className="block text-sm font-medium text-zinc-300 mb-2">
+                Referral Code
+              </label>
+              <div className="flex items-center space-x-2">
+                <input
+                  type="text"
+                  value={coachProfile?.referralCode || ''}
+                  readOnly
+                  className="flex-1 bg-zinc-800 text-white px-4 py-2 rounded-lg border border-zinc-700"
+                />
+                <button
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(coachProfile?.referralCode || '');
+                      setCopySuccess(true);
+                      setTimeout(() => setCopySuccess(false), 2000);
+                    } catch (err) {
+                      console.error('Failed to copy:', err);
+                    }
+                  }}
+                  className="bg-zinc-700 text-white px-4 py-2 rounded-lg hover:bg-zinc-600 transition-colors flex items-center space-x-2"
+                >
+                  <FaCopy className="text-sm" />
+                  <span>Copy</span>
+                </button>
+              </div>
+              <p className="text-xs text-zinc-500 mt-1">
+                For athletes who prefer to enter a code manually
+              </p>
+            </div>
           </div>
         </div>
 
@@ -139,14 +238,23 @@ const CoachDashboard: React.FC = () => {
             <div className="bg-zinc-900 rounded-xl p-8 text-center">
               <div className="text-zinc-400 mb-4">No athletes connected yet</div>
               <p className="text-zinc-500 mb-6">
-                Share your referral code <span className="text-[#E0FE10] font-bold">{coachProfile?.referralCode}</span> with athletes to get started
+                Use the invite link or QR code above to connect with athletes instantly
               </p>
               <div className="flex justify-center space-x-4">
                 <button 
-                  onClick={() => navigator.clipboard.writeText(coachProfile?.referralCode || '')}
-                  className="bg-[#E0FE10] text-black px-6 py-3 rounded-lg hover:bg-lime-400 transition-colors"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(inviteLink);
+                      setCopySuccess(true);
+                      setTimeout(() => setCopySuccess(false), 2000);
+                    } catch (err) {
+                      console.error('Failed to copy:', err);
+                    }
+                  }}
+                  className="bg-[#E0FE10] text-black px-6 py-3 rounded-lg hover:bg-lime-400 transition-colors flex items-center space-x-2"
                 >
-                  Copy Referral Code
+                  <FaLink className="text-sm" />
+                  <span>{copySuccess ? 'Copied!' : 'Copy Invite Link'}</span>
                 </button>
                 <button 
                   onClick={async () => {

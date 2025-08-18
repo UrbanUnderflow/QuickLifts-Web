@@ -88,6 +88,20 @@ exports.handler = async (event, context) => {
 
   } catch (error) {
     console.error('[Sentiment] Error:', error);
+    console.error('[Sentiment] Stack:', error.stack);
+    console.error('[Sentiment] Event body:', event.body);
+    
+    // Try to provide a fallback result
+    let fallbackResult = { sentimentScore: 0, confidence: 0, strategy: 'error_fallback' };
+    try {
+      const parsedBody = JSON.parse(event.body || '{}');
+      if (parsedBody.messages && Array.isArray(parsedBody.messages)) {
+        fallbackResult = await analyzeWithKeywords(parsedBody.messages);
+        fallbackResult.strategy = 'keywords_error_fallback';
+      }
+    } catch (fallbackError) {
+      console.error('[Sentiment] Fallback also failed:', fallbackError);
+    }
     
     return {
       statusCode: 500,
@@ -95,7 +109,9 @@ exports.handler = async (event, context) => {
       body: JSON.stringify({ 
         error: 'Sentiment analysis failed',
         details: error.message,
-        fallback: await analyzeWithKeywords(JSON.parse(event.body).messages || [])
+        stack: error.stack,
+        eventBody: event.body,
+        fallback: fallbackResult
       })
     };
   }
@@ -285,7 +301,7 @@ async function analyzeWithKeywords(messages) {
     // Social & isolation
     'alone', 'isolated', 'unsupported', 'misunderstood', 'ignored', 'rejected', 'abandoned',
     // General negative
-    'no', 'never', 'impossible', 'can\\'t', 'won\\'t', 'shouldn\\'t', 'disaster', 'nightmare'
+    'no', 'never', 'impossible', 'can\'t', 'won\'t', 'shouldn\'t', 'disaster', 'nightmare'
   ];
   
   let positiveCount = 0;
