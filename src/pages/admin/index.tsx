@@ -184,6 +184,12 @@ const adminCardsData = [
     description: "Add and manage prize money for challenges. Set prize amounts and distribution types.",
     icon: <Award className="w-5 h-5" />,
     link: "/admin/assign-prize-money"
+  },
+  {
+    title: "Corporate Partners",
+    description: "Manage corporate partner prospects, track partnerships, and monitor business development opportunities.",
+    icon: <Building2 className="w-5 h-5" />,
+    link: "/admin/corporatePartners"
   }
 ];
 

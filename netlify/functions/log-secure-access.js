@@ -4,12 +4,55 @@ const BREVO_API_KEY = process.env.BREVO_MARKETING_KEY;
 const SENDER_EMAIL = process.env.BREVO_SENDER_EMAIL || "tre@fitwithpulse.ai";
 const SENDER_NAME = process.env.BREVO_SENDER_NAME || "Pulse Security";
 
+// Check if we should send email based on rate limiting (10 minutes per IP)
+const shouldSendEmail = async (ip, type) => {
+  if (!ip) {
+    console.log('No IP address provided, allowing email');
+    return true;
+  }
+
+  try {
+    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+    
+    // Query for recent email notifications from this IP
+    const recentEmailsQuery = await db.collection('secureAccessLogs')
+      .where('ip', '==', ip)
+      .where('emailSent', '==', true)
+      .where('serverTimestamp', '>', tenMinutesAgo)
+      .limit(1)
+      .get();
+
+    if (!recentEmailsQuery.empty) {
+      const recentLog = recentEmailsQuery.docs[0].data();
+      console.log(`Rate limiting: Email already sent for IP ${ip} within last 10 minutes at ${recentLog.serverTimestamp?.toDate()}`);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Error checking email rate limit:', error);
+    // If we can't check, err on the side of caution and allow the email
+    return true;
+  }
+};
+
 // Send email notification using Brevo (matching your existing pattern)
 const sendEmailNotification = async (logData) => {
   try {
     if (!BREVO_API_KEY) {
       console.error('Brevo API key (BREVO_MARKETING_KEY) is not set.');
       return { success: false, error: 'Brevo API key not configured' };
+    }
+
+    // Check rate limiting
+    const shouldSend = await shouldSendEmail(logData.ip, logData.type);
+    if (!shouldSend) {
+      console.log(`Rate limiting: Skipping email for IP ${logData.ip} - already sent within last 10 minutes`);
+      return { 
+        success: true, 
+        message: 'Email skipped due to rate limiting (10 minute cooldown per IP)',
+        rateLimited: true 
+      };
     }
 
     const getAlertColor = (type) => {
@@ -115,12 +158,13 @@ const sendEmailNotification = async (logData) => {
     }
 
     const responseData = await response.json();
-    console.log('✅ Secure access alert email sent successfully via Brevo:', responseData);
+    console.log(`✅ Secure access alert email sent successfully via Brevo for IP ${logData.ip}:`, responseData);
     
     return { 
       success: true, 
       message: 'Email notification sent via Brevo',
-      messageId: responseData.messageId 
+      messageId: responseData.messageId,
+      rateLimited: false
     };
 
   } catch (error) {
@@ -179,13 +223,19 @@ exports.handler = async (event, context) => {
       };
     }
 
-    // Store in Firestore
+    // Send email notification for all access types (check rate limiting first)
+    const emailResult = await sendEmailNotification(logData);
+
+    // Store in Firestore with email status
     let firestoreResult = { success: false };
     try {
       const docRef = await db.collection('secureAccessLogs').add({
         ...logData,
         serverTimestamp: db.FieldValue.serverTimestamp(),
-        createdAt: new Date(logData.timestamp)
+        createdAt: new Date(logData.timestamp),
+        emailSent: emailResult.success && !emailResult.rateLimited,
+        emailRateLimited: emailResult.rateLimited || false,
+        emailError: emailResult.success ? null : emailResult.error
       });
       
       console.log('✅ Stored in Firestore with ID:', docRef.id);
@@ -195,9 +245,6 @@ exports.handler = async (event, context) => {
       firestoreResult = { success: false, error: firestoreError.message };
     }
 
-    // Send email notification for all access types
-    const emailResult = await sendEmailNotification(logData);
-
     return {
       statusCode: 200,
       headers,
@@ -206,7 +253,10 @@ exports.handler = async (event, context) => {
         message: 'Access logged successfully',
         firestore: firestoreResult,
         email: emailResult,
-        logId: firestoreResult.id || null
+        logId: firestoreResult.id || null,
+        rateLimitInfo: emailResult.rateLimited ? 
+          'Email notification skipped due to rate limiting (10 minute cooldown per IP)' : 
+          'Email notification processed normally'
       })
     };
 

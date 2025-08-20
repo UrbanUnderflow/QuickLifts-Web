@@ -131,6 +131,14 @@ const SecurePage: React.FC = () => {
         if (response.ok) {
           const result = await response.json();
           console.log('✅ Server logging successful:', result);
+          
+          // Log rate limiting information
+          if (result.rateLimitInfo) {
+            console.log('📧 Email notification status:', result.rateLimitInfo);
+          }
+          if (result.email?.rateLimited) {
+            console.log('⏰ Email rate limited - cooldown period active for this IP address');
+          }
         } else {
           console.error('❌ Server logging failed:', response.status, response.statusText);
         }
