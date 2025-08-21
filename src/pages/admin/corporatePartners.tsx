@@ -38,6 +38,9 @@ interface PartnerFormData {
   priority: string;
   potentialValue: string;
   source: 'individual_form' | 'bulk_text' | 'bulk_image';
+  // Optional fields for bulk import processing
+  isDuplicate?: boolean;
+  duplicateAction?: 'skip' | 'update' | 'add';
 }
 
 interface PartnerProspect extends PartnerFormData {
@@ -85,7 +88,7 @@ const CorporatePartnersPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [toastVisible, setToastVisible] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
-  const [toastType, setToastType] = useState<'success' | 'error'>('success');
+  const [toastType, setToastType] = useState<'success' | 'error' | 'info'>('success');
 
   // Bulk import state
   const [currentView, setCurrentView] = useState<'form' | 'bulk' | 'table'>('form');
@@ -172,6 +175,11 @@ const CorporatePartnersPage: React.FC = () => {
   const [longPressTimer, setLongPressTimer] = useState<NodeJS.Timeout | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
+  // Column editing state
+  const [editingColumnKey, setEditingColumnKey] = useState<string | null>(null);
+  const [editingColumnLabel, setEditingColumnLabel] = useState<string>('');
+  const [customColumnLabels, setCustomColumnLabels] = useState<Record<string, string>>({});
+
   // Define column structure
   const baseColumns = [
     { key: 'company', label: 'Company', field: 'companyName' },
@@ -210,6 +218,7 @@ const CorporatePartnersPage: React.FC = () => {
   // Local storage keys
   const PENDING_CHANGES_KEY = 'corporate-partners-pending-changes';
   const COLUMN_ORDER_KEY = 'corporate-partners-column-order';
+  const COLUMN_LABELS_KEY = 'corporate-partners-column-labels';
 
   // Local storage functions
   const savePendingChangesToStorage = (changes: Record<string, Partial<PartnerFormData>>) => {
@@ -265,6 +274,33 @@ const CorporatePartnersPage: React.FC = () => {
     }
   };
 
+  // Column labels storage functions
+  const saveColumnLabelsToStorage = (labels: Record<string, string>) => {
+    try {
+      localStorage.setItem(COLUMN_LABELS_KEY, JSON.stringify(labels));
+    } catch (error) {
+      console.error('Failed to save column labels to storage:', error);
+    }
+  };
+
+  const loadColumnLabelsFromStorage = (): Record<string, string> => {
+    try {
+      const stored = localStorage.getItem(COLUMN_LABELS_KEY);
+      return stored ? JSON.parse(stored) : {};
+    } catch (error) {
+      console.error('Failed to load column labels from storage:', error);
+      return {};
+    }
+  };
+
+  const clearColumnLabelsFromStorage = () => {
+    try {
+      localStorage.removeItem(COLUMN_LABELS_KEY);
+    } catch (error) {
+      console.error('Failed to clear column labels from storage:', error);
+    }
+  };
+
   // Constants for dropdown options
   const statusOptions = ['inactive', 'contacted', 'interested', 'negotiating', 'closed-won', 'closed-lost', 'on-hold'];
   const contactStatusOptions = ['not-contacted', 'initial-outreach', 'follow-up-sent', 'meeting-scheduled', 'meeting-completed', 'proposal-sent', 'awaiting-response', 'decision-pending'];
@@ -296,7 +332,7 @@ const CorporatePartnersPage: React.FC = () => {
   const storageService = new FirebaseStorageService();
 
   // Show toast
-  const showToast = (message: string, type: 'success' | 'error') => {
+  const showToast = (message: string, type: 'success' | 'error' | 'info') => {
     setToastMessage(message);
     setToastType(type);
     setToastVisible(true);
@@ -823,6 +859,42 @@ const CorporatePartnersPage: React.FC = () => {
     showToast('Column order reset to default', 'success');
   };
 
+  // Column editing functions
+  const startEditingColumn = (columnKey: string, currentLabel: string) => {
+    setEditingColumnKey(columnKey);
+    setEditingColumnLabel(currentLabel);
+  };
+
+  const saveColumnLabel = () => {
+    if (!editingColumnKey || !editingColumnLabel.trim()) return;
+    
+    const newLabels = {
+      ...customColumnLabels,
+      [editingColumnKey]: editingColumnLabel.trim()
+    };
+    
+    setCustomColumnLabels(newLabels);
+    saveColumnLabelsToStorage(newLabels);
+    setEditingColumnKey(null);
+    setEditingColumnLabel('');
+    showToast('Column title updated', 'success');
+  };
+
+  const cancelEditingColumn = () => {
+    setEditingColumnKey(null);
+    setEditingColumnLabel('');
+  };
+
+  const resetColumnLabels = () => {
+    setCustomColumnLabels({});
+    clearColumnLabelsFromStorage();
+    showToast('Column titles reset to default', 'success');
+  };
+
+  const getColumnLabel = (column: { key: string; label: string }) => {
+    return customColumnLabels[column.key] || column.label;
+  };
+
   // Custom options functions
   const getOptionsForField = (field: string) => {
     const baseOptions = {
@@ -1169,7 +1241,7 @@ const CorporatePartnersPage: React.FC = () => {
     }
   }, [currentView]);
 
-  // Load pending changes, custom options, and column order from localStorage on component mount
+  // Load pending changes, custom options, column order, and column labels from localStorage on component mount
   useEffect(() => {
     const storedChanges = loadPendingChangesFromStorage();
     if (Object.keys(storedChanges).length > 0) {
@@ -1186,6 +1258,10 @@ const CorporatePartnersPage: React.FC = () => {
     if (storedColumnOrder) {
       setColumnOrder(storedColumnOrder);
     }
+    
+    // Load custom column labels
+    const storedColumnLabels = loadColumnLabelsFromStorage();
+    setCustomColumnLabels(storedColumnLabels);
   }, []);
 
   // Page refresh protection
@@ -1267,9 +1343,10 @@ const CorporatePartnersPage: React.FC = () => {
     });
   };
 
-  const getCurrentValue = (partner: PartnerProspect, field: keyof PartnerFormData) => {
+  const getCurrentValue = (partner: PartnerProspect, field: keyof PartnerFormData): string => {
     const pendingValue = pendingChanges[partner.id]?.[field];
-    return pendingValue !== undefined ? pendingValue : partner[field];
+    const value = pendingValue !== undefined ? pendingValue : partner[field];
+    return typeof value === 'string' ? value : String(value || '');
   };
 
   // Helper function to calculate weighted score from rating fields
@@ -1339,7 +1416,7 @@ const CorporatePartnersPage: React.FC = () => {
     const hasPendingChange = pendingChanges[partner.id]?.[field] !== undefined;
     const currentValue = getCurrentValue(partner, field);
     const displayValue = isEditing 
-      ? (editingValues[field] !== undefined ? editingValues[field] : currentValue)
+      ? (editingValues[field] !== undefined ? String(editingValues[field] || '') : currentValue)
       : currentValue;
 
     if (isEditing) {
@@ -1452,7 +1529,7 @@ const CorporatePartnersPage: React.FC = () => {
     const hasPendingChange = pendingChanges[partner.id]?.[field] !== undefined;
     const currentValue = getCurrentValue(partner, field);
     const displayValue = isEditing 
-      ? (editingValues[field] !== undefined ? editingValues[field] : currentValue)
+      ? (editingValues[field] !== undefined ? String(editingValues[field] || '') : currentValue)
       : currentValue;
 
     if (isEditing) {
@@ -1684,7 +1761,7 @@ const CorporatePartnersPage: React.FC = () => {
   // Helper function to render new prospect row
   const renderNewProspectCell = (columnKey: string) => {
     const renderNewEditableCell = (field: keyof PartnerFormData, type: 'text' | 'select' | 'number' | 'email' | 'tel' | 'url' = 'text', options?: string[]) => {
-      const value = newProspectData[field] || '';
+      const value = String(newProspectData[field] || '');
 
       if (type === 'select' && options) {
         const allOptions = getOptionsForField(field);
@@ -1770,7 +1847,7 @@ const CorporatePartnersPage: React.FC = () => {
       return (
         <div className="relative">
           <select
-            value={newProspectData[field] || ''}
+            value={String(newProspectData[field] || '')}
             onChange={(e) => {
               if (e.target.value === '__ADD_CUSTOM__') {
                 setShowAddOption(field);
@@ -3386,7 +3463,15 @@ const CorporatePartnersPage: React.FC = () => {
             title="Reset column order to default"
           >
             <RefreshCw className="w-3 h-3" />
-            Reset Columns
+            Reset Order
+          </button>
+          <button
+            onClick={resetColumnLabels}
+            className="flex items-center gap-2 px-3 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-sm"
+            title="Reset column titles to default"
+          >
+            <Edit3 className="w-3 h-3" />
+            Reset Titles
           </button>
           <button
             onClick={loadPartners}
@@ -3401,7 +3486,7 @@ const CorporatePartnersPage: React.FC = () => {
       {!editingPartner && (
         <div className="mb-4 p-3 bg-[#262a30] rounded-lg border border-gray-600">
           <p className="text-sm text-gray-300">
-            💡 <strong>Tip:</strong> Long press or drag column headers to reorder columns. Click any cell to edit inline.
+            💡 <strong>Tip:</strong> Long press or drag column headers to reorder columns. Double-click column titles to edit them. Click any cell to edit inline.
           </p>
         </div>
       )}
@@ -3485,7 +3570,33 @@ const CorporatePartnersPage: React.FC = () => {
                             className="w-4 h-4 text-[#d7ff00] bg-gray-700 border-gray-600 rounded focus:ring-[#d7ff00] focus:ring-2"
                           />
                         ) : columnKey !== 'select' ? (
-                          <span>{column.label}</span>
+                          editingColumnKey === columnKey ? (
+                            <div className="flex items-center gap-1">
+                              <input
+                                type="text"
+                                value={editingColumnLabel}
+                                onChange={(e) => setEditingColumnLabel(e.target.value)}
+                                onBlur={saveColumnLabel}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    saveColumnLabel();
+                                  } else if (e.key === 'Escape') {
+                                    cancelEditingColumn();
+                                  }
+                                }}
+                                className="px-2 py-1 bg-[#1a1e24] border border-[#d7ff00] rounded text-white text-sm focus:outline-none min-w-0"
+                                autoFocus
+                              />
+                            </div>
+                          ) : (
+                            <span
+                              onDoubleClick={() => startEditingColumn(columnKey, getColumnLabel(column))}
+                              className="cursor-pointer hover:text-[#d7ff00] transition-colors"
+                              title="Double-click to edit column title"
+                            >
+                              {getColumnLabel(column)}
+                            </span>
+                          )
                         ) : null}
                         {isDragging && draggedColumn === columnKey && (
                           <div className="w-2 h-2 bg-[#d7ff00] rounded-full animate-pulse" />
@@ -3608,7 +3719,8 @@ const CorporatePartnersPage: React.FC = () => {
       {/* Toast */}
       {toastVisible && (
         <div className={`fixed bottom-4 right-4 px-6 py-3 rounded-lg text-white font-medium z-50 ${
-          toastType === 'success' ? 'bg-green-600' : 'bg-red-600'
+          toastType === 'success' ? 'bg-green-600' : 
+          toastType === 'error' ? 'bg-red-600' : 'bg-blue-600'
         }`}>
           {toastMessage}
         </div>
