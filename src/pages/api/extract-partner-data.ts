@@ -5,6 +5,7 @@ interface ExtractPartnerDataRequest {
   inputType: 'image' | 'text';
   data?: string; // Text content for spreadsheet data
   imageUrls?: string[]; // Firebase Storage URLs for images
+  existingCompanies?: string[]; // Array of existing company names for duplicate checking
 }
 
 interface PartnerProspect {
@@ -49,7 +50,7 @@ export default async function handler(
   }
 
   try {
-    const { inputType, data, imageUrls } = req.body as ExtractPartnerDataRequest;
+    const { inputType, data, imageUrls, existingCompanies = [] } = req.body as ExtractPartnerDataRequest;
 
     // Validate input
     if (!inputType || (inputType !== 'image' && inputType !== 'text')) {
@@ -85,6 +86,8 @@ CRITICAL RULES:
 - Do NOT generate, infer, or hallucinate any information
 - If you cannot clearly see the data, return an empty array []
 - Focus on structured data like spreadsheets, tables, or lists
+- LIMIT: Extract maximum 15 companies to ensure response quality
+- Prioritize companies with the most complete information
 
 REQUIRED FORMAT - Return a JSON array with these exact fields:
 [
@@ -112,7 +115,7 @@ REQUIRED FORMAT - Return a JSON array with these exact fields:
     "weightedPriorityScore": "Weighted priority score from image (numeric value like 3.75)",
     "notes": "General notes from image",
     "notesJustification": "Notes/justification from image (specific reasoning for ratings)",
-    "status": "Partnership status from image (default to 'new' if not specified)",
+    "status": "Partnership status from image (default to 'inactive' if not specified)",
     "contactStatus": "Contact status from image (default to 'not-contacted' if not specified)",
     "lastContactDate": "Last contact date from image (YYYY-MM-DD format)",
     "nextFollowUpDate": "Next follow-up date from image (YYYY-MM-DD format)",
@@ -124,7 +127,11 @@ REQUIRED FORMAT - Return a JSON array with these exact fields:
 
 VALIDATION: If you cannot access or clearly read the image content, return: {"error": "Cannot access or read the provided image"}
 
-Return ONLY valid JSON, no markdown or explanations.`;
+CRITICAL: Return ONLY valid JSON array format. No markdown, no explanations, no additional text. 
+- ALWAYS return an array, even for single companies
+- Start with [ and end with ]
+- Example for single company: [{"companyName": "Example Corp", "contactPerson": "John Doe", ...}]
+- Example for multiple: [{"companyName": "Corp A", ...}, {"companyName": "Corp B", ...}]`;
 
       const imageContent = imageUrls!.map(url => ({
         type: "image_url" as const,
@@ -160,6 +167,10 @@ TASK: Parse the above text and extract corporate partner prospect information. T
 - List of companies and contacts
 - Partnership information
 
+LIMITS:
+- Extract maximum 15 companies to ensure response quality
+- Prioritize companies with the most complete information
+
 REQUIRED FORMAT - Return a JSON array with these exact fields:
 [
   {
@@ -186,7 +197,7 @@ REQUIRED FORMAT - Return a JSON array with these exact fields:
     "weightedPriorityScore": "Weighted priority score (numeric value like 3.75)",
     "notes": "General notes or description",
     "notesJustification": "Notes/justification (specific reasoning for ratings)",
-    "status": "Partnership status (default to 'new' if not specified)",
+    "status": "Partnership status (default to 'inactive' if not specified)",
     "contactStatus": "Contact status (default to 'not-contacted' if not specified)",
     "lastContactDate": "Last contact date (YYYY-MM-DD format)",
     "nextFollowUpDate": "Next follow-up date (YYYY-MM-DD format)",
@@ -206,7 +217,11 @@ RULES:
 - Normalize company sizes to standard options: 'Startup (1-10)', 'Small (11-50)', 'Medium (51-200)', 'Large (201-1000)', 'Enterprise (1000+)'
 - Normalize industries to common categories: 'Technology', 'Healthcare', 'Finance', 'Retail', 'Manufacturing', 'Education', 'Sports & Fitness', 'Media & Entertainment', 'Government', 'Non-Profit', 'Other'
 
-Return ONLY valid JSON, no markdown or explanations.`;
+CRITICAL: Return ONLY valid JSON array format. No markdown, no explanations, no additional text. 
+- ALWAYS return an array, even for single companies
+- Start with [ and end with ]
+- Example for single company: [{"companyName": "Example Corp", "contactPerson": "John Doe", ...}]
+- Example for multiple: [{"companyName": "Corp A", ...}, {"companyName": "Corp B", ...}]`;
 
       messages = [
         {
@@ -222,13 +237,36 @@ Return ONLY valid JSON, no markdown or explanations.`;
 
     console.log(`🤖 Processing ${inputType} extraction with OpenAI...`);
 
-    // Call OpenAI API
-    const response = await openai.chat.completions.create({
-      model: inputType === 'image' ? 'gpt-4o' : 'gpt-4o-mini', // Use gpt-4o for images, gpt-4o-mini for text
-      messages: messages,
-      max_tokens: inputType === 'image' ? 4000 : 2000,
-      temperature: 0.1, // Low temperature for precise extraction
-    });
+    // Call OpenAI API with retry logic
+    let response;
+    let attempt = 1;
+    const maxAttempts = 2;
+
+    while (attempt <= maxAttempts) {
+      try {
+        console.log(`🔄 Attempt ${attempt}/${maxAttempts}`);
+        
+        response = await openai.chat.completions.create({
+          model: inputType === 'image' ? 'gpt-4o' : 'gpt-4o-mini', // Use gpt-4o for images, gpt-4o-mini for text
+          messages: messages,
+          max_tokens: inputType === 'image' ? 3000 : 1500, // Reduced to prevent overly large responses
+          temperature: 0.1, // Low temperature for precise extraction
+        });
+        
+        break; // Success, exit retry loop
+        
+      } catch (openaiError) {
+        console.error(`❌ OpenAI API attempt ${attempt} failed:`, openaiError);
+        
+        if (attempt === maxAttempts) {
+          throw new Error(`OpenAI API failed after ${maxAttempts} attempts: ${openaiError instanceof Error ? openaiError.message : 'Unknown error'}`);
+        }
+        
+        attempt++;
+        // Wait 1 second before retry
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
 
     const generatedContent = response.choices[0]?.message?.content?.trim();
     if (!generatedContent) {
@@ -237,22 +275,109 @@ Return ONLY valid JSON, no markdown or explanations.`;
 
     console.log('🤖 Raw OpenAI Response:', generatedContent);
 
-    // Clean and parse response
+    // Clean and parse response with aggressive cleaning
     let cleanedResponse = generatedContent
-      .replace(/```json/g, '')
-      .replace(/```/g, '')
+      .replace(/```json/gi, '') // Remove markdown json blocks (case insensitive)
+      .replace(/```/g, '') // Remove any remaining markdown blocks
+      .replace(/^[^[{]*/, '') // Remove any text before JSON starts
+      .replace(/[^}\]]*$/, '') // Remove any text after JSON ends
+      .replace(/\n\s*\n/g, '\n') // Remove empty lines
+      .replace(/,(\s*[}\]])/g, '$1') // Remove trailing commas before } or ]
+      .replace(/([}\]])\s*([{\[])/g, '$1,$2') // Add missing commas between objects/arrays
       .trim();
 
-    console.log('🧹 Cleaned Response:', cleanedResponse);
+    // If response is too long, truncate to prevent parsing issues
+    if (cleanedResponse.length > 50000) {
+      console.log('⚠️ Response is very long, attempting to truncate safely...');
+      // Find the last complete object before the 50k limit
+      const truncatePoint = cleanedResponse.lastIndexOf('},', 50000);
+      if (truncatePoint > 0) {
+        cleanedResponse = cleanedResponse.substring(0, truncatePoint) + ']';
+        console.log('✂️ Truncated response to prevent parsing issues');
+      }
+    }
 
-    // Parse JSON response
+    console.log('🧹 Cleaned Response Length:', cleanedResponse.length);
+    console.log('🧹 Cleaned Response Preview:', cleanedResponse.substring(0, 500) + '...');
+
+    // Parse JSON response with better error handling
     let parsedData;
     try {
       parsedData = JSON.parse(cleanedResponse);
     } catch (parseError) {
-      console.error('Failed to parse OpenAI response:', parseError);
-      console.log('Raw response content:', generatedContent);
-      throw new Error('AI returned invalid JSON format.');
+      console.error('❌ Failed to parse OpenAI response:', parseError);
+      console.log('📄 Raw response content:', generatedContent);
+      console.log('🧹 Cleaned response content:', cleanedResponse);
+      
+      // Try multiple fallback strategies
+      console.log('🔧 Attempting JSON repair strategies...');
+      
+      // Strategy 1: Try to extract and repair the JSON array
+      const arrayMatch = generatedContent.match(/\[[\s\S]*$/);
+      if (arrayMatch) {
+        try {
+          let repairedJson = arrayMatch[0];
+          
+          // Common repairs
+          repairedJson = repairedJson
+            .replace(/```json/gi, '')
+            .replace(/```/g, '')
+            .replace(/,(\s*[}\]])/g, '$1') // Remove trailing commas
+            .replace(/([}\]])\s*([{\[])/g, '$1,$2') // Add missing commas
+            .trim();
+          
+          // If it doesn't end with ], try to close it
+          if (!repairedJson.endsWith(']')) {
+            // Find the last complete object
+            const lastObjectEnd = repairedJson.lastIndexOf('}');
+            if (lastObjectEnd > 0) {
+              repairedJson = repairedJson.substring(0, lastObjectEnd + 1) + ']';
+            }
+          }
+          
+          console.log('🔍 Attempting to parse repaired JSON (length:', repairedJson.length, ')');
+          parsedData = JSON.parse(repairedJson);
+          console.log('✅ Successfully parsed repaired JSON');
+        } catch (repairError) {
+          console.error('❌ JSON repair attempt failed:', repairError);
+          
+          // Strategy 2: Try to extract individual objects and build array
+          try {
+            console.log('🔧 Attempting to extract individual objects...');
+            const objectMatches = generatedContent.match(/\{[^{}]*"companyName"[^{}]*\}/g);
+            if (objectMatches && objectMatches.length > 0) {
+              console.log(`🔍 Found ${objectMatches.length} potential company objects`);
+              const validObjects = [];
+              
+              for (const objStr of objectMatches) {
+                try {
+                  const obj = JSON.parse(objStr);
+                  if (obj.companyName) {
+                    validObjects.push(obj);
+                  }
+                } catch (objError) {
+                  // Skip invalid objects
+                  continue;
+                }
+              }
+              
+              if (validObjects.length > 0) {
+                parsedData = validObjects;
+                console.log(`✅ Successfully extracted ${validObjects.length} valid objects`);
+              } else {
+                throw new Error('No valid company objects found');
+              }
+            } else {
+              throw new Error('No company objects found in response');
+            }
+          } catch (extractError) {
+            console.error('❌ Object extraction failed:', extractError);
+            throw new Error(`AI returned invalid JSON format. Raw response: ${generatedContent.substring(0, 500)}...`);
+          }
+        }
+      } else {
+        throw new Error(`AI returned invalid JSON format. No JSON array found in response: ${generatedContent.substring(0, 500)}...`);
+      }
     }
 
     // Check if AI returned an error
@@ -260,16 +385,43 @@ Return ONLY valid JSON, no markdown or explanations.`;
       return res.status(400).json({ error: parsedData.error });
     }
 
-    // Validate response structure
-    if (!Array.isArray(parsedData)) {
-      throw new Error('Response is not an array');
+    // Validate and normalize response structure
+    let prospectsArray;
+    if (Array.isArray(parsedData)) {
+      prospectsArray = parsedData;
+    } else if (parsedData && typeof parsedData === 'object') {
+      // If OpenAI returned a single object instead of an array, wrap it in an array
+      prospectsArray = [parsedData];
+      console.log('🔄 Converted single object to array format');
+    } else {
+      throw new Error('Response is neither an array nor an object');
     }
 
-    console.log(`📊 Successfully extracted ${parsedData.length} partner prospects`);
+    console.log(`📊 Successfully extracted ${prospectsArray.length} partner prospects`);
+
+    // Check for duplicates and mark them
+    const prospectsWithDuplicateInfo = prospectsArray.map((prospect: PartnerProspect) => {
+      const isDuplicate = existingCompanies.some(existingCompany => 
+        existingCompany.toLowerCase().trim() === prospect.companyName.toLowerCase().trim()
+      );
+      
+      return {
+        ...prospect,
+        isDuplicate,
+        duplicateAction: isDuplicate ? 'skip' : 'add' // Default action
+      };
+    });
+
+    const duplicateCount = prospectsWithDuplicateInfo.filter(p => p.isDuplicate).length;
+    const newCount = prospectsWithDuplicateInfo.filter(p => !p.isDuplicate).length;
+
+    console.log(`🔍 Duplicate check: ${duplicateCount} duplicates, ${newCount} new prospects`);
 
     return res.status(200).json({ 
       success: true,
-      prospects: parsedData 
+      prospects: prospectsWithDuplicateInfo,
+      duplicateCount,
+      newCount
     });
 
   } catch (error) {

@@ -3,7 +3,7 @@ import Head from 'next/head';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import { collection, doc, setDoc, getDocs, query, orderBy, updateDoc, addDoc, getDoc, writeBatch } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
-import { Building2, Mail, User, MapPin, Globe, DollarSign, Calendar, Users, Trophy, FileText, Upload, Eye, Loader2, RefreshCw, Edit3, Check, X, AlertTriangle, Phone, Star, Target, Image as ImageIcon, Trash2 } from 'lucide-react';
+import { Building2, Mail, User, MapPin, Globe, DollarSign, Calendar, Users, Trophy, FileText, Upload, Eye, Loader2, RefreshCw, Edit3, Check, X, AlertTriangle, Phone, Star, Target, Image as ImageIcon, Trash2, CheckSquare } from 'lucide-react';
 import { FirebaseStorageService, UploadImageType } from '../../api/firebase/storage/service';
 
 interface PartnerFormData {
@@ -121,6 +121,45 @@ const CorporatePartnersPage: React.FC = () => {
   const [showAddOption, setShowAddOption] = useState<string | null>(null);
   const [newOptionValue, setNewOptionValue] = useState('');
 
+  // Multi-select delete state
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedPartners, setSelectedPartners] = useState<Set<string>>(new Set());
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // Sort state
+  const [sortBy, setSortBy] = useState<string>('companyName');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+
+  // Search state
+  const [searchQuery, setSearchQuery] = useState<string>('');
+
+  // Sort options
+  const sortOptions = [
+    { value: 'companyName', label: 'Company Name' },
+    { value: 'contactPerson', label: 'Contact Person' },
+    { value: 'industry', label: 'Industry' },
+    { value: 'status', label: 'Status' },
+    { value: 'priority', label: 'Priority' },
+    { value: 'weightedPriorityScore', label: 'Weighted Score' },
+    { value: 'potentialValue', label: 'Potential Value' },
+    { value: 'partnershipTier', label: 'Partnership Tier' },
+    { value: 'missionFit', label: 'Mission Fit' },
+    { value: 'audienceOverlap', label: 'Audience Overlap' },
+    { value: 'activationPotential', label: 'Activation Potential' },
+    { value: 'brandAlignment', label: 'Brand Alignment' },
+    { value: 'lastContactDate', label: 'Last Contact Date' },
+    { value: 'nextFollowUpDate', label: 'Next Follow-up Date' }
+  ];
+
+  // Modal state
+  const [selectedPartnerForModal, setSelectedPartnerForModal] = useState<PartnerProspect | null>(null);
+  const [showDetailModal, setShowDetailModal] = useState(false);
+
+  // Inline add new prospect state
+  const [isAddingNew, setIsAddingNew] = useState(false);
+  const [newProspectData, setNewProspectData] = useState<Partial<PartnerFormData>>({});
+  const [savingNewProspect, setSavingNewProspect] = useState(false);
+
   // Filter state
   const [selectedStatusFilters, setSelectedStatusFilters] = useState<string[]>([]);
   const [selectedIndustryFilters, setSelectedIndustryFilters] = useState<string[]>([]);
@@ -134,7 +173,7 @@ const CorporatePartnersPage: React.FC = () => {
   const [isDragging, setIsDragging] = useState(false);
 
   // Define column structure
-  const defaultColumns = [
+  const baseColumns = [
     { key: 'company', label: 'Company', field: 'companyName' },
     { key: 'contact', label: 'Contact', field: 'contactPerson' },
     { key: 'email', label: 'Email', field: 'email' },
@@ -155,10 +194,22 @@ const CorporatePartnersPage: React.FC = () => {
     { key: 'actions', label: 'Actions', field: 'actions' }
   ];
 
+  // Create columns array with conditional select column
+  const defaultColumns = useMemo(() => {
+    const selectColumn = { key: 'select', label: 'Select', field: 'select' };
+    return isSelectionMode ? [selectColumn, ...baseColumns] : baseColumns;
+  }, [isSelectionMode]);
+
   const [columnOrder, setColumnOrder] = useState<string[]>(defaultColumns.map(col => col.key));
 
-  // Local storage key for pending changes
+  // Update column order when selection mode changes
+  useEffect(() => {
+    setColumnOrder(defaultColumns.map(col => col.key));
+  }, [defaultColumns]);
+
+  // Local storage keys
   const PENDING_CHANGES_KEY = 'corporate-partners-pending-changes';
+  const COLUMN_ORDER_KEY = 'corporate-partners-column-order';
 
   // Local storage functions
   const savePendingChangesToStorage = (changes: Record<string, Partial<PartnerFormData>>) => {
@@ -184,6 +235,33 @@ const CorporatePartnersPage: React.FC = () => {
       localStorage.removeItem(PENDING_CHANGES_KEY);
     } catch (error) {
       console.error('Failed to clear pending changes from localStorage:', error);
+    }
+  };
+
+  // Column order storage functions
+  const saveColumnOrderToStorage = (order: string[]) => {
+    try {
+      localStorage.setItem(COLUMN_ORDER_KEY, JSON.stringify(order));
+    } catch (error) {
+      console.error('Failed to save column order to storage:', error);
+    }
+  };
+
+  const loadColumnOrderFromStorage = (): string[] | null => {
+    try {
+      const stored = localStorage.getItem(COLUMN_ORDER_KEY);
+      return stored ? JSON.parse(stored) : null;
+    } catch (error) {
+      console.error('Failed to load column order from storage:', error);
+      return null;
+    }
+  };
+
+  const clearColumnOrderFromStorage = () => {
+    try {
+      localStorage.removeItem(COLUMN_ORDER_KEY);
+    } catch (error) {
+      console.error('Failed to clear column order from storage:', error);
     }
   };
 
@@ -305,6 +383,7 @@ const CorporatePartnersPage: React.FC = () => {
       
       const partnerData = {
         ...formData,
+        weightedPriorityScore: calculateWeightedScore(formData).toString(),
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -338,7 +417,7 @@ const CorporatePartnersPage: React.FC = () => {
         weightedPriorityScore: '',
         notes: '',
         notesJustification: '',
-        status: 'new',
+        status: 'inactive',
         contactStatus: 'not-contacted',
         lastContactDate: '',
         nextFollowUpDate: '',
@@ -376,8 +455,12 @@ const CorporatePartnersPage: React.FC = () => {
     try {
       setProcessingBulk(true);
       
+      // Get existing company names for duplicate checking
+      const existingCompanies = partners.map(partner => partner.companyName).filter(Boolean);
+      
       let requestData: any = {
-        inputType: bulkInputType
+        inputType: bulkInputType,
+        existingCompanies
       };
 
       if (bulkInputType === 'text') {
@@ -432,17 +515,44 @@ const CorporatePartnersPage: React.FC = () => {
       // Add default status and source to all prospects
       const processedData = prospects.map((prospect: any) => ({
         ...prospect,
-        status: prospect.status || 'new',
+        status: prospect.status || 'inactive',
         priority: prospect.priority || 'medium',
         source: bulkInputType === 'image' ? 'bulk_image' : 'bulk_text'
       }));
 
       setPreviewData(processedData);
-      showToast(`Successfully extracted ${processedData.length} partner prospects!`, 'success');
+      
+      // Show appropriate message based on duplicates
+      const duplicateCount = result.duplicateCount || 0;
+      const newCount = result.newCount || processedData.length;
+      
+      if (duplicateCount > 0) {
+        showToast(
+          `Extracted ${processedData.length} prospects (${newCount} new, ${duplicateCount} duplicates found)`, 
+          'info'
+        );
+      } else {
+        showToast(`Successfully extracted ${processedData.length} new partner prospects!`, 'success');
+      }
       
     } catch (error) {
       console.error('Error processing bulk data:', error);
-      showToast(error instanceof Error ? error.message : 'Error processing bulk data', 'error');
+      
+      // Show more helpful error messages
+      let errorMessage = 'Error processing bulk data';
+      if (error instanceof Error) {
+        if (error.message.includes('AI returned invalid JSON format')) {
+          errorMessage = 'AI had trouble reading the image. Please try with a clearer image or different format.';
+        } else if (error.message.includes('OpenAI API failed')) {
+          errorMessage = 'AI service is temporarily unavailable. Please try again in a moment.';
+        } else if (error.message.includes('Cannot access or read')) {
+          errorMessage = 'Unable to read the uploaded image. Please check the image format and try again.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      showToast(errorMessage, 'error');
     } finally {
       setProcessingBulk(false);
     }
@@ -459,20 +569,75 @@ const CorporatePartnersPage: React.FC = () => {
       setSavingBulk(true);
       const partnersRef = collection(db, 'corporate-partners');
       
-      // Save all prospects
-      const savePromises = previewData.map(async (prospect) => {
-        const partnerData = {
-          ...prospect,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        };
-        
-        return addDoc(partnersRef, partnerData);
-      });
-
-      await Promise.all(savePromises);
+      // Filter prospects based on duplicate actions
+      const prospectsToAdd = previewData.filter(prospect => 
+        !prospect.isDuplicate || prospect.duplicateAction === 'add'
+      );
       
-      showToast(`Successfully saved ${previewData.length} partner prospects!`, 'success');
+      const prospectsToUpdate = previewData.filter(prospect => 
+        prospect.isDuplicate && prospect.duplicateAction === 'update'
+      );
+      
+      const prospectsToSkip = previewData.filter(prospect => 
+        prospect.isDuplicate && prospect.duplicateAction === 'skip'
+      );
+
+      let addedCount = 0;
+      let updatedCount = 0;
+      let skippedCount = prospectsToSkip.length;
+
+      // Add new prospects
+      if (prospectsToAdd.length > 0) {
+        const addPromises = prospectsToAdd.map(async (prospect) => {
+          const partnerData = {
+            ...prospect,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          };
+          // Remove duplicate tracking fields
+          delete partnerData.isDuplicate;
+          delete partnerData.duplicateAction;
+          
+          return addDoc(partnersRef, partnerData);
+        });
+
+        await Promise.all(addPromises);
+        addedCount = prospectsToAdd.length;
+      }
+
+      // Update existing prospects
+      if (prospectsToUpdate.length > 0) {
+        const updatePromises = prospectsToUpdate.map(async (prospect) => {
+          // Find existing partner by company name
+          const existingPartner = partners.find(p => 
+            p.companyName.toLowerCase().trim() === prospect.companyName.toLowerCase().trim()
+          );
+          
+          if (existingPartner) {
+            const partnerData = {
+              ...prospect,
+              updatedAt: new Date(),
+            };
+            // Remove duplicate tracking fields
+            delete partnerData.isDuplicate;
+            delete partnerData.duplicateAction;
+            
+            const docRef = doc(db, 'corporate-partners', existingPartner.id);
+            return updateDoc(docRef, partnerData);
+          }
+        });
+
+        await Promise.all(updatePromises.filter(Boolean));
+        updatedCount = prospectsToUpdate.length;
+      }
+
+      // Show detailed success message
+      const messages = [];
+      if (addedCount > 0) messages.push(`${addedCount} added`);
+      if (updatedCount > 0) messages.push(`${updatedCount} updated`);
+      if (skippedCount > 0) messages.push(`${skippedCount} skipped`);
+      
+      showToast(`Successfully processed ${previewData.length} prospects: ${messages.join(', ')}`, 'success');
       
       // Clear preview data and reset form
       setPreviewData([]);
@@ -495,9 +660,21 @@ const CorporatePartnersPage: React.FC = () => {
 
   // Update preview data
   const updatePreviewData = (index: number, field: keyof PartnerFormData, value: string) => {
-    setPreviewData(prev => prev.map((item, i) => 
-      i === index ? { ...item, [field]: value } : item
-    ));
+    setPreviewData(prev => prev.map((item, i) => {
+      if (i === index) {
+        const updatedItem = { ...item, [field]: value };
+        
+        // If this is a rating field, auto-calculate weighted score
+        const ratingFields = ['missionFit', 'audienceOverlap', 'activationPotential', 'brandReputation', 'scalability', 'resourcesBeyondMoney'];
+        if (ratingFields.includes(field)) {
+          const weightedScore = calculateWeightedScore(updatedItem);
+          updatedItem.weightedPriorityScore = weightedScore.toString();
+        }
+        
+        return updatedItem;
+      }
+      return item;
+    }));
   };
 
   // Remove preview item
@@ -525,12 +702,37 @@ const CorporatePartnersPage: React.FC = () => {
     
     // Immediately add to pending changes
     if (editingPartner) {
+      // Get the current partner data
+      const partner = partners.find(p => p.id === editingPartner);
+      if (!partner) return;
+
+      // Create updated changes object
+      const updatedChanges = {
+        ...pendingChanges[editingPartner],
+        [field]: value
+      };
+
+      // If this is a rating field, auto-calculate weighted score
+      const ratingFields = ['missionFit', 'audienceOverlap', 'activationPotential', 'brandReputation', 'scalability', 'resourcesBeyondMoney'];
+      if (ratingFields.includes(field)) {
+        // Get all current rating values (including pending changes)
+        const currentRatings = {
+          missionFit: updatedChanges.missionFit ?? partner.missionFit,
+          audienceOverlap: updatedChanges.audienceOverlap ?? partner.audienceOverlap,
+          activationPotential: updatedChanges.activationPotential ?? partner.activationPotential,
+          brandReputation: updatedChanges.brandReputation ?? partner.brandReputation,
+          scalability: updatedChanges.scalability ?? partner.scalability,
+          resourcesBeyondMoney: updatedChanges.resourcesBeyondMoney ?? partner.resourcesBeyondMoney,
+        };
+
+        // Calculate and set weighted score
+        const weightedScore = calculateWeightedScore(currentRatings);
+        updatedChanges.weightedPriorityScore = weightedScore.toString();
+      }
+      
       const newPendingChanges = {
         ...pendingChanges,
-        [editingPartner]: {
-          ...pendingChanges[editingPartner],
-          [field]: value
-        }
+        [editingPartner]: updatedChanges
       };
       
       setPendingChanges(newPendingChanges);
@@ -584,6 +786,7 @@ const CorporatePartnersPage: React.FC = () => {
     newColumnOrder.splice(targetIndex, 0, draggedColumn);
 
     setColumnOrder(newColumnOrder);
+    saveColumnOrderToStorage(newColumnOrder); // Save to localStorage
     setDraggedColumn(null);
     setDragOverColumn(null);
     setIsDragging(false);
@@ -614,7 +817,9 @@ const CorporatePartnersPage: React.FC = () => {
 
   // Reset column order
   const resetColumnOrder = () => {
-    setColumnOrder(defaultColumns.map(col => col.key));
+    const defaultOrder = defaultColumns.map(col => col.key);
+    setColumnOrder(defaultOrder);
+    clearColumnOrderFromStorage(); // Clear from localStorage
     showToast('Column order reset to default', 'success');
   };
 
@@ -663,6 +868,188 @@ const CorporatePartnersPage: React.FC = () => {
       }
     } catch (error) {
       console.error('Failed to load custom options:', error);
+    }
+  };
+
+  // Modal functions
+  const openDetailModal = (partner: PartnerProspect) => {
+    setSelectedPartnerForModal(partner);
+    setShowDetailModal(true);
+  };
+
+  const closeDetailModal = () => {
+    setSelectedPartnerForModal(null);
+    setShowDetailModal(false);
+  };
+
+  // Selection mode functions
+  const enterSelectionMode = () => {
+    setIsSelectionMode(true);
+    setSelectedPartners(new Set());
+  };
+
+  const exitSelectionMode = () => {
+    setIsSelectionMode(false);
+    setSelectedPartners(new Set());
+  };
+
+  // Multi-select functions
+  const togglePartnerSelection = (partnerId: string) => {
+    setSelectedPartners(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(partnerId)) {
+        newSet.delete(partnerId);
+      } else {
+        newSet.add(partnerId);
+      }
+      return newSet;
+    });
+  };
+
+  const selectAllPartners = () => {
+    const allPartnerIds = new Set(filteredPartners.map(p => p.id));
+    setSelectedPartners(allPartnerIds);
+  };
+
+  const clearSelection = () => {
+    setSelectedPartners(new Set());
+  };
+
+  const deleteSelectedPartners = async () => {
+    if (selectedPartners.size === 0) {
+      showToast('No partners selected for deletion', 'error');
+      return;
+    }
+
+    const confirmDelete = window.confirm(
+      `Are you sure you want to delete ${selectedPartners.size} partner prospect${selectedPartners.size > 1 ? 's' : ''}? This action cannot be undone.`
+    );
+
+    if (!confirmDelete) return;
+
+    try {
+      setIsDeleting(true);
+      
+      // Delete from Firestore using batch
+      const batch = writeBatch(db);
+      selectedPartners.forEach(partnerId => {
+        const docRef = doc(db, 'corporate-partners', partnerId);
+        batch.delete(docRef);
+      });
+      
+      await batch.commit();
+      
+      // Update local state
+      setPartners(prev => prev.filter(p => !selectedPartners.has(p.id)));
+      
+      // Clear pending changes for deleted partners
+      const newPendingChanges = { ...pendingChanges };
+      selectedPartners.forEach(partnerId => {
+        delete newPendingChanges[partnerId];
+      });
+      setPendingChanges(newPendingChanges);
+      savePendingChangesToStorage(newPendingChanges);
+      
+      // Clear selection
+      setSelectedPartners(new Set());
+      
+      showToast(`Successfully deleted ${selectedPartners.size} partner prospect${selectedPartners.size > 1 ? 's' : ''}`, 'success');
+      
+    } catch (error) {
+      console.error('Error deleting partners:', error);
+      showToast('Error deleting partner prospects', 'error');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  // Inline add new prospect functions
+  const startAddingNew = () => {
+    setIsAddingNew(true);
+    setNewProspectData({
+      companyName: '',
+      contactPerson: '',
+      email: '',
+      phone: '',
+      website: '',
+      linkedin: '',
+      industry: '',
+      companySize: '',
+      location: '',
+      country: '',
+      partnershipType: '',
+      partnershipTier: '',
+      contactNames: '',
+      missionFit: '',
+      audienceOverlap: '',
+      activationPotential: '',
+      brandReputation: '',
+      scalability: '',
+      resourcesBeyondMoney: '',
+      weightedPriorityScore: '',
+      notes: '',
+      notesJustification: '',
+      status: 'inactive',
+      contactStatus: 'not-contacted',
+      lastContactDate: '',
+      nextFollowUpDate: '',
+      leadSource: '',
+      priority: 'medium',
+      potentialValue: ''
+    });
+  };
+
+  const cancelAddingNew = () => {
+    setIsAddingNew(false);
+    setNewProspectData({});
+  };
+
+  const updateNewProspectData = (field: string, value: any) => {
+    const updatedData = { ...newProspectData, [field]: value };
+    
+    // If this is a rating field, auto-calculate weighted score
+    const ratingFields = ['missionFit', 'audienceOverlap', 'activationPotential', 'brandReputation', 'scalability', 'resourcesBeyondMoney'];
+    if (ratingFields.includes(field)) {
+      const weightedScore = calculateWeightedScore(updatedData);
+      updatedData.weightedPriorityScore = weightedScore.toString();
+    }
+    
+    setNewProspectData(updatedData);
+  };
+
+  const saveNewProspect = async () => {
+    if (!newProspectData.companyName?.trim()) {
+      showToast('Company name is required', 'error');
+      return;
+    }
+
+    try {
+      setSavingNewProspect(true);
+      
+      const prospectData = {
+        ...newProspectData,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+
+      const docRef = await addDoc(collection(db, 'corporate-partners'), prospectData);
+      
+      // Add to local state
+      const newProspect: PartnerProspect = {
+        id: docRef.id,
+        ...prospectData
+      } as PartnerProspect;
+      
+      setPartners(prev => [newProspect, ...prev]);
+      
+      showToast('New partner prospect added successfully', 'success');
+      cancelAddingNew();
+      
+    } catch (error) {
+      console.error('Error adding new prospect:', error);
+      showToast('Error adding new prospect', 'error');
+    } finally {
+      setSavingNewProspect(false);
     }
   };
 
@@ -782,7 +1169,7 @@ const CorporatePartnersPage: React.FC = () => {
     }
   }, [currentView]);
 
-  // Load pending changes and custom options from localStorage on component mount
+  // Load pending changes, custom options, and column order from localStorage on component mount
   useEffect(() => {
     const storedChanges = loadPendingChangesFromStorage();
     if (Object.keys(storedChanges).length > 0) {
@@ -793,6 +1180,12 @@ const CorporatePartnersPage: React.FC = () => {
     
     // Load custom options
     loadCustomOptions();
+    
+    // Load column order
+    const storedColumnOrder = loadColumnOrderFromStorage();
+    if (storedColumnOrder) {
+      setColumnOrder(storedColumnOrder);
+    }
   }, []);
 
   // Page refresh protection
@@ -810,13 +1203,127 @@ const CorporatePartnersPage: React.FC = () => {
   }, [hasUnsavedChanges]);
 
   // Helper function to get current display value (including pending changes)
+  // Sort function
+  const sortPartners = (partners: PartnerProspect[]) => {
+    return [...partners].sort((a, b) => {
+      const aValue = getCurrentValue(a, sortBy as keyof PartnerFormData);
+      const bValue = getCurrentValue(b, sortBy as keyof PartnerFormData);
+      
+      // Handle different data types
+      let comparison = 0;
+      
+      if (sortBy === 'weightedPriorityScore' || sortBy === 'potentialValue') {
+        // Numeric comparison
+        const aNum = parseFloat(aValue?.toString() || '0');
+        const bNum = parseFloat(bValue?.toString() || '0');
+        comparison = aNum - bNum;
+      } else if (sortBy === 'lastContactDate' || sortBy === 'nextFollowUpDate') {
+        // Date comparison
+        const aDate = aValue ? new Date(aValue) : new Date(0);
+        const bDate = bValue ? new Date(bValue) : new Date(0);
+        comparison = aDate.getTime() - bDate.getTime();
+      } else if (sortBy.includes('Fit') || sortBy.includes('Overlap') || sortBy.includes('Potential') || sortBy.includes('Alignment')) {
+        // Rating comparison (extract number from "4 - Good" format)
+        const aRating = parseInt(aValue?.toString().split(' ')[0] || '0');
+        const bRating = parseInt(bValue?.toString().split(' ')[0] || '0');
+        comparison = aRating - bRating;
+      } else {
+        // String comparison
+        const aStr = aValue?.toString().toLowerCase() || '';
+        const bStr = bValue?.toString().toLowerCase() || '';
+        comparison = aStr.localeCompare(bStr);
+      }
+      
+      return sortDirection === 'asc' ? comparison : -comparison;
+    });
+  };
+
+  // Search function
+  const searchPartners = (partners: PartnerProspect[]) => {
+    if (!searchQuery.trim()) return partners;
+    
+    const query = searchQuery.toLowerCase().trim();
+    
+    return partners.filter(partner => {
+      // Define searchable fields
+      const searchableFields = [
+        getCurrentValue(partner, 'companyName'),
+        getCurrentValue(partner, 'contactPerson'),
+        getCurrentValue(partner, 'email'),
+        getCurrentValue(partner, 'industry'),
+        getCurrentValue(partner, 'partnershipType'),
+        getCurrentValue(partner, 'partnershipTier'),
+        getCurrentValue(partner, 'status'),
+        getCurrentValue(partner, 'priority'),
+        getCurrentValue(partner, 'leadSource'),
+        getCurrentValue(partner, 'notes'),
+        getCurrentValue(partner, 'notesJustification')
+      ];
+      
+      // Search across all fields
+      return searchableFields.some(field => 
+        field?.toString().toLowerCase().includes(query)
+      );
+    });
+  };
+
   const getCurrentValue = (partner: PartnerProspect, field: keyof PartnerFormData) => {
     const pendingValue = pendingChanges[partner.id]?.[field];
     return pendingValue !== undefined ? pendingValue : partner[field];
   };
 
+  // Helper function to calculate weighted score from rating fields
+  const calculateWeightedScore = (ratings: {
+    missionFit?: string;
+    audienceOverlap?: string;
+    activationPotential?: string;
+    brandReputation?: string;
+    scalability?: string;
+    resourcesBeyondMoney?: string;
+  }) => {
+    // Extract numeric values from rating strings (e.g., "4. Strong Fit" -> 4)
+    const extractRating = (ratingStr: string | undefined): number => {
+      if (!ratingStr) return 0;
+      const match = ratingStr.match(/^(\d+)/);
+      return match ? parseInt(match[1]) : 0;
+    };
+
+    const missionFit = extractRating(ratings.missionFit);
+    const audienceOverlap = extractRating(ratings.audienceOverlap);
+    const activationPotential = extractRating(ratings.activationPotential);
+    const brandReputation = extractRating(ratings.brandReputation);
+    const scalability = extractRating(ratings.scalability);
+    const resourcesBeyondMoney = extractRating(ratings.resourcesBeyondMoney);
+
+    // Define weights for each factor (you can adjust these based on importance)
+    const weights = {
+      missionFit: 0.25,           // 25% - How well aligned with mission
+      audienceOverlap: 0.20,     // 20% - Audience alignment
+      activationPotential: 0.20, // 20% - Potential for activation
+      brandReputation: 0.15,     // 15% - Brand strength
+      scalability: 0.10,         // 10% - Scalability potential
+      resourcesBeyondMoney: 0.10  // 10% - Additional resources
+    };
+
+    // Calculate weighted average
+    const weightedSum = 
+      (missionFit * weights.missionFit) +
+      (audienceOverlap * weights.audienceOverlap) +
+      (activationPotential * weights.activationPotential) +
+      (brandReputation * weights.brandReputation) +
+      (scalability * weights.scalability) +
+      (resourcesBeyondMoney * weights.resourcesBeyondMoney);
+
+    // Return rounded to 2 decimal places
+    return Math.round(weightedSum * 100) / 100;
+  };
+
   // Separate active and inactive prospects using current values (including pending changes)
-  const filteredPartners = useMemo(() => getFilteredPartners(), [partners, selectedStatusFilters, selectedIndustryFilters, selectedPriorityFilters, selectedPartnershipTypeFilters]);
+  const filteredPartners = useMemo(() => {
+    const filtered = getFilteredPartners();
+    const searched = searchPartners(filtered);
+    return sortPartners(searched);
+  }, [partners, selectedStatusFilters, selectedIndustryFilters, selectedPriorityFilters, selectedPartnershipTypeFilters, searchQuery, sortBy, sortDirection, pendingChanges]);
   const activeProspects = useMemo(() => 
     filteredPartners.filter(partner => getCurrentValue(partner, 'status') !== 'inactive'),
     [filteredPartners, pendingChanges]
@@ -837,21 +1344,75 @@ const CorporatePartnersPage: React.FC = () => {
 
     if (isEditing) {
       if (type === 'select' && options) {
+        const allOptions = getOptionsForField(field);
         return (
-          <select
-            value={displayValue || ''}
-            onChange={(e) => updateEditingValue(field, e.target.value)}
-            onBlur={() => finishEditing()}
-            className="w-full px-2 py-1 bg-[#262a30] border border-[#d7ff00] rounded text-white text-sm focus:outline-none"
-            autoFocus
-          >
-            <option value="">Select {field}</option>
-            {options.map(option => (
-              <option key={option} value={option}>
-                {option.charAt(0).toUpperCase() + option.slice(1).replace('-', ' ')}
+          <div className="relative">
+            <select
+              value={displayValue || ''}
+              onChange={(e) => {
+                if (e.target.value === '__ADD_CUSTOM__') {
+                  setShowAddOption(field);
+                } else {
+                  updateEditingValue(field, e.target.value);
+                }
+              }}
+              onBlur={() => {
+                if (showAddOption !== field) {
+                  finishEditing();
+                }
+              }}
+              className="w-full px-2 py-1 bg-[#262a30] border border-[#d7ff00] rounded text-white text-sm focus:outline-none"
+              autoFocus
+            >
+              <option value="">Select {field}</option>
+              {allOptions.map(option => (
+                <option key={option} value={option}>
+                  {option.charAt(0).toUpperCase() + option.slice(1).replace('-', ' ')}
+                </option>
+              ))}
+              <option value="__ADD_CUSTOM__" className="text-[#d7ff00] font-medium">
+                + Add Custom Option
               </option>
-            ))}
-          </select>
+            </select>
+            
+            {showAddOption === field && (
+              <div className="absolute top-full left-0 right-0 mt-1 p-2 bg-[#262a30] border border-[#d7ff00] rounded z-50">
+                <input
+                  type="text"
+                  value={newOptionValue}
+                  onChange={(e) => setNewOptionValue(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      addCustomOption(field);
+                    } else if (e.key === 'Escape') {
+                      setShowAddOption(null);
+                      setNewOptionValue('');
+                    }
+                  }}
+                  placeholder={`Enter new ${field} option`}
+                  className="w-full px-2 py-1 bg-[#1a1e24] border border-gray-600 rounded text-white text-sm focus:outline-none focus:border-[#d7ff00]"
+                  autoFocus
+                />
+                <div className="flex gap-2 mt-2">
+                  <button
+                    onClick={() => addCustomOption(field)}
+                    className="px-2 py-1 bg-[#d7ff00] text-black rounded text-xs hover:bg-[#c5e600]"
+                  >
+                    Add
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowAddOption(null);
+                      setNewOptionValue('');
+                    }}
+                    className="px-2 py-1 bg-gray-600 text-white rounded text-xs hover:bg-gray-700"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         );
       } else {
         return (
@@ -895,19 +1456,73 @@ const CorporatePartnersPage: React.FC = () => {
       : currentValue;
 
     if (isEditing) {
+      const allOptions = getOptionsForField(field);
       return (
-        <select
-          value={displayValue || ''}
-          onChange={(e) => updateEditingValue(field, e.target.value)}
-          onBlur={() => finishEditing()}
-          className="w-full px-2 py-1 bg-[#262a30] border border-[#d7ff00] rounded text-white text-sm focus:outline-none"
-          autoFocus
-        >
-          <option value="">Select rating</option>
-          {ratingOptions.map(option => (
-            <option key={option} value={option}>{option}</option>
-          ))}
-        </select>
+        <div className="relative">
+          <select
+            value={displayValue || ''}
+            onChange={(e) => {
+              if (e.target.value === '__ADD_CUSTOM__') {
+                setShowAddOption(field);
+              } else {
+                updateEditingValue(field, e.target.value);
+              }
+            }}
+            onBlur={() => {
+              if (showAddOption !== field) {
+                finishEditing();
+              }
+            }}
+            className="w-full px-2 py-1 bg-[#262a30] border border-[#d7ff00] rounded text-white text-sm focus:outline-none"
+            autoFocus
+          >
+            <option value="">Select rating</option>
+            {allOptions.map(option => (
+              <option key={option} value={option}>{option}</option>
+            ))}
+            <option value="__ADD_CUSTOM__" className="text-[#d7ff00] font-medium">
+              + Add Custom Rating
+            </option>
+          </select>
+          
+          {showAddOption === field && (
+            <div className="absolute top-full left-0 right-0 mt-1 p-2 bg-[#262a30] border border-[#d7ff00] rounded z-50">
+              <input
+                type="text"
+                value={newOptionValue}
+                onChange={(e) => setNewOptionValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    addCustomOption(field);
+                  } else if (e.key === 'Escape') {
+                    setShowAddOption(null);
+                    setNewOptionValue('');
+                  }
+                }}
+                placeholder={`Enter new ${field} rating`}
+                className="w-full px-2 py-1 bg-[#1a1e24] border border-gray-600 rounded text-white text-sm focus:outline-none focus:border-[#d7ff00]"
+                autoFocus
+              />
+              <div className="flex gap-2 mt-2">
+                <button
+                  onClick={() => addCustomOption(field)}
+                  className="px-2 py-1 bg-[#d7ff00] text-black rounded text-xs hover:bg-[#c5e600]"
+                >
+                  Add
+                </button>
+                <button
+                  onClick={() => {
+                    setShowAddOption(null);
+                    setNewOptionValue('');
+                  }}
+                  className="px-2 py-1 bg-gray-600 text-white rounded text-xs hover:bg-gray-700"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       );
     }
 
@@ -944,18 +1559,19 @@ const CorporatePartnersPage: React.FC = () => {
   const renderActiveProspectCard = (partner: PartnerProspect) => {
     const currentStatus = getCurrentValue(partner, 'status');
     return (
-      <div key={partner.id} className="bg-[#1a1e24] border border-[#d7ff00] rounded-lg p-4 hover:bg-[#1e2329] transition-colors">
-        <div className="flex justify-between items-start mb-3">
-          <div className="flex-1">
-            <h3 className="font-semibold text-white text-lg">
+      <div key={partner.id} className="bg-[#1a1e24] border border-[#d7ff00] rounded-xl p-6 hover:bg-[#1e2329] transition-all duration-200 hover:shadow-lg">
+        {/* Header with Company Name and Status */}
+        <div className="flex justify-between items-start mb-6">
+          <div className="flex-1 min-w-0">
+            <h3 className="font-bold text-white text-xl mb-2 truncate">
               {renderEditableCell(partner, 'companyName', getCurrentValue(partner, 'companyName'), 'text')}
             </h3>
-            <p className="text-gray-400 text-sm mt-1">
+            <p className="text-gray-400 text-base">
               {renderEditableCell(partner, 'contactPerson', getCurrentValue(partner, 'contactPerson'), 'text')}
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+          <div className="flex items-center gap-3 ml-4">
+            <span className={`px-3 py-1.5 rounded-full text-sm font-medium ${
               currentStatus === 'contacted' ? 'bg-blue-900 text-blue-200' :
               currentStatus === 'interested' ? 'bg-green-900 text-green-200' :
               currentStatus === 'negotiating' ? 'bg-yellow-900 text-yellow-200' :
@@ -964,95 +1580,369 @@ const CorporatePartnersPage: React.FC = () => {
               currentStatus === 'on-hold' ? 'bg-gray-900 text-gray-200' :
               'bg-gray-900 text-gray-200'
             }`}>
-              {renderEditableCell(partner, 'status', getCurrentValue(partner, 'status'), 'select', statusOptions)}
+              {renderEditableCell(partner, 'status', getCurrentValue(partner, 'status'), 'select', getOptionsForField('status'))}
             </span>
+            <button
+              onClick={() => openDetailModal(partner)}
+              className="p-2 bg-[#262a30] hover:bg-[#2a2e35] rounded-lg transition-colors text-gray-400 hover:text-[#d7ff00]"
+              title="View details"
+            >
+              <Eye className="w-4 h-4" />
+            </button>
           </div>
         </div>
         
-        <div className="grid grid-cols-2 gap-4 mb-3">
-          <div>
-            <p className="text-xs text-gray-500 uppercase tracking-wide">Industry</p>
-            <p className="text-white text-sm">
-              {renderEditableCell(partner, 'industry', getCurrentValue(partner, 'industry'), 'select', industryOptions)}
-            </p>
+        {/* Basic Info Grid */}
+        <div className="grid grid-cols-2 gap-6 mb-6">
+          <div className="space-y-2">
+            <p className="text-xs text-gray-500 uppercase tracking-wider font-medium">Industry</p>
+            <div className="text-white text-sm">
+              {renderEditableCell(partner, 'industry', getCurrentValue(partner, 'industry'), 'select', getOptionsForField('industry'))}
+            </div>
           </div>
-          <div>
-            <p className="text-xs text-gray-500 uppercase tracking-wide">Partnership Type</p>
-            <p className="text-white text-sm">
-              {renderEditableCell(partner, 'partnershipType', getCurrentValue(partner, 'partnershipType'), 'select', partnershipTypeOptions)}
-            </p>
+          <div className="space-y-2">
+            <p className="text-xs text-gray-500 uppercase tracking-wider font-medium">Partnership Type</p>
+            <div className="text-white text-sm">
+              {renderEditableCell(partner, 'partnershipType', getCurrentValue(partner, 'partnershipType'), 'select', getOptionsForField('partnershipType'))}
+            </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-4 mb-3">
-          <div>
-            <p className="text-xs text-gray-500 uppercase tracking-wide">Mission Fit</p>
-            <div className="mt-1">
+        {/* Ratings Grid */}
+        <div className="grid grid-cols-2 gap-6 mb-6">
+          <div className="space-y-2">
+            <p className="text-xs text-gray-500 uppercase tracking-wider font-medium">Mission Fit</p>
+            <div>
               {renderEditableRating(partner, 'missionFit', getCurrentValue(partner, 'missionFit'), 'text-yellow-400')}
             </div>
           </div>
-          <div>
-            <p className="text-xs text-gray-500 uppercase tracking-wide">Audience Overlap</p>
-            <div className="mt-1">
+          <div className="space-y-2">
+            <p className="text-xs text-gray-500 uppercase tracking-wider font-medium">Audience Overlap</p>
+            <div>
               {renderEditableRating(partner, 'audienceOverlap', getCurrentValue(partner, 'audienceOverlap'), 'text-blue-400')}
             </div>
           </div>
-          <div>
-            <p className="text-xs text-gray-500 uppercase tracking-wide">Weighted Score</p>
-            <p className="text-white font-medium">
-              {renderEditableCell(partner, 'weightedPriorityScore', getCurrentValue(partner, 'weightedPriorityScore'), 'number')}
-            </p>
+        </div>
+
+        {/* Score and Priority */}
+        <div className="grid grid-cols-2 gap-6 mb-6">
+          <div className="space-y-2">
+            <p className="text-xs text-gray-500 uppercase tracking-wider font-medium">Weighted Score</p>
+            <div className="text-[#d7ff00] font-semibold text-lg bg-gray-800/50 px-3 py-1 rounded">
+              {getCurrentValue(partner, 'weightedPriorityScore') || '0.00'}
+            </div>
+          </div>
+          <div className="space-y-2">
+            <p className="text-xs text-gray-500 uppercase tracking-wider font-medium">Priority</p>
+            <div className="text-white">
+              {renderEditableCell(partner, 'priority', getCurrentValue(partner, 'priority'), 'select', getOptionsForField('priority'))}
+            </div>
           </div>
         </div>
 
-        <div className="flex justify-between items-center pt-3 border-t border-gray-700">
-          <div className="flex items-center gap-3">
-            {getCurrentValue(partner, 'website') && (
-              <a
-                href={getCurrentValue(partner, 'website')}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-[#d7ff00] hover:text-[#c5e600] flex items-center gap-1"
-                title="Visit website"
-              >
-                <Globe className="w-4 h-4" />
-                <span className="text-xs">Website</span>
-              </a>
-            )}
-            {getCurrentValue(partner, 'linkedin') && (
-              <a
-                href={getCurrentValue(partner, 'linkedin')}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-blue-400 hover:text-blue-300 flex items-center gap-1"
-                title="View LinkedIn"
-              >
-                <User className="w-4 h-4" />
-                <span className="text-xs">LinkedIn</span>
-              </a>
-            )}
-            {getCurrentValue(partner, 'email') && (
-              <a
-                href={`mailto:${getCurrentValue(partner, 'email')}`}
-                className="text-gray-400 hover:text-gray-300 flex items-center gap-1"
-                title="Send email"
-              >
-                <Mail className="w-4 h-4" />
-                <span className="text-xs">Email</span>
-              </a>
-            )}
-          </div>
-          <div className="text-xs text-gray-500">
-            Priority: {renderEditableCell(partner, 'priority', getCurrentValue(partner, 'priority'), 'select', priorityOptions)}
-          </div>
+        {/* Footer with Links */}
+        <div className="flex items-center gap-4 pt-4 border-t border-gray-700">
+          {getCurrentValue(partner, 'website') && (
+            <a
+              href={getCurrentValue(partner, 'website')}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[#d7ff00] hover:text-[#c5e600] flex items-center gap-2 transition-colors"
+              title="Visit website"
+            >
+              <Globe className="w-4 h-4" />
+              <span className="text-sm font-medium">Website</span>
+            </a>
+          )}
+          {getCurrentValue(partner, 'linkedin') && (
+            <a
+              href={getCurrentValue(partner, 'linkedin')}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-400 hover:text-blue-300 flex items-center gap-2 transition-colors"
+              title="View LinkedIn"
+            >
+              <User className="w-4 h-4" />
+              <span className="text-sm font-medium">LinkedIn</span>
+            </a>
+          )}
+          {getCurrentValue(partner, 'email') && (
+            <a
+              href={`mailto:${getCurrentValue(partner, 'email')}`}
+              className="text-gray-400 hover:text-gray-300 flex items-center gap-2 transition-colors"
+              title="Send email"
+            >
+              <Mail className="w-4 h-4" />
+              <span className="text-sm font-medium">Email</span>
+            </a>
+          )}
         </div>
       </div>
     );
   };
 
+  // Helper function to render new prospect row
+  const renderNewProspectCell = (columnKey: string) => {
+    const renderNewEditableCell = (field: keyof PartnerFormData, type: 'text' | 'select' | 'number' | 'email' | 'tel' | 'url' = 'text', options?: string[]) => {
+      const value = newProspectData[field] || '';
+
+      if (type === 'select' && options) {
+        const allOptions = getOptionsForField(field);
+        return (
+          <div className="relative">
+            <select
+              value={value}
+              onChange={(e) => {
+                if (e.target.value === '__ADD_CUSTOM__') {
+                  setShowAddOption(field);
+                } else {
+                  updateNewProspectData(field, e.target.value);
+                }
+              }}
+              className="w-full px-2 py-1 bg-[#262a30] border border-[#d7ff00] rounded text-white text-sm focus:outline-none"
+            >
+              <option value="">Select {field}</option>
+              {allOptions.map(option => (
+                <option key={option} value={option}>
+                  {option.charAt(0).toUpperCase() + option.slice(1).replace('-', ' ')}
+                </option>
+              ))}
+              <option value="__ADD_CUSTOM__" className="text-[#d7ff00] font-medium">
+                + Add Custom Option
+              </option>
+            </select>
+            
+            {showAddOption === field && (
+              <div className="absolute top-full left-0 right-0 mt-1 p-2 bg-[#262a30] border border-[#d7ff00] rounded z-50">
+                <input
+                  type="text"
+                  value={newOptionValue}
+                  onChange={(e) => setNewOptionValue(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      addCustomOption(field);
+                    } else if (e.key === 'Escape') {
+                      setShowAddOption(null);
+                      setNewOptionValue('');
+                    }
+                  }}
+                  placeholder={`Enter new ${field} option`}
+                  className="w-full px-2 py-1 bg-[#1a1e24] border border-gray-600 rounded text-white text-sm focus:outline-none focus:border-[#d7ff00]"
+                  autoFocus
+                />
+                <div className="flex gap-2 mt-2">
+                  <button
+                    onClick={() => addCustomOption(field)}
+                    className="px-2 py-1 bg-[#d7ff00] text-black rounded text-xs hover:bg-[#c5e600]"
+                  >
+                    Add
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowAddOption(null);
+                      setNewOptionValue('');
+                    }}
+                    className="px-2 py-1 bg-gray-600 text-white rounded text-xs hover:bg-gray-700"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      } else {
+        return (
+          <input
+            type={type}
+            value={value}
+            onChange={(e) => updateNewProspectData(field, e.target.value)}
+            placeholder={`Enter ${field}`}
+            className="w-full px-2 py-1 bg-[#262a30] border border-[#d7ff00] rounded text-white text-sm focus:outline-none placeholder-gray-400"
+            step={type === 'number' ? '0.1' : undefined}
+          />
+        );
+      }
+    };
+
+    const renderNewRatingCell = (field: keyof PartnerFormData) => {
+      const allOptions = getOptionsForField(field);
+      return (
+        <div className="relative">
+          <select
+            value={newProspectData[field] || ''}
+            onChange={(e) => {
+              if (e.target.value === '__ADD_CUSTOM__') {
+                setShowAddOption(field);
+              } else {
+                updateNewProspectData(field, e.target.value);
+              }
+            }}
+            className="w-full px-2 py-1 bg-[#262a30] border border-[#d7ff00] rounded text-white text-sm focus:outline-none"
+          >
+            <option value="">Select rating</option>
+            {allOptions.map(option => (
+              <option key={option} value={option}>{option}</option>
+            ))}
+            <option value="__ADD_CUSTOM__" className="text-[#d7ff00] font-medium">
+              + Add Custom Rating
+            </option>
+          </select>
+          
+          {showAddOption === field && (
+            <div className="absolute top-full left-0 right-0 mt-1 p-2 bg-[#262a30] border border-[#d7ff00] rounded z-50">
+              <input
+                type="text"
+                value={newOptionValue}
+                onChange={(e) => setNewOptionValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    addCustomOption(field);
+                  } else if (e.key === 'Escape') {
+                    setShowAddOption(null);
+                    setNewOptionValue('');
+                  }
+                }}
+                placeholder={`Enter new ${field} rating`}
+                className="w-full px-2 py-1 bg-[#1a1e24] border border-gray-600 rounded text-white text-sm focus:outline-none focus:border-[#d7ff00]"
+                autoFocus
+              />
+              <div className="flex gap-2 mt-2">
+                <button
+                  onClick={() => addCustomOption(field)}
+                  className="px-2 py-1 bg-[#d7ff00] text-black rounded text-xs hover:bg-[#c5e600]"
+                >
+                  Add
+                </button>
+                <button
+                  onClick={() => {
+                    setShowAddOption(null);
+                    setNewOptionValue('');
+                  }}
+                  className="px-2 py-1 bg-gray-600 text-white rounded text-xs hover:bg-gray-700"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    switch (columnKey) {
+      case 'select':
+        return isSelectionMode ? (
+          <div className="flex items-center justify-center">
+            <div className="w-4 h-4 bg-gray-600 rounded border border-gray-500 flex items-center justify-center">
+              <span className="text-xs text-gray-400">+</span>
+            </div>
+          </div>
+        ) : null;
+      case 'company':
+        return (
+          <div>
+            <div className="font-medium text-white mb-1">
+              {renderNewEditableCell('companyName', 'text')}
+            </div>
+            <div className="text-sm">
+              {renderNewEditableCell('location', 'text')}
+            </div>
+          </div>
+        );
+      case 'contact':
+        return (
+          <div>
+            <div className="text-white mb-1">
+              {renderNewEditableCell('contactPerson', 'text')}
+            </div>
+            <div className="text-xs">
+              {renderNewEditableCell('contactNames', 'text')}
+            </div>
+          </div>
+        );
+      case 'email':
+        return renderNewEditableCell('email', 'email');
+      case 'industry':
+        return renderNewEditableCell('industry', 'select', getOptionsForField('industry'));
+      case 'partnershipType':
+        return renderNewEditableCell('partnershipType', 'select', getOptionsForField('partnershipType'));
+      case 'partnershipTier':
+        return renderNewEditableCell('partnershipTier', 'select', getOptionsForField('partnershipTier'));
+      case 'missionFit':
+        return renderNewRatingCell('missionFit');
+      case 'audienceOverlap':
+        return renderNewRatingCell('audienceOverlap');
+      case 'activationPotential':
+        return renderNewRatingCell('activationPotential');
+      case 'brandReputation':
+        return renderNewRatingCell('brandReputation');
+      case 'scalability':
+        return renderNewRatingCell('scalability');
+      case 'resourcesBeyondMoney':
+        return renderNewRatingCell('resourcesBeyondMoney');
+      case 'weightedScore':
+        // Auto-calculate weighted score for new prospects
+        const newProspectRatings = {
+          missionFit: newProspectData.missionFit,
+          audienceOverlap: newProspectData.audienceOverlap,
+          activationPotential: newProspectData.activationPotential,
+          brandReputation: newProspectData.brandReputation,
+          scalability: newProspectData.scalability,
+          resourcesBeyondMoney: newProspectData.resourcesBeyondMoney,
+        };
+        const calculatedScore = calculateWeightedScore(newProspectRatings);
+        
+        return (
+          <div className="font-medium text-[#d7ff00] bg-gray-800/50 px-2 py-1 rounded">
+            {calculatedScore.toFixed(2)}
+          </div>
+        );
+      case 'status':
+        return (
+          <div className="text-white">
+            {renderNewEditableCell('status', 'select', getOptionsForField('status'))}
+          </div>
+        );
+      case 'contactStatus':
+        return (
+          <div className="text-white">
+            {renderNewEditableCell('contactStatus', 'select', getOptionsForField('contactStatus'))}
+          </div>
+        );
+      case 'priority':
+        return (
+          <div className="text-white">
+            {renderNewEditableCell('priority', 'select', getOptionsForField('priority'))}
+          </div>
+        );
+      case 'potentialValue':
+        return renderNewEditableCell('potentialValue', 'text');
+      case 'actions':
+        return (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-400">New prospect</span>
+          </div>
+        );
+      default:
+        return null;
+    }
+  };
+
   // Helper function to render table cell content based on column type
   const renderTableCell = (partner: PartnerProspect, columnKey: string) => {
     switch (columnKey) {
+      case 'select':
+        return isSelectionMode ? (
+          <div className="flex items-center justify-center">
+            <input
+              type="checkbox"
+              checked={selectedPartners.has(partner.id)}
+              onChange={() => togglePartnerSelection(partner.id)}
+              className="w-4 h-4 text-[#d7ff00] bg-gray-700 border-gray-600 rounded focus:ring-[#d7ff00] focus:ring-2"
+            />
+          </div>
+        ) : null;
       case 'company':
         return (
           <div>
@@ -1078,11 +1968,11 @@ const CorporatePartnersPage: React.FC = () => {
       case 'email':
         return renderEditableCell(partner, 'email', getCurrentValue(partner, 'email'), 'email');
       case 'industry':
-        return renderEditableCell(partner, 'industry', getCurrentValue(partner, 'industry'), 'select', industryOptions);
+        return renderEditableCell(partner, 'industry', getCurrentValue(partner, 'industry'), 'select', getOptionsForField('industry'));
       case 'partnershipType':
-        return renderEditableCell(partner, 'partnershipType', getCurrentValue(partner, 'partnershipType'), 'select', partnershipTypeOptions);
+        return renderEditableCell(partner, 'partnershipType', getCurrentValue(partner, 'partnershipType'), 'select', getOptionsForField('partnershipType'));
       case 'partnershipTier':
-        return renderEditableCell(partner, 'partnershipTier', getCurrentValue(partner, 'partnershipTier'), 'select', partnershipTierOptions);
+        return renderEditableCell(partner, 'partnershipTier', getCurrentValue(partner, 'partnershipTier'), 'select', getOptionsForField('partnershipTier'));
       case 'missionFit':
         return renderEditableRating(partner, 'missionFit', getCurrentValue(partner, 'missionFit'), 'text-yellow-400');
       case 'audienceOverlap':
@@ -1097,26 +1987,26 @@ const CorporatePartnersPage: React.FC = () => {
         return renderEditableRating(partner, 'resourcesBeyondMoney', getCurrentValue(partner, 'resourcesBeyondMoney'), 'text-pink-400');
       case 'weightedScore':
         return (
-          <div className="font-medium">
-            {renderEditableCell(partner, 'weightedPriorityScore', getCurrentValue(partner, 'weightedPriorityScore'), 'number')}
+          <div className="font-medium text-[#d7ff00] bg-gray-800/50 px-2 py-1 rounded">
+            {getCurrentValue(partner, 'weightedPriorityScore') || '0.00'}
           </div>
         );
       case 'status':
         return (
           <div className="text-white">
-            {renderEditableCell(partner, 'status', getCurrentValue(partner, 'status'), 'select', statusOptions)}
+            {renderEditableCell(partner, 'status', getCurrentValue(partner, 'status'), 'select', getOptionsForField('status'))}
           </div>
         );
       case 'contactStatus':
         return (
           <div className="text-white">
-            {renderEditableCell(partner, 'contactStatus', getCurrentValue(partner, 'contactStatus'), 'select', contactStatusOptions)}
+            {renderEditableCell(partner, 'contactStatus', getCurrentValue(partner, 'contactStatus'), 'select', getOptionsForField('contactStatus'))}
           </div>
         );
       case 'priority':
         return (
           <div className="text-white">
-            {renderEditableCell(partner, 'priority', getCurrentValue(partner, 'priority'), 'select', priorityOptions)}
+            {renderEditableCell(partner, 'priority', getCurrentValue(partner, 'priority'), 'select', getOptionsForField('priority'))}
           </div>
         );
       case 'potentialValue':
@@ -1160,6 +2050,251 @@ const CorporatePartnersPage: React.FC = () => {
       default:
         return null;
     }
+  };
+
+  // Helper function to render detailed modal
+  const renderDetailModal = () => {
+    if (!selectedPartnerForModal) return null;
+
+    const partner = selectedPartnerForModal;
+    const currentStatus = getCurrentValue(partner, 'status');
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="bg-[#1a1e24] border border-[#d7ff00] rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+          {/* Modal Header */}
+          <div className="flex justify-between items-center p-6 border-b border-gray-700">
+            <div>
+              <h2 className="text-2xl font-bold text-white">
+                {getCurrentValue(partner, 'companyName') || 'Partner Details'}
+              </h2>
+              <p className="text-gray-400 mt-1">
+                {getCurrentValue(partner, 'contactPerson')}
+              </p>
+            </div>
+            <button
+              onClick={closeDetailModal}
+              className="p-2 bg-[#262a30] hover:bg-[#2a2e35] rounded-lg transition-colors text-gray-400 hover:text-white"
+            >
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+
+          {/* Modal Content */}
+          <div className="p-6 space-y-8">
+            {/* Status and Basic Info */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="space-y-3">
+                <label className="block text-sm font-medium text-gray-300">Status</label>
+                <span className={`inline-block px-4 py-2 rounded-full text-sm font-medium ${
+                  currentStatus === 'contacted' ? 'bg-blue-900 text-blue-200' :
+                  currentStatus === 'interested' ? 'bg-green-900 text-green-200' :
+                  currentStatus === 'negotiating' ? 'bg-yellow-900 text-yellow-200' :
+                  currentStatus === 'closed-won' ? 'bg-emerald-900 text-emerald-200' :
+                  currentStatus === 'closed-lost' ? 'bg-red-900 text-red-200' :
+                  currentStatus === 'on-hold' ? 'bg-gray-900 text-gray-200' :
+                  'bg-gray-900 text-gray-200'
+                }`}>
+                  {renderEditableCell(partner, 'status', getCurrentValue(partner, 'status'), 'select', getOptionsForField('status'))}
+                </span>
+              </div>
+              <div className="space-y-3">
+                <label className="block text-sm font-medium text-gray-300">Priority</label>
+                <div className="text-white">
+                  {renderEditableCell(partner, 'priority', getCurrentValue(partner, 'priority'), 'select', getOptionsForField('priority'))}
+                </div>
+              </div>
+              <div className="space-y-3">
+                <label className="block text-sm font-medium text-gray-300">Weighted Score</label>
+                <div className="text-[#d7ff00] font-semibold text-xl bg-gray-800/50 px-3 py-2 rounded">
+                  {getCurrentValue(partner, 'weightedPriorityScore') || '0.00'}
+                </div>
+              </div>
+            </div>
+
+            {/* Contact Information */}
+            <div>
+              <h3 className="text-lg font-semibold text-white mb-4">Contact Information</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-3">
+                  <label className="block text-sm font-medium text-gray-300">Email</label>
+                  <div className="text-white">
+                    {renderEditableCell(partner, 'email', getCurrentValue(partner, 'email'), 'email')}
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <label className="block text-sm font-medium text-gray-300">Phone</label>
+                  <div className="text-white">
+                    {renderEditableCell(partner, 'phone', getCurrentValue(partner, 'phone'), 'tel')}
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <label className="block text-sm font-medium text-gray-300">Website</label>
+                  <div className="text-white">
+                    {renderEditableCell(partner, 'website', getCurrentValue(partner, 'website'), 'url')}
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <label className="block text-sm font-medium text-gray-300">LinkedIn</label>
+                  <div className="text-white">
+                    {renderEditableCell(partner, 'linkedin', getCurrentValue(partner, 'linkedin'), 'url')}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Company Information */}
+            <div>
+              <h3 className="text-lg font-semibold text-white mb-4">Company Information</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-3">
+                  <label className="block text-sm font-medium text-gray-300">Industry</label>
+                  <div className="text-white">
+                    {renderEditableCell(partner, 'industry', getCurrentValue(partner, 'industry'), 'select', getOptionsForField('industry'))}
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <label className="block text-sm font-medium text-gray-300">Company Size</label>
+                  <div className="text-white">
+                    {renderEditableCell(partner, 'companySize', getCurrentValue(partner, 'companySize'), 'select', getOptionsForField('companySize'))}
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <label className="block text-sm font-medium text-gray-300">Location</label>
+                  <div className="text-white">
+                    {renderEditableCell(partner, 'location', getCurrentValue(partner, 'location'), 'text')}
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <label className="block text-sm font-medium text-gray-300">Country</label>
+                  <div className="text-white">
+                    {renderEditableCell(partner, 'country', getCurrentValue(partner, 'country'), 'text')}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Partnership Details */}
+            <div>
+              <h3 className="text-lg font-semibold text-white mb-4">Partnership Details</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-3">
+                  <label className="block text-sm font-medium text-gray-300">Partnership Type</label>
+                  <div className="text-white">
+                    {renderEditableCell(partner, 'partnershipType', getCurrentValue(partner, 'partnershipType'), 'select', getOptionsForField('partnershipType'))}
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <label className="block text-sm font-medium text-gray-300">Partnership Tier</label>
+                  <div className="text-white">
+                    {renderEditableCell(partner, 'partnershipTier', getCurrentValue(partner, 'partnershipTier'), 'select', getOptionsForField('partnershipTier'))}
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <label className="block text-sm font-medium text-gray-300">Potential Value</label>
+                  <div className="text-white">
+                    {renderEditableCell(partner, 'potentialValue', getCurrentValue(partner, 'potentialValue'), 'text')}
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <label className="block text-sm font-medium text-gray-300">Lead Source</label>
+                  <div className="text-white">
+                    {renderEditableCell(partner, 'leadSource', getCurrentValue(partner, 'leadSource'), 'select', getOptionsForField('leadSource'))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Ratings */}
+            <div>
+              <h3 className="text-lg font-semibold text-white mb-4">Assessment Ratings</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="space-y-3">
+                  <label className="block text-sm font-medium text-gray-300">Mission Fit</label>
+                  <div>
+                    {renderEditableRating(partner, 'missionFit', getCurrentValue(partner, 'missionFit'), 'text-yellow-400')}
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <label className="block text-sm font-medium text-gray-300">Audience Overlap</label>
+                  <div>
+                    {renderEditableRating(partner, 'audienceOverlap', getCurrentValue(partner, 'audienceOverlap'), 'text-blue-400')}
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <label className="block text-sm font-medium text-gray-300">Activation Potential</label>
+                  <div>
+                    {renderEditableRating(partner, 'activationPotential', getCurrentValue(partner, 'activationPotential'), 'text-green-400')}
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <label className="block text-sm font-medium text-gray-300">Brand Reputation</label>
+                  <div>
+                    {renderEditableRating(partner, 'brandReputation', getCurrentValue(partner, 'brandReputation'), 'text-purple-400')}
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <label className="block text-sm font-medium text-gray-300">Scalability</label>
+                  <div>
+                    {renderEditableRating(partner, 'scalability', getCurrentValue(partner, 'scalability'), 'text-orange-400')}
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <label className="block text-sm font-medium text-gray-300">Resources Beyond Money</label>
+                  <div>
+                    {renderEditableRating(partner, 'resourcesBeyondMoney', getCurrentValue(partner, 'resourcesBeyondMoney'), 'text-pink-400')}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Notes Section */}
+            <div>
+              <h3 className="text-lg font-semibold text-white mb-4">Notes & Justification</h3>
+              <div className="space-y-6">
+                <div className="space-y-3">
+                  <label className="block text-sm font-medium text-gray-300">General Notes</label>
+                  <div className="text-white">
+                    {renderEditableCell(partner, 'notes', getCurrentValue(partner, 'notes'), 'text')}
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <label className="block text-sm font-medium text-gray-300">Notes & Justification</label>
+                  <textarea
+                    value={getCurrentValue(partner, 'notesJustification') || ''}
+                    onChange={(e) => {
+                      // Handle notes editing
+                      const newPendingChanges = {
+                        ...pendingChanges,
+                        [partner.id]: {
+                          ...pendingChanges[partner.id],
+                          notesJustification: e.target.value
+                        }
+                      };
+                      setPendingChanges(newPendingChanges);
+                      savePendingChangesToStorage(newPendingChanges);
+                      setHasUnsavedChanges(true);
+                    }}
+                    placeholder="Add detailed notes and justification for ratings..."
+                    className="w-full h-32 px-4 py-3 bg-[#262a30] border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-[#d7ff00] resize-none"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Modal Footer */}
+          <div className="flex justify-end gap-3 p-6 border-t border-gray-700">
+            <button
+              onClick={closeDetailModal}
+              className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   const renderBulkImport = () => (
@@ -1270,9 +2405,21 @@ const CorporatePartnersPage: React.FC = () => {
       {previewData.length > 0 && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-white">
-              Preview Extracted Data ({previewData.length} prospects)
-            </h3>
+            <div>
+              <h3 className="text-lg font-semibold text-white">
+                Preview Extracted Data ({previewData.length} prospects)
+              </h3>
+              {previewData.some(p => p.isDuplicate) && (
+                <div className="flex items-center gap-4 mt-1 text-sm">
+                  <span className="text-green-300">
+                    {previewData.filter(p => !p.isDuplicate).length} new
+                  </span>
+                  <span className="text-orange-300">
+                    {previewData.filter(p => p.isDuplicate).length} duplicates
+                  </span>
+                </div>
+              )}
+            </div>
             <div className="flex gap-2">
               <button
                 onClick={saveBulkData}
@@ -1294,15 +2441,40 @@ const CorporatePartnersPage: React.FC = () => {
 
           <div className="space-y-4 max-h-96 overflow-y-auto">
             {previewData.map((prospect, index) => (
-              <div key={index} className="bg-[#262a30] rounded-lg p-4 border border-gray-600">
+              <div key={index} className={`rounded-lg p-4 border ${
+                prospect.isDuplicate 
+                  ? 'bg-orange-900/20 border-orange-500/50' 
+                  : 'bg-[#262a30] border-gray-600'
+              }`}>
                 <div className="flex items-center justify-between mb-3">
-                  <h4 className="font-medium text-white">Prospect {index + 1}</h4>
-                  <button
-                    onClick={() => removePreviewItem(index)}
-                    className="text-red-400 hover:text-red-300"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-medium text-white">Prospect {index + 1}</h4>
+                    {prospect.isDuplicate && (
+                      <div className="flex items-center gap-1">
+                        <div className="w-2 h-2 bg-orange-400 rounded-full animate-pulse" />
+                        <span className="text-xs text-orange-300 font-medium">DUPLICATE</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {prospect.isDuplicate && (
+                      <select
+                        value={prospect.duplicateAction || 'skip'}
+                        onChange={(e) => updatePreviewData(index, 'duplicateAction', e.target.value)}
+                        className="px-2 py-1 bg-[#1a1e24] border border-orange-500 rounded text-white text-xs"
+                      >
+                        <option value="skip">Skip</option>
+                        <option value="update">Update Existing</option>
+                        <option value="add">Add Anyway</option>
+                      </select>
+                    )}
+                    <button
+                      onClick={() => removePreviewItem(index)}
+                      className="text-red-400 hover:text-red-300"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -1350,7 +2522,7 @@ const CorporatePartnersPage: React.FC = () => {
                       className="w-full px-2 py-1 bg-[#1a1e24] border border-gray-600 rounded text-white text-sm"
                     >
                       <option value="">Select industry</option>
-                      {industryOptions.map(option => (
+                      {getOptionsForField('industry').map(option => (
                         <option key={option} value={option}>{option}</option>
                       ))}
                     </select>
@@ -1363,7 +2535,7 @@ const CorporatePartnersPage: React.FC = () => {
                       className="w-full px-2 py-1 bg-[#1a1e24] border border-gray-600 rounded text-white text-sm"
                     >
                       <option value="">Select type</option>
-                      {partnershipTypeOptions.map(option => (
+                      {getOptionsForField('partnershipType').map(option => (
                         <option key={option} value={option}>{option}</option>
                       ))}
                     </select>
@@ -1460,14 +2632,10 @@ const CorporatePartnersPage: React.FC = () => {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs text-gray-400 mb-1">Weighted Priority Score</label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={prospect.weightedPriorityScore}
-                      onChange={(e) => updatePreviewData(index, 'weightedPriorityScore', e.target.value)}
-                      className="w-full px-2 py-1 bg-[#1a1e24] border border-gray-600 rounded text-white text-sm"
-                    />
+                    <label className="block text-xs text-gray-400 mb-1">Weighted Priority Score (Auto-calculated)</label>
+                    <div className="w-full px-2 py-1 bg-gray-800/50 border border-gray-600 rounded text-[#d7ff00] text-sm font-semibold">
+                      {calculateWeightedScore(prospect).toFixed(2)}
+                    </div>
                   </div>
                   <div>
                     <label className="block text-xs text-gray-400 mb-1">Partnership Status</label>
@@ -1639,7 +2807,7 @@ const CorporatePartnersPage: React.FC = () => {
             className="w-full px-3 py-2 bg-[#262a30] border border-gray-600 rounded-lg text-white focus:outline-none focus:border-[#d7ff00]"
           >
             <option value="">Select industry</option>
-            {industryOptions.map(option => (
+            {getOptionsForField('industry').map(option => (
               <option key={option} value={option}>{option}</option>
             ))}
           </select>
@@ -1692,7 +2860,7 @@ const CorporatePartnersPage: React.FC = () => {
             className="w-full px-3 py-2 bg-[#262a30] border border-gray-600 rounded-lg text-white focus:outline-none focus:border-[#d7ff00]"
           >
             <option value="">Select partnership type</option>
-            {partnershipTypeOptions.map(option => (
+            {getOptionsForField('partnershipType').map(option => (
               <option key={option} value={option}>{option}</option>
             ))}
           </select>
@@ -1820,16 +2988,11 @@ const CorporatePartnersPage: React.FC = () => {
         <div>
           <label className="block text-sm font-medium text-gray-300 mb-2">
             <Star className="w-4 h-4 inline mr-2" />
-            Weighted Priority Score
+            Weighted Priority Score (Auto-calculated)
           </label>
-          <input
-            type="number"
-            step="0.1"
-            value={formData.weightedPriorityScore}
-            onChange={(e) => setFormData({...formData, weightedPriorityScore: e.target.value})}
-            className="w-full px-3 py-2 bg-[#262a30] border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-[#d7ff00]"
-            placeholder="e.g., 3.75"
-          />
+          <div className="w-full px-3 py-2 bg-gray-800/50 border border-gray-600 rounded-lg text-[#d7ff00] font-semibold">
+            {calculateWeightedScore(formData).toFixed(2)}
+          </div>
         </div>
 
         <div>
@@ -1969,8 +3132,33 @@ const CorporatePartnersPage: React.FC = () => {
 
   const renderTable = () => (
     <div className="space-y-6">
-      {/* Filters */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Search Bar */}
+      <div className="relative">
+        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+          <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+        </div>
+        <input
+          type="text"
+          placeholder="Search prospects by company, contact, industry, notes..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="w-full pl-10 pr-10 py-3 bg-[#262a30] border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-[#d7ff00] focus:ring-1 focus:ring-[#d7ff00]"
+        />
+        {searchQuery && (
+          <button
+            onClick={() => setSearchQuery('')}
+            className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-white transition-colors"
+            title="Clear search"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        )}
+      </div>
+
+      {/* Filters and Sort */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <div>
           <label className="block text-sm font-medium text-gray-300 mb-2">Filter by Status</label>
           <select
@@ -1995,7 +3183,7 @@ const CorporatePartnersPage: React.FC = () => {
             className="w-full px-3 py-2 bg-[#262a30] border border-gray-600 rounded-lg text-white focus:outline-none focus:border-[#d7ff00]"
             size={3}
           >
-            {industryOptions.map(option => (
+            {getOptionsForField('industry').map(option => (
               <option key={option} value={option}>{option}</option>
             ))}
           </select>
@@ -2025,20 +3213,77 @@ const CorporatePartnersPage: React.FC = () => {
             className="w-full px-3 py-2 bg-[#262a30] border border-gray-600 rounded-lg text-white focus:outline-none focus:border-[#d7ff00]"
             size={3}
           >
-            {partnershipTypeOptions.map(option => (
+            {getOptionsForField('partnershipType').map(option => (
               <option key={option} value={option}>{option}</option>
             ))}
           </select>
         </div>
+        
+        {/* Sort Controls */}
+        <div>
+          <label className="block text-sm font-medium text-gray-300 mb-2">Sort By</label>
+          <div className="flex gap-2">
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="flex-1 px-3 py-2 bg-[#262a30] border border-gray-600 rounded-lg text-white focus:outline-none focus:border-[#d7ff00]"
+            >
+              {sortOptions.map(option => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+            <button
+              onClick={() => setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc')}
+              className="px-3 py-2 bg-[#262a30] border border-gray-600 rounded-lg text-white hover:bg-[#2a2e35] transition-colors"
+              title={`Sort ${sortDirection === 'asc' ? 'Descending' : 'Ascending'}`}
+            >
+              {sortDirection === 'asc' ? '↑' : '↓'}
+            </button>
+          </div>
+        </div>
       </div>
 
       <div className="flex justify-between items-center">
-        <p className="text-gray-400">
-          Showing {filteredPartners.length} of {partners.length} partners
-        </p>
+        <div className="text-gray-400">
+          <p>
+            Showing {filteredPartners.length} of {partners.length} partners
+            {searchQuery && (
+              <span className="ml-2 px-2 py-1 bg-[#d7ff00]/20 text-[#d7ff00] rounded text-sm">
+                Search: "{searchQuery}"
+              </span>
+            )}
+          </p>
+        </div>
         <div className="flex items-center gap-2">
+          {/* Add New Prospect Controls */}
+          {isAddingNew && (
+            <>
+              <div className="flex items-center gap-2 px-3 py-2 bg-green-900/20 border border-green-500/30 rounded-lg">
+                <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
+                <span className="text-green-200 text-sm font-medium">
+                  Adding new prospect
+                </span>
+              </div>
+              <button
+                onClick={saveNewProspect}
+                disabled={savingNewProspect}
+                className="flex items-center gap-2 px-4 py-2 bg-[#d7ff00] text-black rounded-lg hover:bg-[#c5e600] transition-colors disabled:opacity-50 font-medium"
+              >
+                {savingNewProspect ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                Save New Prospect
+              </button>
+              <button
+                onClick={cancelAddingNew}
+                className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+              >
+                <X className="w-4 h-4" />
+                Cancel
+              </button>
+            </>
+          )}
+
           {/* Bulk Save Controls */}
-          {hasUnsavedChanges && (
+          {hasUnsavedChanges && !isAddingNew && (
             <>
               <div className="flex items-center gap-2 px-3 py-2 bg-yellow-900/20 border border-yellow-500/30 rounded-lg">
                 <div className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse" />
@@ -2064,7 +3309,7 @@ const CorporatePartnersPage: React.FC = () => {
             </>
           )}
 
-          {editingPartner && (
+          {editingPartner && !isAddingNew && (
             <>
               <button
                 onClick={finishEditing}
@@ -2081,6 +3326,59 @@ const CorporatePartnersPage: React.FC = () => {
                 Cancel
               </button>
             </>
+          )}
+
+          {/* Selection Mode Controls */}
+          {!isAddingNew && !editingPartner && (
+            <>
+              {!isSelectionMode ? (
+                <button
+                  onClick={enterSelectionMode}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                >
+                  <CheckSquare className="w-4 h-4" />
+                  Select
+                </button>
+              ) : (
+                <div className="flex items-center gap-2">
+                  {selectedPartners.size > 0 && (
+                    <>
+                      <div className="flex items-center gap-2 px-3 py-2 bg-red-900/20 border border-red-500/30 rounded-lg">
+                        <span className="text-red-200 text-sm font-medium">
+                          {selectedPartners.size} selected
+                        </span>
+                      </div>
+                      <button
+                        onClick={deleteSelectedPartners}
+                        disabled={isDeleting}
+                        className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                      >
+                        {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                        {isDeleting ? 'Deleting...' : 'Delete Selected'}
+                      </button>
+                    </>
+                  )}
+                  <button
+                    onClick={exitSelectionMode}
+                    className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors font-medium"
+                  >
+                    <X className="w-4 h-4" />
+                    Cancel
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Add New Button */}
+          {!isAddingNew && !editingPartner && !isSelectionMode && (
+            <button
+              onClick={startAddingNew}
+              className="flex items-center gap-2 px-4 py-2 bg-[#d7ff00] text-black rounded-lg hover:bg-[#c5e600] transition-colors font-medium"
+            >
+              <Users className="w-4 h-4" />
+              Add New
+            </button>
           )}
           <button
             onClick={resetColumnOrder}
@@ -2173,7 +3471,22 @@ const CorporatePartnersPage: React.FC = () => {
                       title={editingPartner ? 'Finish editing to reorder columns' : 'Long press or drag to reorder columns'}
                     >
                       <div className="flex items-center gap-2">
-                        <span>{column.label}</span>
+                        {columnKey === 'select' && isSelectionMode ? (
+                          <input
+                            type="checkbox"
+                            checked={selectedPartners.size > 0 && selectedPartners.size === filteredPartners.length}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                selectAllPartners();
+                              } else {
+                                clearSelection();
+                              }
+                            }}
+                            className="w-4 h-4 text-[#d7ff00] bg-gray-700 border-gray-600 rounded focus:ring-[#d7ff00] focus:ring-2"
+                          />
+                        ) : columnKey !== 'select' ? (
+                          <span>{column.label}</span>
+                        ) : null}
                         {isDragging && draggedColumn === columnKey && (
                           <div className="w-2 h-2 bg-[#d7ff00] rounded-full animate-pulse" />
                         )}
@@ -2184,6 +3497,18 @@ const CorporatePartnersPage: React.FC = () => {
               </tr>
             </thead>
             <tbody>
+              {/* New Prospect Row */}
+              {isAddingNew && (
+                <tr className="border-b border-gray-800 bg-green-900/10 ring-1 ring-green-500/30">
+                  {columnOrder.map((columnKey) => (
+                    <td key={columnKey} className="py-3 px-4">
+                      {renderNewProspectCell(columnKey)}
+                    </td>
+                  ))}
+                </tr>
+              )}
+              
+              {/* Existing Prospects */}
               {inactiveProspects.map((partner) => (
                 <tr key={partner.id} className={`border-b border-gray-800 hover:bg-[#1a1e24] ${editingPartner === partner.id ? 'bg-[#1a1e24] ring-1 ring-[#d7ff00]' : ''}`}>
                   {columnOrder.map((columnKey) => (
@@ -2200,9 +3525,19 @@ const CorporatePartnersPage: React.FC = () => {
       ) : (
         <div className="text-center py-8 text-gray-400">
           {activeProspects.length > 0 
-            ? "No inactive prospects found matching your filters."
-            : "No partners found matching your filters."
+            ? `No inactive prospects found matching your ${searchQuery ? 'search and ' : ''}filters.`
+            : `No partners found matching your ${searchQuery ? 'search and ' : ''}filters.`
           }
+          {searchQuery && (
+            <div className="mt-2">
+              <button
+                onClick={() => setSearchQuery('')}
+                className="text-[#d7ff00] hover:text-[#c5e600] underline"
+              >
+                Clear search to see all results
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -2213,6 +3548,10 @@ const CorporatePartnersPage: React.FC = () => {
       <Head>
         <title>Corporate Partners - Pulse Admin</title>
       </Head>
+
+      {/* Detail Modal */}
+      {showDetailModal && renderDetailModal()}
+
       <div className="min-h-screen bg-[#111417] text-white py-10 px-4">
         <div className="max-w-7xl mx-auto">
           {/* Header */}
