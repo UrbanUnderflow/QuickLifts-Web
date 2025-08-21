@@ -268,7 +268,11 @@ CRITICAL: Return ONLY valid JSON array format. No markdown, no explanations, no 
       }
     }
 
-    const generatedContent = response.choices[0]?.message?.content?.trim();
+    if (!response) {
+      throw new Error('OpenAI API failed to return a response.');
+    }
+
+    const generatedContent = response.choices?.[0]?.message?.content?.trim();
     if (!generatedContent) {
       throw new Error('OpenAI did not return valid content.');
     }
