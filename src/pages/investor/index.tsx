@@ -104,6 +104,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
     ip: null,
     market: null,
     product: null,
+    techstack: null,
     team: null,
     traction: null,
     financials: null,
@@ -349,10 +350,11 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                     { id: 'ip', label: 'IP & Defensibility', number: 4 },
                     { id: 'vision', label: 'Vision & Evolution', number: 5 },
                     { id: 'market', label: 'Market Opportunity', number: 6 },
-                    { id: 'team', label: 'Team', number: 7 },
-                    { id: 'financials', label: 'Financial Information', number: 8 },
-                    { id: 'deck', label: 'Pitch Deck', number: 9 },
-                    { id: 'investment', label: 'Investment Opportunity', number: 10 },
+                    { id: 'techstack', label: 'Technical Stack', number: 7 },
+                    { id: 'team', label: 'Team', number: 8 },
+                    { id: 'financials', label: 'Financial Information', number: 9 },
+                    { id: 'deck', label: 'Pitch Deck', number: 10 },
+                    { id: 'investment', label: 'Investment Opportunity', number: 11 },
                   ].map((item) => (
                     <button
                       key={item.id}
@@ -2013,6 +2015,221 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                     </div>
                 </section>
 
+                {/* Technical Stack Section */}
+                <section 
+                    id="techstack" 
+                    ref={(el) => { sectionsRef.current.techstack = el; }}
+                    className="mb-20"
+                >
+                    <div className="flex items-center mb-6">
+                        <div className="w-10 h-10 rounded-full bg-[#E0FE10] flex items-center justify-center mr-4">
+                            <span className="font-bold text-black">7</span>
+                        </div>
+                        <h2 className="text-white text-3xl font-bold">Technical Stack</h2>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                        {/* Frontend & Mobile */}
+                        <div className="bg-zinc-900/50 rounded-xl p-6 border border-zinc-800">
+                            <h3 className="text-white text-xl font-semibold mb-4 flex items-center">
+                                <div className="w-8 h-8 rounded-lg bg-[#E0FE10]/20 flex items-center justify-center mr-3">
+                                    <span className="text-[#E0FE10] text-sm">📱</span>
+                                </div>
+                                Frontend & Mobile
+                            </h3>
+                            <div className="space-y-3">
+                                <div className="flex justify-between items-center">
+                                    <span className="text-zinc-300">Web Framework</span>
+                                    <span className="text-[#E0FE10] font-medium">Next.js + React</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-zinc-300">Mobile Platform</span>
+                                    <span className="text-[#E0FE10] font-medium">Native iOS (Swift)</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-zinc-300">UI Framework</span>
+                                    <span className="text-[#E0FE10] font-medium">SwiftUI + Tailwind CSS</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-zinc-300">Type Safety</span>
+                                    <span className="text-[#E0FE10] font-medium">TypeScript</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-zinc-300">State Management</span>
+                                    <span className="text-[#E0FE10] font-medium">Redux Toolkit</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Backend & Infrastructure */}
+                        <div className="bg-zinc-900/50 rounded-xl p-6 border border-zinc-800">
+                            <h3 className="text-white text-xl font-semibold mb-4 flex items-center">
+                                <div className="w-8 h-8 rounded-lg bg-[#E0FE10]/20 flex items-center justify-center mr-3">
+                                    <span className="text-[#E0FE10] text-sm">⚡</span>
+                                </div>
+                                Backend & Infrastructure
+                            </h3>
+                            <div className="space-y-3">
+                                <div className="flex justify-between items-center">
+                                    <span className="text-zinc-300">Database</span>
+                                    <span className="text-[#E0FE10] font-medium">Firebase Firestore</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-zinc-300">Authentication</span>
+                                    <span className="text-[#E0FE10] font-medium">Firebase Auth</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-zinc-300">File Storage</span>
+                                    <span className="text-[#E0FE10] font-medium">Firebase Storage</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-zinc-300">API Layer</span>
+                                    <span className="text-[#E0FE10] font-medium">Next.js API Routes</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-zinc-300">Deployment</span>
+                                    <span className="text-[#E0FE10] font-medium">Netlify + App Store</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* AI & Data Processing */}
+                        <div className="bg-zinc-900/50 rounded-xl p-6 border border-zinc-800">
+                            <h3 className="text-white text-xl font-semibold mb-4 flex items-center">
+                                <div className="w-8 h-8 rounded-lg bg-[#E0FE10]/20 flex items-center justify-center mr-3">
+                                    <span className="text-[#E0FE10] text-sm">🤖</span>
+                                </div>
+                                AI & Data Processing
+                            </h3>
+                            <div className="space-y-3">
+                                <div className="flex justify-between items-center">
+                                    <span className="text-zinc-300">AI Platform</span>
+                                    <span className="text-[#E0FE10] font-medium">OpenAI API</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-zinc-300">Models</span>
+                                    <span className="text-[#E0FE10] font-medium">GPT-4o, GPT-4o-mini</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-zinc-300">Image Processing</span>
+                                    <span className="text-[#E0FE10] font-medium">AI-powered extraction</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-zinc-300">Data Parsing</span>
+                                    <span className="text-[#E0FE10] font-medium">Automated text analysis</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-zinc-300">Real-time Sync</span>
+                                    <span className="text-[#E0FE10] font-medium">Firebase listeners</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Development & Tools */}
+                        <div className="bg-zinc-900/50 rounded-xl p-6 border border-zinc-800">
+                            <h3 className="text-white text-xl font-semibold mb-4 flex items-center">
+                                <div className="w-8 h-8 rounded-lg bg-[#E0FE10]/20 flex items-center justify-center mr-3">
+                                    <span className="text-[#E0FE10] text-sm">🛠️</span>
+                                </div>
+                                Development & Tools
+                            </h3>
+                            <div className="space-y-3">
+                                <div className="flex justify-between items-center">
+                                    <span className="text-zinc-300">Package Manager</span>
+                                    <span className="text-[#E0FE10] font-medium">Yarn</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-zinc-300">Version Control</span>
+                                    <span className="text-[#E0FE10] font-medium">Git</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-zinc-300">Code Quality</span>
+                                    <span className="text-[#E0FE10] font-medium">ESLint + Prettier</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-zinc-300">Health Integration</span>
+                                    <span className="text-[#E0FE10] font-medium">iOS HealthKit</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-zinc-300">CDN</span>
+                                    <span className="text-[#E0FE10] font-medium">Netlify Edge</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Architecture Overview */}
+                    <div className="mt-8 bg-zinc-900/50 rounded-xl p-6 border border-zinc-800">
+                        <h3 className="text-white text-xl font-semibold mb-4">Architecture Overview</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div className="text-center">
+                                <div className="w-16 h-16 rounded-full bg-[#E0FE10]/20 flex items-center justify-center mx-auto mb-3">
+                                    <span className="text-[#E0FE10] text-2xl">📱</span>
+                                </div>
+                                <h4 className="text-white font-semibold mb-2">Cross-Platform</h4>
+                                <p className="text-zinc-400 text-sm">Native iOS app for optimal mobile experience, responsive web app for broader accessibility</p>
+                            </div>
+                            <div className="text-center">
+                                <div className="w-16 h-16 rounded-full bg-[#E0FE10]/20 flex items-center justify-center mx-auto mb-3">
+                                    <span className="text-[#E0FE10] text-2xl">🔄</span>
+                                </div>
+                                <h4 className="text-white font-semibold mb-2">Real-time Sync</h4>
+                                <p className="text-zinc-400 text-sm">Unified Firebase backend ensures data consistency across all platforms and devices</p>
+                            </div>
+                            <div className="text-center">
+                                <div className="w-16 h-16 rounded-full bg-[#E0FE10]/20 flex items-center justify-center mx-auto mb-3">
+                                    <span className="text-[#E0FE10] text-2xl">🚀</span>
+                                </div>
+                                <h4 className="text-white font-semibold mb-2">Scalable</h4>
+                                <p className="text-zinc-400 text-sm">Modern tech stack built for rapid scaling with AI-enhanced admin tools and automation</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Key Technical Advantages */}
+                    <div className="mt-8 bg-gradient-to-r from-[#E0FE10]/10 to-transparent rounded-xl p-6 border border-[#E0FE10]/20">
+                        <h3 className="text-white text-xl font-semibold mb-4">Key Technical Advantages</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="flex items-start space-x-3">
+                                <div className="w-6 h-6 rounded-full bg-[#E0FE10] flex items-center justify-center mt-0.5">
+                                    <span className="text-black text-xs font-bold">✓</span>
+                                </div>
+                                <div>
+                                    <h4 className="text-white font-medium">Type-Safe Development</h4>
+                                    <p className="text-zinc-400 text-sm">TypeScript ensures code reliability and faster development cycles</p>
+                                </div>
+                            </div>
+                            <div className="flex items-start space-x-3">
+                                <div className="w-6 h-6 rounded-full bg-[#E0FE10] flex items-center justify-center mt-0.5">
+                                    <span className="text-black text-xs font-bold">✓</span>
+                                </div>
+                                <div>
+                                    <h4 className="text-white font-medium">AI-Enhanced Operations</h4>
+                                    <p className="text-zinc-400 text-sm">Automated data processing reduces manual work and improves accuracy</p>
+                                </div>
+                            </div>
+                            <div className="flex items-start space-x-3">
+                                <div className="w-6 h-6 rounded-full bg-[#E0FE10] flex items-center justify-center mt-0.5">
+                                    <span className="text-black text-xs font-bold">✓</span>
+                                </div>
+                                <div>
+                                    <h4 className="text-white font-medium">Firebase Ecosystem</h4>
+                                    <p className="text-zinc-400 text-sm">Integrated auth, database, and storage with built-in scaling</p>
+                                </div>
+                            </div>
+                            <div className="flex items-start space-x-3">
+                                <div className="w-6 h-6 rounded-full bg-[#E0FE10] flex items-center justify-center mt-0.5">
+                                    <span className="text-black text-xs font-bold">✓</span>
+                                </div>
+                                <div>
+                                    <h4 className="text-white font-medium">Modern Deployment</h4>
+                                    <p className="text-zinc-400 text-sm">Automated CI/CD with Netlify and App Store distribution</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
                 {/* Team Section */}
                 <section 
                     id="team" 
@@ -2021,7 +2238,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                 >
                     <div className="flex items-center mb-6">
                     <div className="w-10 h-10 rounded-full bg-[#E0FE10] flex items-center justify-center mr-4">
-                        <span className="font-bold text-black">7</span>
+                        <span className="font-bold text-black">8</span>
                     </div>
                     <h2 className="text-white text-3xl font-bold">Team</h2>
                     </div>
@@ -2189,7 +2406,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                 >
                     <div className="flex items-center mb-6">
                     <div className="w-10 h-10 rounded-full bg-[#E0FE10] flex items-center justify-center mr-4">
-                        <span className="font-bold text-black">8</span>
+                        <span className="font-bold text-black">9</span>
                     </div>
                     <h2 className="text-white text-3xl font-bold">Financial Information</h2>
                     </div>
@@ -2518,7 +2735,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                 >
                     <div className="flex items-center mb-6">
                     <div className="w-10 h-10 rounded-full bg-[#E0FE10] flex items-center justify-center mr-4">
-                        <span className="font-bold text-black">9</span>
+                        <span className="font-bold text-black">10</span>
                     </div>
                     <h2 className="text-white text-3xl font-bold">Pitch Deck</h2>
                     </div>
@@ -2558,7 +2775,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                 >
                     <div className="flex items-center mb-6">
                     <div className="w-10 h-10 rounded-full bg-[#E0FE10] flex items-center justify-center mr-4">
-                        <span className="font-bold text-black">10</span>
+                        <span className="font-bold text-black">11</span>
                     </div>
                     <h2 className="text-white text-3xl font-bold">Investment Opportunity</h2>
                     </div>
