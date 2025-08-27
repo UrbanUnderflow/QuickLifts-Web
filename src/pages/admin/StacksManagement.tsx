@@ -370,7 +370,7 @@ const StacksManagement: React.FC = () => {
                         </div>
                         <div className="text-right">
                           <p className="text-sm text-gray-300">{exercise.sets} set{exercise.sets !== 1 ? 's' : ''}</p>
-                          {exercise.screenTime && exercise.screenTime > 0 && (
+                          {((exercise?.screenTime ?? 0) > 0) && (
                             <p className="text-xs text-blue-400 flex items-center gap-1">
                               <Clock className="h-3 w-3" />
                               {exercise.screenTime}s
@@ -392,7 +392,7 @@ const StacksManagement: React.FC = () => {
                         </div>
                       )}
                       
-                      {exercise.weight > 0 && (
+                      {((exercise?.weight ?? 0) > 0) && (
                         <div className="mt-2">
                           <p className="text-xs text-gray-400">Weight: {exercise.weight} lbs</p>
                         </div>
