@@ -2,7 +2,7 @@ import React from 'react';
 import { useRouter } from 'next/router';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import Head from 'next/head';
-import { Users, Settings, BarChart2, Bell, FileText, CheckSquare, PlusSquare, Image as ImageIcon, Zap, TrendingUp, Dumbbell, Tag, Users2, Activity, Award, Clock, Gift, Edit3, Send, Server, ChevronDown, MessageCircle, Utensils, Code, Building2, Kanban } from 'lucide-react';
+import { Users, Settings, BarChart2, Bell, FileText, CheckSquare, PlusSquare, Image as ImageIcon, Zap, TrendingUp, Dumbbell, Tag, Users2, Activity, Award, Clock, Gift, Edit3, Send, Server, ChevronDown, MessageCircle, Utensils, Code, Building2, Kanban, Layers, Bug } from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '../../redux/store';
 import { toggleDevMode } from '../../redux/devModeSlice';
@@ -126,6 +126,12 @@ const adminCardsData = [
     link: "/admin/MoveManagement"
   },
   {
+    title: "Stacks Management",
+    description: "Manage workout stacks, view exercises, and track user-created vs AI-generated stacks.",
+    icon: <Layers className="w-5 h-5" />,
+    link: "/admin/StacksManagement"
+  },
+  {
     title: "Manage Page Meta Data",
     description: "Control SEO and social sharing tags for application pages.",
     icon: <Tag className="w-5 h-5" />,
@@ -148,6 +154,12 @@ const adminCardsData = [
     description: "View notification logs and payloads for debugging and monitoring.",
     icon: <Bell className="w-5 h-5" />,
     link: "/admin/NotificationLogs"
+  },
+  {
+    title: "Error Logs",
+    description: "View and manage application error logs from Firestore for debugging and monitoring.",
+    icon: <Bug className="w-5 h-5" />,
+    link: "/admin/ErrorLogs"
   },
   {
     title: "Chat Management",

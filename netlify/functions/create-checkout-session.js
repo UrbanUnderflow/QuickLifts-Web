@@ -76,10 +76,13 @@ const handler = async (event) => {
       client_reference_id: userId, // Link the session to your internal user ID
       success_url: `${baseUrl}/subscription-success?session_id={CHECKOUT_SESSION_ID}`, // Redirect URL on success
       cancel_url: `${baseUrl}/subscribe`, // Redirect URL on cancellation
-      // Optional: Add metadata if needed beyond client_reference_id
-      // metadata: {
-      //   userId: userId,
-      // }
+      subscription_data: {
+        trial_period_days: 30, // 30-day free trial
+        metadata: {
+          userId: userId, // Add userId to subscription metadata for webhook processing
+          userType: 'athlete' // Distinguish from coach subscriptions
+        }
+      }
     });
 
     console.log(`[CreateCheckoutSession] Stripe session created successfully: ${session.id}`);

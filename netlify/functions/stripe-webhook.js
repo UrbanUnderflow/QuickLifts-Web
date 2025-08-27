@@ -4,6 +4,21 @@ const admin = require('firebase-admin');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
+// Subscription type mappings
+const SubscriptionType = {
+  unsubscribed: "Unsubscribed",
+  beta: "Beta User",
+  monthly: "Monthly Subscriber",
+  annual: "Annual Subscriber",
+  sweatEquityPartner: "Sweat Equity Partner",
+  executivePartner: "Executive Partner",
+};
+
+const SubscriptionPlatform = {
+  iOS: "ios",
+  Web: "web",
+};
+
 // Initialize Firebase if not already initialized
 let db;
 if (!global.firebaseInitialized) {
@@ -14,6 +29,57 @@ if (!global.firebaseInitialized) {
   global.firebaseInitialized = true;
 }
 db = getFirestore();
+
+// Price ID to subscription type mapping
+function mapPriceIdToSubscriptionType(priceId) {
+  console.log(`[Webhook] Mapping price ID: ${priceId}`);
+  
+  // Live price IDs (from subscribe.tsx)
+  const LIVE_MONTHLY_PRICE_ID = 'price_1PDq26RobSf56MUOucDIKLhd';
+  const LIVE_ANNUAL_PRICE_ID = 'price_1PDq3LRobSf56MUOng0UxhCC';
+  
+  // Test price IDs (from subscribe.tsx)
+  const TEST_MONTHLY_PRICE_ID = 'price_1RMIUNRobSf56MUOfeB4gIot';
+  const TEST_ANNUAL_PRICE_ID = 'price_1RMISFRobSf56MUOpcSoohjP';
+  
+  const priceMapping = {
+    [LIVE_MONTHLY_PRICE_ID]: SubscriptionType.monthly,
+    [LIVE_ANNUAL_PRICE_ID]: SubscriptionType.annual,
+    [TEST_MONTHLY_PRICE_ID]: SubscriptionType.monthly,
+    [TEST_ANNUAL_PRICE_ID]: SubscriptionType.annual,
+  };
+  
+  const mappedType = priceMapping[priceId] || SubscriptionType.unsubscribed;
+  console.log(`[Webhook] Mapped ${priceId} to ${mappedType}`);
+  return mappedType;
+}
+
+// Helper function to get user ID from subscription
+async function getUserIdFromSubscription(subscription) {
+  console.log(`[Webhook] Getting user ID for subscription: ${subscription.id}`);
+  
+  // Try client_reference_id first (set during checkout)
+  if (subscription.metadata?.userId) {
+    console.log(`[Webhook] Found userId in metadata: ${subscription.metadata.userId}`);
+    return subscription.metadata.userId;
+  }
+  
+  // Try to find user by customer ID
+  if (subscription.customer) {
+    const customerId = typeof subscription.customer === 'string' ? subscription.customer : subscription.customer.id;
+    console.log(`[Webhook] Looking up user by customer ID: ${customerId}`);
+    
+    const userQuery = await db.collection('users').where('stripeCustomerId', '==', customerId).limit(1).get();
+    if (!userQuery.empty) {
+      const userId = userQuery.docs[0].id;
+      console.log(`[Webhook] Found user by customer ID: ${userId}`);
+      return userId;
+    }
+  }
+  
+  console.error(`[Webhook] Could not determine user ID for subscription: ${subscription.id}`);
+  return null;
+}
 
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
@@ -44,6 +110,15 @@ exports.handler = async (event) => {
       case 'checkout.session.completed':
         await handleCheckoutSessionCompleted(stripeEvent.data.object);
         break;
+      case 'customer.subscription.created':
+        await handleSubscriptionCreated(stripeEvent.data.object);
+        break;
+      case 'customer.subscription.updated':
+        await handleSubscriptionUpdated(stripeEvent.data.object);
+        break;
+      case 'customer.subscription.deleted':
+        await handleSubscriptionDeleted(stripeEvent.data.object);
+        break;
       case 'account.updated':
         await handleAccountUpdated(stripeEvent.data.object);
         break;
@@ -64,6 +139,200 @@ exports.handler = async (event) => {
     };
   }
 };
+
+// Handle subscription created event
+async function handleSubscriptionCreated(subscription) {
+  console.log(`[Webhook] Processing subscription created: ${subscription.id}`);
+  
+  try {
+    // Skip coach subscriptions (handled by coach webhook)
+    if (subscription.metadata?.userType === 'coach') {
+      console.log(`[Webhook] Skipping coach subscription: ${subscription.id}`);
+      return;
+    }
+    
+    const userId = await getUserIdFromSubscription(subscription);
+    if (!userId) {
+      console.error(`[Webhook] No user ID found for subscription: ${subscription.id}`);
+      return;
+    }
+    
+    // Get the price ID from the subscription
+    const priceId = subscription.items.data[0]?.price?.id;
+    if (!priceId) {
+      console.error(`[Webhook] No price ID found for subscription: ${subscription.id}`);
+      return;
+    }
+    
+    const subscriptionType = mapPriceIdToSubscriptionType(priceId);
+    const customerId = typeof subscription.customer === 'string' ? subscription.customer : subscription.customer.id;
+    
+    console.log(`[Webhook] Updating user ${userId} with subscription type: ${subscriptionType}`);
+    
+    // Check if subscription is in trial period
+    const isTrialing = subscription.status === 'trialing';
+    const trialEnd = subscription.trial_end ? new Date(subscription.trial_end * 1000) : null;
+    
+    console.log(`[Webhook] Subscription status: ${subscription.status}, trial end: ${trialEnd}`);
+    
+    // Update user document
+    const userUpdateData = {
+      subscriptionType: subscriptionType,
+      subscriptionPlatform: SubscriptionPlatform.Web,
+      stripeCustomerId: customerId,
+      stripeSubscriptionId: subscription.id,
+      isTrialing: isTrialing,
+      trialEndDate: trialEnd,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+    
+    await db.collection('users').doc(userId).update(userUpdateData);
+    
+    // Also create/update subscription document
+    const subscriptionData = {
+      userId: userId,
+      subscriptionType: subscriptionType,
+      platform: SubscriptionPlatform.Web,
+      stripeSubscriptionId: subscription.id,
+      stripeCustomerId: customerId,
+      status: subscription.status,
+      isTrialing: isTrialing,
+      trialEndDate: trialEnd,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+    
+    await db.collection('subscriptions').doc(subscription.id).set(subscriptionData, { merge: true });
+    
+    console.log(`[Webhook] Successfully processed subscription created for user: ${userId}`);
+    
+  } catch (error) {
+    console.error(`[Webhook] Error handling subscription created: ${error.message}`);
+    throw error;
+  }
+}
+
+// Handle subscription updated event
+async function handleSubscriptionUpdated(subscription) {
+  console.log(`[Webhook] Processing subscription updated: ${subscription.id}`);
+  
+  try {
+    // Skip coach subscriptions (handled by coach webhook)
+    if (subscription.metadata?.userType === 'coach') {
+      console.log(`[Webhook] Skipping coach subscription update: ${subscription.id}`);
+      return;
+    }
+    
+    const userId = await getUserIdFromSubscription(subscription);
+    if (!userId) {
+      console.error(`[Webhook] No user ID found for subscription: ${subscription.id}`);
+      return;
+    }
+    
+    // Get the price ID from the subscription
+    const priceId = subscription.items.data[0]?.price?.id;
+    if (!priceId) {
+      console.error(`[Webhook] No price ID found for subscription: ${subscription.id}`);
+      return;
+    }
+    
+    const subscriptionType = mapPriceIdToSubscriptionType(priceId);
+    const customerId = typeof subscription.customer === 'string' ? subscription.customer : subscription.customer.id;
+    
+    console.log(`[Webhook] Updating user ${userId} subscription status: ${subscription.status}, type: ${subscriptionType}`);
+    
+    // Check if subscription is in trial period
+    const isTrialing = subscription.status === 'trialing';
+    const trialEnd = subscription.trial_end ? new Date(subscription.trial_end * 1000) : null;
+    
+    // Determine subscription type based on status
+    let finalSubscriptionType = subscriptionType;
+    if (subscription.status === 'canceled' || subscription.status === 'incomplete_expired') {
+      finalSubscriptionType = SubscriptionType.unsubscribed;
+    }
+    
+    console.log(`[Webhook] Subscription status: ${subscription.status}, trial end: ${trialEnd}, final type: ${finalSubscriptionType}`);
+    
+    // Update user document
+    const userUpdateData = {
+      subscriptionType: finalSubscriptionType,
+      subscriptionPlatform: SubscriptionPlatform.Web,
+      stripeCustomerId: customerId,
+      stripeSubscriptionId: subscription.id,
+      isTrialing: isTrialing,
+      trialEndDate: trialEnd,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+    
+    await db.collection('users').doc(userId).update(userUpdateData);
+    
+    // Update subscription document
+    const subscriptionData = {
+      userId: userId,
+      subscriptionType: finalSubscriptionType,
+      platform: SubscriptionPlatform.Web,
+      stripeSubscriptionId: subscription.id,
+      stripeCustomerId: customerId,
+      status: subscription.status,
+      isTrialing: isTrialing,
+      trialEndDate: trialEnd,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+    
+    await db.collection('subscriptions').doc(subscription.id).update(subscriptionData);
+    
+    console.log(`[Webhook] Successfully processed subscription updated for user: ${userId}`);
+    
+  } catch (error) {
+    console.error(`[Webhook] Error handling subscription updated: ${error.message}`);
+    throw error;
+  }
+}
+
+// Handle subscription deleted event
+async function handleSubscriptionDeleted(subscription) {
+  console.log(`[Webhook] Processing subscription deleted: ${subscription.id}`);
+  
+  try {
+    // Skip coach subscriptions (handled by coach webhook)
+    if (subscription.metadata?.userType === 'coach') {
+      console.log(`[Webhook] Skipping coach subscription deletion: ${subscription.id}`);
+      return;
+    }
+    
+    const userId = await getUserIdFromSubscription(subscription);
+    if (!userId) {
+      console.error(`[Webhook] No user ID found for subscription: ${subscription.id}`);
+      return;
+    }
+    
+    console.log(`[Webhook] Setting user ${userId} to unsubscribed`);
+    
+    // Update user document to unsubscribed
+    const userUpdateData = {
+      subscriptionType: SubscriptionType.unsubscribed,
+      subscriptionPlatform: SubscriptionPlatform.Web,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+    
+    await db.collection('users').doc(userId).update(userUpdateData);
+    
+    // Update subscription document
+    const subscriptionData = {
+      subscriptionType: SubscriptionType.unsubscribed,
+      status: 'canceled',
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+    
+    await db.collection('subscriptions').doc(subscription.id).update(subscriptionData);
+    
+    console.log(`[Webhook] Successfully processed subscription deleted for user: ${userId}`);
+    
+  } catch (error) {
+    console.error(`[Webhook] Error handling subscription deleted: ${error.message}`);
+    throw error;
+  }
+}
 
 async function handleCheckoutSessionCompleted(session) {
   console.log('Processing checkout.session.completed event');

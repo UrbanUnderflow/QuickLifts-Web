@@ -31,8 +31,15 @@ const SubscriptionSuccessPage: React.FC = () => {
 
       if (!sessionId) {
         console.error('[SubscriptionSuccess] Missing session_id in query parameters.');
-        setErrorMessage('Missing payment session information.');
-        setVerificationStatus('error');
+        
+        // Redirect to error page for missing session ID
+        const errorParams = new URLSearchParams({
+          message: 'Missing payment session information. Please try subscribing again.',
+          error: 'MISSING_SESSION_ID',
+          details: 'The payment session ID was not found in the URL parameters.'
+        });
+        
+        router.replace(`/subscription-error?${errorParams.toString()}`);
         return;
       }
 
@@ -61,8 +68,41 @@ const SubscriptionSuccessPage: React.FC = () => {
           setVerificationStatus('verified');
         } catch (error) {
           console.error('[SubscriptionSuccess] Verification API call failed:', error);
-          setErrorMessage(error instanceof Error ? error.message : 'An unknown error occurred during verification.');
-          setVerificationStatus('error');
+          
+          // Parse error response if it's a JSON error
+          let errorMessage = 'An unknown error occurred during verification.';
+          let errorCode = 'UNKNOWN_ERROR';
+          let errorDetails = '';
+          
+          if (error instanceof Error) {
+            errorMessage = error.message;
+            
+            // Try to parse JSON error response
+            try {
+              const errorData = JSON.parse(error.message);
+              if (errorData.message) errorMessage = errorData.message;
+              if (errorData.error) errorCode = errorData.error;
+              if (errorData.details) errorDetails = errorData.details;
+            } catch {
+              // Not JSON, use the original error message
+              errorDetails = error.message;
+            }
+          }
+          
+          // Redirect to error page with error details
+          const errorParams = new URLSearchParams({
+            message: errorMessage,
+            error: errorCode,
+            ...(errorDetails && { details: errorDetails })
+          });
+          
+          console.log('[SubscriptionSuccess] Redirecting to error page with details:', {
+            message: errorMessage,
+            error: errorCode,
+            details: errorDetails
+          });
+          
+          router.replace(`/subscription-error?${errorParams.toString()}`);
         }
       };
 

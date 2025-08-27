@@ -9,6 +9,7 @@ import { FaTrophy, FaCoins, FaGamepad, FaChartLine, FaXmark, FaFire, FaStar, FaR
 import { FaApple, FaUser, FaCheck} from 'react-icons/fa';
 import HomeContent from './HomeContent';
 import { useUser } from '../hooks/useUser';
+import SignInModal from '../components/SignInModal';
 
 interface SerializablePageMetaData extends Omit<FirestorePageMetaData, 'lastUpdated'> {
   lastUpdated: string; 
@@ -21,7 +22,12 @@ interface HomePageProps {
 const STORAGE_KEY = 'pulse_has_seen_marketing';
 
 // Separate component for marketing content to avoid hook issues
-const MarketingContent: React.FC<{ onUseWebApp: () => void; metaData: SerializablePageMetaData | null }> = ({ onUseWebApp, metaData }) => {
+const MarketingContent: React.FC<{ 
+  onUseWebApp: () => void; 
+  metaData: SerializablePageMetaData | null;
+  isSignInModalOpen: boolean;
+  setIsSignInModalOpen: (open: boolean) => void;
+}> = ({ onUseWebApp, metaData, isSignInModalOpen, setIsSignInModalOpen }) => {
   const faqData = [
     {
       question: "What is the Fitness Collective?",
@@ -1601,6 +1607,20 @@ const MarketingContent: React.FC<{ onUseWebApp: () => void; metaData: Serializab
       </section>
 
       <Footer />
+      
+      {/* Sign In Modal */}
+      <SignInModal 
+        isVisible={isSignInModalOpen}
+        onClose={() => setIsSignInModalOpen(false)}
+        onSignInSuccess={() => {
+          setIsSignInModalOpen(false);
+          onUseWebApp(); // Trigger the web app access after successful sign in
+        }}
+        onSignUpSuccess={() => {
+          setIsSignInModalOpen(false);
+          onUseWebApp(); // Trigger the web app access after successful sign up
+        }}
+      />
     </div>
   );
 };
@@ -1608,6 +1628,7 @@ const MarketingContent: React.FC<{ onUseWebApp: () => void; metaData: Serializab
 const HomePage: NextPage<HomePageProps> = ({ metaData }) => {
   const [showMarketing, setShowMarketing] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSignInModalOpen, setIsSignInModalOpen] = useState(false);
   const currentUser = useUser();
 
   useEffect(() => {
@@ -1626,10 +1647,9 @@ const HomePage: NextPage<HomePageProps> = ({ metaData }) => {
       localStorage.setItem(STORAGE_KEY, 'true');
       setShowMarketing(false);
     } else {
-      // If not authenticated, AuthWrapper will handle showing the sign-in modal
-      // since we'll be trying to access protected content
-      localStorage.setItem(STORAGE_KEY, 'true');
-      setShowMarketing(false);
+      // If not authenticated, show sign-in modal
+      console.log('[HomePage] User not authenticated, showing sign-in modal');
+      setIsSignInModalOpen(true);
     }
   };
 
@@ -1656,7 +1676,12 @@ const HomePage: NextPage<HomePageProps> = ({ metaData }) => {
       localStorage.removeItem(STORAGE_KEY);
       // Reset to show marketing
       setShowMarketing(true);
-      return <MarketingContent onUseWebApp={handleUseWebApp} metaData={metaData} />;
+      return <MarketingContent 
+        onUseWebApp={handleUseWebApp} 
+        metaData={metaData} 
+        isSignInModalOpen={isSignInModalOpen}
+        setIsSignInModalOpen={setIsSignInModalOpen}
+      />;
     }
     
     return (
@@ -1675,7 +1700,12 @@ const HomePage: NextPage<HomePageProps> = ({ metaData }) => {
   }
 
   // Show marketing content
-  return <MarketingContent onUseWebApp={handleUseWebApp} metaData={metaData} />;
+  return <MarketingContent 
+    onUseWebApp={handleUseWebApp} 
+    metaData={metaData} 
+    isSignInModalOpen={isSignInModalOpen}
+    setIsSignInModalOpen={setIsSignInModalOpen}
+  />;
 };
 
 // Convert to static generation for better performance

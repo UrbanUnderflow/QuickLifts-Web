@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Head from 'next/head';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
-import { collection, getDocs, query, orderBy, where, getCountFromServer, doc, updateDoc, serverTimestamp, writeBatch } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, where, getCountFromServer, doc, updateDoc, serverTimestamp, writeBatch, deleteDoc } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
 import { getAuth, getIdToken } from 'firebase/auth';
-import { Dumbbell, Video, PlayCircle, RefreshCw, AlertCircle, CheckCircle, Loader2, Eye, XCircle, ImageIcon, Check, X } from 'lucide-react';
+import { Dumbbell, Video, PlayCircle, RefreshCw, AlertCircle, CheckCircle, Loader2, Eye, XCircle, ImageIcon, Check, X, Search, Filter, Trash2, Copy } from 'lucide-react';
 import { Exercise, ExerciseVideo } from '../../api/firebase/exercise/types'; // Assuming types are here
 
 // Define interfaces for display (can be expanded)
@@ -44,13 +44,15 @@ interface ReportedItemDisplay {
 }
 
 const MoveManagement: React.FC = () => {
-  const [activeSubTab, setActiveSubTab] = useState<'allMoves' | 'reportedContent'>('allMoves');
+  const [activeSubTab, setActiveSubTab] = useState<'allMoves' | 'reportedContent' | 'videoAudit'>('allMoves');
   const [exercises, setExercises] = useState<ExerciseDisplay[]>([]);
+  const [filteredExercises, setFilteredExercises] = useState<ExerciseDisplay[]>([]);
   const [loadingExercises, setLoadingExercises] = useState(true);
   const [totalVideoCount, setTotalVideoCount] = useState<number>(0);
   const [loadingTotalVideoCount, setLoadingTotalVideoCount] = useState(true);
   
   const [reportedItems, setReportedItems] = useState<ReportedItemDisplay[]>([]);
+  const [filteredReportedItems, setFilteredReportedItems] = useState<ReportedItemDisplay[]>([]);
   const [loadingReportedItems, setLoadingReportedItems] = useState(true);
   const [pendingReportsCount, setPendingReportsCount] = useState<number>(0);
   const [loadingPendingReportsCount, setLoadingPendingReportsCount] = useState(true);
@@ -60,10 +62,27 @@ const MoveManagement: React.FC = () => {
 
   const [selectedExercise, setSelectedExercise] = useState<ExerciseDisplay | null>(null);
   const [exerciseVideos, setExerciseVideos] = useState<ExerciseVideoDisplay[]>([]);
+  const [filteredExerciseVideos, setFilteredExerciseVideos] = useState<ExerciseVideoDisplay[]>([]);
   const [loadingExerciseVideos, setLoadingExerciseVideos] = useState(false);
 
   const [isTriggeringMOTD, setIsTriggeringMOTD] = useState(false);
   const [updatingItems, setUpdatingItems] = useState<{[reportId: string]: boolean}>({});
+
+  // Search states
+  const [exerciseSearchTerm, setExerciseSearchTerm] = useState('');
+  const [reportSearchTerm, setReportSearchTerm] = useState('');
+  const [videoSearchTerm, setVideoSearchTerm] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [bodyPartFilter, setBodyPartFilter] = useState('');
+
+  // Video audit states
+  const [allVideos, setAllVideos] = useState<ExerciseVideoDisplay[]>([]);
+  const [filteredAllVideos, setFilteredAllVideos] = useState<ExerciseVideoDisplay[]>([]);
+  const [loadingAllVideos, setLoadingAllVideos] = useState(true);
+  const [orphanedVideos, setOrphanedVideos] = useState<ExerciseVideoDisplay[]>([]);
+  const [allVideoSearchTerm, setAllVideoSearchTerm] = useState('');
+  const [showOrphanedOnly, setShowOrphanedOnly] = useState(false);
+  const [deletingVideos, setDeletingVideos] = useState<{[videoId: string]: boolean}>({});
 
   // Show/hide toast
   useEffect(() => {
@@ -72,6 +91,86 @@ const MoveManagement: React.FC = () => {
       return () => clearTimeout(timer);
     }
   }, [toastMessage]);
+
+  // Filter exercises based on search term, category, and body part
+  useEffect(() => {
+    let filtered = exercises;
+
+    if (exerciseSearchTerm) {
+      filtered = filtered.filter(exercise =>
+        exercise.name.toLowerCase().includes(exerciseSearchTerm.toLowerCase()) ||
+        exercise.id.toLowerCase().includes(exerciseSearchTerm.toLowerCase())
+      );
+    }
+
+    if (categoryFilter) {
+      filtered = filtered.filter(exercise => {
+        const category = typeof exercise.category === 'string' 
+          ? exercise.category 
+          : (exercise.category as { id?: string })?.id || '';
+        return category.toLowerCase().includes(categoryFilter.toLowerCase());
+      });
+    }
+
+    if (bodyPartFilter) {
+      filtered = filtered.filter(exercise =>
+        exercise.primaryBodyParts?.some(part =>
+          part.toLowerCase().includes(bodyPartFilter.toLowerCase())
+        )
+      );
+    }
+
+    setFilteredExercises(filtered);
+  }, [exercises, exerciseSearchTerm, categoryFilter, bodyPartFilter]);
+
+  // Filter reported items based on search term
+  useEffect(() => {
+    let filtered = reportedItems;
+
+    if (reportSearchTerm) {
+      filtered = filtered.filter(item =>
+        (item.exerciseName?.toLowerCase().includes(reportSearchTerm.toLowerCase())) ||
+        (item.reporterUsername?.toLowerCase().includes(reportSearchTerm.toLowerCase())) ||
+        (item.videoOwnerUsername?.toLowerCase().includes(reportSearchTerm.toLowerCase())) ||
+        (item.message?.toLowerCase().includes(reportSearchTerm.toLowerCase()))
+      );
+    }
+
+    setFilteredReportedItems(filtered);
+  }, [reportedItems, reportSearchTerm]);
+
+  // Filter exercise videos based on search term
+  useEffect(() => {
+    let filtered = exerciseVideos;
+
+    if (videoSearchTerm) {
+      filtered = filtered.filter(video =>
+        (video.username?.toLowerCase().includes(videoSearchTerm.toLowerCase())) ||
+        (video.id.toLowerCase().includes(videoSearchTerm.toLowerCase()))
+      );
+    }
+
+    setFilteredExerciseVideos(filtered);
+  }, [exerciseVideos, videoSearchTerm]);
+
+  // Filter all videos based on search term and orphaned filter
+  useEffect(() => {
+    let filtered = allVideos;
+
+    if (showOrphanedOnly) {
+      filtered = orphanedVideos;
+    }
+
+    if (allVideoSearchTerm) {
+      filtered = filtered.filter(video =>
+        (video.username?.toLowerCase().includes(allVideoSearchTerm.toLowerCase())) ||
+        (video.id.toLowerCase().includes(allVideoSearchTerm.toLowerCase())) ||
+        (video.exerciseId?.toLowerCase().includes(allVideoSearchTerm.toLowerCase()))
+      );
+    }
+
+    setFilteredAllVideos(filtered);
+  }, [allVideos, orphanedVideos, allVideoSearchTerm, showOrphanedOnly]);
 
   const fetchExercises = useCallback(async () => {
     console.log('[MoveManagement] Fetching exercises...');
@@ -96,6 +195,7 @@ const MoveManagement: React.FC = () => {
       });
 
       setExercises(fetchedExercises);
+      setFilteredExercises(fetchedExercises);
       console.log(`[MoveManagement] Fetched ${fetchedExercises.length} exercises.`);
     } catch (err) {
       console.error('[MoveManagement] Error fetching exercises:', err);
@@ -146,6 +246,7 @@ const MoveManagement: React.FC = () => {
         } as ReportedItemDisplay;
       });
       setReportedItems(fetchedItems);
+      setFilteredReportedItems(fetchedItems);
       setPendingReportsCount(pendingCount);
       console.log(`[MoveManagement] Fetched ${fetchedItems.length} reported items, ${pendingCount} pending.`);
     } catch (err) {
@@ -159,11 +260,61 @@ const MoveManagement: React.FC = () => {
     }
   }, []);
 
+  const fetchAllVideos = useCallback(async () => {
+    console.log('[MoveManagement] Fetching all videos for audit...');
+    setLoadingAllVideos(true);
+    try {
+      const videosRef = collection(db, 'exerciseVideos');
+      const q = query(videosRef, orderBy('createdAt', 'desc'));
+      const snapshot = await getDocs(q);
+      
+      const fetchedVideos = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          exerciseId: data.exerciseId,
+          videoURL: data.videoURL,
+          thumbnail: data.thumbnail,
+          username: data.username,
+          createdAt: data.createdAt,
+          // Add other fields as needed
+        } as ExerciseVideoDisplay;
+      });
+
+      setAllVideos(fetchedVideos);
+      setFilteredAllVideos(fetchedVideos);
+
+      // Detect orphaned videos (videos without corresponding exercises)
+      const exerciseIds = new Set(exercises.map(ex => ex.id));
+      const orphaned = fetchedVideos.filter(video => 
+        video.exerciseId && !exerciseIds.has(video.exerciseId)
+      );
+      setOrphanedVideos(orphaned);
+
+      console.log(`[MoveManagement] Fetched ${fetchedVideos.length} videos, ${orphaned.length} orphaned.`);
+    } catch (err) {
+      console.error('[MoveManagement] Error fetching all videos:', err);
+      setError(prev => prev ? `${prev} | Failed to load videos for audit.` : `Failed to load videos for audit. ${err instanceof Error ? err.message : 'Unknown error'}`);
+      setAllVideos([]);
+      setFilteredAllVideos([]);
+      setOrphanedVideos([]);
+    } finally {
+      setLoadingAllVideos(false);
+    }
+  }, [exercises]);
+
   useEffect(() => {
     fetchExercises();
     fetchTotalVideoCount();
     fetchReportedExercises();
   }, [fetchExercises, fetchTotalVideoCount, fetchReportedExercises]);
+
+  // Fetch all videos when exercises are loaded (for orphan detection)
+  useEffect(() => {
+    if (exercises.length > 0) {
+      fetchAllVideos();
+    }
+  }, [exercises, fetchAllVideos]);
 
   const fetchExerciseVideos = useCallback(async (exerciseId: string) => {
     if (!exerciseId) {
@@ -190,6 +341,7 @@ const MoveManagement: React.FC = () => {
           } as ExerciseVideoDisplay;
       });
       setExerciseVideos(fetchedVideos);
+      setFilteredExerciseVideos(fetchedVideos);
       // Update video count on the exercise display object
       setExercises(prevExercises => prevExercises.map(ex => 
         ex.id === exerciseId ? { ...ex, videoCount: fetchedVideos.length } : ex
@@ -320,6 +472,46 @@ const MoveManagement: React.FC = () => {
     }
   };
 
+  const handleDeleteVideo = async (videoId: string) => {
+    if (!window.confirm("Are you sure you want to permanently delete this video? This action cannot be undone.")) {
+      return;
+    }
+
+    setDeletingVideos(prev => ({ ...prev, [videoId]: true }));
+    setToastMessage({ type: 'info', text: 'Deleting video...' });
+    
+    try {
+      const videoRef = doc(db, 'exerciseVideos', videoId);
+      await deleteDoc(videoRef);
+
+      // Remove from all video states
+      setAllVideos(prevVideos => prevVideos.filter(video => video.id !== videoId));
+      setFilteredAllVideos(prevVideos => prevVideos.filter(video => video.id !== videoId));
+      setOrphanedVideos(prevVideos => prevVideos.filter(video => video.id !== videoId));
+
+      // Update total video count
+      setTotalVideoCount(prev => Math.max(0, prev - 1));
+
+      setToastMessage({ type: 'success', text: 'Video deleted successfully.' });
+    } catch (err) {
+      console.error('[MoveManagement] Error deleting video:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error.';
+      setToastMessage({ type: 'error', text: `Failed to delete video: ${errorMessage}` });
+    } finally {
+      setDeletingVideos(prev => ({ ...prev, [videoId]: false }));
+    }
+  };
+
+  const handleCopyToClipboard = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setToastMessage({ type: 'success', text: `${label} copied to clipboard!` });
+    } catch (err) {
+      console.error('Failed to copy to clipboard:', err);
+      setToastMessage({ type: 'error', text: `Failed to copy ${label.toLowerCase()}` });
+    }
+  };
+
   // Format date helper (if needed for video timestamps etc.)
   const formatDate = (dateValue: any): string => {
     if (!dateValue) return 'N/A';
@@ -346,28 +538,52 @@ const MoveManagement: React.FC = () => {
                <Video className="h-6 w-6 text-[#d7ff00]" />
                <div>
                   <h3 className="text-xl font-semibold text-white">Videos for: {selectedExercise.name}</h3>
-                  <p className="text-sm text-gray-400">({exerciseVideos.length} video{exerciseVideos.length !== 1 ? 's' : ''} found)</p>
+                  <p className="text-sm text-gray-400">({filteredExerciseVideos.length} of {exerciseVideos.length} video{exerciseVideos.length !== 1 ? 's' : ''} shown)</p>
                </div>
             </div>
             <button
-              onClick={() => setSelectedExercise(null)} // Close modal
+              onClick={() => {
+                setSelectedExercise(null);
+                setVideoSearchTerm(''); // Clear video search when closing modal
+              }}
               className="p-1 text-gray-400 hover:text-white transition"
               title="Close video view"
             >
               <XCircle className="h-6 w-6" />
             </button>
           </div>
+          
+          {/* Video Search */}
+          <div className="mb-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search videos by username or ID..."
+                value={videoSearchTerm}
+                onChange={(e) => setVideoSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 bg-[#262a30] border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#d7ff00] focus:border-transparent text-sm"
+              />
+            </div>
+          </div>
+          
           <div className="flex-grow overflow-y-auto pr-2">
             {loadingExerciseVideos ? (
               <div className="flex justify-center items-center py-10"><Loader2 className="h-8 w-8 text-[#d7ff00] animate-spin" /></div>
-            ) : exerciseVideos.length === 0 ? (
+            ) : filteredExerciseVideos.length === 0 && exerciseVideos.length === 0 ? (
                <div className="text-center py-10 text-gray-400">
                   <Video className="h-10 w-10 mx-auto mb-3 text-gray-600" />
                   <p>No videos found for this exercise.</p>
                </div>
+            ) : filteredExerciseVideos.length === 0 && exerciseVideos.length > 0 ? (
+               <div className="text-center py-10 text-gray-400">
+                  <Search className="h-10 w-10 mx-auto mb-3 text-gray-600" />
+                  <p>No videos match your search criteria.</p>
+                  <p className="text-gray-500 text-sm mt-2">Try adjusting your search terms.</p>
+               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {exerciseVideos.map(video => (
+                {filteredExerciseVideos.map(video => (
                   <div key={video.id} className="bg-[#262a30] rounded-lg overflow-hidden border border-gray-700 group">
                     <div className="aspect-video bg-black relative flex items-center justify-center">
                       {video.thumbnail ? (
@@ -383,8 +599,20 @@ const MoveManagement: React.FC = () => {
                       </a>
                     </div>
                     <div className="p-3">
-                      <p className="text-xs text-gray-400 mb-1">Uploaded by: {video.username || 'Unknown'}</p>
-                      <p className="text-xs text-gray-500 font-mono break-all" title={video.id}>ID: {video.id.substring(0, 12)}...</p>
+                      <p className="text-xs text-gray-400 mb-2">Uploaded by: {video.username || 'Unknown'}</p>
+                      <div className="mb-2">
+                        <p className="text-xs text-gray-500 mb-1">Video ID:</p>
+                        <div className="flex items-center gap-2 p-2 bg-[#1a1e24] rounded border border-gray-600">
+                          <p className="text-xs text-gray-300 font-mono flex-1 break-all">{video.id}</p>
+                          <button
+                            onClick={() => handleCopyToClipboard(video.id, 'Video ID')}
+                            className="p-1 text-gray-400 hover:text-[#d7ff00] transition-colors flex-shrink-0"
+                            title="Copy video ID"
+                          >
+                            <Copy className="h-3 w-3" />
+                          </button>
+                        </div>
+                      </div>
                       {/* Add date if available: <p className="text-xs text-gray-500 mt-1">Date: {formatDate(video.createdAt)}</p> */} 
                       {!video.thumbnail && <p className="text-xs text-orange-400 mt-1 italic">Thumbnail pending</p>}
                     </div>
@@ -395,7 +623,10 @@ const MoveManagement: React.FC = () => {
           </div>
            <div className="mt-6 pt-4 border-t border-gray-700 flex justify-end">
               <button
-                onClick={() => setSelectedExercise(null)} // Close modal
+                onClick={() => {
+                  setSelectedExercise(null);
+                  setVideoSearchTerm(''); // Clear video search when closing modal
+                }}
                 className="px-4 py-2 bg-gray-700/30 text-gray-300 rounded-lg text-sm font-medium border border-gray-700 hover:bg-gray-700/50 transition flex items-center"
               >
                 Close
@@ -409,7 +640,7 @@ const MoveManagement: React.FC = () => {
   return (
     <AdminRouteGuard>
       <Head>
-        <title>Move Management | Pulse Admin</title>
+        <title>Exercise Database | Pulse Admin</title>
         <style>{`
           @keyframes fadeInUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
           .animate-fade-in-up { animation: fadeInUp 0.3s ease-out forwards; }
@@ -421,7 +652,7 @@ const MoveManagement: React.FC = () => {
           <div className="flex justify-between items-center mb-8">
             <h1 className="text-2xl font-bold flex items-center">
               <Dumbbell className="text-[#d7ff00] mr-3 h-7 w-7" />
-              Move Management
+              Exercise Database
             </h1>
             <button
               onClick={handleTriggerMoveOfTheDay}
@@ -478,6 +709,164 @@ const MoveManagement: React.FC = () => {
             </div>
           </div>
 
+          {/* Search and Filter Section */}
+          <div className="mb-6 p-4 bg-[#262a30] rounded-xl border border-gray-700">
+            {activeSubTab === 'allMoves' ? (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Search className="h-5 w-5 text-[#d7ff00]" />
+                  <h3 className="text-lg font-semibold text-white">Search & Filter Exercises</h3>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Search by Name or ID</label>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <input
+                        type="text"
+                        placeholder="Enter exercise name or ID..."
+                        value={exerciseSearchTerm}
+                        onChange={(e) => setExerciseSearchTerm(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 bg-[#1a1e24] border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#d7ff00] focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Filter by Category</label>
+                    <div className="relative">
+                      <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <input
+                        type="text"
+                        placeholder="Enter category..."
+                        value={categoryFilter}
+                        onChange={(e) => setCategoryFilter(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 bg-[#1a1e24] border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#d7ff00] focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Filter by Body Part</label>
+                    <div className="relative">
+                      <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <input
+                        type="text"
+                        placeholder="Enter body part..."
+                        value={bodyPartFilter}
+                        onChange={(e) => setBodyPartFilter(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 bg-[#1a1e24] border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#d7ff00] focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+                </div>
+                {(exerciseSearchTerm || categoryFilter || bodyPartFilter) && (
+                  <div className="flex items-center justify-between pt-2 border-t border-gray-600">
+                    <p className="text-sm text-gray-400">
+                      Showing {filteredExercises.length} of {exercises.length} exercises
+                    </p>
+                    <button
+                      onClick={() => {
+                        setExerciseSearchTerm('');
+                        setCategoryFilter('');
+                        setBodyPartFilter('');
+                      }}
+                      className="text-sm text-[#d7ff00] hover:text-[#b8d400] transition-colors"
+                    >
+                      Clear all filters
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : activeSubTab === 'reportedContent' ? (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Search className="h-5 w-5 text-[#d7ff00]" />
+                  <h3 className="text-lg font-semibold text-white">Search Reported Content</h3>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-1 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Search Reports</label>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <input
+                        type="text"
+                        placeholder="Search by exercise name, reporter, video owner, or reason..."
+                        value={reportSearchTerm}
+                        onChange={(e) => setReportSearchTerm(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 bg-[#1a1e24] border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#d7ff00] focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+                </div>
+                {reportSearchTerm && (
+                  <div className="flex items-center justify-between pt-2 border-t border-gray-600">
+                    <p className="text-sm text-gray-400">
+                      Showing {filteredReportedItems.length} of {reportedItems.length} reports
+                    </p>
+                    <button
+                      onClick={() => setReportSearchTerm('')}
+                      className="text-sm text-[#d7ff00] hover:text-[#b8d400] transition-colors"
+                    >
+                      Clear search
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Search className="h-5 w-5 text-[#d7ff00]" />
+                  <h3 className="text-lg font-semibold text-white">Search & Filter Videos</h3>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Search Videos</label>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <input
+                        type="text"
+                        placeholder="Search by username, video ID, or exercise ID..."
+                        value={allVideoSearchTerm}
+                        onChange={(e) => setAllVideoSearchTerm(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 bg-[#1a1e24] border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#d7ff00] focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Filter Options</label>
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        id="showOrphanedOnly"
+                        checked={showOrphanedOnly}
+                        onChange={(e) => setShowOrphanedOnly(e.target.checked)}
+                        className="mr-2 h-4 w-4 text-[#d7ff00] bg-[#1a1e24] border-gray-600 rounded focus:ring-[#d7ff00] focus:ring-2"
+                      />
+                      <label htmlFor="showOrphanedOnly" className="text-sm text-gray-300">
+                        Show orphaned videos only ({orphanedVideos.length})
+                      </label>
+                    </div>
+                  </div>
+                </div>
+                {(allVideoSearchTerm || showOrphanedOnly) && (
+                  <div className="flex items-center justify-between pt-2 border-t border-gray-600">
+                    <p className="text-sm text-gray-400">
+                      Showing {filteredAllVideos.length} of {allVideos.length} videos
+                    </p>
+                    <button
+                      onClick={() => {
+                        setAllVideoSearchTerm('');
+                        setShowOrphanedOnly(false);
+                      }}
+                      className="text-sm text-[#d7ff00] hover:text-[#b8d400] transition-colors"
+                    >
+                      Clear all filters
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           {/* Tab Navigation */}
           <div className="mb-6 border-b border-gray-700 flex space-x-1">
             <button 
@@ -497,6 +886,17 @@ const MoveManagement: React.FC = () => {
                 </span>
               )}
             </button>
+            <button 
+              onClick={() => setActiveSubTab('videoAudit')}
+              className={`py-2 px-4 text-sm font-medium transition-colors rounded-t-md flex items-center gap-2 ${activeSubTab === 'videoAudit' ? 'bg-[#262a30] text-[#d7ff00] border-x border-t border-gray-700' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-700/30'}`}
+            >
+              <Video className="h-4 w-4" /> Video Audit
+              { !loadingAllVideos && orphanedVideos.length > 0 && (
+                <span className="ml-1.5 px-2 py-0.5 rounded-full text-xs bg-red-500/80 text-white font-semibold">
+                  {orphanedVideos.length}
+                </span>
+              )}
+            </button>
           </div>
 
           {error && (
@@ -510,10 +910,16 @@ const MoveManagement: React.FC = () => {
           {activeSubTab === 'allMoves' && (
             loadingExercises ? (
               <div className="flex justify-center items-center py-20"><Loader2 className="h-10 w-10 text-[#d7ff00] animate-spin" /></div>
-            ) : exercises.length === 0 && !error ? (
+            ) : filteredExercises.length === 0 && exercises.length === 0 && !error ? (
               <div className="bg-[#1a1e24] p-8 rounded-lg border border-gray-700 text-center">
                 <Dumbbell className="h-12 w-12 mx-auto mb-4 text-gray-600" />
                 <p className="text-gray-400 text-lg">No exercises found in the database.</p>
+              </div>
+            ) : filteredExercises.length === 0 && exercises.length > 0 ? (
+              <div className="bg-[#1a1e24] p-8 rounded-lg border border-gray-700 text-center">
+                <Search className="h-12 w-12 mx-auto mb-4 text-gray-600" />
+                <p className="text-gray-400 text-lg">No exercises match your search criteria.</p>
+                <p className="text-gray-500 text-sm mt-2">Try adjusting your search terms or filters.</p>
               </div>
             ) : (
               <div className="overflow-x-auto bg-[#1a1e24] rounded-xl shadow-xl border border-gray-800 rounded-t-none"> {/* Remove top rounding if tab is active */}
@@ -528,7 +934,7 @@ const MoveManagement: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-700">
-                    {exercises.map((exercise) => (
+                    {filteredExercises.map((exercise) => (
                       <tr key={exercise.firestoreDocId} className="hover:bg-[#20252c] transition-colors">
                         <td className="py-4 px-5 text-sm text-white font-medium">{exercise.name}</td>
                         <td className="py-4 px-5 text-sm text-gray-300">
@@ -571,10 +977,16 @@ const MoveManagement: React.FC = () => {
           {activeSubTab === 'reportedContent' && (
             loadingReportedItems ? (
               <div className="flex justify-center items-center py-20"><Loader2 className="h-10 w-10 text-[#d7ff00] animate-spin" /></div>
-            ) : reportedItems.length === 0 && !error ? (
+            ) : filteredReportedItems.length === 0 && reportedItems.length === 0 && !error ? (
               <div className="bg-[#1a1e24] p-8 rounded-lg border border-gray-700 text-center rounded-t-none">
                 <AlertCircle className="h-12 w-12 mx-auto mb-4 text-gray-600" />
                 <p className="text-gray-400 text-lg">No reported content found.</p>
+              </div>
+            ) : filteredReportedItems.length === 0 && reportedItems.length > 0 ? (
+              <div className="bg-[#1a1e24] p-8 rounded-lg border border-gray-700 text-center rounded-t-none">
+                <Search className="h-12 w-12 mx-auto mb-4 text-gray-600" />
+                <p className="text-gray-400 text-lg">No reports match your search criteria.</p>
+                <p className="text-gray-500 text-sm mt-2">Try adjusting your search terms.</p>
               </div>
             ) : (
               <div className="overflow-x-auto bg-[#1a1e24] rounded-xl shadow-xl border border-gray-800 rounded-t-none">
@@ -592,7 +1004,7 @@ const MoveManagement: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-700">
-                    {reportedItems.map((item) => (
+                    {filteredReportedItems.map((item) => (
                       <tr key={item.id} className={`hover:bg-[#20252c] transition-colors ${item.status === 'pending' ? 'bg-orange-800/10' : ''}`}>
                         <td className="py-4 px-5 text-sm text-white font-medium">{item.exerciseName || 'N/A'}</td>
                         <td className="py-4 px-5 text-sm text-gray-300">{item.reporterUsername || item.reportedBy || 'N/A'}</td>
@@ -649,6 +1061,126 @@ const MoveManagement: React.FC = () => {
                         </td>
                       </tr>
                     ))}
+                  </tbody>
+                </table>
+              </div>
+            )
+          )}
+
+          {activeSubTab === 'videoAudit' && (
+            loadingAllVideos ? (
+              <div className="flex justify-center items-center py-20"><Loader2 className="h-10 w-10 text-[#d7ff00] animate-spin" /></div>
+            ) : filteredAllVideos.length === 0 && allVideos.length === 0 && !error ? (
+              <div className="bg-[#1a1e24] p-8 rounded-lg border border-gray-700 text-center rounded-t-none">
+                <Video className="h-12 w-12 mx-auto mb-4 text-gray-600" />
+                <p className="text-gray-400 text-lg">No videos found in the database.</p>
+              </div>
+            ) : filteredAllVideos.length === 0 && allVideos.length > 0 ? (
+              <div className="bg-[#1a1e24] p-8 rounded-lg border border-gray-700 text-center rounded-t-none">
+                <Search className="h-12 w-12 mx-auto mb-4 text-gray-600" />
+                <p className="text-gray-400 text-lg">No videos match your search criteria.</p>
+                <p className="text-gray-500 text-sm mt-2">Try adjusting your search terms or filters.</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto bg-[#1a1e24] rounded-xl shadow-xl border border-gray-800 rounded-t-none">
+                <table className="min-w-full">
+                  <thead>
+                    <tr className="border-b border-gray-700">
+                      <th className="py-3 px-5 text-left text-xs text-gray-400 font-semibold uppercase tracking-wider">Thumbnail</th>
+                      <th className="py-3 px-5 text-left text-xs text-gray-400 font-semibold uppercase tracking-wider">Video ID</th>
+                      <th className="py-3 px-5 text-left text-xs text-gray-400 font-semibold uppercase tracking-wider">Exercise ID</th>
+                      <th className="py-3 px-5 text-left text-xs text-gray-400 font-semibold uppercase tracking-wider">Username</th>
+                      <th className="py-3 px-5 text-left text-xs text-gray-400 font-semibold uppercase tracking-wider">Status</th>
+                      <th className="py-3 px-5 text-left text-xs text-gray-400 font-semibold uppercase tracking-wider">Created At</th>
+                      <th className="py-3 px-5 text-center text-xs text-gray-400 font-semibold uppercase tracking-wider">Video</th>
+                      <th className="py-3 px-5 text-center text-xs text-gray-400 font-semibold uppercase tracking-wider">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-700">
+                    {filteredAllVideos.map((video) => {
+                      const isOrphaned = orphanedVideos.some(orphan => orphan.id === video.id);
+                      return (
+                        <tr key={video.id} className={`hover:bg-[#20252c] transition-colors ${isOrphaned ? 'bg-red-800/10' : ''}`}>
+                          <td className="py-4 px-5">
+                            <div className="w-16 h-12 bg-black rounded flex items-center justify-center overflow-hidden">
+                              {video.thumbnail ? (
+                                <img src={video.thumbnail} alt="Video thumbnail" className="object-cover w-full h-full" />
+                              ) : (
+                                <ImageIcon className="h-6 w-6 text-gray-500" />
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-4 px-5">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-gray-300 font-mono">{video.id.substring(0, 12)}...</span>
+                              <button
+                                onClick={() => handleCopyToClipboard(video.id, 'Video ID')}
+                                className="p-1 text-gray-400 hover:text-[#d7ff00] transition-colors"
+                                title={`Copy full video ID: ${video.id}`}
+                              >
+                                <Copy className="h-3 w-3" />
+                              </button>
+                            </div>
+                          </td>
+                          <td className="py-4 px-5">
+                            {video.exerciseId ? (
+                              <div className="flex items-center gap-2">
+                                <span className={`text-sm ${isOrphaned ? 'text-red-400' : 'text-gray-300'}`}>
+                                  {video.exerciseId}
+                                </span>
+                                <button
+                                  onClick={() => handleCopyToClipboard(video.exerciseId, 'Exercise ID')}
+                                  className="p-1 text-gray-400 hover:text-[#d7ff00] transition-colors"
+                                  title={`Copy exercise ID: ${video.exerciseId}`}
+                                >
+                                  <Copy className="h-3 w-3" />
+                                </button>
+                              </div>
+                            ) : (
+                              <span className="text-gray-500 text-sm">N/A</span>
+                            )}
+                          </td>
+                          <td className="py-4 px-5 text-sm text-gray-300">{video.username || 'N/A'}</td>
+                          <td className="py-4 px-5 text-sm">
+                            {isOrphaned ? (
+                              <span className="px-2 py-1 text-xs font-semibold rounded-full bg-red-500/80 text-white">
+                                Orphaned
+                              </span>
+                            ) : (
+                              <span className="px-2 py-1 text-xs font-semibold rounded-full bg-green-500/80 text-white">
+                                Linked
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-4 px-5 text-sm text-gray-400">{video.createdAt ? formatDate(video.createdAt) : 'N/A'}</td>
+                          <td className="py-4 px-5 text-center">
+                            {video.videoURL ? (
+                              <a href={video.videoURL} target="_blank" rel="noopener noreferrer"
+                                className="px-2.5 py-1.5 rounded-md text-xs font-medium border bg-blue-900/40 text-blue-300 border-blue-800 hover:bg-blue-800/60 transition-colors flex items-center mx-auto gap-1.5"
+                              >
+                                <PlayCircle className="h-3.5 w-3.5" /> View
+                              </a>
+                            ) : (
+                              <span className="text-xs text-gray-500">No URL</span>
+                            )}
+                          </td>
+                          <td className="py-4 px-5 text-center">
+                            <button
+                              onClick={() => handleDeleteVideo(video.id)}
+                              disabled={deletingVideos[video.id]}
+                              className={`p-1.5 rounded-md transition-colors ${
+                                deletingVideos[video.id]
+                                  ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                                  : 'bg-red-700/80 hover:bg-red-600/80 text-white'
+                              }`}
+                              title="Delete video permanently"
+                            >
+                              {deletingVideos[video.id] ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
