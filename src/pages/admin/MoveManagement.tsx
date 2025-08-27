@@ -24,6 +24,7 @@ interface ExerciseVideoDisplay {
   videoURL: string;
   thumbnail?: string;
   username?: string;
+  createdAt?: any; // Firestore Timestamp or Date
   // Add other fields from your ExerciseVideo class as needed
 }
 
@@ -337,7 +338,8 @@ const MoveManagement: React.FC = () => {
               videoURL: data.videoURL,
               thumbnail: data.thumbnail,
               username: data.username,
-              // Add createdAt or other fields if needed
+              createdAt: data.createdAt,
+              // Add other fields if needed
           } as ExerciseVideoDisplay;
       });
       setExerciseVideos(fetchedVideos);
