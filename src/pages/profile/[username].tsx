@@ -17,6 +17,7 @@ import { UserActivity } from '../../types/Activity';
 import FullScreenExerciseView from '../FullscreenExerciseView';
 import UserProfileMeta from '../../components/UserProfileMeta';
 import Link from 'next/link';
+import FollowButton from '../../components/FollowButton';
 
 interface ProfileViewProps {
   initialUserData: User | null;
@@ -316,13 +317,32 @@ useEffect(() => {
             </div>
 
             <div className="mt-4 text-white">
-              <h1 className="text-2xl font-bold">{user.displayName}</h1>
-              <p className="text-zinc-400">@{user.username}</p>
-              
-              <div className="mt-2 flex items-center gap-4 text-sm text-zinc-400">
-                <span>{followers.length} followers</span>
-                <span className="w-1 h-1 bg-zinc-600 rounded-full" />
-                <span>{following.length} following</span>
+              <div className="flex items-start justify-between">
+                <div>
+                  <h1 className="text-2xl font-bold">{user.displayName}</h1>
+                  <p className="text-zinc-400">@{user.username}</p>
+                  
+                  <div className="mt-2 flex items-center gap-4 text-sm text-zinc-400">
+                    <span>{followers.length} followers</span>
+                    <span className="w-1 h-1 bg-zinc-600 rounded-full" />
+                    <span>{following.length} following</span>
+                  </div>
+                </div>
+                
+                {/* Follow Button */}
+                <div className="mt-2">
+                  <FollowButton 
+                    targetUser={user}
+                    onFollowSuccess={(isFollowing) => {
+                      // Update followers count optimistically
+                      if (isFollowing) {
+                        setFollowers(prev => [...prev, {} as any]); // Add placeholder follower
+                      } else {
+                        setFollowers(prev => prev.slice(0, -1)); // Remove one follower
+                      }
+                    }}
+                  />
+                </div>
               </div>
 
               <p className="mt-4 text-zinc-300">{user.bio}</p>

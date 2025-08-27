@@ -573,6 +573,140 @@ class UserService {
     }
   }
 
+  /**
+   * Generate follow request ID (same logic as iOS app)
+   */
+  private generateFollowRequestId(toUserId: string, fromUserId: string): string {
+    return `${fromUserId}${toUserId}`;
+  }
+
+  /**
+   * Check follow status between current user and target user
+   */
+  async getFollowStatus(targetUserId: string): Promise<{ isFollowing: boolean; status: string; followRequest?: FollowRequest }> {
+    const currentUser = this.nonUICurrentUser;
+    if (!currentUser?.id) {
+      throw new Error('No user is signed in');
+    }
+
+    if (currentUser.id === targetUserId) {
+      return { isFollowing: false, status: 'self' };
+    }
+
+    try {
+      const requestId = this.generateFollowRequestId(targetUserId, currentUser.id);
+      const followRequestsRef = collection(db, 'followRequests');
+      const docRef = doc(followRequestsRef, requestId);
+      const docSnap = await getDoc(docRef);
+
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        const followRequest: FollowRequest = {
+          fromUser: {
+            id: data.fromUser?.id || '',
+            username: data.fromUser?.username || '',
+            displayName: data.fromUser?.displayName || ''
+          },
+          toUser: {
+            id: data.toUser?.id || '',
+            username: data.toUser?.username || '',
+            displayName: data.toUser?.displayName || ''
+          },
+          status: data.status || '',
+          createdAt: data.createdAt instanceof Date 
+            ? data.createdAt 
+            : (data.createdAt ? new Date(data.createdAt * 1000) : new Date()),
+          updatedAt: data.updatedAt instanceof Date 
+            ? data.updatedAt 
+            : (data.updatedAt ? new Date(data.updatedAt * 1000) : new Date())
+        };
+
+        return {
+          isFollowing: data.status === 'accepted',
+          status: data.status,
+          followRequest
+        };
+      }
+
+      return { isFollowing: false, status: 'notFollowing' };
+    } catch (error) {
+      console.error('Error checking follow status:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Follow a user (create follow request)
+   */
+  async followUser(targetUser: User): Promise<FollowRequest> {
+    const currentUser = this.nonUICurrentUser;
+    if (!currentUser?.id) {
+      throw new Error('No user is signed in');
+    }
+
+    if (currentUser.id === targetUser.id) {
+      throw new Error('Cannot follow yourself');
+    }
+
+    try {
+      const requestId = this.generateFollowRequestId(targetUser.id, currentUser.id);
+      const followRequest: FollowRequest = {
+        fromUser: {
+          id: currentUser.id,
+          username: currentUser.username,
+          displayName: currentUser.displayName
+        },
+        toUser: {
+          id: targetUser.id,
+          username: targetUser.username,
+          displayName: targetUser.displayName
+        },
+        status: 'accepted', // Auto-accept like iOS app
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+
+      const followRequestsRef = collection(db, 'followRequests');
+      const docRef = doc(followRequestsRef, requestId);
+      
+      await setDoc(docRef, {
+        fromUser: followRequest.fromUser,
+        toUser: followRequest.toUser,
+        status: followRequest.status,
+        isUserContentPrioritized: false,
+        workoutBuddy: false,
+        createdAt: followRequest.createdAt.getTime() / 1000, // Store as timestamp
+        updatedAt: followRequest.updatedAt.getTime() / 1000
+      });
+
+      return followRequest;
+    } catch (error) {
+      console.error('Error following user:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Unfollow a user (delete follow request)
+   */
+  async unfollowUser(targetUserId: string): Promise<void> {
+    const currentUser = this.nonUICurrentUser;
+    if (!currentUser?.id) {
+      throw new Error('No user is signed in');
+    }
+
+    try {
+      const requestId = this.generateFollowRequestId(targetUserId, currentUser.id);
+      const followRequestsRef = collection(db, 'followRequests');
+      const docRef = doc(followRequestsRef, requestId);
+      
+      await deleteDoc(docRef);
+    } catch (error) {
+      console.error('Error unfollowing user:', error);
+      throw error;
+    }
+  }
+
    /**
    * Fetch user ID by username
    * @param username The username to search for
