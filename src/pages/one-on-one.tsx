@@ -167,7 +167,7 @@ const OneOnOneGuide = () => {
 
       <Meta title={title} description={description} url={pageUrl} />
 
-      <div className="bg-[#E0FE10]/10 border-l-4 border-[#E0FE10] p-4 mx-4 md:mx-auto max-w-5xl mt-8">
+      <div className="bg-[#E0FE10]/10 border-l-4 border-[#E0FE10] p-4 mx-4 md:mx-auto max-w-5xl">
         <div className="flex items-start gap-3">
           <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
             <Check className="w-4 h-4 text-white" />
