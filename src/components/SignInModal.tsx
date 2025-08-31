@@ -2557,6 +2557,13 @@ function isOnboardingComplete(user: any): boolean { // Explicitly return boolean
   const hasGoals = Array.isArray(user.goal) && user.goal.length > 0;
   const isRegistrationMarkedComplete = !!user.registrationComplete;
 
+  // TEMPORARY FIX: If user has username and email, consider them complete
+  // This bypasses the quiz for existing users
+  if (user.username && user.email) {
+    console.log('[isOnboardingComplete] TEMP FIX: User has username and email, considering complete');
+    return true;
+  }
+
   return (
     hasUsername &&
     hasValidHeight &&

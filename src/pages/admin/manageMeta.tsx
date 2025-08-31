@@ -11,7 +11,7 @@ import { Loader2, UploadCloud, Trash2, AlertTriangle, CheckCircle } from 'lucide
 const storage = getStorage(app);
 
 const pageFileNames = [
-  '100trainers', 'programming', 'starter-pack', 'about', 'morning-mobility-challenge', 
+  '100trainers', 'programming', 'starter-pack', 'one-on-one', 'about', 'morning-mobility-challenge', 
   'createStack', 'subscription-success', 'subscribe', 'mobility', 'morningMobilityRedirect', 
   'join-challenge', 'index', 'download', 'trim-video', 'create', 'rounds', 
   'privacyPolicy', 'terms', 'stacks', 'moves', 'update-challenge-status', 
