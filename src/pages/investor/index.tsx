@@ -2246,7 +2246,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                     <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8 mb-10">
                     <h3 className="text-white text-xl font-semibold mb-6">The Folks Building Pulse</h3>
                     
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
                         {/* CEO */}
                         <div className="bg-zinc-800/50 rounded-xl overflow-hidden">
                         <div className="aspect-square overflow-hidden">
@@ -2306,6 +2306,26 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                             </p>
                         </div>
                         </div>
+
+                        {/* Chief of Staff */}
+                        <div className="bg-zinc-800/50 rounded-xl overflow-hidden">
+                        <div className="aspect-square overflow-hidden">
+                            <img 
+                            src="bobbyAdvisor.jpg"
+                            alt="Bobby Nweke - Chief of Staff" 
+                            className="w-full h-full object-cover"
+                            />
+                        </div>
+                        <div className="p-6">
+                            <h4 className="text-white font-semibold mb-1">Bobby</h4>
+                            <p className="text-[#E0FE10] text-sm font-medium mb-3">Chief of Staff</p>
+                            <p className="text-zinc-400 text-sm">
+                            Harvard-educated strategic advisor and former TED coach who brings top-tier storytelling guidance 
+                            and operational excellence to Pulse. Expert in translating complex ideas into compelling narratives 
+                            that drive investor confidence and team alignment. Passionate about scaling mission-driven organizations.
+                            </p>
+                        </div>
+                        </div>
                     </div>
                     </div>
                     
@@ -2333,7 +2353,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                             </h4>
                             <p className="text-[#E0FE10] text-sm font-medium mb-2">Happiness, Inclusion & Bias</p>
                             <p className="text-zinc-400 text-sm">
-                            Bestselling author and creator of the TED talk "How to Outsmart Your Unconscious Bias" (500k+ views). 
+                            #1 Amazon Seller and creator of the TED talk "How to Outsmart Your Unconscious Bias" (500k+ views). 
                             Former Silicon Valley securities lawyer, VC consultant, and tech-startup CEO who has advised Fortune 500 teams 
                             on growth through inclusion. At Pulse, she brings expertise in brand narrative, bias-free community design, 
                             and helping creators communicate value that converts audiences into loyal users.

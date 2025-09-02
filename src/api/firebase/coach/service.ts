@@ -1,4 +1,4 @@
-import { doc, getDoc, setDoc, collection, query, where, getDocs, writeBatch, serverTimestamp, addDoc, deleteDoc, orderBy, limit } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, query, where, getDocs, writeBatch, serverTimestamp, addDoc, deleteDoc, orderBy, limit, updateDoc } from 'firebase/firestore';
 import { db } from '../config';
 import { CoachModel, CoachFirestoreData } from '../../../types/Coach';
 import { convertFirestoreTimestamp } from '../../../utils/formatDate';
@@ -48,8 +48,20 @@ class CoachService {
       
       const userData = userDoc.data();
       
+      // Check if user has activeCoachAccount flag OR if they have a coach profile
       if (!userData.activeCoachAccount) {
-        return null; // User doesn't have an active coach account
+        // Fallback: Check if coach profile exists directly
+        const coachRef = doc(db, 'coaches', userId);
+        const coachDoc = await getDoc(coachRef);
+        
+        if (!coachDoc.exists()) {
+          console.log('[CoachService] No activeCoachAccount flag and no coach profile found');
+          return null;
+        }
+        
+        // Coach profile exists, so update the user document
+        console.log('[CoachService] Coach profile found, updating user activeCoachAccount flag');
+        await updateDoc(userRef, { activeCoachAccount: true });
       }
       
       // Get coach profile using same userId as document ID

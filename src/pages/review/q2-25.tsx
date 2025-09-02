@@ -76,7 +76,7 @@ const Q2Review2025 = () => {
         {/* Back to Reviews Link */}
         <div className="bg-zinc-900 text-white py-4">
           <div className="max-w-6xl mx-auto px-4">
-            <Link href="/review" className="flex items-center text-sm gap-2 text-[#E0FE10] hover:underline">
+            <Link href="/review" className="flex items-center text-sm gap-2 text-blue-600 hover:underline">
               <ArrowLeft size={20} />
               View Other Reviews
             </Link>
@@ -86,7 +86,7 @@ const Q2Review2025 = () => {
         {/* Hero Section */}
         <div className="bg-gradient-to-br from-zinc-900 to-zinc-800 text-white py-24">
           <div className="max-w-6xl mx-auto px-4">
-            <div className="text-sm font-medium text-[#E0FE10]">Mid-Quarter Review</div>
+            <div className="text-sm font-medium text-blue-400">Mid-Quarter Review</div>
             <h1 className="mt-2 text-5xl sm:text-7xl font-bold font-['Thunder']">
               Q2 2025: Quarter of the Agents
             </h1>
@@ -130,9 +130,9 @@ const Q2Review2025 = () => {
               </div>
             </div>
 
-            <div className="bg-[#E0FE10] rounded-lg p-6">
-              <h3 className="text-xl font-bold mb-2">🎯 Vision</h3>
-              <p className="text-zinc-800">
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-6">
+              <h3 className="text-xl font-bold mb-2 text-blue-900">🎯 Vision</h3>
+              <p className="text-blue-800">
                 We're building the future of work where AI agents aren't just tools—they're teammates. 
                 Each agent gets a name, a role, and an actual seat at our table, transforming how startups scale with autonomous intelligence.
               </p>
@@ -209,9 +209,9 @@ const Q2Review2025 = () => {
             </p>
             <MetricsGrid metrics={morningMobilityMetrics} />
             
-            <div className="mt-8 bg-[#E0FE10] rounded-lg p-6">
-              <h3 className="font-bold text-lg mb-2">📊 Key Achievements</h3>
-              <ul className="space-y-2 text-zinc-800">
+            <div className="mt-8 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-6">
+              <h3 className="font-bold text-lg mb-2 text-blue-900">📊 Key Achievements</h3>
+              <ul className="space-y-2 text-blue-800">
                 <li>• 83 total participants joined with 65.2% coming through referrals</li>
                 <li>• Over 1,630 workouts completed, demonstrating sustained user activity</li>
                 <li>• Challenge format validates our creator-led community approach</li>
@@ -234,7 +234,7 @@ const Q2Review2025 = () => {
                 <ul className="text-zinc-600 space-y-1">
                   <li>• Morning Mobility Challenge live → 68 organic joins</li>
                 </ul>
-                <p className="text-sm text-green-600 mt-2">💡 Validates social loop & creator multiplier</p>
+                <p className="text-sm text-blue-600 mt-2">💡 Validates social loop & creator multiplier</p>
               </div>
               
               <div className="border-l-4 border-blue-500 pl-6">
@@ -250,7 +250,7 @@ const Q2Review2025 = () => {
                 <ul className="text-zinc-600 space-y-1">
                   <li>• Brevo (115k import + flows) • TikTok pixel → 1M impr / $0.47 CAC</li>
                 </ul>
-                <p className="text-sm text-purple-600 mt-2">💡 Scalable retargeting & lifecycle comms</p>
+                <p className="text-sm text-blue-600 mt-2">💡 Scalable retargeting & lifecycle comms</p>
               </div>
               
               <div className="border-l-4 border-orange-500 pl-6">
@@ -258,7 +258,7 @@ const Q2Review2025 = () => {
                 <ul className="text-zinc-600 space-y-1">
                   <li>• Pulse Programming™ launch • TM filed • provisional patent</li>
                 </ul>
-                <p className="text-sm text-orange-600 mt-2">💡 Defensible moat; investor signal</p>
+                <p className="text-sm text-blue-600 mt-2">💡 Defensible moat; investor signal</p>
               </div>
             </div>
           </div>
@@ -272,12 +272,26 @@ const Q2Review2025 = () => {
               <h2 className="text-2xl font-bold">Talent Upgrades</h2>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
               <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-lg">
-                <h3 className="font-bold text-lg mb-3">🎓 Chief of Staff</h3>
-                <p className="text-zinc-700 mb-2"><strong>Bobby Nweke</strong></p>
-                <p className="text-sm text-zinc-600">Harvard / ex-TED coach</p>
-                <p className="text-sm text-blue-600 mt-2">Top-tier storytelling guidance</p>
+                <div className="flex items-center gap-4 mb-4">
+                  <img 
+                    src="/bobbyAdvisor.jpg" 
+                    alt="Bobby Nweke - Chief of Staff" 
+                    className="w-16 h-16 rounded-lg object-cover"
+                  />
+                  <div>
+                    <h3 className="font-bold text-lg mb-1">🎓 Chief of Staff</h3>
+                    <p className="text-zinc-700 font-semibold">Bobby Nweke</p>
+                    <p className="text-sm text-zinc-600">Harvard / ex-TED coach</p>
+                  </div>
+                </div>
+                <p className="text-sm text-zinc-600 mb-3">
+                  Harvard-educated strategic advisor and former TED coach who brings top-tier storytelling guidance 
+                  and operational excellence to Pulse. Expert in translating complex ideas into compelling narratives 
+                  that drive investor confidence and team alignment.
+                </p>
+                <p className="text-sm text-blue-600 font-medium">Strategic storytelling & operational excellence</p>
               </div>
               
               <div className="bg-gradient-to-br from-green-50 to-emerald-50 p-6 rounded-lg">
@@ -287,7 +301,93 @@ const Q2Review2025 = () => {
                   <li>• <strong>DeRay Mckesson</strong> - Community Building and Organizing</li>
                   <li>• <strong>Marques Zak</strong> - Marketing and Growth</li>
                 </ul>
-                <p className="text-sm text-green-600 mt-2">Community building & inclusive growth guidance</p>
+                <p className="text-sm text-blue-600 mt-2">Community building & inclusive growth guidance</p>
+              </div>
+            </div>
+
+            {/* Detailed Advisor Profiles */}
+            <div className="bg-zinc-50 rounded-lg p-6">
+              <h3 className="font-bold text-lg mb-6">🌟 New Advisory Board: Operator-Grade Expertise</h3>
+              <p className="text-zinc-600 mb-6">
+                Q2 brought three exceptional advisors who bring deep operational experience in community building, 
+                inclusive growth, and marketing excellence—exactly what we need to scale Pulse responsibly.
+              </p>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Valerie Alexander */}
+                <div className="bg-white rounded-lg p-4">
+                  <div className="flex items-center gap-3 mb-3">
+                    <img 
+                      src="/Val.jpg" 
+                      alt="Valerie Alexander" 
+                      className="w-12 h-12 rounded-lg object-cover"
+                    />
+                    <div>
+                      <h4 className="font-bold text-sm">Valerie Alexander</h4>
+                      <p className="text-xs text-blue-600">Happiness, Inclusion & Bias</p>
+                    </div>
+                  </div>
+                  <p className="text-xs text-zinc-600 mb-2">
+                    #1 Amazon Seller and creator of the TED talk "How to Outsmart Your Unconscious Bias" (500k+ views). 
+                    Former Silicon Valley securities lawyer, VC consultant, and tech-startup CEO.
+                  </p>
+                  <p className="text-xs text-blue-600 font-medium">
+                    At Pulse: Brand narrative, bias-free community design, creator value communication
+                  </p>
+                </div>
+
+                {/* DeRay Mckesson */}
+                <div className="bg-white rounded-lg p-4">
+                  <div className="flex items-center gap-3 mb-3">
+                    <img 
+                      src="/Deray.png" 
+                      alt="DeRay Mckesson" 
+                      className="w-12 h-12 rounded-lg object-cover"
+                    />
+                    <div>
+                      <h4 className="font-bold text-sm">DeRay Mckesson</h4>
+                      <p className="text-xs text-blue-600">Community Building and Organizing</p>
+                    </div>
+                  </div>
+                  <p className="text-xs text-zinc-600 mb-2">
+                    Renowned civil rights activist and community organizer who has mastered the art of rallying people 
+                    around a shared cause. As a newly passionate fitness enthusiast.
+                  </p>
+                  <p className="text-xs text-blue-600 font-medium">
+                    At Pulse: Human behavior insights, authentic community building, lasting change motivation
+                  </p>
+                </div>
+
+                {/* Marques Zak */}
+                <div className="bg-white rounded-lg p-4">
+                  <div className="flex items-center gap-3 mb-3">
+                    <img 
+                      src="/zak.jpg" 
+                      alt="Marques Zak" 
+                      className="w-12 h-12 rounded-lg object-cover"
+                    />
+                    <div>
+                      <h4 className="font-bold text-sm">Marques Zak</h4>
+                      <p className="text-xs text-blue-600">Marketing and Growth</p>
+                    </div>
+                  </div>
+                  <p className="text-xs text-zinc-600 mb-2">
+                    Marketing executive with leadership roles at PepsiCo and American Express. 
+                    Recent inductee into the Advertising Hall of Achievement.
+                  </p>
+                  <p className="text-xs text-blue-600 font-medium">
+                    At Pulse: Memorable brand experiences, explosive growth strategies, diverse audience resonance
+                  </p>
+                </div>
+              </div>
+              
+              <div className="mt-6 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4">
+                <h4 className="font-bold text-sm mb-2 text-blue-900">💡 Why This Matters</h4>
+                <p className="text-xs text-blue-800">
+                  These advisors bring exactly the expertise we need for our next phase: building inclusive communities 
+                  that scale, creating marketing that resonates across diverse audiences, and ensuring our growth 
+                  strategies are both effective and responsible.
+                </p>
               </div>
             </div>
           </div>
@@ -304,29 +404,29 @@ const Q2Review2025 = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-3">
                 <div className="flex items-center gap-3">
-                  <div className="w-2 h-2 bg-[#E0FE10] rounded-full"></div>
+                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
                   <p className="text-zinc-700">Investor Dataroom v2 with live K-factor dashboard</p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <div className="w-2 h-2 bg-[#E0FE10] rounded-full"></div>
+                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
                   <p className="text-zinc-700">Pulse PR-Ops AI agent drafting releases & investor notes</p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <div className="w-2 h-2 bg-[#E0FE10] rounded-full"></div>
+                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
                   <p className="text-zinc-700">iOS crash-free sessions ↑ to 99.3%</p>
                 </div>
               </div>
               <div className="space-y-3">
                 <div className="flex items-center gap-3">
-                  <div className="w-2 h-2 bg-[#E0FE10] rounded-full"></div>
+                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
                   <p className="text-zinc-700">First Apple Watch HR streaming inside Sweat Sync Live</p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <div className="w-2 h-2 bg-[#E0FE10] rounded-full"></div>
+                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
                   <p className="text-zinc-700">Stripe Connect revenue-share ledger live</p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <div className="w-2 h-2 bg-[#E0FE10] rounded-full"></div>
+                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
                   <p className="text-zinc-700">Admin Tools CMS • 100 Coaches CRM • Pulse Check app inception</p>
                 </div>
               </div>
@@ -344,11 +444,11 @@ const Q2Review2025 = () => {
             
             <div className="space-y-4">
               {[
-                { id: 1, title: "Fundraising", target: "Close Seed round • $500K-$1M raised" },
-                { id: 2, title: "Strategic Partnerships", target: "1 brand partnership (exploring ON collaboration) • 1 corporate pilot" },
-                { id: 3, title: "100 Coaches Program", target: "Onboard first 40 trainers • establish program foundation" },
-                { id: 4, title: "PR & Thought Leadership", target: "5 major media placements" },
-                { id: 5, title: "Product Scale", target: "Grow subscriber base by 30%" }
+                { id: 1, title: "Mobility Round Success", target: "Complete end-to-end Mobility Round with full user engagement and retention metrics" },
+                { id: 2, title: "Creator Payment System", target: "End-to-end payment system for creators and prize winners + Stripe integration" },
+                { id: 3, title: "Nutrition Logging Integration", target: "Add nutrition logging to enable end-to-end Rounds (Nutrition + Cardio + Lifting)" },
+                { id: 4, title: "Pulse Programming AI", target: "AI chatbot collaboration for creating full Rounds in 5-10 minutes vs hours" },
+                { id: 5, title: "Multiplayer Training Experience", target: "Unlock end-to-end training for both Multiplayer Rounds and One-on-One trainer-client sessions" }
               ].map((priority) => (
                 <div key={priority.id} className="flex items-center gap-4 p-4 bg-zinc-50 rounded-lg">
                   <div className="flex-shrink-0 w-8 h-8 bg-black text-white rounded-full flex items-center justify-center font-bold">
@@ -364,7 +464,82 @@ const Q2Review2025 = () => {
           </div>
         </div>
 
-
+        {/* Resources Section */}
+        <div className="max-w-6xl mx-auto px-4 mb-16">
+          <div className="bg-white rounded-xl shadow-lg p-8">
+            <div className="flex items-center gap-3 mb-6">
+              <ArrowUpRight className="text-black" size={28} />
+              <h2 className="text-2xl font-bold">Resources & Next Steps</h2>
+            </div>
+            
+            <p className="text-lg text-zinc-600 mb-8">
+              Want to dive deeper into Pulse's story, metrics, and investment opportunity? 
+              Explore our comprehensive resources below.
+            </p>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="bg-gradient-to-br from-zinc-50 to-zinc-100 p-6 rounded-lg border border-zinc-200">
+                <h3 className="font-bold text-lg mb-3 flex items-center gap-2">
+                  <span className="text-2xl">📊</span>
+                  Investor Dataroom
+                </h3>
+                <p className="text-zinc-600 mb-4">
+                  Comprehensive investor materials including detailed financials, market analysis, 
+                  competitive landscape, and our complete pitch deck.
+                </p>
+                <a 
+                  href="/investor" 
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-black text-white font-medium rounded-lg hover:bg-zinc-800 transition-colors"
+                >
+                  <ArrowUpRight size={16} />
+                  View Investor Dataroom
+                </a>
+              </div>
+              
+              <div className="bg-gradient-to-br from-zinc-50 to-zinc-100 p-6 rounded-lg border border-zinc-200">
+                <h3 className="font-bold text-lg mb-3 flex items-center gap-2">
+                  <span className="text-2xl">📰</span>
+                  Press Kit
+                </h3>
+                <p className="text-zinc-600 mb-4">
+                  Media resources, company assets, founder bios, and press releases 
+                  for journalists and media partners.
+                </p>
+                <a 
+                  href="/press-kit" 
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  <ArrowUpRight size={16} />
+                  Access Press Kit
+                </a>
+              </div>
+            </div>
+            
+            <div className="mt-8 bg-zinc-50 rounded-lg p-6">
+              <h4 className="font-bold text-lg mb-3">💬 Get in Touch</h4>
+              <p className="text-zinc-600 mb-4">
+                Questions about our Q2 progress or interested in learning more about Pulse? 
+                We'd love to hear from you.
+              </p>
+              <div className="flex flex-wrap gap-4">
+                <a 
+                  href="mailto:hello@fitwithpulse.ai" 
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-zinc-200 text-zinc-800 font-medium rounded-lg hover:bg-zinc-300 transition-colors"
+                >
+                  📧 hello@fitwithpulse.ai
+                </a>
+                <a 
+                  href="https://calendly.com/tre-aqo7/30min" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-zinc-200 text-zinc-800 font-medium rounded-lg hover:bg-zinc-300 transition-colors"
+                >
+                  📅 Schedule a Call
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
 
         <Spacer />
       </div>
