@@ -13,30 +13,118 @@ declare global {
 const Custom404: React.FC = () => {
   const router = useRouter();
   const [debugInfo, setDebugInfo] = useState<any>({});
+  const [debugCode, setDebugCode] = useState<string>('');
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
+      // Generate a unique debug code for this 404 instance
+      const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+      setDebugCode(code);
+
+      // Parse URL components
+      const url = new URL(window.location.href);
+      const pathSegments = url.pathname.split('/').filter(Boolean);
+      
+      // Detect potential round/challenge URLs
+      const isRoundUrl = pathSegments.includes('round') || pathSegments.includes('round-invitation');
+      const roundId = isRoundUrl ? pathSegments[pathSegments.indexOf('round') + 1] || pathSegments[pathSegments.indexOf('round-invitation') + 1] : null;
+      
       const info = {
-        userAgent: navigator.userAgent,
-        currentUrl: window.location.href,
-        referrer: document.referrer,
-        isAndroid: /Android/i.test(navigator.userAgent),
-        isChrome: /Chrome/i.test(navigator.userAgent),
-        isSamsung: /SamsungBrowser/i.test(navigator.userAgent),
+        // Basic info
+        debugCode: code,
         timestamp: new Date().toISOString(),
+        currentUrl: window.location.href,
         pathname: router.asPath,
+        referrer: document.referrer,
+        
+        // URL Analysis
+        urlComponents: {
+          protocol: url.protocol,
+          host: url.host,
+          pathname: url.pathname,
+          search: url.search,
+          hash: url.hash,
+          pathSegments: pathSegments,
+        },
+        
+        // Route Analysis
+        routeAnalysis: {
+          isRoundUrl,
+          roundId,
+          possibleIntendedRoute: isRoundUrl ? (roundId ? `/round/${roundId}` : '/round/[missing-id]') : 'unknown',
+          pathDepth: pathSegments.length,
+          hasQueryParams: url.search.length > 0,
+          queryParams: Object.fromEntries(url.searchParams.entries()),
+        },
+        
+        // Device & Browser info
+        device: {
+          userAgent: navigator.userAgent,
+          isAndroid: /Android/i.test(navigator.userAgent),
+          isIOS: /iPhone|iPad|iPod/i.test(navigator.userAgent),
+          isChrome: /Chrome/i.test(navigator.userAgent),
+          isSamsung: /SamsungBrowser/i.test(navigator.userAgent),
+          isSafari: /Safari/i.test(navigator.userAgent) && !/Chrome/i.test(navigator.userAgent),
+          isFirefox: /Firefox/i.test(navigator.userAgent),
+          isMobile: /Mobi|Android/i.test(navigator.userAgent),
+          screenSize: `${window.screen.width}x${window.screen.height}`,
+          viewportSize: `${window.innerWidth}x${window.innerHeight}`,
+        },
+        
+        // Network & Performance
+        network: {
+          connectionType: (navigator as any).connection?.effectiveType || 'unknown',
+          downlink: (navigator as any).connection?.downlink || 'unknown',
+          rtt: (navigator as any).connection?.rtt || 'unknown',
+        },
+        
+        // Session info
+        session: {
+          cookiesEnabled: navigator.cookieEnabled,
+          language: navigator.language,
+          languages: navigator.languages,
+          platform: navigator.platform,
+          onLine: navigator.onLine,
+          localStorage: (() => {
+            try {
+              return localStorage.length > 0 ? `${localStorage.length} items` : 'empty';
+            } catch {
+              return 'unavailable';
+            }
+          })(),
+        },
+        
+        // Potential issues
+        potentialIssues: [
+          ...(isRoundUrl && !roundId ? ['Missing round ID in URL'] : []),
+          ...(url.pathname.includes('//') ? ['Double slashes in URL'] : []),
+          ...(url.pathname.includes('%') ? ['URL encoding issues'] : []),
+          ...(/[^a-zA-Z0-9\-_\/\.]/.test(url.pathname) ? ['Special characters in path'] : []),
+          ...(pathSegments.length > 5 ? ['Very deep URL path'] : []),
+        ],
       };
       
       setDebugInfo(info);
       
-      // Log for debugging
-      console.error('[404] Page not found:', info);
+      // Enhanced logging
+      console.group(`[404] Page Not Found - Debug Code: ${code}`);
+      console.error('Full Debug Info:', info);
+      console.error('Quick Summary:', {
+        url: window.location.href,
+        intended: info.routeAnalysis.possibleIntendedRoute,
+        device: `${info.device.isAndroid ? 'Android' : info.device.isIOS ? 'iOS' : 'Desktop'} - ${info.device.isChrome ? 'Chrome' : info.device.isSafari ? 'Safari' : 'Other'}`,
+        issues: info.potentialIssues,
+      });
+      console.groupEnd();
       
       // Send analytics event if available
       if (window.gtag) {
         window.gtag('event', 'page_not_found', {
           page_path: router.asPath,
           user_agent: navigator.userAgent,
+          debug_code: code,
+          is_round_url: isRoundUrl,
+          round_id: roundId,
         });
       }
     }
@@ -67,6 +155,53 @@ const Custom404: React.FC = () => {
             <p className="text-zinc-400 mb-6">
               The page you're looking for doesn't exist or may have been moved.
             </p>
+            
+            {/* Debug Code Display */}
+            {debugCode && (
+              <div className="mb-6 p-4 bg-red-900/20 border border-red-600/30 rounded-lg">
+                <p className="text-red-400 text-sm mb-2">
+                  <strong>Debug Code:</strong>
+                </p>
+                <div className="bg-black/50 rounded px-3 py-2 font-mono text-lg text-[#E0FE10] tracking-wider">
+                  {debugCode}
+                </div>
+                <p className="text-red-300 text-xs mt-2">
+                  Share this code with support for faster troubleshooting
+                </p>
+              </div>
+            )}
+            
+            {/* URL Analysis */}
+            {debugInfo.routeAnalysis?.isRoundUrl && (
+              <div className="mb-6 p-4 bg-blue-900/20 border border-blue-600/30 rounded-lg">
+                <p className="text-blue-400 text-sm mb-2">
+                  <strong>Round/Challenge URL Detected:</strong>
+                </p>
+                <div className="text-blue-300 text-sm space-y-1">
+                  <p>Attempted URL: <code className="bg-black/50 px-2 py-1 rounded text-xs">{debugInfo.currentUrl}</code></p>
+                  {debugInfo.routeAnalysis.roundId ? (
+                    <p>Round ID: <code className="bg-black/50 px-2 py-1 rounded text-xs">{debugInfo.routeAnalysis.roundId}</code></p>
+                  ) : (
+                    <p className="text-yellow-400">⚠️ Missing Round ID in URL</p>
+                  )}
+                  <p>Suggested: <code className="bg-black/50 px-2 py-1 rounded text-xs">{debugInfo.routeAnalysis.possibleIntendedRoute}</code></p>
+                </div>
+              </div>
+            )}
+            
+            {/* Potential Issues */}
+            {debugInfo.potentialIssues && debugInfo.potentialIssues.length > 0 && (
+              <div className="mb-6 p-4 bg-yellow-900/20 border border-yellow-600/30 rounded-lg">
+                <p className="text-yellow-400 text-sm mb-2">
+                  <strong>Potential Issues Detected:</strong>
+                </p>
+                <ul className="text-yellow-300 text-sm space-y-1">
+                  {debugInfo.potentialIssues.map((issue: string, index: number) => (
+                    <li key={index}>• {issue}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
           
           {debugInfo.isAndroid && (
@@ -105,16 +240,57 @@ const Custom404: React.FC = () => {
             </Link>
           </div>
           
-          {process.env.NODE_ENV === 'development' && (
-            <details className="mt-8 text-left">
-              <summary className="cursor-pointer text-zinc-400 hover:text-white text-sm">
-                Debug Information (Development)
-              </summary>
-              <pre className="mt-2 p-4 bg-zinc-800 rounded text-xs overflow-auto text-green-400">
-                {JSON.stringify(debugInfo, null, 2)}
-              </pre>
-            </details>
-          )}
+          {/* Always show debug info, but make it collapsible */}
+          <details className="mt-8 text-left">
+            <summary className="cursor-pointer text-zinc-400 hover:text-white text-sm flex items-center justify-center gap-2">
+              <span>🔧 Technical Debug Information</span>
+              <span className="text-xs">(Click to expand)</span>
+            </summary>
+            <div className="mt-4 space-y-4">
+              {/* Quick Summary */}
+              <div className="p-3 bg-zinc-800 rounded">
+                <h4 className="text-white text-sm font-semibold mb-2">Quick Summary:</h4>
+                <div className="text-xs space-y-1 text-zinc-300">
+                  <p><strong>URL:</strong> {debugInfo.currentUrl}</p>
+                  <p><strong>Device:</strong> {debugInfo.device?.isAndroid ? 'Android' : debugInfo.device?.isIOS ? 'iOS' : 'Desktop'} - {debugInfo.device?.isChrome ? 'Chrome' : debugInfo.device?.isSafari ? 'Safari' : debugInfo.device?.isSamsung ? 'Samsung Browser' : 'Other'}</p>
+                  <p><strong>Time:</strong> {debugInfo.timestamp}</p>
+                  {debugInfo.routeAnalysis?.isRoundUrl && (
+                    <p><strong>Round ID:</strong> {debugInfo.routeAnalysis.roundId || 'MISSING'}</p>
+                  )}
+                </div>
+              </div>
+              
+              {/* Copy Debug Info Button */}
+              <button
+                onClick={() => {
+                  const debugText = `Debug Code: ${debugCode}\nURL: ${debugInfo.currentUrl}\nTime: ${debugInfo.timestamp}\nDevice: ${debugInfo.device?.userAgent}\nIssues: ${debugInfo.potentialIssues?.join(', ') || 'None'}\n\nFull Debug Info:\n${JSON.stringify(debugInfo, null, 2)}`;
+                  navigator.clipboard.writeText(debugText).then(() => {
+                    alert('Debug information copied to clipboard!');
+                  }).catch(() => {
+                    // Fallback for older browsers
+                    const textArea = document.createElement('textarea');
+                    textArea.value = debugText;
+                    document.body.appendChild(textArea);
+                    textArea.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(textArea);
+                    alert('Debug information copied to clipboard!');
+                  });
+                }}
+                className="w-full bg-blue-600 text-white text-sm py-2 px-4 rounded hover:bg-blue-700 transition-colors"
+              >
+                📋 Copy All Debug Info
+              </button>
+              
+              {/* Full Debug Info */}
+              <div className="p-3 bg-black rounded">
+                <h4 className="text-white text-sm font-semibold mb-2">Full Debug Data:</h4>
+                <pre className="text-xs overflow-auto text-green-400 max-h-64">
+                  {JSON.stringify(debugInfo, null, 2)}
+                </pre>
+              </div>
+            </div>
+          </details>
         </div>
       </div>
     </>

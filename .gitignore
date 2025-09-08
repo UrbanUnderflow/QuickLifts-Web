@@ -10,3 +10,7 @@ firebase-debug.log
 
 # Local environment variables
 .env*.local
+
+# Firebase Index Management
+backups/
+temp/
