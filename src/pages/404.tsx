@@ -156,20 +156,24 @@ const Custom404: React.FC = () => {
               The page you're looking for doesn't exist or may have been moved.
             </p>
             
-            {/* Debug Code Display */}
-            {debugCode && (
-              <div className="mb-6 p-4 bg-red-900/20 border border-red-600/30 rounded-lg">
-                <p className="text-red-400 text-sm mb-2">
-                  <strong>Debug Code:</strong>
-                </p>
-                <div className="bg-black/50 rounded px-3 py-2 font-mono text-lg text-[#E0FE10] tracking-wider">
-                  {debugCode}
-                </div>
-                <p className="text-red-300 text-xs mt-2">
-                  Share this code with support for faster troubleshooting
-                </p>
+            {/* Show the actual problem in plain English */}
+            <div className="mb-6 p-4 bg-red-900/20 border border-red-600/30 rounded-lg">
+              <p className="text-red-400 text-sm mb-2">
+                <strong>What happened:</strong>
+              </p>
+              <div className="text-red-300 text-sm space-y-1">
+                <p>You tried to go to: <code className="bg-black/50 px-2 py-1 rounded text-xs">{debugInfo.currentUrl}</code></p>
+                {debugInfo.routeAnalysis?.isRoundUrl ? (
+                  debugInfo.routeAnalysis.roundId ? (
+                    <p>This looks like a challenge/round link, but the page doesn't exist.</p>
+                  ) : (
+                    <p>This challenge/round link is missing the ID number.</p>
+                  )
+                ) : (
+                  <p>This page doesn't exist on our website.</p>
+                )}
               </div>
-            )}
+            </div>
             
             {/* URL Analysis */}
             {debugInfo.routeAnalysis?.isRoundUrl && (
@@ -240,57 +244,44 @@ const Custom404: React.FC = () => {
             </Link>
           </div>
           
-          {/* Always show debug info, but make it collapsible */}
-          <details className="mt-8 text-left">
-            <summary className="cursor-pointer text-zinc-400 hover:text-white text-sm flex items-center justify-center gap-2">
-              <span>🔧 Technical Debug Information</span>
-              <span className="text-xs">(Click to expand)</span>
-            </summary>
-            <div className="mt-4 space-y-4">
-              {/* Quick Summary */}
-              <div className="p-3 bg-zinc-800 rounded">
-                <h4 className="text-white text-sm font-semibold mb-2">Quick Summary:</h4>
-                <div className="text-xs space-y-1 text-zinc-300">
-                  <p><strong>URL:</strong> {debugInfo.currentUrl}</p>
-                  <p><strong>Device:</strong> {debugInfo.device?.isAndroid ? 'Android' : debugInfo.device?.isIOS ? 'iOS' : 'Desktop'} - {debugInfo.device?.isChrome ? 'Chrome' : debugInfo.device?.isSafari ? 'Safari' : debugInfo.device?.isSamsung ? 'Samsung Browser' : 'Other'}</p>
-                  <p><strong>Time:</strong> {debugInfo.timestamp}</p>
-                  {debugInfo.routeAnalysis?.isRoundUrl && (
-                    <p><strong>Round ID:</strong> {debugInfo.routeAnalysis.roundId || 'MISSING'}</p>
-                  )}
-                </div>
+          {/* Simple tech info for support */}
+          <div className="mt-8 text-left">
+            <div className="p-3 bg-zinc-800 rounded">
+              <h4 className="text-white text-sm font-semibold mb-2">📱 Technical Info (for support):</h4>
+              <div className="text-xs space-y-1 text-zinc-300">
+                <p><strong>Page you tried:</strong> {debugInfo.currentUrl}</p>
+                <p><strong>Your device:</strong> {debugInfo.device?.isAndroid ? 'Android Phone' : debugInfo.device?.isIOS ? 'iPhone/iPad' : 'Computer'}</p>
+                <p><strong>Browser:</strong> {debugInfo.device?.isChrome ? 'Chrome' : debugInfo.device?.isSafari ? 'Safari' : debugInfo.device?.isSamsung ? 'Samsung Browser' : 'Other'}</p>
+                <p><strong>When:</strong> {new Date(debugInfo.timestamp).toLocaleString()}</p>
+                {debugInfo.referrer && (
+                  <p><strong>Came from:</strong> {debugInfo.referrer}</p>
+                )}
+                {debugInfo.routeAnalysis?.isRoundUrl && (
+                  <p><strong>Round/Challenge ID:</strong> {debugInfo.routeAnalysis.roundId || 'MISSING - This is the problem!'}</p>
+                )}
               </div>
               
-              {/* Copy Debug Info Button */}
               <button
                 onClick={() => {
-                  const debugText = `Debug Code: ${debugCode}\nURL: ${debugInfo.currentUrl}\nTime: ${debugInfo.timestamp}\nDevice: ${debugInfo.device?.userAgent}\nIssues: ${debugInfo.potentialIssues?.join(', ') || 'None'}\n\nFull Debug Info:\n${JSON.stringify(debugInfo, null, 2)}`;
-                  navigator.clipboard.writeText(debugText).then(() => {
-                    alert('Debug information copied to clipboard!');
+                  const simpleDebugText = `Problem: Page not found\nURL: ${debugInfo.currentUrl}\nDevice: ${debugInfo.device?.isAndroid ? 'Android' : debugInfo.device?.isIOS ? 'iOS' : 'Desktop'} ${debugInfo.device?.isChrome ? 'Chrome' : debugInfo.device?.isSafari ? 'Safari' : debugInfo.device?.isSamsung ? 'Samsung' : 'Other'}\nTime: ${new Date(debugInfo.timestamp).toLocaleString()}\nCame from: ${debugInfo.referrer || 'Direct link'}\nIssue: ${debugInfo.routeAnalysis?.isRoundUrl ? (debugInfo.routeAnalysis.roundId ? 'Round page missing' : 'Round ID missing from URL') : 'Page does not exist'}`;
+                  navigator.clipboard.writeText(simpleDebugText).then(() => {
+                    alert('Info copied! You can paste this to support.');
                   }).catch(() => {
-                    // Fallback for older browsers
                     const textArea = document.createElement('textarea');
-                    textArea.value = debugText;
+                    textArea.value = simpleDebugText;
                     document.body.appendChild(textArea);
                     textArea.select();
                     document.execCommand('copy');
                     document.body.removeChild(textArea);
-                    alert('Debug information copied to clipboard!');
+                    alert('Info copied! You can paste this to support.');
                   });
                 }}
-                className="w-full bg-blue-600 text-white text-sm py-2 px-4 rounded hover:bg-blue-700 transition-colors"
+                className="w-full bg-blue-600 text-white text-sm py-2 px-4 rounded hover:bg-blue-700 transition-colors mt-3"
               >
-                📋 Copy All Debug Info
+                📋 Copy Info for Support
               </button>
-              
-              {/* Full Debug Info */}
-              <div className="p-3 bg-black rounded">
-                <h4 className="text-white text-sm font-semibold mb-2">Full Debug Data:</h4>
-                <pre className="text-xs overflow-auto text-green-400 max-h-64">
-                  {JSON.stringify(debugInfo, null, 2)}
-                </pre>
-              </div>
             </div>
-          </details>
+          </div>
         </div>
       </div>
     </>
