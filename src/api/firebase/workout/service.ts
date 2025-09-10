@@ -1036,6 +1036,8 @@ async fetchCollections(userId: string): Promise<SweatlistCollection[]> {
       throw new Error('No user is signed in');
     }
 
+    console.log('🔍 [fetchUserChallenges] Starting fetch for user:', currentUser.id);
+
     // Reference to the user-challenge collection
     const userChallengesRef = collection(db, 'user-challenge');
 
@@ -1044,12 +1046,40 @@ async fetchCollections(userId: string): Promise<SweatlistCollection[]> {
 
     try {
       const snapshot = await getDocs(q);
+      console.log('📊 [fetchUserChallenges] Raw documents found:', snapshot.docs.length);
 
       // Map documents to an array of Challenge objects
-      return snapshot.docs.map((doc: DocumentData) => new UserChallenge({
-        id: doc.id,
-        ...doc.data(),
-      }));
+      const userChallenges = snapshot.docs.map((doc: DocumentData) => {
+        const rawData = doc.data();
+        console.log('📋 [fetchUserChallenges] Processing document:', doc.id, {
+          challengeId: rawData.challengeId,
+          hasChallenge: !!rawData.challenge,
+          challengeEndDate: rawData.challenge?.endDate,
+          challengeEndDateType: typeof rawData.challenge?.endDate,
+          isCompleted: rawData.isCompleted,
+          username: rawData.username
+        });
+
+        const userChallenge = new UserChallenge({
+          id: doc.id,
+          ...rawData,
+        });
+
+        console.log('✅ [fetchUserChallenges] Created UserChallenge:', {
+          id: userChallenge.id,
+          challengeId: userChallenge.challengeId,
+          hasChallenge: !!userChallenge.challenge,
+          challengeTitle: userChallenge.challenge?.title,
+          challengeEndDate: userChallenge.challenge?.endDate,
+          challengeEndDateType: typeof userChallenge.challenge?.endDate,
+          isCompleted: userChallenge.isCompleted
+        });
+
+        return userChallenge;
+      });
+
+      console.log('🎯 [fetchUserChallenges] Returning', userChallenges.length, 'user challenges');
+      return userChallenges;
     } catch (error) {
       console.error('Error fetching user challenges:', error);
       throw new Error('Failed to fetch user challenges');
@@ -1735,16 +1765,21 @@ async deleteWorkoutSession(workoutId: string | null): Promise<void> {
       throw new Error('Challenge not found');
     }
 
-    const challenge = challengeSnap.data();
+    const challengeData = challengeSnap.data();
 
     // Current time as Date objects to be used in our app logic
     const now = new Date();
     
     // 4) Build new user-challenge document
     const userChallengeId = `${challengeId}-${userId}-${Date.now()}`;
+    
+    // Store the challenge data exactly as it is in Firestore - no conversion needed!
+    // This preserves the exact Unix timestamps from the original challenge
+    const challengeForStorage = challengeData;
+    
     const userChallengeData = {
       id: userChallengeId,
-      challenge: challenge,
+      challenge: challengeForStorage,
       challengeId,
       userId,
       fcmToken: userData.fcmToken || '',

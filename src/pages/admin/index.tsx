@@ -202,6 +202,18 @@ const adminCardsData = [
     description: "Manage corporate partner prospects, track partnerships, and monitor business development opportunities.",
     icon: <Building2 className="w-5 h-5" />,
     link: "/admin/corporatePartners"
+  },
+  {
+    title: "Add User to Challenge",
+    description: "Manually add any user to any challenge. Search users and challenges, then create user-challenge relationships.",
+    icon: <Users className="w-5 h-5" />,
+    link: "/admin/addUserToChallenge"
+  },
+  {
+    title: "Debug User Challenge",
+    description: "Debug why users aren't seeing active rounds. Analyze challenge filtering and data issues.",
+    icon: <Bug className="w-5 h-5" />,
+    link: "/admin/debugUserChallenge"
   }
 ];
 

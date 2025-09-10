@@ -1094,6 +1094,12 @@ const InactivityCheckPage: React.FC = () => {
                     </div>
                   </div>
                   <div>
+                    <div className="text-gray-400 text-xs">Challenge Subtitle</div>
+                    <div className="text-gray-300 text-sm">
+                      {selectedUserChallenge.challenge?.subtitle || 'N/A'}
+                    </div>
+                  </div>
+                  <div>
                     <div className="text-gray-400 text-xs">Challenge ID</div>
                     <div className="text-gray-300 font-mono text-sm">
                       <button
@@ -1108,17 +1114,95 @@ const InactivityCheckPage: React.FC = () => {
                     </div>
                   </div>
                   <div>
+                    <div className="text-gray-400 text-xs">Start Date</div>
+                    <div className="text-gray-300 text-sm">
+                      {selectedUserChallenge.challenge?.startDate ? 
+                        formatDate(selectedUserChallenge.challenge.startDate) : 'N/A'}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-gray-400 text-xs">End Date</div>
+                    <div className="text-gray-300 text-sm font-medium">
+                      {selectedUserChallenge.challenge?.endDate ? 
+                        formatDate(selectedUserChallenge.challenge.endDate) : 'N/A'}
+                    </div>
+                    {/* Show if challenge is currently active based on end date */}
+                    {selectedUserChallenge.challenge?.endDate && (
+                      <div className="mt-1">
+                        {new Date(selectedUserChallenge.challenge.endDate) > new Date() ? (
+                          <span className="px-2 py-1 bg-green-900/30 text-green-400 rounded-full text-xs font-medium border border-green-900">
+                            Challenge Active
+                          </span>
+                        ) : (
+                          <span className="px-2 py-1 bg-red-900/30 text-red-400 rounded-full text-xs font-medium border border-red-900">
+                            Challenge Ended
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <div className="text-gray-400 text-xs">Created At</div>
+                    <div className="text-gray-300 text-sm">
+                      {selectedUserChallenge.challenge?.createdAt ? 
+                        formatDate(selectedUserChallenge.challenge.createdAt) : 'N/A'}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-gray-400 text-xs">Updated At</div>
+                    <div className="text-gray-300 text-sm">
+                      {selectedUserChallenge.challenge?.updatedAt ? 
+                        formatDate(selectedUserChallenge.challenge.updatedAt) : 'N/A'}
+                    </div>
+                  </div>
+                  
+                  {/* Debug Section - Raw Date Values */}
+                  <div className="pt-3 border-t border-gray-700">
+                    <div className="text-gray-400 text-xs mb-2">🔧 Debug: Raw Date Values</div>
+                    <div className="space-y-2 text-xs">
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Start Date (raw):</span>
+                        <span className="text-gray-300 font-mono">
+                          {selectedUserChallenge.challenge?.startDate ? 
+                            JSON.stringify(selectedUserChallenge.challenge.startDate) : 'null'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">End Date (raw):</span>
+                        <span className="text-gray-300 font-mono">
+                          {selectedUserChallenge.challenge?.endDate ? 
+                            JSON.stringify(selectedUserChallenge.challenge.endDate) : 'null'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">End Date Type:</span>
+                        <span className="text-gray-300 font-mono">
+                          {selectedUserChallenge.challenge?.endDate ? 
+                            typeof selectedUserChallenge.challenge.endDate : 'undefined'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">End Date > Now:</span>
+                        <span className={`font-mono ${selectedUserChallenge.challenge?.endDate && new Date(selectedUserChallenge.challenge.endDate) > new Date() ? 'text-green-400' : 'text-red-400'}`}>
+                          {selectedUserChallenge.challenge?.endDate ? 
+                            (new Date(selectedUserChallenge.challenge.endDate) > new Date()).toString() : 'false'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
                     <div className="text-gray-400 text-xs">
-                      Challenge Status
+                      User Challenge Status
                     </div>
                     <div className="mt-1 flex items-center gap-2">
                       {selectedUserChallenge.isCompleted ? (
                         <span className="px-2 py-1 bg-green-900/30 text-green-400 rounded-full text-xs font-medium border border-green-900">
-                          Completed
+                          User Completed
                         </span>
                       ) : (
                         <span className="px-2 py-1 bg-yellow-900/30 text-yellow-400 rounded-full text-xs font-medium border border-yellow-900">
-                          In Progress
+                          User In Progress
                         </span>
                       )}
                     </div>
