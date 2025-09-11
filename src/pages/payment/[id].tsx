@@ -283,8 +283,8 @@ const PaymentPage = ({ challengeData }: PaymentPageProps) => {
 
         console.log('Simulated payment recorded successfully');
 
-        // Redirect to download page
-        router.replace(`/download?challengeId=${challenge.id}`);
+        // Redirect to one-on-one page
+        router.replace(`/one-on-one?challengeId=${challenge.id}`);
       } catch (error) {
         console.error('Error in paid mode simulation:', error);
       }
@@ -882,9 +882,9 @@ const CheckoutForm = ({ challengeId, amount, currency, isApplePayAvailable, chal
           console.log('Payment recorded successfully');
         }
         
-        // Direct redirect to download page without unnecessary timeout
-        console.log('Redirecting to download page...');
-        router.replace(`/download?challengeId=${challengeId}`);
+        // Direct redirect to one-on-one page without unnecessary timeout
+        console.log('Redirecting to one-on-one page...');
+        router.replace(`/one-on-one?challengeId=${challengeId}`);
       }
     } catch (err) {
       console.error("Payment error:", err);

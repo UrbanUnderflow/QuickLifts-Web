@@ -170,7 +170,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
               if (firestoreUser && (!firestoreUser.username || firestoreUser.username === '')) {
                 console.log('[AuthWrapper] User needs to complete registration - showing modal');
                 setShowSignInModal(true);
-              } else if (firestoreUser?.subscriptionType === SubscriptionType.unsubscribed) {
+              } else if (firestoreUser?.subscriptionType === SubscriptionType.unsubscribed && !router.pathname.startsWith('/payment/')) {
                 console.log(`[AuthWrapper] User onboarded but unsubscribed on protected route (${router.pathname}). Redirecting to /subscribe.`);
                 if (router.pathname.toLowerCase() !== '/subscribe') {
                   router.push('/subscribe');

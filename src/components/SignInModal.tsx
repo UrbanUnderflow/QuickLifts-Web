@@ -2307,7 +2307,10 @@ const SignInModal: React.FC<SignInModalProps> = ({
       }
       
       // *** Explicit Subscription Check ***
-      if (userDoc.subscriptionType === SubscriptionType.unsubscribed) {
+      // Skip subscription check if user is on a payment page (they're about to pay for a round)
+      const isOnPaymentPage = router.pathname.startsWith('/payment/');
+      
+      if (userDoc.subscriptionType === SubscriptionType.unsubscribed && !isOnPaymentPage) {
         console.log('[SignInModal] handleSignInSuccess: User is unsubscribed. Redirecting to /subscribe.');
         // Preserve roundIdRedirect if it exists for post-subscription flow
         if (roundIdRedirect) {
@@ -2316,6 +2319,8 @@ const SignInModal: React.FC<SignInModalProps> = ({
         router.push('/subscribe');
         // Return EARLY to prevent other redirect/close logic
         return; 
+      } else if (isOnPaymentPage) {
+        console.log('[SignInModal] handleSignInSuccess: User is on payment page, skipping subscription check to allow payment.');
       }
       // *** End Explicit Subscription Check ***
 
