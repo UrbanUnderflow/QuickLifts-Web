@@ -245,7 +245,7 @@ const DebugUserChallenge: React.FC = () => {
               <div className="bg-yellow-900/20 border border-yellow-600/30 rounded-lg p-4">
                 <h3 className="font-medium text-yellow-400 mb-2">Dashboard Filter Analysis:</h3>
                 <p className="text-sm text-yellow-300">
-                  The dashboard shows active rounds using: <code>round.challenge && new Date(round.challenge.endDate) > new Date() && !round.isCompleted</code>
+                  The dashboard shows active rounds using: <code>round.challenge && new Date(round.challenge.endDate) &gt; new Date() && !round.isCompleted</code>
                 </p>
                 <p className="text-sm text-yellow-300 mt-2">
                   <strong>Expected Active Rounds:</strong> {debugInfo.activeByFilter} 
