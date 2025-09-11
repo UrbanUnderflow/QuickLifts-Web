@@ -1182,7 +1182,7 @@ const InactivityCheckPage: React.FC = () => {
                         </span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-400">End Date > Now:</span>
+                        <span className="text-gray-400">End Date &gt; Now:</span>
                         <span className={`font-mono ${selectedUserChallenge.challenge?.endDate && new Date(selectedUserChallenge.challenge.endDate) > new Date() ? 'text-green-400' : 'text-red-400'}`}>
                           {selectedUserChallenge.challenge?.endDate ? 
                             (new Date(selectedUserChallenge.challenge.endDate) > new Date()).toString() : 'false'}
