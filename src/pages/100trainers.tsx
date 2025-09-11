@@ -86,7 +86,7 @@ const FAQ_DATA = [
   },
   {
           question: "What is the Founding 100 Trainers Program?",
-    answer: "It's our exclusive early access program for the first 100 fitness professionals on our platform. Members receive lifetime free access to Pulse, direct support from our team, and recognition as founding creators of our community."
+    answer: "It's our exclusive early access program for the first 100 fitness professionals on our platform. Members receive free access to Pulse, direct support from our team, and recognition as founding creators of our community."
   }
 ];
 
@@ -244,7 +244,7 @@ const CreatorChecklist = ({ metaData }: HundredTrainersPageProps) => {
   
 
   const features = [
-    { icon: <CalendarDays size={24} className="text-[#E0FE10]" />, title: 'Lifetime Free Pulse Creator Membership', description: 'In order to monetize your content in the future, you will be required to have a creator membership. All 100 members will be grandfathered into a free creator membership.' },
+    { icon: <CalendarDays size={24} className="text-[#E0FE10]" />, title: 'Free Pulse Creator Membership', description: 'In order to monetize your content in the future, you will be required to have a creator membership. All 100 members will be grandfathered into a free creator membership.' },
     { icon: <DollarSign size={24} className="text-[#E0FE10]" />, title: 'Monetization Tools', description: 'Unlock features to earn from your content and expertise.' },
     { icon: <Zap size={24} className="text-[#E0FE10]" />, title: 'Early Access to Features', description: 'Be the first to try new tools and shape their development.' },
     { icon: <Users size={24} className="text-[#E0FE10]" />, title: 'Founding Member Status', description: 'Exclusive badge and recognition within the Pulse community.' },
