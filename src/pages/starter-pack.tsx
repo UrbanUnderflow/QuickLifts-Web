@@ -13,8 +13,8 @@ const CREATOR_STEPS = [
       "Sign up using your email or sign in with apple'",
       "Upload a profile image",
     ],
-    image: "/step1Mobile.png",
-    mobileImage: "/step1Mobile.png"
+    image: "/step1StarterPack.png",
+    mobileImage: "/step1StarterPack.png"
   },
   {
     title: "Set Up Your Profile",
@@ -23,8 +23,8 @@ const CREATOR_STEPS = [
       "Fill out profile description",
       "Add social media handles",
     ],
-    image: "/step2Mobile.png",
-    mobileImage: "/step2Mobile.png"
+    image: "/step2StarterPack.png",
+    mobileImage: "/step2StarterPack.png"
   },
   {
     title: "Upload Your First Content",
@@ -34,8 +34,8 @@ const CREATOR_STEPS = [
       "Create your first 'Stack'",
       "Create a 'Round'"
     ],
-    image: "/step3Mobile.png",
-    mobileImage: "/step3Mobile.png"
+    image: "/step3StarterPack.png",
+    mobileImage: "/step3StarterPack.png"
   },
   {
     title: "Start a workout",
@@ -44,8 +44,8 @@ const CREATOR_STEPS = [
       "Start and complete your first workout",
       "Join a 'Round'",
     ],
-    image: "/step4Mobile.png",
-    mobileImage: "/step4Mobile.png"
+    image: "/step4StarterPack.png",
+    mobileImage: "/step4StarterPack.png"
   }
 ];
 
