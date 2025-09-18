@@ -1054,32 +1054,44 @@ async fetchCollections(userId: string): Promise<SweatlistCollection[]> {
         console.log('📋 [fetchUserChallenges] Processing document:', doc.id, {
           challengeId: rawData.challengeId,
           hasChallenge: !!rawData.challenge,
+          challengeTitle: rawData.challenge?.title,
+          challengeStartDate: rawData.challenge?.startDate,
+          challengeStartDateType: typeof rawData.challenge?.startDate,
           challengeEndDate: rawData.challenge?.endDate,
           challengeEndDateType: typeof rawData.challenge?.endDate,
           isCompleted: rawData.isCompleted,
           username: rawData.username
         });
 
-        const userChallenge = new UserChallenge({
-          id: doc.id,
-          ...rawData,
-        });
+        try {
+          const userChallenge = new UserChallenge({
+            id: doc.id,
+            ...rawData,
+          });
 
-        console.log('✅ [fetchUserChallenges] Created UserChallenge:', {
-          id: userChallenge.id,
-          challengeId: userChallenge.challengeId,
-          hasChallenge: !!userChallenge.challenge,
-          challengeTitle: userChallenge.challenge?.title,
-          challengeEndDate: userChallenge.challenge?.endDate,
-          challengeEndDateType: typeof userChallenge.challenge?.endDate,
-          isCompleted: userChallenge.isCompleted
-        });
+          console.log('✅ [fetchUserChallenges] Created UserChallenge:', {
+            id: userChallenge.id,
+            challengeId: userChallenge.challengeId,
+            hasChallenge: !!userChallenge.challenge,
+            challengeTitle: userChallenge.challenge?.title,
+            challengeEndDate: userChallenge.challenge?.endDate,
+            challengeEndDateType: typeof userChallenge.challenge?.endDate,
+            isCompleted: userChallenge.isCompleted
+          });
 
-        return userChallenge;
+          return userChallenge;
+        } catch (error) {
+          console.error(`❌ [fetchUserChallenges] Error creating UserChallenge for doc ${doc.id}:`, error);
+          console.error('Raw data that caused error:', JSON.stringify(rawData, null, 2));
+          return null; // Skip this challenge and continue with others
+        }
       });
 
-      console.log('🎯 [fetchUserChallenges] Returning', userChallenges.length, 'user challenges');
-      return userChallenges;
+      // Filter out null values from failed UserChallenge creations
+      const validUserChallenges = userChallenges.filter((challenge): challenge is UserChallenge => challenge !== null);
+      
+      console.log('🎯 [fetchUserChallenges] Returning', validUserChallenges.length, 'valid user challenges out of', userChallenges.length, 'total');
+      return validUserChallenges;
     } catch (error) {
       console.error('Error fetching user challenges:', error);
       throw new Error('Failed to fetch user challenges');
@@ -2595,6 +2607,154 @@ async deleteWorkoutSession(workoutId: string | null): Promise<void> {
     } catch (error) {
       console.error(`Error fetching stack workout details for ID ${stackId}:`, error);
       throw error; // Re-throw the error to be handled by the caller
+    }
+  }
+
+  /**
+   * Fetches trending rounds/collections based on the trending flag.
+   * Matches the iOS implementation for consistency.
+   * @returns A Promise resolving to an array of trending SweatlistCollection objects
+   */
+  async fetchTrendingRounds(): Promise<SweatlistCollection[]> {
+    try {
+      console.log('Fetching trending rounds...');
+      
+      // Fetch all collections
+      const collectionsRef = collection(db, 'sweatlist-collection');
+      const snapshot = await getDocs(collectionsRef);
+      
+      if (snapshot.empty) {
+        console.log('No collections found');
+        return [];
+      }
+
+      const allCollections = snapshot.docs.map(doc => {
+        return new SweatlistCollection({
+          id: doc.id,
+          ...doc.data()
+        });
+      });
+
+      // Filter for rounds marked as trending
+      const trendingCollections = allCollections.filter(collection => collection.trending === true);
+      
+      console.log(`Found ${trendingCollections.length} trending collections out of ${allCollections.length} total`);
+
+      // Group by original challenge ID to avoid duplicates (same logic as iOS)
+      const uniqueTrendingRounds: { [key: string]: SweatlistCollection } = {};
+      const cohortsByOriginalId: { [key: string]: SweatlistCollection[] } = {};
+      
+      for (const collection of trendingCollections) {
+        const originalId = collection.challenge?.originalId || collection.challenge?.id || collection.id;
+        
+        // Keep track of all cohorts for each original challenge
+        if (!cohortsByOriginalId[originalId]) {
+          cohortsByOriginalId[originalId] = [];
+        }
+        cohortsByOriginalId[originalId].push(collection);
+        
+        // Use the first collection as the representative
+        if (!uniqueTrendingRounds[originalId]) {
+          uniqueTrendingRounds[originalId] = collection;
+        }
+      }
+
+      // Update each unique round with its active cohorts count
+      const finalTrendingRounds: SweatlistCollection[] = [];
+      for (const [originalId, representativeCollection] of Object.entries(uniqueTrendingRounds)) {
+        const updatedCollection = { ...representativeCollection };
+        
+        // Get all cohorts for this original challenge and filter for active ones
+        const allCohorts = cohortsByOriginalId[originalId] || [];
+        const activeCohorts = allCohorts
+          .map(c => c.challenge)
+          .filter((challenge): challenge is Challenge => 
+            challenge !== null && 
+            challenge !== undefined &&
+            !challenge.isChallengeEnded && 
+            (challenge.status === ChallengeStatus.Published || challenge.status === ChallengeStatus.Active)
+          );
+        
+        console.log(`Trending Round '${updatedCollection.title}': ${activeCohorts.length} active cohorts from ${allCohorts.length} total cohorts`);
+        
+        finalTrendingRounds.push(new SweatlistCollection(updatedCollection));
+      }
+
+      // Sort by creation date (newest first)
+      return finalTrendingRounds.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+
+    } catch (error) {
+      console.error('Error fetching trending rounds:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Fetches active user challenges (rounds) for the current user.
+   * Matches the iOS implementation for filtering active challenges.
+   * @returns A Promise resolving to an array of active UserChallenge objects
+   */
+  async fetchActiveUserChallenges(): Promise<UserChallenge[]> {
+    const currentUser = userService.nonUICurrentUser;
+    if (!currentUser?.id) {
+      throw new Error('No user is signed in');
+    }
+
+    try {
+      console.log('🔍 [fetchActiveUserChallenges] Starting fetch for user:', currentUser.id);
+
+      // Fetch all user challenges
+      const allUserChallenges = await this.fetchUserChallenges();
+      
+      // Filter to only show active challenges (same logic as iOS)
+      const now = new Date();
+      const activeUserChallenges = allUserChallenges.filter(challenge => {
+        console.log(`🔍 [fetchActiveUserChallenges] Evaluating challenge: ${challenge.challenge?.title}`, {
+          hasChallenge: !!challenge.challenge,
+          isCompleted: challenge.isCompleted,
+          endDate: challenge.challenge?.endDate,
+          endDateType: typeof challenge.challenge?.endDate,
+          endDateValue: challenge.challenge?.endDate?.toISOString(),
+          currentDate: now.toISOString(),
+          isEndDateInFuture: challenge.challenge?.endDate ? challenge.challenge.endDate > now : false
+        });
+        
+        // Must have a challenge object
+        if (!challenge.challenge) {
+          console.log(`❌ [fetchActiveUserChallenges] Skipping - no challenge object`);
+          return false;
+        }
+        
+        // Must not be completed
+        if (challenge.isCompleted) {
+          console.log(`❌ [fetchActiveUserChallenges] Skipping - challenge is completed`);
+          return false;
+        }
+        
+        // End date must be in the future
+        const endDate = challenge.challenge.endDate;
+        if (!endDate) {
+          console.log(`❌ [fetchActiveUserChallenges] Skipping - no end date`);
+          return false;
+        }
+        
+        if (endDate <= now) {
+          console.log(`❌ [fetchActiveUserChallenges] Skipping - end date is in the past`);
+          return false;
+        }
+        
+        console.log(`✅ [fetchActiveUserChallenges] Including challenge - all criteria met`);
+        return true;
+      });
+
+      console.log(`🎯 [fetchActiveUserChallenges] Found ${activeUserChallenges.length} active challenges out of ${allUserChallenges.length} total`);
+      
+      // Sort by creation date (newest first) - matching iOS logic
+      return activeUserChallenges.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+
+    } catch (error) {
+      console.error('Error fetching active user challenges:', error);
+      throw error;
     }
   }
 

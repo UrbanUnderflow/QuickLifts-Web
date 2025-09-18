@@ -5,7 +5,7 @@ import { exerciseService } from '../../../api/firebase/exercise';
 import { GifImageViewer } from '../../../components/GifImageViewer';
 import { workoutService } from '../../../api/firebase/workout';
 import { userService } from '../../../api/firebase/user';
-import { Workout, WorkoutStatus } from '../../../api/firebase/workout/types';
+import { Workout, WorkoutStatus, SweatlistCollection } from '../../../api/firebase/workout/types';
 import { UserChallenge } from '../../../api/firebase/workout/types';
 import { User } from '../../../api/firebase/user/types';
 import { Challenge } from '../../../api/firebase/workout/types';
@@ -46,12 +46,13 @@ const Discover = () => {
   
   // Data states
   const [trendingExercises, setTrendingExercises] = useState<Exercise[]>([]);
-  const [trendingStacks, setTrendingStacks] = useState<Workout[]>([]);
+  const [trendingRounds, setTrendingRounds] = useState<SweatlistCollection[]>([]);
   const [featuredCreators, setFeaturedCreators] = useState<User[]>([]);
   const [activeRounds, setActiveRounds] = useState<UserChallenge[]>([]);
   const [featuredRounds, setFeaturedRounds] = useState<Challenge[]>([]);
   const [moveOfTheDay, setMoveOfTheDay] = useState<{ exercise: Exercise, video: ExerciseVideo } | null>(null);
   const [loadingMoveOfTheDay, setLoadingMoveOfTheDay] = useState(true);
+  const [todaysMissions, setTodaysMissions] = useState<any[]>([]);
   
   // Search results
   const [filteredExercises, setFilteredExercises] = useState<Exercise[]>([]);
@@ -113,6 +114,56 @@ const Discover = () => {
     return !!currentUser?.id;
   };
 
+  // Process today's missions from active rounds
+  const processTodaysMissions = async (userChallenges: UserChallenge[]) => {
+    const missions: any[] = [];
+    
+    // TODO: In the future, fetch round workouts from a separate collection
+    // For now, we'll return empty missions since the web app doesn't have 
+    // the same round workout structure as iOS
+    
+    // The iOS app stores workouts separately in a rounds/roundId/workouts collection
+    // We would need to fetch those workouts based on the current day of the challenge
+    
+    for (const userChallenge of userChallenges) {
+      if (!userChallenge.challenge) continue;
+      
+      // Calculate what day of the challenge we're on
+      const startDate = new Date(userChallenge.challenge.startDate);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      startDate.setHours(0, 0, 0, 0);
+      
+      const dayIndex = Math.floor((today.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+      
+      // Check if today's workout is already completed based on dayIndex
+      // Note: This assumes completedWorkouts would have a dayIndex property in the future
+      const isCompleted = userChallenge.completedWorkouts?.some(
+        (cw: any) => {
+          // For now, just check if any workout was completed today
+          const completedDate = new Date(cw.completedAt);
+          return completedDate.toDateString() === today.toDateString();
+        }
+      ) || false;
+      
+      // We would fetch the actual workout here from rounds/roundId/workouts
+      // For now, create a placeholder mission
+      if (dayIndex >= 0 && dayIndex < userChallenge.challenge.durationInDays) {
+        // missions.push({
+        //   id: `${userChallenge.id}_${dayIndex}`,
+        //   challengeId: userChallenge.challengeId,
+        //   challengeTitle: userChallenge.challenge.title,
+        //   workout: null, // Would be fetched from rounds/roundId/workouts
+        //   dayIndex,
+        //   isCompleted,
+        //   userChallenge
+        // });
+      }
+    }
+    
+    return missions;
+  };
+
   // Load initial data
   useEffect(() => {
     loadData();
@@ -158,9 +209,9 @@ const Discover = () => {
       // Fetch Move of the Day
       await fetchMoveOfTheDayData();
       
-      // Load trending stacks
-      const trendingStacksData = await workoutService.fetchRandomTrendingStacks();
-      setTrendingStacks(trendingStacksData || []);
+      // Load trending rounds
+      const trendingRoundsData = await workoutService.fetchTrendingRounds();
+      setTrendingRounds(trendingRoundsData || []);
       
       // Load featured creators
       const creatorsData = await userService.fetchFeaturedUsers();
@@ -186,20 +237,24 @@ const Discover = () => {
            setCurrentWorkout(null);
         }
         
-        // Load active rounds
+        // Load active rounds using the dedicated method
         try {
-          const userRounds = await workoutService.fetchUserChallenges();
-          setActiveRounds(userRounds.filter(round => 
-            round.challenge && new Date(round.challenge.endDate) > new Date() && !round.isCompleted
-          ));
+          const activeUserRounds = await workoutService.fetchActiveUserChallenges();
+          setActiveRounds(activeUserRounds);
+          
+          // Process today's missions from active rounds
+          const missions = await processTodaysMissions(activeUserRounds);
+          setTodaysMissions(missions);
         } catch (error) {
-          console.log("User challenges couldn't be loaded, user might not be authenticated yet");
+          console.log("Active user challenges couldn't be loaded, user might not be authenticated yet");
           setActiveRounds([]);
+          setTodaysMissions([]);
         }
       } else {
         // If no user is signed in, clear user-specific data
         setCurrentWorkout(null);
         setActiveRounds([]);
+        setTodaysMissions([]);
       }
       
     } catch (error) {
@@ -460,6 +515,101 @@ const Discover = () => {
     }
   };
 
+  const renderTodaysMissions = () => {
+    if (!currentUser) return null;
+
+    return (
+      <div className="mb-8">
+        <div className="flex items-center mb-4">
+          <h3 className="text-white font-bold">Today's Missions</h3>
+          {todaysMissions.length > 0 && (
+            <span className="text-zinc-500 text-sm ml-2">({todaysMissions.length})</span>
+          )}
+        </div>
+
+        <div className="relative">
+          <div className="carousel flex gap-4 overflow-x-auto pb-4 scrollbar-none">
+            {/* AI Powered Workouts Card - Always shown first */}
+            <div 
+              className="min-w-[320px] border border-[#E0FE10] bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900 rounded-xl p-6 snap-start relative overflow-hidden cursor-pointer transition-transform"
+              onClick={() => router.push('/stacks')}
+            >
+              {/* Glow effect */}
+              <div className="absolute inset-0 bg-[#E0FE10] opacity-10 blur-3xl"></div>
+              
+              <div className="relative z-10">
+                <div className="flex items-start gap-4 mb-4">
+                  <div className="w-14 h-14 rounded-full bg-[#E0FE10] flex items-center justify-center shadow-lg shadow-[#E0FE10]/30">
+                    <SparklesIcon className="w-7 h-7 text-zinc-900" />
+                  </div>
+                  
+                  <div className="flex-1">
+                    <h4 className="text-white font-bold text-lg mb-1">AI Powered Workouts</h4>
+                    <p className="text-zinc-400 text-sm">Customized just for you</p>
+                  </div>
+                </div>
+                
+                <p className="text-zinc-300 text-sm mb-6 leading-relaxed">
+                  Instantly generate a custom stack with AI, blending your favorite creator moves to match your goals for today.
+                </p>
+                
+                <button className="w-full bg-[#E0FE10] text-zinc-900 font-bold py-3 px-4 rounded-lg flex items-center justify-center gap-2 hover:bg-[#d0ee00] transition-colors shadow-lg shadow-[#E0FE10]/20">
+                  <SparklesIcon className="w-5 h-5" />
+                  <span>Create Workout</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Mission Cards */}
+            {todaysMissions.map((mission, index) => (
+              <div 
+                key={mission.id}
+                className="min-w-[280px] bg-zinc-800 rounded-xl p-4 snap-start cursor-pointer hover:bg-zinc-750 transition-colors"
+                onClick={() => {
+                  if (!mission.isCompleted && mission.workout) {
+                    router.push(`/workout/${mission.workout.id}?roundId=${mission.challengeId}`);
+                  }
+                }}
+              >
+                <div className="flex justify-between items-start mb-3">
+                  <div className="flex-1">
+                    <h4 className="text-white font-medium text-base mb-1">
+                      {mission.challengeTitle}
+                    </h4>
+                    <p className="text-zinc-400 text-sm">Day {mission.dayIndex + 1}</p>
+                  </div>
+                  {mission.isCompleted && (
+                    <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center">
+                      <CheckIcon className="w-4 h-4 text-white" />
+                    </div>
+                  )}
+                </div>
+                
+                {mission.workout && (
+                  <div className="space-y-2">
+                    <div className="text-white font-medium text-sm">
+                      {mission.workout.title || mission.workout.workoutName || 'Workout'}
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-zinc-400">
+                      <span>{mission.workout.durationInMinutes || 30} min</span>
+                      <span>•</span>
+                      <span>{mission.workout.exercises?.length || 0} exercises</span>
+                    </div>
+                    {!mission.isCompleted && (
+                      <button className="mt-3 w-full bg-zinc-700 hover:bg-zinc-600 text-white text-sm font-medium py-2 px-3 rounded-lg transition-colors">
+                        Start Workout
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderContinueWorkoutCard = () => {
     if (!currentWorkout) return null;
     console.log('Rendering Continue Workout Card for:', currentWorkout);
@@ -510,66 +660,124 @@ const Discover = () => {
   };
 
   const renderActiveRounds = () => {
-    if (!activeRounds.length) return null;
+    if (!activeRounds.length) {
+      // Show empty state for Active Rounds
+      return (
+        <div className="mb-8">
+          <div className="flex items-center mb-4">
+            <h3 className="text-white font-bold">Active Rounds</h3>
+          </div>
+          <div className="bg-zinc-800 rounded-xl p-8 text-center">
+            <UserGroupIcon className="w-12 h-12 text-zinc-600 mx-auto mb-3" />
+            <h4 className="text-white font-medium mb-2">No Active Rounds</h4>
+            <p className="text-zinc-400 text-sm mb-4">Join a round to track your progress with friends</p>
+            <button 
+              onClick={() => router.push('/rounds')}
+              className="bg-[#E0FE10] text-zinc-900 px-6 py-2 rounded-lg font-medium text-sm hover:bg-[#d0ee00] transition-colors"
+            >
+              Browse Rounds
+            </button>
+          </div>
+        </div>
+      );
+    }
 
     return (
       <div className="mb-8">
-        <div className="flex justify-between items-center mb-4">
+        <div className="flex items-center mb-4">
           <h3 className="text-white font-bold">Active Rounds</h3>
-          {activeRounds.length > 0 && (
-            <span className="text-zinc-500 text-sm">({activeRounds.length})</span>
-          )}
+          <span className="text-zinc-500 text-sm ml-2">({activeRounds.length})</span>
         </div>
 
         <div className="relative">
           <div className="carousel flex gap-4 overflow-x-auto pb-4 scrollbar-none">
             {activeRounds.map((round, index) => {
-              // Log the round data, especially completedWorkouts
+              const daysLeft = Math.max(0, Math.floor((new Date(round.challenge?.endDate ?? new Date()).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)));
+              
+              // Calculate progress based on time elapsed (days passed vs total days)
+              const totalDays = round.challenge?.durationInDays || 30;
+              const startDate = new Date(round.challenge?.startDate || new Date());
+              const endDate = new Date(round.challenge?.endDate || new Date());
+              const today = new Date();
+              
+              // Calculate days passed since challenge started
+              const daysPassed = Math.max(0, Math.floor((today.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)));
+              
+              // Progress is based on time elapsed, not workouts completed
+              const progressPercentage = Math.max(0, Math.min(100, (daysPassed / totalDays) * 100));
+              
+              // Debug logging for progress calculation
+              console.log(`📊 [renderActiveRounds] Time-based progress for ${round.challenge?.title}:`, {
+                totalDays,
+                daysLeft,
+                daysPassed,
+                progressPercentage: Math.round(progressPercentage),
+                startDate: startDate.toISOString(),
+                endDate: endDate.toISOString(),
+                today: today.toISOString()
+              });
 
               return (
                 <div 
                   key={round.id || index}
-                  className="min-w-[300px] bg-zinc-800 rounded-xl p-4 snap-start"
+                  className="min-w-[300px] bg-zinc-800 rounded-xl p-5 snap-start cursor-pointer hover:bg-zinc-750 transition-colors"
                   onClick={() => selectRound(round)}
                 >
-                  <h4 className="text-white font-medium text-lg mb-2">
-                    {round.challenge?.title || "Active Round"}
-                  </h4>
-                  
-                  <div className="flex justify-between text-sm text-zinc-400 mb-3">
-                    <span>
-                      {Math.max(0, Math.floor((new Date(round.challenge?.endDate ?? new Date()).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)))} days left
-                    </span>
-                    <span>{round.pulsePoints?.totalPoints || 0} Points</span>
-                  </div>
-                  
-                  <div className="w-full bg-zinc-700 h-1.5 rounded-full mb-4">
-                    <div 
-                      className="bg-[#E0FE10] h-1.5 rounded-full" 
-                      style={{ width: `${Math.max(0, Math.min(100, (1 - (Math.floor((new Date(round.challenge?.endDate ?? new Date()).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)) / (round.challenge?.durationInDays || 30))) * 100))}%` }}
-                    ></div>
-                  </div>
-                  
-                  <div className="flex justify-between text-center">
+                  <div className="flex justify-between items-start mb-3">
                     <div>
-                      <div className="text-[#E0FE10] font-medium">
-                        {round.completedWorkouts?.length || 0}/{round.challenge?.durationInDays || 30}
-                      </div>
-                      <div className="text-xs text-zinc-500">Workouts</div>
+                      <h4 className="text-white font-semibold text-base mb-1">
+                        {round.challenge?.title || "Active Round"}
+                      </h4>
+                      <p className="text-zinc-400 text-sm">
+                        {daysLeft} {daysLeft === 1 ? 'day' : 'days'} left
+                      </p>
                     </div>
-                    
-                    <div>
-                      <div className="text-[#E0FE10] font-medium">
-                        {round.currentStreak || 0}
-                      </div>
-                      <div className="text-xs text-zinc-500">Day Streak</div>
-                    </div>
-                    
-                    <div>
-                      <div className="text-[#E0FE10] font-medium">
+                    <div className="text-right">
+                      <div className="text-[#E0FE10] font-bold text-lg">
                         {round.pulsePoints?.totalPoints || 0}
                       </div>
                       <div className="text-xs text-zinc-500">Points</div>
+                    </div>
+                  </div>
+                  
+                  {/* Progress Bar */}
+                  <div className="mb-4">
+                    <div className="flex justify-between text-xs text-zinc-400 mb-1">
+                      <span>Progress</span>
+                      <span>{Math.round(progressPercentage)}%</span>
+                    </div>
+                    <div className="w-full bg-zinc-700 h-2 rounded-full overflow-hidden">
+                      <div 
+                        className="bg-gradient-to-r from-[#E0FE10] to-[#a5c600] h-2 rounded-full transition-all duration-300" 
+                        style={{ 
+                          width: `${progressPercentage}%`,
+                          minWidth: progressPercentage > 0 ? '2px' : '0px' // Ensure visibility for any progress
+                        }}
+                      ></div>
+                    </div>
+                  </div>
+                  
+                  {/* Stats Grid */}
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="text-center">
+                      <div className="text-white font-semibold text-sm">
+                        {round.completedWorkouts?.length || 0}/{totalDays}
+                      </div>
+                      <div className="text-xs text-zinc-500 mt-0.5">Workouts</div>
+                    </div>
+                    
+                    <div className="text-center">
+                      <div className="text-white font-semibold text-sm">
+                        {round.currentStreak || 0}
+                      </div>
+                      <div className="text-xs text-zinc-500 mt-0.5">Streak</div>
+                    </div>
+                    
+                    <div className="text-center">
+                      <div className="text-white font-semibold text-sm">
+                        {Math.round(progressPercentage)}%
+                      </div>
+                      <div className="text-xs text-zinc-500 mt-0.5">Time</div>
                     </div>
                   </div>
                 </div>
@@ -581,53 +789,90 @@ const Discover = () => {
     );
   };
 
-  const renderTrendingStacks = () => {
-    if (!trendingStacks.length) return null;
+  const renderTrendingRounds = () => {
+    if (!trendingRounds.length) {
+      return (
+        <div className="mb-8">
+          <h3 className="text-white font-bold mb-4">Trending Rounds</h3>
+          <div className="bg-zinc-800 rounded-xl p-8 text-center">
+            <BoltIcon className="w-12 h-12 text-zinc-600 mx-auto mb-3" />
+            <h4 className="text-white font-medium mb-2">No Trending Rounds</h4>
+            <p className="text-zinc-400 text-sm">Check back soon for popular community rounds!</p>
+          </div>
+        </div>
+      );
+    }
 
     return (
       <div className="mb-8">
-        <h3 className="text-white font-bold mb-4">Trending Stacks</h3>
+        <h3 className="text-white font-bold mb-4">Trending Rounds</h3>
         
-        <div className="bg-zinc-800 rounded-lg p-4">
-          <div className="carousel flex gap-4 overflow-x-auto pb-2 scrollbar-none">
-            {trendingStacks.map((workout, index) => (
-              <div 
-                key={workout.id || index} 
-                className="min-w-[160px] cursor-pointer"
-                onClick={() => selectWorkout(workout)}
-              >
-                <div className="relative w-40 h-24 rounded-xl overflow-hidden mb-2">
-                  {workout.exercises[0]?.exercise.videos[0]?.gifURL ? (
-                    <GifImageViewer
-                      gifUrl={workout.exercises[0].exercise.videos[0].gifURL}
-                      alt={workout.title}
-                      frameSize={{ width: 160, height: 96 }}
-                      contentMode="cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full bg-zinc-700 flex items-center justify-center">
-                      <img src="/icons/dumbbell.svg" alt="Workout" className="w-8 h-8 text-zinc-500" />
-                    </div>
-                  )}
+        <div className="carousel flex gap-4 overflow-x-auto pb-4 scrollbar-none">
+          {trendingRounds.map((roundCollection, index) => (
+            <div 
+              key={roundCollection.id || index}
+              className="min-w-[320px] bg-gradient-to-br from-red-600/20 via-orange-500/10 to-zinc-800 rounded-xl overflow-hidden cursor-pointer transition-transform shadow-lg"
+              onClick={() => router.push(`/round/${roundCollection.challenge?.id || roundCollection.id}`)}
+            >
+              {/* Header with gradient background */}
+              <div className="relative h-32 bg-gradient-to-br from-red-500 to-orange-400 p-4">
+                {/* Decorative elements */}
+                <div className="absolute inset-0 overflow-hidden">
+                  <div className="absolute -top-8 -left-8 w-24 h-24 bg-white/10 rounded-full"></div>
+                  <div className="absolute -bottom-6 -right-6 w-20 h-20 bg-white/5 rounded-full"></div>
                 </div>
                 
-                <h4 className="text-white text-sm font-medium truncate">
-                  {workout.title || `${workout.zone} Workout`}
-                </h4>
-                
-                <div className="flex items-center mt-1">
-                  <div className="flex items-center text-zinc-400 text-xs mr-2">
-                    <img src="/icons/clock.svg" alt="Duration" className="w-3 h-3 mr-1" />
-                    <span>{workout.estimatedDuration || 30} min</span>
+                {/* Content */}
+                <div className="relative z-10 flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
+                    <CircleStackIcon className="w-6 h-6 text-white" />
                   </div>
                   
-                  <div className="flex items-center bg-[#E0FE10] bg-opacity-20 px-2 py-0.5 rounded-md">
-                    <span className="text-[#E0FE10] text-xs">{workout.zone || "Strength"}</span>
+                  <div className="flex-1">
+                    <h4 className="text-white font-bold text-lg mb-1 line-clamp-1">
+                      {roundCollection.title}
+                    </h4>
+                    {roundCollection.challenge && (
+                      <div className="flex items-center gap-3 text-sm text-white/90">
+                        <span className="flex items-center gap-1">
+                          <CalendarDaysIcon className="w-4 h-4" />
+                          {roundCollection.challenge.durationInDays} days
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <UserGroupIcon className="w-4 h-4" />
+                          Active rounds
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
-            ))}
-          </div>
+              
+              {/* Description section */}
+              <div className="p-4 bg-zinc-800">
+                {roundCollection.challenge?.subtitle ? (
+                  <p className="text-zinc-300 text-sm mb-4 line-clamp-3">
+                    {roundCollection.challenge.subtitle.length > 120 
+                      ? `${roundCollection.challenge.subtitle.substring(0, 120)}...`
+                      : roundCollection.challenge.subtitle
+                    }
+                  </p>
+                ) : (
+                  <p className="text-zinc-300 text-sm mb-4">
+                    Join this featured training program and challenge yourself with other fitness enthusiasts!
+                  </p>
+                )}
+                
+                {/* CTA */}
+                <div className="flex items-center justify-end">
+                  <span className="text-orange-400 font-medium text-sm">View Details</span>
+                  <svg className="w-4 h-4 ml-1 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     );
@@ -1024,9 +1269,10 @@ const Discover = () => {
             {selectedCategory === CategoryTab.ALL && (
               <>
                 {renderContinueWorkoutCard()}
+                {renderTodaysMissions()}
                 {renderActiveRounds()}
+                {renderTrendingRounds()}
                 {renderMoveOfTheDaySection()}
-                {renderTrendingStacks()}
                 {renderFeaturedCreators()}
               </>
             )}
@@ -1034,12 +1280,13 @@ const Discover = () => {
             {selectedCategory === CategoryTab.MOVES && (
               <>
                 {renderMoveOfTheDaySection()}
-                {renderTrendingStacks()}
+                {renderTrendingRounds()}
               </>
             )}
             
             {selectedCategory === CategoryTab.ROUNDS && (
               <>
+                {renderTodaysMissions()}
                 {renderActiveRounds()}
                 {renderFeaturedRounds()}
                 <div className="bg-zinc-800 rounded-lg p-6 mb-8">

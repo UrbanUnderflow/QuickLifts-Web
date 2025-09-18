@@ -719,6 +719,7 @@ export class SweatlistCollection {
   privacy: SweatlistType;
   createdAt: Date;
   updatedAt: Date;
+  trending?: boolean; // Add trending property
 
   constructor(data: any) {
     this.id = data.id;
@@ -749,6 +750,7 @@ export class SweatlistCollection {
     this.participants = (data.participants || []).map((participant: any) => participant || '');
     this.createdAt = convertFirestoreTimestamp(data.createdAt);
     this.updatedAt = convertFirestoreTimestamp(data.updatedAt);
+    this.trending = data.trending || this.challenge?.trending || false;
   }
 
   toDictionary(): any {
@@ -762,7 +764,8 @@ export class SweatlistCollection {
       ownerId: this.ownerId, // Updated to be an array
       privacy: this.privacy,
       createdAt: dateToUnixTimestamp(this.createdAt),
-      updatedAt: dateToUnixTimestamp(this.updatedAt)
+      updatedAt: dateToUnixTimestamp(this.updatedAt),
+      trending: this.trending
     };
   }
 
@@ -972,7 +975,14 @@ class UserChallenge {
 
   constructor(data: any) {
     this.id = data.id;
-    this.challenge = data.challenge ? new Challenge(data.challenge) : undefined;
+    // Pre-convert dates before passing to Challenge constructor to avoid double conversion
+    this.challenge = data.challenge ? new Challenge({
+      ...data.challenge,
+      startDate: convertFirestoreTimestamp(data.challenge.startDate),
+      endDate: convertFirestoreTimestamp(data.challenge.endDate),
+      createdAt: convertFirestoreTimestamp(data.challenge.createdAt),
+      updatedAt: convertFirestoreTimestamp(data.challenge.updatedAt)
+    }) : undefined;
     this.challengeId = data.challengeId || '';
     this.userId = data.userId || '';
     this.fcmToken = data.fcmToken || '';  // Added
@@ -1176,6 +1186,9 @@ class Challenge {
   // Computed property
   durationInDays: number;
   isChallengeEnded: boolean;
+  
+  // Trending property
+  trending?: boolean;
 
   constructor(data: {
     id: string;
@@ -1204,6 +1217,7 @@ class Challenge {
     totalStepGoal?: number;
     allowedMissedDays?: number;
     mealTracking?: any; // Use any for now to handle raw Firestore data
+    trending?: boolean;
   }) {
     this.id = data.id;
     this.title = data.title;
@@ -1215,12 +1229,28 @@ class Challenge {
       : [];
     this.privacy = data.privacy || SweatlistType.Together;
     this.pin = data.pin;
-    // Dates are already converted by the service layer, so use them directly
+    // Handle dates - they might already be converted or need conversion
+    console.log('🗓️ [Challenge Constructor] Processing dates for challenge:', data.title, {
+      startDate: data.startDate,
+      startDateType: typeof data.startDate,
+      endDate: data.endDate,
+      endDateType: typeof data.endDate,
+      startDateIsDate: data.startDate instanceof Date,
+      endDateIsDate: data.endDate instanceof Date
+    });
+    
     this.startDate = data.startDate instanceof Date ? data.startDate : convertFirestoreTimestamp(data.startDate);
     this.ownerId = data.ownerId;
     this.endDate = data.endDate instanceof Date ? data.endDate : convertFirestoreTimestamp(data.endDate);
     this.createdAt = data.createdAt instanceof Date ? data.createdAt : convertFirestoreTimestamp(data.createdAt);
     this.updatedAt = data.updatedAt instanceof Date ? data.updatedAt : convertFirestoreTimestamp(data.updatedAt);
+    
+    console.log('🗓️ [Challenge Constructor] After conversion:', {
+      startDate: this.startDate,
+      endDate: this.endDate,
+      startDateValid: this.startDate instanceof Date && !isNaN(this.startDate.getTime()),
+      endDateValid: this.endDate instanceof Date && !isNaN(this.endDate.getTime())
+    });
     
     this.originalId = data.originalId || data.id;
     this.joinWindowEnds = data.joinWindowEnds || new Date(this.startDate.getTime() + (48 * 3600 * 1000));
@@ -1235,6 +1265,7 @@ class Challenge {
     this.dailyStepGoal = data.dailyStepGoal || 10000; // Default daily step goal
     this.totalStepGoal = data.totalStepGoal || 0; // Default total step goal
     this.allowedMissedDays = data.allowedMissedDays || 0; // Default allowed missed days
+    this.trending = data.trending || false; // Default trending to false
 
     // Initialize meal tracking properties
     if (data.mealTracking) {
@@ -1330,6 +1361,7 @@ class Challenge {
       dailyStepGoal: this.dailyStepGoal,
       totalStepGoal: this.totalStepGoal,
       allowedMissedDays: this.allowedMissedDays,
+      trending: this.trending,
       // Add meal tracking data (only include defined fields to avoid Firestore undefined errors)
       mealTracking: this.mealTracking ? (() => {
         const mealTrackingDict: any = {
@@ -1361,15 +1393,33 @@ class Challenge {
    * @returns The number of days between the two dates.
    */
   private calculateDurationInDays(): number {
+    console.log('🧮 [calculateDurationInDays] Calculating duration for:', {
+      startDate: this.startDate,
+      endDate: this.endDate,
+      startDateType: typeof this.startDate,
+      endDateType: typeof this.endDate
+    });
+    
     const start = this.startDate?.valueOf();
     const end = this.endDate?.valueOf();
 
+    console.log('🧮 [calculateDurationInDays] Date values:', {
+      start,
+      end,
+      startIsNaN: isNaN(start || 0),
+      endIsNaN: isNaN(end || 0)
+    });
+
     if (!start || !end || isNaN(start) || isNaN(end)) {
-      throw new Error('Invalid startDate or endDate');
+      console.error('🧮 [calculateDurationInDays] Invalid dates detected, returning default duration of 30 days');
+      return 30; // Return default duration instead of throwing
     }
 
     const durationInMilliseconds = end - start;
-    return Math.ceil(durationInMilliseconds / (1000 * 60 * 60 * 24));
+    const duration = Math.ceil(durationInMilliseconds / (1000 * 60 * 60 * 24));
+    
+    console.log('🧮 [calculateDurationInDays] Calculated duration:', duration, 'days');
+    return duration;
   }
 
   static toFirestoreObject(obj: any): any {
