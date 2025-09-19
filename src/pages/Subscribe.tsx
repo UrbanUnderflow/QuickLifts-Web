@@ -28,23 +28,28 @@ const Subscribe: React.FC = () => {
     
     // Validate environment variables in production
     if (!localCheck) {
-      const requiredEnvVars = {
+      // Explicitly type required env vars map
+      const requiredEnvVars: Record<'stripePublishableKey' | 'siteUrl', string | undefined> = {
         stripePublishableKey: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
         siteUrl: process.env.NEXT_PUBLIC_SITE_URL || 'https://fitwithpulse.ai'
       };
       
+      // Build a typed summary object for logging
+      const envSummary: Record<'stripePublishableKey' | 'siteUrl', 'SET' | 'MISSING'> = (Object.keys(requiredEnvVars) as Array<keyof typeof requiredEnvVars>)
+        .reduce((acc, key) => {
+          acc[key] = requiredEnvVars[key] ? 'SET' as const : 'MISSING' as const;
+          return acc;
+        }, {} as Record<'stripePublishableKey' | 'siteUrl', 'SET' | 'MISSING'>);
+      
       console.log('[Subscribe] Production environment check:', {
         hostname: typeof window !== 'undefined' ? window.location.hostname : 'server',
-        envVars: Object.keys(requiredEnvVars).reduce((acc, key) => ({
-          ...acc,
-          [key]: requiredEnvVars[key] ? 'SET' : 'MISSING'
-        }), {}),
+        envVars: envSummary,
         isLocal: localCheck
       });
       
       // Check for missing environment variables
-      const missingVars = Object.entries(requiredEnvVars)
-        .filter(([key, value]) => !value)
+      const missingVars = (Object.entries(requiredEnvVars) as Array<[keyof typeof requiredEnvVars, string | undefined]>)
+        .filter(([, value]) => !value)
         .map(([key]) => key);
         
       if (missingVars.length > 0) {
