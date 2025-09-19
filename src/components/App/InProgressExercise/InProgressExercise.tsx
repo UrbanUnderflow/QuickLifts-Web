@@ -93,19 +93,17 @@ const InProgressExercise: React.FC<InProgressExerciseProps> = ({
 
     if (isPaused || isCompleting) return;
 
-    // If screenTime is 0 or less, complete immediately
+    // If screenTime is 0 or less, just pause the timer (don't auto-complete)
     if (currentScreenTime <= 0) {
-      console.log(`[InProgressExercise Timer Effect] screenTime is ${currentScreenTime}, calling onComplete immediately.`);
-      setIsCompleting(true);
-      onComplete();
+      console.log(`[InProgressExercise Timer Effect] screenTime is ${currentScreenTime}, pausing timer.`);
+      setIsPaused(true);
       return;
     }
 
-    // If time has run out, complete
+    // If time has run out, just pause the timer (don't auto-complete)
     if (timeRemaining <= 0) {
-      console.log('[InProgressExercise Timer Effect] Time reached 0, calling onComplete...');
-      setIsCompleting(true);
-      onComplete();
+      console.log('[InProgressExercise Timer Effect] Time reached 0, pausing timer. User must manually complete.');
+      setIsPaused(true);
       return;
     }
 

@@ -23,7 +23,35 @@ const Subscribe: React.FC = () => {
   const [isSignInModalOpen, setIsSignInModalOpen] = useState(false); // Control SignInModal visibility
 
   useEffect(() => {
-    setIsLocal(isLocalhost());
+    const localCheck = isLocalhost();
+    setIsLocal(localCheck);
+    
+    // Validate environment variables in production
+    if (!localCheck) {
+      const requiredEnvVars = {
+        stripePublishableKey: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
+        siteUrl: process.env.NEXT_PUBLIC_SITE_URL || 'https://fitwithpulse.ai'
+      };
+      
+      console.log('[Subscribe] Production environment check:', {
+        hostname: typeof window !== 'undefined' ? window.location.hostname : 'server',
+        envVars: Object.keys(requiredEnvVars).reduce((acc, key) => ({
+          ...acc,
+          [key]: requiredEnvVars[key] ? 'SET' : 'MISSING'
+        }), {}),
+        isLocal: localCheck
+      });
+      
+      // Check for missing environment variables
+      const missingVars = Object.entries(requiredEnvVars)
+        .filter(([key, value]) => !value)
+        .map(([key]) => key);
+        
+      if (missingVars.length > 0) {
+        console.error('[Subscribe] Missing required environment variables:', missingVars);
+        setError(`Configuration error: Missing environment variables: ${missingVars.join(', ')}`);
+      }
+    }
   }, []);
 
   // --- Live Stripe Price IDs ---

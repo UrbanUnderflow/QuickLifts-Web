@@ -67,7 +67,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
   ].map(route => route?.toLowerCase());
  
   const publicPathPatterns = [
-    '/round-invitation', '/profile', '/challenge', '/review', '/programming', '/press', '/100trainers', '/MoveAndFuelATL', '/investor', '/invest'
+    '/round-invitation', '/round', '/profile', '/challenge', '/review', '/programming', '/press', '/100trainers', '/MoveAndFuelATL', '/investor', '/invest'
   ].map(pattern => pattern.toLowerCase());
  
   const isPublicRoute = (path: string) => {
@@ -83,6 +83,18 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
         isPublic,
         publicRoutes: publicRoutes.filter(route => route.includes('starter')),
         allPublicRoutes: publicRoutes
+      });
+    }
+    
+    // Add debugging for subscribe page specifically
+    if (normalizedPath.includes('subscribe')) {
+      console.log('[AuthWrapper] Subscribe route check:', {
+        originalPath: path,
+        normalizedPath,
+        isPublic,
+        isInPublicRoutes: publicRoutes.includes(normalizedPath),
+        publicRoutes: publicRoutes,
+        environment: typeof window !== 'undefined' ? window.location.hostname : 'server'
       });
     }
     

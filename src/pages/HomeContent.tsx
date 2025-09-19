@@ -401,9 +401,14 @@ const performExerciseSubmission = async (updatedLogs: ExerciseLog[]) => {
   const handleCancelWorkout = async () => {
     if (currentWorkoutSession && userId) {
       try {
+        console.log('🚫 [handleCancelWorkout] Starting workout cancellation...');
         const summary = workoutSummary ? new WorkoutSummary(workoutSummary) : null;
         await workoutService.cancelWorkout(currentWorkoutSession, summary);
         setCurrentExerciseIndex(0);
+        console.log('🚫 [handleCancelWorkout] Workout cancelled successfully, navigating to home...');
+        
+        // Navigate back to home page after successful cancellation
+        router.push('/');
       } catch (error) {
         console.error('Error canceling workout:', error);
       }
