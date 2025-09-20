@@ -190,10 +190,14 @@ const handler = async (event) => {
     batch.update(userRef, userUpdateData);
     console.log(`[VerifySubscription] Updating user doc: ${userRef.path}`);
 
-    // 5b. Subscription record
-    const subscriptionRef = db.collection('subscriptions').doc(stripeSubscriptionId);
+    // 5b. Subscription record (denormalize username/email for searchability)
+    // Use userId as the subscription document ID
+    const subscriptionRef = db.collection('subscriptions').doc(userId);
+    const userData = userDoc.data() || {};
     const subscriptionData = {
         userId: userId,
+        userEmail: userData.email || null,
+        username: userData.username || null,
         subscriptionType: subscriptionType,
         platform: SubscriptionPlatform.Web,
         stripeSubscriptionId: stripeSubscriptionId,
@@ -205,6 +209,13 @@ const handler = async (event) => {
         updatedAt: now,
     };
     batch.set(subscriptionRef, subscriptionData, { merge: true });
+    // Append current_period_end to expirationHistory when available
+    const currentPeriodEnd = session.subscription?.current_period_end;
+    if (currentPeriodEnd) {
+      await subscriptionRef.update({
+        expirationHistory: admin.firestore.FieldValue.arrayUnion(new Date(currentPeriodEnd * 1000))
+      });
+    }
     console.log(`[VerifySubscription] Setting subscription doc: ${subscriptionRef.path}`);
 
     // 6. Commit batch

@@ -175,6 +175,20 @@ async function handleSubscriptionCreated(subscription) {
     
     console.log(`[Webhook] Subscription status: ${subscription.status}, trial end: ${trialEnd}`);
     
+    // Load user for denormalized fields on subscription doc
+    let userEmail = null;
+    let username = null;
+    try {
+      const userSnap = await db.collection('users').doc(userId).get();
+      if (userSnap.exists) {
+        const ud = userSnap.data();
+        userEmail = ud?.email || null;
+        username = ud?.username || null;
+      }
+    } catch (e) {
+      console.warn('[Webhook] Failed to read user doc for denormalized fields', e);
+    }
+
     // Update user document
     const userUpdateData = {
       subscriptionType: subscriptionType,
@@ -191,6 +205,8 @@ async function handleSubscriptionCreated(subscription) {
     // Also create/update subscription document
     const subscriptionData = {
       userId: userId,
+      userEmail: userEmail,
+      username: username,
       subscriptionType: subscriptionType,
       platform: SubscriptionPlatform.Web,
       stripeSubscriptionId: subscription.id,
@@ -202,7 +218,16 @@ async function handleSubscriptionCreated(subscription) {
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
     };
     
-    await db.collection('subscriptions').doc(subscription.id).set(subscriptionData, { merge: true });
+    // Store subscription using userId as the document ID
+    await db.collection('subscriptions').doc(userId).set(subscriptionData, { merge: true });
+
+    // Append current_period_end to expirationHistory
+    if (subscription.current_period_end) {
+      const periodEnd = new Date(subscription.current_period_end * 1000);
+      await db.collection('subscriptions').doc(userId).update({
+        expirationHistory: admin.firestore.FieldValue.arrayUnion(periodEnd)
+      });
+    }
     
     console.log(`[Webhook] Successfully processed subscription created for user: ${userId}`);
     
@@ -253,6 +278,20 @@ async function handleSubscriptionUpdated(subscription) {
     
     console.log(`[Webhook] Subscription status: ${subscription.status}, trial end: ${trialEnd}, final type: ${finalSubscriptionType}`);
     
+    // Load user for denormalized fields on subscription doc
+    let userEmail = null;
+    let username = null;
+    try {
+      const userSnap = await db.collection('users').doc(userId).get();
+      if (userSnap.exists) {
+        const ud = userSnap.data();
+        userEmail = ud?.email || null;
+        username = ud?.username || null;
+      }
+    } catch (e) {
+      console.warn('[Webhook] Failed to read user doc for denormalized fields', e);
+    }
+
     // Update user document
     const userUpdateData = {
       subscriptionType: finalSubscriptionType,
@@ -269,6 +308,8 @@ async function handleSubscriptionUpdated(subscription) {
     // Update subscription document
     const subscriptionData = {
       userId: userId,
+      userEmail: userEmail,
+      username: username,
       subscriptionType: finalSubscriptionType,
       platform: SubscriptionPlatform.Web,
       stripeSubscriptionId: subscription.id,
@@ -279,7 +320,15 @@ async function handleSubscriptionUpdated(subscription) {
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
     };
     
-    await db.collection('subscriptions').doc(subscription.id).update(subscriptionData);
+    await db.collection('subscriptions').doc(userId).update(subscriptionData);
+
+    // Append current_period_end to expirationHistory
+    if (subscription.current_period_end) {
+      const periodEnd = new Date(subscription.current_period_end * 1000);
+      await db.collection('subscriptions').doc(userId).update({
+        expirationHistory: admin.firestore.FieldValue.arrayUnion(periodEnd)
+      });
+    }
     
     console.log(`[Webhook] Successfully processed subscription updated for user: ${userId}`);
     
@@ -324,7 +373,7 @@ async function handleSubscriptionDeleted(subscription) {
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
     };
     
-    await db.collection('subscriptions').doc(subscription.id).update(subscriptionData);
+    await db.collection('subscriptions').doc(userId).update(subscriptionData);
     
     console.log(`[Webhook] Successfully processed subscription deleted for user: ${userId}`);
     

@@ -48,6 +48,12 @@ const AdminCard: React.FC<AdminCardProps> = ({ title, description, icon, link })
 
 const adminCardsData = [
   {
+    title: "Subscriptions",
+    description: "View subscription records, latest expiration, and sync history.",
+    icon: <TrendingUp className="w-5 h-5" />,
+    link: "/admin/subscriptions"
+  },
+  {
     title: "Manage Beta Users",
     description: "View, search, and manage beta user accounts and their status.",
     icon: <Users2 className="w-5 h-5" />,

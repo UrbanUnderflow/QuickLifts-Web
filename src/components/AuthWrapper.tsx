@@ -4,6 +4,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { onAuthStateChanged, getAuth } from 'firebase/auth';
 import { setUser, setLoading } from '../redux/userSlice';
 import { userService, SubscriptionType } from '../api/firebase/user';
+import { subscriptionService } from '../api/firebase/subscription/service';
 import SignInModal from './SignInModal';
 import type { RootState } from '../redux/store';
 import { useUser } from '../hooks/useUser';
@@ -182,12 +183,28 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
               if (firestoreUser && (!firestoreUser.username || firestoreUser.username === '')) {
                 console.log('[AuthWrapper] User needs to complete registration - showing modal');
                 setShowSignInModal(true);
-              } else if (firestoreUser?.subscriptionType === SubscriptionType.unsubscribed && !router.pathname.startsWith('/payment/')) {
-                console.log(`[AuthWrapper] User onboarded but unsubscribed on protected route (${router.pathname}). Redirecting to /subscribe.`);
-                if (router.pathname.toLowerCase() !== '/subscribe') {
-                  router.push('/subscribe');
+              } else if (!firestoreUser || firestoreUser.subscriptionType === SubscriptionType.unsubscribed) {
+                // Drive access by subscription record expirations instead of user field
+                try {
+                  const userIdForCheck = firestoreUser?.id || firebaseUser.uid;
+                  const status = await subscriptionService.ensureActiveOrSync(userIdForCheck);
+                  if (!status.isActive && !router.pathname.startsWith('/payment/')) {
+                    console.log(`[AuthWrapper] Expired or no active subscription on protected route (${router.pathname}). Redirecting to /subscribe.`);
+                    if (router.pathname.toLowerCase() !== '/subscribe') {
+                      router.push('/subscribe');
+                    }
+                    setShowSignInModal(false);
+                  } else {
+                    console.log('[AuthWrapper] Active subscription via subscription record.');
+                    setShowSignInModal(false);
+                  }
+                } catch (e) {
+                  console.warn('[AuthWrapper] Subscription status check failed, defaulting to subscribe page on protected route.');
+                  if (!router.pathname.startsWith('/payment/') && router.pathname.toLowerCase() !== '/subscribe') {
+                    router.push('/subscribe');
+                  }
+                  setShowSignInModal(false);
                 }
-                setShowSignInModal(false);
               } else {
                 console.log('[AuthWrapper] User onboarded and subscribed. Hiding modal if shown.');
                 setShowSignInModal(false);
