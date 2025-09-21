@@ -179,6 +179,17 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
             }
             userService.nonUICurrentUser = firestoreUser;
 
+            // Background: ensure subscription record is fresh on every app open
+            try {
+              const uid = firestoreUser?.id || firebaseUser.uid;
+              console.log('[AuthWrapper] ensureActiveOrSync kickoff', { uid });
+              subscriptionService.ensureActiveOrSync(uid)
+                .then(r => console.log('[AuthWrapper] ensureActiveOrSync result', { isActive: r.isActive, latest: r.latestExpiration?.toISOString() }))
+                .catch(e => console.warn('[AuthWrapper] ensureActiveOrSync error', e));
+            } catch (e) {
+              console.warn('[AuthWrapper] ensureActiveOrSync try/catch error', e);
+            }
+
             if (!isPublicRoute(router.pathname)) {
               if (firestoreUser && (!firestoreUser.username || firestoreUser.username === '')) {
                 console.log('[AuthWrapper] User needs to complete registration - showing modal');

@@ -38,18 +38,23 @@ function getLatestExpirationFromDoc(docData: SubscriptionDoc): Date | null {
 }
 
 async function fetchUserSubscriptions(userId: string): Promise<SubscriptionDoc[]> {
+  console.log('[subscriptionService] fetchUserSubscriptions start', { userId });
   const subsRef = collection(db, 'subscriptions');
   const q = query(subsRef, where('userId', '==', userId));
   const snapshot = await getDocs(q);
-  return snapshot.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
+  const subs = snapshot.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
+  console.log('[subscriptionService] fetchUserSubscriptions result', { count: subs.length, ids: subs.map(s => s.id) });
+  return subs;
 }
 
 async function computeStatusFromSubscriptions(userId: string): Promise<SubscriptionStatusResult> {
+  console.log('[subscriptionService] computeStatusFromSubscriptions start', { userId });
   const subs = await fetchUserSubscriptions(userId);
   let latest: { exp: Date; id: string } | null = null;
 
   for (const sub of subs) {
     const exp = getLatestExpirationFromDoc(sub);
+    console.log('[subscriptionService] candidate expiration', { docId: sub.id, exp: exp?.toISOString() });
     if (!exp || isNaN(exp.valueOf())) continue;
     if (!latest || exp > latest.exp) {
       latest = { exp, id: sub.id };
@@ -57,22 +62,30 @@ async function computeStatusFromSubscriptions(userId: string): Promise<Subscript
   }
 
   const now = new Date();
-  if (!latest) return { isActive: false, latestExpiration: null };
+  if (!latest) {
+    console.log('[subscriptionService] computeStatusFromSubscriptions no expiration');
+    return { isActive: false, latestExpiration: null };
+  }
 
-  return {
+  const result = {
     isActive: latest.exp > now,
     latestExpiration: latest.exp,
     sourceDocId: latest.id,
   };
+  console.log('[subscriptionService] computeStatusFromSubscriptions result', { ...result, latestISO: latest.exp.toISOString() });
+  return result;
 }
 
 async function syncWithRevenueCat(userId: string): Promise<void> {
   try {
+    console.log('[subscriptionService] syncWithRevenueCat POST', { userId, userIdType: typeof userId, userIdLength: userId?.length });
     const res = await fetch('/.netlify/functions/sync-revenuecat-subscription', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId }),
     });
+    const text = await res.text().catch(() => '');
+    console.log('[subscriptionService] syncWithRevenueCat response', { status: res.status, text });
     if (!res.ok) {
       // Swallow errors to avoid blocking UX; server will log details
       return;
@@ -84,11 +97,14 @@ async function syncWithRevenueCat(userId: string): Promise<void> {
 
 async function syncWithStripe(userId: string, stripeCustomerId?: string | null): Promise<void> {
   try {
+    console.log('[subscriptionService] syncWithStripe POST', { userId, hasCustomerId: !!stripeCustomerId });
     const res = await fetch('/.netlify/functions/sync-stripe-subscription', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId, stripeCustomerId }),
     });
+    const text = await res.text().catch(() => '');
+    console.log('[subscriptionService] syncWithStripe response', { status: res.status, text });
     if (!res.ok) return;
   } catch (_) {}
 }
@@ -96,6 +112,7 @@ async function syncWithStripe(userId: string, stripeCustomerId?: string | null):
 export const subscriptionService = {
   getStatus: computeStatusFromSubscriptions,
   ensureActiveOrSync: async (userId: string): Promise<SubscriptionStatusResult> => {
+    console.log('[subscriptionService] ensureActiveOrSync start', { userId });
     const status = await computeStatusFromSubscriptions(userId);
     if (status.isActive) return status;
     // Run RC and Stripe sync in parallel; then recompute
@@ -103,7 +120,9 @@ export const subscriptionService = {
       syncWithRevenueCat(userId),
       syncWithStripe(userId),
     ]);
-    return await computeStatusFromSubscriptions(userId);
+    const after = await computeStatusFromSubscriptions(userId);
+    console.log('[subscriptionService] ensureActiveOrSync after sync', { isActive: after.isActive, latest: after.latestExpiration?.toISOString() });
+    return after;
   },
 };
 

@@ -141,6 +141,42 @@ Backfills:
 
 ---
 
+## Recent Additions & Changes (Changelog)
+
+- Firestore `subscriptions/{userId}` standardized: document ID is the Firebase userId.
+- New fields on subscription docs: `username`, `userEmail`, `status`, `trialEndDate`, `expirationHistory`.
+- Web `subscriptionService.ensureActiveOrSync(userId)`: runs both Stripe and RevenueCat syncs in parallel then recomputes.
+- Netlify functions:
+  - `sync-revenuecat-subscription.js`: upgraded to RevenueCat API v2, supports multiple API keys (QuickLifts, PulseCheck), standardized docId = userId, logs raw responses for debugging, appends latest expiration.
+  - `sync-stripe-subscription.js`: on-demand sync from Stripe, appends latest `current_period_end` and denormalized user fields.
+  - `stripe-webhook.js`: ensures subscription doc upserts on Stripe events with `expirationHistory` updates.
+  - `migrate-expiration-history.js`: migrates historical Stripe periods into `expirationHistory`.
+  - `backfill-subscription-user-fields.js`: denormalizes `username` and `userEmail` for existing docs.
+- Admin page `/admin/subscriptions`:
+  - Search by username/email, improved table, tri-state Active column (Unknown/Active/Expired), backfill action.
+- Payment page `/payment/[id]`:
+  - Displays Pulse Subscription line item: Active (no charge) vs price when not subscribed.
+  - Combined Checkout (round + optional subscription) via `create-round-checkout`.
+- iOS (QuickLifts & PulseCheck):
+  - `Subscription` model updated; services compute active state from Firestore and trigger web sync functions on boot when needed.
+
+---
+
+## Known Gaps / Shortcomings (To Revisit)
+
+- RevenueCat V2 sync still returns 404 for some users despite valid iOS entitlements and correct Secret key. Hypotheses:
+  - Project mismatch vs. SDK project (verify Secret key is from the same RC project as `appl_*` key in use).
+  - Customer may exist under a different environment or identifier; need a confirmed lookup strategy from RC support (note: we currently query production only and use the Firebase userId).
+  - Entitlement key naming differences; iOS uses `plus`. Confirm entitlement names in each RC project.
+- Web function currently relies on the passed `userId` only; if RC stored a different `app_user_id`, lookup fails. We deferred storing any alternate IDs on `users/` by request.
+- No provenance tags on `expirationHistory` entries yet.
+- Stripe + RC conflicts not auto-resolved (we simply take the max expiration).
+- Testing/dev ergonomics: better local env setup docs for Netlify function secrets.
+
+---
+
+---
+
 ## Flow Charts
 
 ### 1) Runtime Access Check (Web/iOS)

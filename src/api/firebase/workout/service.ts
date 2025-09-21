@@ -1779,6 +1779,20 @@ async deleteWorkoutSession(workoutId: string | null): Promise<void> {
 
     const challengeData = challengeSnap.data();
 
+    // 3b) Guard: prevent duplicate user-challenge docs
+    try {
+      const userChallengesRef = collection(db, 'user-challenge');
+      const byUserQuery = query(userChallengesRef, where('userId', '==', userId));
+      const byUserSnap = await getDocs(byUserQuery);
+      const existing = byUserSnap.docs.find(d => (d.data()?.challengeId === challengeId));
+      if (existing) {
+        console.log('[joinChallenge] Existing user-challenge found. Skipping create.', { userId, challengeId, existingId: existing.id });
+        return { id: existing.id, ...existing.data(), alreadyExisted: true };
+      }
+    } catch (dupErr) {
+      console.warn('[joinChallenge] Duplicate check failed (continuing to create):', dupErr);
+    }
+
     // Current time as Date objects to be used in our app logic
     const now = new Date();
     

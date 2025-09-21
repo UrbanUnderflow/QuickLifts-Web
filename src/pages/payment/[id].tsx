@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { ArrowRight, Globe } from 'lucide-react';
 import ChallengeCTA from '../../components/ChallengeCTA';
 import { isLocalhost, getStripePublishableKey } from '../../utils/stripeKey';
+import { subscriptionService } from '../../api/firebase/subscription/service';
 
 // Helper function to detect iOS devices
 const isIOS = () => {
@@ -89,6 +90,9 @@ const PaymentPage = ({ challengeData }: PaymentPageProps) => {
   const [stripeLoaded, setStripeLoaded] = useState(false);
   const [hasPurchased, setHasPurchased] = useState(false);
   const [isCheckingPurchase, setIsCheckingPurchase] = useState(true);
+  const [isSubscriptionActive, setIsSubscriptionActive] = useState<boolean | null>(null);
+  const [subscriptionPrice, setSubscriptionPrice] = useState<number | null>(null);
+  const [currentUserInfo, setCurrentUserInfo] = useState<{ id: string; email?: string | null; username?: string | null } | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -216,6 +220,21 @@ const PaymentPage = ({ challengeData }: PaymentPageProps) => {
     checkApplePayAvailability();
     initTestMode();
     checkPurchaseStatus();
+    // Check subscription record status to show line item state
+    const currentUser = userService.nonUICurrentUser;
+    if (currentUser?.id) {
+      subscriptionService.getStatus(currentUser.id)
+        .then(res => {
+          setIsSubscriptionActive(res.isActive);
+          // Set monthly subscription price for display when needed
+          const envPriceStr = process.env.NEXT_PUBLIC_PULSE_SUBSCRIPTION_PRICE_USD || '4.99';
+          const envPrice = parseFloat(envPriceStr);
+          const monthly = isNaN(envPrice) ? 4.99 : envPrice;
+          setSubscriptionPrice(monthly);
+        })
+        .catch(() => setIsSubscriptionActive(null));
+      setCurrentUserInfo({ id: currentUser.id, email: currentUser.email, username: currentUser.username });
+    }
   }, [challengeData.collection.challenge.id]);
   
   // Calculate fees and total amount
@@ -226,12 +245,49 @@ const PaymentPage = ({ challengeData }: PaymentPageProps) => {
   const baseAmount = pricingInfo?.amount || 0;
   const processingFee = Math.round(baseAmount * 0.029 + 30); // 2.9% + 30¢
   const totalAmount = baseAmount + processingFee;
+  // Add subscription monthly charge to displayed total when user is NOT active
+  const subscriptionChargeCents = !isSubscriptionActive && subscriptionPrice ? Math.round(subscriptionPrice * 100) : 0;
+  const displayTotalAmount = totalAmount + subscriptionChargeCents;
   
   const currency = pricingInfo?.currency || 'usd';
   
   const stripeElementsOptions = {
     appearance,
     locale: 'en' as const,
+  };
+
+  // Start unified checkout via Stripe Checkout (server builds session)
+  const startCheckout = async () => {
+    try {
+      const endpoint = '/.netlify/functions/create-round-checkout';
+      const origin = typeof window !== 'undefined' ? window.location.origin : 'https://fitwithpulse.ai';
+      const currentUser = userService.nonUICurrentUser;
+      if (!currentUser?.id) {
+        router.push('/sign-in');
+        return;
+      }
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: currentUser.id,
+          roundId: challenge.id,
+          coachId: Array.isArray(challenge.ownerId) ? challenge.ownerId[0] : challenge.ownerId,
+          roundAmount: baseAmount / 100, // dollars
+          roundName: challenge.title,
+          successUrl: `${origin}/round/${challenge.id}`,
+          cancelUrl: `${origin}/payment/${challenge.id}`
+        })
+      });
+      const data = await response.json();
+      if (!response.ok || !data.url) {
+        console.error('Failed to create checkout session:', data);
+        return;
+      }
+      window.location.href = data.url;
+    } catch (e) {
+      console.error('Error starting checkout:', e);
+    }
   };
 
   const handleTestModeToggle = (enabled: boolean) => {
@@ -510,6 +566,14 @@ const PaymentPage = ({ challengeData }: PaymentPageProps) => {
           </div>
         )}
         
+        {currentUserInfo && (
+          <div className="mb-4">
+            <span className="inline-flex items-center px-3 py-1 rounded-full bg-zinc-800 text-zinc-200 text-xs">
+              <span className="inline-block w-2 h-2 rounded-full bg-[#E0FE10] mr-2" />
+              Signed in as {currentUserInfo.username || currentUserInfo.email || `${currentUserInfo.id.substring(0,8)}...`}
+            </span>
+          </div>
+        )}
         <h1 className="text-2xl font-bold mb-2">Complete Your Purchase</h1>
         <h2 className="text-xl mb-6">{challenge.title}</h2>
         
@@ -519,20 +583,31 @@ const PaymentPage = ({ challengeData }: PaymentPageProps) => {
             <span>${(baseAmount / 100).toFixed(2)}</span>
           </div>
           <div className="flex justify-between mb-4">
+            <span className="text-zinc-400">Pulse Subscription</span>
+            <span className="text-zinc-400">
+              {isSubscriptionActive === null && 'Checking...'}
+              {isSubscriptionActive === true && 'Active (no charge)'}
+              {isSubscriptionActive === false && (subscriptionPrice ? `$${subscriptionPrice.toFixed(2)}/mo` : 'Billed monthly')}
+            </span>
+          </div>
+          <div className="flex justify-between mb-4">
             <span className="text-zinc-400">Processing Fee</span>
             <span className="text-zinc-400">${(processingFee / 100).toFixed(2)}</span>
           </div>
           <div className="border-t border-zinc-700 pt-4 flex justify-between font-bold">
             <span>Total</span>
-            <span>${(totalAmount / 100).toFixed(2)}</span>
+            <span>${(displayTotalAmount / 100).toFixed(2)}</span>
           </div>
         </div>
+
+        {/* Preferred unified checkout path */}
+        {/* Replace dual flows: keep a single Pay button wired to unified checkout */}
         
         {stripeLoaded && stripePromise ? (
           <Elements stripe={stripePromise} options={stripeElementsOptions}>
             <CheckoutForm 
               challengeId={challenge.id} 
-              amount={totalAmount}
+              amount={displayTotalAmount}
               currency={currency}
               isApplePayAvailable={isApplePayAvailable}
               challengeData={challengeData}

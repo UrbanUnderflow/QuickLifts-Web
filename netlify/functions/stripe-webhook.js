@@ -397,7 +397,8 @@ async function handleCheckoutSessionCompleted(session) {
     }
     
     // Extract metadata
-    const challengeId = metadata?.challengeId;
+    // Round/challenge context
+    const challengeId = metadata?.challengeId || metadata?.roundId;
     const challengeTitle = metadata?.challengeTitle;
     let ownerId = metadata?.ownerId;
     
@@ -441,7 +442,7 @@ async function handleCheckoutSessionCompleted(session) {
       }
     }
     
-    // Process purchase and record transaction
+    // Process purchase and record transaction (round access)
     if (resolvedOwnerId && resolvedBuyerId) {
       await recordPurchase({
         ownerId: resolvedOwnerId,
@@ -455,6 +456,18 @@ async function handleCheckoutSessionCompleted(session) {
       });
     } else {
       console.error(`Unable to record purchase. Missing owner ID or buyer ID. ownerId: ${resolvedOwnerId}, buyerId: ${resolvedBuyerId}`);
+    }
+
+    // If a subscription was created via Checkout (combined flow), upsert subscription record
+    try {
+      if (session.subscription) {
+        const sub = await stripe.subscriptions.retrieve(
+          typeof session.subscription === 'string' ? session.subscription : session.subscription.id
+        );
+        await handleSubscriptionUpdated(sub);
+      }
+    } catch (e) {
+      console.warn('[Webhook] Subscription upsert after checkout failed:', e?.message || e);
     }
   } catch (error) {
     console.error(`Error handling checkout session completed: ${error.message}`);

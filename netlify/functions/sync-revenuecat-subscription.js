@@ -22,29 +22,43 @@ if (admin.apps.length === 0) {
 
 const db = admin.firestore();
 
-async function fetchRevenueCatSubscriber(userId) {
-  const apiKey = process.env.REVENUECAT_API_KEY;
-  if (!apiKey) throw new Error('Missing REVENUECAT_API_KEY');
-
-  const res = await fetch(`https://api.revenuecat.com/v1/subscribers/${encodeURIComponent(userId)}`, {
+async function fetchRevenueCatSubscriberWithKey(userId, apiKey, projectLabel, projectId) {
+  // V2 API: Prefer project-scoped endpoint if projectId is provided
+  const url = projectId
+    ? `https://api.revenuecat.com/v2/projects/${encodeURIComponent(projectId)}/customers/${encodeURIComponent(userId)}`
+    : `https://api.revenuecat.com/v2/customers/${encodeURIComponent(userId)}`;
+  const res = await fetch(url, {
     headers: {
       'Authorization': `Bearer ${apiKey}`,
       'Accept': 'application/json'
     }
   });
+
+  if (res.status === 404) {
+    console.warn(`[SyncRevenueCat] ${projectLabel} 404 for app_user_id`, { userId });
+    return null; // caller will try other candidate IDs
+  }
+
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`RevenueCat error ${res.status}: ${text}`);
+    throw new Error(`RevenueCat V2 error ${res.status}: ${text}`);
   }
   return await res.json();
 }
 
-function parseLatestExpiration(rcJson) {
+function parseLatestExpiration(rcJson, projectLabel) {
   let latest = null;
+  console.log(`[SyncRevenueCat] Raw RC V2 response for ${projectLabel}:`, JSON.stringify(rcJson, null, 2));
   try {
-    const entitlements = rcJson?.subscriber?.entitlements || {};
+    // V2 API structure: customer.entitlements and customer.subscriptions
+    const customer = rcJson?.customer || rcJson?.subscriber || rcJson; // Handle different response structures
+    const entitlements = customer?.entitlements || {};
+    console.log(`[SyncRevenueCat] V2 Entitlements for ${projectLabel}:`, Object.keys(entitlements));
+    
     for (const key of Object.keys(entitlements)) {
-      const exp = entitlements[key]?.expires_date; // RFC3339 string
+      const entitlement = entitlements[key];
+      const exp = entitlement?.expires_date || entitlement?.expiration_date; // Try both field names
+      console.log(`[SyncRevenueCat] V2 Entitlement ${key} expires_date:`, exp, 'isActive:', entitlement?.is_active);
       if (exp) {
         const d = new Date(exp);
         if (!isNaN(d)) {
@@ -52,10 +66,14 @@ function parseLatestExpiration(rcJson) {
         }
       }
     }
+    
     // Fallback: scan subscriptions map
-    const subs = rcJson?.subscriber?.subscriptions || {};
+    const subs = customer?.subscriptions || {};
+    console.log(`[SyncRevenueCat] V2 Subscriptions for ${projectLabel}:`, Object.keys(subs));
     for (const key of Object.keys(subs)) {
-      const exp = subs[key]?.expires_date;
+      const subscription = subs[key];
+      const exp = subscription?.expires_date || subscription?.expiration_date;
+      console.log(`[SyncRevenueCat] V2 Subscription ${key} expires_date:`, exp);
       if (exp) {
         const d = new Date(exp);
         if (!isNaN(d)) {
@@ -66,6 +84,7 @@ function parseLatestExpiration(rcJson) {
   } catch (e) {
     console.warn('[SyncRevenueCat] parseLatestExpiration error:', e);
   }
+  console.log(`[SyncRevenueCat] Final latest expiration for ${projectLabel}:`, latest);
   return latest;
 }
 
@@ -86,10 +105,80 @@ exports.handler = async (event) => {
   }
 
   try {
-    const rc = await fetchRevenueCatSubscriber(userId);
-    const latestExpiration = parseLatestExpiration(rc);
+    // Map API keys to project labels and optional project IDs (V2)
+    const keyConfigs = [];
+    if (process.env.REVENUECAT_API_KEY_QUICKLIFTS) {
+      keyConfigs.push({
+        key: process.env.REVENUECAT_API_KEY_QUICKLIFTS,
+        label: 'quicklifts',
+        projectId: process.env.REVENUECAT_PROJECT_ID_QUICKLIFTS || process.env.REVENUECAT_PROJECT_ID
+      });
+    }
+    if (process.env.REVENUECAT_API_KEY_PULSECHECK) {
+      keyConfigs.push({
+        key: process.env.REVENUECAT_API_KEY_PULSECHECK,
+        label: 'pulsecheck',
+        projectId: process.env.REVENUECAT_PROJECT_ID_PULSECHECK || process.env.REVENUECAT_PROJECT_ID
+      });
+    }
+    if (process.env.REVENUECAT_API_KEY && !keyConfigs.some(k => k.key === process.env.REVENUECAT_API_KEY)) {
+      keyConfigs.push({
+        key: process.env.REVENUECAT_API_KEY,
+        label: 'default',
+        projectId: process.env.REVENUECAT_PROJECT_ID || null
+      });
+    }
+
+    const keys = keyConfigs.map(k => k.key);
+
+    if (!keys.length) {
+      console.warn('[SyncRevenueCat] Missing RC envs', {
+        hasDefault: !!process.env.REVENUECAT_API_KEY,
+        hasQuicklifts: !!process.env.REVENUECAT_API_KEY_QUICKLIFTS,
+        hasPulsecheck: !!process.env.REVENUECAT_API_KEY_PULSECHECK,
+      });
+      throw new Error('Missing REVENUECAT_API_KEY or project-specific keys');
+    }
+
+    // Use ONLY the provided userId for RC lookups
+    const candidates = [userId];
+    console.log('[SyncRevenueCat] Attempting RC sync with', {
+      userId,
+      candidates,
+      keyCount: keyConfigs.length,
+      projectIds: keyConfigs.map(k => ({ label: k.label, projectId: k.projectId ? 'set' : 'unset' }))
+    });
+
+    let latestExpiration = null;
+    let latestSourceProject = null;
+    let tried = 0;
+    for (const cfg of keyConfigs) {
+      const projectLabel = cfg.label;
+      const projectId = cfg.projectId || null;
+
+      for (const candidate of candidates) {
+        tried++;
+        try {
+          const rc = await fetchRevenueCatSubscriberWithKey(candidate, cfg.key, projectLabel, projectId);
+          if (!rc) {
+            console.log('[SyncRevenueCat] No RC record for candidate', { project: projectLabel, candidate });
+            continue;
+          }
+          const exp = parseLatestExpiration(rc, projectLabel);
+          console.log('[SyncRevenueCat] fetched', { project: projectLabel, candidate, hasExpiration: !!exp, tried });
+          if (exp && (!latestExpiration || exp > latestExpiration)) {
+            latestExpiration = exp;
+            latestSourceProject = projectLabel;
+          }
+          if (exp) break; // stop trying other candidates for this project once we have an expiration
+        } catch (e) {
+          console.warn(`[SyncRevenueCat] fetch error for project ${projectLabel} candidate ${candidate}:`, e.message);
+        }
+      }
+    }
+
     if (!latestExpiration) {
-      return { statusCode: 200, body: JSON.stringify({ message: 'No expiration found' }) };
+      return { statusCode: 200, body: JSON.stringify({ message: 'No expiration found from any RevenueCat project' }) };
     }
 
     // Upsert iOS subscription doc for this user and append expirationHistory
@@ -112,6 +201,7 @@ exports.handler = async (event) => {
       username,
       platform: 'ios',
       source: 'revenuecat',
+      sourceProject: latestSourceProject,
       updatedAt: new Date(),
     }, { merge: true });
 
@@ -119,7 +209,7 @@ exports.handler = async (event) => {
       expirationHistory: admin.firestore.FieldValue.arrayUnion(latestExpiration)
     });
 
-    return { statusCode: 200, body: JSON.stringify({ message: 'Synced', latestExpiration }) };
+    return { statusCode: 200, body: JSON.stringify({ message: 'Synced', latestExpiration, sourceProject: latestSourceProject }) };
   } catch (error) {
     console.error('[SyncRevenueCat] Error:', error);
     return { statusCode: 500, body: JSON.stringify({ message: error.message || 'Server error' }) };
