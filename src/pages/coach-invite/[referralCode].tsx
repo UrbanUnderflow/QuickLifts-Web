@@ -20,45 +20,90 @@ const CoachInvitePage: React.FC = () => {
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
 
   useEffect(() => {
-    if (!referralCode || userLoading) return;
+    console.log('[CoachInvite] useEffect triggered', { 
+      referralCode, 
+      currentUser: !!currentUser, 
+      userLoading
+    });
+
+    if (!referralCode) {
+      console.log('[CoachInvite] No referralCode, returning early');
+      return;
+    }
+
+    // Don't run if we already have coach info and are not loading
+    if (coachInfo && !loading) {
+      console.log('[CoachInvite] Already have coach info and not loading, skipping');
+      return;
+    }
+
+    let isCancelled = false;
     
     const handleInvite = async () => {
       try {
-        setLoading(true);
+        console.log('[CoachInvite] Starting handleInvite');
         
         if (typeof referralCode !== 'string') {
+          console.error('[CoachInvite] Invalid referralCode type:', typeof referralCode);
           setError('Invalid referral code.');
+          setLoading(false);
           return;
         }
         
-        // First, verify the coach exists
-        const coach = await coachService.findCoachByReferralCode(referralCode);
-        if (!coach) {
-          setError('Coach not found. Please check the referral code.');
-          return;
+        // Only fetch coach if we don't have it yet
+        if (!coachInfo) {
+          console.log('[CoachInvite] Fetching coach with referralCode:', referralCode);
+          const coach = await coachService.findCoachByReferralCode(referralCode);
+          console.log('[CoachInvite] Coach fetch result:', !!coach, coach);
+          
+          if (!coach) {
+            console.error('[CoachInvite] Coach not found for referralCode:', referralCode);
+            setError('Coach not found. Please check the referral code.');
+            setLoading(false);
+            return;
+          }
+          
+          if (isCancelled) {
+            console.log('[CoachInvite] Operation was cancelled, returning');
+            return;
+          }
+
+          console.log('[CoachInvite] Setting coach info');
+          setCoachInfo(coach);
         }
-        
-        setCoachInfo(coach);
-        
-        if (!currentUser) {
-          // User not logged in - redirect to sign up with referral code
-          router.push(`/sign-up?coach=${referralCode}&redirect=${encodeURIComponent(router.asPath)}`);
-          return;
+
+        console.log('[CoachInvite] Checking auth state', { 
+          currentUser: !!currentUser, 
+          userLoading 
+        });
+
+        if (currentUser) {
+          console.log('[CoachInvite] User is logged in, showing connection interface');
+          setLoading(false);
+        } else if (userLoading === false) {
+          console.log('[CoachInvite] User not logged in, redirecting to sign up');
+          const redirectUrl = `/sign-up?coach=${referralCode}&redirect=${encodeURIComponent(router.asPath)}`;
+          console.log('[CoachInvite] Redirect URL:', redirectUrl);
+          router.push(redirectUrl);
+        } else {
+          console.log('[CoachInvite] Still waiting for auth to resolve, userLoading:', userLoading);
         }
-        
-        // User is logged in - show connection interface
-        setLoading(false);
         
       } catch (err) {
-        console.error('Error handling invite:', err);
+        console.error('[CoachInvite] Error in handleInvite:', err);
         setError('Failed to process invite. Please try again.');
-      } finally {
         setLoading(false);
       }
     };
 
+    console.log('[CoachInvite] About to call handleInvite');
     handleInvite();
-  }, [referralCode, currentUser, userLoading]);
+
+    return () => {
+      console.log('[CoachInvite] Cleanup function called');
+      isCancelled = true;
+    };
+  }, [referralCode, currentUser, userLoading, coachInfo, loading]);
 
   const connectToCoach = async () => {
     if (!referralCode || !currentUser || typeof referralCode !== 'string') return;
@@ -107,7 +152,7 @@ const CoachInvitePage: React.FC = () => {
     }
   };
 
-  if (loading || userLoading) {
+  if (loading) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
         <div className="text-center">
@@ -207,9 +252,7 @@ const CoachInvitePage: React.FC = () => {
               <div className="text-white font-medium">
                 {coachInfo ? `Coach ${coachInfo.referralCode}` : `Coach ${referralCode}`}
               </div>
-              <div className="text-zinc-400 text-sm">
-                {coachInfo?.userType === 'partner' ? 'Partner Coach' : 'Fitness Coach'}
-              </div>
+              
             </div>
           </div>
           <p className="text-zinc-300 text-sm">
