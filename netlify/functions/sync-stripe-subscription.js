@@ -34,16 +34,16 @@ async function getStripeClient(event) {
   return new Stripe(key);
 }
 
-function mapPriceIdToSubscriptionType(priceId) {
+function mapPriceIdToPlanType(priceId) {
   const LIVE_MONTHLY_PRICE_ID = 'price_1PDq26RobSf56MUOucDIKLhd';
   const LIVE_ANNUAL_PRICE_ID = 'price_1PDq3LRobSf56MUOng0UxhCC';
   const TEST_MONTHLY_PRICE_ID = 'price_1RMIUNRobSf56MUOfeB4gIot';
   const TEST_ANNUAL_PRICE_ID = 'price_1RMISFRobSf56MUOpcSoohjP';
   const map = {
-    [LIVE_MONTHLY_PRICE_ID]: 'Monthly Subscriber',
-    [LIVE_ANNUAL_PRICE_ID]: 'Annual Subscriber',
-    [TEST_MONTHLY_PRICE_ID]: 'Monthly Subscriber',
-    [TEST_ANNUAL_PRICE_ID]: 'Annual Subscriber',
+    [LIVE_MONTHLY_PRICE_ID]: 'pulsecheck-monthly',
+    [LIVE_ANNUAL_PRICE_ID]: 'pulsecheck-annual',
+    [TEST_MONTHLY_PRICE_ID]: 'pulsecheck-monthly',
+    [TEST_ANNUAL_PRICE_ID]: 'pulsecheck-annual',
   };
   return map[priceId] || undefined;
 }
@@ -95,17 +95,21 @@ exports.handler = async (event) => {
     // Compute latest current_period_end and status
     let latestEnd = null;
     let latestStatus = 'inactive';
-    let mappedType;
+    let planType;
     for (const s of subs) {
       const end = s.current_period_end ? new Date(s.current_period_end * 1000) : null;
       if (end && (!latestEnd || end > latestEnd)) {
         latestEnd = end;
         latestStatus = s.status || latestStatus;
-        mappedType = mapPriceIdToSubscriptionType(s.items?.data?.[0]?.price?.id);
+        planType = mapPriceIdToPlanType(s.items?.data?.[0]?.price?.id);
       }
     }
 
     const subRef = db.collection('subscriptions').doc(userId || subs[0].customer);
+    const nowSec = Math.floor(Date.now() / 1000);
+    const expSec = latestEnd ? Math.floor(latestEnd.getTime() / 1000) : null;
+
+    // Upsert base document with denormalized fields
     await subRef.set({
       userId: userId || null,
       username,
@@ -113,18 +117,37 @@ exports.handler = async (event) => {
       platform: 'web',
       source: 'stripe-sync',
       stripeCustomerId,
-      subscriptionType: mappedType,
-      status: latestStatus,
-      updatedAt: new Date(),
+      updatedAt: admin.firestore.Timestamp.fromMillis(nowSec * 1000),
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
 
-    if (latestEnd) {
-      await subRef.update({
-        expirationHistory: admin.firestore.FieldValue.arrayUnion(latestEnd)
-      });
+    // Append-only plans entry if we have an expiration and planType
+    if (expSec && planType) {
+      const snap = await subRef.get();
+      const data = snap.data() || {};
+      const plans = Array.isArray(data.plans) ? data.plans : [];
+      // Find latest plan of same type
+      const sameType = plans.filter(p => p && p.type === planType);
+      const latestSame = sameType.reduce((acc, p) => {
+        const e = typeof p.expiration === 'number' ? p.expiration : 0;
+        return !acc || e > acc ? e : acc;
+      }, 0);
+      if (Math.abs(latestSame - expSec) >= 1) {
+        // Different expiration – append new entry
+        await subRef.update({
+          plans: admin.firestore.FieldValue.arrayUnion({
+            type: planType,
+            expiration: expSec,
+            createdAt: nowSec,
+            updatedAt: nowSec,
+            platform: 'web',
+            productId: subs[0]?.items?.data?.[0]?.price?.id || null,
+          })
+        });
+      }
     }
 
-    return { statusCode: 200, body: JSON.stringify({ message: 'Synced', latestEnd, latestStatus, mappedType }) };
+    return { statusCode: 200, body: JSON.stringify({ message: 'Synced', latestEnd, latestStatus, planType }) };
   } catch (error) {
     console.error('[SyncStripe] Error:', error);
     return { statusCode: 500, body: JSON.stringify({ message: error.message || 'Server error' }) };

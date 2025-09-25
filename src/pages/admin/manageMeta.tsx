@@ -16,7 +16,7 @@ const pageFileNames = [
   'join-challenge', 'index', 'download', 'trim-video', 'create', 'rounds', 
   'privacyPolicy', 'terms', 'stacks', 'moves', 'update-challenge-status', 
   'user-dashboard', 'Support', 'connect', 'notification-test', 'creator', 'press', 'MoveAndFuelATL', 'investor', 'invest',
-  'winner--connect-account', 'winner--success', 'winner--error', 'coach', 'coach-onboard'
+  'winner--connect-account', 'winner--success', 'winner--error', 'coach', 'coach-onboard', 'sign-up'
 ].sort(); // Sort it once here
 
 // Helper functions to handle forward slashes in page IDs

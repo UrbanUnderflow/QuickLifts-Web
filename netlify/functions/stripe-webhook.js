@@ -202,31 +202,52 @@ async function handleSubscriptionCreated(subscription) {
     
     await db.collection('users').doc(userId).update(userUpdateData);
     
-    // Also create/update subscription document
-    const subscriptionData = {
-      userId: userId,
-      userEmail: userEmail,
-      username: username,
-      subscriptionType: subscriptionType,
+    // Append-only plans model
+    const subRef = db.collection('subscriptions').doc(userId);
+    await subRef.set({
+      userId,
+      userEmail,
+      username,
       platform: SubscriptionPlatform.Web,
       stripeSubscriptionId: subscription.id,
       stripeCustomerId: customerId,
-      status: subscription.status,
-      isTrialing: isTrialing,
-      trialEndDate: trialEnd,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp()
-    };
-    
-    // Store subscription using userId as the document ID
-    await db.collection('subscriptions').doc(userId).set(subscriptionData, { merge: true });
+    }, { merge: true });
 
-    // Append current_period_end to expirationHistory
-    if (subscription.current_period_end) {
-      const periodEnd = new Date(subscription.current_period_end * 1000);
-      await db.collection('subscriptions').doc(userId).update({
-        expirationHistory: admin.firestore.FieldValue.arrayUnion(periodEnd)
-      });
+    const priceId = subscription.items?.data?.[0]?.price?.id;
+    const toPlanType = (pid) => {
+      switch (pid) {
+        case 'price_1PDq26RobSf56MUOucDIKLhd': return 'pulsecheck-monthly';
+        case 'price_1PDq3LRobSf56MUOng0UxhCC': return 'pulsecheck-annual';
+        case 'price_1RMIUNRobSf56MUOfeB4gIot': return 'pulsecheck-monthly';
+        case 'price_1RMISFRobSf56MUOpcSoohjP': return 'pulsecheck-annual';
+        default: return null;
+      }
+    };
+    const planType = toPlanType(priceId);
+    const expSec = subscription.current_period_end || null;
+    if (planType && expSec) {
+      const snap = await subRef.get();
+      const data = snap.data() || {};
+      const plans = Array.isArray(data.plans) ? data.plans : [];
+      const sameType = plans.filter(p => p && p.type === planType);
+      const latestSame = sameType.reduce((acc, p) => {
+        const e = typeof p.expiration === 'number' ? p.expiration : 0;
+        return !acc || e > acc ? e : acc;
+      }, 0);
+      if (Math.abs(latestSame - expSec) >= 1) {
+        await subRef.update({
+          plans: admin.firestore.FieldValue.arrayUnion({
+            type: planType,
+            expiration: expSec,
+            createdAt: Math.floor(Date.now() / 1000),
+            updatedAt: Math.floor(Date.now() / 1000),
+            platform: 'web',
+            productId: priceId || null,
+          })
+        });
+      }
     }
     
     console.log(`[Webhook] Successfully processed subscription created for user: ${userId}`);
@@ -305,29 +326,51 @@ async function handleSubscriptionUpdated(subscription) {
     
     await db.collection('users').doc(userId).update(userUpdateData);
     
-    // Update subscription document
-    const subscriptionData = {
-      userId: userId,
-      userEmail: userEmail,
-      username: username,
-      subscriptionType: finalSubscriptionType,
+    // Append-only plan update on subscription doc
+    const subRef = db.collection('subscriptions').doc(userId);
+    await subRef.set({
+      userId,
+      userEmail,
+      username,
       platform: SubscriptionPlatform.Web,
       stripeSubscriptionId: subscription.id,
       stripeCustomerId: customerId,
-      status: subscription.status,
-      isTrialing: isTrialing,
-      trialEndDate: trialEnd,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp()
-    };
-    
-    await db.collection('subscriptions').doc(userId).update(subscriptionData);
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
 
-    // Append current_period_end to expirationHistory
-    if (subscription.current_period_end) {
-      const periodEnd = new Date(subscription.current_period_end * 1000);
-      await db.collection('subscriptions').doc(userId).update({
-        expirationHistory: admin.firestore.FieldValue.arrayUnion(periodEnd)
-      });
+    const toPlanType = (pid) => {
+      switch (pid) {
+        case 'price_1PDq26RobSf56MUOucDIKLhd': return 'pulsecheck-monthly';
+        case 'price_1PDq3LRobSf56MUOng0UxhCC': return 'pulsecheck-annual';
+        case 'price_1RMIUNRobSf56MUOfeB4gIot': return 'pulsecheck-monthly';
+        case 'price_1RMISFRobSf56MUOpcSoohjP': return 'pulsecheck-annual';
+        default: return null;
+      }
+    };
+    const priceId = subscription.items?.data?.[0]?.price?.id;
+    const planType = toPlanType(priceId);
+    const expSec = subscription.current_period_end || null;
+    if (planType && expSec) {
+      const snap = await subRef.get();
+      const data = snap.data() || {};
+      const plans = Array.isArray(data.plans) ? data.plans : [];
+      const sameType = plans.filter(p => p && p.type === planType);
+      const latestSame = sameType.reduce((acc, p) => {
+        const e = typeof p.expiration === 'number' ? p.expiration : 0;
+        return !acc || e > acc ? e : acc;
+      }, 0);
+      if (Math.abs(latestSame - expSec) >= 1) {
+        await subRef.update({
+          plans: admin.firestore.FieldValue.arrayUnion({
+            type: planType,
+            expiration: expSec,
+            createdAt: Math.floor(Date.now() / 1000),
+            updatedAt: Math.floor(Date.now() / 1000),
+            platform: 'web',
+            productId: priceId || null,
+          })
+        });
+      }
     }
     
     console.log(`[Webhook] Successfully processed subscription updated for user: ${userId}`);

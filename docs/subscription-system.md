@@ -4,13 +4,13 @@ This document describes the complete subscription system across the Pulse Web ap
 
 ### Goals
 - Drive access by a canonical Firestore record at `subscriptions/{userId}`.
-- Grant access if the subscription record has a non-expired latest expiration.
+- Grant access if the subscription record has a non-expired latest expiration derived from the append-only `plans` array.
 - If the record is expired/missing, refresh from providers (RevenueCat for iOS, Stripe for web) and re-check.
-- Keep a full history of expirations for audit/debug.
+- Maintain an append-only plan history for audit/debug. Never edit an existing plan entry.
 
 ---
 
-## Firestore Data Model
+## Firestore Data Model (Append-only Plans)
 
 Collection: `subscriptions`
 - Document ID: `userId`
@@ -22,53 +22,62 @@ Collection: `subscriptions`
   "username": "tester32",
   "userEmail": "tester32@gmail.com",
   "platform": "ios" | "web",
-  "subscriptionType": "Monthly Subscriber" | "Annual Subscriber" | "Unsubscribed",
-  "status": "active" | "trialing" | "canceled" | "incomplete" | "incomplete_expired" | "past_due" | "unpaid" | "unknown",
-  "expirationHistory": [ 1730851200, 1733533200 ],
-  "trialEndDate": 1730937600,
+  "plans": [
+    {
+      "type": "pulsecheck-monthly",
+      "expiration": 1733533200,
+      "createdAt": 1730090400,
+      "updatedAt": 1732678800,
+      "platform": "web",
+      "productId": "price_..."
+    },
+    {
+      "type": "pulsecheck-annual",
+      "expiration": 1765069200,
+      "createdAt": 1732678800,
+      "updatedAt": 1732678800,
+      "platform": "ios",
+      "productId": "pc_1y"
+    }
+  ],
   "createdAt": 1730090400,
   "updatedAt": 1732678800
 }
 ```
 
 Notes:
-- `expirationHistory` is an array of Unix seconds (ints) for historical/current period ends (Stripe) and RevenueCat expirations (iOS). The system treats the latest value as the canonical expiration.
-- `trialEndDate` is optional; if present it participates in determining the latest expiration.
+- `plans` is append-only. If a new expiration for the same plan type occurs, a new entry is appended. If expiration is identical to the latest of that type, do nothing.
 - `username` and `userEmail` are denormalized for search.
-- All timestamps are saved as Unix seconds (see `docs/DateFormatting.md`).
+- All timestamps in the document are Unix seconds.
 
 Latest expiration logic (shared):
-- Candidates = `expirationHistory` ∪ `{ trialEndDate if present }`.
-- If no candidates: state is "unknown".
-- If `max(candidates) > now`: state is "active"; else state is "expired".
+- If `plans` is empty → state is "unknown"; trigger provider syncs to rebuild.
+- Else compute `latest = max(plans[*].expiration)` and state is `latest > now`.
 
 ---
 
-## Provider Writes → Firestore
+## Provider Writes → Firestore (Append-only Plans)
 
 Stripe (Web):
-- Paths that set/append data:
-  - `netlify/functions/verify-subscription.js` (checkout completion) → sets `subscriptions/{userId}` and appends `current_period_end` to `expirationHistory`.
-  - `netlify/functions/verify-subscription-simple.js` → same as above for simplified flow.
-  - `netlify/functions/stripe-webhook.js` → on `customer.subscription.created/updated/deleted` updates `subscriptions/{userId}` and appends `current_period_end` when available.
-  - `netlify/functions/sync-stripe-subscription.js` → on-demand sync to list Stripe subs and append the latest `current_period_end`.
+- Writers upsert `subscriptions/{userId}` and append to `plans`:
+  - `netlify/functions/verify-subscription.js` (checkout completion) → append `{ type, expiration, productId, platform: 'web' }`.
+  - `netlify/functions/verify-subscription-simple.js` → same as above.
+  - `netlify/functions/stripe-webhook.js` → on `customer.subscription.created/updated` append if expiration changed; on `deleted` no plan append.
+  - `netlify/functions/sync-stripe-subscription.js` → on-demand sync; append latest `{ type, expiration }`.
 
 RevenueCat (iOS):
-- `netlify/functions/sync-revenuecat-subscription.js` → on-demand sync to fetch latest entitlement expiration and append to `subscriptions/{userId}`.
+- `netlify/functions/sync-revenuecat-subscription.js` → on-demand sync to fetch latest entitlement expiration and append to `plans` with `{ type (pc_1w/pc_1m/pc_1y → pulsecheck-*), expiration, platform: 'ios' }`.
 
-Historical Backfills/Migrations:
-- `netlify/functions/migrate-expiration-history.js`
-  - Reads Stripe invoices/subscriptions and appends every invoice period end + current period end for users with `stripeCustomerId`.
-- `netlify/functions/backfill-subscription-user-fields.js`
-  - Denormalizes `username` and `userEmail` onto `subscriptions/{userId}` from `users/{userId}`.
+Legacy Backfills (Deprecated):
+- Any tooling referencing `expirationHistory` is deprecated. Use provider syncs to rebuild `plans` instead.
 
 ---
 
-## Runtime Access Checks
+## Runtime Access Checks (Plans)
 
 ### Web
 - `src/api/firebase/subscription/service.ts`
-  - `getStatus(userId)`: reads `subscriptions/{userId}`, computes latest expiration.
+  - `getStatus(userId)`: reads `plans` on `subscriptions/{userId}`, computes latest expiration.
   - `ensureActiveOrSync(userId)`: if inactive/unknown → calls both syncs in parallel:
     - `/.netlify/functions/sync-revenuecat-subscription`
     - `/.netlify/functions/sync-stripe-subscription`
@@ -104,13 +113,13 @@ Path: `/admin/subscriptions`
 
 ---
 
-## Operational Guidance
+## Operational Guidance (Plans)
 
 When a user reports access issues:
-1. Check `subscriptions/{userId}` in Firestore. If no expirations, run a targeted sync:
+1. Check `subscriptions/{userId}` in Firestore. If `plans` is empty, run a targeted sync:
    - POST `sync-revenuecat-subscription` with `{ userId }` (iOS users)
    - POST `sync-stripe-subscription` with `{ userId }` (web users)
-2. Confirm that `expirationHistory` now has a recent value and `updatedAt` moved forward.
+2. Confirm that `plans` now contains a recent expiration and `updatedAt` moved forward.
 3. On the web app, the next page load will re-check and grant access if active. iOS boot will do the same.
 
 Backfills:
@@ -232,7 +241,7 @@ flowchart LR
 ```
 
 Legend:
-- All writers merge into `subscriptions/{userId}` and may append to `expirationHistory`.
+- All writers merge into `subscriptions/{userId}` and append to `plans` (append-only).
 
 
 

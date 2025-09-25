@@ -8,9 +8,7 @@ const Coach: React.FC = () => {
   const [currentTestimonial, setCurrentTestimonial] = useState(0);
 
   const handleRegister = () => {
-    // For now, redirect to the main site where they can sign up through the normal flow
-    // TODO: Create a dedicated coach sign-up flow or handle coach type in SignInModal
-    router.push('/');
+    router.push('/coach/sign-up');
   };
 
   // Auto-rotate testimonials

@@ -181,7 +181,7 @@ exports.handler = async (event) => {
       return { statusCode: 200, body: JSON.stringify({ message: 'No expiration found from any RevenueCat project' }) };
     }
 
-    // Upsert iOS subscription doc for this user and append expirationHistory
+    // Upsert iOS subscription doc for this user and append to plans (append-only)
     // Use userId as the subscription document ID
     const subRef = db.collection('subscriptions').doc(userId);
     // Read user for denormalized fields
@@ -195,6 +195,9 @@ exports.handler = async (event) => {
         username = ud?.username || null;
       }
     } catch (_) {}
+    const nowSec = Math.floor(Date.now() / 1000);
+    const expSec = Math.floor(latestExpiration.getTime() / 1000);
+
     await subRef.set({
       userId,
       userEmail,
@@ -202,12 +205,45 @@ exports.handler = async (event) => {
       platform: 'ios',
       source: 'revenuecat',
       sourceProject: latestSourceProject,
-      updatedAt: new Date(),
+      updatedAt: admin.firestore.Timestamp.fromMillis(nowSec * 1000),
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
 
-    await subRef.update({
-      expirationHistory: admin.firestore.FieldValue.arrayUnion(latestExpiration)
-    });
+    // Determine plan type from product identifier if available in RC data
+    let planType = null;
+    try {
+      const customer = rcJson?.customer || rcJson?.subscriber || rcJson;
+      const entitlements = customer?.entitlements || {};
+      const anyEnt = Object.values(entitlements)[0] || {};
+      const productId = anyEnt?.product_identifier || anyEnt?.productId || '';
+      if (productId === 'pc_1w') planType = 'pulsecheck-weekly';
+      else if (productId === 'pc_1m') planType = 'pulsecheck-monthly';
+      else if (productId === 'pc_1y') planType = 'pulsecheck-annual';
+    } catch (_) {}
+
+    // Append to plans only if we determined a planType
+    if (planType) {
+      const snap = await subRef.get();
+      const data = snap.data() || {};
+      const plans = Array.isArray(data.plans) ? data.plans : [];
+      const sameType = plans.filter(p => p && p.type === planType);
+      const latestSame = sameType.reduce((acc, p) => {
+        const e = typeof p.expiration === 'number' ? p.expiration : 0;
+        return !acc || e > acc ? e : acc;
+      }, 0);
+      if (Math.abs(latestSame - expSec) >= 1) {
+        await subRef.update({
+          plans: admin.firestore.FieldValue.arrayUnion({
+            type: planType,
+            expiration: expSec,
+            createdAt: nowSec,
+            updatedAt: nowSec,
+            platform: 'ios',
+            productId: null,
+          })
+        });
+      }
+    }
 
     return { statusCode: 200, body: JSON.stringify({ message: 'Synced', latestExpiration, sourceProject: latestSourceProject }) };
   } catch (error) {

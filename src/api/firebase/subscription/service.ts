@@ -6,6 +6,16 @@ export interface SubscriptionDoc {
   id: string;
   userId: string;
   platform?: string;
+  // New append-only plans array (authoritative)
+  plans?: Array<{
+    type: string; // e.g., pulsecheck-weekly | pulsecheck-monthly | pulsecheck-annual | legacy types
+    expiration: number; // seconds since epoch
+    createdAt?: number; // seconds since epoch
+    updatedAt?: number; // seconds since epoch
+    platform?: 'web' | 'ios';
+    productId?: string;
+  }>;
+  // Legacy fields kept for backward compatibility in reads (will be ignored if plans exist)
   status?: string;
   isTrialing?: boolean;
   trialEndDate?: any;
@@ -20,20 +30,31 @@ export interface SubscriptionStatusResult {
 }
 
 function getLatestExpirationFromDoc(docData: SubscriptionDoc): Date | null {
-  const expirations: Date[] = [];
+  // Prefer new plans array
+  if (Array.isArray(docData.plans) && docData.plans.length > 0) {
+    const latestPlan = docData.plans.reduce<null | { exp: number }>((acc, p) => {
+      const expSec = typeof p.expiration === 'number' ? p.expiration : NaN;
+      if (!expSec || isNaN(expSec)) return acc;
+      if (!acc || expSec > acc.exp) return { exp: expSec };
+      return acc;
+    }, null);
+    if (latestPlan && latestPlan.exp) {
+      return new Date(latestPlan.exp * 1000);
+    }
+    // fallthrough to legacy if no valid expiration found
+  }
 
+  // Legacy fallback (to be phased out): expirationHistory/trialEndDate
+  const expirations: Date[] = [];
   if (Array.isArray(docData.expirationHistory)) {
     for (const item of docData.expirationHistory) {
       expirations.push(convertFirestoreTimestamp(item));
     }
   }
-
   if (docData.trialEndDate) {
     expirations.push(convertFirestoreTimestamp(docData.trialEndDate));
   }
-
   if (expirations.length === 0) return null;
-
   return expirations.reduce((max, cur) => (cur > max ? cur : max));
 }
 
@@ -63,7 +84,7 @@ async function computeStatusFromSubscriptions(userId: string): Promise<Subscript
 
   const now = new Date();
   if (!latest) {
-    console.log('[subscriptionService] computeStatusFromSubscriptions no expiration');
+    console.log('[subscriptionService] computeStatusFromSubscriptions no expiration (no plans)');
     return { isActive: false, latestExpiration: null };
   }
 
@@ -114,8 +135,9 @@ export const subscriptionService = {
   ensureActiveOrSync: async (userId: string): Promise<SubscriptionStatusResult> => {
     console.log('[subscriptionService] ensureActiveOrSync start', { userId });
     const status = await computeStatusFromSubscriptions(userId);
+    // If we already have plans with active expiration, return
     if (status.isActive) return status;
-    // Run RC and Stripe sync in parallel; then recompute
+    // Otherwise, attempt to rebuild plans from providers and recompute
     await Promise.all([
       syncWithRevenueCat(userId),
       syncWithStripe(userId),
