@@ -12,7 +12,7 @@ import { FaGoogle, FaApple } from 'react-icons/fa';
 
 const SignUpPage: React.FC = () => {
   const router = useRouter();
-  const { type } = router.query; // May be undefined when accessed via /coach/sign-up
+  const { type } = router.query; // Get the type parameter (e.g., 'coach')
   
   const [formData, setFormData] = useState({
     email: '',
@@ -37,8 +37,7 @@ const SignUpPage: React.FC = () => {
     username?: string;
   }>({});
 
-  const pathIndicatesCoach = typeof window !== 'undefined' ? (window.location.pathname.startsWith('/coach')) : false;
-  const isCoachSignUp = type === 'coach' || pathIndicatesCoach;
+  const isCoachSignUp = type === 'coach';
 
   // Clear error when user starts typing
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -124,7 +123,8 @@ const SignUpPage: React.FC = () => {
         try {
           const imageUrl = await firebaseStorageService.uploadImage(
             profileImage,
-            UploadImageType.Profile
+            UploadImageType.ProfileImage,
+            firebaseUser.uid
           );
           profileImageData = {
             imageUrl,

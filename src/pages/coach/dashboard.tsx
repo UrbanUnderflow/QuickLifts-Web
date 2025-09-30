@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
+import { signOut } from 'firebase/auth';
+import { auth } from '../../api/firebase/config';
 import { useUser, useUserLoading } from '../../hooks/useUser';
 import { coachService } from '../../api/firebase/coach';
 import { CoachModel } from '../../types/Coach';
@@ -18,6 +20,18 @@ const CoachDashboard: React.FC = () => {
   const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
   const [showQrCode, setShowQrCode] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
+  
+  const handleSignOut = async () => {
+    try {
+      await signOut(auth);
+      try {
+        localStorage.removeItem('pulse_has_seen_marketing');
+      } catch (_) {}
+      router.replace('/');
+    } catch (err) {
+      console.error('Error signing out:', err);
+    }
+  };
 
   useEffect(() => {
     const fetchCoachProfile = async () => {
@@ -106,6 +120,12 @@ const CoachDashboard: React.FC = () => {
           <div className="text-right">
             <div className="text-sm text-zinc-400">Referral Code</div>
             <div className="text-xl font-bold text-[#E0FE10]">{coachProfile?.referralCode}</div>
+            <button
+              onClick={handleSignOut}
+              className="mt-3 bg-zinc-800 text-white px-4 py-2 rounded-lg border border-zinc-700 hover:bg-zinc-700 transition-colors"
+            >
+              Sign Out
+            </button>
           </div>
         </div>
 

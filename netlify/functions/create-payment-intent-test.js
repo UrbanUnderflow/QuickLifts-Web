@@ -40,7 +40,17 @@ const handler = async (event) => {
     const data = JSON.parse(event.body);
     console.log('Parsed request data:', data);
     
-    const { challengeId, amount, currency, ownerId, buyerId } = data;
+    const { challengeId, amount, currency } = data;
+    // Normalize ownerId: can come in as string, array, or object/hash from certain clients
+    let ownerId = data.ownerId;
+    if (Array.isArray(ownerId)) {
+      ownerId = ownerId[0];
+    } else if (ownerId && typeof ownerId === 'object') {
+      // Some clients may send a hash-like object; pick first value
+      const firstKey = Object.keys(ownerId)[0];
+      ownerId = ownerId[firstKey];
+    }
+    const buyerId = data.buyerId;
     console.log('Extracted parameters:', { challengeId, amount, currency, ownerId, buyerId });
 
     if (!challengeId || !amount || !currency) {

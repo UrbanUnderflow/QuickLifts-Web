@@ -874,7 +874,8 @@ const CheckoutForm = ({ challengeId, amount, currency, isApplePayAvailable, chal
     setProcessing(true);
     
     try {
-      const ownerId = challengeData.collection.challenge.ownerId || '';
+      const rawOwnerId = challengeData.collection.challenge.ownerId;
+      const ownerId = Array.isArray(rawOwnerId) ? (rawOwnerId[0] || '') : (rawOwnerId || '');
       console.log('Processing payment for challenge:', {
         challengeId,
         ownerId,
