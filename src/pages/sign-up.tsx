@@ -6,7 +6,7 @@ import { doc, setDoc } from 'firebase/firestore';
 import { auth, db } from '../api/firebase/config';
 import { User, SubscriptionType, SubscriptionPlatform, UserLevel } from '../api/firebase/user';
 import { userService } from '../api/firebase/user';
-import { firebaseStorageService, UploadImageType } from '../api/firebase/storage/service';
+import { firebaseStorageService } from '../api/firebase/storage/service';
 import { Camera, Eye, EyeOff, Loader2, CheckCircle, AlertTriangle } from 'lucide-react';
 import { FaGoogle, FaApple } from 'react-icons/fa';
 
@@ -121,13 +121,14 @@ const SignUpPage: React.FC = () => {
       if (profileImage) {
         setIsImageUploading(true);
         try {
-          const imageUrl = await firebaseStorageService.uploadImage(
+          // Upload directly to profile_images/{uid}/...
+          const storagePath = `profile_images/${firebaseUser.uid}/${Date.now()}_${profileImage.name}`;
+          const { downloadURL } = await firebaseStorageService.uploadFileToStorage(
             profileImage,
-            UploadImageType.ProfileImage,
-            firebaseUser.uid
+            storagePath
           );
           profileImageData = {
-            imageUrl,
+            profileImageURL: downloadURL,
             imageOffsetWidth: 0,
             imageOffsetHeight: 0
           };
@@ -154,7 +155,7 @@ const SignUpPage: React.FC = () => {
         bodyWeight: [],
         macros: {},
         profileImage: profileImageData || {
-          imageUrl: '',
+          profileImageURL: '',
           imageOffsetWidth: 0,
           imageOffsetHeight: 0
         },
