@@ -188,13 +188,12 @@ const handler = async (event, context) => {
       ownerAmount
     });
 
-    // Create payment intent with transfer to trainer's connected account
+    // Create payment intent with destination charge + application fee (Stripe will route remainder to destination)
     const paymentIntent = await stripe.paymentIntents.create({
         amount: amount,
         currency: 'usd',
         transfer_data: {
-            destination: connectedAccountId,
-            amount: ownerAmount,
+            destination: connectedAccountId
         },
         application_fee_amount: platformFee,
         metadata: {
