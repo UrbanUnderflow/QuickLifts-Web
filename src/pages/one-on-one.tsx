@@ -7,7 +7,7 @@ import Meta from '../components/Meta';
 const CLIENT_STEPS = [
   {
     title: "Download & Create Account",
-    description: "Get started with Pulse by downloading the app and setting up your account. Your trainer will guide you through this process, but having your account ready ensures a smooth start to your fitness journey.",
+    description: "",
     detailedSteps: [
       "Download Pulse from the App Store",
       "Sign up using your email or Apple ID",
@@ -19,12 +19,11 @@ const CLIENT_STEPS = [
     mobileImage: "/step1Mobile.png"
   },
   {
-    title: "Start Your Free Trial",
-    description: "Activate your free trial to access all of Pulse's premium features. This gives you full access to your trainer's custom workouts, progress tracking, and communication tools during your trial period.",
+    title: "Get Pulse Subscription",
+    description: "",
     detailedSteps: [
-      "Navigate to subscription page",
-      "Select 'Start Free Trial' or 'Subscribe Now' if you've used the trial already.",
-      "Complete the trial activation",
+      "After register, you'll see the subscription options",
+      "Select 'Start Free Trial' or 'Subscribe Now' if you haven't subscribed through your trainer already.",
       "Confirm access to the dashboard",
     ],
     image: "/step2Mobile.png",
@@ -32,10 +31,10 @@ const CLIENT_STEPS = [
   },
   {
     title: "Join the Round",
-    description: "Your trainer will send you an invitation to join their program or Round. This connection allows them to create personalized workouts for you and track your progress throughout your fitness journey.",
+    description: "You may have completed this step through your Round host.",
     detailedSteps: [
       "Join the round",
-      "Make Payment if payment is required",
+      "Make Payment if payment is required.",
       "Once successful, return to the Pulse App"
     ],
     image: "/step3Mobile.png",
@@ -43,7 +42,7 @@ const CLIENT_STEPS = [
   },
   {
     title: "Review Your Round Details",
-    description: "Your trainer will create personalized workout plans (called Stacks) specifically designed for your goals and fitness level. These will appear in your Rounds section, ready for you to start when convenient.",
+    description: "Your trainer will create personalized workout plans (called Stacks) specifically designed for your goals.",
     detailedSteps: [
       "Open the Pulse app",
       "Scroll to the Active Rounds section",
@@ -55,7 +54,7 @@ const CLIENT_STEPS = [
   },
   {
     title: "Start Your First Workout",
-    description: "Time to get moving! Select a Stack from your plan and begin your workout. The app will guide you through each exercise with video demonstrations and timing features to keep you on track.",
+    description: "Time to get moving! Select a Stack from your plan and begin your workout.",
     detailedSteps: [
       "Select a Stack from your assigned plan",
       "Tap 'Start Workout' to begin",
@@ -67,7 +66,7 @@ const CLIENT_STEPS = [
   },
   {
     title: "Track Your Progress",
-    description: "As you complete each exercise, log your reps, weight, and any modifications. This data helps your trainer adjust your program and track your improvements over time.",
+    description: "As you complete each exercise, log your reps, weight, and any modifications. This data helps your trainer adjust your program over time.",
     detailedSteps: [
       "Review recommended weight",
       "Select \"I did recommended weight\"",
@@ -81,7 +80,7 @@ const CLIENT_STEPS = [
   },
   {
     title: "Complete Your Workout",
-    description: "Finish strong by completing your workout summary. This helps your trainer understand how the session went and allows you to reflect on your performance and progress.",
+    description: "Finish strong by completing your workout summary. ",
     detailedSteps: [
       "Review your workout summary",
       "Rate your overall workout experience",
@@ -106,7 +105,7 @@ const CLIENT_STEPS = [
   },
   {
     title: "Log your food",
-    description: "Track your nutrition by logging your meals throughout the day. This helps your trainer understand your eating habits and provide better guidance for reaching your fitness goals.",
+    description: "Track your nutrition by logging your meals throughout the day.",
     detailedSteps: [
       "Tap the macro card in the Round",
       "Scroll down and press capture food",
@@ -203,8 +202,8 @@ const OneOnOneGuide = () => {
             <h1 className="text-white text-5xl sm:text-7xl font-bold mb-8">
               Train with <span className="text-[#E0FE10]">Pulse</span>
             </h1>
-            <p className="text-zinc-400 text-xl leading-relaxed">
-              Your personal trainer has everything set up for your success. This comprehensive guide will help you navigate the app, understand your workouts, and make the most of your one-on-one training experience.
+            <p className="text-zinc-400 text-xl leading-relaxed pl-8">
+              Your personal trainer has everything set up for your success. Follow this guide to get started.
             </p>
           </div>
 
@@ -224,9 +223,6 @@ const OneOnOneGuide = () => {
             <h2 className="text-white text-2xl sm:text-3xl font-bold mb-4">
               Everything You Need to Know
             </h2>
-            <p className="text-zinc-400 text-lg">
-              From your first download to completing workouts and tracking progress, we'll guide you through every step of your fitness journey with your personal trainer.
-            </p>
           </div>
 
           {/* Arrow indicator */}
@@ -253,10 +249,27 @@ const OneOnOneGuide = () => {
         <div className="max-w-5xl mx-auto px-4 mb-20">
           <h2 className="text-center text-white text-3xl font-bold mb-16">What Makes Pulse Special</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* New tile: Video Demonstrations */}
+            <div className="group relative overflow-hidden bg-zinc-900/80 rounded-xl p-6 transition-all hover:bg-zinc-800 hover:shadow-lg hover:shadow-[#E0FE10]/10 border border-[#E0FE10] transform hover:-translate-y-1 duration-300">
+              <div className="relative z-10">
+                <h3 className="text-[#E0FE10] text-2xl font-bold mb-3">Video Demonstrations</h3>
+                <p className="text-zinc-400 mb-4">Every exercise in your plan includes a short video demo performed by experts and real people just like you.</p>
+                <span className="text-zinc-300 group-hover:text-white transition-colors inline-flex items-center gap-1">
+                  Learn Proper Form
+                  <svg className="w-4 h-4 transform group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                  </svg>
+                </span>
+              </div>
+              <div className="absolute top-4 right-4">
+                <Play className="w-8 h-8 text-[#E0FE10] opacity-40" />
+              </div>
+            </div>
+
             <div className="group relative overflow-hidden bg-zinc-900/80 rounded-xl p-6 transition-all hover:bg-zinc-800 hover:shadow-lg hover:shadow-[#E0FE10]/10 border border-[#E0FE10] transform hover:-translate-y-1 duration-300">
               <div className="relative z-10">
                 <h3 className="text-[#E0FE10] text-2xl font-bold mb-3">Personal Training</h3>
-                <p className="text-zinc-400 mb-4">Work directly with your trainer through custom workout plans designed specifically for your goals and fitness level.</p>
+                <p className="text-zinc-400 mb-4">Work directly with your trainer, conent creators, or friends to be challenged by real full workouts.</p>
                 <span className="text-zinc-300 group-hover:text-white transition-colors inline-flex items-center gap-1">
                   Personalized Programs
                   <svg className="w-4 h-4 transform group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -272,7 +285,7 @@ const OneOnOneGuide = () => {
             <div className="group relative overflow-hidden bg-zinc-900/80 rounded-xl p-6 transition-all hover:bg-zinc-800 hover:shadow-lg hover:shadow-[#E0FE10]/10 border border-[#E0FE10]/70 transform hover:-translate-y-1 duration-300">
               <div className="relative z-10">
                 <h3 className="text-[#E0FE10]/70 text-2xl font-bold mb-3">Progress Tracking</h3>
-                <p className="text-zinc-400 mb-4">Log your workouts, track improvements, and share progress with your trainer for continuous program optimization.</p>
+                <p className="text-zinc-400 mb-4">Log your workouts, track improvements, and share progress.</p>
                 <span className="text-zinc-300 group-hover:text-white transition-colors inline-flex items-center gap-1">
                   Track Your Growth
                   <svg className="w-4 h-4 transform group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
