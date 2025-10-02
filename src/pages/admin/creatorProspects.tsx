@@ -83,6 +83,8 @@ const CreatorProspectsPage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<ProspectStatus | 'all'>('all');
   const [priorityFilter, setPriorityFilter] = useState<ProspectPriority | 'all'>('all');
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [editing, setEditing] = useState<CreatorProspect | null>(null);
 
   const filtered = useMemo(() => {
     let rows = prospects;
@@ -143,6 +145,22 @@ const CreatorProspectsPage: React.FC = () => {
       updatedAt: new Date()
     });
     setProspects(prev => prev.map(p => (p.id === row.id ? { ...p, status } : p)));
+  };
+
+  const openDetail = (row: CreatorProspect) => {
+    setEditing(row);
+    setDetailOpen(true);
+  };
+
+  const saveEdit = async () => {
+    if (!editing?.id) return;
+    const { id, ...rest } = editing;
+    await updateDoc(doc(db, 'creator-prospects', id), {
+      ...rest,
+      updatedAt: new Date()
+    } as any);
+    setProspects(prev => prev.map(p => (p.id === id ? { ...p, ...rest } : p)));
+    setDetailOpen(false);
   };
 
   return (
@@ -242,12 +260,7 @@ const CreatorProspectsPage: React.FC = () => {
                 )}
                 {!loading && filtered.map(row => {
                   const updated = convertFirestoreTimestamp(row.updatedAt as any);
-                  const platformBadges = [
-                    row.platforms.instagram && 'IG',
-                    row.platforms.youtube && 'YT',
-                    row.platforms.tiktok && 'TT',
-                    row.platforms.twitter && 'X'
-                  ].filter(Boolean).join(' · ');
+                  const p = row.platforms || {};
                   return (
                     <tr key={row.id} className="border-b border-zinc-800 hover:bg-zinc-800/40">
                       <td className="p-3">
@@ -256,7 +269,23 @@ const CreatorProspectsPage: React.FC = () => {
                       </td>
                       <td className="p-3 text-zinc-300">{row.niche}</td>
                       <td className="p-3 text-zinc-300">{row.country}</td>
-                      <td className="p-3 text-zinc-300">{platformBadges || '—'}</td>
+                      <td className="p-3 text-zinc-300">
+                        <div className="flex flex-wrap gap-2">
+                          {p.instagram && (
+                            <a className="px-2 py-1 text-xs rounded-full bg-pink-500/10 text-pink-400 border border-pink-500/30 hover:bg-pink-500/20" href={p.instagram} target="_blank" rel="noopener noreferrer">IG</a>
+                          )}
+                          {p.youtube && (
+                            <a className="px-2 py-1 text-xs rounded-full bg-red-500/10 text-red-400 border border-red-500/30 hover:bg-red-500/20" href={p.youtube} target="_blank" rel="noopener noreferrer">YT</a>
+                          )}
+                          {p.tiktok && (
+                            <a className="px-2 py-1 text-xs rounded-full bg-white/5 text-white border border-white/20 hover:bg-white/10" href={p.tiktok} target="_blank" rel="noopener noreferrer">TT</a>
+                          )}
+                          {p.twitter && (
+                            <a className="px-2 py-1 text-xs rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/30 hover:bg-blue-500/20" href={p.twitter} target="_blank" rel="noopener noreferrer">X</a>
+                          )}
+                          {!p.instagram && !p.youtube && !p.tiktok && !p.twitter && '—'}
+                        </div>
+                      </td>
                       <td className="p-3">
                         <span className={`text-xs px-2 py-1 rounded-full ${row.priority === 'high' ? 'bg-red-500/10 text-red-400' : row.priority === 'low' ? 'bg-zinc-700 text-zinc-200' : 'bg-yellow-500/10 text-yellow-400'}`}>{row.priority}</span>
                       </td>
@@ -265,13 +294,52 @@ const CreatorProspectsPage: React.FC = () => {
                           {statuses.map(s=> <option key={s.value} value={s.value}>{s.label}</option>)}
                         </select>
                       </td>
-                      <td className="p-3 text-zinc-400">{formatDate(updated)}</td>
+                      <td className="p-3 text-zinc-400 flex items-center justify-between">
+                        <span>{formatDate(updated)}</span>
+                        <button onClick={() => openDetail(row)} className="ml-3 px-3 py-1 rounded-md bg-zinc-800 border border-zinc-700 text-zinc-300 hover:bg-zinc-700">View</button>
+                      </td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
           </div>
+
+          {/* Detail/Edit Modal */}
+          {detailOpen && editing && (
+            <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setDetailOpen(false)}>
+              <div className="bg-zinc-900 border border-zinc-800 rounded-xl w-full max-w-2xl" onClick={e=>e.stopPropagation()}>
+                <div className="p-4 border-b border-zinc-800 flex items-center justify-between">
+                  <h3 className="text-xl font-semibold">Edit Prospect</h3>
+                  <button className="text-zinc-400 hover:text-white" onClick={() => setDetailOpen(false)}>✕</button>
+                </div>
+                <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <input className="bg-zinc-800 rounded-lg px-3 py-2" placeholder="Display Name" value={editing.displayName} onChange={e=>setEditing({...editing, displayName:e.target.value})} />
+                  <input className="bg-zinc-800 rounded-lg px-3 py-2" placeholder="@handle" value={editing.handle} onChange={e=>setEditing({...editing, handle:e.target.value})} />
+                  <input className="bg-zinc-800 rounded-lg px-3 py-2" placeholder="Email" value={editing.email} onChange={e=>setEditing({...editing, email:e.target.value})} />
+                  <input className="bg-zinc-800 rounded-lg px-3 py-2" placeholder="Niche" value={editing.niche} onChange={e=>setEditing({...editing, niche:e.target.value})} />
+                  <input className="bg-zinc-800 rounded-lg px-3 py-2" placeholder="Country" value={editing.country} onChange={e=>setEditing({...editing, country:e.target.value})} />
+                  <input className="bg-zinc-800 rounded-lg px-3 py-2" placeholder="Lead Source" value={editing.leadSource} onChange={e=>setEditing({...editing, leadSource:e.target.value})} />
+
+                  <input className="bg-zinc-800 rounded-lg px-3 py-2 md:col-span-2" placeholder="Instagram URL" value={editing.platforms?.instagram || ''} onChange={e=>setEditing({...editing, platforms:{...editing.platforms, instagram:e.target.value}})} />
+                  <input className="bg-zinc-800 rounded-lg px-3 py-2" placeholder="YouTube URL" value={editing.platforms?.youtube || ''} onChange={e=>setEditing({...editing, platforms:{...editing.platforms, youtube:e.target.value}})} />
+                  <input className="bg-zinc-800 rounded-lg px-3 py-2" placeholder="TikTok URL" value={editing.platforms?.tiktok || ''} onChange={e=>setEditing({...editing, platforms:{...editing.platforms, tiktok:e.target.value}})} />
+
+                  <select className="bg-zinc-800 rounded-lg px-3 py-2" value={editing.priority} onChange={e=>setEditing({...editing!, priority: e.target.value as ProspectPriority})}>
+                    {priorities.map(p=> <option key={p.value} value={p.value}>{p.label}</option>)}
+                  </select>
+                  <select className="bg-zinc-800 rounded-lg px-3 py-2" value={editing.status} onChange={e=>setEditing({...editing!, status: e.target.value as ProspectStatus})}>
+                    {statuses.map(s=> <option key={s.value} value={s.value}>{s.label}</option>)}
+                  </select>
+                  <textarea className="bg-zinc-800 rounded-lg px-3 py-3 md:col-span-2 h-32 resize-y" placeholder="Notes" value={editing.notes} onChange={e=>setEditing({...editing, notes:e.target.value})} />
+                </div>
+                <div className="p-4 border-t border-zinc-800 flex justify-end gap-3">
+                  <button className="px-4 py-2 rounded-md bg-zinc-800 border border-zinc-700 text-zinc-300" onClick={()=>setDetailOpen(false)}>Close</button>
+                  <button className="px-4 py-2 rounded-md bg-[#E0FE10] text-black font-semibold hover:bg-lime-400" onClick={saveEdit}>Save Changes</button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </AdminRouteGuard>
