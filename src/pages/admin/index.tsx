@@ -144,6 +144,12 @@ const adminCardsData = [
     link: "/admin/manageMeta"
   },
   {
+    title: "Creator Prospects",
+    description: "Track and manage inbound/outbound creator opportunities and onboarding.",
+    icon: <Users2 className="w-5 h-5" />,
+    link: "/admin/creatorProspects"
+  },
+  {
     title: "Daily Reflection",
     description: "Create and manage daily reflection prompts for users.",
     icon: <Edit3 className="w-5 h-5" />,
