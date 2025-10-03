@@ -321,13 +321,22 @@ const SignInModal: React.FC<SignInModalProps> = ({
           }
           
           userService.nonUICurrentUser = firestoreUser; // Use nonUICurrentUser
-   
-          // Check subscription status first
+
+          // If missing username, start registration flow (mirror Google path)
+          if (!firestoreUser.username) {
+            console.log('[SignInModal] Apple sign-in: Username missing, opening profile step');
+            setIsSignUp(true);
+            setSignUpStep('profile');
+            setIsLoading(false);
+            return;
+          }
+
+          // If unsubscribed, show subscription step
           if (firestoreUser.subscriptionType === SubscriptionType.unsubscribed) {
             setSignUpStep('subscription');
             return;
           }
-          
+
           // Otherwise proceed with normal flow
           await checkSubscriptionAndProceed(user);
         } catch (error: unknown) {

@@ -58,6 +58,9 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
   const [authChecked, setAuthChecked] = useState(false);
   const prevUserRef = React.useRef<any>(null);
 
+  // Temporary: disable subscription-based redirects entirely
+  const DISABLE_SUBSCRIPTION_REDIRECT = true;
+
   console.log('AuthWrapper setup complete, before useEffect');
 
   // Add subscription routes to public routes
@@ -176,7 +179,21 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
               timestamp: new Date().toISOString()
             });
 
-            const newUserDict = firestoreUser ? firestoreUser.toDictionary() : null;
+            // Check 100 Trainers/Beta access (QuickLifts behavior parity)
+            let activeUser = firestoreUser;
+            try {
+              if (firebaseUser.email && firestoreUser?.subscriptionType === SubscriptionType.unsubscribed) {
+                const approved = await userService.getBetaUserAccess(firebaseUser.email, firestoreUser);
+                if (approved) {
+                  // Re-fetch to get updated subscriptionType
+                  activeUser = await userService.fetchUserFromFirestore(firebaseUser.uid);
+                }
+              }
+            } catch (betaErr) {
+              console.warn('[AuthWrapper] Beta/100Trainers check failed (non-blocking):', betaErr);
+            }
+
+            const newUserDict = activeUser ? activeUser.toDictionary() : null;
             if (!shallowEqual(prevUserRef.current, newUserDict)) {
               console.warn('[AuthWrapper] shallowEqual failed. Dispatching setUser. Differences:', {
                 prev: prevUserRef.current,
@@ -190,7 +207,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
               dispatch(setUser(newUserDict));
               prevUserRef.current = newUserDict;
             }
-            userService.nonUICurrentUser = firestoreUser;
+            userService.nonUICurrentUser = activeUser;
 
             // Background: ensure subscription record is fresh on every app open
             try {
@@ -203,31 +220,51 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
               console.warn('[AuthWrapper] ensureActiveOrSync try/catch error', e);
             }
 
+            // If the user is authenticated but missing required onboarding (e.g., username),
+            // force the registration modal regardless of route visibility.
+            if (activeUser && (!activeUser.username || activeUser.username.trim() === '')) {
+              console.log('[AuthWrapper] Authenticated but missing username. Showing registration modal.');
+              setShowSignInModal(true);
+              dispatch(setLoading(false));
+              setAuthChecked(true);
+              return;
+            }
+
             if (!isPublicRoute(router.asPath || router.pathname)) {
-              if (firestoreUser && (!firestoreUser.username || firestoreUser.username === '')) {
+              if (activeUser && (!activeUser.username || activeUser.username === '')) {
                 console.log('[AuthWrapper] User needs to complete registration - showing modal');
                 setShowSignInModal(true);
-              } else if (!firestoreUser || firestoreUser.subscriptionType === SubscriptionType.unsubscribed) {
+              } else if (!activeUser || activeUser.subscriptionType === SubscriptionType.unsubscribed) {
                 // Drive access by subscription record expirations instead of user field
                 try {
-                  const userIdForCheck = firestoreUser?.id || firebaseUser.uid;
+                  const userIdForCheck = activeUser?.id || firebaseUser.uid;
                   const status = await subscriptionService.ensureActiveOrSync(userIdForCheck);
                   if (!status.isActive && !router.pathname.startsWith('/payment/')) {
-                    console.log(`[AuthWrapper] Expired or no active subscription on protected route (${router.pathname}). Redirecting to /subscribe.`);
-                    if (router.pathname.toLowerCase() !== '/subscribe') {
-                      router.push('/subscribe');
+                    if (DISABLE_SUBSCRIPTION_REDIRECT) {
+                      console.log(`[AuthWrapper] Subscription inactive but redirects disabled. Allowing access to ${router.pathname}.`);
+                      setShowSignInModal(false);
+                    } else {
+                      console.log(`[AuthWrapper] Expired or no active subscription on protected route (${router.pathname}). Redirecting to /subscribe.`);
+                      if (router.pathname.toLowerCase() !== '/subscribe') {
+                        router.push('/subscribe');
+                      }
+                      setShowSignInModal(false);
                     }
-                    setShowSignInModal(false);
                   } else {
                     console.log('[AuthWrapper] Active subscription via subscription record.');
                     setShowSignInModal(false);
                   }
                 } catch (e) {
-                  console.warn('[AuthWrapper] Subscription status check failed, defaulting to subscribe page on protected route.');
-                  if (!router.pathname.startsWith('/payment/') && router.pathname.toLowerCase() !== '/subscribe') {
-                    router.push('/subscribe');
+                  console.warn('[AuthWrapper] Subscription status check failed.');
+                  if (DISABLE_SUBSCRIPTION_REDIRECT) {
+                    console.log('[AuthWrapper] Redirects disabled; allowing access.');
+                    setShowSignInModal(false);
+                  } else {
+                    if (!router.pathname.startsWith('/payment/') && router.pathname.toLowerCase() !== '/subscribe') {
+                      router.push('/subscribe');
+                    }
+                    setShowSignInModal(false);
                   }
-                  setShowSignInModal(false);
                 }
               } else {
                 console.log('[AuthWrapper] User onboarded and subscribed. Hiding modal if shown.');
