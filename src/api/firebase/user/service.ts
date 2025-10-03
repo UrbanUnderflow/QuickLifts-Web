@@ -60,8 +60,26 @@ class UserService {
   async updateUser(userId: string, user: User): Promise<void> {
     const userRef = doc(db, 'users', userId);
     const userData = user.toDictionary();
-    console.log(`[UserService Update] Updating user ${userId} with data:`, JSON.parse(JSON.stringify(userData)));
-    await setDoc(userRef, user.toDictionary(), { merge: true });
+
+    // Deep-sanitize undefined → null for Firestore compatibility
+    const sanitizeForFirestore = (value: any): any => {
+      if (value === undefined) return null;
+      if (value === null) return null;
+      if (Array.isArray(value)) return value.map(sanitizeForFirestore);
+      if (typeof value === 'object') {
+        const out: Record<string, any> = {};
+        Object.keys(value).forEach((k) => {
+          const v = (value as any)[k];
+          out[k] = sanitizeForFirestore(v);
+        });
+        return out;
+      }
+      return value;
+    };
+
+    const safeData = sanitizeForFirestore(userData);
+    console.log(`[UserService Update] Updating user ${userId} with data:`, JSON.parse(JSON.stringify(safeData)));
+    await setDoc(userRef, safeData, { merge: true });
   }
 
   async getUsersByIds(ids: string[]): Promise<User[]> {
