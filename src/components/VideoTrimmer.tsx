@@ -25,6 +25,23 @@ const ffmpeg = createFFmpeg({
 // Track loading state globally
 let ffmpegLoadingPromise: Promise<void> | null = null;
 
+// Lightweight ProgressBar rendered inside the modal header area
+const ProgressBar: React.FC<{ progress: number; label: TrimProgress['stage'] }> = ({ progress, label }) => {
+  const labelText = label === 'preparing' ? 'Preparing...' : label === 'trimming' ? 'Trimming...' : 'Finalizing...';
+  const safe = Math.max(0, Math.min(100, Math.round(progress)));
+  return (
+    <div className="mb-4">
+      <div className="flex justify-between text-sm text-zinc-400 mb-1">
+        <span>{labelText}</span>
+        <span>{safe}%</span>
+      </div>
+      <div className="w-full bg-zinc-800 rounded-full h-2">
+        <div className="bg-[#E0FE10] h-2 rounded-full transition-all duration-300" style={{ width: `${safe}%` }} />
+      </div>
+    </div>
+  );
+};
+
 export const VideoTrimmer: React.FC<VideoTrimmerProps> = ({ 
   isOpen, 
   file, 
@@ -217,8 +234,8 @@ export const VideoTrimmer: React.FC<VideoTrimmerProps> = ({
   return (
     <div className="fixed inset-0 bg-black bg-opacity-75 z-50 flex items-center justify-center">
       <div className="bg-zinc-900 w-full max-w-md rounded-xl p-6">
-        <h2 className="text-white text-xl font-bold mb-4">Trim Your Video</h2>
-        
+        <h2 className="text-white text-xl font-bold mb-4">Trim Your Video HELLLO</h2>
+        {isProcessing && <ProgressBar progress={progress.percent} label={progress.stage} />}
         {error && (
           <div className="mb-4 p-3 bg-red-900/20 border border-red-500 rounded-lg">
             <p className="text-red-500 text-sm">{error}</p>
@@ -288,24 +305,7 @@ export const VideoTrimmer: React.FC<VideoTrimmerProps> = ({
             </div>
           )}
 
-          {isProcessing && (
-            <div className="mt-4">
-              <div className="flex justify-between text-sm text-zinc-400 mb-2">
-                <span>
-                  {progress.stage === 'preparing' && 'Preparing...'}
-                  {progress.stage === 'trimming' && 'Trimming...'}
-                  {progress.stage === 'finalizing' && 'Finalizing...'}
-                </span>
-                <span>{progress.percent}%</span>
-              </div>
-              <div className="w-full bg-zinc-800 rounded-full h-2">
-                <div 
-                  className="bg-[#E0FE10] h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${progress.percent}%` }}
-                />
-              </div>
-            </div>
-          )}
+          {/* Progress bar now rendered near the header via ProgressBar */}
         </div>
 
         <div className="flex space-x-3">

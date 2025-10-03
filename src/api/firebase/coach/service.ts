@@ -1,7 +1,7 @@
-import { doc, getDoc, setDoc, collection, query, where, getDocs, writeBatch, serverTimestamp, addDoc, deleteDoc, orderBy, limit, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, query, where, getDocs, writeBatch, addDoc, deleteDoc, orderBy, limit, updateDoc, arrayUnion } from 'firebase/firestore';
 import { db } from '../config';
 import { CoachModel, CoachFirestoreData } from '../../../types/Coach';
-import { convertFirestoreTimestamp } from '../../../utils/formatDate';
+import { convertFirestoreTimestamp, dateToUnixTimestamp } from '../../../utils/formatDate';
 import { privacyService } from '../privacy/service';
 
 export interface DailySentimentRecord {
@@ -82,6 +82,127 @@ class CoachService {
   }
 
   /**
+   * Disconnect athlete from coach (soft delete)
+   */
+  async disconnectAthleteFromCoach(coachId: string, athleteUserId: string): Promise<void> {
+    try {
+      const now = dateToUnixTimestamp(new Date());
+      const coachAthletesRef = collection(db, 'coachAthletes');
+      const existingQuery = query(
+        coachAthletesRef,
+        where('coachId', '==', coachId),
+        where('athleteUserId', '==', athleteUserId)
+      );
+      const existingSnapshot = await getDocs(existingQuery);
+      await Promise.all(existingSnapshot.docs.map(async (docSnap) => {
+        await setDoc(docSnap.ref, { status: 'disconnected', disconnectedAt: now, updatedAt: now }, { merge: true });
+      }));
+    } catch (error) {
+      console.error('Error disconnecting athlete from coach:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * List coaches connected to an athlete
+   */
+  async getConnectedCoaches(athleteUserId: string): Promise<Array<{ id: string; data: CoachFirestoreData }>> {
+    try {
+      const coachAthletesRef = collection(db, 'coachAthletes');
+      const q = query(coachAthletesRef, where('athleteUserId', '==', athleteUserId));
+      const links = await getDocs(q);
+      const activeCoachIds = links.docs
+        .filter(d => (d.data() as any).status !== 'disconnected')
+        .map(d => (d.data() as any).coachId);
+      if (activeCoachIds.length === 0) return [];
+      const coachesRef = collection(db, 'coaches');
+      const result: Array<{ id: string; data: CoachFirestoreData }> = [];
+      for (const coachId of activeCoachIds) {
+        const cDoc = await getDoc(doc(coachesRef, coachId));
+        if (cDoc.exists()) result.push({ id: cDoc.id, data: cDoc.data() as CoachFirestoreData });
+      }
+      return result;
+    } catch (error) {
+      console.error('Error getting connected coaches:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Connect a coach to another coach using referral code.
+   * Adds each other to connectedCoaches array on both coach documents.
+   */
+  async connectCoachToCoachByReferralCode(inviteeUserId: string, inviteeUsername: string, inviteeEmail: string, referralCode: string): Promise<{ success: boolean; message?: string }> {
+    try {
+      const clean = referralCode.toUpperCase().trim();
+      if (!clean) return { success: false, message: 'Missing referral code' };
+
+      // Find inviter coach by referral code
+      const coachesRef = collection(db, 'coaches');
+      const q = query(coachesRef, where('referralCode', '==', clean));
+      const snap = await getDocs(q);
+      if (snap.empty) return { success: false, message: 'Invalid referral code' };
+      const inviterDoc = snap.docs[0];
+      const inviterId = inviterDoc.id;
+
+      // Load invitee coach document (must exist)
+      const inviteeRef = doc(db, 'coaches', inviteeUserId);
+      const inviteeSnap = await getDoc(inviteeRef);
+      if (!inviteeSnap.exists()) return { success: false, message: 'Invitee coach profile missing' };
+
+      const now = dateToUnixTimestamp(new Date());
+      const inviteeEntry = { userId: inviteeUserId, username: inviteeUsername || '', email: inviteeEmail || '', connectedAt: now };
+
+      // Get inviter basic info for reciprocal entry
+      const inviterData = inviterDoc.data() as any;
+      const inviterEntry = { userId: inviterId, username: inviterData?.username || '', email: inviterData?.email || '', connectedAt: now };
+
+      await Promise.all([
+        setDoc(inviterDoc.ref, { connectedCoaches: arrayUnion(inviteeEntry), updatedAt: now }, { merge: true }),
+        setDoc(inviteeRef, { connectedCoaches: arrayUnion(inviterEntry), updatedAt: now }, { merge: true })
+      ]);
+      return { success: true };
+    } catch (error: any) {
+      console.error('Error connecting coach-to-coach:', error);
+      return { success: false, message: error?.message || 'Unknown error' };
+    }
+  }
+
+  /**
+   * List connected coaches for a coach (reads the connectedCoaches array)
+   */
+  async getConnectedCoachesForCoach(coachId: string): Promise<Array<{ userId: string; username: string; email: string; connectedAt?: number }>> {
+    try {
+      const ref = doc(db, 'coaches', coachId);
+      const snap = await getDoc(ref);
+      if (!snap.exists()) return [];
+      const data = snap.data() as any;
+      return Array.isArray(data?.connectedCoaches) ? data.connectedCoaches : [];
+    } catch (error) {
+      console.error('Error reading connected coaches:', error);
+      return [];
+    }
+  }
+
+  /** Privacy helpers */
+  async getPrivacyForCoach(athleteUserId: string, coachId: string): Promise<any | null> {
+    try {
+      const ref = doc(db, 'athlete-privacy-settings', athleteUserId, 'coaches', coachId);
+      const snap = await getDoc(ref);
+      return snap.exists() ? snap.data() : null;
+    } catch (error) {
+      console.error('Error fetching privacy for coach:', error);
+      return null;
+    }
+  }
+
+  async setPrivacyForCoach(athleteUserId: string, coachId: string, partial: Record<string, any>): Promise<void> {
+    const now = dateToUnixTimestamp(new Date());
+    const ref = doc(db, 'athlete-privacy-settings', athleteUserId, 'coaches', coachId);
+    await setDoc(ref, { ...partial, updatedAt: now, createdAt: partial.createdAt ?? now }, { merge: true });
+  }
+
+  /**
    * Create a partner profile
    */
   async createPartnerProfile(userId: string, referralCode?: string): Promise<CoachModel> {
@@ -120,9 +241,9 @@ class CoachService {
         referralCode: finalReferralCode,
         userType: 'partner',
         subscriptionStatus: 'partner',
-        stripeCustomerId: existingStripeId || undefined,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
+        stripeCustomerId: existingStripeId || '',
+        createdAt: dateToUnixTimestamp(new Date()),
+        updatedAt: dateToUnixTimestamp(new Date())
       };
       
       batch.set(coachRef, coachData);
@@ -130,7 +251,7 @@ class CoachService {
       // Update user with activeCoachAccount flag
       batch.update(userRef, { 
         activeCoachAccount: true,
-        updatedAt: serverTimestamp()
+        updatedAt: dateToUnixTimestamp(new Date())
       });
       
       await batch.commit();
@@ -138,11 +259,7 @@ class CoachService {
       // Add referral code to lookup table (after batch commit)
       await this.addReferralCodeToLookup(finalReferralCode, userId);
       
-      return new CoachModel(userId, {
-        ...coachData,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      } as CoachFirestoreData);
+      return new CoachModel(userId, coachData as unknown as CoachFirestoreData);
     } catch (error) {
       console.error('Error creating partner profile:', error);
       throw error;
@@ -183,8 +300,8 @@ class CoachService {
         subscriptionStatus,
         stripeCustomerId,
         linkedPartnerId,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
+        createdAt: dateToUnixTimestamp(new Date()),
+        updatedAt: dateToUnixTimestamp(new Date())
       };
       
       batch.set(coachRef, coachData);
@@ -193,7 +310,7 @@ class CoachService {
       const userRef = doc(db, 'users', userId);
       batch.update(userRef, { 
         activeCoachAccount: true,
-        updatedAt: serverTimestamp()
+        updatedAt: dateToUnixTimestamp(new Date())
       });
       
       await batch.commit();
@@ -201,11 +318,7 @@ class CoachService {
       // Add referral code to lookup table (after batch commit)
       await this.addReferralCodeToLookup(coachReferralCode, userId);
       
-      return new CoachModel(userId, {
-        ...coachData,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      } as CoachFirestoreData);
+      return new CoachModel(userId, coachData as unknown as CoachFirestoreData);
     } catch (error) {
       console.error('Error creating coach profile:', error);
       throw error;
@@ -426,7 +539,7 @@ class CoachService {
       const coachRef = doc(db, 'coaches', userId);
       await setDoc(coachRef, {
         subscriptionStatus: status,
-        updatedAt: serverTimestamp()
+        updatedAt: dateToUnixTimestamp(new Date())
       }, { merge: true });
     } catch (error) {
       console.error('Error updating subscription status:', error);
@@ -439,24 +552,25 @@ class CoachService {
    */
   async linkAthleteToCoach(coachId: string, athleteUserId: string): Promise<void> {
     try {
-      const batch = writeBatch(db);
-      
-      // Create coach-athlete relationship
+      const now = dateToUnixTimestamp(new Date());
       const coachAthleteRef = doc(collection(db, 'coachAthletes'));
-      batch.set(coachAthleteRef, {
+      await setDoc(coachAthleteRef, {
         coachId,
         athleteUserId,
-        linkedAt: serverTimestamp()
+        status: 'active',
+        linkedAt: now,
+        createdAt: now,
+        updatedAt: now
       });
-      
-      // Update athlete's user document
-      const userRef = doc(db, 'users', athleteUserId);
-      batch.update(userRef, {
-        linkedCoachId: coachId,
-        updatedAt: serverTimestamp()
-      });
-      
-      await batch.commit();
+      // Create default per-coach privacy doc
+      const privacyRef = doc(db, 'athlete-privacy-settings', athleteUserId, 'coaches', coachId);
+      await setDoc(privacyRef, {
+        // Conservative defaults; adjust as needed
+        shareSentiment: true,
+        shareActivity: true,
+        createdAt: now,
+        updatedAt: now
+      }, { merge: true });
     } catch (error) {
       console.error('Error linking athlete to coach:', error);
       throw error;
@@ -472,7 +586,9 @@ class CoachService {
       const q = query(coachAthletesRef, where('coachId', '==', coachId));
       const querySnapshot = await getDocs(q);
       
-      return querySnapshot.docs.map(doc => doc.data().athleteUserId);
+      return querySnapshot.docs
+        .filter(d => (d.data() as any).status !== 'disconnected')
+        .map(doc => doc.data().athleteUserId);
     } catch (error) {
       console.error('Error fetching coach athletes:', error);
       throw error;
@@ -530,14 +646,21 @@ class CoachService {
           
           // Get additional stats (conversations, sessions, etc.)
           const athleteStats = await this.getAthleteStats(athleteUserId);
+
+          // Last active should prioritize most recent conversation; fallback to coachAthletes.updatedAt/linkedAt
+          const conversationDate = athleteStats.lastConversationDate;
+          const linkUpdated = convertFirestoreTimestamp(coachAthleteData.updatedAt || coachAthleteData.linkedAt);
+          const lastActive = conversationDate && !isNaN(conversationDate.getTime())
+            ? conversationDate
+            : linkUpdated;
           
           athletes.push({
             id: athleteUserId,
             displayName: userData.displayName || userData.username || 'Unknown User',
             email: userData.email || '',
             profileImageUrl: userData.profileImageUrl,
-            linkedAt: coachAthleteData.linkedAt?.toDate?.() || new Date(),
-            lastActiveDate: userData.updatedAt?.toDate?.() || new Date(),
+            linkedAt: convertFirestoreTimestamp(coachAthleteData.linkedAt),
+            lastActiveDate: lastActive,
             ...athleteStats
           });
         }
@@ -591,11 +714,8 @@ class CoachService {
         }
         
         // Track most recent conversation
-        if (conversationData.updatedAt) {
-          const conversationDate = conversationData.updatedAt.toDate ? 
-            conversationData.updatedAt.toDate() : 
-            new Date(conversationData.updatedAt);
-          
+        if (conversationData.updatedAt || conversationData.createdAt) {
+          const conversationDate = convertFirestoreTimestamp(conversationData.updatedAt || conversationData.createdAt);
           if (!lastConversationDate || conversationDate > lastConversationDate) {
             lastConversationDate = conversationDate;
           }
@@ -1251,22 +1371,24 @@ class CoachService {
       }
       
       // Create coach-athlete relationship
+      const now = dateToUnixTimestamp(new Date());
       const connectionData = {
         coachId,
         athleteUserId,
         status: 'active',
-        linkedAt: serverTimestamp(),
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
+        linkedAt: now,
+        createdAt: now,
+        updatedAt: now
       };
       
       await addDoc(coachAthletesRef, connectionData);
-      
-      // Update athlete's profile to include coach reference
-      const athleteRef = doc(db, 'users', athleteUserId);
-      await setDoc(athleteRef, {
-        linkedCoachId: coachId,
-        updatedAt: serverTimestamp()
+      // Create default privacy for this coach
+      const privacyRef = doc(db, 'athlete-privacy-settings', athleteUserId, 'coaches', coachId);
+      await setDoc(privacyRef, {
+        shareSentiment: true,
+        shareActivity: true,
+        createdAt: now,
+        updatedAt: now
       }, { merge: true });
       
       console.log(`[CoachService] Successfully connected athlete ${athleteUserId} to coach ${coachId}`);
@@ -1310,14 +1432,15 @@ class CoachService {
       const mockUserId = `mock_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       const userRef = doc(db, 'users', mockUserId);
       
+      const now = dateToUnixTimestamp(new Date());
       await setDoc(userRef, {
         id: mockUserId,
         displayName: athleteName,
         email: athleteEmail,
         username: athleteName.toLowerCase().replace(/\s+/g, ''),
         profileImageUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(athleteName)}&background=E0FE10&color=000000&size=128`,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
+        createdAt: now,
+        updatedAt: now
       });
 
       // Create coach-athlete relationship
@@ -1325,7 +1448,7 @@ class CoachService {
       await setDoc(coachAthleteRef, {
         coachId: coachId,
         athleteUserId: mockUserId,
-        linkedAt: serverTimestamp(),
+        linkedAt: now,
         status: 'active'
       });
 

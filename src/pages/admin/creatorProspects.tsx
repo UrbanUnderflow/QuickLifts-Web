@@ -5,6 +5,8 @@ import { collection, addDoc, getDocs, orderBy, query, updateDoc, doc } from 'fir
 import { db } from '../../api/firebase/config';
 import { Check, User, Mail, Globe, Users, Target, Loader2, Filter } from 'lucide-react';
 import { convertFirestoreTimestamp, formatDate } from '../../utils/formatDate';
+import { useSelector } from 'react-redux';
+import { RootState } from '../../redux/store';
 
 type ProspectStatus =
   | 'new'
@@ -42,6 +44,8 @@ interface CreatorProspect {
   notes: string;
   createdAt?: any;
   updatedAt?: any;
+  createdBy?: string;
+  lastUpdatedBy?: string;
 }
 
 const emptyProspect: CreatorProspect = {
@@ -83,8 +87,11 @@ const CreatorProspectsPage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<ProspectStatus | 'all'>('all');
   const [priorityFilter, setPriorityFilter] = useState<ProspectPriority | 'all'>('all');
+  const currentUser = useSelector((s: RootState) => s.user.currentUser);
   const [detailOpen, setDetailOpen] = useState(false);
   const [editing, setEditing] = useState<CreatorProspect | null>(null);
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [notesEditing, setNotesEditing] = useState<CreatorProspect | null>(null);
 
   const filtered = useMemo(() => {
     let rows = prospects;
@@ -125,10 +132,13 @@ const CreatorProspectsPage: React.FC = () => {
   const saveProspect = async () => {
     setSaving(true);
     try {
+      const actor = (currentUser?.username || currentUser?.displayName || currentUser?.email || 'admin') as string;
       const payload = {
         ...form,
         createdAt: new Date(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
+        createdBy: actor,
+        lastUpdatedBy: actor
       } as CreatorProspect;
       await addDoc(collection(db, 'creator-prospects'), payload as any);
       setForm(emptyProspect);
@@ -140,11 +150,13 @@ const CreatorProspectsPage: React.FC = () => {
 
   const changeStatus = async (row: CreatorProspect, status: ProspectStatus) => {
     if (!row.id) return;
+    const actor = (currentUser?.username || currentUser?.displayName || currentUser?.email || 'admin') as string;
     await updateDoc(doc(db, 'creator-prospects', row.id), {
       status,
-      updatedAt: new Date()
+      updatedAt: new Date(),
+      lastUpdatedBy: actor
     });
-    setProspects(prev => prev.map(p => (p.id === row.id ? { ...p, status } : p)));
+    setProspects(prev => prev.map(p => (p.id === row.id ? { ...p, status, lastUpdatedBy: actor, updatedAt: new Date() } : p)));
   };
 
   const openDetail = (row: CreatorProspect) => {
@@ -155,12 +167,31 @@ const CreatorProspectsPage: React.FC = () => {
   const saveEdit = async () => {
     if (!editing?.id) return;
     const { id, ...rest } = editing;
+    const actor = (currentUser?.username || currentUser?.displayName || currentUser?.email || 'admin') as string;
     await updateDoc(doc(db, 'creator-prospects', id), {
       ...rest,
-      updatedAt: new Date()
+      updatedAt: new Date(),
+      lastUpdatedBy: actor
     } as any);
-    setProspects(prev => prev.map(p => (p.id === id ? { ...p, ...rest } : p)));
+    setProspects(prev => prev.map(p => (p.id === id ? { ...p, ...rest, lastUpdatedBy: actor, updatedAt: new Date() } : p)));
     setDetailOpen(false);
+  };
+
+  const openNotes = (row: CreatorProspect) => {
+    setNotesEditing(row);
+    setNotesOpen(true);
+  };
+
+  const saveNotes = async () => {
+    if (!notesEditing?.id) return;
+    const actor = (currentUser?.username || currentUser?.displayName || currentUser?.email || 'admin') as string;
+    await updateDoc(doc(db, 'creator-prospects', notesEditing.id), {
+      notes: notesEditing.notes || '',
+      updatedAt: new Date(),
+      lastUpdatedBy: actor
+    });
+    setProspects(prev => prev.map(p => (p.id === notesEditing.id ? { ...p, notes: notesEditing.notes, lastUpdatedBy: actor, updatedAt: new Date() } : p)));
+    setNotesOpen(false);
   };
 
   return (
@@ -247,16 +278,19 @@ const CreatorProspectsPage: React.FC = () => {
                   <th className="text-left p-3">Country</th>
                   <th className="text-left p-3">Platforms</th>
                   <th className="text-left p-3">Priority</th>
+                  <th className="text-left p-3">Notes</th>
+                  <th className="text-left p-3">Created By</th>
+                  <th className="text-left p-3">Updated By</th>
                   <th className="text-left p-3">Status</th>
                   <th className="text-left p-3">Updated</th>
                 </tr>
               </thead>
               <tbody>
                 {loading && (
-                  <tr><td className="p-4 text-zinc-400" colSpan={7}>Loading…</td></tr>
+                  <tr><td className="p-4 text-zinc-400" colSpan={10}>Loading…</td></tr>
                 )}
                 {!loading && filtered.length === 0 && (
-                  <tr><td className="p-4 text-zinc-400" colSpan={7}>No prospects found.</td></tr>
+                  <tr><td className="p-4 text-zinc-400" colSpan={10}>No prospects found.</td></tr>
                 )}
                 {!loading && filtered.map(row => {
                   const updated = convertFirestoreTimestamp(row.updatedAt as any);
@@ -289,6 +323,15 @@ const CreatorProspectsPage: React.FC = () => {
                       <td className="p-3">
                         <span className={`text-xs px-2 py-1 rounded-full ${row.priority === 'high' ? 'bg-red-500/10 text-red-400' : row.priority === 'low' ? 'bg-zinc-700 text-zinc-200' : 'bg-yellow-500/10 text-yellow-400'}`}>{row.priority}</span>
                       </td>
+                      <td className="p-3 text-zinc-300">
+                        {row.notes ? (
+                          <button onClick={() => openNotes(row)} className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/30 hover:bg-blue-500/20">Has notes</button>
+                        ) : (
+                          <span className="text-zinc-500 text-xs">—</span>
+                        )}
+                      </td>
+                      <td className="p-3 text-zinc-300">{row.createdBy || '—'}</td>
+                      <td className="p-3 text-zinc-300">{row.lastUpdatedBy || '—'}</td>
                       <td className="p-3">
                         <select className="bg-zinc-800 rounded-md px-2 py-1" value={row.status} onChange={e=>changeStatus(row, e.target.value as ProspectStatus)}>
                           {statuses.map(s=> <option key={s.value} value={s.value}>{s.label}</option>)}
@@ -336,6 +379,25 @@ const CreatorProspectsPage: React.FC = () => {
                 <div className="p-4 border-t border-zinc-800 flex justify-end gap-3">
                   <button className="px-4 py-2 rounded-md bg-zinc-800 border border-zinc-700 text-zinc-300" onClick={()=>setDetailOpen(false)}>Close</button>
                   <button className="px-4 py-2 rounded-md bg-[#E0FE10] text-black font-semibold hover:bg-lime-400" onClick={saveEdit}>Save Changes</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Notes Modal */}
+          {notesOpen && notesEditing && (
+            <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setNotesOpen(false)}>
+              <div className="bg-zinc-900 border border-zinc-800 rounded-xl w-full max-w-xl" onClick={e=>e.stopPropagation()}>
+                <div className="p-4 border-b border-zinc-800 flex items-center justify-between">
+                  <h3 className="text-xl font-semibold">Notes for {notesEditing.displayName}</h3>
+                  <button className="text-zinc-400 hover:text-white" onClick={() => setNotesOpen(false)}>✕</button>
+                </div>
+                <div className="p-4">
+                  <textarea className="w-full bg-zinc-800 rounded-lg px-3 py-3 h-48 resize-y" value={notesEditing.notes || ''} onChange={e=>setNotesEditing({...notesEditing, notes: e.target.value})} />
+                </div>
+                <div className="p-4 border-t border-zinc-800 flex justify-end gap-3">
+                  <button className="px-4 py-2 rounded-md bg-zinc-800 border border-zinc-700 text-zinc-300" onClick={()=>setNotesOpen(false)}>Close</button>
+                  <button className="px-4 py-2 rounded-md bg-[#E0FE10] text-black font-semibold hover:bg-lime-400" onClick={saveNotes}>Save</button>
                 </div>
               </div>
             </div>

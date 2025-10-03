@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
@@ -8,6 +8,7 @@ import { userService } from '../../api/firebase/user';
 import { firebaseStorageService, UploadImageType } from '../../api/firebase/storage/service';
 import { FaGoogle, FaApple } from 'react-icons/fa';
 import { coachAuth } from '../../api/firebase/auth/coachAuth';
+import { coachService } from '../../api/firebase/coach';
 
 const CoachSignUpPage: React.FC = () => {
   const router = useRouter();
@@ -20,6 +21,37 @@ const CoachSignUpPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [oauthUser, setOauthUser] = useState<any | null>(null);
+
+  const ensureCoachProfile = async (uid: string) => {
+    try {
+      const existingProfile = await coachService.getCoachProfile(uid);
+      if (existingProfile) return existingProfile;
+      const created = await coachService.createPartnerProfile(uid);
+      return created;
+    } catch (e: any) {
+      console.error('[coach/sign-up] ensureCoachProfile error', e);
+      setError(e?.message || 'Failed to set up coach profile');
+      return null;
+    }
+  };
+
+  // Persist referrer code from ?ref= in localStorage so we can link after sign-up
+  useEffect(() => {
+    const ref = (router.query.ref as string) || '';
+    if (typeof window !== 'undefined' && ref) {
+      try { localStorage.setItem('pulse_referring_coach_code', ref.toUpperCase()); } catch (_) {}
+    }
+  }, [router.query.ref]);
+
+  const maybeLinkReferringCoach = async (uid: string, inviteeUsername: string, inviteeEmail: string) => {
+    try {
+      if (typeof window === 'undefined') return;
+      const ref = localStorage.getItem('pulse_referring_coach_code');
+      if (!ref) return;
+      await coachService.connectCoachToCoachByReferralCode(uid, inviteeUsername || '', inviteeEmail || '', ref);
+      try { localStorage.removeItem('pulse_referring_coach_code'); } catch (_) {}
+    } catch (_) { /* ignore linking failure */ }
+  };
 
   const saveUser = async (uid: string, userEmail: string, display: string, imageUrl: string) => {
     const u = new User(uid, {
@@ -35,7 +67,11 @@ const CoachSignUpPage: React.FC = () => {
       goal: [], bodyWeight: [], macros: {},
       profileImage: { profileImageURL: imageUrl, imageOffsetWidth: 0, imageOffsetHeight: 0 },
       bio: '', additionalGoals: '', blockedUsers: [], encouragement: [],
-      isCurrentlyActive: false, videoCount: 0, creator: null, winner: null,
+      isCurrentlyActive: false, videoCount: 0,
+      // Ensure optional nested objects are either valid objects or nulls
+      creator: null,
+      winner: null,
+      linkedCoachId: null,
       createdAt: new Date(), updatedAt: new Date()
     });
     await userService.updateUser(uid, u);
@@ -47,7 +83,19 @@ const CoachSignUpPage: React.FC = () => {
       const res = await coachAuth.signInWithGoogle();
       const fb = res.user;
       const existing = await userService.fetchUserFromFirestore(fb.uid);
-      if (existing) return router.push('/coach/dashboard');
+      if (existing) {
+        // Upgrade existing user to coach if needed
+        if (existing.role !== 'coach') {
+          const upgraded = new User(existing.id || fb.uid, { ...existing, role: 'coach', registrationComplete: true, updatedAt: new Date() });
+          await userService.updateUser(existing.id || fb.uid, upgraded);
+        }
+        const profile = await ensureCoachProfile(fb.uid);
+        if (profile) {
+          await maybeLinkReferringCoach(fb.uid, (existing as any)?.username || username || '', fb.email || '');
+          return router.replace('/coach/dashboard');
+        }
+        return;
+      }
       const suggested = (fb.displayName?.replace(/\s+/g, '_') || fb.email?.split('@')[0] || 'user').toLowerCase();
       setOauthUser(fb); setEmail(fb.email || ''); setUsername(suggested);
     } catch (e: any) { setError(e?.message || 'Google sign-in failed'); }
@@ -60,7 +108,18 @@ const CoachSignUpPage: React.FC = () => {
       const res = await coachAuth.signInWithApple();
       const fb = res.user;
       const existing = await userService.fetchUserFromFirestore(fb.uid);
-      if (existing) return router.push('/coach/dashboard');
+      if (existing) {
+        if (existing.role !== 'coach') {
+          const upgraded = new User(existing.id || fb.uid, { ...existing, role: 'coach', registrationComplete: true, updatedAt: new Date() });
+          await userService.updateUser(existing.id || fb.uid, upgraded);
+        }
+        const profile = await ensureCoachProfile(fb.uid);
+        if (profile) {
+          await maybeLinkReferringCoach(fb.uid, (existing as any)?.username || username || '', fb.email || '');
+          return router.replace('/coach/dashboard');
+        }
+        return;
+      }
       const suggested = (fb.displayName?.replace(/\s+/g, '_') || fb.email?.split('@')[0] || 'user').toLowerCase();
       setOauthUser(fb); setEmail(fb.email || ''); setUsername(suggested);
     } catch (e: any) { setError(e?.message || 'Apple sign-in failed'); }
@@ -78,7 +137,12 @@ const CoachSignUpPage: React.FC = () => {
 
       if (oauthUser) {
         await saveUser(oauthUser.uid, oauthUser.email || '', username, imageUrl);
-        return router.push('/coach/dashboard');
+        const profile = await ensureCoachProfile(oauthUser.uid);
+        if (profile) {
+          await maybeLinkReferringCoach(oauthUser.uid, username, oauthUser.email || '');
+          return router.replace('/coach/dashboard');
+        }
+        return;
       }
 
       if (!email) return setError('Email is required');
@@ -87,7 +151,11 @@ const CoachSignUpPage: React.FC = () => {
 
       const cred = await createUserWithEmailAndPassword(auth, email, password);
       await saveUser(cred.user.uid, email, username, imageUrl);
-      router.push('/coach/dashboard');
+      const profile = await ensureCoachProfile(cred.user.uid);
+      if (profile) {
+        await maybeLinkReferringCoach(cred.user.uid, username, email);
+        router.replace('/coach/dashboard');
+      }
     } catch (e: any) {
       setError(e?.message || 'Could not create account');
     } finally { setLoading(false); }

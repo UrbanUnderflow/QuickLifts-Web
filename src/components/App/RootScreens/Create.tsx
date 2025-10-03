@@ -47,6 +47,7 @@ const Create: React.FC = () => {
   const [trimStartTime, setTrimStartTime] = useState<number | null>(null);
   const [trimEndTime, setTrimEndTime] = useState<number | null>(null);
   const [videoPreview, setVideoPreview] = useState<string | null>(null);
+  const previewUrlRef = useRef<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [showTrimmer, setShowTrimmer] = useState(false);
@@ -151,7 +152,11 @@ const Create: React.FC = () => {
               }
             }
             
-            // Create object URL 
+            // Create object URL and revoke any previous preview first
+            if (previewUrlRef.current) {
+              try { URL.revokeObjectURL(previewUrlRef.current); } catch (_) {}
+              previewUrlRef.current = null;
+            }
             const objectUrl = URL.createObjectURL(trimmedFile);
             console.log('[DEBUG] Created object URL for video preview:', objectUrl);
             
@@ -173,6 +178,7 @@ const Create: React.FC = () => {
             
             // Update component state
             setOriginalVideoFile(trimmedFile);
+            previewUrlRef.current = objectUrl;
             setVideoPreview(objectUrl);
             
             // If videoData contains trimStart/trimEnd, set them here (though this flow might be deprecated)
@@ -288,9 +294,22 @@ const Create: React.FC = () => {
     console.log('[DEBUG] Trim complete, setting video file');
     setOriginalVideoFile(trimmedFile);
     setShowTrimmer(false);
+    // Capture trim points from returned file metadata if present
+    const s = (trimmedFile as any).trimStartTime ?? (trimmedFile as any).trimStart;
+    const e = (trimmedFile as any).trimEndTime ?? (trimmedFile as any).trimEnd;
+    if (typeof s === 'number' && typeof e === 'number') {
+      setTrimStartTime(s);
+      setTrimEndTime(e);
+      console.log('[DEBUG] Trim points set from file metadata', { s, e });
+    }
     
     // Create preview URL for the trimmed video
+    if (previewUrlRef.current) {
+      try { URL.revokeObjectURL(previewUrlRef.current); } catch (_) {}
+      previewUrlRef.current = null;
+    }
     const previewUrl = URL.createObjectURL(trimmedFile);
+    previewUrlRef.current = previewUrl;
     setVideoPreview(previewUrl);
   };
 
@@ -299,7 +318,12 @@ const Create: React.FC = () => {
     console.log('[DEBUG] Trim selection made:', params);
     if (selectedFile) { // selectedFile should be the original file shown in the trimmer
       setOriginalVideoFile(selectedFile); // Ensure originalVideoFile is the one from the trimmer
+      if (previewUrlRef.current) {
+        try { URL.revokeObjectURL(previewUrlRef.current); } catch (_) {}
+        previewUrlRef.current = null;
+      }
       const previewUrl = URL.createObjectURL(selectedFile);
+      previewUrlRef.current = previewUrl;
       setVideoPreview(previewUrl); // Show preview of the original file
     }
     setTrimStartTime(params.startTime);
@@ -389,6 +413,10 @@ const Create: React.FC = () => {
 
   const clearVideo = () => {
     setOriginalVideoFile(null);
+    if (previewUrlRef.current) {
+      try { URL.revokeObjectURL(previewUrlRef.current); } catch (_) {}
+      previewUrlRef.current = null;
+    }
     setVideoPreview(null);
     setTrimStartTime(null);
     setTrimEndTime(null);
@@ -397,6 +425,16 @@ const Create: React.FC = () => {
       fileInputRef.current.value = '';
     }
   };
+
+  // Cleanup preview URL on unmount
+  useEffect(() => {
+    return () => {
+      if (previewUrlRef.current) {
+        try { URL.revokeObjectURL(previewUrlRef.current); } catch (_) {}
+        previewUrlRef.current = null;
+      }
+    };
+  }, []);
 
   // Check for similar exercises in Firestore
   const checkSimilarExercises = async (): Promise<Exercise[]> => {
@@ -573,7 +611,9 @@ const Create: React.FC = () => {
         userId: userId,
         originalVideoStoragePath: uploadResult.gsURL, 
         originalVideoUrl: uploadResult.downloadURL, 
-        videoURL: '', 
+        // Seed videoURL with the original so the exercise page has a playable source immediately.
+        // The server-side trim can update this to the trimmed URL later.
+        videoURL: uploadResult.downloadURL, 
         gifURL: '', 
         trimStatus: 'pending', 
         trimStartTime: trimStartTime!, // Assert non-null as checked in uploadVideo start
@@ -610,6 +650,9 @@ const Create: React.FC = () => {
         exerciseVideoPlainObject.trimStartTime = trimStartTime!;
         exerciseVideoPlainObject.trimEndTime = trimEndTime!;
         exerciseVideoPlainObject.originalVideoStoragePath = uploadResult.gsURL;
+        exerciseVideoPlainObject.originalVideoUrl = uploadResult.downloadURL;
+        // Ensure videoURL exists so UI can render immediately
+        exerciseVideoPlainObject.videoURL = exerciseVideoPlainObject.videoURL || uploadResult.downloadURL;
         exerciseVideoPlainObject.trimStatus = 'pending';
         
         await exerciseService.createExerciseVideo(exerciseVideoPlainObject);
@@ -1186,7 +1229,7 @@ const Create: React.FC = () => {
         isOpen={showTrimmer}
         file={selectedFile}
         onClose={() => setShowTrimmer(false)}
-        onTrimComplete={handleTrimSelection as any} // Use the new handler, cast for now
+        onTrimComplete={handleTrimComplete}
       />
     </div>
   );

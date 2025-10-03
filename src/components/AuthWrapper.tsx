@@ -74,7 +74,9 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
   ].map(pattern => pattern.toLowerCase());
  
   const isPublicRoute = (path: string) => {
-    const normalizedPath = path.toLowerCase();
+    // Normalize: prefer asPath, strip query/hash, lowercase, remove trailing slash
+    const raw = (path || '').split('?')[0].split('#')[0];
+    const normalizedPath = raw.replace(/\/$/, '').toLowerCase();
     const isPublic = publicRoutes.includes(normalizedPath) || 
            publicPathPatterns.some(pattern => normalizedPath.startsWith(pattern));
     
@@ -98,6 +100,15 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
         isInPublicRoutes: publicRoutes.includes(normalizedPath),
         publicRoutes: publicRoutes,
         environment: typeof window !== 'undefined' ? window.location.hostname : 'server'
+      });
+    }
+    if (normalizedPath.includes('100trainers')) {
+      console.log('[AuthWrapper] 100Trainers route check:', {
+        originalPath: path,
+        normalizedPath,
+        isPublic,
+        publicRoutes,
+        publicPathPatterns
       });
     }
     
@@ -192,7 +203,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
               console.warn('[AuthWrapper] ensureActiveOrSync try/catch error', e);
             }
 
-            if (!isPublicRoute(router.pathname)) {
+            if (!isPublicRoute(router.asPath || router.pathname)) {
               if (firestoreUser && (!firestoreUser.username || firestoreUser.username === '')) {
                 console.log('[AuthWrapper] User needs to complete registration - showing modal');
                 setShowSignInModal(true);
@@ -230,7 +241,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
             console.log('No firebase user, clearing state');
             dispatch(setUser(null));
             userService.nonUICurrentUser = null;
-            if (!isPublicRoute(router.pathname)) {
+            if (!isPublicRoute(router.asPath || router.pathname)) {
               console.log(`[AuthWrapper] User not authenticated on protected route: ${router.asPath}. Setting redirect path and showing modal.`);
               dispatch(setLoginRedirectPath(router.asPath));
               setShowSignInModal(true);

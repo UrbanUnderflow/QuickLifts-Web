@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Head from 'next/head';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
-import { collection, getDocs, query, orderBy, where, getCountFromServer, doc, updateDoc, serverTimestamp, writeBatch, deleteDoc } from 'firebase/firestore';
-import { db } from '../../api/firebase/config';
+import { collection, getDocs, query, orderBy, where, getCountFromServer, doc, updateDoc, serverTimestamp, writeBatch, deleteDoc, getDoc } from 'firebase/firestore';
+import { db, storage } from '../../api/firebase/config';
+import { ref as storageRef, deleteObject } from 'firebase/storage';
 import { getAuth, getIdToken } from 'firebase/auth';
 import { Dumbbell, Video, PlayCircle, RefreshCw, AlertCircle, CheckCircle, Loader2, Eye, XCircle, ImageIcon, Check, X, Search, Filter, Trash2, Copy } from 'lucide-react';
 import { Exercise, ExerciseVideo } from '../../api/firebase/exercise/types'; // Assuming types are here
@@ -84,6 +85,7 @@ const MoveManagement: React.FC = () => {
   const [allVideoSearchTerm, setAllVideoSearchTerm] = useState('');
   const [showOrphanedOnly, setShowOrphanedOnly] = useState(false);
   const [deletingVideos, setDeletingVideos] = useState<{[videoId: string]: boolean}>({});
+  const [deletingExercises, setDeletingExercises] = useState<{[exerciseId: string]: boolean}>({});
 
   // Show/hide toast
   useEffect(() => {
@@ -484,6 +486,32 @@ const MoveManagement: React.FC = () => {
     
     try {
       const videoRef = doc(db, 'exerciseVideos', videoId);
+
+      // Fetch video document to get storage URLs/paths
+      const videoSnap = await getDoc(videoRef);
+      const data: any = videoSnap.exists() ? videoSnap.data() : {};
+
+      // Helper to delete storage object if URL/path is present
+      const tryDeleteStorage = async (urlOrPath?: string) => {
+        try {
+          if (urlOrPath && typeof urlOrPath === 'string' && urlOrPath.trim().length > 0) {
+            const ref = storageRef(storage, urlOrPath);
+            await deleteObject(ref);
+          }
+        } catch (e) {
+          // Best-effort: log but do not block deletion
+          console.warn('[MoveManagement] Failed to delete storage object:', urlOrPath, e);
+        }
+      };
+
+      // Attempt to delete original, trimmed, gif/thumbnail assets
+      await Promise.all([
+        tryDeleteStorage(data.originalVideoStoragePath || data.originalVideoUrl),
+        tryDeleteStorage(data.videoURL),
+        tryDeleteStorage(data.gifURL || data.thumbnail)
+      ]);
+
+      // Finally delete the Firestore doc
       await deleteDoc(videoRef);
 
       // Remove from all video states
@@ -501,6 +529,45 @@ const MoveManagement: React.FC = () => {
       setToastMessage({ type: 'error', text: `Failed to delete video: ${errorMessage}` });
     } finally {
       setDeletingVideos(prev => ({ ...prev, [videoId]: false }));
+    }
+  };
+
+  const handleDeleteExercise = async (exercise: ExerciseDisplay) => {
+    if (!window.confirm(`Delete exercise "${exercise.name}" and ALL of its videos? This cannot be undone.`)) {
+      return;
+    }
+
+    setDeletingExercises(prev => ({ ...prev, [exercise.firestoreDocId]: true }));
+    setToastMessage({ type: 'info', text: 'Deleting exercise and related videos...' });
+
+    try {
+      // 1) Query all videos linked to this exercise
+      const videosRef = collection(db, 'exerciseVideos');
+      const q = query(videosRef, where('exerciseId', '==', exercise.id));
+      const snapshot = await getDocs(q);
+
+      // 2) Delete each video's storage + doc
+      const deletePromises: Promise<any>[] = [];
+      snapshot.forEach(d => {
+        deletePromises.push(handleDeleteVideo(d.id));
+      });
+      await Promise.all(deletePromises);
+
+      // 3) Delete the exercise document itself
+      const exerciseRef = doc(db, 'exercises', exercise.firestoreDocId);
+      await deleteDoc(exerciseRef);
+
+      // 4) Update local state
+      setExercises(prev => prev.filter(ex => ex.firestoreDocId !== exercise.firestoreDocId));
+      setFilteredExercises(prev => prev.filter(ex => ex.firestoreDocId !== exercise.firestoreDocId));
+
+      setToastMessage({ type: 'success', text: 'Exercise and all related videos deleted.' });
+    } catch (err) {
+      console.error('[MoveManagement] Error deleting exercise:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error.';
+      setToastMessage({ type: 'error', text: `Failed to delete exercise: ${errorMessage}` });
+    } finally {
+      setDeletingExercises(prev => ({ ...prev, [exercise.firestoreDocId]: false }));
     }
   };
 
@@ -950,22 +1017,32 @@ const MoveManagement: React.FC = () => {
                             : 'N/A'}
                         </td>
                         <td className="py-4 px-5 text-center">
-                          <button
-                            onClick={() => {
-                              setSelectedExercise(exercise);
-                              fetchExerciseVideos(exercise.id); // Use the correct ID field for querying videos
-                            }}
-                            className="px-2.5 py-1.5 rounded-md text-xs font-medium border bg-blue-900/40 text-blue-300 border-blue-800 hover:bg-blue-800/60 transition-colors flex items-center mx-auto gap-1.5"
-                            title="View associated videos"
-                          >
-                            <Eye className="h-3.5 w-3.5" />
-                            View
-                            {typeof exercise.videoCount === 'number' && (
-                              <span className={`ml-1.5 px-1.5 py-0.5 rounded-full text-xs ${exercise.videoCount > 0 ? 'bg-green-700/50 text-green-300' : 'bg-gray-600 text-gray-300'}`}>
-                                {exercise.videoCount}
-                              </span>
-                            )}
-                          </button>
+                          <div className="flex items-center justify-center gap-2">
+                            <button
+                              onClick={() => {
+                                setSelectedExercise(exercise);
+                                fetchExerciseVideos(exercise.id); // Use the correct ID field for querying videos
+                              }}
+                              className="px-2.5 py-1.5 rounded-md text-xs font-medium border bg-blue-900/40 text-blue-300 border-blue-800 hover:bg-blue-800/60 transition-colors flex items-center gap-1.5"
+                              title="View associated videos"
+                            >
+                              <Eye className="h-3.5 w-3.5" />
+                              View
+                              {typeof exercise.videoCount === 'number' && (
+                                <span className={`ml-1.5 px-1.5 py-0.5 rounded-full text-xs ${exercise.videoCount > 0 ? 'bg-green-700/50 text-green-300' : 'bg-gray-600 text-gray-300'}`}>
+                                  {exercise.videoCount}
+                                </span>
+                              )}
+                            </button>
+                            <button
+                              onClick={() => handleDeleteExercise(exercise)}
+                              disabled={!!deletingExercises[exercise.firestoreDocId]}
+                              className={`px-2.5 py-1.5 rounded-md text-xs font-medium border ${deletingExercises[exercise.firestoreDocId] ? 'bg-gray-700/50 text-gray-400 border-gray-700 cursor-not-allowed' : 'bg-red-900/40 text-red-300 border-red-800 hover:bg-red-800/60'} transition-colors`}
+                              title="Delete exercise and all videos"
+                            >
+                              {deletingExercises[exercise.firestoreDocId] ? 'Deleting...' : 'Delete'}
+                            </button>
+                          </div>
                         </td>
                         <td className="py-4 px-5 text-xs text-gray-500 font-mono">{exercise.id}</td>
                       </tr>

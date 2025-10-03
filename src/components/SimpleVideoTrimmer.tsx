@@ -26,6 +26,7 @@ export const SimpleVideoTrimmer: React.FC<VideoTrimmerProps> = ({
   const [duration, setDuration] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [progressPct, setProgressPct] = useState(0);
   const objectUrlRef = useRef<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -61,6 +62,7 @@ export const SimpleVideoTrimmer: React.FC<VideoTrimmerProps> = ({
     // Mark recording as stopped
     isRecordingRef.current = false;
     hasReachedEndRef.current = true;
+    setProgressPct(0);
     
     // Stop MediaRecorder if running
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
@@ -212,6 +214,7 @@ export const SimpleVideoTrimmer: React.FC<VideoTrimmerProps> = ({
     });
 
     setIsProcessing(true);
+    setProgressPct(0);
     setError(null);
 
     const canvas = document.createElement('canvas');
@@ -288,10 +291,12 @@ export const SimpleVideoTrimmer: React.FC<VideoTrimmerProps> = ({
             compressionRatio: (trimmedFile.size / file.size * 100).toFixed(2) + '%'
           });
 
-          // Add your start/end metadata
+          // Add both legacy and expected metadata keys for downstream uploaders
           Object.defineProperties(trimmedFile, {
             trimStart: { value: startTime, enumerable: true },
             trimEnd: { value: endTime, enumerable: true },
+            trimStartTime: { value: startTime, enumerable: true },
+            trimEndTime: { value: endTime, enumerable: true },
             duration: { value: endTime - startTime, enumerable: true }
           });
 
@@ -380,12 +385,15 @@ export const SimpleVideoTrimmer: React.FC<VideoTrimmerProps> = ({
 
           if (currentTime < endTime) {
             frameCount++;
-            if (frameCount % 30 === 0) { // Log every 30 frames
+            // Update progress roughly every few frames to limit re-renders
+            if (frameCount % 6 === 0) {
               console.log('[VideoTrimmer] Processing frame', {
                 currentTime: currentTime.toFixed(2),
                 progress: ((currentTime - startTime) / (endTime - startTime) * 100).toFixed(1) + '%',
                 frameCount
               });
+              const pct = ((currentTime - startTime) / Math.max(0.001, (endTime - startTime))) * 100;
+              setProgressPct(Math.max(0, Math.min(100, Math.round(pct))));
             }
             
             // Draw the current video frame to the canvas
@@ -503,11 +511,17 @@ export const SimpleVideoTrimmer: React.FC<VideoTrimmerProps> = ({
           )}
 
           {isProcessing && (
-            <div className="w-full bg-zinc-800 rounded-full h-2 mb-4">
-              <div 
-                className="bg-[#E0FE10] h-2 rounded-full transition-all duration-300 animate-pulse"
-                style={{ width: '100%' }}
-              />
+            <div className="mb-4">
+              <div className="flex justify-between text-sm text-zinc-400 mb-1">
+                <span>Processing...</span>
+                <span>{progressPct}%</span>
+              </div>
+              <div className="w-full bg-zinc-800 rounded-full h-2">
+                <div
+                  className="bg-[#E0FE10] h-2 rounded-full transition-all duration-200"
+                  style={{ width: `${progressPct}%` }}
+                />
+              </div>
             </div>
           )}
         </div>
