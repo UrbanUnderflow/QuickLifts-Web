@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
+import Link from 'next/link';
 import { signOut } from 'firebase/auth';
 import { auth } from '../../api/firebase/config';
 import { useUser, useUserLoading } from '../../hooks/useUser';
@@ -7,6 +8,8 @@ import { coachService } from '../../api/firebase/coach';
 import { CoachModel } from '../../types/Coach';
 import AthleteCard from '../../components/AthleteCard';
 import { FaCopy, FaQrcode, FaLink, FaUsers } from 'react-icons/fa';
+import { db } from '../../api/firebase/config';
+import { doc, getDoc, collection, getDocs, query, where, updateDoc } from 'firebase/firestore';
 
 const CoachDashboard: React.FC = () => {
   const currentUser = useUser();
@@ -16,13 +19,10 @@ const CoachDashboard: React.FC = () => {
   const [athletes, setAthletes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [inviteLink, setInviteLink] = useState<string>('');
-  const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
-  const [showQrCode, setShowQrCode] = useState(false);
-  const [copySuccess, setCopySuccess] = useState(false);
-  const [coachReferralInput, setCoachReferralInput] = useState('');
-  const [connectedCoaches, setConnectedCoaches] = useState<Array<{ userId: string; username: string; email: string; connectedAt?: number }>>([]);
-  const [coachConnectStatus, setCoachConnectStatus] = useState<string | null>(null);
+  const [sharedAthletes, setSharedAthletes] = useState<any[]>([]);
+  const [sharedByCoach, setSharedByCoach] = useState<Array<{coachId: string; coachName?: string; athletes: any[]}>>([]);
+  const [pendingInvites, setPendingInvites] = useState<{ coachId: string; coachName?: string; permission: 'full'|'limited'; allowedAthletes?: string[] }[]>([]);
+  
   
   const handleSignOut = async () => {
     try {
@@ -60,32 +60,119 @@ const CoachDashboard: React.FC = () => {
         }
 
         setCoachProfile(coachProfile);
-        
-        // Generate invite link
-        const baseUrl = window.location.origin;
-        const inviteUrl = `${baseUrl}/coach-invite/${coachProfile.referralCode}`;
-        setInviteLink(inviteUrl);
-        
-        // Generate QR code using Google Charts API
-        const qrCodeApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=${encodeURIComponent(inviteUrl)}`;
-        setQrCodeUrl(qrCodeApiUrl);
-        
-        // Fetch connected athletes
-        console.log('Fetching athletes for coach:', coachProfile.id);
+        // Fetch connected athletes (your own)
         const connectedAthletes = await coachService.getConnectedAthletes(coachProfile.id);
-        console.log('Initial athlete fetch result:', connectedAthletes);
         setAthletes(connectedAthletes);
-        // Fetch connected coaches
+
+        // Also fetch shared athletes where you're a staff member for other coaches
         try {
-          const cc = await coachService.getConnectedCoachesForCoach(coachProfile.id);
-          setConnectedCoaches(cc);
-        } catch (e) { /* noop */ }
-        
+          if (currentUser?.email) {
+            const invitesRef = collection(db, 'staff-invites');
+            const qInv = query(invitesRef, where('memberEmail', '==', currentUser.email.toLowerCase()), where('status', '==', 'accepted'));
+            const snap = await getDocs(qInv);
+            const allShared: any[] = [];
+            const grouped: Array<{coachId: string; coachName?: string; athletes: any[]}> = [];
+            for (const d of snap.docs) {
+              const data: any = d.data();
+              const allow: string[] = Array.isArray(data.allowedAthletes) ? data.allowedAthletes : [];
+              if (data.permission === 'full') {
+                const connected = await coachService.getConnectedAthletes(data.coachId);
+                grouped.push({ coachId: data.coachId, coachName: data.coachUsername, athletes: connected });
+                allShared.push(...connected);
+              } else if (allow.length) {
+                const perCoach: any[] = [];
+                await Promise.all(allow.map(async (aid: string) => {
+                  try {
+                    const uref = doc(db, 'users', aid);
+                    const usnap = await getDoc(uref);
+                    if (usnap.exists()) {
+                      const u = usnap.data();
+                      const athlete = { id: aid, ...u };
+                      perCoach.push(athlete);
+                      allShared.push(athlete);
+                    }
+                  } catch (_) {}
+                }));
+                grouped.push({ coachId: data.coachId, coachName: data.coachUsername, athletes: perCoach });
+              }
+            }
+            if (grouped.length) setSharedByCoach(grouped);
+            setSharedAthletes(allShared);
+          }
+        } catch (_) {
+          setSharedAthletes([]);
+        }
+
         setLoading(false);
       } catch (err) {
-        console.error('Error fetching coach profile:', err);
-        setError('Failed to load coach profile. Please try again.');
-        setLoading(false);
+        // If no coach profile, check if this user is a staff member with assignments
+        try {
+          if (!currentUser) throw err;
+          // Find any coach-staff record where this user (by email) is a member
+          const coachStaffRoot = collection(db, 'coach-staff');
+          const coachIdsSnap = await getDocs(coachStaffRoot);
+          let found: { coachId: string; allowed: string[] } | null = null;
+          const invites: { coachId: string; coachName?: string; permission: 'full'|'limited'; allowedAthletes?: string[] }[] = [];
+          const groupedShared: Array<{coachId: string; coachName?: string; athletes: any[]}> = [];
+          for (const coachDoc of coachIdsSnap.docs) {
+            const memberSnap = await getDoc(doc(db, 'coach-staff', coachDoc.id, 'members', (currentUser.email || '').toLowerCase()));
+            if (memberSnap.exists()) {
+              const data: any = memberSnap.data();
+              if (data.status === 'invited') {
+                invites.push({ coachId: coachDoc.id, coachName: undefined, permission: data.permission || 'limited', allowedAthletes: data.allowedAthletes || [] });
+              } else if (data.permission === 'limited' && Array.isArray(data.allowedAthletes) && data.allowedAthletes.length) {
+                found = { coachId: coachDoc.id, allowed: data.allowedAthletes };
+              } else if (data.permission === 'full') {
+                // Staff with full permission → show that coach's athletes as shared
+                const connected = await coachService.getConnectedAthletes(coachDoc.id);
+                groupedShared.push({ coachId: coachDoc.id, coachName: undefined, athletes: connected });
+              }
+            }
+          }
+          if (groupedShared.length) setSharedByCoach(groupedShared);
+          if (invites.length) {
+            setPendingInvites(invites);
+          }
+          // Additionally read limited shares from staff-invites (source of truth)
+          try {
+            const invitesRef = collection(db, 'staff-invites');
+            const qInv = query(invitesRef, where('memberEmail', '==', (currentUser.email||'').toLowerCase()), where('status', '==', 'accepted'));
+            const snap = await getDocs(qInv);
+            const allShared: any[] = [];
+            const grouped: Array<{coachId: string; coachName?: string; athletes: any[]}> = [];
+            for (const d of snap.docs) {
+              const data: any = d.data();
+              const allow: string[] = Array.isArray(data.allowedAthletes) ? data.allowedAthletes : [];
+              if (data.permission === 'full') {
+                const connected = await coachService.getConnectedAthletes(data.coachId);
+                grouped.push({ coachId: data.coachId, coachName: data.coachUsername, athletes: connected });
+              } else if (allow.length) {
+                const perCoach: any[] = [];
+                await Promise.all(allow.map(async (aid: string) => {
+                  try {
+                    const uref = doc(db, 'users', aid);
+                    const usnap = await getDoc(uref);
+                    if (usnap.exists()) {
+                      const u = usnap.data();
+                      perCoach.push({ id: aid, ...u });
+                      allShared.push({ id: aid, ...u });
+                    }
+                  } catch (_) {}
+                }));
+                grouped.push({ coachId: data.coachId, coachName: data.coachUsername, athletes: perCoach });
+              }
+            }
+            if (grouped.length) setSharedByCoach(grouped);
+            if (allShared.length) setSharedAthletes(allShared);
+          } catch (_) {}
+          // Neither coach nor staff with assignments
+          setError('Access denied. Coach account required.');
+          setLoading(false);
+        } catch (subErr) {
+          console.error('Error fetching coach profile:', err);
+          setError('Failed to load coach profile. Please try again.');
+          setLoading(false);
+        }
       }
     };
 
@@ -103,15 +190,36 @@ const CoachDashboard: React.FC = () => {
   if (error) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-red-400 text-xl mb-4">Access Denied</div>
-          <div className="text-white">{error}</div>
-          <button 
-            onClick={() => router.push('/')}
-            className="mt-4 bg-[#E0FE10] text-black px-6 py-2 rounded-lg hover:bg-lime-400 transition-colors"
-          >
-            Go Home
-          </button>
+        <div className="w-full max-w-lg bg-zinc-900 border border-zinc-800 rounded-xl p-8 text-center">
+          <div className="text-2xl font-semibold text-white mb-2">No Coach Account</div>
+          <p className="text-zinc-400 mb-6">
+            You’re signed in but don’t have a coach profile yet. Create one to access the dashboard.
+          </p>
+          <div className="flex flex-col gap-3">
+            <button
+              onClick={() => router.push('/coach/sign-up')}
+              className="bg-[#E0FE10] text-black px-6 py-3 rounded-lg hover:bg-lime-400 transition-colors"
+            >
+              Create Coach Account
+            </button>
+            <div className="text-sm text-zinc-500 mt-3">
+              Signed in as <span className="text-zinc-300">{currentUser?.email || currentUser?.username || 'unknown'}</span>
+            </div>
+            <div className="flex items-center justify-center gap-3 mt-1">
+              <button
+                onClick={handleSignOut}
+                className="bg-zinc-800 text-white px-5 py-2 rounded-lg border border-zinc-700 hover:bg-zinc-700 transition-colors"
+              >
+                Sign out
+              </button>
+              <button
+                onClick={() => router.push('/')}
+                className="bg-zinc-800 text-white px-5 py-2 rounded-lg border border-zinc-700 hover:bg-zinc-700 transition-colors"
+              >
+                Go Home
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -125,6 +233,32 @@ const CoachDashboard: React.FC = () => {
             <h1 className="text-3xl font-bold">Coach Dashboard</h1>
             <p className="text-zinc-400">Welcome back, {currentUser?.username}</p>
           </div>
+
+          {/* Top Nav: Dashboard | Referrals | Staff */}
+          <div className="flex-1" />
+          <nav className="mr-6 hidden md:flex items-center gap-2">
+            {[
+              { href: '/coach/dashboard', label: 'Dashboard' },
+              { href: '/coach/referrals', label: 'Referrals' },
+              { href: '/coach/staff', label: 'Staff' },
+              { href: '/coach/inbox', label: 'Inbox' },
+              { href: '/coach/profile', label: 'Profile' }
+            ].map((item) => {
+              const isActive = router.pathname === item.href;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                    isActive ? 'bg-[#E0FE10] text-black' : 'text-zinc-300 hover:text-white hover:bg-zinc-800'
+                  }`}
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
+          </nav>
+          
           <div className="text-right">
             <div className="text-sm text-zinc-400">Referral Code</div>
             <div className="text-xl font-bold text-[#E0FE10]">{coachProfile?.referralCode}</div>
@@ -148,164 +282,7 @@ const CoachDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Invite Athletes Section */}
-        <div className="mt-8 bg-zinc-900 rounded-xl p-6">
-          <div className="flex items-center space-x-3 mb-4">
-            <FaLink className="text-[#E0FE10] text-xl" />
-            <h3 className="text-lg font-semibold">Invite Athletes</h3>
-          </div>
-          
-          <div className="space-y-4">
-            {/* Invite Link */}
-            <div>
-              <label className="block text-sm font-medium text-zinc-300 mb-2">
-                Invite Link
-              </label>
-              <div className="flex items-center space-x-2">
-                <input
-                  type="text"
-                  value={inviteLink}
-                  readOnly
-                  className="flex-1 bg-zinc-800 text-white px-4 py-2 rounded-lg border border-zinc-700 focus:border-[#E0FE10] focus:outline-none"
-                />
-                <button
-                  onClick={async () => {
-                    try {
-                      await navigator.clipboard.writeText(inviteLink);
-                      setCopySuccess(true);
-                      setTimeout(() => setCopySuccess(false), 2000);
-                    } catch (err) {
-                      console.error('Failed to copy:', err);
-                    }
-                  }}
-                  className="bg-[#E0FE10] text-black px-4 py-2 rounded-lg hover:bg-lime-400 transition-colors flex items-center space-x-2"
-                >
-                  <FaCopy className="text-sm" />
-                  <span>{copySuccess ? 'Copied!' : 'Copy'}</span>
-                </button>
-              </div>
-              <p className="text-xs text-zinc-500 mt-1">
-                Athletes can click this link to automatically connect to you
-              </p>
-            </div>
-
-            {/* QR Code Section */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="block text-sm font-medium text-zinc-300">
-                  QR Code
-                </label>
-                <button
-                  onClick={() => setShowQrCode(!showQrCode)}
-                  className="text-[#E0FE10] hover:text-lime-400 transition-colors flex items-center space-x-1 text-sm"
-                >
-                  <FaQrcode />
-                  <span>{showQrCode ? 'Hide' : 'Show'} QR Code</span>
-                </button>
-              </div>
-              
-              {showQrCode && qrCodeUrl && (
-                <div className="bg-white p-4 rounded-lg inline-block">
-                  <img src={qrCodeUrl} alt="Invite QR Code" className="w-48 h-48" />
-                  <p className="text-center text-black text-xs mt-2">
-                    Scan to connect with {coachProfile?.referralCode}
-                  </p>
-                </div>
-              )}
-              
-              <p className="text-xs text-zinc-500 mt-1">
-                Athletes can scan this QR code to instantly connect
-              </p>
-            </div>
-
-            {/* Legacy Referral Code */}
-            <div>
-              <label className="block text-sm font-medium text-zinc-300 mb-2">
-                Referral Code
-              </label>
-              <div className="flex items-center space-x-2">
-                <input
-                  type="text"
-                  value={coachProfile?.referralCode || ''}
-                  readOnly
-                  className="flex-1 bg-zinc-800 text-white px-4 py-2 rounded-lg border border-zinc-700"
-                />
-                <button
-                  onClick={async () => {
-                    try {
-                      await navigator.clipboard.writeText(coachProfile?.referralCode || '');
-                      setCopySuccess(true);
-                      setTimeout(() => setCopySuccess(false), 2000);
-                    } catch (err) {
-                      console.error('Failed to copy:', err);
-                    }
-                  }}
-                  className="bg-zinc-700 text-white px-4 py-2 rounded-lg hover:bg-zinc-600 transition-colors flex items-center space-x-2"
-                >
-                  <FaCopy className="text-sm" />
-                  <span>Copy</span>
-                </button>
-              </div>
-              <p className="text-xs text-zinc-500 mt-1">
-                For athletes who prefer to enter a code manually
-              </p>
-            </div>
-          </div>
-        </div>
-        
-        {/* Invite Coaches Section */}
-        <div className="mt-8 bg-zinc-900 rounded-xl p-6">
-          <div className="flex items-center space-x-3 mb-4">
-            <FaLink className="text-[#E0FE10] text-xl" />
-            <h3 className="text-lg font-semibold">Invite Coaches</h3>
-          </div>
-          <p className="text-zinc-400 text-sm mb-4">Coaches you invite can be linked to you for revenue sharing.</p>
-          <div className="flex items-center gap-3 mb-4">
-            <input
-              value={coachReferralInput}
-              onChange={(e)=>setCoachReferralInput(e.target.value)}
-              placeholder="Enter coach referral code"
-              className="flex-1 bg-zinc-800 text-white px-4 py-2 rounded-lg border border-zinc-700 focus:border-[#E0FE10] focus:outline-none"
-            />
-            <button
-              onClick={async ()=>{
-                if (!coachProfile || !currentUser) return;
-                setCoachConnectStatus(null);
-                const res = await coachService.connectCoachToCoachByReferralCode(
-                  coachProfile.id,
-                  currentUser.username || '',
-                  currentUser.email || '',
-                  coachReferralInput
-                );
-                setCoachConnectStatus(res.message || (res.success ? 'Connected!' : 'Failed'));
-                if (res.success) {
-                  const cc = await coachService.getConnectedCoachesForCoach(coachProfile.id);
-                  setConnectedCoaches(cc);
-                  setCoachReferralInput('');
-                }
-              }}
-              className="bg-[#E0FE10] text-black px-4 py-2 rounded-lg hover:bg-lime-400 transition-colors"
-            >Connect Coach</button>
-          </div>
-          {coachConnectStatus && <div className="text-xs text-zinc-400 mb-2">{coachConnectStatus}</div>}
-          <div>
-            <div className="text-sm text-zinc-300 mb-2">Connected Coaches</div>
-            {connectedCoaches.length === 0 ? (
-              <div className="text-zinc-500 text-sm">No connected coaches yet.</div>
-            ) : (
-              <div className="space-y-2">
-                {connectedCoaches.map((c)=> (
-                  <div key={c.userId} className="flex items-center justify-between bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-2">
-                    <div>
-                      <div className="font-medium">{c.username || c.email || c.userId}</div>
-                      <div className="text-xs text-zinc-500">{c.email}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
+        {/* Referrals moved to /coach/referrals */}
 
         {/* Athletes Section */}
         <div className="mt-8">
@@ -323,21 +300,6 @@ const CoachDashboard: React.FC = () => {
                 Use the invite link or QR code above to connect with athletes instantly
               </p>
               <div className="flex justify-center space-x-4">
-                <button 
-                  onClick={async () => {
-                    try {
-                      await navigator.clipboard.writeText(inviteLink);
-                      setCopySuccess(true);
-                      setTimeout(() => setCopySuccess(false), 2000);
-                    } catch (err) {
-                      console.error('Failed to copy:', err);
-                    }
-                  }}
-                  className="bg-[#E0FE10] text-black px-6 py-3 rounded-lg hover:bg-lime-400 transition-colors flex items-center space-x-2"
-                >
-                  <FaLink className="text-sm" />
-                  <span>{copySuccess ? 'Copied!' : 'Copy Invite Link'}</span>
-                </button>
                 <button 
                   onClick={async () => {
                     if (coachProfile) {
@@ -376,6 +338,74 @@ const CoachDashboard: React.FC = () => {
             </div>
           )}
         </div>
+
+        {/* Shared Athletes (staff) */}
+        {sharedAthletes.length > 0 && (
+          <div className="mt-12">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-2xl font-bold">Shared Athletes</h3>
+              <span className="text-zinc-400">{sharedAthletes.length} assigned</span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {sharedAthletes.map((athlete) => (
+                <AthleteCard
+                  key={athlete.id}
+                  athlete={athlete}
+                  onViewDetails={()=>{}}
+                  onMessageAthlete={()=>{}}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Invites Inbox (staff) */}
+        {pendingInvites.length > 0 && (
+          <div className="mt-12">
+            <h3 className="text-2xl font-bold mb-4">Invites</h3>
+            <div className="space-y-3">
+              {pendingInvites.map((inv) => (
+                <div key={inv.coachId} className="bg-zinc-900 border border-zinc-800 rounded-lg p-4 flex items-center justify-between">
+                  <div className="text-zinc-300">You have been invited to join a coach’s staff.</div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={async ()=>{
+                        if (!currentUser?.email) return;
+                        const memberRef = doc(db, 'coach-staff', inv.coachId, 'members', currentUser.email.toLowerCase());
+                        await updateDoc(memberRef, { status: 'accepted' });
+                        // Refresh page state
+                        setPendingInvites(prev => prev.filter(p => p.coachId !== inv.coachId));
+                        // Try to load shared athletes now
+                        if (inv.permission === 'full') {
+                          const connected = await coachService.getConnectedAthletes(inv.coachId);
+                          setSharedAthletes(connected);
+                        } else if (inv.allowedAthletes && inv.allowedAthletes.length) {
+                          const results: any[] = [];
+                          await Promise.all(inv.allowedAthletes.map(async (aid: string) => {
+                            const uref = doc(db, 'users', aid);
+                            const usnap = await getDoc(uref);
+                            if (usnap.exists()) results.push({ id: aid, ...usnap.data() });
+                          }));
+                          setSharedAthletes(results);
+                        }
+                      }}
+                      className="bg-[#E0FE10] text-black px-3 py-1.5 rounded-md"
+                    >Accept</button>
+                    <button
+                      onClick={async ()=>{
+                        if (!currentUser?.email) return;
+                        const memberRef = doc(db, 'coach-staff', inv.coachId, 'members', currentUser.email.toLowerCase());
+                        await updateDoc(memberRef, { status: 'declined' });
+                        setPendingInvites(prev => prev.filter(p => p.coachId !== inv.coachId));
+                      }}
+                      className="bg-zinc-800 border border-zinc-700 px-3 py-1.5 rounded-md"
+                    >Decline</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

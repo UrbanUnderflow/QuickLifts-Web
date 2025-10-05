@@ -427,6 +427,10 @@ const handler = async (event) => {
             console.log(`Using default buyer ID: ${cleanBuyerId}`);
           }
           
+          // Prefer email/username from payment metadata if present
+          const buyerEmail = payment.buyerEmail || (payment.metadata && payment.metadata.buyerEmail) || '';
+          const buyerUsername = payment.buyerUsername || (payment.metadata && payment.metadata.buyerUsername) || '';
+
           return {
             date: payment.createdAt?.toDate?.() 
               ? payment.createdAt.toDate().toISOString().split('T')[0] 
@@ -436,7 +440,9 @@ const handler = async (event) => {
             status: payment.status || 'completed',
             source: payment.source || 'firestore',
             id: payment.paymentId || payment.id || 'unknown',
-            buyerId: cleanBuyerId
+            buyerId: cleanBuyerId,
+            buyerEmail,
+            buyerUsername
           };
         });
         

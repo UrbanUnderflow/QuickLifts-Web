@@ -42,7 +42,18 @@ class CoachService {
       const userDoc = await getDoc(userRef);
       
       if (!userDoc.exists()) {
-        console.log('[CoachService] User document not found:', userId);
+        console.log('[CoachService] User document not found:', userId, '— falling back to coaches collection.');
+        // Fallback: if a coach profile exists, allow access and backfill activeCoachAccount flag
+        const coachRef = doc(db, 'coaches', userId);
+        const coachDoc = await getDoc(coachRef);
+        if (coachDoc.exists()) {
+          try {
+            // Attempt to set activeCoachAccount=true if users doc exists later
+            const userRef = doc(db, 'users', userId);
+            await setDoc(userRef, { activeCoachAccount: true, updatedAt: dateToUnixTimestamp(new Date()) }, { merge: true });
+          } catch (_) { /* non-blocking */ }
+          return new CoachModel(coachDoc.id, coachDoc.data() as CoachFirestoreData);
+        }
         return null;
       }
       
@@ -177,7 +188,17 @@ class CoachService {
       const snap = await getDoc(ref);
       if (!snap.exists()) return [];
       const data = snap.data() as any;
-      return Array.isArray(data?.connectedCoaches) ? data.connectedCoaches : [];
+      const list = Array.isArray(data?.connectedCoaches) ? data.connectedCoaches : [];
+      // Dedupe by userId in case multiple entries were appended with different timestamps
+      const byId = new Map<string, { userId: string; username: string; email: string; connectedAt?: number }>();
+      list.forEach((e: any) => {
+        if (!e || !e.userId) return;
+        const existing = byId.get(e.userId);
+        if (!existing || (typeof e.connectedAt === 'number' && (existing.connectedAt || 0) < e.connectedAt)) {
+          byId.set(e.userId, { userId: e.userId, username: e.username || '', email: e.email || '', connectedAt: e.connectedAt });
+        }
+      });
+      return Array.from(byId.values()).sort((a, b) => (b.connectedAt || 0) - (a.connectedAt || 0));
     } catch (error) {
       console.error('Error reading connected coaches:', error);
       return [];
@@ -645,7 +666,9 @@ class CoachService {
           const userData = userDoc.data();
           
           // Get additional stats (conversations, sessions, etc.)
-          const athleteStats = await this.getAthleteStats(athleteUserId);
+          // Defensive: ensure we have a valid instance context; fallback to singleton
+          const self = (this as CoachService | undefined) || coachService;
+          const athleteStats = await self.getAthleteStats(athleteUserId);
 
           // Last active should prioritize most recent conversation; fallback to coachAthletes.updatedAt/linkedAt
           const conversationDate = athleteStats.lastConversationDate;

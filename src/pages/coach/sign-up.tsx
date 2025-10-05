@@ -89,6 +89,16 @@ const CoachSignUpPage: React.FC = () => {
           const upgraded = new User(existing.id || fb.uid, { ...existing, role: 'coach', registrationComplete: true, updatedAt: new Date() });
           await userService.updateUser(existing.id || fb.uid, upgraded);
         }
+        // If no profile image on existing account, collect it here before redirect
+        const hasImage = !!(existing as any)?.profileImage?.profileImageURL;
+        if (!hasImage) {
+          const suggested = (fb.displayName?.replace(/\s+/g, '_') || fb.email?.split('@')[0] || 'user').toLowerCase();
+          setOauthUser(fb);
+          setEmail(fb.email || (existing as any)?.email || '');
+          setUsername((existing as any)?.username || suggested);
+          setLoading(false);
+          return; // show form to upload image and save
+        }
         const profile = await ensureCoachProfile(fb.uid);
         if (profile) {
           await maybeLinkReferringCoach(fb.uid, (existing as any)?.username || username || '', fb.email || '');
@@ -112,6 +122,15 @@ const CoachSignUpPage: React.FC = () => {
         if (existing.role !== 'coach') {
           const upgraded = new User(existing.id || fb.uid, { ...existing, role: 'coach', registrationComplete: true, updatedAt: new Date() });
           await userService.updateUser(existing.id || fb.uid, upgraded);
+        }
+        const hasImage = !!(existing as any)?.profileImage?.profileImageURL;
+        if (!hasImage) {
+          const suggested = (fb.displayName?.replace(/\s+/g, '_') || fb.email?.split('@')[0] || 'user').toLowerCase();
+          setOauthUser(fb);
+          setEmail(fb.email || (existing as any)?.email || '');
+          setUsername((existing as any)?.username || suggested);
+          setLoading(false);
+          return;
         }
         const profile = await ensureCoachProfile(fb.uid);
         if (profile) {

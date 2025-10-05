@@ -215,7 +215,7 @@ async function handleSubscriptionCreated(subscription) {
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
 
-    const priceId = subscription.items?.data?.[0]?.price?.id;
+    // reuse previously derived priceId for plan mapping
     const toPlanType = (pid) => {
       switch (pid) {
         case 'price_1PDq26RobSf56MUOucDIKLhd': return 'pulsecheck-monthly';
@@ -347,7 +347,7 @@ async function handleSubscriptionUpdated(subscription) {
         default: return null;
       }
     };
-    const priceId = subscription.items?.data?.[0]?.price?.id;
+    // reuse previously derived priceId for plan mapping
     const planType = toPlanType(priceId);
     const expSec = subscription.current_period_end || null;
     if (planType && expSec) {

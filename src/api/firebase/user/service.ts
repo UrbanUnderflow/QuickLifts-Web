@@ -57,9 +57,12 @@ class UserService {
     return new User(userId, userData);
   }
 
-  async updateUser(userId: string, user: User): Promise<void> {
+  async updateUser(userId: string, user: User | Record<string, any>): Promise<void> {
     const userRef = doc(db, 'users', userId);
-    const userData = user.toDictionary();
+    // Allow callers to pass either a User instance or a plain object
+    const userData: any = (user && typeof (user as any).toDictionary === 'function')
+      ? (user as any).toDictionary()
+      : user;
 
     // Deep-sanitize undefined → null for Firestore compatibility
     const sanitizeForFirestore = (value: any): any => {
