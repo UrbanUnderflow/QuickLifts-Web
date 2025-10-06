@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { useUser, useUserLoading } from '../../hooks/useUser';
 import { coachService } from '../../api/firebase/coach';
@@ -236,8 +237,26 @@ const CoachInvitePage: React.FC = () => {
     );
   }
 
+  // Dynamic OG/Twitter meta for rich previews
+  const title = `You're invited to coach on Pulse`;
+  const description = `Access athlete CRM and AI Cognitive Behavior Therapy.`;
+  const base = typeof window !== 'undefined' ? window.location.origin : 'https://fitwithpulse.ai';
+  const ogImage = coachInfo?.profileImage?.profileImageURL || `${base}/images/og/coach-invite-default.jpg`;
+
   return (
     <div className="min-h-screen bg-black flex items-center justify-center">
+      <Head>
+        <title>{title}</title>
+        <meta property="og:title" content={title} />
+        <meta property="og:description" content={description} />
+        <meta property="og:image" content={ogImage} />
+        <meta property="og:url" content={`${base}/coach-invite/${referralCode || ''}`} />
+        <meta property="og:type" content="website" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={title} />
+        <meta name="twitter:description" content={description} />
+        <meta name="twitter:image" content={ogImage} />
+      </Head>
       <div className="text-center max-w-md mx-auto p-8">
         <FaUser className="text-[#E0FE10] text-6xl mx-auto mb-6" />
         <h1 className="text-3xl font-bold text-white mb-4">Coach Invitation</h1>
