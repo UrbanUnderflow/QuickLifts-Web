@@ -30,8 +30,8 @@ const ReferralsPage: React.FC = () => {
           const cc = await coachService.getConnectedCoachesForCoach(profile.id);
           setConnectedCoaches(cc);
         } catch (_) {}
-        // Build coach-to-coach signup link using stable referral code
-        setCoachInviteLink(`${baseUrl}/coach/sign-up?ref=${profile.referralCode}`);
+        // Build coach-to-coach invite link (rich preview)
+        setCoachInviteLink(`${baseUrl}/coach-invite/${profile.referralCode}`);
       } catch (e) {
         // noop
       }
