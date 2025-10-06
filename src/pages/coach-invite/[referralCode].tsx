@@ -241,7 +241,7 @@ const CoachInvitePage: React.FC = () => {
   const title = `You're invited to coach on Pulse`;
   const description = `Access athlete CRM and AI Cognitive Behavior Therapy.`;
   const base = typeof window !== 'undefined' ? window.location.origin : 'https://fitwithpulse.ai';
-  const ogImage = coachInfo?.profileImage?.profileImageURL || `${base}/images/og/coach-invite-default.jpg`;
+  const ogImage = coachInfo?.profileImage?.profileImageURL || `${base}/coach-invite-default.jpg`;
 
   return (
     <div className="min-h-screen bg-black flex items-center justify-center">
