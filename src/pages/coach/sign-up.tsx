@@ -9,6 +9,8 @@ import { firebaseStorageService, UploadImageType } from '../../api/firebase/stor
 import { FaGoogle, FaApple } from 'react-icons/fa';
 import { coachAuth } from '../../api/firebase/auth/coachAuth';
 import { coachService } from '../../api/firebase/coach';
+import { db } from '../../api/firebase/config';
+import { doc, getDoc, runTransaction, serverTimestamp } from 'firebase/firestore';
 
 const CoachSignUpPage: React.FC = () => {
   const router = useRouter();
@@ -21,6 +23,9 @@ const CoachSignUpPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [oauthUser, setOauthUser] = useState<any | null>(null);
+  const [isChecking, setIsChecking] = useState(false);
+  const [isAvailable, setIsAvailable] = useState<boolean | null>(null);
+  const [usernameError, setUsernameError] = useState<string | null>(null);
 
   const ensureCoachProfile = async (uid: string) => {
     try {
@@ -51,6 +56,46 @@ const CoachSignUpPage: React.FC = () => {
       await coachService.connectCoachToCoachByReferralCode(uid, inviteeUsername || '', inviteeEmail || '', ref);
       try { localStorage.removeItem('pulse_referring_coach_code'); } catch (_) {}
     } catch (_) { /* ignore linking failure */ }
+  };
+
+  // Username helpers
+  const normalizedUsername = (val: string) => val.trim().toLowerCase();
+  const validUsernameFormat = (val: string) => /^[a-z0-9_]{3,20}$/.test(val);
+
+  const checkUsernameAvailability = async (name: string): Promise<boolean> => {
+    const uname = normalizedUsername(name);
+    if (!validUsernameFormat(uname)) {
+      setUsernameError('Use 3-20 chars: letters, numbers, underscore');
+      setIsAvailable(null);
+      return false;
+    }
+    setUsernameError(null);
+    setIsChecking(true);
+    try {
+      const ref = doc(db, 'usernames', uname);
+      const snap = await getDoc(ref);
+      const taken = snap.exists();
+      setIsAvailable(!taken);
+      return !taken;
+    } catch (_) {
+      setIsAvailable(null);
+      return false;
+    } finally {
+      setIsChecking(false);
+    }
+  };
+
+  const claimUsername = async (uid: string, name: string) => {
+    const uname = normalizedUsername(name);
+    if (!validUsernameFormat(uname)) throw new Error('Invalid username');
+    await runTransaction(db, async (tx) => {
+      const ref = doc(db, 'usernames', uname);
+      const snap = await tx.get(ref);
+      if (snap.exists() && (snap.data() as any)?.userId !== uid) {
+        throw new Error('Username already taken');
+      }
+      tx.set(ref, { userId: uid, username: uname, createdAt: serverTimestamp() });
+    });
   };
 
   const saveUser = async (uid: string, userEmail: string, display: string, imageUrl: string) => {
@@ -148,17 +193,21 @@ const CoachSignUpPage: React.FC = () => {
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (!username || username.length < 3) return setError('Username must be at least 3 characters');
+    const uname = normalizedUsername(username);
+    if (!validUsernameFormat(uname)) return setError('Username: 3-20 chars, letters, numbers, underscore');
+    const available = await checkUsernameAvailability(uname);
+    if (!available) return setError('Username is taken');
     try {
       setLoading(true);
       let imageUrl = '';
       if (profileFile) imageUrl = (await firebaseStorageService.uploadImage(profileFile, UploadImageType.Profile)).downloadURL;
 
       if (oauthUser) {
-        await saveUser(oauthUser.uid, oauthUser.email || '', username, imageUrl);
+        await claimUsername(oauthUser.uid, uname);
+        await saveUser(oauthUser.uid, oauthUser.email || '', uname, imageUrl);
         const profile = await ensureCoachProfile(oauthUser.uid);
         if (profile) {
-          await maybeLinkReferringCoach(oauthUser.uid, username, oauthUser.email || '');
+          await maybeLinkReferringCoach(oauthUser.uid, uname, oauthUser.email || '');
           return router.replace('/coach/dashboard');
         }
         return;
@@ -169,10 +218,11 @@ const CoachSignUpPage: React.FC = () => {
       if (password !== confirm) return setError('Passwords do not match');
 
       const cred = await createUserWithEmailAndPassword(auth, email, password);
-      await saveUser(cred.user.uid, email, username, imageUrl);
+      await claimUsername(cred.user.uid, uname);
+      await saveUser(cred.user.uid, email, uname, imageUrl);
       const profile = await ensureCoachProfile(cred.user.uid);
       if (profile) {
-        await maybeLinkReferringCoach(cred.user.uid, username, email);
+        await maybeLinkReferringCoach(cred.user.uid, uname, email);
         router.replace('/coach/dashboard');
       }
     } catch (e: any) {
@@ -218,7 +268,22 @@ const CoachSignUpPage: React.FC = () => {
 
           <div>
             <label className="block text-sm mb-2">Username</label>
-            <input value={username} onChange={e=>setUsername(e.target.value)} type="text" className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-3" />
+            <div className="space-y-1">
+              <input
+                value={username}
+                onChange={async (e)=>{ setUsername(e.target.value); setIsAvailable(null); }}
+                onBlur={()=>checkUsernameAvailability(username)}
+                type="text"
+                className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-3"
+                placeholder="e.g., coach_calvin"
+              />
+              <div className="text-xs">
+                {usernameError && (<span className="text-red-400">{usernameError}</span>)}
+                {!usernameError && isChecking && (<span className="text-zinc-400">Checking availability…</span>)}
+                {!usernameError && isAvailable === true && (<span className="text-green-400">Username is available</span>)}
+                {!usernameError && isAvailable === false && (<span className="text-red-400">Username is taken</span>)}
+              </div>
+            </div>
           </div>
 
           {!oauthUser && (

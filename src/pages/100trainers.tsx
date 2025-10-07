@@ -125,6 +125,7 @@ const CreatorChecklist = ({ metaData }: HundredTrainersPageProps) => {
 
   const router = useRouter();
   const [showVideo, setShowVideo] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
 
   // Pre-fill form with user data once on mount
   useEffect(() => {
@@ -145,6 +146,13 @@ const CreatorChecklist = ({ metaData }: HundredTrainersPageProps) => {
       // router.push('/login');
     }
   }, [currentUser, router]);
+
+  useEffect(() => {
+    const update = () => setIsMobile(typeof window !== 'undefined' ? window.innerWidth < 768 : false);
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -399,6 +407,108 @@ const CreatorChecklist = ({ metaData }: HundredTrainersPageProps) => {
           )}
 
           {currentView === 'form' && (
+            isMobile ? (
+              <div className="fixed inset-0 z-50 bg-[#131313] overflow-y-auto" id="application-form-section">
+                <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-2xl font-bold text-white">Application for Pulse Founding 100</h2>
+                    <button onClick={() => setCurrentView('landing')} className="text-gray-300 hover:text-white"><X /></button>
+                  </div>
+                  <p className="text-sm text-gray-400 mb-4">We're excited to learn more about you!</p>
+                  <form onSubmit={handleSubmit} className="space-y-8 bg-[#1c1c1c] p-6 rounded-xl shadow-2xl">
+                    <div>
+                      <label htmlFor="name" className="block text-sm font-medium text-gray-300 mb-1">Full Name</label>
+                      <input type="text" name="name" id="name" value={formData.name} onChange={handleInputChange} required className="w-full bg-[#2a2a2a] border-gray-600 rounded-md p-3 text-white focus:ring-[#E0FE10] focus:border-[#E0FE10]" />
+                    </div>
+                    <div>
+                      <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-1">Email Address</label>
+                      <input type="email" name="email" id="email" value={formData.email} onChange={handleInputChange} required className="w-full bg-[#2a2a2a] border-gray-600 rounded-md p-3 text-white focus:ring-[#E0FE10] focus:border-[#E0FE10]" />
+                    </div>
+                    {/* Roles */}
+                    <fieldset>
+                      <legend className="text-sm font-medium text-gray-300 mb-2">Which role(s) best describe you? (Select all that apply)</legend>
+                      <div className="grid grid-cols-2 gap-4">
+                        {Object.keys(formData.role).map((key) => (
+                          <div key={key} className="flex items-center">
+                            <input id={`role-${key}`} name={key} type="checkbox" checked={formData.role[key as keyof typeof formData.role]} onChange={() => handleCheckboxChange('role', key)} className="h-4 w-4 text-[#E0FE10] bg-gray-700 border-gray-600 rounded focus:ring-[#E0FE10]" />
+                            <label htmlFor={`role-${key}`} className="ml-2 text-sm text-gray-300 capitalize">{key.replace(/([A-Z])/g, ' $1')}</label>
+                          </div>
+                        ))}
+                      </div>
+                    </fieldset>
+                    <div>
+                      <label htmlFor="primaryUse" className="block text-sm font-medium text-gray-300 mb-1">How do you primarily see yourself using Pulse?</label>
+                      <textarea name="primaryUse" id="primaryUse" value={formData.primaryUse} onChange={handleInputChange} rows={3} className="w-full bg-[#2a2a2a] border-gray-600 rounded-md p-3 text-white focus:ring-[#E0FE10] focus:border-[#E0FE10]" placeholder="e.g., Share my workouts, build a fitness community, train clients..."></textarea>
+                    </div>
+                    {/* Use Cases */}
+                    <fieldset>
+                      <legend className="text-sm font-medium text-gray-300 mb-2">Which of the following use cases are you interested in? (Select all that apply)</legend>
+                      <div className="space-y-2">
+                        {Object.keys(formData.useCases).map((key) => (
+                          <div key={key} className="flex items-center">
+                            <input id={`useCases-${key}`} name={key} type="checkbox" checked={formData.useCases[key as keyof typeof formData.useCases]} onChange={() => handleCheckboxChange('useCases', key)} className="h-4 w-4 text-[#E0FE10] bg-gray-700 border-gray-600 rounded focus:ring-[#E0FE10]" />
+                            <label htmlFor={`useCases-${key}`} className="ml-2 text-sm text-gray-300 capitalize">{key.replace(/([A-Z])/g, ' $1')}</label>
+                          </div>
+                        ))}
+                      </div>
+                    </fieldset>
+                    <div>
+                      <label htmlFor="clientCount" className="block text-sm font-medium text-gray-300 mb-1">Roughly how many clients or community members do you currently engage with? (Optional)</label>
+                      <select 
+                        name="clientCount" 
+                        id="clientCount" 
+                        value={formData.clientCount} 
+                        onChange={handleInputChange} 
+                        className="w-full bg-[#2a2a2a] border-gray-600 rounded-md p-3 text-white focus:ring-[#E0FE10] focus:border-[#E0FE10]"
+                      >
+                        <option value="">Select a range</option>
+                        <option value="0-10">0-10</option>
+                        <option value="11-50">11-50</option>
+                        <option value="51-100">51-100</option>
+                        <option value="101-500">101-500</option>
+                        <option value="501-1000">501-1000</option>
+                        <option value="1000+">1000+</option>
+                        <option value="Not applicable">Not applicable</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label htmlFor="yearsExperience" className="block text-sm font-medium text-gray-300 mb-1">Years of Experience in your primary role (Optional)</label>
+                      <input type="text" name="yearsExperience" id="yearsExperience" value={formData.yearsExperience} onChange={handleInputChange} className="w-full bg-[#2a2a2a] border-gray-600 rounded-md p-3 text-white focus:ring-[#E0FE10] focus:border-[#E0FE10]" placeholder="e.g., 3 years as a PT" />
+                    </div>
+                    <div>
+                      <label htmlFor="longTermGoal" className="block text-sm font-medium text-gray-300 mb-1">What's your long-term goal with Pulse? (Optional)</label>
+                      <textarea name="longTermGoal" id="longTermGoal" value={formData.longTermGoal} onChange={handleInputChange} rows={3} className="w-full bg-[#2a2a2a] border-gray-600 rounded-md p-3 text-white focus:ring-[#E0FE10] focus:border-[#E0FE10]" placeholder="e.g., Build a global fitness brand, help 1000 people achieve their goals..."></textarea>
+                    </div>
+                    {/* Certification */}
+                    <fieldset className="space-y-2">
+                      <legend className="text-sm font-medium text-gray-300">Are you a certified fitness professional? (Optional)</legend>
+                      <div className="flex items-center gap-x-4">
+                        <div className="flex items-center">
+                          <input id="isCertifiedYes" name="isCertified" type="radio" checked={formData.isCertified === true} onChange={() => handleRadioChange('isCertified', true)} className="h-4 w-4 text-[#E0FE10] border-gray-600 focus:ring-[#E0FE10]" />
+                          <label htmlFor="isCertifiedYes" className="ml-2 block text-sm text-gray-300">Yes</label>
+                        </div>
+                        <div className="flex items-center">
+                          <input id="isCertifiedNo" name="isCertified" type="radio" checked={formData.isCertified === false} onChange={() => handleRadioChange('isCertified', false)} className="h-4 w-4 text-[#E0FE10] border-gray-600 focus:ring-[#E0FE10]" />
+                          <label htmlFor="isCertifiedNo" className="ml-2 block text-sm text-gray-300">No</label>
+                        </div>
+                      </div>
+                      {formData.isCertified && (
+                        <div>
+                          <label htmlFor="certificationName" className="block text-sm font-medium text-gray-300 mt-2 mb-1">Name of Certification (Optional)</label>
+                          <input type="text" name="certificationName" id="certificationName" value={formData.certificationName} onChange={handleInputChange} className="w-full bg-[#2a2a2a] border-gray-600 rounded-md p-3 text-white focus:ring-[#E0FE10] focus:border-[#E0FE10]" />
+                        </div>
+                      )}
+                    </fieldset>
+                    {submitError && <p className="text-red-400 text-sm">{submitError}</p>}
+                    <div className="flex flex-col sm:flex-row justify-end items-center gap-4 pt-2">
+                      <button type="button" onClick={handleViewGuide} className="w-full sm:w-auto px-6 py-3 border border-gray-600 rounded-full text-gray-300 hover:bg-gray-700 hover:text-white transition-colors duration-300">View Application Guide</button>
+                      <button type="button" onClick={() => setCurrentView('landing')} className="w-full sm:w-auto px-6 py-3 border border-[#E0FE10] rounded-full text-[#E0FE10] hover:bg-[#E0FE10] hover:text-black transition-colors duration-300">Cancel</button>
+                      <button type="submit" disabled={isSubmitting || !isFormValid()} className="w-full sm:w-auto flex items-center justify-center px-8 py-3 border border-transparent text-lg font-medium rounded-full text-black bg-[#E0FE10] hover:bg-opacity-80 transition-colors duration-300 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed">{isSubmitting ? <Loader2 className="animate-spin h-5 w-5 mr-2" /> : <Send className="h-5 w-5 mr-2" />} {isSubmitting ? 'Submitting...' : 'Submit Application'}</button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            ) : (
             <section id="application-form-section" className="py-16 md:py-24 bg-[#131313] relative z-20">
               <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="text-center mb-12">
@@ -526,6 +636,7 @@ const CreatorChecklist = ({ metaData }: HundredTrainersPageProps) => {
                 </form>
               </div>
             </section>
+            )
           )}
 
           {currentView === 'guide' && (

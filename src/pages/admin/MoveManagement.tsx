@@ -3,7 +3,7 @@ import Head from 'next/head';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import { collection, getDocs, query, orderBy, where, getCountFromServer, doc, updateDoc, serverTimestamp, writeBatch, deleteDoc, getDoc } from 'firebase/firestore';
 import { db, storage } from '../../api/firebase/config';
-import { ref as storageRef, deleteObject } from 'firebase/storage';
+import { ref as storageRef, deleteObject, getMetadata } from 'firebase/storage';
 import { getAuth, getIdToken } from 'firebase/auth';
 import { Dumbbell, Video, PlayCircle, RefreshCw, AlertCircle, CheckCircle, Loader2, Eye, XCircle, ImageIcon, Check, X, Search, Filter, Trash2, Copy } from 'lucide-react';
 import { Exercise, ExerciseVideo } from '../../api/firebase/exercise/types'; // Assuming types are here
@@ -27,6 +27,7 @@ interface ExerciseVideoDisplay {
   username?: string;
   createdAt?: any; // Firestore Timestamp or Date
   // Add other fields from your ExerciseVideo class as needed
+  fileSizeBytes?: number;
 }
 
 interface ReportedItemDisplay {
@@ -332,7 +333,7 @@ const MoveManagement: React.FC = () => {
       // Ensure the field name in 'where' matches your Firestore data for linking videos to exercises
       const q = query(videosRef, where('exerciseId', '==', exerciseId), orderBy('createdAt', 'desc'));
       const snapshot = await getDocs(q);
-      const fetchedVideos = snapshot.docs.map(doc => {
+      const baseVideos = snapshot.docs.map(doc => {
           const data = doc.data();
           return {
               id: doc.id,
@@ -341,16 +342,45 @@ const MoveManagement: React.FC = () => {
               thumbnail: data.thumbnail,
               username: data.username,
               createdAt: data.createdAt,
-              // Add other fields if needed
           } as ExerciseVideoDisplay;
       });
-      setExerciseVideos(fetchedVideos);
-      setFilteredExerciseVideos(fetchedVideos);
+
+      // Best-effort: fetch file sizes from Storage metadata; fallback to HEAD content-length
+      const enriched = await Promise.all(
+        baseVideos.map(async (v) => {
+          try {
+            if (v.videoURL && typeof v.videoURL === 'string') {
+              // Try Storage metadata (works when using gs:// path or storage path)
+              try {
+                const ref = storageRef(storage, v.videoURL);
+                const metadata = await getMetadata(ref);
+                if (typeof metadata.size === 'number') {
+                  return { ...v, fileSizeBytes: metadata.size };
+                }
+              } catch (_) { /* fall through to HEAD */ }
+
+              // Fallback: HEAD request if it's a public https URL
+              if (v.videoURL.startsWith('http')) {
+                const len = await fetchContentLength(v.videoURL);
+                if (typeof len === 'number') {
+                  return { ...v, fileSizeBytes: len };
+                }
+              }
+            }
+          } catch (e) {
+            console.warn('[MoveManagement] Failed to load metadata for', v.id, e);
+          }
+          return v;
+        })
+      );
+
+      setExerciseVideos(enriched);
+      setFilteredExerciseVideos(enriched);
       // Update video count on the exercise display object
       setExercises(prevExercises => prevExercises.map(ex => 
-        ex.id === exerciseId ? { ...ex, videoCount: fetchedVideos.length } : ex
+        ex.id === exerciseId ? { ...ex, videoCount: enriched.length } : ex
       ));
-      console.log(`[MoveManagement] Fetched ${fetchedVideos.length} videos for exercise ${exerciseId}.`);
+      console.log(`[MoveManagement] Fetched ${enriched.length} videos for exercise ${exerciseId}.`);
     } catch (err) {
       console.error(`[MoveManagement] Error fetching videos for exercise ${exerciseId}:`, err);
       setToastMessage({ type: 'error', text: `Failed to load videos. ${err instanceof Error ? err.message : ''}`});
@@ -595,6 +625,32 @@ const MoveManagement: React.FC = () => {
     }
   };
 
+  // Human-readable bytes formatter
+  const formatBytes = (bytes?: number): string => {
+    if (bytes == null || isNaN(bytes)) return '—';
+    if (bytes === 0) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(1024));
+    const value = bytes / Math.pow(1024, i);
+    return `${value.toFixed(value < 10 && i > 0 ? 1 : 0)} ${units[i]}`;
+  };
+
+  // Attempt to read Content-Length via HEAD for public URLs
+  const fetchContentLength = async (url?: string): Promise<number | undefined> => {
+    if (!url || typeof url !== 'string') return undefined;
+    try {
+      const res = await fetch(url, { method: 'HEAD' });
+      const len = res.headers.get('content-length');
+      if (len) {
+        const parsed = parseInt(len, 10);
+        if (!isNaN(parsed)) return parsed;
+      }
+    } catch (e) {
+      // ignore; best-effort fallback only
+    }
+    return undefined;
+  };
+
   // Render Exercise Videos Modal/Section (similar to metrics.tsx)
   const renderExerciseVideoDetails = () => {
     if (!selectedExercise) return null;
@@ -669,6 +725,7 @@ const MoveManagement: React.FC = () => {
                     </div>
                     <div className="p-3">
                       <p className="text-xs text-gray-400 mb-2">Uploaded by: {video.username || 'Unknown'}</p>
+                      <p className="text-xs text-gray-400 mb-2">File size: {formatBytes(video.fileSizeBytes)}</p>
                       <div className="mb-2">
                         <p className="text-xs text-gray-500 mb-1">Video ID:</p>
                         <div className="flex items-center gap-2 p-2 bg-[#1a1e24] rounded border border-gray-600">

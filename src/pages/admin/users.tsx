@@ -2356,7 +2356,16 @@ const UsersManagement: React.FC = () => {
                                 <tr>
                                   <td colSpan={7} className="p-0 border-b border-gray-700">
                                     <div className="bg-[#1a1e24] p-6 border-l-4 border-[#d7ff00]">
-                                      <h4 className="text-white font-medium mb-4">Application Details</h4>
+                                      <div className="flex items-center justify-between mb-4">
+                                        <h4 className="text-white font-medium">Application Details</h4>
+                                        <button
+                                          onClick={() => handleDeleteApplication(application.id || '', application.email || '')}
+                                          disabled={processingApplicationStatus === application.id}
+                                          className="px-3 py-1.5 bg-red-900/30 text-red-400 hover:bg-red-900/50 rounded-lg text-xs font-medium border border-red-900 transition flex items-center"
+                                        >
+                                          {processingApplicationStatus === application.id ? 'Deleting…' : 'Delete'}
+                                        </button>
+                                      </div>
                                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                                         <div>
                                           <span className="text-gray-400">Email:</span>

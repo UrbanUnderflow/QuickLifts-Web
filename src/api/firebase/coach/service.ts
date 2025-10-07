@@ -156,6 +156,11 @@ class CoachService {
       const inviterDoc = snap.docs[0];
       const inviterId = inviterDoc.id;
 
+      // Prevent self-connection
+      if (inviterId === inviteeUserId) {
+        return { success: false, message: 'Cannot connect a coach to themselves' };
+      }
+
       // Load invitee coach document (must exist)
       const inviteeRef = doc(db, 'coaches', inviteeUserId);
       const inviteeSnap = await getDoc(inviteeRef);
@@ -168,9 +173,21 @@ class CoachService {
       const inviterData = inviterDoc.data() as any;
       const inviterEntry = { userId: inviterId, username: inviterData?.username || '', email: inviterData?.email || '', connectedAt: now };
 
+      // Read existing arrays and enforce idempotency (avoid duplicates by userId)
+      const inviterExisting = Array.isArray((inviterDoc.data() as any)?.connectedCoaches) ? (inviterDoc.data() as any).connectedCoaches : [];
+      const inviteeExisting = Array.isArray((inviteeSnap.data() as any)?.connectedCoaches) ? (inviteeSnap.data() as any).connectedCoaches : [];
+
+      const inviterMap = new Map<string, any>();
+      inviterExisting.forEach((e: any) => { if (e?.userId) inviterMap.set(e.userId, e); });
+      if (!inviterMap.has(inviteeEntry.userId)) inviterMap.set(inviteeEntry.userId, inviteeEntry);
+
+      const inviteeMap = new Map<string, any>();
+      inviteeExisting.forEach((e: any) => { if (e?.userId) inviteeMap.set(e.userId, e); });
+      if (!inviteeMap.has(inviterEntry.userId)) inviteeMap.set(inviterEntry.userId, inviterEntry);
+
       await Promise.all([
-        setDoc(inviterDoc.ref, { connectedCoaches: arrayUnion(inviteeEntry), updatedAt: now }, { merge: true }),
-        setDoc(inviteeRef, { connectedCoaches: arrayUnion(inviterEntry), updatedAt: now }, { merge: true })
+        setDoc(inviterDoc.ref, { connectedCoaches: Array.from(inviterMap.values()), updatedAt: now }, { merge: true }),
+        setDoc(inviteeRef, { connectedCoaches: Array.from(inviteeMap.values()), updatedAt: now }, { merge: true })
       ]);
       return { success: true };
     } catch (error: any) {
