@@ -15,7 +15,8 @@ export function parseActivityType(
   workoutSummaries: WorkoutSummary[], 
   exerciseVideos: Exercise[], 
   follows: FollowRequest[],
-  currentUserId: string
+  currentUserId: string,
+  profileUsername?: string
 ): UserActivity[] {
   const activities: UserActivity[] = [];
   
@@ -48,7 +49,7 @@ export function parseActivityType(
       activities.push({
         id: generateUniqueId(),
         type: ActivityType.Cardio,
-        title: "You completed a cardio workout",
+        title: profileUsername ? `${profileUsername} completed a cardio workout` : "You completed a cardio workout",
         correspondingId: summary.id,
         value: `${caloriesBurned} cals burned`,
         date: new Date(summary.updatedAt || Date.now()) // Fallback to current date
@@ -65,7 +66,7 @@ export function parseActivityType(
       activities.push({
         id: generateUniqueId(),
         type: ActivityType.WeightTraining,
-        title: "You completed a weight training workout",
+        title: profileUsername ? `${profileUsername} completed a weight training workout` : "You completed a weight training workout",
         correspondingId: summary.id,
         value: `${summary.exercisesCompleted.length} exercises, ${totalSets} sets, ${averageReps} rep average`,
         date: new Date(summary.updatedAt || Date.now()) // Fallback to current date
@@ -78,7 +79,7 @@ export function parseActivityType(
     activities.push({
       id: generateUniqueId(),
       type: ActivityType.ExercisePosted,
-      title: "You posted a new exercise",
+      title: profileUsername ? `${profileUsername} posted a new exercise` : "You posted a new exercise",
       correspondingId: exercise.id,
       value: exercise.name,
       date: new Date(exercise.createdAt || Date.now()) // Fallback to current date

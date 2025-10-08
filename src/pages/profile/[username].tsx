@@ -35,7 +35,7 @@ const TABS = {
   // STATS: 'stats',
   ACTIVITY: 'activity',
   EXERICSES: 'moves',
-  CHALLENGES: 'challenges',
+  CHALLENGES: 'rounds',
   EARNINGS: 'earnings',
 } as const;
 
@@ -231,7 +231,8 @@ useEffect(() => {
               summaries,
               userVideos,
               followRequests,
-              user.id
+              user.id,
+              user.username
             );
             setActivities(parsedActivities);
           }
