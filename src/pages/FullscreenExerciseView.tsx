@@ -34,7 +34,7 @@ const FullScreenExerciseView: React.FC<FullScreenExerciseViewProps> = ({
       {/* Background Video */}
       <video
         src={currentVideo?.videoURL}
-        className="absolute inset-0 w-full h-full object-cover"
+        className="absolute inset-0 w-full h-full object-contain"
         autoPlay
         loop
         muted
