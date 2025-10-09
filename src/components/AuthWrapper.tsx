@@ -73,7 +73,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
   ].map(route => route?.toLowerCase());
  
   const publicPathPatterns = [
-    '/round-invitation', '/round', '/profile', '/challenge', '/review', '/programming', '/press', '/100trainers', '/MoveAndFuelATL', '/investor', '/invest'
+    '/round-invitation', '/round', '/profile', '/challenge', '/review', '/programming', '/press', '/100trainers', '/MoveAndFuelATL', '/investor', '/invest', '/connect', '/coach-invite'
   ].map(pattern => pattern.toLowerCase());
  
   const isPublicRoute = (path: string) => {
@@ -235,6 +235,16 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
                 console.log('[AuthWrapper] User needs to complete registration - showing modal');
                 setShowSignInModal(true);
               } else if (!activeUser || activeUser.subscriptionType === SubscriptionType.unsubscribed) {
+                // Skip subscription check for connect pages (athletes connecting to coaches)
+                const isConnectPage = router.pathname.startsWith('/connect/') || router.asPath.startsWith('/connect/');
+                
+                if (isConnectPage) {
+                  console.log('[AuthWrapper] User on connect page, allowing access for coach connection flow');
+                  setShowSignInModal(false);
+                  setAuthChecked(true);
+                  return;
+                }
+                
                 // Drive access by subscription record expirations instead of user field
                 try {
                   const userIdForCheck = activeUser?.id || firebaseUser.uid;

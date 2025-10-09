@@ -178,7 +178,9 @@ const CoachInvitePage: React.FC = () => {
             <div className="flex items-center space-x-3">
               <FaUser className="text-[#E0FE10]" />
               <div className="text-left">
-                <div className="text-white font-medium">Coach {referralCode}</div>
+                <div className="text-white font-medium">
+                  {coachInfo ? (coachInfo.displayName || coachInfo.username || `Coach ${referralCode}`) : `Coach ${referralCode}`}
+                </div>
                 <div className="text-zinc-400 text-sm">Your fitness coach</div>
               </div>
             </div>
@@ -221,13 +223,15 @@ const CoachInvitePage: React.FC = () => {
           <FaSpinner className="animate-spin text-[#E0FE10] text-6xl mx-auto mb-6" />
           <h1 className="text-3xl font-bold text-white mb-4">Connecting to Coach</h1>
           <p className="text-zinc-300 mb-6">
-            Setting up your connection with Coach {referralCode}...
+            Setting up your connection with {coachInfo ? (coachInfo.displayName || coachInfo.username || `Coach ${referralCode}`) : `Coach ${referralCode}`}...
           </p>
           <div className="bg-zinc-900 rounded-lg p-4">
             <div className="flex items-center space-x-3">
               <FaUser className="text-[#E0FE10]" />
               <div className="text-left">
-                <div className="text-white font-medium">Coach {referralCode}</div>
+                <div className="text-white font-medium">
+                  {coachInfo ? (coachInfo.displayName || coachInfo.username || `Coach ${referralCode}`) : `Coach ${referralCode}`}
+                </div>
                 <div className="text-zinc-400 text-sm">Connecting...</div>
               </div>
             </div>
@@ -261,7 +265,7 @@ const CoachInvitePage: React.FC = () => {
         <FaUser className="text-[#E0FE10] text-6xl mx-auto mb-6" />
         <h1 className="text-3xl font-bold text-white mb-4">Coach Invitation</h1>
         <p className="text-zinc-300 mb-6">
-          You've been invited to connect with Coach {referralCode}
+          You've been invited to connect with {coachInfo ? (coachInfo.displayName || coachInfo.username || `Coach ${referralCode}`) : `Coach ${referralCode}`}
         </p>
         
         <div className="bg-zinc-900 rounded-lg p-6 mb-6">
@@ -269,9 +273,11 @@ const CoachInvitePage: React.FC = () => {
             <FaUser className="text-[#E0FE10]" />
             <div className="text-left">
               <div className="text-white font-medium">
-                {coachInfo ? `Coach ${coachInfo.referralCode}` : `Coach ${referralCode}`}
+                {coachInfo ? (coachInfo.displayName || coachInfo.username || `Coach ${referralCode}`) : `Coach ${referralCode}`}
               </div>
-              
+              {coachInfo?.username && (
+                <div className="text-zinc-400 text-sm">@{coachInfo.username}</div>
+              )}
             </div>
           </div>
           <p className="text-zinc-300 text-sm">
@@ -299,7 +305,7 @@ const CoachInvitePage: React.FC = () => {
           isOpen={showPrivacyModal}
           onClose={() => setShowPrivacyModal(false)}
           onConsent={handlePrivacyConsent}
-          coachName={coachInfo ? `Coach ${coachInfo.referralCode}` : `Coach ${referralCode}`}
+          coachName={coachInfo ? (coachInfo.displayName || coachInfo.username || `Coach ${referralCode}`) : `Coach ${referralCode}`}
           loading={connecting}
         />
       </div>

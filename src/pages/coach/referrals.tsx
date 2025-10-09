@@ -24,9 +24,10 @@ const ReferralsPage: React.FC = () => {
         const profile = await coachService.getCoachProfile(currentUser.id);
         if (!profile) return;
         const baseUrl = window.location.origin;
-        const url = `${baseUrl}/coach-invite/${profile.referralCode}`;
-        setInviteLink(url);
-        setQrCodeUrl(`https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=${encodeURIComponent(url)}`);
+        // Athlete invite link - dedicated route for athlete connections
+        const athleteUrl = `${baseUrl}/connect/${profile.referralCode}`;
+        setInviteLink(athleteUrl);
+        setQrCodeUrl(`https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=${encodeURIComponent(athleteUrl)}`);
         try {
           const cc = await coachService.getConnectedCoachesForCoach(profile.id);
           setConnectedCoaches(cc);

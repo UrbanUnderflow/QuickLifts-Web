@@ -1441,9 +1441,9 @@ class CoachService {
   }
 
   /**
-   * Find coach by referral code
+   * Find coach by referral code (returns coach data enriched with user profile)
    */
-  async findCoachByReferralCode(referralCode: string): Promise<CoachModel | null> {
+  async findCoachByReferralCode(referralCode: string): Promise<any | null> {
     try {
       const coachesRef = collection(db, 'coaches');
       const coachQuery = query(coachesRef, where('referralCode', '==', referralCode));
@@ -1455,8 +1455,30 @@ class CoachService {
       
       const coachDoc = coachSnapshot.docs[0];
       const coachData = coachDoc.data();
+      const coachModel = new CoachModel(coachDoc.id, coachData as CoachFirestoreData);
       
-      return new CoachModel(coachDoc.id, coachData as CoachFirestoreData);
+      // Fetch user profile to get displayName, username, etc.
+      try {
+        const userRef = doc(db, 'users', coachModel.userId);
+        const userDoc = await getDoc(userRef);
+        
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          // Return enriched coach object with user profile data
+          return {
+            ...coachModel,
+            username: userData.username,
+            displayName: userData.displayName,
+            bio: userData.bio,
+            profileImage: userData.profileImage
+          };
+        }
+      } catch (userError) {
+        console.error('[CoachService] Error fetching user profile for coach:', userError);
+        // Return coach model without user data if fetch fails
+      }
+      
+      return coachModel;
     } catch (error) {
       console.error('[CoachService] Error finding coach by referral code:', error);
       return null;

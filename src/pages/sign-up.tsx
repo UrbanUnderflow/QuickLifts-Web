@@ -7,12 +7,13 @@ import { auth, db } from '../api/firebase/config';
 import { User, SubscriptionType, SubscriptionPlatform, UserLevel } from '../api/firebase/user';
 import { userService } from '../api/firebase/user';
 import { firebaseStorageService } from '../api/firebase/storage/service';
+import { coachService } from '../api/firebase/coach';
 import { Camera, Eye, EyeOff, Loader2, CheckCircle, AlertTriangle } from 'lucide-react';
 import { FaGoogle, FaApple } from 'react-icons/fa';
 
 const SignUpPage: React.FC = () => {
   const router = useRouter();
-  const { type } = router.query; // Get the type parameter (e.g., 'coach')
+  const { type, coach, redirect } = router.query; // Get the type, coach, and redirect parameters
   
   const [formData, setFormData] = useState({
     email: '',
@@ -175,11 +176,27 @@ const SignUpPage: React.FC = () => {
       const user = new User(firebaseUser.uid, userData);
       await userService.updateUser(firebaseUser.uid, user);
       
+      // If user came from a coach invite link, auto-connect them
+      if (coach && typeof coach === 'string' && !isCoachSignUp) {
+        try {
+          console.log('[SignUp] Auto-connecting athlete to coach:', coach);
+          await coachService.connectAthleteToCoach(firebaseUser.uid, coach);
+          console.log('[SignUp] Successfully connected athlete to coach');
+        } catch (connectError) {
+          console.error('[SignUp] Failed to auto-connect to coach:', connectError);
+          // Don't fail the sign-up process if connection fails
+          // User can still manually connect later
+        }
+      }
+      
       setSuccess(true);
       
       // Redirect after success
       setTimeout(() => {
-        if (isCoachSignUp) {
+        // If there's a redirect URL (from coach invite), go there
+        if (redirect && typeof redirect === 'string') {
+          router.push(redirect);
+        } else if (isCoachSignUp) {
           router.push('/coach/dashboard');
         } else {
           router.push('/dashboard');
@@ -249,8 +266,12 @@ const SignUpPage: React.FC = () => {
       <div className="max-w-md mx-auto px-6 py-12">
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-[#E0FE10] rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <span className="text-black font-bold text-2xl">P</span>
+          <div className="mx-auto mb-4 flex items-center justify-center">
+            <img 
+              src="/pulseIcon.png" 
+              alt="Pulse" 
+              className="w-16 h-16 object-contain"
+            />
           </div>
           <h1 className="text-3xl font-bold mb-2">
             {isCoachSignUp ? 'Join as a Coach' : 'Join Pulse'}
