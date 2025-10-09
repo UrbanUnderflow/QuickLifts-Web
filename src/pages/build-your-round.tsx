@@ -53,10 +53,12 @@ const BuildYourRound: React.FC = () => {
         {/* Header with Logo */}
         <div className="bg-gradient-to-r from-zinc-900 to-black border-b border-zinc-800 py-8 print:py-4">
           <div className="max-w-5xl mx-auto px-6">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-12 h-12 bg-[#E0FE10] rounded-xl flex items-center justify-center">
-                <span className="text-black font-bold text-2xl">P</span>
-              </div>
+            <div className="flex items-center gap-4 mb-2">
+              <img 
+                src="/pulseIcon.png" 
+                alt="Pulse Logo" 
+                className="w-16 h-16 rounded-xl"
+              />
               <div>
                 <h1 className="text-4xl font-bold text-white">Pulse Creator Guide</h1>
                 <p className="text-zinc-400 text-sm mt-1">How to Design and Launch a Successful Round</p>
