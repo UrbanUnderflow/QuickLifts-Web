@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { useUser, useUserLoading } from '../../hooks/useUser';
 import { coachService } from '../../api/firebase/coach';
 import { privacyService } from '../../api/firebase/privacy/service';
-import { FaCheckCircle, FaSpinner, FaExclamationTriangle, FaUser } from 'react-icons/fa';
+import { signOut } from 'firebase/auth';
+import { auth } from '../../api/firebase/config';
+import { FaCheckCircle, FaSpinner, FaExclamationTriangle, FaUser, FaChevronDown, FaSignOutAlt } from 'react-icons/fa';
 import PrivacyConsentModal from '../../components/PrivacyConsentModal';
 
 const CoachInvitePage: React.FC = () => {
@@ -19,6 +21,8 @@ const CoachInvitePage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [coachInfo, setCoachInfo] = useState<any>(null);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     console.log('[CoachInvite] useEffect triggered', { 
@@ -105,6 +109,32 @@ const CoachInvitePage: React.FC = () => {
       isCancelled = true;
     };
   }, [referralCode, currentUser, userLoading, coachInfo, loading]);
+
+  // Close user menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+        setShowUserMenu(false);
+      }
+    };
+
+    if (showUserMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showUserMenu]);
+
+  const handleSignOut = async () => {
+    try {
+      await signOut(auth);
+      router.push('/');
+    } catch (err) {
+      console.error('Error signing out:', err);
+    }
+  };
 
   const connectToCoach = async () => {
     if (!referralCode || !currentUser || typeof referralCode !== 'string') return;
@@ -262,17 +292,51 @@ const CoachInvitePage: React.FC = () => {
         <meta name="twitter:image" content={ogImage} />
       </Head>
       <div className="text-center max-w-md mx-auto p-8">
+        {/* Signed in as badge with dropdown */}
+        {currentUser && (
+          <div className="mb-6 relative inline-block" ref={userMenuRef}>
+            <button
+              onClick={() => setShowUserMenu(!showUserMenu)}
+              className="inline-flex items-center gap-2 bg-zinc-900 border border-zinc-800 rounded-full px-4 py-2 hover:bg-zinc-800 transition-colors cursor-pointer"
+            >
+              <div className="w-6 h-6 rounded-full bg-zinc-800 flex items-center justify-center flex-shrink-0">
+                <FaUser className="text-[#E0FE10] text-xs" />
+              </div>
+              <span className="text-zinc-400 text-sm">Signed in as</span>
+              <span className="text-white text-sm font-medium">
+                @{currentUser.username || currentUser.email?.split('@')[0]}
+              </span>
+              <FaChevronDown className={`text-zinc-400 text-xs transition-transform ${showUserMenu ? 'rotate-180' : ''}`} />
+            </button>
+
+            {/* Dropdown menu */}
+            {showUserMenu && (
+              <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 bg-zinc-900 border border-zinc-800 rounded-lg shadow-xl overflow-hidden min-w-[200px] z-50">
+                <button
+                  onClick={handleSignOut}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-left text-white hover:bg-zinc-800 transition-colors"
+                >
+                  <FaSignOutAlt className="text-zinc-400" />
+                  <span className="text-sm">Sign Out</span>
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+        
         <FaUser className="text-[#E0FE10] text-6xl mx-auto mb-6" />
         <h1 className="text-3xl font-bold text-white mb-4">Coach Invitation</h1>
         <p className="text-zinc-300 mb-6">
           You've been invited to connect with {coachInfo ? (coachInfo.displayName || coachInfo.username || `Coach ${referralCode}`) : `Coach ${referralCode}`}
         </p>
         
-        <div className="bg-zinc-900 rounded-lg p-6 mb-6">
-          <div className="flex items-center space-x-3 mb-4">
-            <FaUser className="text-[#E0FE10]" />
-            <div className="text-left">
-              <div className="text-white font-medium">
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 mb-6">
+          <div className="flex flex-col items-center mb-4">
+            <div className="w-12 h-12 rounded-full bg-zinc-800 flex items-center justify-center mb-3">
+              <FaUser className="text-[#E0FE10] text-xl" />
+            </div>
+            <div className="text-center">
+              <div className="text-white font-semibold text-lg">
                 {coachInfo ? (coachInfo.displayName || coachInfo.username || `Coach ${referralCode}`) : `Coach ${referralCode}`}
               </div>
               {coachInfo?.username && (
@@ -280,7 +344,7 @@ const CoachInvitePage: React.FC = () => {
               )}
             </div>
           </div>
-          <p className="text-zinc-300 text-sm">
+          <p className="text-zinc-300 text-sm leading-relaxed text-center">
             This coach will help guide your fitness journey and provide personalized support through the Pulse app.
           </p>
         </div>

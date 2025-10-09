@@ -2316,10 +2316,12 @@ const SignInModal: React.FC<SignInModalProps> = ({
       }
       
       // *** Explicit Subscription Check ***
-      // Skip subscription check if user is on a payment page (they're about to pay for a round)
+      // Skip subscription check if user is on a payment page or connect page (they're about to pay for a round or connecting to a coach)
       const isOnPaymentPage = router.pathname.startsWith('/payment/');
+      const isOnConnectPage = router.pathname.startsWith('/connect/') || router.asPath.startsWith('/connect/');
+      const isOnCoachInvitePage = router.pathname.startsWith('/coach-invite/') || router.asPath.startsWith('/coach-invite/');
       
-      if (userDoc.subscriptionType === SubscriptionType.unsubscribed && !isOnPaymentPage) {
+      if (userDoc.subscriptionType === SubscriptionType.unsubscribed && !isOnPaymentPage && !isOnConnectPage && !isOnCoachInvitePage) {
         console.log('[SignInModal] handleSignInSuccess: User is unsubscribed. Redirecting to /subscribe.');
         // Preserve roundIdRedirect if it exists for post-subscription flow
         if (roundIdRedirect) {
@@ -2328,8 +2330,8 @@ const SignInModal: React.FC<SignInModalProps> = ({
         router.push('/subscribe');
         // Return EARLY to prevent other redirect/close logic
         return; 
-      } else if (isOnPaymentPage) {
-        console.log('[SignInModal] handleSignInSuccess: User is on payment page, skipping subscription check to allow payment.');
+      } else if (isOnPaymentPage || isOnConnectPage || isOnCoachInvitePage) {
+        console.log('[SignInModal] handleSignInSuccess: User is on payment/connect/coach-invite page, skipping subscription check.');
       }
       // *** End Explicit Subscription Check ***
 
