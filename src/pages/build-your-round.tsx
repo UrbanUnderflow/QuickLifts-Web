@@ -57,7 +57,7 @@ const BuildYourRound: React.FC = () => {
               <img 
                 src="/pulseIcon.png" 
                 alt="Pulse Logo" 
-                className="w-16 h-16 rounded-xl"
+                className="w-14 h-14 object-contain"
               />
               <div>
                 <h1 className="text-4xl font-bold text-white">Pulse Creator Guide</h1>
