@@ -1410,7 +1410,7 @@ class CoachService {
         return true; // Already connected
       }
       
-      // Create coach-athlete relationship
+      // Create coach-athlete relationship with default privacy settings
       const now = dateToUnixTimestamp(new Date());
       const connectionData = {
         coachId,
@@ -1418,18 +1418,13 @@ class CoachService {
         status: 'active',
         linkedAt: now,
         createdAt: now,
-        updatedAt: now
+        updatedAt: now,
+        // Privacy settings (default: share everything)
+        shareConversations: true,
+        shareSentiment: true
       };
       
       await addDoc(coachAthletesRef, connectionData);
-      // Create default privacy for this coach
-      const privacyRef = doc(db, 'athlete-privacy-settings', athleteUserId, 'coaches', coachId);
-      await setDoc(privacyRef, {
-        shareSentiment: true,
-        shareActivity: true,
-        createdAt: now,
-        updatedAt: now
-      }, { merge: true });
       
       console.log(`[CoachService] Successfully connected athlete ${athleteUserId} to coach ${coachId}`);
       return true;

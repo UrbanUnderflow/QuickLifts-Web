@@ -16,7 +16,7 @@ const PrivacyConsentModal: React.FC<PrivacyConsentModalProps> = ({
   coachName,
   loading = false
 }) => {
-  const [shareConversations, setShareConversations] = useState(false);
+  const [shareConversations, setShareConversations] = useState(true);
   const [shareSentiment, setShareSentiment] = useState(true);
 
   if (!isOpen) return null;
@@ -43,38 +43,13 @@ const PrivacyConsentModal: React.FC<PrivacyConsentModalProps> = ({
           {/* Explanation */}
           <div className="bg-zinc-800 rounded-lg p-4 mb-6">
             <p className="text-zinc-300 text-sm leading-relaxed">
-              Your conversations with your AI companion are <strong className="text-white">private by default</strong>. 
-              You can choose what information to share with your coach to help them provide better support.
+              Your conversations with your AI companion are <strong className="text-white">shared with your coach by default</strong>. 
+              You can choose to make your conversations private if you prefer your coach only see sentiment versus the details of your conversation with the chatbot.
             </p>
           </div>
 
           {/* Privacy Options */}
           <div className="space-y-4 mb-6">
-            {/* Sentiment Sharing */}
-            <div className="bg-zinc-800 rounded-lg p-4">
-              <div className="flex items-start space-x-3">
-                <div className="flex-shrink-0 mt-1">
-                  <input
-                    type="checkbox"
-                    id="shareSentiment"
-                    checked={shareSentiment}
-                    onChange={(e) => setShareSentiment(e.target.checked)}
-                    className="w-4 h-4 text-[#E0FE10] bg-zinc-700 border-zinc-600 rounded focus:ring-[#E0FE10] focus:ring-2"
-                  />
-                </div>
-                <div className="flex-1">
-                  <label htmlFor="shareSentiment" className="flex items-center space-x-2 cursor-pointer">
-                    <FaChartLine className="text-[#E0FE10] text-sm" />
-                    <span className="text-white font-medium">Share Mood & Sentiment Data</span>
-                  </label>
-                  <p className="text-zinc-400 text-sm mt-1">
-                    Allow your coach to see your mood trends and emotional patterns to provide better support. 
-                    <span className="text-[#E0FE10]"> (Recommended)</span>
-                  </p>
-                </div>
-              </div>
-            </div>
-
             {/* Conversation Sharing */}
             <div className="bg-zinc-800 rounded-lg p-4">
               <div className="flex items-start space-x-3">
@@ -89,11 +64,36 @@ const PrivacyConsentModal: React.FC<PrivacyConsentModalProps> = ({
                 </div>
                 <div className="flex-1">
                   <label htmlFor="shareConversations" className="flex items-center space-x-2 cursor-pointer">
-                    <FaComments className="text-blue-400 text-sm" />
+                    <FaComments className="text-[#E0FE10] text-sm" />
                     <span className="text-white font-medium">Share Full Conversations</span>
                   </label>
                   <p className="text-zinc-400 text-sm mt-1">
                     Allow your coach to read your full conversations with the AI companion for deeper insights and personalized guidance.
+                    <span className="text-[#E0FE10]"> (Recommended)</span>
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Sentiment Sharing */}
+            <div className="bg-zinc-800 rounded-lg p-4">
+              <div className="flex items-start space-x-3">
+                <div className="flex-shrink-0 mt-1">
+                  <input
+                    type="checkbox"
+                    id="shareSentiment"
+                    checked={shareSentiment}
+                    onChange={(e) => setShareSentiment(e.target.checked)}
+                    className="w-4 h-4 text-[#E0FE10] bg-zinc-700 border-zinc-600 rounded focus:ring-[#E0FE10] focus:ring-2"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label htmlFor="shareSentiment" className="flex items-center space-x-2 cursor-pointer">
+                    <FaChartLine className="text-blue-400 text-sm" />
+                    <span className="text-white font-medium">Share Mood & Sentiment Data</span>
+                  </label>
+                  <p className="text-zinc-400 text-sm mt-1">
+                    Allow your coach to see your mood trends and emotional patterns to provide better support.
                   </p>
                 </div>
               </div>
@@ -132,8 +132,8 @@ const PrivacyConsentModal: React.FC<PrivacyConsentModalProps> = ({
               <FaLock className="text-blue-400 text-sm mt-0.5 flex-shrink-0" />
               <div>
                 <p className="text-blue-200 text-xs">
-                  <strong>Privacy Note:</strong> You can change these settings anytime in your profile. 
-                  Your coach will only see data you explicitly choose to share.
+                  <strong>Privacy Note:</strong> By default, your coach has access to your full conversations. 
+                  You can change these settings anytime in your profile if you prefer to only share sentiment data.
                 </p>
               </div>
             </div>

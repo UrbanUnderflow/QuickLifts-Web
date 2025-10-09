@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { useUser, useUserLoading } from '../../hooks/useUser';
 import { coachService } from '../../api/firebase/coach';
 import { privacyService } from '../../api/firebase/privacy/service';
-import { FaCheckCircle, FaSpinner, FaExclamationTriangle, FaUser, FaMobileAlt, FaDesktop } from 'react-icons/fa';
+import { signOut } from 'firebase/auth';
+import { auth } from '../../api/firebase/config';
+import { FaCheckCircle, FaSpinner, FaExclamationTriangle, FaUser, FaChevronDown, FaSignOutAlt } from 'react-icons/fa';
 import PrivacyConsentModal from '../../components/PrivacyConsentModal';
 
 const AthleteConnectPage: React.FC = () => {
@@ -19,29 +21,8 @@ const AthleteConnectPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [coachInfo, setCoachInfo] = useState<any>(null);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
-  const [attemptedDeepLink, setAttemptedDeepLink] = useState(false);
-
-  // Attempt to open PulseCheck app via deep link
-  const attemptAppDeepLink = () => {
-    if (attemptedDeepLink || typeof window === 'undefined') return;
-    
-    setAttemptedDeepLink(true);
-    
-    // Create deep link URL for PulseCheck app
-    const deepLinkUrl = `pulsecheck://connect?coachCode=${referralCode}`;
-    
-    // Try to open the app
-    const appLink = document.createElement('a');
-    appLink.href = deepLinkUrl;
-    appLink.style.display = 'none';
-    document.body.appendChild(appLink);
-    appLink.click();
-    document.body.removeChild(appLink);
-    
-    // If app doesn't open within 2 seconds, we assume it's not installed
-    // and continue with web flow
-    console.log('[AthleteConnect] Attempted deep link to PulseCheck app:', deepLinkUrl);
-  };
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     console.log('[AthleteConnect] useEffect triggered', { 
@@ -73,9 +54,6 @@ const AthleteConnectPage: React.FC = () => {
           setLoading(false);
           return;
         }
-        
-        // Attempt deep link to PulseCheck app (non-blocking)
-        attemptAppDeepLink();
         
         // Only fetch coach if we don't have it yet
         if (!coachInfo) {
@@ -132,6 +110,32 @@ const AthleteConnectPage: React.FC = () => {
     };
   }, [referralCode, currentUser, userLoading, coachInfo, loading]);
 
+  // Close user menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+        setShowUserMenu(false);
+      }
+    };
+
+    if (showUserMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showUserMenu]);
+
+  const handleSignOut = async () => {
+    try {
+      await signOut(auth);
+      router.push('/');
+    } catch (err) {
+      console.error('Error signing out:', err);
+    }
+  };
+
   const connectToCoach = async () => {
     if (!referralCode || !currentUser || typeof referralCode !== 'string') return;
     
@@ -161,10 +165,7 @@ const AthleteConnectPage: React.FC = () => {
         setShowPrivacyModal(false);
         setSuccess(true);
         
-        // Redirect to dashboard after success
-        setTimeout(() => {
-          router.push('/dashboard');
-        }, 4000);
+        // No auto-redirect - let user read app download prompt and click manually
       } else {
         setError('Failed to connect to coach. You may already be connected or there was an error.');
         setShowPrivacyModal(false);
@@ -199,9 +200,9 @@ const AthleteConnectPage: React.FC = () => {
             <FaCheckCircle className="text-green-400 text-6xl mx-auto mb-4 animate-bounce" />
           </div>
           
-          <h1 className="text-3xl font-bold text-white mb-4">Successfully Connected!</h1>
+          <h1 className="text-3xl font-bold text-white mb-4">Connection Successful!</h1>
           <p className="text-zinc-300 mb-8">
-            You're now connected with your coach. Get ready to transform your fitness journey!
+            You're now connected with your coach. Ready to unlock your full potential!
           </p>
           
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 mb-6">
@@ -229,17 +230,55 @@ const AthleteConnectPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-4 mb-6">
-            <p className="text-zinc-400 text-sm">
-              Redirecting you to your dashboard in a moment...
+          {/* PulseCheck App Download CTA */}
+          <div className="bg-gradient-to-r from-[#E0FE10]/10 to-lime-400/10 border border-[#E0FE10]/30 rounded-xl p-6 mb-6">
+            <div className="mb-4">
+              <div className="text-lg font-bold text-white mb-2">
+                📱 Get the PulseCheck App
+              </div>
+              <p className="text-zinc-300 text-sm leading-relaxed">
+                Chat with your coach and access AI-powered mindset coaching anytime, anywhere. Download PulseCheck to unlock:
+              </p>
+            </div>
+            
+            <ul className="text-left text-zinc-300 text-sm space-y-2 mb-6">
+              <li className="flex items-start gap-2">
+                <span className="text-[#E0FE10] flex-shrink-0">✓</span>
+                <span>Direct messaging with your coach</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-[#E0FE10] flex-shrink-0">✓</span>
+                <span>AI sports psychology & mindset coaching</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-[#E0FE10] flex-shrink-0">✓</span>
+                <span>Daily readiness scores & performance insights</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-[#E0FE10] flex-shrink-0">✓</span>
+                <span>Smart journaling & mental rep tracking</span>
+              </li>
+            </ul>
+            
+            <a
+              href="https://apps.apple.com/by/app/pulsecheck-mindset-coaching/id6747253393"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block w-full bg-[#E0FE10] text-black px-6 py-4 rounded-xl hover:bg-lime-400 transition-colors font-bold text-lg mb-3"
+            >
+              Download PulseCheck
+            </a>
+            
+            <p className="text-zinc-500 text-xs">
+              Available on iPhone
             </p>
           </div>
 
           <button
             onClick={() => router.push('/dashboard')}
-            className="w-full bg-[#E0FE10] text-black px-6 py-3 rounded-lg hover:bg-lime-400 transition-colors font-semibold"
+            className="w-full bg-zinc-800 border border-zinc-700 text-white px-6 py-3 rounded-lg hover:bg-zinc-700 transition-colors font-semibold"
           >
-            Go to Dashboard Now
+            Continue to Dashboard
           </button>
         </div>
       </div>
@@ -329,6 +368,38 @@ const AthleteConnectPage: React.FC = () => {
       </Head>
       
       <div className="text-center max-w-md mx-auto p-8">
+        {/* Signed in as badge with dropdown */}
+        {currentUser && (
+          <div className="mb-6 relative inline-block" ref={userMenuRef}>
+            <button
+              onClick={() => setShowUserMenu(!showUserMenu)}
+              className="inline-flex items-center gap-2 bg-zinc-900 border border-zinc-800 rounded-full px-4 py-2 hover:bg-zinc-800 transition-colors cursor-pointer"
+            >
+              <div className="w-6 h-6 rounded-full bg-zinc-800 flex items-center justify-center flex-shrink-0">
+                <FaUser className="text-[#E0FE10] text-xs" />
+              </div>
+              <span className="text-zinc-400 text-sm">Signed in as</span>
+              <span className="text-white text-sm font-medium">
+                @{currentUser.username || currentUser.email?.split('@')[0]}
+              </span>
+              <FaChevronDown className={`text-zinc-400 text-xs transition-transform ${showUserMenu ? 'rotate-180' : ''}`} />
+            </button>
+
+            {/* Dropdown menu */}
+            {showUserMenu && (
+              <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 bg-zinc-900 border border-zinc-800 rounded-lg shadow-xl overflow-hidden min-w-[200px] z-50">
+                <button
+                  onClick={handleSignOut}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-left text-white hover:bg-zinc-800 transition-colors"
+                >
+                  <FaSignOutAlt className="text-zinc-400" />
+                  <span className="text-sm">Sign Out</span>
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+        
         <div className="mb-8">
           <img 
             src="/pulseIcon.png" 
@@ -370,23 +441,14 @@ const AthleteConnectPage: React.FC = () => {
           )}
         </div>
 
-        {/* Connection Options */}
-        <div className="space-y-4 mb-6">
+        {/* Connection Button */}
+        <div className="mb-6">
           <button
             onClick={connectToCoach}
-            className="w-full bg-[#E0FE10] text-black px-6 py-4 rounded-xl hover:bg-lime-400 transition-colors font-semibold text-lg flex items-center justify-center gap-3"
+            className="w-full bg-[#E0FE10] text-black px-6 py-4 rounded-xl hover:bg-lime-400 transition-colors font-semibold text-lg"
           >
-            <FaDesktop className="text-xl" />
-            Connect via Web
+            Connect with Coach
           </button>
-          
-          <a
-            href={`pulsecheck://connect?coachCode=${referralCode}`}
-            className="w-full bg-zinc-800 border border-zinc-700 text-white px-6 py-4 rounded-xl hover:bg-zinc-700 transition-colors font-semibold flex items-center justify-center gap-3"
-          >
-            <FaMobileAlt className="text-xl" />
-            Open in PulseCheck App
-          </a>
         </div>
 
         <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-4">

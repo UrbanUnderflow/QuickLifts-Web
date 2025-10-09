@@ -81,34 +81,32 @@ class PrivacyService {
 
   /**
    * Update privacy consent when connecting to a coach
+   * Privacy settings are stored in the coachAthletes record
    */
   async updatePrivacyConsent(consentRequest: PrivacyConsentRequest): Promise<void> {
     try {
       console.log(`[PrivacyService] Updating privacy consent for athlete: ${consentRequest.athleteUserId}`);
       
-      const privacyRef = doc(db, this.privacyCollection, consentRequest.athleteUserId);
+      // Update the coachAthletes record with privacy settings (single source of truth)
+      const coachAthletesRef = collection(db, 'coachAthletes');
+      const connectionQuery = query(
+        coachAthletesRef,
+        where('coachId', '==', consentRequest.coachId),
+        where('athleteUserId', '==', consentRequest.athleteUserId)
+      );
+      const connectionSnapshot = await getDocs(connectionQuery);
       
-      // Check if settings exist, create if not
-      const existingDoc = await getDoc(privacyRef);
-      
-      const updateData = {
-        athleteUserId: consentRequest.athleteUserId,
-        coachId: consentRequest.coachId,
-        shareConversationsWithCoach: consentRequest.shareConversations,
-        shareSentimentWithCoach: consentRequest.shareSentiment,
-        consentGivenAt: serverTimestamp(),
-        lastUpdatedAt: serverTimestamp()
-      };
-      
-      if (!existingDoc.exists()) {
-        // Create new document
-        await setDoc(privacyRef, {
-          ...updateData,
-          createdAt: serverTimestamp()
+      if (!connectionSnapshot.empty) {
+        const connectionDoc = connectionSnapshot.docs[0];
+        await updateDoc(doc(db, 'coachAthletes', connectionDoc.id), {
+          shareConversations: consentRequest.shareConversations,
+          shareSentiment: consentRequest.shareSentiment,
+          updatedAt: serverTimestamp()
         });
+        console.log(`[PrivacyService] Updated privacy settings in coachAthletes record`);
       } else {
-        // Update existing document
-        await updateDoc(privacyRef, updateData);
+        console.error(`[PrivacyService] No connection found between athlete ${consentRequest.athleteUserId} and coach ${consentRequest.coachId}`);
+        throw new Error('Connection not found');
       }
       
       console.log(`[PrivacyService] Privacy consent updated successfully`);
@@ -120,41 +118,29 @@ class PrivacyService {
 
   /**
    * Check if coach can access athlete's conversations
+   * Uses coachAthletes record as single source of truth
    */
   async canCoachAccessConversations(athleteUserId: string, coachId: string): Promise<boolean> {
     try {
-      const privacySettings = await this.getAthletePrivacySettings(athleteUserId);
-      
-      if (!privacySettings) {
-        // No settings = default to private
-        return false;
-      }
-      
-      // Check if this is the correct coach and conversations are shared
-      return privacySettings.coachId === coachId && privacySettings.shareConversationsWithCoach;
+      const settings = await this.getPrivacyFromCoachAthlete(athleteUserId, coachId);
+      return settings?.shareConversations ?? true; // Default to true if not found
     } catch (error) {
       console.error('[PrivacyService] Error checking conversation access:', error);
-      return false;
+      return true; // Default to true on error
     }
   }
 
   /**
    * Check if coach can access athlete's sentiment data
+   * Uses coachAthletes record as single source of truth
    */
   async canCoachAccessSentiment(athleteUserId: string, coachId: string): Promise<boolean> {
     try {
-      const privacySettings = await this.getAthletePrivacySettings(athleteUserId);
-      
-      if (!privacySettings) {
-        // No settings = default to allow sentiment (but not conversations)
-        return true;
-      }
-      
-      // Check if this is the correct coach and sentiment is shared
-      return privacySettings.coachId === coachId && privacySettings.shareSentimentWithCoach;
+      const settings = await this.getPrivacyFromCoachAthlete(athleteUserId, coachId);
+      return settings?.shareSentiment ?? true; // Default to true if not found
     } catch (error) {
       console.error('[PrivacyService] Error checking sentiment access:', error);
-      return false;
+      return true; // Default to true on error
     }
   }
 
@@ -189,6 +175,34 @@ class PrivacyService {
     } catch (error) {
       console.error('[PrivacyService] Error fetching athletes with consent:', error);
       return [];
+    }
+  }
+
+  /**
+   * Get privacy settings from coachAthletes record (primary source)
+   */
+  async getPrivacyFromCoachAthlete(athleteUserId: string, coachId: string): Promise<{shareConversations: boolean, shareSentiment: boolean} | null> {
+    try {
+      const coachAthletesRef = collection(db, 'coachAthletes');
+      const connectionQuery = query(
+        coachAthletesRef,
+        where('coachId', '==', coachId),
+        where('athleteUserId', '==', athleteUserId)
+      );
+      const connectionSnapshot = await getDocs(connectionQuery);
+      
+      if (!connectionSnapshot.empty) {
+        const data = connectionSnapshot.docs[0].data();
+        return {
+          shareConversations: data.shareConversations ?? true, // Default to true
+          shareSentiment: data.shareSentiment ?? true // Default to true
+        };
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('[PrivacyService] Error fetching privacy from coachAthletes:', error);
+      return null;
     }
   }
 }
