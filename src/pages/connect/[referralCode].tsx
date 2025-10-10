@@ -350,7 +350,7 @@ const AthleteConnectPage: React.FC = () => {
   const title = `Join ${coachInfo?.displayName || coachInfo?.username || 'your coach'} on Pulse`;
   const description = `Connect with your coach for personalized fitness guidance and support.`;
   const base = typeof window !== 'undefined' ? window.location.origin : 'https://fitwithpulse.ai';
-  const ogImage = coachInfo?.profileImage?.profileImageURL || `${base}/athlete-connect-default.jpg`;
+  const ogImage = coachInfo?.profileImage?.profileImageURL || `${base}/coach-invite-default.jpg`;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-black via-zinc-900 to-black flex items-center justify-center px-4">
@@ -523,6 +523,43 @@ const AthleteConnectPage: React.FC = () => {
     </div>
   );
 };
+
+// Server-side rendering for dynamic OG meta tags
+export async function getServerSideProps(context: any) {
+  const { referralCode } = context.params || {};
+
+  if (!referralCode || typeof referralCode !== 'string') {
+    return {
+      redirect: {
+        destination: '/',
+        permanent: false,
+      },
+    };
+  }
+
+  try {
+    // Fetch coach information server-side for meta tags
+    const API_BASE_URL = process.env.NODE_ENV === 'development' 
+      ? 'http://localhost:8888/.netlify/functions'
+      : 'https://fitwithpulse.ai/.netlify/functions';
+
+    // We need to create a serverless function to fetch coach by referral code
+    // For now, we'll use client-side fetching and set meta tags dynamically
+    
+    return {
+      props: {
+        referralCode
+      }
+    };
+  } catch (error) {
+    console.error('Error in getServerSideProps:', error);
+    return {
+      props: {
+        referralCode
+      }
+    };
+  }
+}
 
 export default AthleteConnectPage;
 
