@@ -108,6 +108,12 @@ const adminCardsData = [
     link: "/admin/pressReleases"
   },
   {
+    title: "Round Exports",
+    description: "View and download creator round plans exported from Build Your Round page.",
+    icon: <FileText className="w-5 h-5" />,
+    link: "/admin/roundExports"
+  },
+  {
     title: "Send Notification",
     description: "Send push notifications to users or specific user groups.",
     icon: <Bell className="w-5 h-5" />,

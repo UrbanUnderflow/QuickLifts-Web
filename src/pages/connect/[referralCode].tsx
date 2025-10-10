@@ -8,6 +8,7 @@ import { signOut } from 'firebase/auth';
 import { auth } from '../../api/firebase/config';
 import { FaCheckCircle, FaSpinner, FaExclamationTriangle, FaUser, FaChevronDown, FaSignOutAlt } from 'react-icons/fa';
 import PrivacyConsentModal from '../../components/PrivacyConsentModal';
+import SignInModal from '../../components/SignInModal';
 
 const AthleteConnectPage: React.FC = () => {
   const router = useRouter();
@@ -22,6 +23,7 @@ const AthleteConnectPage: React.FC = () => {
   const [coachInfo, setCoachInfo] = useState<any>(null);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showSignInModal, setShowSignInModal] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -86,10 +88,8 @@ const AthleteConnectPage: React.FC = () => {
           console.log('[AthleteConnect] User is logged in, showing connection interface');
           setLoading(false);
         } else if (userLoading === false) {
-          console.log('[AthleteConnect] User not logged in, redirecting to sign up');
-          const redirectUrl = `/sign-up?coach=${referralCode}&redirect=${encodeURIComponent(router.asPath)}`;
-          console.log('[AthleteConnect] Redirect URL:', redirectUrl);
-          router.push(redirectUrl);
+          console.log('[AthleteConnect] User not logged in, showing sign in/sign up options');
+          setLoading(false);
         } else {
           console.log('[AthleteConnect] Still waiting for auth to resolve, userLoading:', userLoading);
         }
@@ -441,21 +441,53 @@ const AthleteConnectPage: React.FC = () => {
           )}
         </div>
 
-        {/* Connection Button */}
-        <div className="mb-6">
-          <button
-            onClick={connectToCoach}
-            className="w-full bg-[#E0FE10] text-black px-6 py-4 rounded-xl hover:bg-lime-400 transition-colors font-semibold text-lg"
-          >
-            Connect with Coach
-          </button>
-        </div>
+        {/* Connection Button - Only show if user is logged in */}
+        {currentUser ? (
+          <>
+            <div className="mb-6">
+              <button
+                onClick={connectToCoach}
+                className="w-full bg-[#E0FE10] text-black px-6 py-4 rounded-xl hover:bg-lime-400 transition-colors font-semibold text-lg"
+              >
+                Connect with Coach
+              </button>
+            </div>
 
-        <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-4">
-          <p className="text-zinc-500 text-xs">
-            By connecting, you'll get personalized fitness coaching, workout tracking, and direct support from your coach.
-          </p>
-        </div>
+            <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-4">
+              <p className="text-zinc-500 text-xs">
+                By connecting, you'll get personalized fitness coaching, workout tracking, and direct support from your coach.
+              </p>
+            </div>
+          </>
+        ) : (
+          <>
+            {/* Sign In / Sign Up Options - Show when not logged in */}
+            <div className="space-y-3 mb-6">
+              <button
+                onClick={() => setShowSignInModal(true)}
+                className="w-full bg-[#E0FE10] text-black px-6 py-4 rounded-xl hover:bg-lime-400 transition-colors font-semibold text-lg"
+              >
+                Sign In
+              </button>
+              
+              <div className="text-center">
+                <span className="text-zinc-500 text-sm">or </span>
+                <button
+                  onClick={() => router.push(`/sign-up?coach=${referralCode}&redirect=${encodeURIComponent(router.asPath)}`)}
+                  className="text-[#E0FE10] hover:text-lime-400 text-sm font-medium transition-colors underline"
+                >
+                  Create Account
+                </button>
+              </div>
+            </div>
+
+            <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-4">
+              <p className="text-zinc-500 text-xs">
+                Sign in to connect with your coach and access personalized fitness coaching, workout tracking, and direct support.
+              </p>
+            </div>
+          </>
+        )}
 
         <button
           onClick={() => router.push('/')}
@@ -471,6 +503,21 @@ const AthleteConnectPage: React.FC = () => {
           onConsent={handlePrivacyConsent}
           coachName={coachInfo?.displayName || coachInfo?.username || `Coach ${referralCode}`}
           loading={connecting}
+        />
+
+        {/* Sign In Modal */}
+        <SignInModal
+          isVisible={showSignInModal}
+          closable={true}
+          onClose={() => setShowSignInModal(false)}
+          onSignInSuccess={() => {
+            setShowSignInModal(false);
+            // After sign-in, the page will re-render with currentUser populated
+            // and show the connection button
+          }}
+          onSignInError={(error) => {
+            console.error('[AthleteConnect] Sign in error:', error);
+          }}
         />
       </div>
     </div>
