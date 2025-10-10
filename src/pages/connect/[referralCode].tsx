@@ -26,6 +26,18 @@ const AthleteConnectPage: React.FC = () => {
   const [showSignInModal, setShowSignInModal] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
+  // Preserve current path for Apple Sign In redirects (Safari mobile fix)
+  useEffect(() => {
+    if (typeof window !== 'undefined' && referralCode) {
+      try {
+        sessionStorage.setItem('pulse_auth_return_path', router.asPath);
+        console.log('[AthleteConnect] Saved return path to sessionStorage:', router.asPath);
+      } catch (e) {
+        console.error('[AthleteConnect] Error saving return path:', e);
+      }
+    }
+  }, [referralCode, router.asPath]);
+
   useEffect(() => {
     console.log('[AthleteConnect] useEffect triggered', { 
       referralCode, 
@@ -350,7 +362,7 @@ const AthleteConnectPage: React.FC = () => {
   const title = `Join ${coachInfo?.displayName || coachInfo?.username || 'your coach'} on Pulse`;
   const description = `Connect with your coach for personalized fitness guidance and support.`;
   const base = typeof window !== 'undefined' ? window.location.origin : 'https://fitwithpulse.ai';
-  const ogImage = coachInfo?.profileImage?.profileImageURL || `${base}/coach-invite-default.jpg`;
+  const ogImage = coachInfo?.profileImage?.profileImageURL || `${base}/athlete-connect-default.jpg`;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-black via-zinc-900 to-black flex items-center justify-center px-4">
@@ -511,7 +523,15 @@ const AthleteConnectPage: React.FC = () => {
           closable={true}
           onClose={() => setShowSignInModal(false)}
           onSignInSuccess={() => {
+            console.log('[AthleteConnect] Sign in successful');
             setShowSignInModal(false);
+            
+            // Safari mobile fix: Ensure we stay on this page after Apple Sign In
+            const returnPath = sessionStorage.getItem('pulse_auth_return_path');
+            if (returnPath && returnPath !== router.asPath) {
+              console.log('[AthleteConnect] Redirecting back to return path:', returnPath);
+              router.push(returnPath);
+            }
             // After sign-in, the page will re-render with currentUser populated
             // and show the connection button
           }}
@@ -523,43 +543,6 @@ const AthleteConnectPage: React.FC = () => {
     </div>
   );
 };
-
-// Server-side rendering for dynamic OG meta tags
-export async function getServerSideProps(context: any) {
-  const { referralCode } = context.params || {};
-
-  if (!referralCode || typeof referralCode !== 'string') {
-    return {
-      redirect: {
-        destination: '/',
-        permanent: false,
-      },
-    };
-  }
-
-  try {
-    // Fetch coach information server-side for meta tags
-    const API_BASE_URL = process.env.NODE_ENV === 'development' 
-      ? 'http://localhost:8888/.netlify/functions'
-      : 'https://fitwithpulse.ai/.netlify/functions';
-
-    // We need to create a serverless function to fetch coach by referral code
-    // For now, we'll use client-side fetching and set meta tags dynamically
-    
-    return {
-      props: {
-        referralCode
-      }
-    };
-  } catch (error) {
-    console.error('Error in getServerSideProps:', error);
-    return {
-      props: {
-        referralCode
-      }
-    };
-  }
-}
 
 export default AthleteConnectPage;
 

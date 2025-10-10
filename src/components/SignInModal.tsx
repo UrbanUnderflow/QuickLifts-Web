@@ -2294,6 +2294,8 @@ const SignInModal: React.FC<SignInModalProps> = ({
 
   const handleSignInSuccess = async (user: any) => {
     const queryRedirectUrl = router.query.redirect as string | undefined;
+    // Safari mobile fix: Check sessionStorage for saved return path
+    const sessionReturnPath = typeof window !== 'undefined' ? sessionStorage.getItem('pulse_auth_return_path') : null;
 
     try {
       const userDoc = await userService.fetchUserFromFirestore(user.uid);
@@ -2349,6 +2351,12 @@ const SignInModal: React.FC<SignInModalProps> = ({
         dispatch(clearLoginRedirectPath()); 
         onClose?.(); 
         return; // Return after handling
+      } else if (sessionReturnPath && sessionReturnPath !== router.asPath) {
+        // Safari mobile fix: Redirect back to saved path (e.g., /connect/TREMAINE)
+        console.log(`[SignInModal] Sign in success. Found sessionStorage return path. Navigating to: ${sessionReturnPath}`);
+        sessionStorage.removeItem('pulse_auth_return_path');
+        router.push(sessionReturnPath);
+        return;
       } else if (queryRedirectUrl) { 
         // Legacy fallback (and is subscribed)
         console.log(`[SignInModal] Sign in success. Using query param redirect. Navigating to: ${queryRedirectUrl}`);

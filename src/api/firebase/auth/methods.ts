@@ -61,6 +61,16 @@ import { User } from '../../firebase/user';
       provider.addScope('email');
       provider.addScope('name');
       
+      // Safari mobile fix: Store current path before redirect
+      try {
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem('pulse_auth_return_path', window.location.pathname + window.location.search);
+          console.log('[AppleSignIn] Saved return path:', window.location.pathname + window.location.search);
+        }
+      } catch (e) {
+        console.error('[AppleSignIn] Error saving return path:', e);
+      }
+      
       // Add your service ID
       provider.setCustomParameters({
           client_id: 'com.pulsefitnesscollective.pulse.web', // The Services ID from Apple
