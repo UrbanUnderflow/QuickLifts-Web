@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import BottomNav from '../components/App/BottomNav';
+import SideNav from '../components/Navigation/SideNav';
 import Discover from '../../src/components/App/RootScreens/Discover';
 import Search from '../../src/components/App/RootScreens/Search';
 import Create from '../../src/components/App/RootScreens/Create';
@@ -25,7 +25,11 @@ import { dateToUnixTimestamp } from '../utils/formatDate';
 
 import { setCurrentWorkout, setCurrentExerciseLogs, setWorkoutSummary } from '../redux/workoutSlice';
 
-const HomeContent = () => {
+interface HomeContentProps {
+  onAbout?: () => void;
+}
+
+const HomeContent: React.FC<HomeContentProps> = ({ onAbout }) => {
   const router = useRouter();
   const [selectedTab, setSelectedTab] = useState<SelectedRootTabs>(SelectedRootTabs.Discover);
   const [isWorkoutPanelOpen, setIsWorkoutPanelOpen] = useState(false);
@@ -503,29 +507,13 @@ const performExerciseSubmission = async (updatedLogs: ExerciseLog[]) => {
         renderWorkoutView()
       ) : (
         <>
-          {/* Top Navigation */}
-          <nav className="px-4 py-4 bg-zinc-900/80 backdrop-blur-sm border-b border-zinc-800 sticky top-0 z-10 flex justify-between items-center">
-            <div className="flex items-center">
-              <img src="/pulse-logo-white.svg" alt="Pulse" className="h-8" />
-            </div>
-            <div className="flex items-center space-x-4">
-              <button
-                className="bg-[#E0FE10] text-black px-4 py-2 rounded-lg"
-                onClick={() => setIsWorkoutPanelOpen(true)}
-              >
-                Start Workout
-              </button>
-              <UserMenu />
-            </div>
-          </nav>
-
+          {/* Side/Bottom Navigation */}
+          <SideNav selectedTab={selectedTab} onTabChange={setSelectedTab} onAbout={onAbout} />
+          
           {/* Main Content */}
-          <div className="w-full">
+          <div className="md:ml-20 lg:ml-64 pb-16 md:pb-0">
             {renderContent()}
           </div>
-
-          {/* Bottom Navigation */}
-          <BottomNav selectedTab={selectedTab} onTabChange={setSelectedTab} />
 
           {/* Render WorkoutPanel if needed */}
           <WorkoutPanel

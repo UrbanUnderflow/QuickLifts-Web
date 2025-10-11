@@ -108,7 +108,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
   onRegistrationComplete,
 }) => {
   const [email, setEmail] = useState("");
-  console.log('[SignInModal] Component rendering or re-rendering.'); // Simple render log
+  // Removed render log to prevent infinite loop
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [username, setUsername] = useState("");
@@ -146,7 +146,10 @@ const SignInModal: React.FC<SignInModalProps> = ({
   }, []);
 
   // Add effect to check if we need to show registration
+  // GUARDED to prevent infinite loop - only runs when modal is visible
   useEffect(() => {
+    if (!isVisible) return; // Don't run when modal is hidden
+    
     if (currentUser) {
       console.log('[SignInModal Onboarding Check Effect] Running. Current User:', JSON.parse(JSON.stringify(currentUser)));
 
@@ -212,7 +215,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
       setIsForgotPassword(false); // Reset forgot password state
       setResetEmailSent(false);
     }
-  }, [currentUser]); // Dependency is currentUser
+  }, [currentUser?.id, isVisible]); // Only depend on user ID, not whole object + visibility guard
 
   // Password validation states
   const hasUppercase = /[A-Z]/.test(password);
@@ -495,6 +498,9 @@ const SignInModal: React.FC<SignInModalProps> = ({
   };
 
   useEffect(() => {
+    // GUARDED: Don't run when modal is hidden to prevent infinite loop
+    if (!isVisible) return;
+    
     const logs = localStorage.getItem("authFlowLogs");
     if (logs) {
       console.log("Auth Flow Logs:");
@@ -508,11 +514,6 @@ const SignInModal: React.FC<SignInModalProps> = ({
    
     const handleRedirect = async () => {
       addLog("Starting redirect handler");
-   
-      if (!isVisible) {
-        addLog("Modal not visible, skipping redirect handling");
-        return;
-      }
    
       const urlParams = new URLSearchParams(window.location.search);
       const isRedirecting = urlParams.has("state") || window.location.href.includes("__/auth/handler");
@@ -2243,28 +2244,31 @@ const SignInModal: React.FC<SignInModalProps> = ({
     setProfileImage(null);
   };
 
-  // Add debug logging for props
+  // Add debug logging for props (ONLY when visible to prevent loop)
   useEffect(() => {
-    console.log('[SignInModal] Props state:', {
-      isVisible,
-      closable,
-      hasOnClose: !!onClose,
-      timestamp: new Date().toISOString()
-    });
+    if (isVisible) {
+      console.log('[SignInModal] Props state:', {
+        isVisible,
+        closable,
+        hasOnClose: !!onClose,
+        timestamp: new Date().toISOString()
+      });
+    }
   }, [isVisible, closable, onClose]);
 
-  // Add debug logging for signup step changes
+  // Add debug logging for signup step changes (ONLY when visible to prevent loop)
   useEffect(() => {
-    console.log('[SignInModal] Sign-up step changed:', {
-      signUpStep,
-      isSignUp,
-      timestamp: new Date().toISOString()
-    });
-  }, [signUpStep, isSignUp]);
+    if (isVisible) {
+      console.log('[SignInModal] Sign-up step changed:', {
+        signUpStep,
+        isSignUp,
+        timestamp: new Date().toISOString()
+      });
+    }
+  }, [signUpStep, isSignUp, isVisible]);
 
-  // Make sure the modal is actually visible
+  // Make sure the modal is actually visible (removed log to prevent loop)
   if (!isVisible) {
-    console.log('[SignInModal] Modal not visible, not rendering');
     return null;
   }
 

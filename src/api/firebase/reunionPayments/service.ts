@@ -36,22 +36,59 @@ export const reunionPaymentsService = {
     const normalizedName = record.name.trim();
     if (!normalizedName) throw new Error('Name is required');
 
+    const nowSeconds = Math.floor(Date.now() / 1000);
+
+    // If record has an ID, update that specific record
+    if (record.id) {
+      const docRef = doc(db, COLLECTION, record.id);
+      
+      // Build update data without undefined values
+      const updateData: any = {
+        name: normalizedName,
+        nameLower: normalizedName.toLowerCase(),
+        updatedAt: nowSeconds
+      };
+      
+      // Only include payment amounts if they are defined
+      if (record.apr1Amount !== undefined) updateData.apr1Amount = record.apr1Amount;
+      if (record.aug1Amount !== undefined) updateData.aug1Amount = record.aug1Amount;
+      if (record.dec1Amount !== undefined) updateData.dec1Amount = record.dec1Amount;
+      if (record.apr1Note !== undefined) updateData.apr1Note = record.apr1Note;
+      if (record.aug1Note !== undefined) updateData.aug1Note = record.aug1Note;
+      if (record.dec1Note !== undefined) updateData.dec1Note = record.dec1Note;
+      if (record.notes !== undefined) updateData.notes = record.notes;
+      
+      await updateDoc(docRef, updateData);
+      return record.id;
+    }
+
     // Try to find existing by exact lowercase name
     const q = query(
       collection(db, COLLECTION),
       where('nameLower', '==', normalizedName.toLowerCase())
     );
     const snap = await getDocs(q);
-    const nowSeconds = Math.floor(Date.now() / 1000);
 
     if (!snap.empty) {
       const existing = snap.docs[0];
-      await updateDoc(existing.ref, {
-        ...record,
+      
+      // Build update data without undefined values
+      const updateData: any = {
         name: normalizedName,
         nameLower: normalizedName.toLowerCase(),
         updatedAt: nowSeconds
-      });
+      };
+      
+      // Only include payment amounts if they are defined
+      if (record.apr1Amount !== undefined) updateData.apr1Amount = record.apr1Amount;
+      if (record.aug1Amount !== undefined) updateData.aug1Amount = record.aug1Amount;
+      if (record.dec1Amount !== undefined) updateData.dec1Amount = record.dec1Amount;
+      if (record.apr1Note !== undefined) updateData.apr1Note = record.apr1Note;
+      if (record.aug1Note !== undefined) updateData.aug1Note = record.aug1Note;
+      if (record.dec1Note !== undefined) updateData.dec1Note = record.dec1Note;
+      if (record.notes !== undefined) updateData.notes = record.notes;
+      
+      await updateDoc(existing.ref, updateData);
       return existing.id;
     }
 

@@ -1686,15 +1686,7 @@ const HomePage: NextPage<HomePageProps> = ({ metaData }) => {
     
     return (
       <div className="h-screen relative">
-        <HomeContent />
-        {/* Optional: Add a small button to go back to marketing view */}
-        <button
-          onClick={handleBackToMarketing}
-          className="fixed bottom-4 right-4 bg-zinc-800 hover:bg-zinc-700 text-white px-3 py-2 rounded-lg text-xs opacity-50 hover:opacity-100 transition-opacity z-50"
-          title="View marketing page"
-        >
-          About Pulse
-        </button>
+        <HomeContent onAbout={handleBackToMarketing} />
       </div>
     );
   }

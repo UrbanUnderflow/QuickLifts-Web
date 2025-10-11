@@ -4,8 +4,20 @@ import { FaApple, FaCheckCircle, FaChartLine, FaBrain, FaHeart, FaRocket, FaShie
 import Footer from '../components/Footer/Footer';
 import PageHead from '../components/PageHead';
 import { PulseCheckWaitlistForm } from '../components/PulseCheckWaitlistForm';
+import { useUser } from '../hooks/useUser';
+import SignInModal from '../components/SignInModal';
+import Chat from '../components/pulsecheck/Chat';
+import ConnectedCoachesBadge from '../components/pulsecheck/ConnectedCoachesBadge';
+import ProfilePhoto from '../components/pulsecheck/ProfilePhoto';
+import SideNav from '../components/Navigation/SideNav';
+
+const STORAGE_KEY_PC = 'pulsecheck_has_seen_marketing';
 
 const PulseCheckPage: NextPage = () => {
+    const currentUser = useUser();
+    const [showMarketing, setShowMarketing] = useState(true);
+    const [isLoading, setIsLoading] = useState(true);
+    const [isSignInModalOpen, setIsSignInModalOpen] = useState(false);
     // Add custom styles for animations
     const customStyles = `
         @keyframes fadeInScale {
@@ -127,6 +139,35 @@ const PulseCheckPage: NextPage = () => {
             }
         };
     }, []);
+
+    // Mirror home: decide which view to show under same URL
+    useEffect(() => {
+        const hasSeen = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEY_PC) : null;
+        // Allow query param override: /PulseCheck?web=1
+        const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+        const webParam = params?.get('web');
+        if (webParam === '1') {
+            localStorage.setItem(STORAGE_KEY_PC, 'true');
+        }
+        if (hasSeen === 'true') {
+            setShowMarketing(false);
+        }
+        setIsLoading(false);
+    }, []);
+
+    const handleUseWebApp = () => {
+        if (currentUser) {
+            localStorage.setItem(STORAGE_KEY_PC, 'true');
+            setShowMarketing(false);
+        } else {
+            setIsSignInModalOpen(true);
+        }
+    };
+
+    const handleBackToMarketing = () => {
+        localStorage.removeItem(STORAGE_KEY_PC);
+        setShowMarketing(true);
+    };
 
     useEffect(() => {
         // Only run animations when hero is visible
@@ -1491,6 +1532,51 @@ const PulseCheckPage: NextPage = () => {
         </div>
     );
 
+    // Initial tiny loading gate to avoid flicker
+    if (isLoading) {
+        return (
+            <div className="min-h-screen bg-zinc-950 text-white flex items-center justify-center">Loading...</div>
+        );
+    }
+
+    // If user chose web app (and is logged in), show web app content
+    if (!showMarketing && currentUser) {
+        return (
+            <>
+                <PageHead
+                    metaData={{
+                        pageId: "pulse-check",
+                        pageTitle: "PulseCheck — AI Sports Psychology",
+                        metaDescription: "AI-powered sports psychology and mindset coaching",
+                        lastUpdated: new Date().toISOString()
+                    }}
+                    pageOgUrl="https://fitwithpulse.ai/PulseCheck"
+                />
+                
+                {/* Side/Bottom Navigation */}
+                <SideNav onAbout={handleBackToMarketing} />
+                
+                {/* Main Content Area */}
+                <div className="md:ml-20 lg:ml-64">
+                    <div className="fixed top-0 left-0 md:left-20 lg:left-64 right-0 z-10 flex items-center justify-between px-6 py-3 bg-black border-b border-zinc-800">
+                        <h1 className="text-xl font-bold text-white">PulseCheck</h1>
+                        <div className="flex items-center gap-3">
+                            <ConnectedCoachesBadge />
+                            <div className="hidden md:block">
+                                <ProfilePhoto />
+                            </div>
+                        </div>
+                    </div>
+                    <div className="h-screen pt-[52px] overflow-hidden">
+                        <Chat />
+                    </div>
+                </div>
+                
+                <SignInModal isVisible={isSignInModalOpen} onClose={() => setIsSignInModalOpen(false)} />
+            </>
+        );
+    }
+
     return (
         <div className="min-h-screen bg-zinc-950 text-white font-avenir overflow-hidden">
             <style jsx>{customStyles}</style>
@@ -1691,23 +1777,22 @@ const PulseCheckPage: NextPage = () => {
                             
                             <div className="flex flex-col sm:flex-row items-center justify-center gap-6">
                                 <button 
-                                    onClick={() => {
-                                        setWaitlistUserType(undefined);
-                                        setShowWaitlistForm(true);
-                                    }}
+                                    onClick={handleUseWebApp}
                                     className="group relative inline-flex items-center justify-center px-8 py-4 text-lg font-semibold text-zinc-900 bg-gradient-to-r from-[#E0FE10] to-lime-400 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105"
                                 >
                                     <span className="absolute -inset-1 bg-gradient-to-r from-[#E0FE10] to-lime-400 rounded-xl blur opacity-25 group-hover:opacity-50 transition duration-1000"></span>
                                     <span className="relative flex items-center">
-                                        <FaRocket className="mr-2 h-5 w-5" />
-                                        Join Waitlist
+                                        Use Web App →
                                     </span>
                                 </button>
                                 <a 
-                                    href="#features" 
+                                    href="https://apps.apple.com/by/app/pulsecheck-mindset-coaching/id6747253393"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
                                     className="inline-flex items-center justify-center px-8 py-4 text-lg font-semibold text-white bg-white/10 rounded-xl ring-1 ring-inset ring-white/20 hover:bg-white/20 transition-all duration-200 backdrop-blur-sm"
                                 >
-                                    Learn More
+                                    <FaApple className="mr-2 h-5 w-5" />
+                                    Download iOS App
                                 </a>
                             </div>
                         </div>

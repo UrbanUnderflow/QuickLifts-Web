@@ -28,6 +28,9 @@ const HaveYouPaidPage: React.FC = () => {
   const [passcode, setPasscode] = useState<string>('');
   const [paymentModal, setPaymentModal] = useState<{open: boolean; row: ReunionPaymentRecord | null}>({ open: false, row: null });
   const [modalAmount, setModalAmount] = useState<string>('');
+  const [editNameModal, setEditNameModal] = useState<{open: boolean; row: ReunionPaymentRecord | null}>({ open: false, row: null });
+  const [editedName, setEditedName] = useState<string>('');
+  const [depositCount, setDepositCount] = useState<number>(0);
 
   const runSearch = useMemo(
     () => debounce(async (text: string) => {
@@ -63,6 +66,19 @@ const HaveYouPaidPage: React.FC = () => {
     setNewPaymentAmount(undefined);
   };
 
+  const refreshTableAndCount = async () => {
+    const all = await reunionPaymentsService.listAll();
+    setRows(all.sort((a,b)=> (a.name||'').localeCompare(b.name||'')));
+    
+    // Update deposit count
+    const peopleWithDeposits = all.filter(r => 
+      (r.apr1Amount && r.apr1Amount > 0) || 
+      (r.aug1Amount && r.aug1Amount > 0) || 
+      (r.dec1Amount && r.dec1Amount > 0)
+    ).length;
+    setDepositCount(peopleWithDeposits);
+  };
+
   const handleSave = async () => {
     const name = (selected?.name || query).trim();
     if (!name) { setMessage('Please enter a name.'); return; }
@@ -89,8 +105,7 @@ const HaveYouPaidPage: React.FC = () => {
       setSelected({ id, name, apr1Amount: a1 || undefined, aug1Amount: a2 || undefined, dec1Amount: a3 || undefined });
       // Refresh table
       setLoadingRows(true);
-      const all = await reunionPaymentsService.listAll();
-      setRows(all.sort((a,b)=> (a.name||'').localeCompare(b.name||'')));
+      await refreshTableAndCount();
       setLoadingRows(false);
     } catch (e) {
       console.error(e);
@@ -108,8 +123,7 @@ const HaveYouPaidPage: React.FC = () => {
       const id = await reunionPaymentsService.upsert({ name });
       setMessage('Person added!');
       setSelected({ id, name });
-      const all = await reunionPaymentsService.listAll();
-      setRows(all.sort((a,b)=> (a.name||'').localeCompare(b.name||'')));
+      await refreshTableAndCount();
     } catch (e) {
       console.error(e);
       setMessage('There was an error adding the person.');
@@ -125,8 +139,7 @@ const HaveYouPaidPage: React.FC = () => {
       setIsLoading(true);
       const id = await reunionPaymentsService.upsert({ name: name.trim() });
       setMessage('Person added!');
-      const all = await reunionPaymentsService.listAll();
-      setRows(all.sort((a,b)=> (a.name||'').localeCompare(b.name||'')));
+      await refreshTableAndCount();
     } catch (e) {
       console.error(e);
       setMessage('There was an error adding the person.');
@@ -146,6 +159,15 @@ const HaveYouPaidPage: React.FC = () => {
         }
         const all = await reunionPaymentsService.listAll();
         setRows(all.sort((a,b)=> (a.name||'').localeCompare(b.name||'')));
+        
+        // Count people who have made at least one deposit
+        const peopleWithDeposits = all.filter(r => 
+          (r.apr1Amount && r.apr1Amount > 0) || 
+          (r.aug1Amount && r.aug1Amount > 0) || 
+          (r.dec1Amount && r.dec1Amount > 0)
+        ).length;
+        setDepositCount(peopleWithDeposits);
+        
         setLoadingRows(false);
       } catch (e) {
         // silent
@@ -162,6 +184,21 @@ const HaveYouPaidPage: React.FC = () => {
       <div className="min-h-screen bg-[#0f1115] text-white">
         <div className="max-w-2xl mx-auto px-4 py-12">
           <h1 className="text-2xl md:text-3xl font-semibold mb-4">Have you paid up your balance for the Anderson Family Reunion?</h1>
+          
+          {/* Exciting Deposit Counter */}
+          {depositCount > 0 && (
+            <div className="mb-6 p-4 rounded-lg bg-gradient-to-r from-green-900/30 to-emerald-900/30 border border-green-700/50">
+              <div className="text-center">
+                <div className="text-3xl md:text-4xl font-bold text-green-400 mb-1">
+                  {depositCount} {depositCount === 1 ? 'person has' : 'people have'}
+                </div>
+                <div className="text-lg md:text-xl text-green-300">
+                  put down deposits! 🎉
+                </div>
+              </div>
+            </div>
+          )}
+          
           <p className="text-gray-300 mb-6">Enter your name below to check.</p>
 
           <div className="relative mb-6">
@@ -267,6 +304,13 @@ const HaveYouPaidPage: React.FC = () => {
                      <td className="p-3 text-gray-300">
                        <div className="flex gap-2">
                          <button
+                           className="px-3 py-1 rounded-md bg-blue-600 hover:bg-blue-500"
+                           onClick={() => {
+                             setEditNameModal({ open: true, row: r });
+                             setEditedName(r.name);
+                           }}
+                         >Edit</button>
+                         <button
                            className="px-3 py-1 rounded-md bg-red-600 hover:bg-red-500"
                            onClick={async () => {
                              if (!r.id) return;
@@ -311,11 +355,55 @@ const HaveYouPaidPage: React.FC = () => {
                       const amt = Number(modalAmount);
                       if (!paymentModal.row?.id || !amt || amt <= 0) return;
                       await reunionPaymentsService.addPaymentById(paymentModal.row.id, amt);
-                      const all = await reunionPaymentsService.listAll();
-                      setRows(all.sort((a,b)=> (a.name||'').localeCompare(b.name||'')));
+                      await refreshTableAndCount();
                       setPaymentModal({ open: false, row: null });
                     }}
                   >Add Amount</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Edit Name Modal */}
+          {editNameModal.open && editNameModal.row && (
+            <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={() => setEditNameModal({ open: false, row: null })}>
+              <div className="bg-[#11151b] border border-gray-800 rounded-xl w-full max-w-md" onClick={e => e.stopPropagation()}>
+                <div className="p-4 border-b border-gray-800 flex items-center justify-between">
+                  <div className="font-semibold">Edit Name</div>
+                  <button className="text-gray-400 hover:text-white" onClick={() => setEditNameModal({ open: false, row: null })}>✕</button>
+                </div>
+                <div className="p-4 text-gray-300 space-y-3">
+                  <p>Edit the name for <span className="text-white font-medium">{editNameModal.row.name}</span>.</p>
+                  <input
+                    type="text"
+                    value={editedName}
+                    onChange={(e)=>setEditedName(e.target.value)}
+                    placeholder="Enter new name"
+                    className="w-full bg-[#1a1f28] border border-gray-700 rounded-lg px-3 py-2 focus:outline-none"
+                  />
+                </div>
+                <div className="p-4 border-t border-gray-800 flex justify-end gap-2">
+                  <button className="px-4 py-2 rounded-md bg-zinc-800 border border-zinc-700 hover:bg-zinc-700" onClick={()=>setEditNameModal({ open: false, row: null })}>Cancel</button>
+                  <button
+                    className="px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-500"
+                    onClick={async ()=>{
+                      const newName = editedName.trim();
+                      if (!editNameModal.row?.id || !newName) return;
+                      
+                      // Use upsert to update the name while keeping payment data
+                      await reunionPaymentsService.upsert({
+                        id: editNameModal.row.id,
+                        name: newName,
+                        apr1Amount: editNameModal.row.apr1Amount,
+                        aug1Amount: editNameModal.row.aug1Amount,
+                        dec1Amount: editNameModal.row.dec1Amount,
+                      });
+                      
+                      await refreshTableAndCount();
+                      setEditNameModal({ open: false, row: null });
+                      setMessage('Name updated successfully!');
+                    }}
+                  >Save Name</button>
                 </div>
               </div>
             </div>

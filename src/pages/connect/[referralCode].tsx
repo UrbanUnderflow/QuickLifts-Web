@@ -287,10 +287,13 @@ const AthleteConnectPage: React.FC = () => {
           </div>
 
           <button
-            onClick={() => router.push('/dashboard')}
+            onClick={() => {
+              try { localStorage.setItem('pulsecheck_has_seen_marketing', 'true'); } catch {}
+              router.push('/PulseCheck?web=1');
+            }}
             className="w-full bg-zinc-800 border border-zinc-700 text-white px-6 py-3 rounded-lg hover:bg-zinc-700 transition-colors font-semibold"
           >
-            Continue to Dashboard
+            Continue to PulseCheck
           </button>
         </div>
       </div>

@@ -18,6 +18,7 @@ import FullScreenExerciseView from '../FullscreenExerciseView';
 import UserProfileMeta from '../../components/UserProfileMeta';
 import Link from 'next/link';
 import FollowButton from '../../components/FollowButton';
+import SideNav from '../../components/Navigation/SideNav';
 
 interface ProfileViewProps {
   initialUserData: User | null;
@@ -303,7 +304,10 @@ useEffect(() => {
         username={user.username}
       />
 
-      <div className="relative">
+      {/* Side/Bottom Navigation */}
+      <SideNav />
+
+      <div className="relative md:ml-20 lg:ml-64 pb-16 md:pb-0">
         <div className="h-48 bg-gradient-to-b from-zinc-800 to-zinc-900" />
         
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
