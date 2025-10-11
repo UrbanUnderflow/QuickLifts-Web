@@ -7,6 +7,7 @@ import {
   browserPopupRedirectResolver,
   OAuthProvider,
   sendPasswordResetEmail,
+  signOut as firebaseSignOut,
 } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 import { auth, db } from '../config';
@@ -114,3 +115,6 @@ import { User } from '../../firebase/user';
     }
   }
 };
+
+// Export signOut function for use in components
+export const signOut = () => firebaseSignOut(auth);
