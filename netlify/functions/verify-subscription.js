@@ -207,7 +207,7 @@ const handler = async (event) => {
     batch.set(subscriptionRef, baseData, { merge: true });
 
     // Determine plan type and expiration
-    const priceId = session.subscription?.items?.data?.[0]?.price?.id;
+    const mappedPriceId = session.subscription?.items?.data?.[0]?.price?.id;
     const planTypeMap = (pid) => {
       switch (pid) {
         case 'price_1PDq26RobSf56MUOucDIKLhd': return 'pulsecheck-monthly';
@@ -217,7 +217,7 @@ const handler = async (event) => {
         default: return null;
       }
     };
-    const planType = planTypeMap(priceId);
+    const planType = planTypeMap(mappedPriceId);
     const currentPeriodEnd = session.subscription?.current_period_end;
     if (planType && currentPeriodEnd) {
       const expSec = currentPeriodEnd;
@@ -238,7 +238,7 @@ const handler = async (event) => {
             createdAt: nowSec,
             updatedAt: nowSec,
             platform: 'web',
-            productId: priceId || null,
+            productId: mappedPriceId || null,
           })
         });
       }
