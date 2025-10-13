@@ -35,11 +35,12 @@ const AthleteConnectPage: React.FC = () => {
   const HARD_CODED_PLANS = {
     monthly: {
       // Stripe Price IDs: test vs live
-      priceId: isLocalhost ? 'price_1RMIUNRobSf56MUOfeB4gIot' : 'price_1PDq26RobSf56MUOucDIKLhd',
+      // Updated TEST priceId per latest screenshot
+      priceId: isLocalhost ? 'price_1SHtdpRobSf56MUOMWHNd3ns' : 'price_1SHtQcRobSf56MUOgD0MHltS',
       displayPrice: '24.99',
     },
     annual: {
-      priceId: isLocalhost ? 'price_1RMISFRobSf56MUOpcSoohjP' : 'price_1PDq3LRobSf56MUOng0UxhCC',
+      priceId: isLocalhost ? 'price_1SHtgSRobSf56MUOcX5gfwUy' : 'price_1SHti3RobSf56MUOIULmEfK4',
       displayPrice: '219.99',
     },
     // Weekly plan can be added here when a Stripe price is available
