@@ -367,6 +367,169 @@ const MarketingContent: React.FC<{
         </div>
       </section>
 
+      {/* Hierarchy Flowchart Section - Updated with new styling */}
+      <section className="py-20 bg-gradient-to-br from-zinc-950 to-black">
+        <div className="max-w-5xl mx-auto px-8">
+          <h2 className="text-center text-white text-3xl font-bold mb-16">The Pulse Ecosystem</h2>
+          
+          <div className="flex flex-col md:flex-row justify-between items-center gap-10 relative">
+            {/* Connecting lines with gradients */}
+            <div className="hidden md:block absolute inset-0 z-0">
+              <div className="absolute top-1/2 left-1/4 right-3/4 h-1 bg-gradient-to-r from-[#E0FE10] to-purple-400 transform -translate-y-1/2"></div>
+              <div className="absolute top-1/2 left-1/2 right-1/4 h-1 bg-gradient-to-r from-purple-400 to-blue-400 transform -translate-y-1/2"></div>
+            </div>
+            
+            {/* Mobile connecting lines */}
+            <div className="md:hidden absolute left-1/2 top-[22%] bottom-[78%] w-1 bg-gradient-to-b from-[#E0FE10] to-purple-400 transform -translate-x-1/2"></div>
+            <div className="md:hidden absolute left-1/2 top-[55%] bottom-[45%] w-1 bg-gradient-to-b from-purple-400 to-blue-400 transform -translate-x-1/2"></div>
+            
+            {/* Move Card */}
+            <div className="bg-gradient-to-br from-[#E0FE10]/10 to-lime-400/10 backdrop-blur-sm rounded-3xl p-6 w-full md:w-[30%] relative z-10 border border-[#E0FE10]/30 hover:border-[#E0FE10]/50 hover:shadow-lg hover:shadow-[#E0FE10]/20 transition-all duration-300 group cursor-pointer">
+              <div className="absolute -top-5 -left-5 w-10 h-10 rounded-full bg-gradient-to-br from-[#E0FE10] to-lime-400 flex items-center justify-center font-bold text-black">1</div>
+              <h3 className="text-[#E0FE10] text-2xl font-bold mb-3">Move</h3>
+              <p className="text-zinc-400">The foundation: short video clips of exercises that form the building blocks of your fitness journey.</p>
+              <div className="absolute right-4 bottom-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                <FaArrowRight className="w-6 h-6 text-[#E0FE10]" />
+              </div>
+            </div>
+            
+            {/* Stack Card */}
+            <div className="bg-gradient-to-br from-purple-500/10 to-blue-500/10 backdrop-blur-sm rounded-3xl p-6 w-full md:w-[30%] relative z-10 border border-purple-400/30 hover:border-purple-400/50 hover:shadow-lg hover:shadow-purple-400/20 transition-all duration-300 group cursor-pointer">
+              <div className="absolute -top-5 -left-5 w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center font-bold text-white">2</div>
+              <h3 className="text-purple-400 text-2xl font-bold mb-3">Stack</h3>
+              <p className="text-zinc-400">Combine Moves to create complete workout routines that you can share or follow.</p>
+              <div className="absolute right-4 bottom-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                <FaArrowRight className="w-6 h-6 text-purple-400" />
+              </div>
+            </div>
+            
+            {/* Round Card */}
+            <div className="bg-gradient-to-br from-blue-500/10 to-cyan-500/10 backdrop-blur-sm rounded-3xl p-6 w-full md:w-[30%] relative z-10 border border-blue-400/30 hover:border-blue-400/50 hover:shadow-lg hover:shadow-blue-400/20 transition-all duration-300 group cursor-pointer">
+              <div className="absolute -top-5 -left-5 w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center font-bold text-white">3</div>
+              <h3 className="text-blue-400 text-2xl font-bold mb-3">Round</h3>
+              <p className="text-zinc-400">Join community fitness challenges where members work out, compete, and support each other.</p>
+              <div className="absolute right-4 bottom-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                <FaArrowRight className="w-6 h-6 text-blue-400" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Move Section */}
+      <section id="move-section" className="min-h-screen flex flex-col lg:flex-row items-center justify-center gap-20 p-8 bg-gradient-to-br from-black to-zinc-950">
+        <div className="relative w-[300px] sm:w-[380px] group">
+          <div className="relative aspect-[9/19.5] rounded-[3rem] p-[2px] transition-transform duration-500 transform group-hover:scale-105">
+            <div className="absolute inset-0 rounded-[3rem] border-2 border-[#E0FE10] group-hover:border-4 transition-all duration-300" />
+            <div className="relative h-full w-full rounded-[3rem] overflow-hidden bg-zinc-900">
+              <video
+                className="w-full h-full object-cover group-hover:opacity-90 transition-opacity duration-300"
+                autoPlay
+                loop
+                muted
+                playsInline
+                src="/ThisIsPulseNoSound.mp4"
+                poster="/sample-round-poster.jpg"
+              />
+            </div>
+          </div>
+          <div className="absolute -z-10 inset-0 rounded-[3rem] bg-[#E0FE10]/20 blur-xl opacity-0 group-hover:opacity-40 transition-opacity duration-500"></div>
+        </div>
+        <div className="max-w-xl">
+          <div className="inline-flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-[#E0FE10]/20 to-lime-400/20 backdrop-blur-sm border border-[#E0FE10]/30 rounded-full mb-6">
+            <FaBolt className="h-4 w-4 text-[#E0FE10]" />
+            <span className="text-[#E0FE10] text-sm font-medium">The Foundation</span>
+          </div>
+          <h1 className="text-white text-5xl sm:text-6xl font-bold mb-6">
+            Everything starts with a <span className="bg-gradient-to-r from-[#E0FE10] to-lime-400 bg-clip-text text-transparent">Move</span>
+          </h1>
+          <p className="text-zinc-400 text-lg leading-relaxed mb-8">
+            A Move is the fundamental building block of Pulse. It's a 5-30 second video clip of a lift, stretch, exercise, or movement that is used to build a workout. Build your library of movements from basic exercises to complex variations, each Move you create becomes part of yours or maybe someone else fitness journey.
+          </p>
+          <div className="bg-gradient-to-br from-[#E0FE10]/10 to-lime-400/10 backdrop-blur-sm border border-[#E0FE10]/20 rounded-2xl p-4">
+            <p className="text-[#E0FE10] text-sm">
+              <strong>Gamification:</strong> Each Move you create earns XP and unlocks new creation tools. Quality Moves get featured and earn bonus rewards.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* Stacks Section - Enhanced */}
+      <section id="stack-section" className="min-h-screen bg-gradient-to-br from-zinc-950 via-purple-950/20 to-zinc-900 flex flex-col lg:flex-row items-center justify-center gap-20 p-8">
+        <div className="max-w-xl lg:order-1">
+          <div className="inline-flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-purple-500/20 to-blue-500/20 backdrop-blur-sm border border-purple-400/30 rounded-full mb-6">
+            <FaRocket className="h-4 w-4 text-purple-400" />
+            <span className="text-purple-400 text-sm font-medium">Build The Blocks</span>
+          </div>
+          <h1 className="text-white text-4xl sm:text-5xl font-bold mb-6">
+            <span className="bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent">Stack</span> your Moves into workouts
+          </h1>
+          <p className="text-zinc-400 text-lg leading-relaxed mb-8">
+            Combine your Moves into powerful workouts called Stacks. Create personalized routines that target your goals, share them with the community, or discover Stacks created by others. Each Stack is a curated collection of Moves designed to challenge and inspire.
+          </p>
+          <div className="bg-gradient-to-br from-purple-500/10 to-blue-500/10 backdrop-blur-sm border border-purple-400/20 rounded-2xl p-4">
+            <p className="text-purple-300 text-sm">
+              <strong>Creator Economy:</strong> Popular Stacks generate passive income. Build a following and monetize your expertise through Stack subscriptions.
+            </p>
+          </div>
+        </div>
+        <div className="relative w-[300px] sm:w-[380px] lg:order-2 group">
+          <div className="relative aspect-[9/19.5] rounded-[3rem] p-[2px] transition-transform duration-500 transform group-hover:scale-105">
+            <div className="absolute inset-0 rounded-[3rem] border-2 border-purple-400 group-hover:border-4 transition-all duration-300" />
+            <div className="relative h-full w-full rounded-[3rem] overflow-hidden bg-zinc-900">
+              <video
+                className="w-full h-full object-cover group-hover:opacity-90 transition-opacity duration-300"
+                autoPlay
+                loop
+                muted
+                playsInline
+                src="/stack.mp4"
+                poster="/sample-round-poster.jpg"
+              />
+            </div>
+          </div>
+          <div className="absolute -z-10 inset-0 rounded-[3rem] bg-purple-400/20 blur-xl opacity-0 group-hover:opacity-40 transition-opacity duration-500"></div>
+        </div>
+      </section>
+
+      {/* Community Section - Enhanced */}
+      <section id="round-section" className="min-h-screen bg-gradient-to-br from-black via-blue-950/20 to-zinc-950 flex flex-col lg:flex-row items-center justify-center gap-20 p-8">
+        <div className="relative w-[300px] sm:w-[380px] group">
+          <div className="relative aspect-[9/19.5] rounded-[3rem] p-[2px] transition-transform duration-500 transform group-hover:scale-105">
+            <div className="absolute inset-0 rounded-[3rem] border-2 border-blue-400 group-hover:border-4 transition-all duration-300" />
+            <div className="relative h-full w-full rounded-[3rem] overflow-hidden bg-zinc-900">
+              <video
+                className="w-full h-full object-cover group-hover:opacity-90 transition-opacity duration-300"
+                autoPlay
+                loop
+                muted
+                playsInline
+                src="/rounds.mp4"
+                poster="/sample-round-poster.jpg"
+              />
+            </div>
+          </div>
+          <div className="absolute -z-10 inset-0 rounded-[3rem] bg-blue-400/20 blur-xl opacity-0 group-hover:opacity-40 transition-opacity duration-500"></div>
+        </div>
+        <div className="max-w-xl">
+          <div className="inline-flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-blue-500/20 to-cyan-500/20 backdrop-blur-sm border border-blue-400/30 rounded-full mb-6">
+            <FaTrophy className="h-4 w-4 text-blue-400" />
+            <span className="text-blue-400 text-sm font-medium">The Community</span>
+          </div>
+          <h1 className="text-white text-5xl sm:text-6xl font-bold mb-6">
+            Join a <span className="bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">Round</span> and compete together
+          </h1>
+          <p className="text-zinc-400 text-lg leading-relaxed mb-8">
+            Participate in community fitness challenges called Rounds where multiple people work out together. Chat, support, and check in with fellow participants as you compete for points. Earn rewards by completing workouts and engaging with your fellow Rounders in these time-based challenges that build community and accountability.
+          </p>
+          <div className="bg-gradient-to-br from-blue-500/10 to-cyan-500/10 backdrop-blur-sm border border-blue-400/20 rounded-2xl p-4">
+            <p className="text-blue-300 text-sm">
+              <strong>Win Together:</strong> Collective achievements unlock team rewards. Individual performance contributes to group success and shared prize pools.
+            </p>
+          </div>
+        </div>
+      </section>
+
       {/* Apple Watch & Data Revolution Section - New */}
       <section className="py-16 sm:py-24 lg:py-32 relative overflow-hidden">
         {/* Background Elements */}
@@ -770,169 +933,6 @@ const MarketingContent: React.FC<{
                 </div>
               </div>
             </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Hierarchy Flowchart Section - Updated with new styling */}
-      <section className="py-20 bg-gradient-to-br from-zinc-950 to-black">
-        <div className="max-w-5xl mx-auto px-8">
-          <h2 className="text-center text-white text-3xl font-bold mb-16">The Pulse Ecosystem</h2>
-          
-          <div className="flex flex-col md:flex-row justify-between items-center gap-10 relative">
-            {/* Connecting lines with gradients */}
-            <div className="hidden md:block absolute inset-0 z-0">
-              <div className="absolute top-1/2 left-1/4 right-3/4 h-1 bg-gradient-to-r from-[#E0FE10] to-purple-400 transform -translate-y-1/2"></div>
-              <div className="absolute top-1/2 left-1/2 right-1/4 h-1 bg-gradient-to-r from-purple-400 to-blue-400 transform -translate-y-1/2"></div>
-            </div>
-            
-            {/* Mobile connecting lines */}
-            <div className="md:hidden absolute left-1/2 top-[22%] bottom-[78%] w-1 bg-gradient-to-b from-[#E0FE10] to-purple-400 transform -translate-x-1/2"></div>
-            <div className="md:hidden absolute left-1/2 top-[55%] bottom-[45%] w-1 bg-gradient-to-b from-purple-400 to-blue-400 transform -translate-x-1/2"></div>
-            
-            {/* Move Card */}
-            <div className="bg-gradient-to-br from-[#E0FE10]/10 to-lime-400/10 backdrop-blur-sm rounded-3xl p-6 w-full md:w-[30%] relative z-10 border border-[#E0FE10]/30 hover:border-[#E0FE10]/50 hover:shadow-lg hover:shadow-[#E0FE10]/20 transition-all duration-300 group cursor-pointer">
-              <div className="absolute -top-5 -left-5 w-10 h-10 rounded-full bg-gradient-to-br from-[#E0FE10] to-lime-400 flex items-center justify-center font-bold text-black">1</div>
-              <h3 className="text-[#E0FE10] text-2xl font-bold mb-3">Move</h3>
-              <p className="text-zinc-400">The foundation: short video clips of exercises that form the building blocks of your fitness journey.</p>
-              <div className="absolute right-4 bottom-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                <FaArrowRight className="w-6 h-6 text-[#E0FE10]" />
-              </div>
-            </div>
-            
-            {/* Stack Card */}
-            <div className="bg-gradient-to-br from-purple-500/10 to-blue-500/10 backdrop-blur-sm rounded-3xl p-6 w-full md:w-[30%] relative z-10 border border-purple-400/30 hover:border-purple-400/50 hover:shadow-lg hover:shadow-purple-400/20 transition-all duration-300 group cursor-pointer">
-              <div className="absolute -top-5 -left-5 w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center font-bold text-white">2</div>
-              <h3 className="text-purple-400 text-2xl font-bold mb-3">Stack</h3>
-              <p className="text-zinc-400">Combine Moves to create complete workout routines that you can share or follow.</p>
-              <div className="absolute right-4 bottom-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                <FaArrowRight className="w-6 h-6 text-purple-400" />
-              </div>
-            </div>
-            
-            {/* Round Card */}
-            <div className="bg-gradient-to-br from-blue-500/10 to-cyan-500/10 backdrop-blur-sm rounded-3xl p-6 w-full md:w-[30%] relative z-10 border border-blue-400/30 hover:border-blue-400/50 hover:shadow-lg hover:shadow-blue-400/20 transition-all duration-300 group cursor-pointer">
-              <div className="absolute -top-5 -left-5 w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center font-bold text-white">3</div>
-              <h3 className="text-blue-400 text-2xl font-bold mb-3">Round</h3>
-              <p className="text-zinc-400">Join community fitness challenges where members work out, compete, and support each other.</p>
-              <div className="absolute right-4 bottom-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                <FaArrowRight className="w-6 h-6 text-blue-400" />
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Move Section */}
-      <section id="move-section" className="min-h-screen flex flex-col lg:flex-row items-center justify-center gap-20 p-8 bg-gradient-to-br from-black to-zinc-950">
-        <div className="relative w-[300px] sm:w-[380px] group">
-          <div className="relative aspect-[9/19.5] rounded-[3rem] p-[2px] transition-transform duration-500 transform group-hover:scale-105">
-            <div className="absolute inset-0 rounded-[3rem] border-2 border-[#E0FE10] group-hover:border-4 transition-all duration-300" />
-            <div className="relative h-full w-full rounded-[3rem] overflow-hidden bg-zinc-900">
-              <video
-                className="w-full h-full object-cover group-hover:opacity-90 transition-opacity duration-300"
-                autoPlay
-                loop
-                muted
-                playsInline
-                src="/ThisIsPulseNoSound.mp4"
-                poster="/sample-round-poster.jpg"
-              />
-            </div>
-          </div>
-          <div className="absolute -z-10 inset-0 rounded-[3rem] bg-[#E0FE10]/20 blur-xl opacity-0 group-hover:opacity-40 transition-opacity duration-500"></div>
-        </div>
-        <div className="max-w-xl">
-          <div className="inline-flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-[#E0FE10]/20 to-lime-400/20 backdrop-blur-sm border border-[#E0FE10]/30 rounded-full mb-6">
-            <FaBolt className="h-4 w-4 text-[#E0FE10]" />
-            <span className="text-[#E0FE10] text-sm font-medium">The Foundation</span>
-          </div>
-          <h1 className="text-white text-5xl sm:text-6xl font-bold mb-6">
-            Everything starts with a <span className="bg-gradient-to-r from-[#E0FE10] to-lime-400 bg-clip-text text-transparent">Move</span>
-          </h1>
-          <p className="text-zinc-400 text-lg leading-relaxed mb-8">
-            A Move is the fundamental building block of Pulse. It's a 5-30 second video clip of a lift, stretch, exercise, or movement that is used to build a workout. Build your library of movements from basic exercises to complex variations, each Move you create becomes part of yours or maybe someone else fitness journey.
-          </p>
-          <div className="bg-gradient-to-br from-[#E0FE10]/10 to-lime-400/10 backdrop-blur-sm border border-[#E0FE10]/20 rounded-2xl p-4">
-            <p className="text-[#E0FE10] text-sm">
-              <strong>Gamification:</strong> Each Move you create earns XP and unlocks new creation tools. Quality Moves get featured and earn bonus rewards.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* Stacks Section - Enhanced */}
-      <section id="stack-section" className="min-h-screen bg-gradient-to-br from-zinc-950 via-purple-950/20 to-zinc-900 flex flex-col lg:flex-row items-center justify-center gap-20 p-8">
-        <div className="max-w-xl lg:order-1">
-          <div className="inline-flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-purple-500/20 to-blue-500/20 backdrop-blur-sm border border-purple-400/30 rounded-full mb-6">
-            <FaRocket className="h-4 w-4 text-purple-400" />
-            <span className="text-purple-400 text-sm font-medium">Build The Blocks</span>
-          </div>
-          <h1 className="text-white text-4xl sm:text-5xl font-bold mb-6">
-            <span className="bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent">Stack</span> your Moves into workouts
-          </h1>
-          <p className="text-zinc-400 text-lg leading-relaxed mb-8">
-            Combine your Moves into powerful workouts called Stacks. Create personalized routines that target your goals, share them with the community, or discover Stacks created by others. Each Stack is a curated collection of Moves designed to challenge and inspire.
-          </p>
-          <div className="bg-gradient-to-br from-purple-500/10 to-blue-500/10 backdrop-blur-sm border border-purple-400/20 rounded-2xl p-4">
-            <p className="text-purple-300 text-sm">
-              <strong>Creator Economy:</strong> Popular Stacks generate passive income. Build a following and monetize your expertise through Stack subscriptions.
-            </p>
-          </div>
-        </div>
-        <div className="relative w-[300px] sm:w-[380px] lg:order-2 group">
-          <div className="relative aspect-[9/19.5] rounded-[3rem] p-[2px] transition-transform duration-500 transform group-hover:scale-105">
-            <div className="absolute inset-0 rounded-[3rem] border-2 border-purple-400 group-hover:border-4 transition-all duration-300" />
-            <div className="relative h-full w-full rounded-[3rem] overflow-hidden bg-zinc-900">
-              <video
-                className="w-full h-full object-cover group-hover:opacity-90 transition-opacity duration-300"
-                autoPlay
-                loop
-                muted
-                playsInline
-                src="/stack.mp4"
-                poster="/sample-round-poster.jpg"
-              />
-            </div>
-          </div>
-          <div className="absolute -z-10 inset-0 rounded-[3rem] bg-purple-400/20 blur-xl opacity-0 group-hover:opacity-40 transition-opacity duration-500"></div>
-        </div>
-      </section>
-
-      {/* Community Section - Enhanced */}
-      <section id="round-section" className="min-h-screen bg-gradient-to-br from-black via-blue-950/20 to-zinc-950 flex flex-col lg:flex-row items-center justify-center gap-20 p-8">
-        <div className="relative w-[300px] sm:w-[380px] group">
-          <div className="relative aspect-[9/19.5] rounded-[3rem] p-[2px] transition-transform duration-500 transform group-hover:scale-105">
-            <div className="absolute inset-0 rounded-[3rem] border-2 border-blue-400 group-hover:border-4 transition-all duration-300" />
-            <div className="relative h-full w-full rounded-[3rem] overflow-hidden bg-zinc-900">
-              <video
-                className="w-full h-full object-cover group-hover:opacity-90 transition-opacity duration-300"
-                autoPlay
-                loop
-                muted
-                playsInline
-                src="/rounds.mp4"
-                poster="/sample-round-poster.jpg"
-              />
-            </div>
-          </div>
-          <div className="absolute -z-10 inset-0 rounded-[3rem] bg-blue-400/20 blur-xl opacity-0 group-hover:opacity-40 transition-opacity duration-500"></div>
-        </div>
-        <div className="max-w-xl">
-          <div className="inline-flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-blue-500/20 to-cyan-500/20 backdrop-blur-sm border border-blue-400/30 rounded-full mb-6">
-            <FaTrophy className="h-4 w-4 text-blue-400" />
-            <span className="text-blue-400 text-sm font-medium">The Community</span>
-          </div>
-          <h1 className="text-white text-5xl sm:text-6xl font-bold mb-6">
-            Join a <span className="bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">Round</span> and compete together
-          </h1>
-          <p className="text-zinc-400 text-lg leading-relaxed mb-8">
-            Participate in community fitness challenges called Rounds where multiple people work out together. Chat, support, and check in with fellow participants as you compete for points. Earn rewards by completing workouts and engaging with your fellow Rounders in these time-based challenges that build community and accountability.
-          </p>
-          <div className="bg-gradient-to-br from-blue-500/10 to-cyan-500/10 backdrop-blur-sm border border-blue-400/20 rounded-2xl p-4">
-            <p className="text-blue-300 text-sm">
-              <strong>Win Together:</strong> Collective achievements unlock team rewards. Individual performance contributes to group success and shared prize pools.
-            </p>
           </div>
         </div>
       </section>
