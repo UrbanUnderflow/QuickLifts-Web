@@ -8,7 +8,7 @@ import { db } from '../../../api/firebase/config';
 import { convertFirestoreTimestamp } from '../../../utils/formatDate';
 import { userService } from '../../../api/firebase/user/service';
 import { workoutService } from '../../../api/firebase/workout/service';
-import { Exercise } from '../../../api/firebase/exercise/types';
+// import { Exercise } from '../../../api/firebase/exercise/types'; // Not required for flexible move search rendering
 import { Workout, Challenge } from '../../../api/firebase/workout/types';
 import { X } from 'lucide-react';
 
@@ -200,11 +200,12 @@ const DirectMessagePage: React.FC = () => {
     setIsSearching(true);
     try {
       if (sendModalType === 'move') {
-        const exercises = await userService.fetchUserVideos(currentUser.id);
-        const filtered = exercises.filter(ex => 
-          ex.exerciseName.toLowerCase().includes(query.toLowerCase())
-        );
-        setSearchResults(filtered);
+        const exercises = await userService.fetchUserVideos(currentUser.id) as any[];
+        const filtered = exercises.filter((ex: any) => {
+          const name = (ex?.exerciseName || ex?.title || ex?.name || '').toString();
+          return name.toLowerCase().includes(query.toLowerCase());
+        });
+        setSearchResults(filtered as any[]);
       } else if (sendModalType === 'stack') {
         const stacks = await userService.fetchUserStacks(currentUser.id);
         const filtered = stacks.filter(stack => 
@@ -242,8 +243,9 @@ const DirectMessagePage: React.FC = () => {
       };
 
       if (sendModalType === 'move') {
-        // For moves, we might need to format differently - for now just send content
-        messageData.content = `Shared exercise: ${item.exerciseName}`;
+        // For moves, derive a safe display name from available fields
+        const name = (item?.exerciseName || item?.title || item?.name || 'exercise').toString();
+        messageData.content = `Shared exercise: ${name}`;
         messageData.mediaType = 'none';
       } else if (sendModalType === 'stack') {
         messageData.workout = item;
@@ -613,7 +615,7 @@ const DirectMessagePage: React.FC = () => {
                         className="w-full p-4 bg-zinc-800 hover:bg-zinc-700 rounded-lg transition-colors text-left"
                       >
                         <h3 className="font-semibold text-white mb-1">
-                          {sendModalType === 'move' ? item.exerciseName : item.title}
+                          {sendModalType === 'move' ? (item?.exerciseName || item?.title || item?.name || 'Exercise') : item.title}
                         </h3>
                         {sendModalType !== 'move' && (
                           <p className="text-sm text-gray-400">
