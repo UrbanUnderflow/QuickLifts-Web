@@ -207,19 +207,21 @@ const DirectMessagePage: React.FC = () => {
         });
         setSearchResults(filtered as any[]);
       } else if (sendModalType === 'stack') {
-        const stacks = await userService.fetchUserStacks(currentUser.id);
-        const filtered = stacks.filter(stack => 
-          stack.title.toLowerCase().includes(query.toLowerCase()) ||
-          stack.description.toLowerCase().includes(query.toLowerCase())
-        );
-        setSearchResults(filtered);
+        const stacks = await userService.fetchUserStacks(currentUser.id) as any[];
+        const filtered = stacks.filter((stack: any) => {
+          const title = (stack?.title || '').toString();
+          const desc = (stack?.description || stack?.subtitle || '').toString();
+          return title.toLowerCase().includes(query.toLowerCase()) || desc.toLowerCase().includes(query.toLowerCase());
+        });
+        setSearchResults(filtered as any[]);
       } else if (sendModalType === 'round') {
-        const rounds = await workoutService.fetchCollections(currentUser.id);
-        const filtered = rounds.filter(round => 
-          round.title.toLowerCase().includes(query.toLowerCase()) ||
-          round.description.toLowerCase().includes(query.toLowerCase())
-        );
-        setSearchResults(filtered);
+        const rounds = await workoutService.fetchCollections(currentUser.id) as any[];
+        const filtered = rounds.filter((round: any) => {
+          const title = (round?.title || '').toString();
+          const desc = (round?.description || round?.subtitle || '').toString();
+          return title.toLowerCase().includes(query.toLowerCase()) || desc.toLowerCase().includes(query.toLowerCase());
+        });
+        setSearchResults(filtered as any[]);
       }
     } catch (error) {
       console.error('[DM] Error searching:', error);
