@@ -1,14 +1,29 @@
 import React from 'react';
 import { useUser } from '../../hooks/useUser';
 import { useRouter } from 'next/router';
+import { SelectedRootTabs } from '../../types/DashboardTypes';
 
-const ProfilePhoto: React.FC = () => {
+interface ProfilePhotoProps {
+  onTabChange?: (tab: SelectedRootTabs) => void;
+}
+
+const ProfilePhoto: React.FC<ProfilePhotoProps> = ({ onTabChange }) => {
   const currentUser = useUser();
   const router = useRouter();
+  const currentPath = router.pathname;
+  const isHomePage = currentPath === '/';
 
   const handleProfileClick = () => {
-    if (currentUser?.username) {
-      router.push(`/profile/${currentUser.username}`);
+    if (isHomePage && onTabChange) {
+      // If on home page, use tab navigation to show private profile
+      onTabChange(SelectedRootTabs.Profile);
+    } else {
+      // Otherwise, navigate to home and trigger profile tab
+      router.push('/');
+      setTimeout(() => {
+        // This will be picked up when the home page loads
+        window.dispatchEvent(new CustomEvent('showProfile'));
+      }, 100);
     }
   };
 

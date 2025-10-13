@@ -182,7 +182,11 @@ const SideNav: React.FC<SideNavProps> = ({ selectedTab, onTabChange, onAbout }) 
                 if (isHomePage && onTabChange) {
                   onTabChange(SelectedRootTabs.Profile);
                 } else {
-                  router.push(`/profile/${currentUser.username}`);
+                  // Navigate to home page and trigger profile tab
+                  router.push('/');
+                  setTimeout(() => {
+                    if (onTabChange) onTabChange(SelectedRootTabs.Profile);
+                  }, 100);
                 }
               }}
               className={`
@@ -364,8 +368,12 @@ const SideNav: React.FC<SideNavProps> = ({ selectedTab, onTabChange, onAbout }) 
           onClick={() => {
             if (isHomePage && onTabChange) {
               onTabChange(SelectedRootTabs.Profile);
-            } else if (currentUser?.username) {
-              router.push(`/profile/${currentUser.username}`);
+            } else {
+              // Navigate to home page and trigger profile tab
+              router.push('/');
+              setTimeout(() => {
+                if (onTabChange) onTabChange(SelectedRootTabs.Profile);
+              }, 100);
             }
           }}
           className="flex flex-col items-center justify-center p-2"

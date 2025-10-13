@@ -256,6 +256,78 @@ class CoachAthleteMessagingService {
   }
 
   /**
+   * Get all conversations for a user (both as coach and athlete)
+   */
+  async getUserConversations(userId: string): Promise<CoachAthleteConversation[]> {
+    try {
+      const conversationsRef = collection(db, this.conversationsCollection);
+      
+      // Query conversations where user is a coach
+      const coachQuery = query(
+        conversationsRef,
+        where('coachId', '==', userId)
+      );
+      
+      // Query conversations where user is an athlete
+      const athleteQuery = query(
+        conversationsRef,
+        where('athleteId', '==', userId)
+      );
+      
+      const [coachSnapshot, athleteSnapshot] = await Promise.all([
+        getDocs(coachQuery),
+        getDocs(athleteQuery)
+      ]);
+      
+      const conversations: CoachAthleteConversation[] = [];
+      
+      // Map coach conversations
+      coachSnapshot.docs.forEach(doc => {
+        const data = doc.data();
+        conversations.push({
+          id: doc.id,
+          coachId: data.coachId,
+          athleteId: data.athleteId,
+          coachName: data.coachName,
+          athleteName: data.athleteName,
+          lastMessage: data.lastMessage || '',
+          lastMessageTimestamp: convertFirestoreTimestamp(data.lastMessageTimestamp),
+          lastMessageSenderId: data.lastMessageSenderId || '',
+          unreadCount: data.unreadCount || {},
+          createdAt: convertFirestoreTimestamp(data.createdAt),
+          updatedAt: convertFirestoreTimestamp(data.updatedAt)
+        });
+      });
+      
+      // Map athlete conversations
+      athleteSnapshot.docs.forEach(doc => {
+        const data = doc.data();
+        conversations.push({
+          id: doc.id,
+          coachId: data.coachId,
+          athleteId: data.athleteId,
+          coachName: data.coachName,
+          athleteName: data.athleteName,
+          lastMessage: data.lastMessage || '',
+          lastMessageTimestamp: convertFirestoreTimestamp(data.lastMessageTimestamp),
+          lastMessageSenderId: data.lastMessageSenderId || '',
+          unreadCount: data.unreadCount || {},
+          createdAt: convertFirestoreTimestamp(data.createdAt),
+          updatedAt: convertFirestoreTimestamp(data.updatedAt)
+        });
+      });
+      
+      // Sort by most recent
+      conversations.sort((a, b) => b.lastMessageTimestamp.getTime() - a.lastMessageTimestamp.getTime());
+      
+      return conversations;
+    } catch (error) {
+      console.error('[CoachAthleteMessagingService] Error getting user conversations:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Mark messages as read
    */
   async markMessagesAsRead(conversationId: string, userId: string): Promise<void> {

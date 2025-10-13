@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { useUser, useUserLoading } from '../../hooks/useUser';
+import { subscriptionService } from '../../api/firebase/subscription/service';
 import { coachService } from '../../api/firebase/coach';
 import { privacyService } from '../../api/firebase/privacy/service';
 import { signOut } from 'firebase/auth';
@@ -24,6 +25,71 @@ const AthleteConnectPage: React.FC = () => {
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showSignInModal, setShowSignInModal] = useState(false);
+  // Subscription gate state
+  const [checkingSubscription, setCheckingSubscription] = useState(false);
+  const [isSubscribed, setIsSubscribed] = useState<boolean | null>(null);
+  const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
+  const [creatingCheckout, setCreatingCheckout] = useState(false);
+  // Plan picker state (PulseCheck: weekly, monthly, annual)
+  const planOptions = [
+    {
+      key: 'monthly',
+      label: 'Monthly',
+      cadence: 'per month',
+      priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_PULSECHECK_MONTHLY as string | undefined,
+      displayPrice: process.env.NEXT_PUBLIC_PULSECHECK_PRICE_MONTHLY_USD as string | undefined,
+    },
+    {
+      key: 'annual',
+      label: 'Annual',
+      cadence: 'per year',
+      priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_PULSECHECK_ANNUAL as string | undefined,
+      displayPrice: process.env.NEXT_PUBLIC_PULSECHECK_PRICE_ANNUAL_USD as string | undefined,
+    },
+    {
+      key: 'weekly',
+      label: 'Weekly',
+      cadence: 'per week',
+      priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_PULSECHECK_WEEKLY as string | undefined,
+      displayPrice: process.env.NEXT_PUBLIC_PULSECHECK_PRICE_WEEKLY_USD as string | undefined,
+    },
+  ].filter(p => !!p.priceId);
+  const defaultSelected = (planOptions.find(p => p.key === 'monthly') || planOptions[0])?.priceId;
+  const [selectedPriceId, setSelectedPriceId] = useState<string | undefined>(defaultSelected);
+
+  // When connection succeeds, check subscription once
+  useEffect(() => {
+    if (!success || !currentUser?.id) {
+      console.log('[SubscriptionGate] Skipping check', { success, hasUser: !!currentUser?.id });
+      return;
+    }
+    let cancelled = false;
+    const check = async () => {
+      try {
+        setCheckingSubscription(true);
+        console.log('[SubscriptionGate] ensureActiveOrSync starting', { userId: currentUser.id, timestamp: new Date().toISOString() });
+        const res = await subscriptionService.ensureActiveOrSync(currentUser.id);
+        console.log('[SubscriptionGate] ensureActiveOrSync result', { isActive: res.isActive, latestExp: res.latestExpiration?.toISOString?.() });
+        if (cancelled) return;
+        setIsSubscribed(res.isActive);
+        if (!res.isActive) {
+          console.log('[SubscriptionGate] No active subscription → showing modal');
+          setShowSubscriptionModal(true);
+        } else {
+          console.log('[SubscriptionGate] Active subscription detected → skipping modal');
+        }
+      } catch (e) {
+        console.warn('[SubscriptionGate] ensureActiveOrSync error', e);
+        if (cancelled) return;
+        setIsSubscribed(false);
+        setShowSubscriptionModal(true);
+      } finally {
+        if (!cancelled) setCheckingSubscription(false);
+      }
+    };
+    check();
+    return () => { cancelled = true; };
+  }, [success, currentUser?.id]);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
   // Preserve current path for Apple Sign In redirects (Safari mobile fix)
@@ -205,6 +271,31 @@ const AthleteConnectPage: React.FC = () => {
   }
 
   if (success) {
+    // When we hit the success screen, check subscription once and show the subscription gate if needed
+    if (currentUser && isSubscribed === null && !checkingSubscription) {
+      // Testing override: show subscription modal regardless of status
+      const force = router.query.forceSubscribe === '1' || router.query.force === 'subscribe';
+      if (force) {
+        console.log('[SubscriptionGate] FORCE enabled via query → showing subscription modal');
+        setIsSubscribed(false);
+        setShowSubscriptionModal(true);
+        return;
+      }
+      setCheckingSubscription(true);
+      // Use PulseCheck-only status to decide gating (plans type prefixed with 'pulsecheck-')
+      subscriptionService.ensureActiveOrSyncPulseCheck(currentUser.id)
+        .then((res) => {
+          setIsSubscribed(res.isActive);
+          if (!res.isActive) setShowSubscriptionModal(true);
+        })
+        .catch(() => {
+          // On error, keep gate visible so user can self-serve
+          setIsSubscribed(false);
+          setShowSubscriptionModal(true);
+        })
+        .finally(() => setCheckingSubscription(false));
+    }
+
     return (
       <div className="min-h-screen bg-gradient-to-br from-black via-zinc-900 to-black flex items-center justify-center px-4">
         <div className="text-center max-w-md mx-auto p-8">
@@ -295,6 +386,100 @@ const AthleteConnectPage: React.FC = () => {
           >
             Continue to PulseCheck
           </button>
+
+          {/* Subscription Gate Modal */}
+          {showSubscriptionModal && (
+            <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-lg text-left overflow-hidden">
+                <div className="p-6 border-b border-zinc-800">
+                  <h2 className="text-xl font-semibold text-white">Unlock PulseCheck</h2>
+                  <p className="text-zinc-300 mt-2">
+                    Subscribe to access AI mindset coaching and message your coach. You can cancel anytime.
+                  </p>
+                </div>
+
+                <div className="p-6 space-y-3">
+                  {/* Plan picker */}
+                  <div className="space-y-2">
+                    {planOptions.length === 0 && (
+                      <div className="bg-zinc-800 rounded-lg px-4 py-3 text-zinc-400">
+                        No PulseCheck plans are configured. Please set NEXT_PUBLIC_STRIPE_PRICE_PULSECHECK_* env vars.
+                      </div>
+                    )}
+                    {planOptions.map(opt => (
+                      <button
+                        key={opt.key}
+                        onClick={() => setSelectedPriceId(opt.priceId)}
+                        className={`w-full flex items-center justify-between rounded-lg px-4 py-3 border ${
+                          selectedPriceId === opt.priceId
+                            ? 'border-[#E0FE10] bg-zinc-800'
+                            : 'border-zinc-700 bg-zinc-800/60 hover:bg-zinc-800'
+                        }`}
+                      >
+                        <div className="text-left">
+                          <div className="text-white font-medium">PulseCheck {opt.label}</div>
+                          <div className="text-zinc-400 text-xs">{opt.cadence}</div>
+                        </div>
+                        <div className="text-white font-semibold">
+                          {opt.displayPrice ? `$${opt.displayPrice}` : ''}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2 pt-2">
+                    <button
+                      onClick={() => setShowSubscriptionModal(false)}
+                      className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-white"
+                    >
+                      Not now
+                    </button>
+                    <button
+                      onClick={async () => {
+                        if (!currentUser) return;
+                        try {
+                          setCreatingCheckout(true);
+                          // Resolve priceId precedence for checkout:
+                          // 1) ?price=...
+                          // 2) Selected plan from picker
+                          // 3) Legacy athlete monthly fallback
+                          const priceFromQuery = (typeof router.query.price === 'string' && router.query.price) || undefined;
+                          const athleteMonthly = process.env.NEXT_PUBLIC_STRIPE_PRICE_ATHLETE_MONTHLY as string | undefined;
+                          const priceId = priceFromQuery || selectedPriceId || athleteMonthly;
+                          console.log('[SubscriptionGate] Creating checkout', { userId: currentUser.id, priceId, referralCode });
+                          const res = await fetch('/.netlify/functions/create-athlete-checkout-session', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              userId: currentUser.id,
+                              priceId,
+                              coachReferralCode: typeof referralCode === 'string' ? referralCode : undefined,
+                            })
+                          });
+                          const data = await res.json();
+                          if (res.ok && data.url) {
+                            // Save return path for Safari mobile
+                            try { sessionStorage.setItem('pulse_auth_return_path', router.asPath); } catch {}
+                            window.location.href = data.url as string;
+                          } else {
+                            console.error('[SubscriptionGate] Failed to create checkout session', data);
+                          }
+                        } catch (e) {
+                          console.error('[SubscriptionGate] create checkout error', e);
+                        } finally {
+                          setCreatingCheckout(false);
+                        }
+                      }}
+                      disabled={creatingCheckout}
+                      className="px-4 py-2 bg-[#E0FE10] hover:bg-lime-400 rounded-lg text-black font-semibold disabled:opacity-50"
+                    >
+                      {creatingCheckout ? 'Redirecting…' : 'Subscribe'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );

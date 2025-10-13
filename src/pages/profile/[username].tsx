@@ -4,10 +4,10 @@ import { useRouter } from 'next/router';
 import { useSelector } from 'react-redux';
 import { RootState } from '../../redux/store';
 import { FollowRequest } from '../../api/firebase/user';
-import { User } from '../../api/firebase/user';
+import { User, userService } from '../../api/firebase/user';
 import ExerciseGrid from '../../components/ExerciseGrid';
 import { Exercise } from '../../api/firebase/exercise/types'; 
-import { Challenge } from '../../api/firebase/workout/types';
+import { Challenge, Workout } from '../../api/firebase/workout/types';
 import { ChallengesTab } from '../../components/ChallengesTab';
 import { WorkoutSummary } from '../../api/firebase/workout';
 import { StarIcon } from '@heroicons/react/24/outline';
@@ -19,6 +19,7 @@ import UserProfileMeta from '../../components/UserProfileMeta';
 import Link from 'next/link';
 import FollowButton from '../../components/FollowButton';
 import SideNav from '../../components/Navigation/SideNav';
+import { StackCard } from '../../components/Rounds/StackCard';
 
 interface ProfileViewProps {
   initialUserData: User | null;
@@ -36,8 +37,8 @@ const TABS = {
   // STATS: 'stats',
   ACTIVITY: 'activity',
   EXERICSES: 'moves',
+  STACKS: 'stacks',
   CHALLENGES: 'rounds',
-  EARNINGS: 'earnings',
 } as const;
 
 type TabType = typeof TABS[keyof typeof TABS];
@@ -56,6 +57,8 @@ export default function ProfileView({ initialUserData, error: serverError }: Pro
   const [selectedTab, setSelectedTab] = useState<TabType>(TABS.EXERICSES);
   const [user, setUser] = useState<User | null>(initialUserData);
   const [userVideos, setUserVideos] = useState<Exercise[]>([]);
+  const [userStacks, setUserStacks] = useState<Workout[]>([]);
+  const [stackSearchQuery, setStackSearchQuery] = useState('');
   const [activeChallenges, setActiveChallenges] = useState<Challenge[]>([]);
   const [workoutSummaries, setWorkoutSummaries] = useState<WorkoutSummary[]>([]);
   const [activities, setActivities] = useState<UserActivity[]>([]);
@@ -65,11 +68,53 @@ export default function ProfileView({ initialUserData, error: serverError }: Pro
   const [error, setError] = useState<string | null>(serverError || null);
   const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
   const [showProfileImageModal, setShowProfileImageModal] = useState(false);
+  const [resolvedUsername, setResolvedUsername] = useState<string | null>(null);
 
 
   const API_BASE_URL = process.env.NODE_ENV === 'development' 
     ? 'http://localhost:8888/.netlify/functions'
     : 'https://fitwithpulse.ai/.netlify/functions';
+
+  // Resolve username - use from URL if available, otherwise fetch from user object
+  useEffect(() => {
+    const resolveUsername = async () => {
+      console.log('[Username Resolution] Starting...');
+      console.log('[Username Resolution] username from query:', username);
+      console.log('[Username Resolution] user object:', user);
+      
+      // If we have username from URL, use it
+      if (username && typeof username === 'string') {
+        console.log('[Username Resolution] Using username from URL:', username);
+        setResolvedUsername(username);
+        return;
+      }
+      
+      // If no username in URL but we have user object, use user.username
+      if (user?.username) {
+        console.log('[Username Resolution] Using username from user object:', user.username);
+        setResolvedUsername(user.username);
+        return;
+      }
+      
+      // If we have user ID but no username, fetch the user to get username
+      if (user?.id) {
+        console.log('[Username Resolution] Fetching user by ID to get username:', user.id);
+        try {
+          const fetchedUser = await userService.getUserById(user.id);
+          if (fetchedUser?.username) {
+            console.log('[Username Resolution] Fetched username:', fetchedUser.username);
+            setResolvedUsername(fetchedUser.username);
+          } else {
+            console.error('[Username Resolution] Fetched user has no username');
+          }
+        } catch (error) {
+          console.error('[Username Resolution] Error fetching user:', error);
+        }
+      }
+    };
+    
+    resolveUsername();
+  }, [username, user?.id, user?.username]);
 
   // In your ProfileView component, update the stats state initialization
   // Initial state setup
@@ -173,6 +218,36 @@ useEffect(() => {
 
     fetchUserVideos();
   }, [user?.id, API_BASE_URL]);
+
+  useEffect(() => {
+    const fetchUserStacks = async () => {
+      if (!user?.id) {
+        console.log('[Fetch Stacks] No user ID available yet');
+        return;
+      }
+      
+      console.log('[Fetch Stacks] Fetching stacks for user ID:', user.id);
+      console.log('[Fetch Stacks] User username:', user.username);
+      
+      try {
+        const stacks = await userService.fetchUserStacks(user.id);
+        console.log('[Fetch Stacks] Fetched stacks count:', stacks.length);
+        if (stacks.length > 0) {
+          console.log('[Fetch Stacks] First stack:', {
+            id: stacks[0].id,
+            roundWorkoutId: stacks[0].roundWorkoutId,
+            title: stacks[0].title,
+            author: stacks[0].author
+          });
+        }
+        setUserStacks(stacks);
+      } catch (error) {
+        console.error('[Fetch Stacks] Error fetching user stacks:', error);
+      }
+    };
+
+    fetchUserStacks();
+  }, [user?.id]);
 
   useEffect(() => {
     const fetchFollowData = async (userId: string) => {
@@ -378,9 +453,7 @@ useEffect(() => {
             <div className="mt-8 border-b border-zinc-700 overflow-x-auto">
               <nav className="flex whitespace-nowrap min-w-full sm:min-w-0 px-4 sm:px-0">
                 <div className="flex gap-8 pb-2 sm:pb-0">
-                  {Object.values(TABS)
-                    .filter(tab => tab !== 'earnings' || isOwnProfile) // Only show earnings tab for profile owner
-                    .map((tab) => (
+                  {Object.values(TABS).map((tab) => (
                     <button
                       key={tab}
                       onClick={() => setSelectedTab(tab)}
@@ -450,6 +523,127 @@ useEffect(() => {
                 </div>
               )}
               {selectedTab === TABS.EXERICSES && renderExercisesTab()}
+              {selectedTab === TABS.STACKS && (() => {
+                console.log('[Stacks Tab] Current username from router.query:', username);
+                console.log('[Stacks Tab] Resolved username:', resolvedUsername);
+                console.log('[Stacks Tab] User object:', user);
+                console.log('[Stacks Tab] User.username:', user?.username);
+                console.log('[Stacks Tab] Total userStacks:', userStacks.length);
+                
+                const filteredStacks = userStacks.filter(stack => 
+                  stack.title.toLowerCase().includes(stackSearchQuery.toLowerCase()) ||
+                  stack.description.toLowerCase().includes(stackSearchQuery.toLowerCase())
+                );
+
+                console.log('[Stacks Tab] Filtered stacks:', filteredStacks.length);
+                if (filteredStacks.length > 0) {
+                  console.log('[Stacks Tab] First stack sample:', {
+                    id: filteredStacks[0].id,
+                    roundWorkoutId: filteredStacks[0].roundWorkoutId,
+                    title: filteredStacks[0].title,
+                    author: filteredStacks[0].author
+                  });
+                }
+
+                // Use resolvedUsername with fallback chain
+                const usernameForUrl = resolvedUsername || username || user?.username || 'unknown';
+                console.log('[Stacks Tab] Username that will be used for URLs:', usernameForUrl);
+
+                return (
+                  <div className="px-5">
+                    <div className="flex items-center justify-between mb-4">
+                      <h2 className="text-xl text-white font-semibold">
+                        {user.username}'s Stacks ({userStacks.length})
+                      </h2>
+                    </div>
+
+                    {/* Search Input */}
+                    <div className="mb-6">
+                      <div className="relative">
+                        <input
+                          type="text"
+                          placeholder="Search stacks..."
+                          value={stackSearchQuery}
+                          onChange={(e) => setStackSearchQuery(e.target.value)}
+                          className="w-full bg-zinc-800 text-white rounded-lg px-4 py-3 pl-10 focus:outline-none focus:ring-2 focus:ring-[#E0FE10] placeholder-zinc-500"
+                        />
+                        <svg
+                          className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                          />
+                        </svg>
+                        {stackSearchQuery && (
+                          <button
+                            onClick={() => setStackSearchQuery('')}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white"
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
+                      {stackSearchQuery && (
+                        <p className="text-sm text-zinc-400 mt-2">
+                          Found {filteredStacks.length} of {userStacks.length} stacks
+                        </p>
+                      )}
+                    </div>
+
+                    {userStacks.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center p-8 bg-zinc-900 rounded-xl">
+                        <div className="text-6xl mb-4">🏋️</div>
+                        <p className="text-zinc-400 text-center">
+                          No workout stacks yet
+                        </p>
+                      </div>
+                    ) : filteredStacks.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center p-8 bg-zinc-900 rounded-xl">
+                        <div className="text-6xl mb-4">🔍</div>
+                        <p className="text-zinc-400 text-center">
+                          No stacks match "{stackSearchQuery}"
+                        </p>
+                        <button
+                          onClick={() => setStackSearchQuery('')}
+                          className="mt-4 text-[#E0FE10] hover:underline"
+                        >
+                          Clear search
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {filteredStacks.map((stack) => (
+                          <StackCard
+                            key={stack.id}
+                            workout={stack}
+                            gifUrls={[]}
+                            onPrimaryAction={() => {
+                              const targetUrl = `/workout/${usernameForUrl}/${stack.roundWorkoutId}`;
+                              console.log('[Stack Click] Navigating to:', targetUrl);
+                              console.log('[Stack Click] Resolved username:', resolvedUsername);
+                              console.log('[Stack Click] Username from query:', username);
+                              console.log('[Stack Click] User.username:', user?.username);
+                              console.log('[Stack Click] Final username used:', usernameForUrl);
+                              console.log('[Stack Click] Stack roundWorkoutId:', stack.roundWorkoutId);
+                              console.log('[Stack Click] Stack author:', stack.author);
+                              console.log('[Stack Click] Full stack object:', stack);
+                              router.push(targetUrl);
+                            }}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
               {selectedTab === TABS.CHALLENGES && (
                 <ChallengesTab
                   activeChallenges={activeChallenges}
@@ -457,23 +651,6 @@ useEffect(() => {
                     console.log(challenge);
                   }}
                 />
-              )}
-              {selectedTab === TABS.EARNINGS && isOwnProfile && (
-                <div className="px-5">
-                  <div className="flex flex-col items-center justify-center p-8 bg-zinc-900 rounded-xl">
-                    <div className="text-6xl mb-4">💰</div>
-                    <h3 className="text-xl font-semibold mb-4">Your Earnings Dashboard</h3>
-                    <p className="text-zinc-400 text-center mb-6">
-                      View your complete earnings from creator programs and challenge prizes in one place.
-                    </p>
-                    <button
-                      onClick={() => router.push(`/${user.username}/earnings`)}
-                      className="bg-[#E0FE10] text-black py-3 px-6 rounded-xl font-semibold hover:bg-[#C5E609] transition-colors"
-                    >
-                      View Full Earnings Dashboard
-                    </button>
-                  </div>
-                </div>
               )}
             </div>
           </div>

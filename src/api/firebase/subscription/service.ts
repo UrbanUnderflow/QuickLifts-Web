@@ -58,6 +58,22 @@ function getLatestExpirationFromDoc(docData: SubscriptionDoc): Date | null {
   return expirations.reduce((max, cur) => (cur > max ? cur : max));
 }
 
+// Compute latest expiration limited to PulseCheck plans only (types prefixed with 'pulsecheck-')
+function getPulseCheckExpirationFromDoc(docData: SubscriptionDoc): Date | null {
+  if (Array.isArray(docData.plans) && docData.plans.length > 0) {
+    const latest = docData.plans.reduce<null | { exp: number }>((acc, p) => {
+      if (!p || typeof p.expiration !== 'number') return acc;
+      const t = (p.type || '').toLowerCase();
+      if (!t.startsWith('pulsecheck-')) return acc;
+      const expSec = p.expiration;
+      if (!acc || expSec > acc.exp) return { exp: expSec };
+      return acc;
+    }, null);
+    if (latest && latest.exp) return new Date(latest.exp * 1000);
+  }
+  return null;
+}
+
 async function fetchUserSubscriptions(userId: string): Promise<SubscriptionDoc[]> {
   console.log('[subscriptionService] fetchUserSubscriptions start', { userId });
   const subsRef = collection(db, 'subscriptions');
@@ -97,6 +113,27 @@ async function computeStatusFromSubscriptions(userId: string): Promise<Subscript
   return result;
 }
 
+// PulseCheck-only status (ignores Pulse plans)
+async function computePulseCheckStatus(userId: string): Promise<SubscriptionStatusResult> {
+  console.log('[subscriptionService] computePulseCheckStatus start', { userId });
+  const subs = await fetchUserSubscriptions(userId);
+  let latest: { exp: Date; id: string } | null = null;
+  for (const sub of subs) {
+    const exp = getPulseCheckExpirationFromDoc(sub);
+    console.log('[subscriptionService] pulsecheck candidate expiration', { docId: sub.id, exp: exp?.toISOString() });
+    if (!exp || isNaN(exp.valueOf())) continue;
+    if (!latest || exp > latest.exp) latest = { exp, id: sub.id };
+  }
+  const now = new Date();
+  if (!latest) {
+    console.log('[subscriptionService] computePulseCheckStatus no PC plan found');
+    return { isActive: false, latestExpiration: null };
+  }
+  const result = { isActive: latest.exp > now, latestExpiration: latest.exp, sourceDocId: latest.id };
+  console.log('[subscriptionService] computePulseCheckStatus result', { ...result, latestISO: latest.exp.toISOString() });
+  return result;
+}
+
 async function syncWithRevenueCat(userId: string): Promise<void> {
   try {
     console.log('[subscriptionService] syncWithRevenueCat POST', { userId, userIdType: typeof userId, userIdLength: userId?.length });
@@ -132,6 +169,7 @@ async function syncWithStripe(userId: string, stripeCustomerId?: string | null):
 
 export const subscriptionService = {
   getStatus: computeStatusFromSubscriptions,
+  getPulseCheckStatus: computePulseCheckStatus,
   ensureActiveOrSync: async (userId: string): Promise<SubscriptionStatusResult> => {
     console.log('[subscriptionService] ensureActiveOrSync start', { userId });
     const status = await computeStatusFromSubscriptions(userId);
@@ -146,6 +184,18 @@ export const subscriptionService = {
     console.log('[subscriptionService] ensureActiveOrSync after sync', { isActive: after.isActive, latest: after.latestExpiration?.toISOString() });
     return after;
   },
+  ensureActiveOrSyncPulseCheck: async (userId: string): Promise<SubscriptionStatusResult> => {
+    console.log('[subscriptionService] ensureActiveOrSyncPulseCheck start', { userId });
+    const status = await computePulseCheckStatus(userId);
+    if (status.isActive) return status;
+    await Promise.all([
+      syncWithRevenueCat(userId),
+      syncWithStripe(userId),
+    ]);
+    const after = await computePulseCheckStatus(userId);
+    console.log('[subscriptionService] ensureActiveOrSyncPulseCheck after sync', { isActive: after.isActive, latest: after.latestExpiration?.toISOString() });
+    return after;
+  }
 };
 
 export default subscriptionService;

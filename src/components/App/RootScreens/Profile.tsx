@@ -170,6 +170,7 @@ const Profile: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedStacks, setSelectedStacks] = useState<Set<string>>(new Set());
   const [userStacks, setUserStacks] = useState<Workout[]>([]);
+  const [stackSearchQuery, setStackSearchQuery] = useState('');
   const [isSelecting, setIsSelecting] = useState(false);
   const [isProcessingGifs, setIsProcessingGifs] = useState(false);
   const [isLoading, setIsLoading] = useState(true); // Keep this one for overall loading
@@ -566,66 +567,152 @@ const Profile: React.FC = () => {
                 </div>
               )}
 
-              {selectedTab === TABS.STACKS && (
-                <div className="px-5">
-                  <div className="flex justify-between items-center mb-4">
-                    <div className="flex items-center gap-4">
-                      <h2 className="text-xl text-white font-semibold">
-                        Your Stacks ({userStacks.length})
-                      </h2>
-                      <button
-                        onClick={() => router.push('/createStack')}
-                        className="flex items-center gap-2 px-4 py-2 bg-[#E0FE10] text-black rounded-lg hover:bg-[#c8e60e] transition-colors"
-                      >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                          <path d="M12 5V19M5 12H19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                        </svg>
-                        Create a Stack
-                      </button>
-                    </div>
-                    <div className="flex gap-4">
-                      <button
-                        onClick={() => setIsSelecting(!isSelecting)}
-                        className="text-zinc-400 hover:text-white"
-                      >
-                        {isSelecting ? 'Cancel' : 'Select'}
-                      </button>
-                      {isSelecting && selectedStacks.size > 0 && (
+              {selectedTab === TABS.STACKS && (() => {
+                console.log('[Private Profile - Stacks Tab] hookCurrentUser:', hookCurrentUser);
+                console.log('[Private Profile - Stacks Tab] hookCurrentUser.username:', hookCurrentUser?.username);
+                console.log('[Private Profile - Stacks Tab] hookCurrentUser.id:', hookCurrentUser?.id);
+                console.log('[Private Profile - Stacks Tab] Total userStacks:', userStacks.length);
+                
+                const filteredStacks = userStacks.filter(stack => 
+                  stack.title.toLowerCase().includes(stackSearchQuery.toLowerCase()) ||
+                  stack.description.toLowerCase().includes(stackSearchQuery.toLowerCase())
+                );
+
+                console.log('[Private Profile - Stacks Tab] Filtered stacks:', filteredStacks.length);
+                if (filteredStacks.length > 0) {
+                  console.log('[Private Profile - Stacks Tab] First stack:', {
+                    id: filteredStacks[0].id,
+                    roundWorkoutId: filteredStacks[0].roundWorkoutId,
+                    title: filteredStacks[0].title,
+                    author: filteredStacks[0].author
+                  });
+                }
+
+                return (
+                  <div className="px-5">
+                    <div className="flex justify-between items-center mb-4">
+                      <div className="flex items-center gap-4">
+                        <h2 className="text-xl text-white font-semibold">
+                          Your Stacks ({userStacks.length})
+                        </h2>
                         <button
-                          onClick={handleDelete}
-                          className="text-red-500 hover:text-red-400"
+                          onClick={() => router.push('/createStack')}
+                          className="flex items-center gap-2 px-4 py-2 bg-[#E0FE10] text-black rounded-lg hover:bg-[#c8e60e] transition-colors"
                         >
-                          Delete ({selectedStacks.size})
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 5V19M5 12H19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                          Create a Stack
                         </button>
+                      </div>
+                      <div className="flex gap-4">
+                        <button
+                          onClick={() => setIsSelecting(!isSelecting)}
+                          className="text-zinc-400 hover:text-white"
+                        >
+                          {isSelecting ? 'Cancel' : 'Select'}
+                        </button>
+                        {isSelecting && selectedStacks.size > 0 && (
+                          <button
+                            onClick={handleDelete}
+                            className="text-red-500 hover:text-red-400"
+                          >
+                            Delete ({selectedStacks.size})
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Search Input */}
+                    <div className="mb-6">
+                      <div className="relative">
+                        <input
+                          type="text"
+                          placeholder="Search stacks..."
+                          value={stackSearchQuery}
+                          onChange={(e) => setStackSearchQuery(e.target.value)}
+                          className="w-full bg-zinc-800 text-white rounded-lg px-4 py-3 pl-10 focus:outline-none focus:ring-2 focus:ring-[#E0FE10] placeholder-zinc-500"
+                        />
+                        <svg
+                          className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                          />
+                        </svg>
+                        {stackSearchQuery && (
+                          <button
+                            onClick={() => setStackSearchQuery('')}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white"
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
+                      {stackSearchQuery && (
+                        <p className="text-sm text-zinc-400 mt-2">
+                          Found {filteredStacks.length} of {userStacks.length} stacks
+                        </p>
                       )}
                     </div>
-                  </div>
-                  <StackGrid
-                    stacks={[...userStacks].sort(
-                      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+
+                    {userStacks.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center p-8 bg-zinc-900 rounded-xl">
+                        <div className="text-6xl mb-4">🏋️</div>
+                        <p className="text-zinc-400 text-center">
+                          No workout stacks yet
+                        </p>
+                      </div>
+                    ) : filteredStacks.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center p-8 bg-zinc-900 rounded-xl">
+                        <div className="text-6xl mb-4">🔍</div>
+                        <p className="text-zinc-400 text-center">
+                          No stacks match "{stackSearchQuery}"
+                        </p>
+                        <button
+                          onClick={() => setStackSearchQuery('')}
+                          className="mt-4 text-[#E0FE10] hover:underline"
+                        >
+                          Clear search
+                        </button>
+                      </div>
+                    ) : (
+                      <StackGrid
+                        stacks={[...filteredStacks].sort(
+                          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+                        )}
+                        isSelecting={isSelecting}
+                        selectedStacks={selectedStacks}
+                        onToggleSelection={(stack) => {
+                          setSelectedStacks((prev) => {                        
+                            const next = new Set(prev);
+                            if (next.has(stack.id)) {
+                              next.delete(stack.id);
+                            } else {
+                              next.add(stack.id);
+                            }
+                            return next;
+                          });
+                        }}
+                        onSelectStack={(stack) => {
+                          if (!isSelecting) {
+                            router.push(`/workout/${hookCurrentUser?.username}/${stack.roundWorkoutId}`);
+                          }
+                        }}
+                        username={hookCurrentUser?.username}
+                      />
                     )}
-                    isSelecting={isSelecting}
-                    selectedStacks={selectedStacks}
-                    onToggleSelection={(stack) => {
-                      setSelectedStacks((prev) => {                        
-                        const next = new Set(prev);
-                        if (next.has(stack.id)) {
-                          next.delete(stack.id);
-                        } else {
-                          next.add(stack.id);
-                        }
-                        return next;
-                      });
-                    }}
-                    onSelectStack={(stack) => {
-                      if (!isSelecting) {
-                        // Handle normal stack selection
-                      }
-                    }}
-                    username={hookCurrentUser?.username}
-                  />
-                </div>
-              )}
+                  </div>
+                );
+              })()}
 
 
               {selectedTab === TABS.EXERCISES && (

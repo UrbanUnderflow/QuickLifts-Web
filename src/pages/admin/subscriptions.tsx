@@ -16,6 +16,15 @@ type SubscriptionRow = {
   status?: string;
   isTrialing?: boolean;
   trialEndDate?: any;
+  // Authoritative append-only plans array
+  plans?: Array<{
+    type: string;
+    expiration: number;
+    createdAt?: number;
+    updatedAt?: number;
+    platform?: 'web' | 'ios' | string;
+    productId?: string;
+  }>;
   expirationHistory?: any[];
   updatedAt?: any;
 };
@@ -52,6 +61,19 @@ const SubscriptionsAdminPage: React.FC = () => {
   const [selectedSubscription, setSelectedSubscription] = useState<SubscriptionRow | null>(null);
   const [copiedId, setCopiedId] = useState<string>('');
   const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error' | 'info', text: string } | null>(null);
+
+  // Helpers to read latest plan entry from append-only plans
+  const getLatestPlanEntry = useCallback((doc: SubscriptionRow) => {
+    if (!Array.isArray(doc.plans) || doc.plans.length === 0) return null;
+    let latest = null as null | { type: string; expiration: number; platform?: string; productId?: string };
+    for (const p of doc.plans) {
+      if (!p || typeof p.expiration !== 'number') continue;
+      if (!latest || p.expiration > latest.expiration) {
+        latest = { type: p.type, expiration: p.expiration, platform: p.platform, productId: p.productId };
+      }
+    }
+    return latest;
+  }, []);
 
   const loadUsernames = useCallback(async (rows: SubscriptionRow[]) => {
     try {
@@ -112,12 +134,15 @@ const SubscriptionsAdminPage: React.FC = () => {
     const lower = search.trim().toLowerCase();
     const usernameLower = usernameSearch.trim().toLowerCase();
     return subscriptions.filter(s => {
+      const latestPlan = getLatestPlanEntry(s);
+      const latestPlanType = latestPlan?.type?.toLowerCase() || '';
       const matchesSearch = !lower ||
         s.id.toLowerCase().includes(lower) ||
         (s.userId || '').toLowerCase().includes(lower) ||
         (s.userEmail || '').toLowerCase().includes(lower) ||
         (s.username || '').toLowerCase().includes(lower) ||
-        (s.subscriptionType || '').toLowerCase().includes(lower);
+        (s.subscriptionType || '').toLowerCase().includes(lower) ||
+        latestPlanType.includes(lower);
       const matchesUsername = !usernameLower || (s.username || usernames[s.userId] || '').toLowerCase().includes(usernameLower);
       const matchesStatus = !statusFilter || (s.status || '').toLowerCase() === statusFilter.toLowerCase();
       const matchesPlatform = !platformFilter || (s.platform || '').toLowerCase() === platformFilter.toLowerCase();
@@ -262,7 +287,7 @@ const SubscriptionsAdminPage: React.FC = () => {
             <div className="space-y-3">
               <div>
                 <div className="text-gray-400 text-xs">Type</div>
-                <div className="text-gray-300">{subscription.subscriptionType || 'Not specified'}</div>
+                <div className="text-gray-300">{(getLatestPlanEntry(subscription)?.type) || subscription.subscriptionType || 'Not specified'}</div>
               </div>
               <div>
                 <div className="text-gray-400 text-xs">Status</div>
@@ -518,7 +543,7 @@ const SubscriptionsAdminPage: React.FC = () => {
                     <th className="py-3 px-4 text-left text-gray-300 font-medium">Username</th>
                     <th className="py-3 px-4 text-left text-gray-300 font-medium">Email</th>
                     <th className="py-3 px-4 text-left text-gray-300 font-medium">Platform</th>
-                    <th className="py-3 px-4 text-left text-gray-300 font-medium">Type</th>
+                    <th className="py-3 px-4 text-left text-gray-300 font-medium">Type (latest plan)</th>
                     <th className="py-3 px-4 text-left text-gray-300 font-medium">Status</th>
                     <th className="py-3 px-4 text-left text-gray-300 font-medium">Active</th>
                     <th className="py-3 px-4 text-left text-gray-300 font-medium">Latest Expiration</th>
@@ -531,6 +556,7 @@ const SubscriptionsAdminPage: React.FC = () => {
                     const activeState: 'unknown' | 'active' | 'expired' = !latest
                       ? 'unknown'
                       : (latest > new Date() ? 'active' : 'expired');
+                    const latestPlan = getLatestPlanEntry(row);
                     return (
                       <React.Fragment key={row.id}>
                         <tr className={`hover:bg-[#2a2f36] transition-colors ${
@@ -561,7 +587,9 @@ const SubscriptionsAdminPage: React.FC = () => {
                           <td className="py-3 px-4 border-b border-gray-700 text-gray-300">{row.username || usernames[row.userId] || '-'}</td>
                           <td className="py-3 px-4 border-b border-gray-700 text-gray-300">{row.userEmail || '-'}</td>
                           <td className="py-3 px-4 border-b border-gray-700 text-gray-300">{row.platform || '-'}</td>
-                          <td className="py-3 px-4 border-b border-gray-700 text-gray-300">{row.subscriptionType || '-'}</td>
+                          <td className="py-3 px-4 border-b border-gray-700 text-gray-300">
+                            {latestPlan?.type || row.subscriptionType || '-'}
+                          </td>
                           <td className="py-3 px-4 border-b border-gray-700">
                             <span className={`px-2 py-1 rounded-full text-xs font-medium border ${
                               row.status === 'active' 

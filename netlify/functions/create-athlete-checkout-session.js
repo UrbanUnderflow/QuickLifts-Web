@@ -64,7 +64,7 @@ const handler = async (event) => {
     priceId, 
     userId,
     coachReferralCode // Optional: if athlete is signing up through a coach
-  } = body;
+  } = body || {};
 
   if (!priceId || !userId) {
     console.warn('[AthleteCheckout] Missing parameters:', { 
@@ -75,26 +75,25 @@ const handler = async (event) => {
       statusCode: 400, 
       headers,
       body: JSON.stringify({ 
-        message: 'Missing required parameters: priceId and userId' 
+        message: 'Missing required parameters: priceId and userId',
+        debug: { priceId, userId }
       }) 
     };
   }
 
   // Validate that this is an athlete price ID
+  // Accept both legacy Pulse (athlete) and PulseCheck price envs (if set).
+  // NOTE: We do not hard fail if priceId is not in this list; client provides the exact Stripe Price ID.
   const validAthletePrices = [
     process.env.STRIPE_PRICE_ATHLETE_MONTHLY,
-    process.env.STRIPE_PRICE_ATHLETE_ANNUAL
-  ];
+    process.env.STRIPE_PRICE_ATHLETE_ANNUAL,
+    process.env.STRIPE_PRICE_PULSECHECK_WEEKLY,
+    process.env.STRIPE_PRICE_PULSECHECK_MONTHLY,
+    process.env.STRIPE_PRICE_PULSECHECK_ANNUAL
+  ].filter(Boolean);
 
-  if (!validAthletePrices.includes(priceId)) {
-    console.warn('[AthleteCheckout] Invalid athlete price ID:', priceId);
-    return { 
-      statusCode: 400, 
-      headers,
-      body: JSON.stringify({ 
-        message: 'Invalid athlete price ID provided' 
-      }) 
-    };
+  if (validAthletePrices.length > 0 && !validAthletePrices.includes(priceId)) {
+    console.warn('[AthleteCheckout] PriceId not in known env list; proceeding anyway for flexibility:', priceId);
   }
 
   const siteUrl = process.env.SITE_URL || 'https://fitwithpulse.ai';
