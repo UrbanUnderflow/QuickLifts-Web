@@ -30,30 +30,37 @@ const AthleteConnectPage: React.FC = () => {
   const [isSubscribed, setIsSubscribed] = useState<boolean | null>(null);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [creatingCheckout, setCreatingCheckout] = useState(false);
-  // Plan picker state (PulseCheck: weekly, monthly, annual)
+  // Plan picker state (PulseCheck). We hard-code price IDs and display prices to avoid Netlify env dependency.
+  const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+  const HARD_CODED_PLANS = {
+    monthly: {
+      // Stripe Price IDs: test vs live
+      priceId: isLocalhost ? 'price_1RMIUNRobSf56MUOfeB4gIot' : 'price_1PDq26RobSf56MUOucDIKLhd',
+      displayPrice: '24.99',
+    },
+    annual: {
+      priceId: isLocalhost ? 'price_1RMISFRobSf56MUOpcSoohjP' : 'price_1PDq3LRobSf56MUOng0UxhCC',
+      displayPrice: '219.99',
+    },
+    // Weekly plan can be added here when a Stripe price is available
+  } as const;
+
   const planOptions = [
     {
       key: 'monthly',
       label: 'Monthly',
       cadence: 'per month',
-      priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_PULSECHECK_MONTHLY as string | undefined,
-      displayPrice: process.env.NEXT_PUBLIC_PULSECHECK_PRICE_MONTHLY_USD as string | undefined,
+      priceId: HARD_CODED_PLANS.monthly.priceId,
+      displayPrice: HARD_CODED_PLANS.monthly.displayPrice,
     },
     {
       key: 'annual',
       label: 'Annual',
       cadence: 'per year',
-      priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_PULSECHECK_ANNUAL as string | undefined,
-      displayPrice: process.env.NEXT_PUBLIC_PULSECHECK_PRICE_ANNUAL_USD as string | undefined,
+      priceId: HARD_CODED_PLANS.annual.priceId,
+      displayPrice: HARD_CODED_PLANS.annual.displayPrice,
     },
-    {
-      key: 'weekly',
-      label: 'Weekly',
-      cadence: 'per week',
-      priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_PULSECHECK_WEEKLY as string | undefined,
-      displayPrice: process.env.NEXT_PUBLIC_PULSECHECK_PRICE_WEEKLY_USD as string | undefined,
-    },
-  ].filter(p => !!p.priceId);
+  ];
   const defaultSelected = (planOptions.find(p => p.key === 'monthly') || planOptions[0])?.priceId;
   const [selectedPriceId, setSelectedPriceId] = useState<string | undefined>(defaultSelected);
 
@@ -444,8 +451,8 @@ const AthleteConnectPage: React.FC = () => {
                           // 2) Selected plan from picker
                           // 3) Legacy athlete monthly fallback
                           const priceFromQuery = (typeof router.query.price === 'string' && router.query.price) || undefined;
-                          const athleteMonthly = process.env.NEXT_PUBLIC_STRIPE_PRICE_ATHLETE_MONTHLY as string | undefined;
-                          const priceId = priceFromQuery || selectedPriceId || athleteMonthly;
+                          const athleteMonthlyFallback = isLocalhost ? 'price_test_athlete_monthly' : 'price_live_athlete_monthly';
+                          const priceId = priceFromQuery || selectedPriceId || athleteMonthlyFallback;
                           console.log('[SubscriptionGate] Creating checkout', { userId: currentUser.id, priceId, referralCode });
                           const res = await fetch('/.netlify/functions/create-athlete-checkout-session', {
                             method: 'POST',
