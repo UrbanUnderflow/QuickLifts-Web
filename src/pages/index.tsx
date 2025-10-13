@@ -71,7 +71,7 @@ const MarketingContent: React.FC<{
       />
 
       {/* Hero Section - Updated with Web App Button */}
-      <section className="relative min-h-screen flex flex-col items-center justify-center text-center px-8 py-20 overflow-hidden">
+      <section className="relative min-h-screen flex items-center justify-center px-6 sm:px-8 py-20 overflow-hidden">
         {/* Enhanced Background Elements */}
         <div className="absolute inset-0 bg-gradient-to-br from-zinc-950 via-green-950/30 to-zinc-900"></div>
         <div className="absolute inset-0">
@@ -86,70 +86,94 @@ const MarketingContent: React.FC<{
           <div className="h-full w-full bg-[url('/grid-pattern.svg')] bg-repeat"></div>
         </div>
 
-        {/* Content */}
-        <div className="relative z-20 max-w-5xl mx-auto">
-          <div className="inline-flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-[#E0FE10]/20 to-lime-500/20 backdrop-blur-sm border border-[#E0FE10]/30 rounded-full mb-8 animate-fade-in-up">
-            <FaGamepad className="h-4 w-4 text-[#E0FE10]" />
-            <span className="text-[#E0FE10] text-sm font-medium">Gamified Fitness Platform</span>
-          </div>
-          
-          <h1 className="text-white text-6xl sm:text-8xl font-bold mb-8 animate-fade-in-up animation-delay-300">
-            Pulse
-          </h1>
-          
-          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-8 animate-fade-in-up animation-delay-600">
-            <span className="bg-gradient-to-r from-[#E0FE10] via-purple-400 to-blue-400 bg-clip-text text-transparent">
-              Build Your Fitness Empire Through<br />
-              Content, Community & Challenges
-            </span>
-          </h2>
-          
-          <p className="text-zinc-400 text-xl leading-relaxed mb-12 max-w-3xl mx-auto animate-fade-in-up animation-delay-900">
-            Convert boring content into actionable, gamified workouts. Turn your Moves into Stacks, launch community Rounds, and monetize your expertise.
-          </p>
+        {/* Content - Two Column Layout */}
+        <div className="relative z-20 max-w-7xl mx-auto w-full">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+            
+            {/* Left Column - Text Content */}
+            <div className="text-center lg:text-left">
+              <div className="inline-flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-[#E0FE10]/20 to-lime-500/20 backdrop-blur-sm border border-[#E0FE10]/30 rounded-full mb-8 animate-fade-in-up">
+                <FaGamepad className="h-4 w-4 text-[#E0FE10]" />
+                <span className="text-[#E0FE10] text-sm font-medium">Gamified Fitness Platform</span>
+              </div>
+              
+              <h1 className="text-white text-5xl sm:text-7xl lg:text-8xl font-bold mb-6 animate-fade-in-up animation-delay-300">
+                Pulse
+              </h1>
+              
+              <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-6 animate-fade-in-up animation-delay-600">
+                <span className="bg-gradient-to-r from-[#E0FE10] via-purple-400 to-blue-400 bg-clip-text text-transparent">
+                  Build Your Fitness Empire Through<br />
+                  Content, Community & Challenges
+                </span>
+              </h2>
+              
+              <p className="text-zinc-400 text-lg sm:text-xl leading-relaxed mb-8 animate-fade-in-up animation-delay-900">
+                Convert boring content into actionable, gamified workouts. Turn your Moves into Stacks, launch community Rounds, and monetize your expertise.
+              </p>
 
-          {/* CTA Buttons */}
-          <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12 animate-fade-in-up animation-delay-1200">
-            <button
-              onClick={onUseWebApp}
-              className="inline-flex items-center gap-3 bg-gradient-to-r from-[#E0FE10] to-lime-400 text-black px-8 py-4 rounded-2xl font-bold text-lg hover:shadow-lg hover:shadow-[#E0FE10]/20 transition-all duration-300 group"
-            >
-              Use Web App
-              <FaArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
-            </button>
-            <a 
-              href="https://apps.apple.com/ca/app/pulse-community-workouts/id6451497729"
-              className="inline-flex items-center gap-3 bg-zinc-900/80 text-white border border-zinc-700 hover:border-zinc-600 px-8 py-4 rounded-2xl font-bold text-lg hover:bg-zinc-800/80 transition-all duration-300"
-            >
-              Download iOS App
-              <FaApple className="h-5 w-5" />
-            </a>
-          </div>
-          
-          <div className="flex flex-wrap justify-center gap-6 animate-fade-in-up animation-delay-1500">
-            <div className="bg-gradient-to-br from-[#E0FE10]/10 to-lime-400/10 backdrop-blur-sm border border-[#E0FE10]/30 hover:border-[#E0FE10]/50 rounded-3xl p-6 max-w-[280px] cursor-pointer transform hover:-translate-y-2 transition-all duration-500 hover:shadow-lg hover:shadow-[#E0FE10]/20 group">
-              <div className="w-12 h-12 bg-gradient-to-br from-[#E0FE10] to-lime-400 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
-                <FaBolt className="h-6 w-6 text-black" />
+              {/* CTA Buttons */}
+              <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start mb-10 animate-fade-in-up animation-delay-1200">
+                <button
+                  onClick={onUseWebApp}
+                  className="inline-flex items-center justify-center gap-3 bg-gradient-to-r from-[#E0FE10] to-lime-400 text-black px-8 py-4 rounded-2xl font-bold text-lg hover:shadow-lg hover:shadow-[#E0FE10]/20 transition-all duration-300 group"
+                >
+                  Use Web App
+                  <FaArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
+                </button>
+                <a 
+                  href="https://apps.apple.com/ca/app/pulse-community-workouts/id6451497729"
+                  className="inline-flex items-center justify-center gap-3 bg-zinc-900/80 text-white border border-zinc-700 hover:border-zinc-600 px-8 py-4 rounded-2xl font-bold text-lg hover:bg-zinc-800/80 transition-all duration-300"
+                >
+                  Download iOS App
+                  <FaApple className="h-5 w-5" />
+                </a>
               </div>
-              <h3 className="text-white text-xl font-semibold mb-2">Create Content</h3>
-              <p className="text-zinc-400">Record Moves & build your exercise library</p>
-            </div>
-            
-            <div className="bg-gradient-to-br from-purple-500/10 to-blue-500/10 backdrop-blur-sm border border-purple-400/30 hover:border-purple-400/50 rounded-3xl p-6 max-w-[280px] cursor-pointer transform hover:-translate-y-2 transition-all duration-500 hover:shadow-lg hover:shadow-purple-400/20 group">
-              <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-blue-500 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
-                <FaGamepad className="h-6 w-6 text-white" />
+              
+              {/* Feature Cards - Horizontal on Desktop */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 animate-fade-in-up animation-delay-1500">
+                <div className="bg-gradient-to-br from-[#E0FE10]/10 to-lime-400/10 backdrop-blur-sm border border-[#E0FE10]/30 hover:border-[#E0FE10]/50 rounded-2xl p-4 cursor-pointer transform hover:-translate-y-1 transition-all duration-300 hover:shadow-lg hover:shadow-[#E0FE10]/20 group">
+                  <div className="w-10 h-10 bg-gradient-to-br from-[#E0FE10] to-lime-400 rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform duration-300">
+                    <FaBolt className="h-5 w-5 text-black" />
+                  </div>
+                  <h3 className="text-white text-base font-semibold mb-1">Create Content</h3>
+                  <p className="text-zinc-400 text-sm">Record Moves & build your library</p>
+                </div>
+                
+                <div className="bg-gradient-to-br from-purple-500/10 to-blue-500/10 backdrop-blur-sm border border-purple-400/30 hover:border-purple-400/50 rounded-2xl p-4 cursor-pointer transform hover:-translate-y-1 transition-all duration-300 hover:shadow-lg hover:shadow-purple-400/20 group">
+                  <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-blue-500 rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform duration-300">
+                    <FaGamepad className="h-5 w-5 text-white" />
+                  </div>
+                  <h3 className="text-white text-base font-semibold mb-1">Launch Rounds</h3>
+                  <p className="text-zinc-400 text-sm">Turn Stacks into challenges</p>
+                </div>
+                
+                <div className="bg-gradient-to-br from-orange-500/10 to-pink-500/10 backdrop-blur-sm border border-orange-400/30 hover:border-orange-400/50 rounded-2xl p-4 cursor-pointer transform hover:-translate-y-1 transition-all duration-300 hover:shadow-lg hover:shadow-orange-400/20 group">
+                  <div className="w-10 h-10 bg-gradient-to-br from-orange-500 to-pink-500 rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform duration-300">
+                    <FaCoins className="h-5 w-5 text-white" />
+                  </div>
+                  <h3 className="text-white text-base font-semibold mb-1">Earn Revenue</h3>
+                  <p className="text-zinc-400 text-sm">Monetize your expertise</p>
+                </div>
               </div>
-              <h3 className="text-white text-xl font-semibold mb-2">Launch Rounds</h3>
-              <p className="text-zinc-400">Turn Stacks into community challenges</p>
             </div>
-            
-            <div className="bg-gradient-to-br from-orange-500/10 to-pink-500/10 backdrop-blur-sm border border-orange-400/30 hover:border-orange-400/50 rounded-3xl p-6 max-w-[280px] cursor-pointer transform hover:-translate-y-2 transition-all duration-500 hover:shadow-lg hover:shadow-orange-400/20 group">
-              <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-pink-500 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
-                <FaCoins className="h-6 w-6 text-white" />
+
+            {/* Right Column - Phone Screenshot */}
+            <div className="flex items-center justify-center lg:justify-end animate-fade-in-up animation-delay-1800">
+              <div className="relative group">
+                <div className="relative w-[300px] sm:w-[380px] lg:w-[420px]">
+                  <div className="absolute -inset-6 bg-gradient-to-r from-[#E0FE10]/30 to-lime-400/30 rounded-[3rem] blur-2xl opacity-40 group-hover:opacity-60 transition-opacity duration-500"></div>
+                  <div className="relative rounded-[2.5rem] overflow-hidden border-4 border-zinc-800/50 shadow-2xl transform group-hover:scale-105 transition-transform duration-500">
+                    <img 
+                      src="/Winner1.png" 
+                      alt="Pulse App - Winner Screen" 
+                      className="w-full h-auto"
+                    />
+                  </div>
+                </div>
               </div>
-              <h3 className="text-white text-xl font-semibold mb-2">Earn Revenue</h3>
-              <p className="text-zinc-400">Monetize through subscriptions & royalties</p>
             </div>
+
           </div>
         </div>
       </section>
