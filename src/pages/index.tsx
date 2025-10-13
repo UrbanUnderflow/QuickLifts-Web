@@ -468,11 +468,11 @@ const MarketingContent: React.FC<{
             Everything starts with a <span className="bg-gradient-to-r from-[#E0FE10] to-lime-400 bg-clip-text text-transparent">Move</span>
           </h1>
           <p className="text-zinc-400 text-lg leading-relaxed mb-8">
-            A Move is the fundamental building block of Pulse. It's a 5-30 second video clip of a lift, stretch, exercise, or movement that is used to build a workout. Build your library of movements from basic exercises to complex variations, each Move you create becomes part of yours or maybe someone else fitness journey.
+            A Move is a soundless, 5-15 second video clip of a lift, stretch, exercise, focusing on it's core movement.
           </p>
           <div className="bg-gradient-to-br from-[#E0FE10]/10 to-lime-400/10 backdrop-blur-sm border border-[#E0FE10]/20 rounded-2xl p-4">
             <p className="text-[#E0FE10] text-sm">
-              <strong>Gamification:</strong> Each Move you create earns XP and unlocks new creation tools. Quality Moves get featured and earn bonus rewards.
+              <strong>These are your building blocks.</strong> Create once, reuse forever.
             </p>
           </div>
         </div>
