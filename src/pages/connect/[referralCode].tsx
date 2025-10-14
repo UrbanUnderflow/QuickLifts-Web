@@ -248,6 +248,31 @@ const AthleteConnectPage: React.FC = () => {
           shareSentiment
         });
         
+        // Notify coach via Netlify function (idempotent)
+        try {
+          const baseUrl = typeof window !== 'undefined' && window.location.origin ? window.location.origin : '';
+          const payload = {
+            athleteId: currentUser.id,
+            coachId: coachInfo.id,
+            coachUserId: coachInfo.userId || undefined,
+            coachReferralCode: referralCode,
+            // Testing flags: allow self and force repeat notifications when query contains ?notify=force
+            allowSelf: true,
+            force: router.query.notify === 'force',
+          } as const;
+          console.log('[AthleteConnect] notify-coach-connection POST →', payload);
+          const res = await fetch(`${baseUrl}/.netlify/functions/notify-coach-connection`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          let json: any = null;
+          try { json = await res.json(); } catch {}
+          console.log('[AthleteConnect] notify-coach-connection response ←', { status: res.status, ok: res.ok, json });
+        } catch (notifyErr) {
+          console.warn('[AthleteConnect] notify-coach-connection failed (non-blocking):', notifyErr);
+        }
+        
         setShowPrivacyModal(false);
         setSuccess(true);
         

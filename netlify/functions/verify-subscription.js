@@ -249,6 +249,73 @@ const handler = async (event) => {
     await batch.commit();
     console.log('[VerifySubscription] Firestore updates committed successfully.');
 
+    // 8. If this subscription came from a coach connection, notify the coach and create a DM
+    try {
+      const linkedCoachId = session.metadata?.linkedCoachId || session.subscription?.metadata?.linkedCoachId || null;
+      const coachReferralCode = session.metadata?.coachReferralCode || session.subscription?.metadata?.coachReferralCode || null;
+      let coachUserId = linkedCoachId || null;
+
+      if (!coachUserId && coachReferralCode) {
+        const coachSnap = await db.collection('coaches').where('referralCode', '==', coachReferralCode).limit(1).get();
+        if (!coachSnap.empty) {
+          coachUserId = coachSnap.docs[0].data()?.userId || null;
+        }
+      }
+
+      if (coachUserId) {
+        // Create or upsert a DM chat between athlete and coach with a welcome message
+        const chats = await db.collection('chats').where('participantIds', 'array-contains', userId).get();
+        let chatId = null;
+        for (const d of chats.docs) {
+          const data = d.data();
+          if (Array.isArray(data.participantIds) && data.participantIds.includes(coachUserId)) {
+            chatId = d.id; break;
+          }
+        }
+        if (!chatId) {
+          const coachUserDoc = await db.collection('users').doc(coachUserId).get();
+          const athleteDoc = await db.collection('users').doc(userId).get();
+          const participants = [];
+          if (athleteDoc.exists) participants.push({ id: userId, username: athleteDoc.data()?.username || '', profileImage: athleteDoc.data()?.profileImage || null });
+          if (coachUserDoc.exists) participants.push({ id: coachUserId, username: coachUserDoc.data()?.username || '', profileImage: coachUserDoc.data()?.profileImage || null });
+          const newChat = await db.collection('chats').add({
+            participantIds: [userId, coachUserId],
+            participants,
+            lastMessage: 'Connected via PulseCheck subscription',
+            lastMessageTimestamp: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          chatId = newChat.id;
+        }
+        if (chatId) {
+          await db.collection('chats').doc(chatId).collection('messages').add({
+            senderId: userId,
+            content: 'Hi coach! I just connected with you via PulseCheck. You can now view my mindset notes and message me here.',
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+            readBy: { [userId]: admin.firestore.FieldValue.serverTimestamp() }
+          });
+        }
+        console.log('[VerifySubscription] DM notification created for coach connection');
+
+        // Send Brevo email to coach (non-blocking)
+        try {
+          const coachDoc = await db.collection('users').doc(coachUserId).get();
+          const coachEmail = coachDoc.data()?.email;
+          const athleteName = userDoc.data()?.displayName || userDoc.data()?.username || 'An athlete';
+          if (coachEmail) {
+            await fetch(process.env.SITE_URL ? `${process.env.SITE_URL}/.netlify/functions/send-coach-connection-email` : 'http://localhost:8888/.netlify/functions/send-coach-connection-email', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ coachEmail, coachName: coachDoc.data()?.displayName || coachDoc.data()?.username, athleteName }),
+            }).catch(() => {});
+          }
+        } catch (emailErr) {
+          console.warn('[VerifySubscription] Coach email send failed (non-blocking):', emailErr);
+        }
+      }
+    } catch (notifErr) {
+      console.warn('[VerifySubscription] Coach notification step failed (non-blocking):', notifErr);
+    }
+
     // 7. Return success
     return {
       statusCode: 200,

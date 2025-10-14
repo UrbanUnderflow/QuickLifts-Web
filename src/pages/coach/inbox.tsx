@@ -3,7 +3,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useUser, useUserLoading } from '../../hooks/useUser';
 import { db } from '../../api/firebase/config';
-import { collection, getDocs, doc, getDoc, updateDoc, query, where } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, updateDoc, query, where, orderBy } from 'firebase/firestore';
+import { convertFirestoreTimestamp } from '../../utils/formatDate';
 
 type Invite = {
   coachId: string;
@@ -22,6 +23,14 @@ const InboxPage: React.FC = () => {
   const [toast, setToast] = useState<string | null>(null);
   const [acceptedCoachId, setAcceptedCoachId] = useState<string | null>(null);
   const [connectedCoaches, setConnectedCoaches] = useState<string[]>([]);
+  const [chats, setChats] = useState<Array<{
+    id: string;
+    title: string;
+    lastMessage: string;
+    lastMessageTime: Date;
+    avatarUrl?: string;
+    otherUserId?: string;
+  }>>([]);
 
   // Manual accept only; no auto-accept from URL
 
@@ -65,6 +74,41 @@ const InboxPage: React.FC = () => {
     };
     loadInvites();
   }, [currentUser?.email, userLoading]);
+
+  // Load direct message chats for the coach (from chats collection)
+  useEffect(() => {
+    const loadChats = async () => {
+      if (userLoading) return;
+      if (!currentUser?.id) return;
+      try {
+        const chatsRef = collection(db, 'chats');
+        const chatsQuery = query(
+          chatsRef,
+          where('participantIds', 'array-contains', currentUser.id),
+          orderBy('lastMessageTimestamp', 'desc')
+        );
+        const snap = await getDocs(chatsQuery);
+        const rows: Array<{ id: string; title: string; lastMessage: string; lastMessageTime: Date; avatarUrl?: string; otherUserId?: string; }> = [];
+        snap.docs.forEach(d => {
+          const data: any = d.data();
+          const participants = Array.isArray(data.participants) ? data.participants : [];
+          const other = participants.find((p: any) => p && p.id !== currentUser.id);
+          rows.push({
+            id: d.id,
+            title: (other?.displayName || other?.username || 'Conversation') as string,
+            lastMessage: (data.lastMessage || 'No messages yet') as string,
+            lastMessageTime: convertFirestoreTimestamp(data.lastMessageTimestamp),
+            avatarUrl: other?.profileImage?.profileImageURL,
+            otherUserId: other?.id,
+          });
+        });
+        setChats(rows);
+      } catch (_) {
+        setChats([]);
+      }
+    };
+    loadChats();
+  }, [currentUser?.id, userLoading]);
 
   const acceptInvite = async (inv: Invite) => {
     if (!currentUser?.email) return;
@@ -161,10 +205,42 @@ const InboxPage: React.FC = () => {
           )}
         </div>
 
-        {/* Messages Placeholder */}
+        {/* Messages (from chats) */}
         <div>
           <h3 className="text-xl font-semibold mb-3">Messages</h3>
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 text-zinc-400">Messages will appear here soon.</div>
+          {chats.length === 0 ? (
+            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 text-zinc-400">Messages will appear here soon.</div>
+          ) : (
+            <div className="space-y-2">
+              {chats.map((chat) => (
+                <button
+                  key={chat.id}
+                  onClick={() => router.push(`/messages/dm/${chat.id}`)}
+                  className="w-full flex items-start gap-4 p-4 rounded-xl bg-zinc-900 hover:bg-zinc-800 transition-colors text-left"
+                >
+                  {/* Avatar */}
+                  <div className="flex-shrink-0">
+                    {chat.avatarUrl ? (
+                      <img src={chat.avatarUrl} alt={chat.title} className="w-12 h-12 rounded-full object-cover" />
+                    ) : (
+                      <div className="w-12 h-12 rounded-full flex items-center justify-center bg-gradient-to-br from-green-500 to-emerald-600">
+                        <span className="text-white font-semibold text-lg">{chat.title?.[0]?.toUpperCase() || 'U'}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Content */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between mb-1">
+                      <h4 className="font-semibold text-white truncate">{chat.title}</h4>
+                      <span className="text-xs text-gray-500 ml-2">{chat.lastMessageTime.toLocaleDateString?.() || ''}</span>
+                    </div>
+                    <p className="text-sm text-gray-400 truncate">{chat.lastMessage}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {toast && (
