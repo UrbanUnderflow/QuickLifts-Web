@@ -214,7 +214,7 @@ const HaveYouPaidPage: React.FC = () => {
             )}
             {suggestions.length > 0 && (
               <div className="absolute z-10 mt-1 w-full bg-[#1a1f28] border border-gray-700 rounded-lg shadow-lg max-h-64 overflow-auto">
-                {suggestions.map((s) => (
+                {suggestions.map((s: ReunionPaymentRecord) => (
                   <button
                     key={s.id}
                     onClick={() => handlePick(s)}
@@ -288,7 +288,7 @@ const HaveYouPaidPage: React.FC = () => {
                 {!loadingRows && rows.length === 0 && (
                   <tr><td className="p-4 text-gray-400" colSpan={3}>No records found.</td></tr>
                 )}
-                 {!loadingRows && rows.map(r => (
+                 {!loadingRows && rows.map((r: ReunionPaymentRecord) => (
                   <tr key={r.id} className="border-b border-gray-900 hover:bg-[#151a21]">
                     <td className="p-3 text-white">
                       <button
