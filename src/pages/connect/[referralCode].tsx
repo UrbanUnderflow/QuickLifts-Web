@@ -460,6 +460,7 @@ const AthleteConnectPage: React.FC = () => {
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
                               userId: currentUser.id,
+                              email: currentUser.email,
                               priceId,
                               coachReferralCode: typeof referralCode === 'string' ? referralCode : undefined,
                             })

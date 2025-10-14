@@ -63,6 +63,7 @@ const handler = async (event) => {
   const { 
     priceId, 
     userId,
+    email, // Optional: prefill Checkout email
     coachReferralCode // Optional: if athlete is signing up through a coach
   } = body || {};
 
@@ -161,6 +162,7 @@ const handler = async (event) => {
       ],
       mode: 'subscription',
       client_reference_id: userId,
+      ...(email ? { customer_email: email } : {}),
       success_url: `${baseUrl}/subscription-success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${baseUrl}/subscribe`,
       metadata: metadata,
