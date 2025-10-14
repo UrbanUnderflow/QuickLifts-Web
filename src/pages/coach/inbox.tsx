@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useUser, useUserLoading } from '../../hooks/useUser';
 import { db } from '../../api/firebase/config';
-import { collection, getDocs, doc, getDoc, updateDoc, query, where, orderBy } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, updateDoc, query, where, orderBy, limit } from 'firebase/firestore';
 import { convertFirestoreTimestamp } from '../../utils/formatDate';
 
 type Invite = {
@@ -109,6 +109,36 @@ const InboxPage: React.FC = () => {
     };
     loadChats();
   }, [currentUser?.id, userLoading]);
+
+  // Debug: scan recent messages in each chat to find the connection confirmation
+  useEffect(() => {
+    const scanForConnectionMessages = async () => {
+      if (!currentUser?.id || chats.length === 0) return;
+      const needle = 'connected with you via PulseCheck';
+      try {
+        for (const chat of chats.slice(0, 10)) { // limit to 10 chats for debug
+          try {
+            const msgsRef = collection(db, 'chats', chat.id, 'messages');
+            const q = query(msgsRef, orderBy('timestamp', 'desc'), limit(25));
+            const snap = await getDocs(q);
+            const contents = snap.docs.map(d => (d.data() as any)?.content || '').filter(Boolean);
+            const found = contents.some(c => typeof c === 'string' && c.includes(needle));
+            console.log('[CoachInbox][Debug] Scan chat', {
+              chatId: chat.id,
+              checkedCount: snap.docs.length,
+              foundConnectionText: found,
+              sample: contents.slice(0, 5),
+            });
+          } catch (err) {
+            console.warn('[CoachInbox][Debug] Scan failed for chat', chat.id, err);
+          }
+        }
+      } catch (err) {
+        console.warn('[CoachInbox][Debug] Scan loop error', err);
+      }
+    };
+    scanForConnectionMessages();
+  }, [chats, currentUser?.id]);
 
   const acceptInvite = async (inv: Invite) => {
     if (!currentUser?.email) return;

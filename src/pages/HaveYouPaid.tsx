@@ -231,7 +231,7 @@ const HaveYouPaidPage: React.FC = () => {
               <div className="text-sm text-gray-300">
                 {(() => {
                   const total = (selected.apr1Amount ?? 0) + (selected.aug1Amount ?? 0) + (selected.dec1Amount ?? 0);
-                  const owed = Math.max(250 - total, 0);
+                  const owed = Math.max(200 - total, 0);
                   return (
                     <>
                       <div>Total Paid: ${total}</div>
@@ -300,7 +300,7 @@ const HaveYouPaidPage: React.FC = () => {
                       >{r.name}</button>
                     </td>
                     <td className="p-3 text-gray-300">${(r.apr1Amount ?? 0) + (r.aug1Amount ?? 0) + (r.dec1Amount ?? 0)}</td>
-                    <td className="p-3 text-gray-300">${Math.max(250 - ((r.apr1Amount ?? 0) + (r.aug1Amount ?? 0) + (r.dec1Amount ?? 0)), 0)}</td>
+                    <td className="p-3 text-gray-300">${Math.max(200 - ((r.apr1Amount ?? 0) + (r.aug1Amount ?? 0) + (r.dec1Amount ?? 0)), 0)}</td>
                      <td className="p-3 text-gray-300">
                        <div className="flex gap-2">
                          <button

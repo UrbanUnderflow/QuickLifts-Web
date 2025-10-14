@@ -4,7 +4,7 @@ import { useUser } from '../hooks/useUser';
 import SideNav from '../components/Navigation/SideNav';
 import { MessageCircle, Clock } from 'lucide-react';
 import { coachAthleteMessagingService, CoachAthleteConversation } from '../api/firebase/messaging/coachAthleteService';
-import { collection, query, where, orderBy, getDocs } from 'firebase/firestore';
+import { collection, query, where, orderBy, getDocs, limit, getDoc, doc } from 'firebase/firestore';
 import { db } from '../api/firebase/config';
 import { convertFirestoreTimestamp } from '../utils/formatDate';
 
@@ -70,8 +70,8 @@ const MessagesPage: React.FC = () => {
           const chatsSnapshot = await getDocs(chatsQuery);
           console.log('[Messages] Found', chatsSnapshot.docs.length, 'direct messages');
           
-          chatsSnapshot.docs.forEach(doc => {
-            const data = doc.data();
+          for (const d of chatsSnapshot.docs) {
+            const data = d.data();
             console.log('[Messages] Processing chat:', doc.id, data);
             const participants = (data.participants || []) as ShortUser[];
             
@@ -79,19 +79,25 @@ const MessagesPage: React.FC = () => {
             const otherUser = participants.find(p => p.id !== currentUser.id);
             
             if (otherUser) {
+              // Compute unread via lastReadAt timestamp vs lastMessageTimestamp
+              const lastMsgTime = convertFirestoreTimestamp(data.lastMessageTimestamp);
+              const myLastReadRaw = data?.lastReadAt?.[currentUser.id];
+              const myLastReadAt = myLastReadRaw ? convertFirestoreTimestamp(myLastReadRaw) : null;
+              const fromOther = data?.lastMessageSenderId && data.lastMessageSenderId !== currentUser.id;
+              const lastUnread = fromOther && (!myLastReadAt || lastMsgTime.getTime() > myLastReadAt.getTime());
               unified.push({
-                id: `dm-${doc.id}`,
+                id: `dm-${d.id}`,
                 title: otherUser.displayName || otherUser.username || 'User',
                 lastMessage: data.lastMessage || 'No messages yet',
                 lastMessageTime: convertFirestoreTimestamp(data.lastMessageTimestamp),
-                unreadCount: 0, // TODO: Implement unread count for direct messages
+                unreadCount: lastUnread ? 1 : 0,
                 type: 'direct-message',
                 otherUserId: otherUser.id,
                 otherUserName: otherUser.username,
                 avatarUrl: otherUser.profileImage?.profileImageURL
               });
             }
-          });
+          }
         } catch (error) {
           console.error('[Messages] Error fetching direct messages:', error);
         }

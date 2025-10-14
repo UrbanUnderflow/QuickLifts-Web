@@ -17,6 +17,8 @@ import { UserActivity } from '../../types/Activity';
 import FullScreenExerciseView from '../FullscreenExerciseView';
 import UserProfileMeta from '../../components/UserProfileMeta';
 import Link from 'next/link';
+import { db } from '../../api/firebase/config';
+import { collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
 import FollowButton from '../../components/FollowButton';
 import SideNav from '../../components/Navigation/SideNav';
 import { StackCard } from '../../components/Rounds/StackCard';
@@ -409,19 +411,64 @@ useEffect(() => {
                   </div>
                 </div>
                 
-                {/* Follow Button */}
-                <div className="mt-2">
+                {/* Follow / Message Actions */}
+                <div className="mt-2 flex items-center gap-2">
                   <FollowButton 
                     targetUser={user}
                     onFollowSuccess={(isFollowing) => {
                       // Update followers count optimistically
                       if (isFollowing) {
-                        setFollowers(prev => [...prev, {} as any]); // Add placeholder follower
+                        setFollowers(prev => [...prev, {} as any]);
                       } else {
-                        setFollowers(prev => prev.slice(0, -1)); // Remove one follower
+                        setFollowers(prev => prev.slice(0, -1));
                       }
                     }}
                   />
+                  {!isOwnProfile && (
+                    <button
+                      onClick={async () => {
+                        try {
+                          if (!currentUser?.id) {
+                            router.push('/messages');
+                            return;
+                          }
+                          // 1) Find existing chat between current user and profile user
+                          const chatsRef = collection(db, 'chats');
+                          const q = query(chatsRef, where('participantIds', 'array-contains', currentUser.id));
+                          const snap = await getDocs(q);
+                          let chatId: string | null = null;
+                          for (const d of snap.docs) {
+                            const data: any = d.data();
+                            if (Array.isArray(data.participantIds) && data.participantIds.includes(user.id)) {
+                              chatId = d.id; break;
+                            }
+                          }
+                          // 2) If none, create
+                          if (!chatId) {
+                            const participants = [
+                              { id: currentUser.id, username: currentUser.username || '', profileImage: currentUser.profileImage || null },
+                              { id: user.id, username: user.username || '', profileImage: user.profileImage || null },
+                            ];
+                            const newChat = await addDoc(chatsRef, {
+                              participantIds: [currentUser.id, user.id],
+                              participants,
+                              lastMessage: 'New conversation',
+                              lastMessageTimestamp: serverTimestamp(),
+                              lastMessageSenderId: currentUser.id,
+                            });
+                            chatId = newChat.id;
+                          }
+                          if (chatId) router.push(`/messages/dm/${chatId}`);
+                        } catch (err) {
+                          console.warn('[Profile] Failed to open DM, routing to messages list', err);
+                          router.push('/messages');
+                        }
+                      }}
+                      className="px-3 py-1.5 rounded-md bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-700 text-sm"
+                    >
+                      Send Message
+                    </button>
+                  )}
                 </div>
               </div>
 

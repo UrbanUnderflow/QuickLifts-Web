@@ -3,7 +3,7 @@ import { useRouter } from 'next/router';
 import { useUser } from '../../../hooks/useUser';
 import SideNav from '../../../components/Navigation/SideNav';
 import { Send, ArrowLeft, Image as ImageIcon } from 'lucide-react';
-import { collection, query, where, orderBy, getDocs, addDoc, serverTimestamp, doc, getDoc, onSnapshot, updateDoc } from 'firebase/firestore';
+import { collection, query, where, orderBy, getDocs, addDoc, serverTimestamp, doc, getDoc, onSnapshot, updateDoc, writeBatch, limit } from 'firebase/firestore';
 import { db } from '../../../api/firebase/config';
 import { convertFirestoreTimestamp } from '../../../utils/formatDate';
 import { userService } from '../../../api/firebase/user/service';
@@ -58,6 +58,7 @@ const DirectMessagePage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const hasMarkedReadRef = useRef(false);
 
   // Auto-scroll to bottom when messages change
   const scrollToBottom = () => {
@@ -133,6 +134,28 @@ const DirectMessagePage: React.FC = () => {
       
       setMessages(msgs);
       setLoading(false);
+      // Mark unread as read for current user (once per load)
+      if (currentUser?.id && typeof chatId === 'string') {
+        try {
+          const unread = snapshot.docs.filter(d => {
+            const rb = (d.data() as any)?.readBy || {};
+            return !rb[currentUser.id];
+          });
+          if (unread.length > 0) {
+            console.log('[DM] Marking messages as read', { count: unread.length });
+            const batch = writeBatch(db);
+            unread.forEach(d => {
+              const mref = doc(db, 'chats', chatId, 'messages', d.id);
+              batch.update(mref, { [`readBy.${currentUser.id}`]: serverTimestamp() });
+            });
+            const cref = doc(db, 'chats', chatId);
+            batch.update(cref, { [`lastReadAt.${currentUser.id}`]: serverTimestamp() });
+            batch.commit().catch(err => console.warn('[DM] Mark read batch failed', err));
+          }
+        } catch (err) {
+          console.warn('[DM] Mark read failed', err);
+        }
+      }
     }, (error) => {
       console.error('[DM] Error listening to messages:', error);
       setLoading(false);
