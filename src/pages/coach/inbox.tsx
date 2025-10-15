@@ -5,6 +5,9 @@ import { useUser, useUserLoading } from '../../hooks/useUser';
 import { db } from '../../api/firebase/config';
 import { collection, getDocs, doc, getDoc, updateDoc, query, where, orderBy, limit } from 'firebase/firestore';
 import { convertFirestoreTimestamp } from '../../utils/formatDate';
+import { FaBars, FaTimes } from 'react-icons/fa';
+import { signOut } from 'firebase/auth';
+import { auth } from '../../api/firebase/config';
 
 type Invite = {
   coachId: string;
@@ -31,6 +34,16 @@ const InboxPage: React.FC = () => {
     avatarUrl?: string;
     otherUserId?: string;
   }>>([]);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const handleSignOut = async () => {
+    try {
+      await signOut(auth);
+      try { localStorage.removeItem('pulse_has_seen_marketing'); } catch (_) {}
+      router.replace('/');
+    } catch (err) {
+      console.error('Error signing out:', err);
+    }
+  };
 
   // Manual accept only; no auto-accept from URL
 
@@ -200,7 +213,60 @@ const InboxPage: React.FC = () => {
               );
             })}
           </nav>
+          <button
+            aria-label="Open navigation"
+            onClick={() => setMobileNavOpen(true)}
+            className="md:hidden inline-flex items-center justify-center p-2 rounded-md text-zinc-300 hover:text-white hover:bg-zinc-800"
+          >
+            <FaBars />
+          </button>
         </div>
+
+        {/* Mobile slide-over navigation */}
+        {mobileNavOpen && (
+          <div className="fixed inset-0 z-50 md:hidden">
+            <div className="absolute inset-0 bg-black/60" onClick={() => setMobileNavOpen(false)} />
+            <div className="absolute top-0 right-0 h-full w-72 bg-zinc-900 border-l border-zinc-800 shadow-xl p-5 flex flex-col">
+              <div className="flex items-center justify-between mb-6">
+                <div className="text-lg font-semibold text-white">Menu</div>
+                <button aria-label="Close navigation" onClick={() => setMobileNavOpen(false)} className="inline-flex items-center justify-center p-2 rounded-md text-zinc-300 hover:text-white hover:bg-zinc-800">
+                  <FaTimes />
+                </button>
+              </div>
+              <div className="flex flex-col gap-2">
+                {[
+                  { href: '/coach/dashboard', label: 'Dashboard' },
+                  { href: '/coach/referrals', label: 'Referrals' },
+                  { href: '/coach/staff', label: 'Staff' },
+                  { href: '/coach/inbox', label: 'Inbox' },
+                  { href: '/coach/profile', label: 'Profile' }
+                ].map((item) => {
+                  const isActive = router.pathname === item.href;
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      onClick={() => setMobileNavOpen(false)}
+                      className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                        isActive ? 'bg-[#E0FE10] text-black' : 'text-zinc-300 hover:text-white hover:bg-zinc-800'
+                      }`}
+                    >
+                      {item.label}
+                    </Link>
+                  );
+                })}
+              </div>
+              <div className="mt-auto pt-6 border-t border-zinc-800">
+                <button
+                  onClick={() => { setMobileNavOpen(false); handleSignOut(); }}
+                  className="w-full bg-zinc-800 text-white px-4 py-2 rounded-lg border border-zinc-700 hover:bg-zinc-700 transition-colors"
+                >
+                  Sign Out
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Staff Invites */}
         <div className="mb-10">

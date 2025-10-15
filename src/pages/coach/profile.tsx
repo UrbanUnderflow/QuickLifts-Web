@@ -6,6 +6,9 @@ import { firebaseStorageService, UploadImageType } from '../../api/firebase/stor
 import { userService } from '../../api/firebase/user';
 import { db } from '../../api/firebase/config';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { FaBars, FaTimes } from 'react-icons/fa';
+import { signOut } from 'firebase/auth';
+import { auth } from '../../api/firebase/config';
 
 const CoachProfilePage: React.FC = () => {
   const router = useRouter();
@@ -30,6 +33,7 @@ const CoachProfilePage: React.FC = () => {
   const [onboardingLink, setOnboardingLink] = useState<string | null>(null);
   const [earnings, setEarnings] = useState<{ totalEarned: number; pendingPayout: number; availableBalance: number; recentSales: Array<{date:string, amount:number, roundTitle:string}> } | null>(null);
   const [buyers, setBuyers] = useState<Record<string, { username?: string; email?: string }>>({});
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   useEffect(()=>{
     const load = async () => {
@@ -144,6 +148,16 @@ const CoachProfilePage: React.FC = () => {
     }
   };
 
+  const handleSignOut = async () => {
+    try {
+      await signOut(auth);
+      try { localStorage.removeItem('pulse_has_seen_marketing'); } catch (_) {}
+      router.replace('/');
+    } catch (err) {
+      console.error('Error signing out:', err);
+    }
+  };
+
   const addService = () => {
     const title = serviceTitle.trim();
     if (!title) return;
@@ -176,19 +190,32 @@ const CoachProfilePage: React.FC = () => {
     if (!currentUser) return;
     setStripeLoading(true);
     try {
+      // Pre-open a tab to avoid Safari popup blockers
+      const pendingWin = window.open('', '_blank');
       const res = await fetch(`/.netlify/functions/create-connected-account?userId=${encodeURIComponent(currentUser.id)}`);
       const json = await res.json().catch(()=>({}));
       if (res.ok && json?.accountLink) {
-        window.location.href = json.accountLink;
+        if (pendingWin && !pendingWin.closed) {
+          pendingWin.location.href = json.accountLink;
+        } else {
+          // Fallback: same-tab navigation if popups are blocked
+          window.location.href = json.accountLink;
+        }
         return;
       }
+      // No link returned – close the pre-opened tab if present
+      if (pendingWin && !pendingWin.closed) pendingWin.close();
       // Fallback: if Firestore stored the link, use it
       const ref = doc(db, 'users', currentUser.id);
       const snap = await getDoc(ref);
       const data: any = snap.exists() ? snap.data() : {};
       const link = data?.creator?.onboardingLink;
       if (link) {
-        window.location.href = link;
+        if (pendingWin && !pendingWin.closed) {
+          pendingWin.location.href = link;
+        } else {
+          window.location.href = link;
+        }
       }
     } finally {
       setStripeLoading(false);
@@ -204,7 +231,12 @@ const CoachProfilePage: React.FC = () => {
       const json = await res.json().catch(()=>({}));
       const link = json?.link || json?.onboardingLink || json?.accountLink;
       if (res.ok && link) {
-        window.location.href = link;
+        const pendingWin = window.open('', '_blank');
+        if (pendingWin && !pendingWin.closed) {
+          pendingWin.location.href = link;
+        } else {
+          window.location.href = link;
+        }
       }
     } finally {
       setStripeLoading(false);
@@ -213,7 +245,7 @@ const CoachProfilePage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-black text-white">
-      <div className="container mx-auto px-6 py-8">
+      <div className="container mx-auto px-4 sm:px-6 py-6 sm:py-8">
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-3xl font-bold">Coach Profile</h1>
@@ -234,14 +266,74 @@ const CoachProfilePage: React.FC = () => {
               );
             })}
           </nav>
+          <button
+            aria-label="Open navigation"
+            onClick={() => setMobileNavOpen(true)}
+            className="md:hidden inline-flex items-center justify-center p-2 rounded-md text-zinc-300 hover:text-white hover:bg-zinc-800"
+          >
+            <FaBars />
+          </button>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="bg-zinc-900 rounded-xl p-6 border border-zinc-800 flex flex-col items-center justify-center" style={{ aspectRatio: '1 / 1', minHeight: 420 }}>
+        {/* Mobile slide-over navigation */}
+        {mobileNavOpen && (
+          <div className="fixed inset-0 z-50 md:hidden">
+            <div
+              className="absolute inset-0 bg-black/60"
+              onClick={() => setMobileNavOpen(false)}
+            />
+            <div className="absolute top-0 right-0 h-full w-72 bg-zinc-900 border-l border-zinc-800 shadow-xl p-5 flex flex-col">
+              <div className="flex items-center justify-between mb-6">
+                <div className="text-lg font-semibold text-white">Menu</div>
+                <button
+                  aria-label="Close navigation"
+                  onClick={() => setMobileNavOpen(false)}
+                  className="inline-flex items-center justify-center p-2 rounded-md text-zinc-300 hover:text-white hover:bg-zinc-800"
+                >
+                  <FaTimes />
+                </button>
+              </div>
+              <div className="flex flex-col gap-2">
+                {[
+                  { href: '/coach/dashboard', label: 'Dashboard' },
+                  { href: '/coach/referrals', label: 'Referrals' },
+                  { href: '/coach/staff', label: 'Staff' },
+                  { href: '/coach/inbox', label: 'Inbox' },
+                  { href: '/coach/profile', label: 'Profile' }
+                ].map((item) => {
+                  const isActive = router.pathname === item.href;
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      onClick={() => setMobileNavOpen(false)}
+                      className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                        isActive ? 'bg-[#E0FE10] text-black' : 'text-zinc-300 hover:text-white hover:bg-zinc-800'
+                      }`}
+                    >
+                      {item.label}
+                    </Link>
+                  );
+                })}
+              </div>
+              <div className="mt-auto pt-6 border-t border-zinc-800">
+                <button
+                  onClick={() => { setMobileNavOpen(false); handleSignOut(); }}
+                  className="w-full bg-zinc-800 text-white px-4 py-2 rounded-lg border border-zinc-700 hover:bg-zinc-700 transition-colors"
+                >
+                  Sign Out
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
+          <div className="bg-zinc-900 rounded-xl p-6 border border-zinc-800 flex flex-col items-center justify-center w-full">
             <div className="text-sm text-zinc-400 mb-4">Update Profile Image</div>
             <img
               src={imageUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser?.username||'Coach')}&background=E0FE10&color=000000&size=128`}
-              className="w-40 h-40 rounded-full object-cover border border-zinc-700"
+              className="w-28 h-28 sm:w-36 sm:h-36 md:w-40 md:h-40 rounded-full object-cover border border-zinc-700"
             />
             <label className="bg-[#E0FE10] text-black px-4 py-2 rounded-lg cursor-pointer mt-4">
               {uploading ? 'Uploading...' : 'Upload'}
@@ -356,11 +448,11 @@ const CoachProfilePage: React.FC = () => {
             </div>
             <div className="mb-6">
               <div className="text-sm text-zinc-400 mb-2">Additional Services</div>
-              <div className="flex items-center gap-3 mb-3">
-                <input value={serviceTitle} onChange={(e)=>setServiceTitle(e.target.value)} placeholder="Service title (e.g., 1:1 Coaching)" className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2" />
-                <input value={serviceDescription} onChange={(e)=>setServiceDescription(e.target.value)} placeholder="Description (optional)" className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2" />
-                <input value={servicePrice} onChange={(e)=>setServicePrice(e.target.value)} placeholder="$ Price" className="w-40 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2" />
-                <button onClick={addService} type="button" className="bg-[#E0FE10] text-black px-4 py-2 rounded-lg hover:bg-lime-400">Add</button>
+              <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 mb-3">
+                <input value={serviceTitle} onChange={(e)=>setServiceTitle(e.target.value)} placeholder="Service title (e.g., 1:1 Coaching)" className="w-full md:flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2" />
+                <input value={serviceDescription} onChange={(e)=>setServiceDescription(e.target.value)} placeholder="Description (optional)" className="w-full md:flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2" />
+                <input value={servicePrice} onChange={(e)=>setServicePrice(e.target.value)} placeholder="$ Price" className="w-full md:w-40 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2" />
+                <button onClick={addService} type="button" className="w-full md:w-auto bg-[#E0FE10] text-black px-4 py-2 rounded-lg hover:bg-lime-400">Add</button>
               </div>
               {services.length > 0 && (
                 <div className="border border-zinc-800 rounded-lg overflow-hidden">

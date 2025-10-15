@@ -11,9 +11,11 @@ import { coachAuth } from '../../api/firebase/auth/coachAuth';
 import { coachService } from '../../api/firebase/coach';
 import { db } from '../../api/firebase/config';
 import { doc, getDoc, runTransaction, serverTimestamp } from 'firebase/firestore';
+import { useUser } from '../../hooks/useUser';
 
 const CoachSignUpPage: React.FC = () => {
   const router = useRouter();
+  const currentUser = useUser();
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -121,6 +123,24 @@ const CoachSignUpPage: React.FC = () => {
     });
     await userService.updateUser(uid, u);
   };
+
+  // If already signed-in with a complete user profile, auto-create coach profile and skip the form
+  useEffect(() => {
+    const autoCreate = async () => {
+      try {
+        if (!currentUser?.id) return;
+        // If this user already exists in Firestore, ensure a coach profile and redirect
+        const profile = await ensureCoachProfile(currentUser.id);
+        if (profile) {
+          await maybeLinkReferringCoach(currentUser.id, currentUser.username || '', currentUser.email || '');
+          router.replace('/coach/dashboard');
+        }
+      } catch (_) {
+        // fall back to form if something fails
+      }
+    };
+    autoCreate();
+  }, [currentUser?.id]);
 
   const handleGoogle = async () => {
     try {
@@ -271,11 +291,22 @@ const CoachSignUpPage: React.FC = () => {
             <div className="space-y-1">
               <input
                 value={username}
-                onChange={async (e)=>{ setUsername(e.target.value); setIsAvailable(null); }}
+                onChange={(e)=>{
+                  const v = e.target.value;
+                  setUsername(v);
+                  // Live validate format so valid entries don't keep showing the error until blur
+                  const uname = normalizedUsername(v);
+                  if (validUsernameFormat(uname)) {
+                    setUsernameError(null);
+                  } else {
+                    setUsernameError('Use 3-20 chars: letters, numbers, underscore');
+                  }
+                  setIsAvailable(null);
+                }}
                 onBlur={()=>checkUsernameAvailability(username)}
                 type="text"
                 className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-3"
-                placeholder="e.g., coach_calvin"
+                placeholder="e.g., coach_matthew"
               />
               <div className="text-xs">
                 {usernameError && (<span className="text-red-400">{usernameError}</span>)}

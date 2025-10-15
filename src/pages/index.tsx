@@ -131,29 +131,35 @@ const MarketingContent: React.FC<{
               </div>
               
               {/* Feature Cards - Horizontal on Desktop */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 animate-fade-in-up animation-delay-1500">
-                <div className="bg-gradient-to-br from-[#E0FE10]/10 to-lime-400/10 backdrop-blur-sm border border-[#E0FE10]/30 hover:border-[#E0FE10]/50 rounded-2xl p-4 cursor-pointer transform hover:-translate-y-1 transition-all duration-300 hover:shadow-lg hover:shadow-[#E0FE10]/20 group">
-                  <div className="w-10 h-10 bg-gradient-to-br from-[#E0FE10] to-lime-400 rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform duration-300">
-                    <FaBolt className="h-5 w-5 text-black" />
+              <div className="grid grid-cols-1 gap-4 animate-fade-in-up animation-delay-1500">
+                <div className="bg-gradient-to-br from-[#E0FE10]/10 to-lime-400/10 backdrop-blur-sm border border-[#E0FE10]/30 hover:border-[#E0FE10]/50 rounded-3xl px-5 py-5 sm:py-6 cursor-pointer transform hover:-translate-y-1 transition-all duration-300 hover:shadow-lg hover:shadow-[#E0FE10]/20 group flex items-center">
+                  <div className="w-11 h-11 sm:w-12 sm:h-12 bg-gradient-to-br from-[#E0FE10] to-lime-400 rounded-2xl flex items-center justify-center mr-4 sm:mr-6 group-hover:scale-110 transition-transform duration-300">
+                    <FaBolt className="h-6 w-6 text-black" />
                   </div>
-                  <h3 className="text-white text-base font-semibold mb-1">Create Content</h3>
-                  <p className="text-zinc-400 text-sm">Record Moves & build your library</p>
+                  <div className="flex-1 text-center">
+                    <h3 className="text-white text-lg sm:text-xl font-semibold leading-tight">Create Content</h3>
+                    <p className="text-zinc-400 text-sm sm:text-base leading-snug">Record Moves & build your library</p>
+                  </div>
                 </div>
-                
-                <div className="bg-gradient-to-br from-purple-500/10 to-blue-500/10 backdrop-blur-sm border border-purple-400/30 hover:border-purple-400/50 rounded-2xl p-4 cursor-pointer transform hover:-translate-y-1 transition-all duration-300 hover:shadow-lg hover:shadow-purple-400/20 group">
-                  <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-blue-500 rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform duration-300">
-                    <FaGamepad className="h-5 w-5 text-white" />
+
+                <div className="bg-gradient-to-br from-purple-500/10 to-blue-500/10 backdrop-blur-sm border border-purple-400/30 hover:border-purple-400/50 rounded-3xl px-5 py-5 sm:py-6 cursor-pointer transform hover:-translate-y-1 transition-all duration-300 hover:shadow-lg hover:shadow-purple-400/20 group flex items-center">
+                  <div className="w-11 h-11 sm:w-12 sm:h-12 bg-gradient-to-br from-purple-500 to-blue-500 rounded-2xl flex items-center justify-center mr-4 sm:mr-6 group-hover:scale-110 transition-transform duration-300">
+                    <FaGamepad className="h-6 w-6 text-white" />
                   </div>
-                  <h3 className="text-white text-base font-semibold mb-1">Launch Rounds</h3>
-                  <p className="text-zinc-400 text-sm">Turn Stacks into challenges</p>
+                  <div className="flex-1 text-center">
+                    <h3 className="text-white text-lg sm:text-xl font-semibold leading-tight">Launch Rounds</h3>
+                    <p className="text-zinc-400 text-sm sm:text-base leading-snug">Turn Stacks into challenges</p>
+                  </div>
                 </div>
-                
-                <div className="bg-gradient-to-br from-orange-500/10 to-pink-500/10 backdrop-blur-sm border border-orange-400/30 hover:border-orange-400/50 rounded-2xl p-4 cursor-pointer transform hover:-translate-y-1 transition-all duration-300 hover:shadow-lg hover:shadow-orange-400/20 group">
-                  <div className="w-10 h-10 bg-gradient-to-br from-orange-500 to-pink-500 rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform duration-300">
-                    <FaCoins className="h-5 w-5 text-white" />
+
+                <div className="bg-gradient-to-br from-orange-500/10 to-pink-500/10 backdrop-blur-sm border border-orange-400/30 hover:border-orange-400/50 rounded-3xl px-5 py-5 sm:py-6 cursor-pointer transform hover:-translate-y-1 transition-all duration-300 hover:shadow-lg hover:shadow-orange-400/20 group flex items-center">
+                  <div className="w-11 h-11 sm:w-12 sm:h-12 bg-gradient-to-br from-orange-500 to-pink-500 rounded-2xl flex items-center justify-center mr-4 sm:mr-6 group-hover:scale-110 transition-transform duration-300">
+                    <FaCoins className="h-6 w-6 text-white" />
                   </div>
-                  <h3 className="text-white text-base font-semibold mb-1">Earn Revenue</h3>
-                  <p className="text-zinc-400 text-sm">Monetize your expertise</p>
+                  <div className="flex-1 text-center">
+                    <h3 className="text-white text-lg sm:text-xl font-semibold leading-tight">Earn Revenue</h3>
+                    <p className="text-zinc-400 text-sm sm:text-base leading-snug">Monetize your expertise</p>
+                  </div>
                 </div>
               </div>
             </div>
