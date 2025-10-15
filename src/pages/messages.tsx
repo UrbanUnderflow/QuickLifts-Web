@@ -72,7 +72,7 @@ const MessagesPage: React.FC = () => {
           
           for (const d of chatsSnapshot.docs) {
             const data = d.data();
-            console.log('[Messages] Processing chat:', doc.id, data);
+            console.log('[Messages] Processing chat:', d.id, data);
             const participants = (data.participants || []) as ShortUser[];
             
             // Find the other user (not the current user)
