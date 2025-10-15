@@ -249,36 +249,50 @@ const BuildYourRound: React.FC = () => {
 
         <div className="max-w-5xl mx-auto px-6 py-12 print:py-6 print:bg-white print:text-black">
           {/* What is a Round */}
-          <section className="mb-12 print:mb-8">
-            <h2 className="text-4xl font-bold mb-6 text-white print:text-black print:text-2xl">What is a Round?</h2>
-            <div className="bg-zinc-900 rounded-xl p-8 border border-zinc-800 print:bg-white print:border-gray-300">
-              <p className="text-gray-300 leading-relaxed mb-4 text-lg print:text-black">
-                A Round is a <strong className="text-white print:text-black">focused fitness experience</strong> designed and led by a creator or coach inside the Pulse app.
-              </p>
-              <p className="text-gray-300 leading-relaxed mb-4 print:text-black">
-                Think of it as your signature challenge — a curated sequence of workouts, habits, and community interactions that take participants through a defined journey toward a specific goal (e.g., <em>30-Day Core Reset</em>, <em>21-Day Mobility Flow</em>, or <em>7-Day Strength Sprint</em>).
-              </p>
-              <p className="text-gray-300 leading-relaxed mb-6 print:text-black">
-                Each Round lives at the intersection of:
-              </p>
-              <ul className="space-y-4 mb-6">
-                <li className="flex items-start gap-4 bg-zinc-800/50 p-4 rounded-lg print:bg-gray-50">
-                  <Calendar className="w-6 h-6 text-[#E0FE10] mt-1 flex-shrink-0" />
-                  <div className="text-gray-300 print:text-black"><strong className="text-white print:text-black">Structure:</strong> Clear timeline (e.g., 7, 14, or 30 days)</div>
-                </li>
-                <li className="flex items-start gap-4 bg-zinc-800/50 p-4 rounded-lg print:bg-gray-50">
-                  <Lightbulb className="w-6 h-6 text-[#E0FE10] mt-1 flex-shrink-0" />
-                  <div className="text-gray-300 print:text-black"><strong className="text-white print:text-black">Story:</strong> A theme or focus that connects your content and motivates challengers</div>
-                </li>
-                <li className="flex items-start gap-4 bg-zinc-800/50 p-4 rounded-lg print:bg-gray-50">
-                  <Users className="w-6 h-6 text-[#E0FE10] mt-1 flex-shrink-0" />
-                  <div className="text-gray-300 print:text-black"><strong className="text-white print:text-black">Social Energy:</strong> A built-in community of participants who move together, share progress, and engage directly with you as the coach</div>
-                </li>
-              </ul>
-              <div className="bg-[#E0FE10]/10 border-l-4 border-[#E0FE10] p-4 rounded print:bg-yellow-50">
-                <p className="text-gray-200 italic print:text-black">
-                  Rounds are how creators transform workouts into experiences — and experiences into income and community growth.
+          <section id="what-is-round" className="mb-12 print:mb-8">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+              {/* Left media */}
+              <div className="rounded-2xl overflow-hidden border border-zinc-800 bg-black">
+                <img
+                  src="/Winner1.png"
+                  alt="Creator filming a workout"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              {/* Right content */}
+              <div>
+                <h2 className="text-5xl font-extrabold mb-4 text-white print:text-black print:text-2xl">What is a Round?</h2>
+                <p className="text-gray-300 leading-relaxed mb-4 text-lg print:text-black">
+                  A Round is a creator-led fitness journey in the Pulse app — a curated series of workouts, habits, and community challenges guiding participants toward a specific goal (e.g., 30-Day Core Reset or 7-Day Strength Sprint).
                 </p>
+                <p className="text-gray-300 leading-relaxed mb-6 print:text-black">
+                  Each Round lives at the intersection of:
+                </p>
+                <ul className="space-y-4 mb-8">
+                  <li className="flex items-start gap-3">
+                    <span className="w-8 h-8 rounded-lg bg-[#E0FE10]/20 border border-[#E0FE10]/30 flex items-center justify-center flex-shrink-0">
+                      <Calendar className="w-4 h-4 text-[#E0FE10]" />
+                    </span>
+                    <div className="text-gray-300 print:text-black"><strong className="text-white print:text-black">Structure:</strong> Clear timeline (e.g., 7, 14, or 30 days)</div>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <span className="w-8 h-8 rounded-lg bg-[#E0FE10]/20 border border-[#E0FE10]/30 flex items-center justify-center flex-shrink-0">
+                      <Lightbulb className="w-4 h-4 text-[#E0FE10]" />
+                    </span>
+                    <div className="text-gray-300 print:text-black"><strong className="text-white print:text-black">Story:</strong> A theme or focus that connects your content and motivates challengers</div>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <span className="w-8 h-8 rounded-lg bg-[#E0FE10]/20 border border-[#E0FE10]/30 flex items-center justify-center flex-shrink-0">
+                      <Users className="w-4 h-4 text-[#E0FE10]" />
+                    </span>
+                    <div className="text-gray-300 print:text-black"><strong className="text-white print:text-black">Social Energy:</strong> A built-in community of participants who move together, share progress, and engage directly with you as the coach</div>
+                  </li>
+                </ul>
+                <div className="bg-[#E0FE10]/10 border border-[#E0FE10]/30 rounded-xl p-4">
+                  <p className="text-[#e6ffc2]/90 italic">
+                    Rounds are how creators transform workouts into experiences — and experiences into income and community growth.
+                  </p>
+                </div>
               </div>
             </div>
           </section>
