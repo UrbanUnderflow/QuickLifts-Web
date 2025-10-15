@@ -51,7 +51,7 @@ const BuildYourRound: React.FC = () => {
   const [exportError, setExportError] = useState<string | null>(null);
   const [exportSuccess, setExportSuccess] = useState(false);
   const [collapsedDays, setCollapsedDays] = useState<Set<number>>(new Set());
-  const [collapsedSteps, setCollapsedSteps] = useState<Set<number>>(new Set([2,3,4,5,6,7]));
+  const [collapsedSteps, setCollapsedSteps] = useState<Set<number>>(new Set([2, 3, 4, 5, 6, 7])); // 1 is open by default
   
   const [formData, setFormData] = useState<RoundData>({
     step1: { theme: '', goals: '' },
@@ -356,63 +356,59 @@ const BuildYourRound: React.FC = () => {
 
           {/* Case Study */}
           <section id="case-study" className="mb-12 print:mb-8">
-            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 md:p-8 print:bg-white print:border-gray-300 print:p-4">
-              <div className="mb-4">
-                <div className="flex items-center gap-2">
-                  <Target className="w-6 h-6 text-[#E0FE10]" />
-                  <h2 className="text-4xl font-bold text-white print:text-black print:text-2xl">Creator Spotlight: Jaidus × SoulCycle</h2>
-                </div>
-                <p className="text-zinc-400 mt-2">From studio energy to digital movement — how one coach turned sweat into story.</p>
+            <div className="bg-gradient-to-br from-zinc-900 to-zinc-800 border border-zinc-700 rounded-xl p-8 print:bg-white print:border-gray-300 print:p-4">
+              <div className="flex items-center gap-2 mb-6">
+                <Target className="w-6 h-6 text-[#E0FE10]" />
+                <h2 className="text-3xl font-bold text-white print:text-black print:text-xl">Case Study: Meet Jaidus</h2>
               </div>
 
-              {/* Hero video */}
-              <div className="rounded-2xl overflow-hidden border border-zinc-700 mb-6 print:border-gray-300">
-                <video
-                  className="w-full h-full object-cover aspect-video"
-                  controls
-                  playsInline
-                  src="/JaidusNewYear.mov"
-                >
-                  Your browser does not support the video tag.
-                </video>
-              </div>
-
-              {/* Highlight cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-                <div className="bg-zinc-800/70 border border-zinc-700 rounded-xl p-4">
-                  <div className="flex items-center gap-2 text-white font-semibold">
-                    <span className="text-xl">🔥</span>
-                    <span>Built 30-Day Ab Challenge</span>
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+                {/* Video showcase - portrait format */}
+                <div className="lg:col-span-1 print:hidden">
+                  <div className="rounded-lg overflow-hidden bg-black" style={{ aspectRatio: '9/16' }}>
+                    <video 
+                      className="w-full h-full object-cover"
+                      controls
+                      playsInline
+                      src="/JaidusNewYear.mov"
+                    >
+                      Your browser does not support the video tag.
+                    </video>
                   </div>
-                  <p className="text-zinc-400 text-sm mt-1">From studio to screen.</p>
                 </div>
-                <div className="bg-zinc-800/70 border border-zinc-700 rounded-xl p-4">
-                  <div className="flex items-center gap-2 text-white font-semibold">
-                    <span className="text-xl">💪</span>
-                    <span>Engaged 2,000+ new users</span>
-                  </div>
-                  <p className="text-zinc-400 text-sm mt-1">Grew community beyond cycling.</p>
-                </div>
-                <div className="bg-zinc-800/70 border border-zinc-700 rounded-xl p-4">
-                  <div className="flex items-center gap-2 text-white font-semibold">
-                    <span className="text-xl">💰</span>
-                    <span>Partnered with SoulCycle</span>
-                  </div>
-                  <p className="text-zinc-400 text-sm mt-1">First Pulse-branded Round.</p>
-                </div>
-              </div>
 
-              {/* Quote */}
-              <div className="bg-[#E0FE10]/10 border border-[#E0FE10]/30 rounded-xl p-4 mb-6">
-                <p className="text-[#e6ffc2]/90">“Pulse helped me turn my workouts into something people feel part of.”</p>
-                <p className="text-[#e6ffc2]/80 italic text-sm mt-2">— Jaidus Mondesir, Creator & Coach</p>
-              </div>
-
-              {/* CTA */}
-              <div className="text-center">
-                <a href="#breakdown" className="inline-flex items-center justify-center px-6 py-3 rounded-lg bg-[#E0FE10] text-black font-bold hover:bg-[#d0ee00] transition-colors">
-                  Build Yours
-                </a>
+                {/* Content */}
+                <div className="lg:col-span-2 space-y-6">
+                  <div className="space-y-2 text-sm">
+                    <p className="text-gray-300 print:text-gray-700"><strong className="text-white print:text-black">Partner:</strong> SoulCycle × Jaidus Mondesir</p>
+                    <p className="text-gray-300 print:text-gray-700"><strong className="text-white print:text-black">Round:</strong> 30-Day Ab Challenge</p>
+                    <p className="text-gray-300 print:text-gray-700"><strong className="text-white print:text-black">Timeline:</strong> January 2025</p>
+                    <p className="text-gray-300 print:text-gray-700"><strong className="text-white print:text-black">Type:</strong> Branded partnership pilot</p>
+                    <p className="text-gray-300 print:text-gray-700"><strong className="text-white print:text-black">Format:</strong> 30 days of core-focused workouts filmed in-studio</p>
+                  </div>
+                  <div className="bg-zinc-800 p-4 rounded-lg border border-zinc-700 print:bg-gray-50 print:border-gray-200 print:p-3">
+                    <h4 className="font-semibold mb-3 text-white print:text-black print:text-sm">Round Goals:</h4>
+                    <ul className="space-y-2 text-sm text-gray-300 print:text-gray-700 print:text-xs">
+                      <li className="flex items-start gap-2">
+                        <span className="text-[#E0FE10] flex-shrink-0">✓</span>
+                        <span><strong className="text-white print:text-black">Expand Reach:</strong> Engage people outside SoulCycle's existing cycling audience</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="text-[#E0FE10] flex-shrink-0">✓</span>
+                        <span><strong className="text-white print:text-black">Build Personal Brand:</strong> Establish Jaidus as a multidimensional coach beyond the bike</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="text-[#E0FE10] flex-shrink-0">✓</span>
+                        <span><strong className="text-white print:text-black">Drive Real-World Conversion:</strong> Use the digital challenge to bring new members into the world and rigor of SoulCycle studios</span>
+                      </li>
+                    </ul>
+                  </div>
+                  <div className="bg-[#E0FE10]/10 border-l-4 border-[#E0FE10] p-4 rounded print:bg-yellow-50 print:p-3">
+                    <p className="text-gray-300 print:text-gray-700 print:text-sm">
+                      SoulCycle instructor Jaidus Mondesir wanted to extend his reach beyond the cycling studio. His goal was to translate the motivation, energy, and storytelling that defined his in-person classes into a digital space that could connect both existing riders and new audiences who hadn't yet set foot in a SoulCycle studio.
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
           </section>
@@ -424,184 +420,297 @@ const BuildYourRound: React.FC = () => {
                 <h2 className="text-3xl font-bold text-white mb-2">The Breakdown: How to Build a Round</h2>
                 <p className="text-zinc-400 text-sm">Complete each step to design your signature Round experience</p>
               </div>
-
+              
               <div className="space-y-3">
-                {(() => {
-                  const stepNum = 1;
-                  const isCollapsed = collapsedSteps.has(stepNum);
-                  return (
-                    <div className="bg-zinc-800 border border-zinc-700 rounded-xl overflow-hidden">
-                      <button onClick={() => toggleStep(stepNum)} className="w-full flex items-center justify-between px-4 py-3 hover:bg-zinc-700/50 transition-colors">
-                        <div className="flex items-center gap-3">
-                          <Target className="w-5 h-5 text-[#E0FE10]" />
-                          <h3 className="text-lg font-bold text-white">Step 1: Define the Focus</h3>
-                        </div>
-                        <ChevronDown className={`w-5 h-5 text-[#E0FE10] transition-transform ${isCollapsed ? '' : 'rotate-180'}`} />
-                      </button>
-                      {!isCollapsed && (
-                        <div className="px-4 pb-4 pt-2">
-                          <p className="text-zinc-400 mb-4 text-sm">Identify a single clear goal (abs, mobility, strength, mindfulness)</p>
-                          <div className="space-y-3">
-                            <div>
-                              <p className="font-medium mb-2 text-gray-200 text-sm">What is the overall theme of this round?</p>
-                              <input type="text" placeholder="e.g., 30-Day Core Reset" value={formData.step1.theme} onChange={(e) => updateStepField('step1', 'theme', e.target.value)} className="w-full bg-zinc-700 border border-zinc-600 text-white rounded-md px-3 py-2 focus:border-[#E0FE10] outline-none" />
-                            </div>
-                            <div>
-                              <p className="font-medium mb-2 text-gray-200 text-sm">What are your 1-2 goals for your clients?</p>
-                              <textarea placeholder="e.g., Build visible core strength, improve posture" rows={2} value={formData.step1.goals} onChange={(e) => updateStepField('step1', 'goals', e.target.value)} className="w-full bg-zinc-700 border border-zinc-600 text-white rounded-md px-3 py-2 focus:border-[#E0FE10] outline-none" />
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })()}
-
-                {(() => {
-                  const stepNum = 2;
-                  const isCollapsed = collapsedSteps.has(stepNum);
-                  return (
-                    <div className="bg-zinc-800 border border-zinc-700 rounded-xl overflow-hidden">
-                      <button onClick={() => toggleStep(stepNum)} className="w-full flex items-center justify-between px-4 py-3 hover:bg-zinc-700/50 transition-colors">
-                        <div className="flex items-center gap-3">
-                          <Calendar className="w-5 h-5 text-[#E0FE10]" />
-                          <h3 className="text-lg font-bold text-white">Step 2: Design the Structure</h3>
-                        </div>
-                        <ChevronDown className={`w-5 h-5 text-[#E0FE10] transition-transform ${isCollapsed ? '' : 'rotate-180'}`} />
-                      </button>
-                      {!isCollapsed && (
-                        <div className="px-4 pb-4 pt-2">
-                          <p className="text-zinc-400 mb-4 text-sm">Choose the duration (7, 14, or 30 days) and intensity. Mix "Moves" and "Stacks".</p>
-                          <div className="space-y-3">
-                            <div>
-                              <p className="font-medium mb-2 text-gray-200 text-sm">What is the duration of this round? Why?</p>
-                              <textarea rows={2} placeholder="e.g., 30 days to build consistent habits and see visible results" value={formData.step2.duration} onChange={(e) => updateStepField('step2', 'duration', e.target.value)} className="w-full bg-zinc-700 border border-zinc-600 text-white rounded-md px-3 py-2 focus:border-[#E0FE10] outline-none" />
-                            </div>
-                            <div>
-                              <p className="font-medium mb-2 text-gray-200 text-sm">How will you structure it to build intensity over time?</p>
-                              <textarea rows={2} placeholder="e.g., Week 1: Foundation, Week 2-3: Progressive overload, Week 4: Peak" value={formData.step2.structure} onChange={(e) => updateStepField('step2', 'structure', e.target.value)} className="w-full bg-zinc-700 border border-zinc-600 text-white rounded-md px-3 py-2 focus:border-[#E0FE10] outline-none" />
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })()}
-
-                {(() => {
-                  const blocks = [
-                    { n: 3, icon: <Lightbulb className="w-5 h-5 text-[#E0FE10]" />, title: 'Step 3: Craft the Experience', content: (
-                      <>
-                        <p className="text-zinc-400 mb-4 text-sm">Add storytelling and motivation. Include daily themes or mantras.</p>
-                        <div className="space-y-3">
-                          <div>
-                            <p className="font-medium mb-2 text-gray-200 text-sm">What story or message should they remember?</p>
-                            <textarea rows={2} placeholder="e.g., Your core is your foundation — build it strong" value={formData.step3.story} onChange={(e)=>updateStepField('step3','story',e.target.value)} className="w-full bg-zinc-700 border border-zinc-600 text-white rounded-md px-3 py-2 focus:border-[#E0FE10] outline-none" />
-                          </div>
-                          <div>
-                            <p className="font-medium mb-2 text-gray-200 text-sm">Motivation/mindset touchpoints</p>
-                            <textarea rows={2} placeholder="e.g., Daily check-ins, motivational quotes" value={formData.step3.motivation} onChange={(e)=>updateStepField('step3','motivation',e.target.value)} className="w-full bg-zinc-700 border border-zinc-600 text-white rounded-md px-3 py-2 focus:border-[#E0FE10] outline-none" />
-                          </div>
-                          <div>
-                            <p className="font-medium mb-2 text-gray-200 text-sm">Desired emotions by the end</p>
-                            <textarea rows={2} placeholder="e.g., Empowered, confident" value={formData.step3.emotions} onChange={(e)=>updateStepField('step3','emotions',e.target.value)} className="w-full bg-zinc-700 border border-zinc-600 text-white rounded-md px-3 py-2 focus:border-[#E0FE10] outline-none" />
-                          </div>
-                        </div>
-                      </>
-                    )},
-                    { n: 4, icon: <Camera className="w-5 h-5 text-[#E0FE10]" />, title: 'Step 4: Set the Visual Tone', content: (
-                      <>
-                        <p className="text-zinc-400 mb-4 text-sm">Film or capture content that reflects your brand and energy.</p>
-                        <div className="space-y-3">
-                          <div>
-                            <p className="font-medium mb-2 text-gray-200 text-sm">Look & feel</p>
-                            <textarea rows={2} placeholder="e.g., High-energy, raw, authentic" value={formData.step4.visualTone} onChange={(e)=>updateStepField('step4','visualTone',e.target.value)} className="w-full bg-zinc-700 border border-zinc-600 text-white rounded-md px-3 py-2 focus:border-[#E0FE10] outline-none" />
-                          </div>
-                          <div>
-                            <p className="font-medium mb-2 text-gray-200 text-sm">Locations</p>
-                            <textarea rows={2} placeholder="e.g., Local gym, outdoor park" value={formData.step4.location} onChange={(e)=>updateStepField('step4','location',e.target.value)} className="w-full bg-zinc-700 border border-zinc-600 text-white rounded-md px-3 py-2 focus:border-[#E0FE10] outline-none" />
-                          </div>
-                          <div>
-                            <p className="font-medium mb-2 text-gray-200 text-sm">Visual elements</p>
-                            <textarea rows={2} placeholder="e.g., Branded apparel, natural lighting" value={formData.step4.visualElements} onChange={(e)=>updateStepField('step4','visualElements',e.target.value)} className="w-full bg-zinc-700 border border-zinc-600 text-white rounded-md px-3 py-2 focus:border-[#E0FE10] outline-none" />
-                          </div>
-                        </div>
-                      </>
-                    )},
-                    { n: 5, icon: <Users className="w-5 h-5 text-[#E0FE10]" />, title: 'Step 5: Build Engagement', content: (
-                      <>
-                        <p className="text-zinc-400 mb-4 text-sm">Encourage daily check-ins, progress posts, and community shoutouts.</p>
-                        <div className="space-y-3">
-                          <div>
-                            <p className="font-medium mb-2 text-gray-200 text-sm">Moments to share wins/challenges</p>
-                            <textarea rows={2} placeholder="e.g., Daily photo check-ins" value={formData.step5.sharingMoments} onChange={(e)=>updateStepField('step5','sharingMoments',e.target.value)} className="w-full bg-zinc-700 border border-zinc-600 text-white rounded-md px-3 py-2 focus:border-[#E0FE10] outline-none" />
-                          </div>
-                          <div>
-                            <p className="font-medium mb-2 text-gray-200 text-sm">Prompts/reminders</p>
-                            <textarea rows={2} placeholder="e.g., Morning messages, mid-week check-ins" value={formData.step5.prompts} onChange={(e)=>updateStepField('step5','prompts',e.target.value)} className="w-full bg-zinc-700 border border-zinc-600 text-white rounded-md px-3 py-2 focus:border-[#E0FE10] outline-none" />
-                          </div>
-                          <div>
-                            <p className="font-medium mb-2 text-gray-200 text-sm">How you will show up</p>
-                            <textarea rows={2} placeholder="e.g., Weekly live Q&A, video shoutouts" value={formData.step5.presence} onChange={(e)=>updateStepField('step5','presence',e.target.value)} className="w-full bg-zinc-700 border border-zinc-600 text-white rounded-md px-3 py-2 focus:border-[#E0FE10] outline-none" />
-                          </div>
-                        </div>
-                      </>
-                    )},
-                    { n: 6, icon: <Gift className="w-5 h-5 text-[#E0FE10]" />, title: 'Step 6: Add an Incentive', content: (
-                      <>
-                        <p className="text-zinc-400 mb-4 text-sm">Create a reward or experience for completion.</p>
-                        <div className="space-y-3">
-                          <div>
-                            <p className="font-medium mb-2 text-gray-200 text-sm">Meaningful reward</p>
-                            <textarea rows={2} placeholder="e.g., Free 1-on-1 session" value={formData.step6.reward} onChange={(e)=>updateStepField('step6','reward',e.target.value)} className="w-full bg-zinc-700 border border-zinc-600 text-white rounded-md px-3 py-2 focus:border-[#E0FE10] outline-none" />
-                          </div>
-                          <div>
-                            <p className="font-medium mb-2 text-gray-200 text-sm">Connect to brand/business</p>
-                            <textarea rows={2} placeholder="e.g., Winners featured on my IG" value={formData.step6.brandConnection} onChange={(e)=>updateStepField('step6','brandConnection',e.target.value)} className="w-full bg-zinc-700 border border-zinc-600 text-white rounded-md px-3 py-2 focus:border-[#E0FE10] outline-none" />
-                          </div>
-                          <div>
-                            <p className="font-medium mb-2 text-gray-200 text-sm">Non-monetary recognition</p>
-                            <textarea rows={2} placeholder="e.g., Community badge" value={formData.step6.nonMonetary} onChange={(e)=>updateStepField('step6','nonMonetary',e.target.value)} className="w-full bg-zinc-700 border border-zinc-600 text-white rounded-md px-3 py-2 focus:border-[#E0FE10] outline-none" />
-                          </div>
-                        </div>
-                      </>
-                    )},
-                    { n: 7, icon: <TrendingUp className="w-5 h-5 text-[#E0FE10]" />, title: 'Step 7: Launch + Reflect', content: (
-                      <>
-                        <p className="text-zinc-400 mb-4 text-sm">Announce, promote, and gather data on participation, engagement, and completion.</p>
-                        <div className="space-y-3">
-                          <div>
-                            <p className="font-medium mb-2 text-gray-200 text-sm">Promotion plan</p>
-                            <textarea rows={2} placeholder="e.g., Countdown posts, BTS content" value={formData.step7.promotion} onChange={(e)=>updateStepField('step7','promotion',e.target.value)} className="w-full bg-zinc-700 border border-zinc-600 text-white rounded-md px-3 py-2 focus:border-[#E0FE10] outline-none" />
-                          </div>
-                          <div>
-                            <p className="font-medium mb-2 text-gray-200 text-sm">Success metrics</p>
-                            <textarea rows={2} placeholder="e.g., Sign-ups, engagement rate" value={formData.step7.metrics} onChange={(e)=>updateStepField('step7','metrics',e.target.value)} className="w-full bg-zinc-700 border border-zinc-600 text-white rounded-md px-3 py-2 focus:border-[#E0FE10] outline-none" />
-                          </div>
-                        </div>
-                      </>
-                    )},
-                  ];
-                  return blocks.map(({ n, icon, title, content }) => {
-                    const isCollapsedBlock = collapsedSteps.has(n);
-                    return (
-                      <div key={n} className="bg-zinc-800 border border-zinc-700 rounded-xl overflow-hidden">
-                        <button onClick={() => toggleStep(n)} className="w-full flex items-center justify-between px-4 py-3 hover:bg-zinc-700/50 transition-colors">
-                          <div className="flex items-center gap-3">
-                            {icon}
-                            <h3 className="text-lg font-bold text-white">{title}</h3>
-                          </div>
-                          <ChevronDown className={`w-5 h-5 text-[#E0FE10] transition-transform ${isCollapsedBlock ? '' : 'rotate-180'}`} />
-                        </button>
-                        {!isCollapsedBlock && (
-                          <div className="px-4 pb-4 pt-2">
-                            {content}
-                          </div>
-                        )}
+              {/* Step 1 */}
+              {(() => {
+                const stepNum = 1;
+                const isCollapsed = collapsedSteps.has(stepNum);
+                return (
+                  <div className="bg-zinc-800 border border-zinc-700 rounded-xl overflow-hidden">
+                    <button
+                      onClick={() => toggleStep(stepNum)}
+                      className="w-full flex items-center justify-between px-4 py-3 hover:bg-zinc-700/50 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <Target className="w-5 h-5 text-[#E0FE10]" />
+                        <h3 className="text-lg font-bold text-white">Step 1: Define the Focus</h3>
                       </div>
-                    );
-                  });
-                })()}
+                      <ChevronDown className={`w-5 h-5 text-[#E0FE10] transition-transform ${isCollapsed ? '' : 'rotate-180'}`} />
+                    </button>
+                    {!isCollapsed && (
+                      <div className="px-4 pb-4 pt-2">
+                        <p className="text-zinc-400 mb-4 text-sm">Identify a single clear goal (abs, mobility, strength, mindfulness)</p>
+                        <div className="space-y-3">
+                  <div>
+                    <p className="font-medium mb-2 text-gray-200 print:text-black print:text-sm">What is the overall theme of this round?</p>
+                    <input 
+                      type="text" 
+                      placeholder="e.g., 30-Day Core Reset" 
+                      value={formData.step1.theme}
+                      onChange={(e) => updateStepField('step1', 'theme', e.target.value)}
+                      className="w-full bg-zinc-700 border border-zinc-600 text-white rounded-md px-3 py-2 focus:border-[#E0FE10] outline-none print:bg-white print:border-gray-300 print:text-black print:text-sm" 
+                    />
+                  </div>
+                  <div>
+                    <p className="font-medium mb-2 text-gray-200 print:text-black print:text-sm">What are your 1-2 goals for your clients?</p>
+                    <textarea 
+                      placeholder="e.g., Build visible core strength, improve posture" 
+                      rows={2} 
+                      value={formData.step1.goals}
+                      onChange={(e) => updateStepField('step1', 'goals', e.target.value)}
+                      className="w-full bg-zinc-700 border border-zinc-600 text-white rounded-md px-3 py-2 focus:border-[#E0FE10] outline-none print:bg-white print:border-gray-300 print:text-black print:text-sm" 
+                    />
+                  </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* Step 2 */}
+              {(() => {
+                const stepNum = 2;
+                const isCollapsed = collapsedSteps.has(stepNum);
+                return (
+                  <div className="bg-zinc-800 border border-zinc-700 rounded-xl overflow-hidden">
+                    <button
+                      onClick={() => toggleStep(stepNum)}
+                      className="w-full flex items-center justify-between px-4 py-3 hover:bg-zinc-700/50 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <Calendar className="w-5 h-5 text-[#E0FE10]" />
+                        <h3 className="text-lg font-bold text-white">Step 2: Design the Structure</h3>
+                      </div>
+                      <ChevronDown className={`w-5 h-5 text-[#E0FE10] transition-transform ${isCollapsed ? '' : 'rotate-180'}`} />
+                    </button>
+                    {!isCollapsed && (
+                      <div className="px-4 pb-4 pt-2">
+                        <p className="text-zinc-400 mb-4 text-sm">Choose the duration (7, 14, or 30 days) and intensity. Mix "Moves" (workouts) and "Stacks" (combos).</p>
+                        <div className="space-y-3">
+                <div className="flex items-center gap-3 mb-3">
+                  <Calendar className="w-6 h-6 text-[#E0FE10]" />
+                  <h3 className="text-2xl font-bold text-white print:text-black print:text-lg">Step 2: Design the Structure</h3>
+                </div>
+                <p className="text-gray-400 mb-4 print:text-gray-600 print:text-sm">Choose the duration (7, 14, or 30 days) and intensity. Mix "Moves" (workouts) and "Stacks" (combos).</p>
+                <div className="space-y-3 bg-zinc-800/50 p-4 rounded-lg print:bg-gray-50 print:p-3">
+                  <div>
+                    <p className="font-medium mb-2 text-gray-200 print:text-black print:text-sm">What is the duration of this round? Why?</p>
+                    <textarea 
+                      placeholder="e.g., 30 days to build consistent habits and see visible results" 
+                      rows={2} 
+                      value={formData.step2.duration}
+                      onChange={(e) => updateStepField('step2', 'duration', e.target.value)}
+                      className="w-full bg-zinc-700 border border-zinc-600 text-white rounded-md px-3 py-2 focus:border-[#E0FE10] outline-none print:bg-white print:border-gray-300 print:text-black print:text-sm" 
+                    />
+                  </div>
+                  <div>
+                    <p className="font-medium mb-2 text-gray-200 print:text-black print:text-sm">How will you structure it to build the intensity over time and throughout the duration?</p>
+                    <textarea 
+                      placeholder="e.g., Week 1: Foundation, Week 2-3: Progressive overload, Week 4: Peak performance" 
+                      rows={2} 
+                      value={formData.step2.structure}
+                      onChange={(e) => updateStepField('step2', 'structure', e.target.value)}
+                      className="w-full bg-zinc-700 border border-zinc-600 text-white rounded-md px-3 py-2 focus:border-[#E0FE10] outline-none print:bg-white print:border-gray-300 print:text-black print:text-sm" 
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Step 3 */}
+              <div className="bg-zinc-900 border-l-4 border-[#E0FE10] rounded-r-xl p-6 print:bg-white print:border-gray-300 print:pl-4">
+                <div className="flex items-center gap-3 mb-3">
+                  <Lightbulb className="w-6 h-6 text-[#E0FE10]" />
+                  <h3 className="text-2xl font-bold text-white print:text-black print:text-lg">Step 3: Craft the Experience</h3>
+                </div>
+                <p className="text-gray-400 mb-4 print:text-gray-600 print:text-sm">Add storytelling and motivation. Include daily themes or mantras.</p>
+                <div className="space-y-3 bg-zinc-800/50 p-4 rounded-lg print:bg-gray-50 print:p-3">
+                  <div>
+                    <p className="font-medium mb-2 text-gray-200 print:text-black print:text-sm">What story or message do you want your participants to feel and remember throughout the round?</p>
+                    <textarea 
+                      placeholder="e.g., Your core is your foundation — build it strong and everything else follows" 
+                      rows={2} 
+                      value={formData.step3.story}
+                      onChange={(e) => updateStepField('step3', 'story', e.target.value)}
+                      className="w-full bg-zinc-700 border border-zinc-600 text-white rounded-md px-3 py-2 focus:border-[#E0FE10] outline-none print:bg-white print:border-gray-300 print:text-black print:text-sm" 
+                    />
+                  </div>
+                  <div>
+                    <p className="font-medium mb-2 text-gray-200 print:text-black print:text-sm">How will you weave motivation or mindset into each day in the round and feed (e.g., quotes, reflections, or mantras)?</p>
+                    <textarea 
+                      placeholder="e.g., Daily check-in questions, motivational quotes, progress reflections" 
+                      rows={2} 
+                      value={formData.step3.motivation}
+                      onChange={(e) => updateStepField('step3', 'motivation', e.target.value)}
+                      className="w-full bg-zinc-700 border border-zinc-600 text-white rounded-md px-3 py-2 focus:border-[#E0FE10] outline-none print:bg-white print:border-gray-300 print:text-black print:text-sm" 
+                    />
+                  </div>
+                  <div>
+                    <p className="font-medium mb-2 text-gray-200 print:text-black print:text-sm">What emotions or energy do you want your participants to walk away with by the end?</p>
+                    <textarea 
+                      placeholder="e.g., Empowered, confident, capable of more than they thought" 
+                      rows={2} 
+                      value={formData.step3.emotions}
+                      onChange={(e) => updateStepField('step3', 'emotions', e.target.value)}
+                      className="w-full bg-zinc-700 border border-zinc-600 text-white rounded-md px-3 py-2 focus:border-[#E0FE10] outline-none print:bg-white print:border-gray-300 print:text-black print:text-sm" 
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Step 4 */}
+              <div className="bg-zinc-900 border-l-4 border-[#E0FE10] rounded-r-xl p-6 print:bg-white print:border-gray-300 print:pl-4">
+                <div className="flex items-center gap-3 mb-3">
+                  <Camera className="w-6 h-6 text-[#E0FE10]" />
+                  <h3 className="text-2xl font-bold text-white print:text-black print:text-lg">Step 4: Set the Visual Tone</h3>
+                </div>
+                <p className="text-gray-400 mb-4 print:text-gray-600 print:text-sm">Film or capture content that reflects your brand and energy.</p>
+                <div className="space-y-3 bg-zinc-800/50 p-4 rounded-lg print:bg-gray-50 print:p-3">
+                  <div>
+                    <p className="font-medium mb-2 text-gray-200 print:text-black print:text-sm">What do you want your content to look and feel like (e.g., high-energy, calm, minimalist, gritty, cinematic)?</p>
+                    <textarea 
+                      placeholder="e.g., High-energy, raw, authentic gym atmosphere" 
+                      rows={2} 
+                      value={formData.step4.visualTone}
+                      onChange={(e) => updateStepField('step4', 'visualTone', e.target.value)}
+                      className="w-full bg-zinc-700 border border-zinc-600 text-white rounded-md px-3 py-2 focus:border-[#E0FE10] outline-none print:bg-white print:border-gray-300 print:text-black print:text-sm" 
+                    />
+                  </div>
+                  <div>
+                    <p className="font-medium mb-2 text-gray-200 print:text-black print:text-sm">Where will you film or shoot your content so it aligns with your personal brand or environment?</p>
+                    <textarea 
+                      placeholder="e.g., My local gym, outdoor park, home studio" 
+                      rows={2} 
+                      value={formData.step4.location}
+                      onChange={(e) => updateStepField('step4', 'location', e.target.value)}
+                      className="w-full bg-zinc-700 border border-zinc-600 text-white rounded-md px-3 py-2 focus:border-[#E0FE10] outline-none print:bg-white print:border-gray-300 print:text-black print:text-sm" 
+                    />
+                  </div>
+                  <div>
+                    <p className="font-medium mb-2 text-gray-200 print:text-black print:text-sm">How can your visuals (music, lighting, camera angles, wardrobe) reinforce your message or theme?</p>
+                    <textarea 
+                      placeholder="e.g., Consistent branded apparel, natural lighting, dynamic angles" 
+                      rows={2} 
+                      value={formData.step4.visualElements}
+                      onChange={(e) => updateStepField('step4', 'visualElements', e.target.value)}
+                      className="w-full bg-zinc-700 border border-zinc-600 text-white rounded-md px-3 py-2 focus:border-[#E0FE10] outline-none print:bg-white print:border-gray-300 print:text-black print:text-sm" 
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Step 5 */}
+              <div className="bg-zinc-900 border-l-4 border-[#E0FE10] rounded-r-xl p-6 print:bg-white print:border-gray-300 print:pl-4">
+                <div className="flex items-center gap-3 mb-3">
+                  <Users className="w-6 h-6 text-[#E0FE10]" />
+                  <h3 className="text-2xl font-bold text-white print:text-black print:text-lg">Step 5: Build Engagement</h3>
+                </div>
+                <p className="text-gray-400 mb-4 print:text-gray-600 print:text-sm">Encourage daily check-ins, progress posts, and community shoutouts.</p>
+                <div className="space-y-3 bg-zinc-800/50 p-4 rounded-lg print:bg-gray-50 print:p-3">
+                  <div>
+                    <p className="font-medium mb-2 text-gray-200 print:text-black print:text-sm">How will you create moments for participants to share their wins or challenges?</p>
+                    <textarea 
+                      placeholder="e.g., Daily photo check-ins, weekly reflection prompts" 
+                      rows={2} 
+                      value={formData.step5.sharingMoments}
+                      onChange={(e) => updateStepField('step5', 'sharingMoments', e.target.value)}
+                      className="w-full bg-zinc-700 border border-zinc-600 text-white rounded-md px-3 py-2 focus:border-[#E0FE10] outline-none print:bg-white print:border-gray-300 print:text-black print:text-sm" 
+                    />
+                  </div>
+                  <div>
+                    <p className="font-medium mb-2 text-gray-200 print:text-black print:text-sm">What types of prompts, reminders, or touchpoints will help your community stay active and accountable?</p>
+                    <textarea 
+                      placeholder="e.g., Morning motivational messages, mid-week check-ins, weekend recaps" 
+                      rows={2} 
+                      value={formData.step5.prompts}
+                      onChange={(e) => updateStepField('step5', 'prompts', e.target.value)}
+                      className="w-full bg-zinc-700 border border-zinc-600 text-white rounded-md px-3 py-2 focus:border-[#E0FE10] outline-none print:bg-white print:border-gray-300 print:text-black print:text-sm" 
+                    />
+                  </div>
+                  <div>
+                    <p className="font-medium mb-2 text-gray-200 print:text-black print:text-sm">How will you show up in the community (through comments, live check-ins, or video messages)?</p>
+                    <textarea 
+                      placeholder="e.g., Daily comment engagement, weekly live Q&A, personal video shoutouts" 
+                      rows={2} 
+                      value={formData.step5.presence}
+                      onChange={(e) => updateStepField('step5', 'presence', e.target.value)}
+                      className="w-full bg-zinc-700 border border-zinc-600 text-white rounded-md px-3 py-2 focus:border-[#E0FE10] outline-none print:bg-white print:border-gray-300 print:text-black print:text-sm" 
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Step 6 */}
+              <div className="bg-zinc-900 border-l-4 border-[#E0FE10] rounded-r-xl p-6 print:bg-white print:border-gray-300 print:pl-4">
+                <div className="flex items-center gap-3 mb-3">
+                  <Gift className="w-6 h-6 text-[#E0FE10]" />
+                  <h3 className="text-2xl font-bold text-white print:text-black print:text-lg">Step 6: Add an Incentive</h3>
+                </div>
+                <p className="text-gray-400 mb-4 print:text-gray-600 print:text-sm">Create a reward or experience for completion (e.g., free class, merch, shoutout, bragging rights)</p>
+                <div className="space-y-3 bg-zinc-800/50 p-4 rounded-lg print:bg-gray-50 print:p-3">
+                  <div>
+                    <p className="font-medium mb-2 text-gray-200 print:text-black print:text-sm">What's one meaningful reward or recognition that would motivate your participants to finish strong?</p>
+                    <textarea 
+                      placeholder="e.g., Free 1-on-1 session, exclusive merch, featured spotlight" 
+                      rows={2} 
+                      value={formData.step6.reward}
+                      onChange={(e) => updateStepField('step6', 'reward', e.target.value)}
+                      className="w-full bg-zinc-700 border border-zinc-600 text-white rounded-md px-3 py-2 focus:border-[#E0FE10] outline-none print:bg-white print:border-gray-300 print:text-black print:text-sm" 
+                    />
+                  </div>
+                  <div>
+                    <p className="font-medium mb-2 text-gray-200 print:text-black print:text-sm">How can the incentive connect back to your brand or business (e.g., free session, event invite, feature)?</p>
+                    <textarea 
+                      placeholder="e.g., Winners get featured on my IG, invite to exclusive workout event" 
+                      rows={2} 
+                      value={formData.step6.brandConnection}
+                      onChange={(e) => updateStepField('step6', 'brandConnection', e.target.value)}
+                      className="w-full bg-zinc-700 border border-zinc-600 text-white rounded-md px-3 py-2 focus:border-[#E0FE10] outline-none print:bg-white print:border-gray-300 print:text-black print:text-sm" 
+                    />
+                  </div>
+                  <div>
+                    <p className="font-medium mb-2 text-gray-200 print:text-black print:text-sm">What non-monetary reward could make participants feel seen, celebrated, or part of something bigger?</p>
+                    <textarea 
+                      placeholder="e.g., Public recognition, Hall of Fame post, community badge" 
+                      rows={2} 
+                      value={formData.step6.nonMonetary}
+                      onChange={(e) => updateStepField('step6', 'nonMonetary', e.target.value)}
+                      className="w-full bg-zinc-700 border border-zinc-600 text-white rounded-md px-3 py-2 focus:border-[#E0FE10] outline-none print:bg-white print:border-gray-300 print:text-black print:text-sm" 
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Step 7 */}
+              <div className="bg-zinc-900 border-l-4 border-[#E0FE10] rounded-r-xl p-6 print:bg-white print:border-gray-300 print:pl-4">
+                <div className="flex items-center gap-3 mb-3">
+                  <TrendingUp className="w-6 h-6 text-[#E0FE10]" />
+                  <h3 className="text-2xl font-bold text-white print:text-black print:text-lg">Step 7: Launch + Reflect</h3>
+                </div>
+                <p className="text-gray-400 mb-4 print:text-gray-600 print:text-sm">Announce, promote, and gather data on participation, engagement, and completion.</p>
+                <div className="space-y-3 bg-zinc-800/50 p-4 rounded-lg print:bg-gray-50 print:p-3">
+                  <div>
+                    <p className="font-medium mb-2 text-gray-200 print:text-black print:text-sm">How will you build anticipation and promote your round before launch (social posts, teaser videos, partner collabs)?</p>
+                    <textarea 
+                      placeholder="e.g., Countdown posts, behind-the-scenes content, influencer partnerships" 
+                      rows={2} 
+                      value={formData.step7.promotion}
+                      onChange={(e) => updateStepField('step7', 'promotion', e.target.value)}
+                      className="w-full bg-zinc-700 border border-zinc-600 text-white rounded-md px-3 py-2 focus:border-[#E0FE10] outline-none print:bg-white print:border-gray-300 print:text-black print:text-sm" 
+                    />
+                  </div>
+                  <div>
+                    <p className="font-medium mb-2 text-gray-200 print:text-black print:text-sm">What metrics or signs of success will you look for (sign-ups, engagement rate, community activity, conversions)?</p>
+                    <textarea 
+                      placeholder="e.g., 100+ sign-ups, 70% completion rate, 5+ posts per day" 
+                      rows={2} 
+                      value={formData.step7.metrics}
+                      onChange={(e) => updateStepField('step7', 'metrics', e.target.value)}
+                      className="w-full bg-zinc-700 border border-zinc-600 text-white rounded-md px-3 py-2 focus:border-[#E0FE10] outline-none print:bg-white print:border-gray-300 print:text-black print:text-sm" 
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           </section>
