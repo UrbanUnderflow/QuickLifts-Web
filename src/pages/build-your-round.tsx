@@ -225,22 +225,27 @@ const BuildYourRound: React.FC = () => {
       </Head>
       
       <div className="min-h-screen bg-[#0a0a0a] text-white">
-        {/* Header with Logo */}
-        <div className="bg-gradient-to-r from-zinc-900 to-black border-b border-zinc-800 py-8 print:py-4">
-          <div className="max-w-5xl mx-auto px-6">
-            <div className="flex items-center gap-4 mb-2">
-              <img 
-                src="/pulseIcon.png" 
-                alt="Pulse Logo" 
-                className="w-14 h-14 object-contain"
-              />
-              <div>
-                <h1 className="text-4xl font-bold text-white">Pulse Creator Guide</h1>
-                <p className="text-zinc-400 text-sm mt-1">How to Design and Launch a Successful Round</p>
-              </div>
+        {/* Hero with background video */}
+        <section className="relative h-[60vh] min-h-[420px] w-full overflow-hidden border-b border-zinc-800 print:hidden">
+          <video
+            className="absolute inset-0 w-full h-full object-cover opacity-60"
+            src="/MoveHero.mp4"
+            autoPlay
+            muted
+            loop
+            playsInline
+          />
+          <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/40 to-black/80" />
+          <div className="relative h-full max-w-5xl mx-auto px-6 flex flex-col justify-center">
+            <img src="/pulseIcon.png" alt="Pulse" className="w-12 h-12 mb-4" />
+            <h1 className="text-5xl md:text-6xl font-extrabold leading-tight">Turn Your Workouts<br/>Into Experiences</h1>
+            <p className="text-zinc-300 mt-4 max-w-2xl text-lg">Create your first Pulse Round — a guided, social fitness experience that grows your income and community.</p>
+            <div className="mt-6 flex items-center gap-4">
+              <a href="#breakdown" className="bg-[#E0FE10] text-black font-semibold px-5 py-3 rounded-xl hover:bg-lime-400 transition">Start Building</a>
+              <a href="#case-study" className="text-white/90 underline underline-offset-4 hover:text-white">See Examples</a>
             </div>
           </div>
-        </div>
+        </section>
 
         <div className="max-w-5xl mx-auto px-6 py-12 print:py-6 print:bg-white print:text-black">
           {/* What is a Round */}
@@ -312,7 +317,7 @@ const BuildYourRound: React.FC = () => {
           </section>
 
           {/* Case Study */}
-          <section className="mb-12 print:mb-8">
+          <section id="case-study" className="mb-12 print:mb-8">
             <div className="bg-gradient-to-br from-zinc-900 to-zinc-800 border border-zinc-700 rounded-xl p-8 print:bg-white print:border-gray-300 print:p-4">
               <div className="flex items-center gap-2 mb-6">
                 <Target className="w-6 h-6 text-[#E0FE10]" />
@@ -371,7 +376,7 @@ const BuildYourRound: React.FC = () => {
           </section>
 
           {/* The Breakdown */}
-          <section className="mb-12 print:mb-8">
+          <section id="breakdown" className="mb-12 print:mb-8">
             <h2 className="text-4xl font-bold mb-8 text-white print:text-black print:text-2xl">The Breakdown: How to Build a Round</h2>
             
             <div className="space-y-8 print:space-y-4">

@@ -67,7 +67,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
   const publicRoutes = [
     '/', '/about', '/creator', '/rounds', '/privacyPolicy', '/programming', '/100trainers', 
     '/starter-pack', '/one-on-one', '/train-your-client', '/stacks', '/moves', '/terms', '/press', '/100trainers',
-    '/subscribe', '/download', '/morning-mobility-challenge', '/review', '/MoveAndFuelATL', '/investor', '/invest', '/GetInTouch', '/PulseCheck', '/coach/dashboard', '/secure', '/haveyoupaid', '/pulsecheck',
+    '/subscribe', '/download', '/morning-mobility-challenge', '/review', '/MoveAndFuelATL', '/investor', '/invest', '/GetInTouch', '/secure', '/haveyoupaid',
     // Public onboarding/marketing entry points
     '/sign-up', '/coach', '/coach/sign-up', '/build-your-round'
   ].map(route => route?.toLowerCase());
@@ -281,8 +281,14 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
                 setShowSignInModal(false);
               }
             } else {
-              console.log(`[AuthWrapper] User authenticated on public route: ${router.pathname}. No authentication checks needed.`);
+              console.log(`[AuthWrapper] User authenticated on public route: ${router.pathname}. Ensuring app landing page shows the web app.`);
               setShowSignInModal(false);
+              // If on root marketing page after login, route to app landing
+              const normalized = (router.pathname || '').replace(/\/$/, '').toLowerCase();
+              if (normalized === '/') {
+                try { localStorage.setItem('pulsecheck_has_seen_marketing', 'true'); } catch {}
+                router.replace('/PulseCheck?web=1');
+              }
             }
           } else {
             console.log('No firebase user, clearing state');
