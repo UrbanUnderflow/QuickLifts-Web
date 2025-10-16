@@ -10,6 +10,10 @@ import { FaApple, FaUser, FaCheck} from 'react-icons/fa';
 import HomeContent from './HomeContent';
 import { useUser } from '../hooks/useUser';
 import SignInModal from '../components/SignInModal';
+import { Swiper, SwiperSlide } from 'swiper/react';
+import { Autoplay } from 'swiper/modules';
+import 'swiper/css';
+import { exerciseService } from '../api/firebase/exercise/service';
 
 interface SerializablePageMetaData extends Omit<FirestorePageMetaData, 'lastUpdated'> {
   lastUpdated: string; 
@@ -62,6 +66,30 @@ const MarketingContent: React.FC<{
       answer: "Absolutely! Your data is yours, and we make it easy to take it with you anywhere you decide to go."
     }
   ];
+
+  const [moveVideos, setMoveVideos] = useState<string[]>([]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const loadVideos = async () => {
+      try {
+        // Fetch exercises with videos, then flatten to video URLs
+        await exerciseService.fetchExercises();
+        const all = exerciseService.allExercises;
+        const urls: string[] = all
+          .flatMap(ex => (ex.videos || []).map(v => v.videoURL).filter(Boolean)) as string[];
+        // Shuffle and select up to 10
+        const randomTen = urls
+          .sort(() => Math.random() - 0.5)
+          .slice(0, 10);
+        if (isMounted) setMoveVideos(randomTen);
+      } catch (e) {
+        console.error('Failed to load move videos', e);
+      }
+    };
+    loadVideos();
+    return () => { isMounted = false; };
+  }, []);
 
   return (
     <div className="min-h-screen bg-zinc-900">
@@ -130,35 +158,99 @@ const MarketingContent: React.FC<{
                 </a>
               </div>
               
-              {/* Feature Cards - Horizontal on Desktop */}
-              <div className="grid grid-cols-1 gap-4 animate-fade-in-up animation-delay-1500">
-                <div className="bg-gradient-to-br from-[#E0FE10]/10 to-lime-400/10 backdrop-blur-sm border border-[#E0FE10]/30 hover:border-[#E0FE10]/50 rounded-3xl px-5 py-5 sm:py-6 cursor-pointer transform hover:-translate-y-1 transition-all duration-300 hover:shadow-lg hover:shadow-[#E0FE10]/20 group flex items-center">
-                  <div className="w-11 h-11 sm:w-12 sm:h-12 bg-gradient-to-br from-[#E0FE10] to-lime-400 rounded-2xl flex items-center justify-center mr-4 sm:mr-6 group-hover:scale-110 transition-transform duration-300">
-                    <FaBolt className="h-6 w-6 text-black" />
+              {/* Trust Bar - App Store Rating */}
+              <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-3 text-zinc-300 mb-8 animate-fade-in-up animation-delay-1500">
+                <div className="flex items-center gap-2 bg-zinc-900/70 border border-zinc-800 rounded-full px-4 py-2">
+                  <span className="text-white font-semibold">4.9</span>
+                  <div className="flex items-center text-[#E0FE10]">
+                    <FaStar className="h-4 w-4" />
+                    <FaStar className="h-4 w-4" />
+                    <FaStar className="h-4 w-4" />
+                    <FaStar className="h-4 w-4" />
+                    <FaStar className="h-4 w-4" />
                   </div>
-                  <div className="flex-1 text-center">
-                    <h3 className="text-white text-lg sm:text-xl font-semibold leading-tight">Create Content</h3>
-                    <p className="text-zinc-400 text-sm sm:text-base leading-snug">Record Moves & build your library</p>
+                  <span className="text-sm text-zinc-400">on the App Store</span>
+                </div>
+                <span className="text-sm text-zinc-500">Trusted by creators and athletes</span>
+              </div>
+
+              {/* Moves Carousel */}
+              <div className="animate-fade-in-up animation-delay-1800">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-white text-sm font-semibold">Real Moves from Creators on Pulse</h3>
+                  <div className="flex items-center gap-1.5 text-zinc-500 text-xs">
+                    <FaUser className="h-3 w-3" />
+                    <span>Live from our community</span>
                   </div>
                 </div>
+                <Swiper
+                  modules={[Autoplay]}
+                  spaceBetween={16}
+                  slidesPerView={1.2}
+                  autoplay={{
+                    delay: 3000,
+                    disableOnInteraction: false,
+                  }}
+                  loop={true}
+                  breakpoints={{
+                    640: { slidesPerView: 2.2 },
+                    1024: { slidesPerView: 3.2 }
+                  }}
+                >
+                  {(moveVideos.length ? moveVideos : ['move.mp4','rounds.mp4','mymoves.mp4','createstack.mp4','LaunchRounds.mp4']).map((src, idx) => (
+                    <SwiperSlide key={idx}>
+                      <div className="rounded-3xl overflow-hidden border border-zinc-800 bg-zinc-900/60">
+                        <video src={src.startsWith('http') ? src : `/${src}`} className="w-full h-56 object-cover" autoPlay muted loop playsInline />
+                      </div>
+                    </SwiperSlide>
+                  ))}
+                </Swiper>
+              </div>
 
-                <div className="bg-gradient-to-br from-purple-500/10 to-blue-500/10 backdrop-blur-sm border border-purple-400/30 hover:border-purple-400/50 rounded-3xl px-5 py-5 sm:py-6 cursor-pointer transform hover:-translate-y-1 transition-all duration-300 hover:shadow-lg hover:shadow-purple-400/20 group flex items-center">
-                  <div className="w-11 h-11 sm:w-12 sm:h-12 bg-gradient-to-br from-purple-500 to-blue-500 rounded-2xl flex items-center justify-center mr-4 sm:mr-6 group-hover:scale-110 transition-transform duration-300">
-                    <FaGamepad className="h-6 w-6 text-white" />
+              {/* Creator Flow - Compact Horizontal */}
+              <div className="mt-8 animate-fade-in-up animation-delay-2000">
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-0">
+                  {/* Create Content */}
+                  <div className="flex items-center gap-3 bg-gradient-to-br from-[#E0FE10]/10 to-lime-400/10 backdrop-blur-sm border border-[#E0FE10]/30 rounded-2xl px-5 py-3.5 w-full sm:w-auto">
+                    <div className="w-12 h-12 bg-gradient-to-br from-[#E0FE10] to-lime-400 rounded-xl flex items-center justify-center flex-shrink-0">
+                      <FaBolt className="h-5 w-5 text-black" />
+                    </div>
+                    <div>
+                      <div className="text-white font-bold text-base leading-tight">Create Content</div>
+                      <div className="text-zinc-400 text-xs leading-snug mt-0.5">Record Moves</div>
+                    </div>
                   </div>
-                  <div className="flex-1 text-center">
-                    <h3 className="text-white text-lg sm:text-xl font-semibold leading-tight">Launch Rounds</h3>
-                    <p className="text-zinc-400 text-sm sm:text-base leading-snug">Turn Stacks into challenges</p>
-                  </div>
-                </div>
 
-                <div className="bg-gradient-to-br from-orange-500/10 to-pink-500/10 backdrop-blur-sm border border-orange-400/30 hover:border-orange-400/50 rounded-3xl px-5 py-5 sm:py-6 cursor-pointer transform hover:-translate-y-1 transition-all duration-300 hover:shadow-lg hover:shadow-orange-400/20 group flex items-center">
-                  <div className="w-11 h-11 sm:w-12 sm:h-12 bg-gradient-to-br from-orange-500 to-pink-500 rounded-2xl flex items-center justify-center mr-4 sm:mr-6 group-hover:scale-110 transition-transform duration-300">
-                    <FaCoins className="h-6 w-6 text-white" />
+                  {/* Arrow */}
+                  <div className="flex items-center justify-center px-3 rotate-90 sm:rotate-0">
+                    <FaArrowRight className="h-5 w-5 text-zinc-600" />
                   </div>
-                  <div className="flex-1 text-center">
-                    <h3 className="text-white text-lg sm:text-xl font-semibold leading-tight">Earn Revenue</h3>
-                    <p className="text-zinc-400 text-sm sm:text-base leading-snug">Monetize your expertise</p>
+
+                  {/* Launch Rounds */}
+                  <div className="flex items-center gap-3 bg-gradient-to-br from-purple-500/10 to-blue-500/10 backdrop-blur-sm border border-purple-400/30 rounded-2xl px-5 py-3.5 w-full sm:w-auto">
+                    <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-blue-500 rounded-xl flex items-center justify-center flex-shrink-0">
+                      <FaGamepad className="h-5 w-5 text-white" />
+                    </div>
+                    <div>
+                      <div className="text-white font-bold text-base leading-tight">Launch Rounds</div>
+                      <div className="text-zinc-400 text-xs leading-snug mt-0.5">Turn Stacks into challenges</div>
+                    </div>
+                  </div>
+
+                  {/* Arrow */}
+                  <div className="flex items-center justify-center px-3 rotate-90 sm:rotate-0">
+                    <FaArrowRight className="h-5 w-5 text-zinc-600" />
+                  </div>
+
+                  {/* Earn Revenue */}
+                  <div className="flex items-center gap-3 bg-gradient-to-br from-orange-500/10 to-pink-500/10 backdrop-blur-sm border border-orange-400/30 rounded-2xl px-5 py-3.5 w-full sm:w-auto">
+                    <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-pink-500 rounded-xl flex items-center justify-center flex-shrink-0">
+                      <FaCoins className="h-5 w-5 text-white" />
+                    </div>
+                    <div>
+                      <div className="text-white font-bold text-base leading-tight">Earn Revenue</div>
+                      <div className="text-zinc-400 text-xs leading-snug mt-0.5">Monetize expertise</div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -560,871 +652,33 @@ const MarketingContent: React.FC<{
         </div>
       </section>
 
-      {/* Apple Watch & Data Revolution Section - New */}
+      {/* Apple Watch Gamification - Compact */}
+      <section className="relative overflow-hidden h-[300px] bg-gradient-to-br from-black via-blue-950/30 to-zinc-950">
+        <div className="absolute inset-0">
+          <div className="absolute -top-10 -left-10 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl"></div>
+          <div className="absolute -bottom-10 -right-10 w-56 h-56 bg-cyan-500/10 rounded-full blur-3xl"></div>
+        </div>
+        <div className="relative max-w-7xl mx-auto h-full px-6 lg:px-8 flex items-center justify-between">
+          <div>
+            <div className="inline-flex items-center gap-3 px-5 py-2 bg-gradient-to-r from-blue-500/20 to-cyan-500/20 backdrop-blur-sm border border-blue-400/30 rounded-full mb-4">
+              <FaGamepad className="h-4 w-4 text-blue-400" />
+              <span className="text-blue-400 text-xs font-medium">Gamified Apple Watch</span>
+            </div>
+            <h2 className="text-white text-3xl lg:text-4xl font-bold mb-2 tracking-tight">Gamify Your Apple Watch Data</h2>
+            <p className="text-zinc-400 text-sm sm:text-base max-w-xl">
+              Turn heart rate, calories, and activity into points, streaks, and wins with your Round.
+            </p>
+          </div>
+          <div className="hidden sm:flex items-center justify-center">
+            <div className="w-20 h-20 lg:w-24 lg:h-24 bg-gradient-to-br from-blue-400/20 to-cyan-400/20 border border-blue-400/30 rounded-2xl flex items-center justify-center">
+              <span className="text-2xl lg:text-3xl">⌚</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Features & Products Section - New */}
       <section className="py-16 sm:py-24 lg:py-32 relative overflow-hidden">
-        {/* Background Elements */}
-        <div className="absolute inset-0 bg-gradient-to-br from-black via-blue-950/30 to-zinc-950"></div>
-        <div className="absolute inset-0">
-          <div className="absolute top-10 left-10 w-96 h-96 bg-blue-500/8 rounded-full filter blur-3xl animate-pulse"></div>
-          <div className="absolute bottom-10 right-10 w-80 h-80 bg-cyan-500/8 rounded-full filter blur-3xl animate-pulse animation-delay-1000"></div>
-          <div className="absolute top-1/2 left-1/2 w-64 h-64 bg-purple-500/6 rounded-full filter blur-3xl animate-pulse animation-delay-2000"></div>
-        </div>
-        
-        <div className="relative max-w-7xl mx-auto px-6 lg:px-8">
-          {/* Section Header */}
-          <div className="text-center mb-12 lg:mb-20">
-            <div className="inline-flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-blue-500/20 to-cyan-500/20 backdrop-blur-sm border border-blue-400/30 rounded-full mb-6 lg:mb-8">
-              <FaRocket className="h-4 w-4 text-blue-400" />
-              <span className="text-blue-400 text-sm font-medium">Data Revolution</span>
-            </div>
-            
-            <h2 className="text-4xl sm:text-5xl lg:text-7xl font-bold text-white mb-6 lg:mb-8 tracking-tight">
-              Your Wrist Captures More Data
-              <br />
-              <span className="bg-gradient-to-r from-blue-400 via-cyan-400 to-purple-400 bg-clip-text text-transparent">
-                Than Apollo Astronauts
-              </span>
-            </h2>
-            
-            <p className="text-lg lg:text-xl text-zinc-400 max-w-4xl mx-auto leading-relaxed mb-8 lg:mb-12">
-              Today's Apple Watch collects more comprehensive health data in a single workout than NASA captured 
-              from entire Apollo missions. But raw data is just numbers—until you add the human story.
-            </p>
-          </div>
-
-          {/* Main Content Split */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20 items-center mb-16 lg:mb-24">
-            
-            {/* Left: Apollo vs Apple Watch Comparison */}
-            <div className="space-y-8">
-              <div className="bg-gradient-to-br from-zinc-900/80 to-blue-950/40 backdrop-blur-sm border border-blue-400/20 rounded-3xl p-8 lg:p-10">
-                <h3 className="text-2xl lg:text-3xl font-bold text-white mb-6">Apollo Mission Data</h3>
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center border-b border-zinc-700 pb-2">
-                    <span className="text-zinc-400">Heart Rate</span>
-                    <span className="text-blue-400 font-mono">Basic monitoring</span>
-                  </div>
-                  <div className="flex justify-between items-center border-b border-zinc-700 pb-2">
-                    <span className="text-zinc-400">Body Temperature</span>
-                    <span className="text-blue-400 font-mono">Limited sensors</span>
-                  </div>
-                  <div className="flex justify-between items-center border-b border-zinc-700 pb-2">
-                    <span className="text-zinc-400">Sleep Data</span>
-                    <span className="text-red-400 font-mono">None</span>
-                  </div>
-                  <div className="flex justify-between items-center border-b border-zinc-700 pb-2">
-                    <span className="text-zinc-400">Activity Tracking</span>
-                    <span className="text-red-400 font-mono">Manual logs</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-zinc-400">Contextual Data</span>
-                    <span className="text-red-400 font-mono">Radio reports only</span>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="bg-gradient-to-br from-[#E0FE10]/10 to-cyan-500/10 backdrop-blur-sm border border-cyan-400/30 rounded-3xl p-8 lg:p-10">
-                <h3 className="text-2xl lg:text-3xl font-bold text-white mb-6">Your Apple Watch</h3>
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center border-b border-zinc-700 pb-2">
-                    <span className="text-zinc-400">Heart Rate</span>
-                    <span className="text-cyan-400 font-mono">Real-time + HRV</span>
-                  </div>
-                  <div className="flex justify-between items-center border-b border-zinc-700 pb-2">
-                    <span className="text-zinc-400">Movement</span>
-                    <span className="text-cyan-400 font-mono">6-axis gyroscope</span>
-                  </div>
-                  <div className="flex justify-between items-center border-b border-zinc-700 pb-2">
-                    <span className="text-zinc-400">Blood Oxygen</span>
-                    <span className="text-cyan-400 font-mono">Continuous SpO2</span>
-                  </div>
-                  <div className="flex justify-between items-center border-b border-zinc-700 pb-2">
-                    <span className="text-zinc-400">Sleep Quality</span>
-                    <span className="text-cyan-400 font-mono">REM, Deep, Core</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-zinc-400">+ 20 More Metrics</span>
-                    <span className="text-[#E0FE10] font-mono">Every second</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Right: Visual Representation */}
-            <div className="relative">
-              <div className="relative z-10 bg-gradient-to-br from-blue-500/10 to-purple-500/10 backdrop-blur-sm border border-blue-400/30 rounded-3xl p-8 lg:p-12 text-center">
-                <div className="w-24 h-24 lg:w-32 lg:h-32 mx-auto mb-6 bg-gradient-to-br from-blue-400 to-cyan-400 rounded-full flex items-center justify-center">
-                  <span className="text-2xl lg:text-3xl">⌚</span>
-                </div>
-                <h3 className="text-xl lg:text-2xl font-bold text-white mb-4">
-                  More Data Points in One Workout
-                </h3>
-                <p className="text-zinc-400 mb-6">
-                  Than NASA collected from the entire Apollo 11 mission
-                </p>
-                <div className="text-4xl lg:text-6xl font-bold text-cyan-400 mb-2">1000x</div>
-                <div className="text-sm lg:text-base text-zinc-500">More comprehensive health insights</div>
-              </div>
-              
-              {/* Floating data points */}
-              <div className="absolute -top-4 -right-4 w-20 h-20 bg-gradient-to-br from-[#E0FE10]/20 to-lime-400/20 backdrop-blur-sm border border-[#E0FE10]/30 rounded-2xl flex items-center justify-center animate-bounce">
-                <span className="text-[#E0FE10] text-xs font-bold">ECG</span>
-              </div>
-              <div className="absolute -bottom-4 -left-4 w-16 h-16 bg-gradient-to-br from-purple-500/20 to-blue-500/20 backdrop-blur-sm border border-purple-400/30 rounded-xl flex items-center justify-center animate-bounce animation-delay-1000">
-                <span className="text-purple-400 text-xs font-bold">GPS</span>
-              </div>
-              <div className="absolute top-1/2 -left-6 w-18 h-18 bg-gradient-to-br from-cyan-500/20 to-blue-500/20 backdrop-blur-sm border border-cyan-400/30 rounded-lg flex items-center justify-center animate-bounce animation-delay-2000">
-                <span className="text-cyan-400 text-xs font-bold">VO2</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Human Context Section */}
-          <div className="bg-gradient-to-br from-zinc-900/80 to-purple-950/40 backdrop-blur-sm border border-purple-400/20 rounded-3xl p-8 lg:p-12 mb-16 lg:mb-24">
-            <div className="text-center mb-8 lg:mb-12">
-              <h3 className="text-3xl lg:text-4xl font-bold text-white mb-6">
-                But Data Without Context is Just 
-                <span className="bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent"> Noise</span>
-              </h3>
-              <p className="text-lg lg:text-xl text-zinc-300 max-w-3xl mx-auto leading-relaxed">
-                <span className="text-white font-semibold">Pulse bridges</span> the gap between <span className="text-purple-300 font-medium">raw biometric data</span> and <span className="text-[#E0FE10] font-medium">meaningful insights</span> by capturing the <span className="text-cyan-300 font-medium">human story</span> behind every number.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-8">
-              
-              {/* How You Experience */}
-              <div className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 backdrop-blur-sm border border-purple-400/20 rounded-2xl p-6 text-center group hover:border-purple-400/40 transition-all duration-300">
-                <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform duration-300">
-                  <span className="text-white text-lg">🧠</span>
-                </div>
-                <h4 className="text-white font-bold mb-3">How You <span className="text-purple-300">Experience</span></h4>
-                <p className="text-zinc-400 text-sm leading-relaxed">
-                  <span className="text-purple-200">"That felt easier than my heart rate suggests"</span> — Your <span className="font-medium">perception vs. data</span> tells the complete story.
-                </p>
-              </div>
-
-              {/* How You Feel */}
-              <div className="bg-gradient-to-br from-blue-500/10 to-cyan-500/10 backdrop-blur-sm border border-blue-400/20 rounded-2xl p-6 text-center group hover:border-blue-400/40 transition-all duration-300">
-                <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform duration-300">
-                  <span className="text-white text-lg">💭</span>
-                </div>
-                <h4 className="text-white font-bold mb-3">How You <span className="text-cyan-300">Feel</span></h4>
-                <p className="text-zinc-400 text-sm leading-relaxed">
-                  <span className="font-medium text-cyan-200">Energy, motivation, confidence</span> — the emotional data no sensor captures but drives every rep.
-                </p>
-              </div>
-
-              {/* Personal Context */}
-              <div className="bg-gradient-to-br from-[#E0FE10]/10 to-lime-400/10 backdrop-blur-sm border border-[#E0FE10]/20 rounded-2xl p-6 text-center group hover:border-[#E0FE10]/40 transition-all duration-300">
-                <div className="w-12 h-12 bg-gradient-to-br from-[#E0FE10] to-lime-400 rounded-xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform duration-300">
-                  <span className="text-black text-lg">📝</span>
-                </div>
-                <h4 className="text-white font-bold mb-3">Personal <span className="text-[#E0FE10]">Context</span></h4>
-                <p className="text-zinc-400 text-sm leading-relaxed">
-                  <span className="text-lime-200">"Stressed from work, didn't sleep well, but pushed through"</span> — context that explains the <span className="font-medium">why</span> behind numbers.
-                </p>
-              </div>
-
-              {/* Decision Insights */}
-              <div className="bg-gradient-to-br from-green-500/10 to-emerald-500/10 backdrop-blur-sm border border-green-400/20 rounded-2xl p-6 text-center group hover:border-green-400/40 transition-all duration-300">
-                <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-500 rounded-xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform duration-300">
-                  <span className="text-white text-lg">🎯</span>
-                </div>
-                <h4 className="text-white font-bold mb-3">Decision <span className="text-green-300">Story</span></h4>
-                <p className="text-zinc-400 text-sm leading-relaxed">
-                  Why you chose that weight, skipped that exercise, or pushed for an extra set — <span className="font-medium text-green-200">decisions</span> that shape your journey.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* The Complete Story */}
-          <div className="text-center mb-8 lg:mb-12">
-            <h3 className="text-3xl lg:text-5xl font-bold text-white mb-8">
-              <span className="bg-gradient-to-r from-[#E0FE10] via-cyan-400 to-purple-400 bg-clip-text text-transparent">
-                Data + Context = 
-              </span>
-              <br />
-              Your Story
-            </h3>
-            
-            <div className="bg-gradient-to-br from-zinc-900/80 to-blue-950/40 backdrop-blur-sm border border-[#E0FE10]/30 rounded-3xl p-8 lg:p-12 max-w-4xl mx-auto">
-              <p className="text-lg lg:text-xl text-zinc-300 leading-relaxed mb-8">
-                <span className="text-white font-semibold">Biometric data</span> + <span className="text-cyan-300 font-semibold">personal context</span> = we don't just <span className="text-zinc-400">track</span> your fitness—we <span className="text-[#E0FE10] font-medium">understand</span> your journey. 
-                This creates your personalized <span className="text-purple-300 font-medium">Work Score</span> and gamifies progress that's meaningful to <span className="text-white font-bold">YOU</span>.
-              </p>
-              
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
-                <div className="group">
-                  <div className="text-4xl lg:text-5xl font-bold text-[#E0FE10] mb-2 group-hover:scale-110 transition-transform duration-300">📊</div>
-                  <div className="text-white font-semibold mb-2">Raw Data</div>
-                  <div className="text-zinc-400 text-sm">Heart rate, reps, weight, time</div>
-                </div>
-                
-                <div className="group">
-                  <div className="text-4xl lg:text-5xl mb-2 group-hover:scale-110 transition-transform duration-300">+</div>
-                  <div className="text-white font-semibold mb-2">Human Context</div>
-                  <div className="text-zinc-400 text-sm">Experience, feelings, decisions</div>
-                </div>
-                
-                <div className="group">
-                  <div className="text-4xl lg:text-5xl font-bold text-cyan-400 mb-2 group-hover:scale-110 transition-transform duration-300">🎮</div>
-                  <div className="text-white font-semibold mb-2">Gamified Score</div>
-                  <div className="text-zinc-400 text-sm">Personalized, meaningful progress</div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Energy Story Example */}
-          <div className="mt-16 lg:mt-24">
-            <div className="text-center mb-8 lg:mb-12">
-              <h3 className="text-2xl lg:text-3xl font-bold text-white mb-4">
-                See It In Action: <span className="text-orange-400">Your Energy Story</span>
-              </h3>
-              <p className="text-zinc-400 max-w-2xl mx-auto">
-                Here's how your Apple Watch data combines with human context to create a meaningful health narrative
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-center">
-              
-              {/* Mobile Phone Mockup */}
-              <div className="relative mx-auto">
-                <div className="relative w-[300px] h-[600px] bg-black rounded-[3rem] p-2 shadow-2xl">
-                  {/* Phone Screen */}
-                  <div className="w-full h-full bg-gradient-to-b from-gray-900 to-black rounded-[2.5rem] overflow-hidden relative">
-                    
-                    {/* Status Bar */}
-                    <div className="flex justify-between items-center px-6 py-2 text-white text-sm">
-                      <span className="font-semibold">8:55</span>
-                      <div className="flex items-center gap-1">
-                        <div className="flex gap-1">
-                          <div className="w-1 h-3 bg-white rounded-full"></div>
-                          <div className="w-1 h-3 bg-white rounded-full"></div>
-                          <div className="w-1 h-3 bg-white rounded-full"></div>
-                          <div className="w-1 h-3 bg-gray-500 rounded-full"></div>
-                        </div>
-                        <span className="text-xs ml-2">78%</span>
-                      </div>
-                    </div>
-
-                    {/* Content */}
-                    <div className="px-4 py-2">
-                      {/* Header */}
-                      <div className="flex justify-between items-center mb-4">
-                        <h2 className="text-white text-xl font-bold">Your Energy Story</h2>
-                        <div className="bg-orange-500/20 border border-orange-400 rounded-full px-3 py-1 flex items-center gap-2">
-                          <span className="text-orange-400 text-sm font-medium">-368 kcal deficit</span>
-                          <span className="text-orange-400">😊</span>
-                        </div>
-                      </div>
-
-                      {/* Main Card */}
-                      <div className="bg-gradient-to-br from-orange-500/10 to-red-500/10 border border-orange-400/30 rounded-2xl p-4 mb-4">
-                        {/* Fat Loss Mode Header */}
-                        <div className="flex items-center gap-3 mb-4">
-                          <div className="w-10 h-10 bg-orange-500 rounded-full flex items-center justify-center">
-                            <span className="text-white text-sm">📈</span>
-                          </div>
-                          <div>
-                            <h3 className="text-white font-bold">Fat Loss Mode 📈</h3>
-                            <p className="text-gray-400 text-xs">You're in a solid deficit - great for steady fat loss progress!</p>
-                          </div>
-                        </div>
-
-                        {/* Calories Comparison */}
-                        <div className="grid grid-cols-2 gap-4 mb-4">
-                          <div>
-                            <div className="flex items-center gap-2 mb-2">
-                              <div className="w-3 h-3 bg-blue-400 rounded-full"></div>
-                              <span className="text-blue-400 text-sm">Calories In</span>
-                            </div>
-                            <div className="text-white text-lg font-bold">1,943 kcal</div>
-                            <div className="w-full bg-gray-700 rounded-full h-2">
-                              <div className="bg-blue-400 h-2 rounded-full" style={{width: '75%'}}></div>
-                            </div>
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2 mb-2">
-                              <div className="w-3 h-3 bg-red-400 rounded-full"></div>
-                              <span className="text-red-400 text-sm">Calories Out 🔥</span>
-                            </div>
-                            <div className="text-white text-lg font-bold">2,311 kcal</div>
-                            <div className="text-xs text-gray-400">Active: 270 | Resting: 2,041</div>
-                            <div className="w-full bg-gray-700 rounded-full h-2">
-                              <div className="bg-red-400 h-2 rounded-full" style={{width: '90%'}}></div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Net Result */}
-                        <div className="text-center py-3 border-t border-gray-700">
-                          <div className="text-gray-400 text-sm">Net Result:</div>
-                          <div className="text-orange-400 text-xl font-bold flex items-center justify-center gap-2">
-                            -368 kcal deficit 😊
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Understanding Section */}
-                      <div className="mb-3">
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="text-yellow-400">💡</span>
-                          <span className="text-yellow-400 text-sm font-semibold">Understanding Your Energy Burn</span>
-                        </div>
-                        <div className="text-xs text-gray-400 space-y-1">
-                          <div>🟠 <span className="text-orange-400">Active Calories:</span> Energy burned through movement, exercise, and daily activities</div>
-                          <div>🔴 <span className="text-red-400">Resting Calories:</span> Energy your body burns at rest for basic functions like breathing, circulation, and cell production</div>
-                        </div>
-                      </div>
-
-                      {/* What This Means */}
-                      <div className="mb-3">
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="text-yellow-400">💡</span>
-                          <span className="text-yellow-400 text-sm font-semibold">What This Means</span>
-                        </div>
-                        <div className="text-xs text-gray-400">
-                          This deficit should result in about 1 pound of fat loss per week if maintained. Poor sleep significantly impacts metabolism, increasing hunger hormones and reducing energy expenditure.
-                        </div>
-                      </div>
-
-                      {/* Recommendation */}
-                      <div className="mb-4">
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="text-green-400">🎯</span>
-                          <span className="text-green-400 text-sm font-semibold">Recommendation</span>
-                        </div>
-                        <div className="text-xs text-lime-300">
-                          Strong deficit for fat loss. Monitor energy levels and consider refeed days if needed. Prioritize getting more sleep - it's crucial for your energy balance and fitness goals.
-                        </div>
-                      </div>
-
-                      {/* Add to Story Button */}
-                      <div className="bg-green-500/10 border border-green-400/30 rounded-xl p-3 flex items-center justify-between">
-                        <div>
-                          <div className="text-green-400 text-sm font-medium">Add to Your Story</div>
-                          <div className="text-gray-400 text-xs">Add context, notes, or missing data</div>
-                        </div>
-                        <span className="text-green-400">→</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Explanation */}
-              <div className="space-y-6">
-                <div>
-                  <h4 className="text-xl font-bold text-white mb-3 flex items-center gap-3">
-                    <span className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-sm">📊</span>
-                    Apple Watch Data
-                  </h4>
-                  <div className="space-y-2 text-sm text-zinc-400">
-                    <div>• <span className="text-blue-300">Calories burned:</span> 2,311 kcal (270 active + 2,041 resting)</div>
-                    <div>• <span className="text-blue-300">Heart rate variability:</span> Sleep quality indicators</div>
-                    <div>• <span className="text-blue-300">Activity rings:</span> Movement patterns throughout the day</div>
-                    <div>• <span className="text-blue-300">Workout data:</span> Exercise intensity and duration</div>
-                  </div>
-                </div>
-
-                <div>
-                  <h4 className="text-xl font-bold text-white mb-3 flex items-center gap-3">
-                    <span className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center text-sm">🧠</span>
-                    Human Context
-                  </h4>
-                  <div className="space-y-2 text-sm text-zinc-400">
-                    <div>• <span className="text-orange-300">Physical Goal:</span> "Fat Loss Mode" - deficit target aligns with -368 kcal</div>
-                    <div>• <span className="text-orange-300">Food Log:</span> Breakfast at 8am, oatmeal & banana logged</div>
-                    <div>• <span className="text-orange-300">Watch Status:</span> "Wore all day" - complete data capture confirmed</div>
-                    <div>• <span className="text-orange-300">Extra Activity:</span> "10min walk without watch during lunch"</div>
-                  </div>
-                </div>
-
-                <div>
-                  <h4 className="text-xl font-bold text-white mb-3 flex items-center gap-3">
-                    <span className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center text-sm">🎯</span>
-                    Actionable Insights
-                  </h4>
-                  <div className="space-y-2 text-sm text-zinc-400">
-                    <div>• <span className="text-green-300">Increase daily steps:</span> Add 2,000 steps to boost NEAT and energy burn</div>
-                    <div>• <span className="text-green-300">Reduce evening carbs:</span> Move carbs to pre-workout for better fat oxidation</div>
-                    <div>• <span className="text-green-300">Meal timing:</span> Stop eating 3 hours before bed to improve sleep quality</div>
-                    <div>• <span className="text-green-300">Energy supplements:</span> Consider B-complex and magnesium for sustained energy</div>
-                  </div>
-                </div>
-
-                <div className="bg-gradient-to-r from-[#E0FE10]/10 to-orange-500/10 border border-[#E0FE10]/30 rounded-xl p-4">
-                  <p className="text-[#E0FE10] text-sm">
-                    <strong>This is the future of health tracking:</strong> Your Apple Watch provides the data foundation, but Pulse adds the human story that makes it meaningful and actionable.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-            {/* What Makes Pulse Different Section */}
-            <section className="min-h-screen bg-gradient-to-br from-zinc-950 via-purple-950/10 to-black py-20">
-        <div className="max-w-7xl mx-auto px-8">
-          <div className="text-center mb-16">
-            <div className="inline-flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-[#E0FE10]/20 to-purple-500/20 backdrop-blur-sm border border-[#E0FE10]/30 rounded-full mb-8">
-              <FaStar className="h-4 w-4 text-[#E0FE10]" />
-              <span className="text-[#E0FE10] text-sm font-medium">What Makes Pulse Different</span>
-            </div>
-            <h3 className="text-white text-4xl lg:text-5xl font-bold mb-6">
-              While Others Track, <br /><span className="bg-gradient-to-r from-[#E0FE10] via-purple-400 to-blue-400 bg-clip-text text-transparent">We Transform</span>
-            </h3>
-            <p className="text-zinc-400 text-lg max-w-4xl mx-auto leading-relaxed">
-              Pulse isn't just another fitness app—it's a living ecosystem where creators thrive, communities flourish, and data becomes actionable intelligence. Here's how we're different from every other platform.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-16">
-            {/* Creator-First Economy */}
-            <div className="group bg-gradient-to-br from-[#E0FE10]/10 to-lime-400/10 backdrop-blur-sm border border-[#E0FE10]/20 hover:border-[#E0FE10]/40 rounded-3xl p-8 transition-all duration-300 hover:shadow-lg hover:shadow-[#E0FE10]/20 cursor-pointer">
-              <div className="w-12 h-12 bg-gradient-to-br from-[#E0FE10] to-lime-400 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300">
-                <FaCoins className="h-6 w-6 text-black" />
-              </div>
-              <h4 className="text-white text-xl font-semibold mb-4">
-                Creator-First Economy
-              </h4>
-              <p className="text-zinc-400 leading-relaxed mb-4">
-                <span className="text-white font-medium">Build workouts, earn revenue, grow your fitness business.</span>
-              </p>
-              <div className="bg-[#E0FE10]/10 border border-[#E0FE10]/20 rounded-xl p-3 mb-4">
-                <p className="text-[#E0FE10] text-sm">
-                  <strong>Advantage:</strong> While others treat you as a user, we treat you as a creator
-                </p>
-              </div>
-              <div className="bg-[#E0FE10]/10 border border-[#E0FE10]/20 rounded-xl p-3 mb-4">
-                <p className="text-[#E0FE10] text-sm">
-                  <strong>Value:</strong> Build workouts, earn revenue, grow your fitness business
-                </p>
-              </div>
-              <div className="bg-[#E0FE10]/10 border border-[#E0FE10]/20 rounded-xl p-3">
-                <p className="text-[#E0FE10] text-sm">
-                  <strong>Proof:</strong> $4.3k+ monthly potential for top creators
-                </p>
-              </div>
-            </div>
-
-            {/* Real Community vs Solo Tracking */}
-            <div className="group bg-gradient-to-br from-purple-500/10 to-blue-500/10 backdrop-blur-sm border border-purple-400/20 hover:border-purple-400/40 rounded-3xl p-8 transition-all duration-300 hover:shadow-lg hover:shadow-purple-400/20 cursor-pointer">
-              <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-blue-500 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300">
-                <FaUser className="h-6 w-6 text-white" />
-              </div>
-              <h4 className="text-white text-xl font-semibold mb-4">
-                Real Community vs Solo Tracking
-              </h4>
-              <p className="text-zinc-400 leading-relaxed mb-4">
-                <span className="text-white font-medium">Real accountability, real prizes, up to 250 players per challenge.</span>
-              </p>
-              <div className="bg-purple-500/10 border border-purple-500/20 rounded-xl p-3 mb-4">
-                <p className="text-purple-300 text-sm">
-                  <strong>Advantage:</strong> Live challenges with real people vs. lonely workouts
-                </p>
-              </div>
-              <div className="bg-purple-500/10 border border-purple-500/20 rounded-xl p-3 mb-4">
-                <p className="text-purple-300 text-sm">
-                  <strong>Value:</strong> Real accountability, real prizes, up to 250 players per challenge
-                </p>
-              </div>
-              <div className="bg-purple-500/10 border border-purple-500/20 rounded-xl p-3">
-                <p className="text-purple-300 text-sm">
-                  <strong>Proof:</strong> Authentic community with shared goals
-                </p>
-              </div>
-            </div>
-
-            {/* Intelligent Data vs Pretty Charts */}
-            <div className="group bg-gradient-to-br from-orange-500/10 to-pink-500/10 backdrop-blur-sm border border-orange-400/20 hover:border-orange-400/40 rounded-3xl p-8 transition-all duration-300 hover:shadow-lg hover:shadow-orange-400/20 cursor-pointer">
-              <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-pink-500 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300">
-                <FaChartLine className="h-6 w-6 text-white" />
-              </div>
-              <h4 className="text-white text-xl font-semibold mb-4">
-                Intelligent Data vs Pretty Charts
-              </h4>
-              <p className="text-zinc-400 leading-relaxed mb-4">
-                <span className="text-white font-medium">Apple Watch data + human context = actionable insights.</span>
-              </p>
-              <div className="bg-orange-500/10 border border-orange-500/20 rounded-xl p-3 mb-4">
-                <p className="text-orange-300 text-sm">
-                  <strong>Advantage:</strong> We tell you what to do next vs. just showing what happened
-                </p>
-              </div>
-              <div className="bg-orange-500/10 border border-orange-500/20 rounded-xl p-3 mb-4">
-                <p className="text-orange-300 text-sm">
-                  <strong>Value:</strong> Apple Watch data + human context = actionable insights
-                </p>
-              </div>
-              <div className="bg-orange-500/10 border border-orange-500/20 rounded-xl p-3">
-                <p className="text-orange-300 text-sm">
-                  <strong>Proof:</strong> Personalized recommendations, not just reports
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Competitive Comparison Table */}
-          <div className="bg-gradient-to-br from-zinc-900/50 to-purple-900/20 backdrop-blur-sm border border-zinc-700/50 rounded-3xl p-8 lg:p-12 mb-16">
-            <div className="text-center mb-8">
-              <h4 className="text-white text-2xl lg:text-3xl font-bold mb-4">
-                <span className="bg-gradient-to-r from-[#E0FE10] to-purple-400 bg-clip-text text-transparent">Traditional Apps</span> vs <span className="bg-gradient-to-r from-green-400 to-blue-400 bg-clip-text text-transparent">Pulse Platform</span>
-              </h4>
-              <p className="text-zinc-400 text-lg">See how we stack up against the competition</p>
-            </div>
-            
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* Traditional Apps - Problems */}
-              <div className="space-y-4">
-                <h5 className="text-white text-xl font-bold mb-6 flex items-center gap-3">
-                  <FaXmark className="h-6 w-6 text-red-400" />
-                  Traditional Apps
-                </h5>
-                
-                <div className="flex items-start gap-2">
-                  <FaXmark className="h-4 w-4 text-red-400 mt-0.5 flex-shrink-0" />
-                  <span className="text-zinc-400">Solo workouts with no real accountability</span>
-                </div>
-                
-                <div className="flex items-start gap-2">
-                  <FaXmark className="h-4 w-4 text-red-400 mt-0.5 flex-shrink-0" />
-                  <span className="text-zinc-400">Static data reports that don't drive action</span>
-                </div>
-                
-                <div className="flex items-start gap-2">
-                  <FaXmark className="h-4 w-4 text-red-400 mt-0.5 flex-shrink-0" />
-                  <span className="text-zinc-400">No monetization for fitness creators</span>
-                </div>
-                
-                <div className="flex items-start gap-2">
-                  <FaXmark className="h-4 w-4 text-red-400 mt-0.5 flex-shrink-0" />
-                  <span className="text-zinc-400">Generic workouts → Personalized AI programming</span>
-                </div>
-                
-                <div className="flex items-start gap-2">
-                  <FaXmark className="h-4 w-4 text-red-400 mt-0.5 flex-shrink-0" />
-                  <span className="text-zinc-400">Fake social → Authentic community</span>
-                </div>
-              </div>
-              
-              {/* Pulse Platform - Solutions */}
-              <div className="space-y-4">
-                <h5 className="text-white text-xl font-bold mb-6 flex items-center gap-3">
-                  <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
-                    <span className="text-white text-sm font-bold">✓</span>
-                  </div>
-                  Pulse Platform
-                </h5>
-                
-                <div className="flex items-start gap-2">
-                  <div className="w-4 h-4 bg-green-500 rounded-full flex items-center justify-center mt-0.5 flex-shrink-0">
-                    <span className="text-white text-xs font-bold">✓</span>
-                  </div>
-                  <span className="text-white">Live multiplayer challenges</span>
-                </div>
-                
-                <div className="flex items-start gap-2">
-                  <div className="w-4 h-4 bg-green-500 rounded-full flex items-center justify-center mt-0.5 flex-shrink-0">
-                    <span className="text-white text-xs font-bold">✓</span>
-                  </div>
-                  <span className="text-white">AI-powered insights</span>
-                </div>
-                
-                <div className="flex items-start gap-2">
-                  <div className="w-4 h-4 bg-green-500 rounded-full flex items-center justify-center mt-0.5 flex-shrink-0">
-                    <span className="text-white text-xs font-bold">✓</span>
-                  </div>
-                  <span className="text-white">Creator economy</span>
-                </div>
-                
-                <div className="flex items-start gap-2">
-                  <div className="w-4 h-4 bg-green-500 rounded-full flex items-center justify-center mt-0.5 flex-shrink-0">
-                    <span className="text-white text-xs font-bold">✓</span>
-                  </div>
-                  <span className="text-white">Personalized AI programming</span>
-                </div>
-                
-                <div className="flex items-start gap-2">
-                  <div className="w-4 h-4 bg-green-500 rounded-full flex items-center justify-center mt-0.5 flex-shrink-0">
-                    <span className="text-white text-xs font-bold">✓</span>
-                  </div>
-                  <span className="text-white">Authentic community</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-                     {/* Testimonials */}
-           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-16">
-             <div className="bg-gradient-to-br from-blue-500/10 to-cyan-500/10 backdrop-blur-sm border border-blue-400/20 rounded-3xl p-8">
-               <div className="flex items-start gap-4 mb-6">
-                 <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-full flex-shrink-0"></div>
-                 <div>
-                   <h5 className="text-white font-semibold text-lg">Deray Mckesson</h5>
-                   <p className="text-blue-300 text-sm">Activist & Educator • NYC</p>
-                 </div>
-               </div>
-               <blockquote className="text-white text-lg leading-relaxed italic mb-4">
-                 "Pulse reminds me of the best classrooms — They're places where every student can feel success."
-               </blockquote>
-               <div className="flex gap-1">
-                 {[...Array(5)].map((_, i) => (
-                   <FaStar key={i} className="h-4 w-4 text-[#E0FE10]" />
-                 ))}
-               </div>
-             </div>
-             
-             <div className="bg-gradient-to-br from-[#E0FE10]/10 to-lime-400/10 backdrop-blur-sm border border-[#E0FE10]/20 rounded-3xl p-8">
-               <div className="flex items-start gap-4 mb-6">
-                 <div className="w-16 h-16 bg-gradient-to-br from-[#E0FE10] to-lime-400 rounded-full flex-shrink-0"></div>
-                 <div>
-                   <h5 className="text-white font-semibold text-lg">Marques Zak</h5>
-                   <p className="text-[#E0FE10] text-sm">Fitness Enthusiast • NYC</p>
-                 </div>
-               </div>
-               <blockquote className="text-white text-lg leading-relaxed italic mb-4">
-                 "The Mobility Challenge is Amazing! I do it after my workouts and it feels soooo good!"
-               </blockquote>
-               <div className="flex gap-1">
-                 {[...Array(5)].map((_, i) => (
-                   <FaStar key={i} className="h-4 w-4 text-[#E0FE10]" />
-                 ))}
-               </div>
-             </div>
-           </div>
-
-           {/* Strong CTA */}
-           <div className="text-center">
-             <div className="bg-gradient-to-br from-[#E0FE10]/10 to-purple-500/10 backdrop-blur-sm border border-[#E0FE10]/30 rounded-3xl p-8 lg:p-12 max-w-4xl mx-auto">
-               <h4 className="text-white text-2xl lg:text-3xl font-bold mb-6">
-                 Ready to Experience the Difference?
-               </h4>
-               <p className="text-zinc-400 text-lg mb-8 max-w-2xl mx-auto leading-relaxed">
-                 Join the fitness platform that's actually built for creators, community, and real results.
-               </p>
-               <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                 <button className="inline-flex items-center gap-3 bg-gradient-to-r from-[#E0FE10] to-lime-400 text-black px-8 py-4 rounded-2xl font-bold text-lg hover:shadow-lg hover:shadow-[#E0FE10]/20 transition-all duration-300 group">
-                   Start Creating Today
-                   <FaArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
-                 </button>
-                 <a 
-                   href="https://apps.apple.com/ca/app/pulse-community-workouts/id6451497729"
-                   className="inline-flex items-center gap-3 bg-zinc-900/80 text-white border border-zinc-700 hover:border-zinc-600 px-8 py-4 rounded-2xl font-bold text-lg hover:bg-zinc-800/80 transition-all duration-300"
-                 >
-                   Download iOS App
-                   <FaApple className="h-5 w-5" />
-                 </a>
-               </div>
-             </div>
-           </div>
-        </div>
-      </section>
-
-      {/* Core Products Section - HIDDEN FOR NOW */}
-      {false && <section className="py-16 sm:py-24 lg:py-32 relative overflow-hidden bg-gradient-to-br from-zinc-950 via-purple-950/20 to-black">
-        {/* Background Elements */}
-        <div className="absolute inset-0">
-          <div className="absolute top-20 left-1/5 w-96 h-96 bg-[#E0FE10]/8 rounded-full filter blur-3xl animate-pulse"></div>
-          <div className="absolute bottom-20 right-1/5 w-80 h-80 bg-purple-500/8 rounded-full filter blur-3xl animate-pulse animation-delay-1000"></div>
-          <div className="absolute top-1/2 left-1/2 w-64 h-64 bg-blue-500/8 rounded-full filter blur-3xl animate-pulse animation-delay-2000"></div>
-        </div>
-        
-        <div className="relative max-w-7xl mx-auto px-6 lg:px-8">
-          {/* Section Header */}
-          <div className="text-center mb-12 lg:mb-20">
-            <div className="inline-flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-[#E0FE10]/20 to-purple-500/20 backdrop-blur-sm border border-[#E0FE10]/30 rounded-full mb-6 lg:mb-8">
-              <FaRocket className="h-4 w-4 text-[#E0FE10]" />
-              <span className="text-[#E0FE10] text-sm font-medium">Core Products</span>
-            </div>
-            
-            <h2 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-6 lg:mb-8 tracking-tight">
-              One Platform,
-              <br />
-              <span className="bg-gradient-to-r from-[#E0FE10] via-purple-400 to-blue-400 bg-clip-text text-transparent">
-                Three Powerful Products
-              </span>
-            </h2>
-            
-            <p className="text-lg lg:text-xl text-zinc-400 max-w-3xl mx-auto leading-relaxed">
-              <span className="text-white font-semibold">Pulse</span> serves as the central data engine, powering specialized experiences through <span className="text-purple-300 font-medium">Pulse Programming</span> and <span className="text-blue-300 font-medium">PulseCheck</span>.
-            </p>
-          </div>
-
-          {/* Products Ecosystem Diagram */}
-          <div className="relative max-w-6xl mx-auto">
-            {/* Connection Lines */}
-            <div className="hidden lg:block absolute inset-0 z-0">
-              {/* Left connection line */}
-              <div className="absolute top-1/2 left-[20%] right-[60%] h-1 bg-gradient-to-r from-purple-400/60 to-[#E0FE10]/60 transform -translate-y-1/2"></div>
-              {/* Right connection line */}
-              <div className="absolute top-1/2 left-[60%] right-[20%] h-1 bg-gradient-to-r from-[#E0FE10]/60 to-blue-400/60 transform -translate-y-1/2"></div>
-              
-              {/* Animated data flow dots */}
-              <div className="absolute top-1/2 left-[25%] w-3 h-3 bg-purple-400 rounded-full transform -translate-y-1/2 animate-pulse"></div>
-              <div className="absolute top-1/2 left-[35%] w-2 h-2 bg-[#E0FE10] rounded-full transform -translate-y-1/2 animate-pulse animation-delay-500"></div>
-              <div className="absolute top-1/2 right-[35%] w-2 h-2 bg-[#E0FE10] rounded-full transform -translate-y-1/2 animate-pulse animation-delay-1000"></div>
-              <div className="absolute top-1/2 right-[25%] w-3 h-3 bg-blue-400 rounded-full transform -translate-y-1/2 animate-pulse animation-delay-1500"></div>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 lg:gap-12 items-center relative z-10">
-              
-              {/* Pulse Programming */}
-              <div className="group bg-gradient-to-br from-purple-500/10 to-pink-500/10 backdrop-blur-sm border border-purple-400/30 hover:border-purple-400/50 rounded-3xl p-8 transition-all duration-300 hover:shadow-lg hover:shadow-purple-400/20 cursor-pointer transform hover:-translate-y-2">
-                <div className="text-center mb-6">
-                  <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform duration-300">
-                    <FaRocket className="h-8 w-8 text-white" />
-                  </div>
-                  <h3 className="text-2xl font-bold text-white mb-3">Pulse Programming</h3>
-                  <p className="text-purple-300 text-sm font-medium mb-4">AI-Powered Workout Generation</p>
-                </div>
-                
-                <div className="space-y-3 mb-6">
-                  <div className="flex items-center gap-3 text-zinc-300">
-                    <div className="w-2 h-2 bg-purple-400 rounded-full"></div>
-                    <span className="text-sm">Custom workout plans</span>
-                  </div>
-                  <div className="flex items-center gap-3 text-zinc-300">
-                    <div className="w-2 h-2 bg-purple-400 rounded-full"></div>
-                    <span className="text-sm">AI exercise selection</span>
-                  </div>
-                  <div className="flex items-center gap-3 text-zinc-300">
-                    <div className="w-2 h-2 bg-purple-400 rounded-full"></div>
-                    <span className="text-sm">Progressive overload</span>
-                  </div>
-                </div>
-
-                <div className="bg-purple-500/10 border border-purple-400/20 rounded-xl p-4 mb-4">
-                  <p className="text-purple-300 text-xs">
-                    <strong>Powered by Pulse:</strong> Uses your workout history, preferences, and progress data to generate personalized programs.
-                  </p>
-                </div>
-
-                <a 
-                  href="/programming" 
-                  className="inline-flex items-center gap-2 text-purple-400 hover:text-purple-300 font-medium transition-colors group-hover:gap-3 duration-300"
-                >
-                  Learn More
-                  <FaArrowRight className="h-4 w-4" />
-                </a>
-              </div>
-
-              {/* Pulse (Central) */}
-              <div className="lg:scale-110 group bg-gradient-to-br from-[#E0FE10]/15 to-lime-400/15 backdrop-blur-sm border-2 border-[#E0FE10]/40 hover:border-[#E0FE10]/60 rounded-3xl p-8 transition-all duration-300 hover:shadow-xl hover:shadow-[#E0FE10]/30 cursor-pointer transform hover:-translate-y-3">
-                <div className="text-center mb-6">
-                  <div className="w-20 h-20 bg-gradient-to-br from-[#E0FE10] to-lime-400 rounded-3xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform duration-300 relative">
-                    <FaBolt className="h-10 w-10 text-black" />
-                    {/* Pulsing ring effect */}
-                    <div className="absolute inset-0 rounded-3xl border-2 border-[#E0FE10] animate-ping opacity-20"></div>
-                  </div>
-                  <h3 className="text-3xl font-bold text-white mb-3">Pulse</h3>
-                  <p className="text-[#E0FE10] text-sm font-medium mb-4">The Data Engine</p>
-                </div>
-                
-                <div className="space-y-3 mb-6">
-                  <div className="flex items-center gap-3 text-zinc-300">
-                    <div className="w-2 h-2 bg-[#E0FE10] rounded-full"></div>
-                    <span className="text-sm">Workout tracking & scoring</span>
-                  </div>
-                  <div className="flex items-center gap-3 text-zinc-300">
-                    <div className="w-2 h-2 bg-[#E0FE10] rounded-full"></div>
-                    <span className="text-sm">Community & challenges</span>
-                  </div>
-                  <div className="flex items-center gap-3 text-zinc-300">
-                    <div className="w-2 h-2 bg-[#E0FE10] rounded-full"></div>
-                    <span className="text-sm">Health data integration</span>
-                  </div>
-                  <div className="flex items-center gap-3 text-zinc-300">
-                    <div className="w-2 h-2 bg-[#E0FE10] rounded-full"></div>
-                    <span className="text-sm">Creator tools & economy</span>
-                  </div>
-                </div>
-
-                <div className="bg-[#E0FE10]/10 border border-[#E0FE10]/30 rounded-xl p-4 mb-4">
-                  <p className="text-[#E0FE10] text-xs">
-                    <strong>Central Hub:</strong> All your fitness data, social connections, and achievements live here. Powers all other Pulse products.
-                  </p>
-                </div>
-
-                <a 
-                  href="/app" 
-                  className="inline-flex items-center gap-2 text-[#E0FE10] hover:text-lime-300 font-medium transition-colors group-hover:gap-3 duration-300"
-                >
-                  Open Pulse
-                  <FaArrowRight className="h-4 w-4" />
-                </a>
-              </div>
-
-              {/* PulseCheck */}
-              <div className="group bg-gradient-to-br from-blue-500/10 to-cyan-500/10 backdrop-blur-sm border border-blue-400/30 hover:border-blue-400/50 rounded-3xl p-8 transition-all duration-300 hover:shadow-lg hover:shadow-blue-400/20 cursor-pointer transform hover:-translate-y-2">
-                <div className="text-center mb-6">
-                  <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform duration-300">
-                    <FaChartLine className="h-8 w-8 text-white" />
-                  </div>
-                  <h3 className="text-2xl font-bold text-white mb-3">PulseCheck</h3>
-                  <p className="text-blue-300 text-sm font-medium mb-4">Health Insights & Analytics</p>
-                </div>
-                
-                <div className="space-y-3 mb-6">
-                  <div className="flex items-center gap-3 text-zinc-300">
-                    <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
-                    <span className="text-sm">Health data stories</span>
-                  </div>
-                  <div className="flex items-center gap-3 text-zinc-300">
-                    <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
-                    <span className="text-sm">Trend analysis</span>
-                  </div>
-                  <div className="flex items-center gap-3 text-zinc-300">
-                    <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
-                    <span className="text-sm">Personalized insights</span>
-                  </div>
-                </div>
-
-                <div className="bg-blue-500/10 border border-blue-400/20 rounded-xl p-4 mb-4">
-                  <p className="text-blue-300 text-xs">
-                    <strong>Powered by Pulse:</strong> Analyzes your Pulse workout data, health metrics, and patterns to deliver actionable insights.
-                  </p>
-                </div>
-
-                <a 
-                  href="/pulsecheck" 
-                  className="inline-flex items-center gap-2 text-blue-400 hover:text-blue-300 font-medium transition-colors group-hover:gap-3 duration-300"
-                >
-                  Explore PulseCheck
-                  <FaArrowRight className="h-4 w-4" />
-                </a>
-              </div>
-            </div>
-
-            {/* Data Flow Indicators */}
-            <div className="mt-12 text-center">
-              <div className="inline-flex items-center gap-4 bg-zinc-900/80 backdrop-blur-sm border border-zinc-700/50 rounded-full px-6 py-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 bg-purple-400 rounded-full animate-pulse"></div>
-                  <span className="text-purple-300 text-sm">Data Flow</span>
-                </div>
-                <div className="w-1 h-6 bg-zinc-600"></div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 bg-[#E0FE10] rounded-full animate-pulse animation-delay-500"></div>
-                  <span className="text-[#E0FE10] text-sm">Central Engine</span>
-                </div>
-                <div className="w-1 h-6 bg-zinc-600"></div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 bg-blue-400 rounded-full animate-pulse animation-delay-1000"></div>
-                  <span className="text-blue-300 text-sm">Insights</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>}
-
-            {/* Features & Products Section - New */}
-            <section className="py-16 sm:py-24 lg:py-32 relative overflow-hidden">
         {/* Background Elements */}
         <div className="absolute inset-0 bg-gradient-to-br from-black via-zinc-950/50 to-zinc-900"></div>
         <div className="absolute inset-0">
