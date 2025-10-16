@@ -131,13 +131,13 @@ const MarketingContent: React.FC<{
               
               <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-6 animate-fade-in-up animation-delay-600">
                 <span className="bg-gradient-to-r from-[#E0FE10] via-purple-400 to-blue-400 bg-clip-text text-transparent">
-                  Build Your Fitness Empire Through<br />
-                  Content, Community & Challenges
+                  Turn Your Workouts Into<br />
+                  Monthly Recurring Revenue
                 </span>
               </h2>
               
               <p className="text-zinc-400 text-lg sm:text-xl leading-relaxed mb-8 animate-fade-in-up animation-delay-900">
-                Convert boring content into actionable, gamified workouts. Turn your Moves into Stacks, launch community Rounds, and monetize your expertise.
+                Create once, earn forever. Build workout content that generates passive income through subscriptions, challenge entry fees, and automated creator royalties.
               </p>
 
               {/* CTA Buttons */}
