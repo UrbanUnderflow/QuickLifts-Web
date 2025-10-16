@@ -809,6 +809,127 @@ const MarketingContent: React.FC<{
         </div>
       </section>
 
+      {/* Traditional vs Pulse Comparison */}
+      <section className="bg-gradient-to-br from-zinc-950 via-purple-950/20 to-zinc-950 py-16 sm:py-24 lg:py-32">
+        <div className="max-w-7xl mx-auto px-6 lg:px-8">
+          {/* Header */}
+          <div className="text-center mb-12 lg:mb-16">
+            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold mb-4">
+              <span className="text-red-400">Traditional Platforms</span> <span className="text-zinc-400 font-normal">vs</span> <span className="text-[#E0FE10]">Pulse</span> <span className="text-white">for Creators</span>
+            </h2>
+            <p className="text-zinc-400 text-lg">Why creators are making the switch</p>
+          </div>
+
+          {/* Comparison Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-16">
+            {/* Traditional Platforms */}
+            <div className="bg-gradient-to-br from-red-950/20 to-zinc-900/80 backdrop-blur-sm border border-red-500/20 rounded-3xl p-8">
+              <div className="flex items-center gap-3 mb-6">
+                <FaXmark className="h-6 w-6 text-red-400" />
+                <h3 className="text-2xl font-bold text-white">Traditional Platforms</h3>
+              </div>
+              <div className="space-y-4">
+                <div className="flex items-start gap-3">
+                  <FaXmark className="h-5 w-5 text-red-400 flex-shrink-0 mt-0.5" />
+                  <p className="text-zinc-300">You're fighting algorithms for reach</p>
+                </div>
+                <div className="flex items-start gap-3">
+                  <FaXmark className="h-5 w-5 text-red-400 flex-shrink-0 mt-0.5" />
+                  <p className="text-zinc-300">Platform takes 30-50% of your revenue</p>
+                </div>
+                <div className="flex items-start gap-3">
+                  <FaXmark className="h-5 w-5 text-red-400 flex-shrink-0 mt-0.5" />
+                  <p className="text-zinc-300">Can't own your community or content</p>
+                </div>
+                <div className="flex items-start gap-3">
+                  <FaXmark className="h-5 w-5 text-red-400 flex-shrink-0 mt-0.5" />
+                  <p className="text-zinc-300">Limited monetization options</p>
+                </div>
+                <div className="flex items-start gap-3">
+                  <FaXmark className="h-5 w-5 text-red-400 flex-shrink-0 mt-0.5" />
+                  <p className="text-zinc-300">No community engagement tools</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Pulse for Creators */}
+            <div className="bg-gradient-to-br from-[#E0FE10]/10 to-zinc-900/80 backdrop-blur-sm border border-[#E0FE10]/30 rounded-3xl p-8">
+              <div className="flex items-center gap-3 mb-6">
+                <FaCheck className="h-6 w-6 text-[#E0FE10]" />
+                <h3 className="text-2xl font-bold text-white">Pulse for Creators</h3>
+              </div>
+              <div className="space-y-4">
+                <div className="flex items-start gap-3">
+                  <FaCheck className="h-5 w-5 text-[#E0FE10] flex-shrink-0 mt-0.5" />
+                  <p className="text-zinc-300">Direct access to your community</p>
+                </div>
+                <div className="flex items-start gap-3">
+                  <FaCheck className="h-5 w-5 text-[#E0FE10] flex-shrink-0 mt-0.5" />
+                  <p className="text-zinc-300">Keep 100% of subscription revenue</p>
+                </div>
+                <div className="flex items-start gap-3">
+                  <FaCheck className="h-5 w-5 text-[#E0FE10] flex-shrink-0 mt-0.5" />
+                  <p className="text-zinc-300">Own your content & community</p>
+                </div>
+                <div className="flex items-start gap-3">
+                  <FaCheck className="h-5 w-5 text-[#E0FE10] flex-shrink-0 mt-0.5" />
+                  <p className="text-zinc-300">Multiple revenue streams built-in</p>
+                </div>
+                <div className="flex items-start gap-3">
+                  <FaCheck className="h-5 w-5 text-[#E0FE10] flex-shrink-0 mt-0.5" />
+                  <p className="text-zinc-300">Gamified Rounds for engagement</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Testimonials */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* Testimonial 1 */}
+            <div className="bg-gradient-to-br from-blue-950/40 to-zinc-900/60 backdrop-blur-sm border border-blue-500/20 rounded-3xl p-8">
+              <div className="flex items-center gap-4 mb-6">
+                <div className="w-16 h-16 bg-gradient-to-br from-blue-400 to-cyan-400 rounded-full"></div>
+                <div>
+                  <h4 className="text-white font-bold text-lg">Deray Mckesson</h4>
+                  <p className="text-zinc-400 text-sm">Activist & Educator • NYC</p>
+                </div>
+              </div>
+              <p className="text-zinc-300 text-lg italic mb-4">
+                "Pulse reminds me of the best classrooms — They're places where every student can feel success."
+              </p>
+              <div className="flex gap-1 text-[#E0FE10]">
+                <FaStar className="h-5 w-5" />
+                <FaStar className="h-5 w-5" />
+                <FaStar className="h-5 w-5" />
+                <FaStar className="h-5 w-5" />
+                <FaStar className="h-5 w-5" />
+              </div>
+            </div>
+
+            {/* Testimonial 2 */}
+            <div className="bg-gradient-to-br from-green-950/40 to-zinc-900/60 backdrop-blur-sm border border-[#E0FE10]/20 rounded-3xl p-8">
+              <div className="flex items-center gap-4 mb-6">
+                <div className="w-16 h-16 bg-gradient-to-br from-[#E0FE10] to-lime-400 rounded-full"></div>
+                <div>
+                  <h4 className="text-white font-bold text-lg">Marques Zak</h4>
+                  <p className="text-zinc-400 text-sm">Fitness Enthusiast • NYC</p>
+                </div>
+              </div>
+              <p className="text-zinc-300 text-lg italic mb-4">
+                "The Mobility Challenge is Amazing! I do it after my workouts and it feels soooo good!"
+              </p>
+              <div className="flex gap-1 text-[#E0FE10]">
+                <FaStar className="h-5 w-5" />
+                <FaStar className="h-5 w-5" />
+                <FaStar className="h-5 w-5" />
+                <FaStar className="h-5 w-5" />
+                <FaStar className="h-5 w-5" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* FAQ Section */}
       <section className="bg-zinc-900 py-20">
         <FAQ title="Frequently Asked Questions" 
