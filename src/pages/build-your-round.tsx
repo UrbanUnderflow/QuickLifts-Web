@@ -389,9 +389,9 @@ const BuildYourRound: React.FC = () => {
                 <div className="bg-zinc-800/70 border border-zinc-700 rounded-xl p-4">
                   <div className="flex items-center gap-2 text-white font-semibold">
                     <span className="text-xl">💪</span>
-                    <span>Engaged 2,000+ new users</span>
+                    <span>Trained 50 people simultaneously</span>
                   </div>
-                  <p className="text-zinc-400 text-sm mt-1">Grew community beyond cycling.</p>
+                  <p className="text-zinc-400 text-sm mt-1">Live, high-energy group experience.</p>
                 </div>
                 <div className="bg-zinc-800/70 border border-zinc-700 rounded-xl p-4">
                   <div className="flex items-center gap-2 text-white font-semibold">
