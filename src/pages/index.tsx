@@ -325,7 +325,7 @@ const MarketingContent: React.FC<{
                       <span className="text-[#E0FE10]">Create</span> Your Moves
                     </h3>
                     <p className="text-zinc-400 text-lg mb-4">
-                      Record <span className="text-white font-medium">5-30 second exercise videos</span> that become reusable content assets. Build your library of signature movements.
+                      <span className="text-white font-medium">5-30 second exercise videos</span>
                     </p>
                     <div className="flex items-center gap-3 text-sm text-[#E0FE10]">
                       <FaBolt className="h-4 w-4" />
@@ -344,7 +344,7 @@ const MarketingContent: React.FC<{
                       <span className="text-purple-400">Stack</span> Your Workout Programs
                     </h3>
                     <p className="text-zinc-400 text-lg mb-4">
-                      Combine Moves into <span className="text-white font-medium">complete workout programs</span> called Stacks. Package your expertise into sellable content.
+                      <span className="text-white font-medium">Complete workout programs</span>
                     </p>
                     <div className="flex items-center gap-3 text-sm text-purple-400">
                       <FaRocket className="h-4 w-4" />
@@ -363,7 +363,7 @@ const MarketingContent: React.FC<{
                       <span className="text-blue-400">Launch</span> Community Rounds
                     </h3>
                     <p className="text-zinc-400 text-lg mb-4">
-                      Turn your Stacks into <span className="text-white font-medium">competitive challenges</span> called Rounds. Set prizes, duration, and build your community.
+                      <span className="text-white font-medium">Competitive challenges</span>
                     </p>
                     <div className="flex items-center gap-3 text-sm text-blue-400">
                       <FaTrophy className="h-4 w-4" />
@@ -382,7 +382,7 @@ const MarketingContent: React.FC<{
                       <span className="text-orange-400">Grow</span> Your Community
                     </h3>
                     <p className="text-zinc-400 text-lg mb-4">
-                      Members join your Rounds, engage with your content, and <span className="text-white font-medium">build loyalty</span> to your brand through gamified challenges.
+                      <span className="text-white font-medium">Build loyalty</span>
                     </p>
                     <div className="flex items-center gap-3 text-sm text-orange-400">
                       <FaGamepad className="h-4 w-4" />
@@ -401,7 +401,7 @@ const MarketingContent: React.FC<{
                       <span className="text-cyan-400">Understand</span> Your Audience
                     </h3>
                     <p className="text-zinc-400 text-lg mb-4">
-                      See how your community performs with <span className="text-white font-medium">real data and insights</span>. Know what works and optimize your content.
+                      <span className="text-white font-medium">Real data and insights</span>
                     </p>
                     <div className="flex items-center gap-3 text-sm text-cyan-400">
                       <FaChartLine className="h-4 w-4" />
@@ -420,7 +420,7 @@ const MarketingContent: React.FC<{
                       <span className="text-green-400">Optimize</span> & Improve
                     </h3>
                     <p className="text-zinc-400 text-lg mb-4">
-                      Use <span className="text-white font-medium">AI insights</span> to improve your content. See what resonates, what drives results, and what keeps people coming back.
+                      <span className="text-white font-medium">AI insights</span>
                     </p>
                     <div className="flex items-center gap-3 text-sm text-green-400">
                       <FaStar className="h-4 w-4" />
@@ -439,7 +439,7 @@ const MarketingContent: React.FC<{
                       <span className="text-yellow-400">Earn</span> Sustainable Revenue
                     </h3>
                     <p className="text-zinc-400 text-lg mb-4">
-                      Generate income through <span className="text-white font-medium">multiple revenue streams</span>: Stack subscriptions, Round entry fees, and automated creator royalties.
+                      <span className="text-white font-medium">Multiple revenue streams</span>
                     </p>
                     <div className="flex items-center gap-3 text-sm text-yellow-400">
                       <FaCoins className="h-4 w-4" />
@@ -587,7 +587,7 @@ const MarketingContent: React.FC<{
             <span className="bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent">Stack</span> your Moves into workouts
           </h1>
           <p className="text-zinc-400 text-lg leading-relaxed mb-8">
-            Combine your Moves into powerful workouts called Stacks. Create personalized routines that target your goals, share them with the community, or discover Stacks created by others. Each Stack is a curated collection of Moves designed to challenge and inspire.
+            Combine your Moves into complete workout programs called Stacks. Create personalized routines, share them with the community, or discover Stacks from other creators.
           </p>
           <div className="bg-gradient-to-br from-purple-500/10 to-blue-500/10 backdrop-blur-sm border border-purple-400/20 rounded-2xl p-4">
             <p className="text-purple-300 text-sm">
@@ -642,7 +642,7 @@ const MarketingContent: React.FC<{
             Join a <span className="bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">Round</span> and compete together
           </h1>
           <p className="text-zinc-400 text-lg leading-relaxed mb-8">
-            Participate in community fitness challenges called Rounds where multiple people work out together. Chat, support, and check in with fellow participants as you compete for points. Earn rewards by completing workouts and engaging with your fellow Rounders in these time-based challenges that build community and accountability.
+            Join community fitness challenges called Rounds. Compete with up to 250 people, chat in real-time, and earn rewards through time-based challenges that build accountability.
           </p>
           <div className="bg-gradient-to-br from-blue-500/10 to-cyan-500/10 backdrop-blur-sm border border-blue-400/20 rounded-2xl p-4">
             <p className="text-blue-300 text-sm">
