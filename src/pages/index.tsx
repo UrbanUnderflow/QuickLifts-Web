@@ -711,142 +711,70 @@ const MarketingContent: React.FC<{
           {/* Features Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
             
-            {/* AI Programming */}
+            {/* Real Workouts From Real People */}
             <div className="group bg-gradient-to-br from-purple-500/10 to-indigo-500/10 backdrop-blur-sm border border-purple-400/30 hover:border-purple-400/50 rounded-3xl p-6 lg:p-8 transition-all duration-300 hover:shadow-lg hover:shadow-purple-400/20 cursor-pointer">
               <div className="w-12 h-12 lg:w-16 lg:h-16 bg-gradient-to-br from-purple-500 to-indigo-500 rounded-2xl flex items-center justify-center mb-4 lg:mb-6 group-hover:scale-110 transition-transform duration-300">
-                <FaRocket className="h-6 w-6 lg:h-8 lg:w-8 text-white" />
+                <FaUser className="h-6 w-6 lg:h-8 lg:w-8 text-white" />
               </div>
-              <h3 className="text-xl lg:text-2xl font-bold text-white mb-3 lg:mb-4">AI Programming</h3>
-              <p className="text-zinc-400 leading-relaxed text-sm lg:text-base mb-4 lg:mb-6">
-                Revolutionary AI creates personalized workout challenges, analyzes tagged user data, and generates custom routines that adapt to your progress.
+              <h3 className="text-xl lg:text-2xl font-bold text-white mb-3 lg:mb-4">Real Workouts From Real People</h3>
+              <p className="text-zinc-400 leading-relaxed text-sm lg:text-base">
+                Access authentic workouts created by real trainers and athletes. Every Move is filmed by actual people, giving you genuine content that inspires and motivates your fitness journey.
               </p>
-              <div className="bg-purple-500/10 border border-purple-500/20 rounded-xl p-3 lg:p-4 mb-4">
-                <p className="text-purple-300 text-xs lg:text-sm">
-                  <strong>Beta Access:</strong> Join exclusive early access program for advanced AI programming features.
-                </p>
-              </div>
-              <a 
-                href="/programming" 
-                className="inline-flex items-center gap-2 text-purple-400 hover:text-purple-300 font-medium transition-colors group-hover:gap-3 duration-300"
-              >
-                Explore AI Programming
-                <FaArrowRight className="h-4 w-4" />
-              </a>
             </div>
 
-            {/* PulseCheck */}
+            {/* Video Demonstrations in Real Time */}
             <div className="group bg-gradient-to-br from-[#E0FE10]/10 to-lime-400/10 backdrop-blur-sm border border-[#E0FE10]/30 hover:border-[#E0FE10]/50 rounded-3xl p-6 lg:p-8 transition-all duration-300 hover:shadow-lg hover:shadow-[#E0FE10]/20 cursor-pointer">
               <div className="w-12 h-12 lg:w-16 lg:h-16 bg-gradient-to-br from-[#E0FE10] to-lime-400 rounded-2xl flex items-center justify-center mb-4 lg:mb-6 group-hover:scale-110 transition-transform duration-300">
-                <FaBolt className="h-6 w-6 lg:h-8 lg:w-8 text-black" />
+                <FaFire className="h-6 w-6 lg:h-8 lg:w-8 text-black" />
               </div>
-              <h3 className="text-xl lg:text-2xl font-bold text-white mb-3 lg:mb-4">PulseCheck</h3>
-              <p className="text-zinc-400 leading-relaxed text-sm lg:text-base mb-4 lg:mb-6">
-                Your personal AI health coach that analyzes sleep, nutrition, workouts, and more. Get instant insights and coaching through natural conversation.
+              <h3 className="text-xl lg:text-2xl font-bold text-white mb-3 lg:mb-4">Video Demonstrations in Real Time</h3>
+              <p className="text-zinc-400 leading-relaxed text-sm lg:text-base">
+                Follow along with high-quality video demonstrations as you work out. See proper form, technique, and execution for every exercise in real-time.
               </p>
-              <div className="bg-[#E0FE10]/10 border border-[#E0FE10]/20 rounded-xl p-3 lg:p-4 mb-4">
-                <p className="text-[#E0FE10] text-xs lg:text-sm">
-                  <strong>Coming Soon:</strong> Advanced sports psychology and performance optimization features.
-                </p>
-              </div>
-              <a 
-                href="/PulseCheck" 
-                className="inline-flex items-center gap-2 text-[#E0FE10] hover:text-lime-400 font-medium transition-colors group-hover:gap-3 duration-300"
-              >
-                Learn About PulseCheck
-                <FaArrowRight className="h-4 w-4" />
-              </a>
             </div>
 
-            {/* Creator Program */}
+            {/* Gamified Content & Earned Revenue */}
             <div className="group bg-gradient-to-br from-orange-500/10 to-pink-500/10 backdrop-blur-sm border border-orange-400/30 hover:border-orange-400/50 rounded-3xl p-6 lg:p-8 transition-all duration-300 hover:shadow-lg hover:shadow-orange-400/20 cursor-pointer">
               <div className="w-12 h-12 lg:w-16 lg:h-16 bg-gradient-to-br from-orange-500 to-pink-500 rounded-2xl flex items-center justify-center mb-4 lg:mb-6 group-hover:scale-110 transition-transform duration-300">
                 <FaCoins className="h-6 w-6 lg:h-8 lg:w-8 text-white" />
               </div>
-              <h3 className="text-xl lg:text-2xl font-bold text-white mb-3 lg:mb-4">Creator Program</h3>
-              <p className="text-zinc-400 leading-relaxed text-sm lg:text-base mb-4 lg:mb-6">
-                Join the 100 Trainers Program and turn your workouts into revenue streams. Earn $4.3k+ monthly through our multiplayer fitness platform.
+              <h3 className="text-xl lg:text-2xl font-bold text-white mb-3 lg:mb-4">Gamified Content & Earned Revenue</h3>
+              <p className="text-zinc-400 leading-relaxed text-sm lg:text-base">
+                Turn your fitness expertise into income streams. Create content, launch challenges, and earn revenue through our gamified creator economy platform.
               </p>
-              <div className="bg-orange-500/10 border border-orange-500/20 rounded-xl p-3 lg:p-4 mb-4">
-                <p className="text-orange-300 text-xs lg:text-sm">
-                  <strong>Elite Program:</strong> 37.5x user multiplier and automated royalty system for top creators.
-                </p>
-              </div>
-              <a 
-                href="/creators" 
-                className="inline-flex items-center gap-2 text-orange-400 hover:text-orange-300 font-medium transition-colors group-hover:gap-3 duration-300"
-              >
-                Join Creator Program
-                <FaArrowRight className="h-4 w-4" />
-              </a>
             </div>
 
-            {/* Health Data Stories */}
+            {/* Food Photo Macro Calculation */}
             <div className="group bg-gradient-to-br from-teal-500/10 to-cyan-500/10 backdrop-blur-sm border border-teal-400/30 hover:border-teal-400/50 rounded-3xl p-6 lg:p-8 transition-all duration-300 hover:shadow-lg hover:shadow-teal-400/20 cursor-pointer">
               <div className="w-12 h-12 lg:w-16 lg:h-16 bg-gradient-to-br from-teal-500 to-cyan-500 rounded-2xl flex items-center justify-center mb-4 lg:mb-6 group-hover:scale-110 transition-transform duration-300">
-                <FaChartLine className="h-6 w-6 lg:h-8 lg:w-8 text-white" />
+                <FaBolt className="h-6 w-6 lg:h-8 lg:w-8 text-white" />
               </div>
-              <h3 className="text-xl lg:text-2xl font-bold text-white mb-3 lg:mb-4">Health Data Stories</h3>
-              <p className="text-zinc-400 leading-relaxed text-sm lg:text-base mb-4 lg:mb-6">
-                Transform your health data into compelling narratives. Track sleep, nutrition, movement, heart health, and more with AI-powered insights.
+              <h3 className="text-xl lg:text-2xl font-bold text-white mb-3 lg:mb-4">Real Macro Calculation</h3>
+              <p className="text-zinc-400 leading-relaxed text-sm lg:text-base">
+                Simply take photos of your food and get instant, accurate macro calculations. Track your nutrition effortlessly with AI-powered food recognition technology.
               </p>
-              <div className="bg-teal-500/10 border border-teal-500/20 rounded-xl p-3 lg:p-4 mb-4">
-                <p className="text-teal-300 text-xs lg:text-sm">
-                  <strong>Comprehensive:</strong> 6 health stories covering energy, movement, sleep, heart, nutrition, and fitness.
-                </p>
-              </div>
-              <a 
-                href="/HealthDataStories" 
-                className="inline-flex items-center gap-2 text-teal-400 hover:text-teal-300 font-medium transition-colors group-hover:gap-3 duration-300"
-              >
-                View Health Stories
-                <FaArrowRight className="h-4 w-4" />
-              </a>
             </div>
 
-            {/* Rounds (Community Challenges) */}
+            {/* Apple Watch Data Story */}
             <div className="group bg-gradient-to-br from-blue-500/10 to-indigo-500/10 backdrop-blur-sm border border-blue-400/30 hover:border-blue-400/50 rounded-3xl p-6 lg:p-8 transition-all duration-300 hover:shadow-lg hover:shadow-blue-400/20 cursor-pointer">
               <div className="w-12 h-12 lg:w-16 lg:h-16 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-2xl flex items-center justify-center mb-4 lg:mb-6 group-hover:scale-110 transition-transform duration-300">
-                <FaTrophy className="h-6 w-6 lg:h-8 lg:w-8 text-white" />
+                <FaChartLine className="h-6 w-6 lg:h-8 lg:w-8 text-white" />
               </div>
-              <h3 className="text-xl lg:text-2xl font-bold text-white mb-3 lg:mb-4">Rounds</h3>
-              <p className="text-zinc-400 leading-relaxed text-sm lg:text-base mb-4 lg:mb-6">
-                Join multiplayer fitness challenges with up to 250 players. Compete, chat, and motivate each other in time-based community workouts.
+              <h3 className="text-xl lg:text-2xl font-bold text-white mb-3 lg:mb-4">Apple Watch Data Story</h3>
+              <p className="text-zinc-400 leading-relaxed text-sm lg:text-base">
+                Transform your Apple Watch data into meaningful insights. Understand your complete health story through heart rate, activity, sleep, and more.
               </p>
-              <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3 lg:p-4 mb-4">
-                <p className="text-blue-300 text-xs lg:text-sm">
-                  <strong>Multiplayer:</strong> Real-time leaderboards, live chat, and group achievements for maximum motivation.
-                </p>
-              </div>
-              <a 
-                href="/rounds" 
-                className="inline-flex items-center gap-2 text-blue-400 hover:text-blue-300 font-medium transition-colors group-hover:gap-3 duration-300"
-              >
-                Explore Rounds
-                <FaArrowRight className="h-4 w-4" />
-              </a>
             </div>
 
-            {/* Stacks (Workout Collections) */}
+            {/* Real Community That Trains Together */}
             <div className="group bg-gradient-to-br from-emerald-500/10 to-green-500/10 backdrop-blur-sm border border-emerald-400/30 hover:border-emerald-400/50 rounded-3xl p-6 lg:p-8 transition-all duration-300 hover:shadow-lg hover:shadow-emerald-400/20 cursor-pointer">
               <div className="w-12 h-12 lg:w-16 lg:h-16 bg-gradient-to-br from-emerald-500 to-green-500 rounded-2xl flex items-center justify-center mb-4 lg:mb-6 group-hover:scale-110 transition-transform duration-300">
-                <FaGamepad className="h-6 w-6 lg:h-8 lg:w-8 text-white" />
+                <FaTrophy className="h-6 w-6 lg:h-8 lg:w-8 text-white" />
               </div>
-              <h3 className="text-xl lg:text-2xl font-bold text-white mb-3 lg:mb-4">Stacks</h3>
-              <p className="text-zinc-400 leading-relaxed text-sm lg:text-base mb-4 lg:mb-6">
-                Create and discover curated workout collections. Stack your favorite Moves into complete routines and share them with the community.
+              <h3 className="text-xl lg:text-2xl font-bold text-white mb-3 lg:mb-4">Real Community That Trains Together</h3>
+              <p className="text-zinc-400 leading-relaxed text-sm lg:text-base">
+                Join a supportive fitness community where members work out together, share progress, and motivate each other. Build accountability through genuine connections.
               </p>
-              <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 lg:p-4 mb-4">
-                <p className="text-emerald-300 text-xs lg:text-sm">
-                  <strong>Customizable:</strong> Build personalized routines that match your goals, equipment, and schedule.
-                </p>
-              </div>
-              <a 
-                href="/stacks" 
-                className="inline-flex items-center gap-2 text-emerald-400 hover:text-emerald-300 font-medium transition-colors group-hover:gap-3 duration-300"
-              >
-                Browse Stacks
-                <FaArrowRight className="h-4 w-4" />
-              </a>
             </div>
 
           </div>
