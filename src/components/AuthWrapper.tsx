@@ -78,8 +78,9 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
  
   const isPublicRoute = (path: string) => {
     // Normalize: prefer asPath, strip query/hash, lowercase, remove trailing slash
-    const raw = (path || '').split('?')[0].split('#')[0];
-    const normalizedPath = raw.replace(/\/$/, '').toLowerCase();
+    const raw = (path || '').split('?')[0].split('#')[0] || '/';
+    // Preserve root "/" when trimming the trailing slash so home stays public
+    const normalizedPath = (raw === '/' ? '/' : raw.replace(/\/$/, '')).toLowerCase();
     const isPublic = publicRoutes.includes(normalizedPath) || 
            publicPathPatterns.some(pattern => normalizedPath.startsWith(pattern));
     
@@ -281,14 +282,9 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
                 setShowSignInModal(false);
               }
             } else {
-              console.log(`[AuthWrapper] User authenticated on public route: ${router.pathname}. Ensuring app landing page shows the web app.`);
+              console.log(`[AuthWrapper] User authenticated on public route: ${router.pathname}. No redirect needed.`);
               setShowSignInModal(false);
-              // If on root marketing page after login, route to app landing
-              const normalized = (router.pathname || '').replace(/\/$/, '').toLowerCase();
-              if (normalized === '/') {
-                try { localStorage.setItem('pulsecheck_has_seen_marketing', 'true'); } catch {}
-                router.replace('/PulseCheck?web=1');
-              }
+              // Home page (/) has its own logic to show marketing vs web app, so don't redirect
             }
           } else {
             console.log('No firebase user, clearing state');

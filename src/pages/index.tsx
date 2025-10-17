@@ -135,10 +135,6 @@ const MarketingContent: React.FC<{
                   Monthly Recurring Revenue
                 </span>
               </h2>
-              
-              <p className="text-zinc-400 text-lg sm:text-xl leading-relaxed mb-8 animate-fade-in-up animation-delay-900">
-                Create once, earn forever. Build workout content that generates passive income through subscriptions, challenge entry fees, and automated creator royalties.
-              </p>
 
               {/* CTA Buttons */}
               <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start mb-10 animate-fade-in-up animation-delay-1200">
@@ -958,19 +954,34 @@ const MarketingContent: React.FC<{
 };
 
 const HomePage: NextPage<HomePageProps> = ({ metaData }) => {
+  const currentUser = useUser();
   const [showMarketing, setShowMarketing] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
   const [isSignInModalOpen, setIsSignInModalOpen] = useState(false);
-  const currentUser = useUser();
 
   useEffect(() => {
-    // Check if user has seen marketing content before
+    // Check if user has seen marketing content before AND is authenticated
     const hasSeenMarketing = localStorage.getItem(STORAGE_KEY);
-    if (hasSeenMarketing === 'true') {
+    console.log('[HomePage] useEffect check:', { hasSeenMarketing, currentUser: !!currentUser });
+    
+    if (!currentUser) {
+      // If not authenticated, ALWAYS show marketing and clear the flag
+      localStorage.removeItem(STORAGE_KEY);
+      setShowMarketing(true);
+      setIsSignInModalOpen(false); // Ensure modal is closed
+      console.log('[HomePage] Not authenticated - showing marketing');
+    } else if (hasSeenMarketing === 'true' && currentUser) {
+      // Only hide marketing if user is authenticated AND has explicitly clicked "Use Web App"
       setShowMarketing(false);
+      console.log('[HomePage] Authenticated and has seen marketing - showing web app');
+    } else {
+      // User is authenticated but hasn't clicked "Use Web App" yet - show marketing
+      setShowMarketing(true);
+      console.log('[HomePage] Authenticated but showing marketing (hasn\'t clicked Use Web App)');
     }
+    
     setIsLoading(false);
-  }, []);
+  }, [currentUser]);
 
   const handleUseWebApp = () => {
     // Only allow web app access if user is authenticated
@@ -1000,36 +1011,24 @@ const HomePage: NextPage<HomePageProps> = ({ metaData }) => {
     );
   }
 
-  // Show web app if user has seen marketing AND is authenticated
-  if (!showMarketing) {
-    // If user is not authenticated, show marketing instead and clear the flag
-    if (!currentUser) {
-      // Clear the localStorage flag since user is not authenticated
-      localStorage.removeItem(STORAGE_KEY);
-      // Reset to show marketing
-      setShowMarketing(true);
-      return <MarketingContent 
-        onUseWebApp={handleUseWebApp} 
-        metaData={metaData} 
-        isSignInModalOpen={isSignInModalOpen}
-        setIsSignInModalOpen={setIsSignInModalOpen}
-      />;
-    }
-    
-    return (
-      <div className="h-screen relative">
-        <HomeContent onAbout={handleBackToMarketing} />
-      </div>
-    );
+  // Always show marketing if not authenticated OR if user hasn't clicked "Use Web App"
+  if (!currentUser || showMarketing) {
+    console.log('[HomePage] Rendering MarketingContent', { currentUser: !!currentUser, showMarketing });
+    return <MarketingContent 
+      onUseWebApp={handleUseWebApp} 
+      metaData={metaData} 
+      isSignInModalOpen={isSignInModalOpen}
+      setIsSignInModalOpen={setIsSignInModalOpen}
+    />;
   }
 
-  // Show marketing content
-  return <MarketingContent 
-    onUseWebApp={handleUseWebApp} 
-    metaData={metaData} 
-    isSignInModalOpen={isSignInModalOpen}
-    setIsSignInModalOpen={setIsSignInModalOpen}
-  />;
+  // Only show web app if user is authenticated AND has clicked "Use Web App"
+  console.log('[HomePage] Rendering HomeContent (Web App)');
+  return (
+    <div className="h-screen relative">
+      <HomeContent onAbout={handleBackToMarketing} />
+    </div>
+  );
 };
 
 // Convert to static generation for better performance
