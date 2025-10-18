@@ -25,6 +25,7 @@ const ChallengeMeta: React.FC<ChallengeMetaProps> = ({ challenge, id }) => {
   
   // Use static image from public directory with absolute URL
   const previewImageUrl = 'https://fitwithpulse.ai/round-preview.png'; // Make sure this file exists in public/
+  const pageUrl = `https://fitwithpulse.ai/round-invitation/${id}`;
 
   return (
     <Head>
@@ -35,9 +36,11 @@ const ChallengeMeta: React.FC<ChallengeMetaProps> = ({ challenge, id }) => {
       <meta key="og:title" property="og:title" content={`Join ${challenge.title} | Pulse`} />
       <meta key="og:description" property="og:description" content={enrichedDescription} />
       <meta key="og:type" property="og:type" content="website" />
-      <meta key="og:url" property="og:url" content={`https://fitwithpulse.ai/challenge/${id}`} />
+      <meta key="og:url" property="og:url" content={pageUrl} />
       <meta key="og:site_name" property="og:site_name" content="Pulse Fitness" />
       <meta key="og:image" property="og:image" content={previewImageUrl} />
+      <meta key="og:image:secure_url" property="og:image:secure_url" content={previewImageUrl} />
+      <meta key="og:image:type" property="og:image:type" content="image/png" />
       <meta key="og:image:width" property="og:image:width" content="1200" />
       <meta key="og:image:height" property="og:image:height" content="630" />
       <meta key="og:image:alt" property="og:image:alt" content={`${challenge.title} preview`} />
@@ -57,7 +60,7 @@ const ChallengeMeta: React.FC<ChallengeMetaProps> = ({ challenge, id }) => {
       <meta key="twitter:image:alt" name="twitter:image:alt" content={`${challenge.title} preview`} />
       
       {/* Additional Meta Tags */}
-      <link key="canonical" rel="canonical" href={`https://fitwithpulse.ai/challenge/${id}`} />
+      <link key="canonical" rel="canonical" href={pageUrl} />
       <meta key="theme-color" name="theme-color" content="#E0FE10" />
       <meta key="mobile-web-app-capable" name="mobile-web-app-capable" content="yes" />
       <meta key="apple-mobile-web-app-capable" name="apple-mobile-web-app-capable" content="yes" />

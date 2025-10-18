@@ -283,25 +283,7 @@ const MarketingContent: React.FC<{
         </div>
         
         <div className="relative max-w-7xl mx-auto px-6 lg:px-8">
-          {/* Section Header */}
-          <div className="text-center mb-12 lg:mb-20">
-            <div className="inline-flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-[#E0FE10]/20 to-lime-500/20 backdrop-blur-sm border border-[#E0FE10]/30 rounded-full mb-6 lg:mb-8">
-              <FaCoins className="h-4 w-4 text-[#E0FE10]" />
-              <span className="text-[#E0FE10] text-sm font-medium">The Creator Journey</span>
-            </div>
-            
-            <h2 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-6 lg:mb-8 tracking-tight">
-              From First Move
-              <br />
-              <span className="bg-gradient-to-r from-[#E0FE10] via-lime-400 to-green-400 bg-clip-text text-transparent">
-                To Monthly Revenue
-              </span>
-            </h2>
-            
-            <p className="text-lg lg:text-xl text-zinc-400 max-w-3xl mx-auto leading-relaxed">
-              How fitness creators turn their expertise into sustainable income through Moves, Stacks, and Rounds
-            </p>
-          </div>
+          {/* Section Header removed */}
 
           {/* The Flow - Vertical Timeline */}
           <div className="max-w-4xl mx-auto">
