@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
+import { GetServerSideProps } from 'next';
 import { useUser, useUserLoading } from '../../hooks/useUser';
 import { subscriptionService } from '../../api/firebase/subscription/service';
 import { coachService } from '../../api/firebase/coach';
@@ -11,7 +12,13 @@ import { FaCheckCircle, FaSpinner, FaExclamationTriangle, FaUser, FaChevronDown,
 import PrivacyConsentModal from '../../components/PrivacyConsentModal';
 import SignInModal from '../../components/SignInModal';
 
-const AthleteConnectPage: React.FC = () => {
+interface AthleteConnectPageProps {
+  initialCoachInfo?: any;
+  referralCode?: string;
+  ogImage?: string;
+}
+
+const AthleteConnectPage: React.FC<AthleteConnectPageProps> = ({ initialCoachInfo, referralCode: serverReferralCode, ogImage: serverOgImage }) => {
   const router = useRouter();
   const { referralCode } = router.query;
   const currentUser = useUser();
@@ -21,7 +28,7 @@ const AthleteConnectPage: React.FC = () => {
   const [connecting, setConnecting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [coachInfo, setCoachInfo] = useState<any>(null);
+  const [coachInfo, setCoachInfo] = useState<any>(initialCoachInfo || null);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showSignInModal, setShowSignInModal] = useState(false);
@@ -124,9 +131,14 @@ const AthleteConnectPage: React.FC = () => {
       return;
     }
 
-    // Don't run if we already have coach info and are not loading
-    if (coachInfo && !loading) {
-      console.log('[AthleteConnect] Already have coach info and not loading, skipping');
+    // Don't run if we already have coach info from SSR or previous fetch
+    if (coachInfo) {
+      console.log('[AthleteConnect] Already have coach info, skipping fetch');
+      if (currentUser) {
+        setLoading(false);
+      } else if (userLoading === false) {
+        setLoading(false);
+      }
       return;
     }
 
@@ -580,25 +592,36 @@ const AthleteConnectPage: React.FC = () => {
     );
   }
 
-  // Dynamic OG/Twitter meta for rich previews
+  // Dynamic OG/Twitter meta for rich previews (use server-rendered values)
+  const finalReferralCode = referralCode || serverReferralCode || '';
   const title = `Join ${coachInfo?.displayName || coachInfo?.username || 'your coach'} on Pulse`;
   const description = `Connect with your coach for personalized fitness guidance and support.`;
-  const base = typeof window !== 'undefined' ? window.location.origin : 'https://fitwithpulse.ai';
-  const ogImage = coachInfo?.profileImage?.profileImageURL || `${base}/athlete-connect-default.jpg`;
+  const base = 'https://fitwithpulse.ai';
+  const ogImage = serverOgImage || coachInfo?.profileImage?.profileImageURL || `${base}/athlete-connect-default.jpg`;
+  const pageUrl = `${base}/connect/${finalReferralCode}`;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-black via-zinc-900 to-black flex items-center justify-center px-4">
       <Head>
         <title>{title}</title>
+        <meta name="description" content={description} />
         <meta property="og:title" content={title} />
         <meta property="og:description" content={description} />
         <meta property="og:image" content={ogImage} />
-        <meta property="og:url" content={`${base}/connect/${referralCode || ''}`} />
+        <meta property="og:image:secure_url" content={ogImage} />
+        <meta property="og:image:type" content="image/jpeg" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        <meta property="og:image:alt" content={`Join ${coachInfo?.displayName || coachInfo?.username || 'your coach'} on Pulse`} />
+        <meta property="og:url" content={pageUrl} />
         <meta property="og:type" content="website" />
+        <meta property="og:site_name" content="Pulse Fitness" />
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content={title} />
         <meta name="twitter:description" content={description} />
         <meta name="twitter:image" content={ogImage} />
+        <meta name="twitter:image:alt" content={`Join ${coachInfo?.displayName || coachInfo?.username || 'your coach'} on Pulse`} />
+        <link rel="canonical" href={pageUrl} />
       </Head>
       
       <div className="text-center max-w-md mx-auto p-8">
@@ -764,6 +787,49 @@ const AthleteConnectPage: React.FC = () => {
       </div>
     </div>
   );
+};
+
+export const getServerSideProps: GetServerSideProps<AthleteConnectPageProps> = async ({ params, res }) => {
+  try {
+    const referralCode = params?.referralCode as string;
+    
+    if (!referralCode) {
+      return {
+        props: {
+          referralCode: '',
+          ogImage: 'https://fitwithpulse.ai/athlete-connect-default.jpg'
+        }
+      };
+    }
+
+    // Set cache headers for better performance
+    res.setHeader(
+      'Cache-Control',
+      'public, s-maxage=300, stale-while-revalidate=600'
+    );
+
+    // Fetch coach info server-side
+    const coach = await coachService.findCoachByReferralCode(referralCode);
+    
+    // Use coach's profile image for OG preview, or fallback to default
+    const ogImage = coach?.profileImage?.profileImageURL || 'https://fitwithpulse.ai/athlete-connect-default.jpg';
+
+    return {
+      props: {
+        initialCoachInfo: coach ? JSON.parse(JSON.stringify(coach)) : null,
+        referralCode,
+        ogImage
+      }
+    };
+  } catch (error) {
+    console.error('[AthleteConnect SSR] Error fetching coach:', error);
+    return {
+      props: {
+        referralCode: params?.referralCode as string || '',
+        ogImage: 'https://fitwithpulse.ai/athlete-connect-default.jpg'
+      }
+    };
+  }
 };
 
 export default AthleteConnectPage;
