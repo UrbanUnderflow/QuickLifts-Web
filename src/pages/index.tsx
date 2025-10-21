@@ -285,166 +285,55 @@ const MarketingContent: React.FC<{
         <div className="relative max-w-7xl mx-auto px-6 lg:px-8">
           {/* Section Header removed */}
 
-          {/* The Flow - Vertical Timeline */}
-          <div className="max-w-4xl mx-auto">
-            <div className="relative">
-              {/* Vertical connecting line */}
-              <div className="absolute left-8 lg:left-12 top-16 bottom-16 w-1 bg-gradient-to-b from-[#E0FE10] via-purple-400 via-blue-400 via-orange-400 to-green-400"></div>
-              
-              <div className="space-y-12 lg:space-y-16">
-                
-                {/* Step 1: Create Moves */}
-                <div className="relative flex items-start gap-6 lg:gap-12">
-                  <div className="relative z-10 w-16 h-16 lg:w-24 lg:h-24 bg-gradient-to-br from-[#E0FE10] to-lime-400 rounded-full flex items-center justify-center flex-shrink-0">
-                    <span className="text-black text-xl lg:text-2xl font-bold">1</span>
-                  </div>
-                  <div className="pt-2 lg:pt-4 flex-1">
-                    <h3 className="text-2xl lg:text-3xl font-bold text-white mb-3">
-                      <span className="text-[#E0FE10]">Create</span> Your Moves
-                    </h3>
-                    <p className="text-zinc-400 text-lg mb-4">
-                      <span className="text-white font-medium">5-30 second exercise videos</span>
-                    </p>
-                    <div className="flex items-center gap-3 text-sm text-[#E0FE10]">
-                      <FaBolt className="h-4 w-4" />
-                      <span>Your content • Your brand • Reusable forever</span>
-                    </div>
+          {/* The Flow - Horizontal 3 Steps */}
+          <div className="max-w-5xl mx-auto">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Step 1: Create */}
+              <div className="relative flex items-start p-6 rounded-3xl border border-[#E0FE10]/30 bg-gradient-to-br from-[#E0FE10]/10 to-lime-400/10">
+                <div className="pt-1 flex-1">
+                  <h3 className="text-2xl lg:text-3xl font-bold text-white mb-2">
+                    <span className="text-[#E0FE10]">Create</span> Your Moves
+                  </h3>
+                  <p className="text-zinc-400 text-lg mb-2">
+                    <span className="text-white font-medium">5-30 second exercise videos</span>
+                  </p>
+                  <div className="flex items-center gap-3 text-sm text-[#E0FE10]">
+                    <FaBolt className="h-4 w-4" />
+                    <span>Your content • Your brand • Reusable forever</span>
                   </div>
                 </div>
+              </div>
 
-                {/* Step 2: Build Stacks */}
-                <div className="relative flex items-start gap-6 lg:gap-12">
-                  <div className="relative z-10 w-16 h-16 lg:w-24 lg:h-24 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
-                    <span className="text-white text-xl lg:text-2xl font-bold">2</span>
-                  </div>
-                  <div className="pt-2 lg:pt-4 flex-1">
-                    <h3 className="text-2xl lg:text-3xl font-bold text-white mb-3">
-                      <span className="text-purple-400">Stack</span> Your Workout Programs
-                    </h3>
-                    <p className="text-zinc-400 text-lg mb-4">
-                      <span className="text-white font-medium">Complete workout programs</span>
-                    </p>
-                    <div className="flex items-center gap-3 text-sm text-purple-400">
-                      <FaRocket className="h-4 w-4" />
-                      <span>Structured programs • Subscription ready • Creator owned</span>
-                    </div>
+              {/* Step 2: Launch */}
+              <div className="relative flex items-start p-6 rounded-3xl border border-blue-400/30 bg-gradient-to-br from-blue-500/10 to-cyan-500/10">
+                <div className="pt-1 flex-1">
+                  <h3 className="text-2xl lg:text-3xl font-bold text-white mb-2">
+                    <span className="text-blue-400">Launch</span> Community Rounds
+                  </h3>
+                  <p className="text-zinc-400 text-lg mb-2">
+                    <span className="text-white font-medium">Competitive challenges</span>
+                  </p>
+                  <div className="flex items-center gap-3 text-sm text-blue-400">
+                    <FaTrophy className="h-4 w-4" />
+                    <span>Your community • Your rules • Your brand</span>
                   </div>
                 </div>
+              </div>
 
-                {/* Step 3: Launch Rounds */}
-                <div className="relative flex items-start gap-6 lg:gap-12">
-                  <div className="relative z-10 w-16 h-16 lg:w-24 lg:h-24 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-full flex items-center justify-center flex-shrink-0">
-                    <span className="text-white text-xl lg:text-2xl font-bold">3</span>
-                  </div>
-                  <div className="pt-2 lg:pt-4 flex-1">
-                    <h3 className="text-2xl lg:text-3xl font-bold text-white mb-3">
-                      <span className="text-blue-400">Launch</span> Community Rounds
-                    </h3>
-                    <p className="text-zinc-400 text-lg mb-4">
-                      <span className="text-white font-medium">Competitive challenges</span>
-                    </p>
-                    <div className="flex items-center gap-3 text-sm text-blue-400">
-                      <FaTrophy className="h-4 w-4" />
-                      <span>Your community • Your rules • Your brand</span>
-                    </div>
+              {/* Step 3: Grow */}
+              <div className="relative flex items-start p-6 rounded-3xl border border-orange-400/30 bg-gradient-to-br from-orange-500/10 to-pink-500/10">
+                <div className="pt-1 flex-1">
+                  <h3 className="text-2xl lg:text-3xl font-bold text-white mb-2">
+                    <span className="text-orange-400">Grow</span> Your Community
+                  </h3>
+                  <p className="text-zinc-400 text-lg mb-2">
+                    <span className="text-white font-medium">Build loyalty</span>
+                  </p>
+                  <div className="flex items-center gap-3 text-sm text-orange-400">
+                    <FaGamepad className="h-4 w-4" />
+                    <span>Real engagement • Built-in distribution • Community owned</span>
                   </div>
                 </div>
-
-                {/* Step 4: Grow Your Community */}
-                <div className="relative flex items-start gap-6 lg:gap-12">
-                  <div className="relative z-10 w-16 h-16 lg:w-24 lg:h-24 bg-gradient-to-br from-orange-500 to-red-500 rounded-full flex items-center justify-center flex-shrink-0">
-                    <span className="text-white text-xl lg:text-2xl font-bold">4</span>
-                  </div>
-                  <div className="pt-2 lg:pt-4 flex-1">
-                    <h3 className="text-2xl lg:text-3xl font-bold text-white mb-3">
-                      <span className="text-orange-400">Grow</span> Your Community
-                    </h3>
-                    <p className="text-zinc-400 text-lg mb-4">
-                      <span className="text-white font-medium">Build loyalty</span>
-                    </p>
-                    <div className="flex items-center gap-3 text-sm text-orange-400">
-                      <FaGamepad className="h-4 w-4" />
-                      <span>Real engagement • Built-in distribution • Community owned</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Step 5: Understand Your Audience */}
-                <div className="relative flex items-start gap-6 lg:gap-12">
-                  <div className="relative z-10 w-16 h-16 lg:w-24 lg:h-24 bg-gradient-to-br from-cyan-500 to-teal-500 rounded-full flex items-center justify-center flex-shrink-0">
-                    <span className="text-white text-xl lg:text-2xl font-bold">5</span>
-                  </div>
-                  <div className="pt-2 lg:pt-4 flex-1">
-                    <h3 className="text-2xl lg:text-3xl font-bold text-white mb-3">
-                      <span className="text-cyan-400">Understand</span> Your Audience
-                    </h3>
-                    <p className="text-zinc-400 text-lg mb-4">
-                      <span className="text-white font-medium">Real data and insights</span>
-                    </p>
-                    <div className="flex items-center gap-3 text-sm text-cyan-400">
-                      <FaChartLine className="h-4 w-4" />
-                      <span>Performance data • Engagement metrics • Content insights</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Step 6: Optimize & Improve */}
-                <div className="relative flex items-start gap-6 lg:gap-12">
-                  <div className="relative z-10 w-16 h-16 lg:w-24 lg:h-24 bg-gradient-to-br from-green-500 to-emerald-500 rounded-full flex items-center justify-center flex-shrink-0">
-                    <span className="text-white text-xl lg:text-2xl font-bold">6</span>
-                  </div>
-                  <div className="pt-2 lg:pt-4 flex-1">
-                    <h3 className="text-2xl lg:text-3xl font-bold text-white mb-3">
-                      <span className="text-green-400">Optimize</span> & Improve
-                    </h3>
-                    <p className="text-zinc-400 text-lg mb-4">
-                      <span className="text-white font-medium">AI insights</span>
-                    </p>
-                    <div className="flex items-center gap-3 text-sm text-green-400">
-                      <FaStar className="h-4 w-4" />
-                      <span>AI recommendations • Content analytics • Performance trends</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Step 7: Earn Revenue */}
-                <div className="relative flex items-start gap-6 lg:gap-12">
-                  <div className="relative z-10 w-16 h-16 lg:w-24 lg:h-24 bg-gradient-to-br from-yellow-500 to-orange-500 rounded-full flex items-center justify-center flex-shrink-0">
-                    <span className="text-black text-xl lg:text-2xl font-bold">7</span>
-                  </div>
-                  <div className="pt-2 lg:pt-4 flex-1">
-                    <h3 className="text-2xl lg:text-3xl font-bold text-white mb-3">
-                      <span className="text-yellow-400">Earn</span> Sustainable Revenue
-                    </h3>
-                    <p className="text-zinc-400 text-lg mb-4">
-                      <span className="text-white font-medium">Multiple revenue streams</span>
-                    </p>
-                    <div className="flex items-center gap-3 text-sm text-yellow-400">
-                      <FaCoins className="h-4 w-4" />
-                      <span>$4.3k+ monthly potential • Passive income • Multiple streams</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Step 8: Scale Your Empire */}
-                <div className="relative flex items-start gap-6 lg:gap-12">
-                  <div className="relative z-10 w-16 h-16 lg:w-24 lg:h-24 bg-gradient-to-br from-[#E0FE10] to-lime-400 rounded-full flex items-center justify-center flex-shrink-0 border-4 border-white">
-                    <FaArrowsRotate className="text-black text-lg lg:text-xl" />
-                  </div>
-                  <div className="pt-2 lg:pt-4 flex-1">
-                    <h3 className="text-2xl lg:text-3xl font-bold text-white mb-3">
-                      <span className="text-[#E0FE10]">Scale</span> Your Fitness Empire
-                    </h3>
-                    <p className="text-zinc-400 text-lg mb-4">
-                      Each Round builds on the last. <span className="text-white font-medium">Grow your library, expand your community, increase your revenue</span>. Build once, earn repeatedly.
-                    </p>
-                    <div className="flex items-center gap-3 text-sm text-[#E0FE10]">
-                      <FaBolt className="h-4 w-4" />
-                      <span>Compounding growth • Passive income • Long-term business</span>
-                    </div>
-                  </div>
-                </div>
-
               </div>
             </div>
           </div>
@@ -528,7 +417,7 @@ const MarketingContent: React.FC<{
                 loop
                 muted
                 playsInline
-                src="/ThisIsPulseNoSound.mp4"
+                src="/move.mp4"
                 poster="/sample-round-poster.jpg"
               />
             </div>
@@ -561,11 +450,11 @@ const MarketingContent: React.FC<{
             <FaRocket className="h-4 w-4 text-purple-400" />
             <span className="text-purple-400 text-sm font-medium">Build The Blocks</span>
           </div>
-          <h1 className="text-white text-4xl sm:text-5xl font-bold mb-6">
+          <h1 className="text-white text-5xl sm:text-6xl font-bold mb-6">
             <span className="bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent">Stack</span> your Moves into workouts
           </h1>
           <p className="text-zinc-400 text-lg leading-relaxed mb-8">
-            Combine your Moves into complete workout programs called Stacks. Create personalized routines, share them with the community, or discover Stacks from other creators.
+            Combine your Moves into a list called a Stacks. Bring your Stack with you to the gym, and save your workout data in real-time
           </p>
           <div className="bg-gradient-to-br from-purple-500/10 to-blue-500/10 backdrop-blur-sm border border-purple-400/20 rounded-2xl p-4">
             <p className="text-purple-300 text-sm">
@@ -617,10 +506,10 @@ const MarketingContent: React.FC<{
             <span className="text-blue-400 text-sm font-medium">The Community</span>
           </div>
           <h1 className="text-white text-5xl sm:text-6xl font-bold mb-6">
-            Join a <span className="bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">Round</span> and compete together
+            Launch a <span className="bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">Round</span> and rally your community
           </h1>
           <p className="text-zinc-400 text-lg leading-relaxed mb-8">
-            Join community fitness challenges called Rounds. Compete with up to 250 people, chat in real-time, and earn rewards through time-based challenges that build accountability.
+            Launch Rounds to turn your audience into an engaged community. Run time-based challenges, chat with members in real time, and reward progress — all under your brand.
           </p>
           <div className="bg-gradient-to-br from-blue-500/10 to-cyan-500/10 backdrop-blur-sm border border-blue-400/20 rounded-2xl p-4">
             <p className="text-blue-300 text-sm">
@@ -650,6 +539,55 @@ const MarketingContent: React.FC<{
           <div className="hidden sm:flex items-center justify-center">
             <div className="w-20 h-20 lg:w-24 lg:h-24 bg-gradient-to-br from-blue-400/20 to-cyan-400/20 border border-blue-400/30 rounded-2xl flex items-center justify-center">
               <span className="text-2xl lg:text-3xl">⌚</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Discovery Section - Creator Visibility */}
+      <section className="py-16 sm:py-24 lg:py-32 relative overflow-hidden">
+        {/* Background */}
+        <div className="absolute inset-0 bg-gradient-to-br from-zinc-950 via-green-950/10 to-zinc-900"></div>
+        
+        <div className="relative max-w-7xl mx-auto px-6 lg:px-8">
+          {/* Header */}
+          <div className="text-center mb-12 lg:mb-20">
+            <div className="inline-flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-[#E0FE10]/20 to-blue-500/20 backdrop-blur-sm border border-[#E0FE10]/30 rounded-full mb-6 lg:mb-8">
+              <FaUser className="h-4 w-4 text-[#E0FE10]" />
+              <span className="text-[#E0FE10] text-sm font-medium">Built‑in Discovery</span>
+            </div>
+
+            <h2 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-6 lg:mb-8 tracking-tight">
+              Get Discovered
+              <br />
+              <span className="bg-gradient-to-r from-[#E0FE10] via-blue-400 to-purple-400 bg-clip-text text-transparent">
+                Inside a Real Community
+              </span>
+            </h2>
+
+            <p className="text-lg lg:text-xl text-zinc-400 max-w-3xl mx-auto leading-relaxed">
+              Unlike isolated coaching tools, Pulse is a creator community. Where members can discover, follow, and actually workout with your rather than just like your content.
+            </p>
+          </div>
+
+          {/* Discovery Phone Preview */}
+          <div className="flex items-center justify-center mb-12 lg:mb-16">
+            <div className="relative w-[300px] sm:w-[380px] group">
+              <div className="relative aspect-[9/19.5] rounded-[3rem] p-[2px] transition-transform duration-500 transform group-hover:scale-105">
+                <div className="absolute inset-0 rounded-[3rem] border-2 border-[#E0FE10] group-hover:border-4 transition-all duration-300" />
+                <div className="relative h-full w-full rounded-[3rem] overflow-hidden bg-zinc-900">
+                  <video
+                    className="w-full h-full object-cover group-hover:opacity-90 transition-opacity duration-300"
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
+                    src="/moveotd.mp4"
+                    poster="/sample-round-poster.jpg"
+                  />
+                </div>
+              </div>
+              <div className="absolute -z-10 inset-0 rounded-[3rem] bg-[#E0FE10]/20 blur-xl opacity-0 group-hover:opacity-40 transition-opacity duration-500"></div>
             </div>
           </div>
         </div>
@@ -695,9 +633,6 @@ const MarketingContent: React.FC<{
                 <FaUser className="h-6 w-6 lg:h-8 lg:w-8 text-white" />
               </div>
               <h3 className="text-xl lg:text-2xl font-bold text-white mb-3 lg:mb-4">Real Workouts From Real People</h3>
-              <p className="text-zinc-400 leading-relaxed text-sm lg:text-base">
-                Access authentic workouts created by real trainers and athletes. Every Move is filmed by actual people, giving you genuine content that inspires and motivates your fitness journey.
-              </p>
             </div>
 
             {/* Video Demonstrations in Real Time */}
@@ -706,9 +641,6 @@ const MarketingContent: React.FC<{
                 <FaFire className="h-6 w-6 lg:h-8 lg:w-8 text-black" />
               </div>
               <h3 className="text-xl lg:text-2xl font-bold text-white mb-3 lg:mb-4">Video Demonstrations in Real Time</h3>
-              <p className="text-zinc-400 leading-relaxed text-sm lg:text-base">
-                Follow along with high-quality video demonstrations as you work out. See proper form, technique, and execution for every exercise in real-time.
-              </p>
             </div>
 
             {/* Gamified Content & Earned Revenue */}
@@ -717,9 +649,6 @@ const MarketingContent: React.FC<{
                 <FaCoins className="h-6 w-6 lg:h-8 lg:w-8 text-white" />
               </div>
               <h3 className="text-xl lg:text-2xl font-bold text-white mb-3 lg:mb-4">Gamified Content & Earned Revenue</h3>
-              <p className="text-zinc-400 leading-relaxed text-sm lg:text-base">
-                Turn your fitness expertise into income streams. Create content, launch challenges, and earn revenue through our gamified creator economy platform.
-              </p>
             </div>
 
             {/* Food Photo Macro Calculation */}
@@ -728,9 +657,6 @@ const MarketingContent: React.FC<{
                 <FaBolt className="h-6 w-6 lg:h-8 lg:w-8 text-white" />
               </div>
               <h3 className="text-xl lg:text-2xl font-bold text-white mb-3 lg:mb-4">Real Macro Calculation</h3>
-              <p className="text-zinc-400 leading-relaxed text-sm lg:text-base">
-                Simply take photos of your food and get instant, accurate macro calculations. Track your nutrition effortlessly with AI-powered food recognition technology.
-              </p>
             </div>
 
             {/* Apple Watch Data Story */}
@@ -739,9 +665,6 @@ const MarketingContent: React.FC<{
                 <FaChartLine className="h-6 w-6 lg:h-8 lg:w-8 text-white" />
               </div>
               <h3 className="text-xl lg:text-2xl font-bold text-white mb-3 lg:mb-4">Apple Watch Data Story</h3>
-              <p className="text-zinc-400 leading-relaxed text-sm lg:text-base">
-                Transform your Apple Watch data into meaningful insights. Understand your complete health story through heart rate, activity, sleep, and more.
-              </p>
             </div>
 
             {/* Real Community That Trains Together */}
@@ -750,9 +673,6 @@ const MarketingContent: React.FC<{
                 <FaTrophy className="h-6 w-6 lg:h-8 lg:w-8 text-white" />
               </div>
               <h3 className="text-xl lg:text-2xl font-bold text-white mb-3 lg:mb-4">Real Community That Trains Together</h3>
-              <p className="text-zinc-400 leading-relaxed text-sm lg:text-base">
-                Join a supportive fitness community where members work out together, share progress, and motivate each other. Build accountability through genuine connections.
-              </p>
             </div>
 
           </div>
