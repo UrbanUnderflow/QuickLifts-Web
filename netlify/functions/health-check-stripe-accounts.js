@@ -179,18 +179,29 @@ const handler = async (event) => {
               }
             }
 
-            // Auto-fix the missing account ID and set onboarding status
-            await db.collection("users").doc(userId).update({
-              'creator.stripeAccountId': stripeAccount.id,
-              'creator.accountType': stripeAccount.type,
-              'creator.onboardingStatus': accountValid ? 'complete' : 'incomplete',
-              'creator.onboardingCompletedAt': accountValid ? new Date() : null,
-              'creator.accountValidated': accountValid,
-              'creator.onboardingLink': onboardingLink || admin.firestore.FieldValue.delete?.() || null,
-              'creator.onboardingExpirationDate': onboardingExpiresAt || null,
-              'creator.healthCheckFixed': new Date(),
-              'creator.lastLinked': new Date()
-            });
+            // Auto-fix the missing account ID and set onboarding status - use set with merge to handle null creator
+            const creatorData = {
+              stripeAccountId: stripeAccount.id,
+              accountType: stripeAccount.type,
+              onboardingStatus: accountValid ? 'complete' : 'incomplete',
+              accountValidated: accountValid,
+              healthCheckFixed: new Date(),
+              lastLinked: new Date()
+            };
+            
+            if (accountValid) {
+              creatorData.onboardingCompletedAt = new Date();
+            }
+            if (onboardingLink) {
+              creatorData.onboardingLink = onboardingLink;
+            }
+            if (onboardingExpiresAt) {
+              creatorData.onboardingExpirationDate = onboardingExpiresAt;
+            }
+            
+            await db.collection("users").doc(userId).set({
+              creator: creatorData
+            }, { merge: true });
 
             console.log(`[HealthCheck] AUTO-FIXED: Linked account ${stripeAccount.id} to user ${userId}, onboarding: ${accountValid ? 'complete' : 'incomplete'}, valid: ${accountValid}`);
             

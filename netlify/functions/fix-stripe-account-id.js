@@ -53,15 +53,17 @@ exports.handler = async function(event, context) {
     const userData = userDoc.data();
     const oldStripeAccountId = userData.creator?.stripeAccountId;
 
-    // Update the stripeAccountId
-    await db.collection("users").doc(userId).update({
-      'creator.stripeAccountId': newStripeAccountId,
-      'creator.onboardingStatus': 'complete',
-      'creator.onboardingCompletedAt': new Date(),
-      'creator.manuallyFixed': new Date(),
-      'creator.lastLinked': new Date(),
-      'creator.previousStripeAccountId': oldStripeAccountId // Keep track of the old one
-    });
+    // Update the stripeAccountId - use set with merge to handle null creator
+    await db.collection("users").doc(userId).set({
+      creator: {
+        stripeAccountId: newStripeAccountId,
+        onboardingStatus: 'complete',
+        onboardingCompletedAt: new Date(),
+        manuallyFixed: new Date(),
+        lastLinked: new Date(),
+        previousStripeAccountId: oldStripeAccountId
+      }
+    }, { merge: true });
 
     console.log(`[ManualFix] SUCCESS: Updated user ${userId} from ${oldStripeAccountId} to ${newStripeAccountId}`);
 

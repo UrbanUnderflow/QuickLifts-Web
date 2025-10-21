@@ -72,13 +72,13 @@ const handler = async (event) => {
     const userData = userDoc.data();
     console.log('Current creator status:', userData.creator);
     
-    // Reset the creator fields
-    await db.collection('users').doc(userId).update({
-      'creator.onboardingStatus': 'notStarted',
-      'creator.onboardingLink': admin.firestore.FieldValue.delete(),
-      'creator.stripeAccountId': admin.firestore.FieldValue.delete(),
-      'creator.onboardingExpirationDate': admin.firestore.FieldValue.delete()
-    });
+    // Reset the creator fields - use set with merge to handle null creator
+    await db.collection('users').doc(userId).set({
+      creator: {
+        onboardingStatus: 'notStarted'
+        // Omitting fields effectively removes them when using set with merge
+      }
+    }, { merge: true });
     
     console.log('Reset onboarding status to notStarted and removed Stripe fields');
 

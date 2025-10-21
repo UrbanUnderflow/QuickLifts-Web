@@ -194,18 +194,53 @@ const CoachProfilePage: React.FC = () => {
       dispatch(showToast({ message: 'Please sign in to continue', type: 'error' }));
       return;
     }
+    
+    // Validate user has an email before proceeding
+    if (!currentUser.email || currentUser.email.trim() === '') {
+      dispatch(showToast({ 
+        message: 'Your account is missing an email address. Please update your profile first.', 
+        type: 'error',
+        duration: 6000
+      }));
+      return;
+    }
+    
     setStripeLoading(true);
     try {
-      console.log('[CoachProfile] Starting Stripe onboarding for user:', currentUser.id);
+      console.log('[CoachProfile] Starting Stripe onboarding for user:', currentUser.id, 'email:', currentUser.email);
       const res = await fetch(`/.netlify/functions/create-connected-account?userId=${encodeURIComponent(currentUser.id)}`);
       
       if (!res.ok) {
-        const errorText = await res.text();
-        console.error('[CoachProfile] Stripe onboarding API error:', { status: res.status, error: errorText });
+        let errorMessage = `Failed to start onboarding (Error ${res.status})`;
+        let errorDetails = '';
+        
+        try {
+          const errorJson = await res.json();
+          console.error('[CoachProfile] Stripe onboarding API error:', { 
+            status: res.status, 
+            error: errorJson 
+          });
+          
+          // Use server-provided error message if available
+          if (errorJson.error) {
+            errorMessage = errorJson.error;
+          }
+          if (errorJson.details) {
+            errorDetails = errorJson.details;
+          }
+          if (errorJson.code) {
+            errorDetails = `${errorDetails} (Code: ${errorJson.code})`.trim();
+          }
+        } catch (parseErr) {
+          const errorText = await res.text();
+          console.error('[CoachProfile] Failed to parse error response:', { errorText, parseErr });
+          errorDetails = 'Unable to parse server error';
+        }
+        
         dispatch(showToast({ 
-          message: `Failed to start onboarding (Error ${res.status}). Please try again or contact support.`, 
+          message: errorDetails ? `${errorMessage}. ${errorDetails}` : errorMessage, 
           type: 'error',
-          duration: 5000
+          duration: 7000
         }));
         return;
       }

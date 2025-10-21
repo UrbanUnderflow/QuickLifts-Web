@@ -86,18 +86,23 @@ const handler = async (event) => {
 
     // Store/update pending payout info in user record for dashboard display
     if (totalPendingAmount > 0) {
-      await db.collection('users').doc(userId).update({
-        'creator.pendingPayouts': {
-          totalAmount: totalPendingAmount,
-          payouts: pendingPayouts,
-          lastUpdated: new Date()
+      // Use set with merge to handle null creator objects
+      await db.collection('users').doc(userId).set({
+        creator: {
+          pendingPayouts: {
+            totalAmount: totalPendingAmount,
+            payouts: pendingPayouts,
+            lastUpdated: new Date()
+          }
         }
-      });
+      }, { merge: true });
     } else {
-      // Clear pending payouts if none found
-      await db.collection('users').doc(userId).update({
-        'creator.pendingPayouts': null
-      });
+      // Clear pending payouts if none found - use set with merge
+      await db.collection('users').doc(userId).set({
+        creator: {
+          pendingPayouts: null
+        }
+      }, { merge: true });
     }
 
     return {

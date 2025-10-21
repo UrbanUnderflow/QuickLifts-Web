@@ -73,7 +73,10 @@ exports.handler = async (event) => {
     // If we selected a winner account but creator is empty, backfill creator with this id
     try {
       if (accountId && (!userData.creator || !userData.creator.stripeAccountId)) {
-        await db.collection('users').doc(userId).update({ 'creator.stripeAccountId': accountId });
+        // Use set with merge to handle null creator objects
+        await db.collection('users').doc(userId).set({
+          creator: { stripeAccountId: accountId }
+        }, { merge: true });
       }
     } catch (bfErr) {
       console.warn('[CreateAccountUpdateLink] Backfill creator.stripeAccountId failed:', bfErr.message);

@@ -9,11 +9,16 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 async function updateOnboardingLink(userId, link, expiration) {
   try {
     const userRef = db.collection("users").doc(userId);
-    await userRef.update({
-      'creator.onboardingLink': link, 
-      'creator.onboardingExpirationDate': expiration,
-      'creator.onboardingPayoutState': 'introduction'
-    });
+    
+    // Use set with merge to handle null creator objects
+    await userRef.set({
+      creator: {
+        onboardingLink: link,
+        onboardingExpirationDate: expiration,
+        onboardingPayoutState: 'introduction'
+      }
+    }, { merge: true });
+    
     console.log(`[CreateConnectedAccount] Updated onboarding link for user ${userId}`);
   } catch (error) {
     console.error(`[CreateConnectedAccount] Error updating onboarding link for user ${userId}:`, error);
@@ -70,6 +75,19 @@ const handler = async (event) => {
       };
     }
 
+    // Validate Stripe key exists
+    if (!process.env.STRIPE_SECRET_KEY) {
+      console.error('[CreateConnectedAccount] STRIPE_SECRET_KEY not configured');
+      return {
+        statusCode: 500,
+        body: JSON.stringify({
+          success: false,
+          error: 'Stripe configuration error. Please contact support.',
+          details: 'STRIPE_SECRET_KEY not configured'
+        })
+      };
+    }
+
     // Get user document to check if they already have a Stripe account
     const userDoc = await db.collection("users").doc(userId).get();
     if (!userDoc.exists) {
@@ -84,6 +102,27 @@ const handler = async (event) => {
     }
 
     const userData = userDoc.data();
+    
+    // CRITICAL: Validate email exists
+    if (!userData.email) {
+      console.error(`[CreateConnectedAccount] User ${userId} does not have an email in Firestore`);
+      return {
+        statusCode: 400,
+        body: JSON.stringify({
+          success: false,
+          error: 'Your account is missing an email address. Please update your profile with a valid email.',
+          details: 'No email found in user document'
+        })
+      };
+    }
+    
+    console.log('[CreateConnectedAccount] User data loaded:', {
+      userId,
+      email: userData.email,
+      username: userData.username,
+      hasCreator: !!userData.creator,
+      hasStripeAccountId: !!userData.creator?.stripeAccountId
+    });
     
     // If user already has a Stripe account, create a new onboarding link for it
     if (userData.creator?.stripeAccountId) {
@@ -232,13 +271,20 @@ const handler = async (event) => {
     // CRITICAL: Update user document with Stripe account info
     // This is the most important step - if this fails, the user will lose their account linking
     try {
-      await db.collection("users").doc(userId).update({
-        'creator.stripeAccountId': account.id,
-        'creator.onboardingStatus': 'incomplete',
-        'creator.onboardingLink': accountLink.url,
-        'creator.onboardingExpirationDate': accountLink.expires_at,
-        'creator.onboardingPayoutState': 'introduction'
-      });
+      // Initialize creator object if it's null or doesn't exist
+      const creatorData = {
+        stripeAccountId: account.id,
+        onboardingStatus: 'incomplete',
+        onboardingLink: accountLink.url,
+        onboardingExpirationDate: accountLink.expires_at,
+        onboardingPayoutState: 'introduction'
+      };
+      
+      // Use set with merge to handle null creator objects
+      await db.collection("users").doc(userId).set({
+        creator: creatorData
+      }, { merge: true });
+      
       console.log(`[CreateConnectedAccount] CRITICAL SUCCESS: Stripe account ID ${account.id} saved to Firestore for user ${userId}`);
     } catch (firestoreError) {
       console.error(`[CreateConnectedAccount] CRITICAL FAILURE: Failed to save Stripe account ID to Firestore for user ${userId}:`, firestoreError);
@@ -267,12 +313,37 @@ const handler = async (event) => {
       })
     };
   } catch (error) {
-    console.error('[CreateConnectedAccount] Error:', error);
+    console.error('[CreateConnectedAccount] Error:', {
+      message: error.message,
+      type: error.type,
+      code: error.code,
+      stack: error.stack,
+      raw: error
+    });
+    
+    // Provide more helpful error messages based on error type
+    let userMessage = error.message || 'An unexpected error occurred';
+    let errorDetails = error.code || error.type || 'unknown_error';
+    
+    // Handle specific Stripe errors
+    if (error.type === 'StripeInvalidRequestError') {
+      userMessage = 'Invalid request to Stripe. Please contact support.';
+      errorDetails = `Stripe: ${error.message}`;
+    } else if (error.type === 'StripeAPIError') {
+      userMessage = 'Stripe API error. Please try again or contact support.';
+      errorDetails = `Stripe API: ${error.message}`;
+    } else if (error.code === 'permission-denied') {
+      userMessage = 'Database permission error. Please contact support.';
+      errorDetails = `Firestore: ${error.message}`;
+    }
+    
     return { 
       statusCode: 500, 
       body: JSON.stringify({
         success: false,
-        error: error.message
+        error: userMessage,
+        details: errorDetails,
+        code: error.code || error.type || 'UNKNOWN'
       })
     };
   }

@@ -58,8 +58,11 @@ const PageHead: React.FC<PageHeadProps> = ({
       <meta property="og:title" content={ogTitle} />
       <meta property="og:description" content={ogDescription} />
       {ogImage && <meta property="og:image" content={ogImage} />}
+      {ogImage && <meta property="og:image:secure_url" content={ogImage} />}
+      {ogImage && <meta property="og:image:type" content="image/png" />}
       {ogImage && <meta property="og:image:width" content="1200" />}
       {ogImage && <meta property="og:image:height" content="630" />}
+      {ogImage && <meta property="og:image:alt" content={ogTitle} />}
       <meta property="og:url" content={ogUrl} />
       <meta property="og:type" content={ogType} />
       <meta property="og:site_name" content="Pulse Fitness" />
@@ -69,9 +72,12 @@ const PageHead: React.FC<PageHeadProps> = ({
       <meta name="twitter:title" content={twitterTitle} />
       <meta name="twitter:description" content={twitterDescription} />
       {twitterImage && <meta name="twitter:image" content={twitterImage} />}
+      {twitterImage && <meta name="twitter:image:alt" content={twitterTitle} />}
       
-      {/* Add other global tags if needed, e.g., viewport, favicon, etc. */}
-      {/* <link rel="icon" href="/favicon.ico" /> */}
+      {/* Additional Meta Tags */}
+      <link rel="canonical" href={ogUrl} />
+      <meta name="viewport" content="width=device-width, initial-scale=1" />
+      <meta name="theme-color" content="#E0FE10" />
     </Head>
   );
 };

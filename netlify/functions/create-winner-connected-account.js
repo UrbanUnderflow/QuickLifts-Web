@@ -9,11 +9,14 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 async function updateOnboardingLink(userId, link, expiration) {
   try {
     const userRef = db.collection("users").doc(userId);
-    await userRef.update({
-      'winner.onboardingLink': link, 
-      'winner.onboardingExpirationDate': expiration,
-      'winner.onboardingPayoutState': 'introduction'
-    });
+    // Use set with merge to handle null winner objects
+    await userRef.set({
+      winner: {
+        onboardingLink: link,
+        onboardingExpirationDate: expiration,
+        onboardingPayoutState: 'introduction'
+      }
+    }, { merge: true });
     console.log(`[CreateWinnerConnectedAccount] Updated onboarding link for user ${userId}`);
   } catch (error) {
     console.error(`[CreateWinnerConnectedAccount] Error updating onboarding link for user ${userId}:`, error);
@@ -224,14 +227,16 @@ const handler = async (event) => {
 
     console.log('[CreateWinnerConnectedAccount] Account link created');
 
-    // Update user document with Stripe account info in winner field
-    await db.collection("users").doc(userId).update({
-      'creator.stripeAccountId': account.id,
-      'winner.onboardingStatus': 'incomplete',
-      'winner.onboardingLink': accountLink.url,
-      'winner.onboardingExpirationDate': accountLink.expires_at,
-      'winner.onboardingPayoutState': 'introduction'
-    });
+    // Update user document with Stripe account info - use set with merge to handle null objects
+    await db.collection("users").doc(userId).set({
+      creator: { stripeAccountId: account.id },
+      winner: {
+        onboardingStatus: 'incomplete',
+        onboardingLink: accountLink.url,
+        onboardingExpirationDate: accountLink.expires_at,
+        onboardingPayoutState: 'introduction'
+      }
+    }, { merge: true });
 
     // Create or update WinnerStripeConnect document
     await createOrUpdateWinnerStripeConnect(userId, account.id, userData.email);

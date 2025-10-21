@@ -36,8 +36,11 @@ const UserProfileMeta: React.FC<UserProfileMetaProps> = ({ userData }) => {
       <meta property="og:title" content={title} />
       <meta property="og:description" content={description} />
       <meta property="og:image" content={imageUrl} />
+      <meta property="og:image:secure_url" content={imageUrl} />
+      <meta property="og:image:type" content="image/jpeg" />
       <meta property="og:image:width" content="400" />
       <meta property="og:image:height" content="400" />
+      <meta property="og:image:alt" content={`${userData.displayName}'s profile picture`} />
       <meta property="og:url" content={url} />
       <meta property="og:type" content="profile" />
       <meta property="og:site_name" content="Pulse Fitness" />
@@ -47,11 +50,13 @@ const UserProfileMeta: React.FC<UserProfileMetaProps> = ({ userData }) => {
       <meta name="twitter:title" content={title} />
       <meta name="twitter:description" content={description} />
       <meta name="twitter:image" content={imageUrl} />
+      <meta name="twitter:image:alt" content={`${userData.displayName}'s profile picture`} />
       
       {/* Additional Meta Tags */}
       <link rel="canonical" href={url} />
       <link rel="preconnect" href="https://fitwithpulse.ai" />
       <meta name="viewport" content="width=device-width, initial-scale=1" />
+      <meta name="theme-color" content="#E0FE10" />
     </Head>
   );
 };

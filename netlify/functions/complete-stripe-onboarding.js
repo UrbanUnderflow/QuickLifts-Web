@@ -140,17 +140,20 @@ async function updateOnboardingStatus(userId) {
     }
 
     // Update onboarding status to complete
-    const updateData = {
-      'creator.onboardingStatus': 'complete',
-      'creator.onboardingCompletedAt': new Date()
+    const creatorData = {
+      onboardingStatus: 'complete',
+      onboardingCompletedAt: new Date()
     };
 
     // Also update the account ID if we found/fixed it
     if (stripeAccountId) {
-      updateData['creator.stripeAccountId'] = stripeAccountId;
+      creatorData.stripeAccountId = stripeAccountId;
     }
 
-    await db.collection("users").doc(userId).update(updateData);
+    // Use set with merge to handle null creator objects
+    await db.collection("users").doc(userId).set({
+      creator: creatorData
+    }, { merge: true });
     
     console.log(`Updated onboarding status to complete for user ${userId}`, {
       hasStripeAccountId: !!stripeAccountId,

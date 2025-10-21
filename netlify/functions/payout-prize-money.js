@@ -259,10 +259,13 @@ const handler = async (event) => {
         return win;
       });
 
-      batch.update(userRef, {
-        'winner.challengeWins': updatedWins,
-        'winner.updatedAt': admin.firestore.FieldValue.serverTimestamp()
-      });
+      // Use set with merge to handle null winner objects
+      batch.set(userRef, {
+        winner: {
+          challengeWins: updatedWins,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        }
+      }, { merge: true });
 
       // Commit all updates
       await batch.commit();

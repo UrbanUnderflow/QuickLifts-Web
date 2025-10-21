@@ -7,11 +7,13 @@ async function updateWinnerOnboardingStatus(userId) {
   try {
     console.log(`[CompleteWinnerOnboarding] Updating onboarding status for user: ${userId}`);
     
-    // Update the user's winner onboarding status
-    await db.collection('users').doc(userId).update({
-      'winner.onboardingStatus': 'complete',
-      'winner.updatedAt': admin.firestore.FieldValue.serverTimestamp()
-    });
+    // Update the user's winner onboarding status - use set with merge to handle null winner
+    await db.collection('users').doc(userId).set({
+      winner: {
+        onboardingStatus: 'complete',
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      }
+    }, { merge: true });
     
     console.log(`[CompleteWinnerOnboarding] Successfully updated winner onboarding status for user: ${userId}`);
     return true;

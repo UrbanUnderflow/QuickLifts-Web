@@ -936,7 +936,7 @@ const HomePage: NextPage<HomePageProps> = ({ metaData }) => {
 // Convert to static generation for better performance
 export const getStaticProps: GetStaticProps<HomePageProps> = async () => {
   try {
-    const metaData = await adminMethods.getPageMetaData('about');
+    const metaData = await adminMethods.getPageMetaData('index');
     
     if (metaData) {
       const serializedMetaData: SerializablePageMetaData = {
