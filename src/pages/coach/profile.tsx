@@ -190,32 +190,20 @@ const CoachProfilePage: React.FC = () => {
     if (!currentUser) return;
     setStripeLoading(true);
     try {
-      // Pre-open a tab to avoid Safari popup blockers
-      const pendingWin = window.open('', '_blank');
       const res = await fetch(`/.netlify/functions/create-connected-account?userId=${encodeURIComponent(currentUser.id)}`);
       const json = await res.json().catch(()=>({}));
       if (res.ok && json?.accountLink) {
-        if (pendingWin && !pendingWin.closed) {
-          pendingWin.location.href = json.accountLink;
-        } else {
-          // Fallback: same-tab navigation if popups are blocked
-          window.location.href = json.accountLink;
-        }
+        // Open in new tab - more mobile-friendly approach
+        window.open(json.accountLink, '_blank', 'noopener,noreferrer');
         return;
       }
-      // No link returned – close the pre-opened tab if present
-      if (pendingWin && !pendingWin.closed) pendingWin.close();
       // Fallback: if Firestore stored the link, use it
       const ref = doc(db, 'users', currentUser.id);
       const snap = await getDoc(ref);
       const data: any = snap.exists() ? snap.data() : {};
       const link = data?.creator?.onboardingLink;
       if (link) {
-        if (pendingWin && !pendingWin.closed) {
-          pendingWin.location.href = link;
-        } else {
-          window.location.href = link;
-        }
+        window.open(link, '_blank', 'noopener,noreferrer');
       }
     } finally {
       setStripeLoading(false);
@@ -231,12 +219,8 @@ const CoachProfilePage: React.FC = () => {
       const json = await res.json().catch(()=>({}));
       const link = json?.link || json?.onboardingLink || json?.accountLink;
       if (res.ok && link) {
-        const pendingWin = window.open('', '_blank');
-        if (pendingWin && !pendingWin.closed) {
-          pendingWin.location.href = link;
-        } else {
-          window.location.href = link;
-        }
+        // Open in new tab - more mobile-friendly approach
+        window.open(link, '_blank', 'noopener,noreferrer');
       }
     } finally {
       setStripeLoading(false);
