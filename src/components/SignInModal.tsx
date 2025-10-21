@@ -280,11 +280,15 @@ const SignInModal: React.FC<SignInModalProps> = ({
         }
 
         // If user is unsubscribed and not beta
-        if (firestoreUser.subscriptionType === SubscriptionType.unsubscribed) {
+        // Skip subscription requirement for coach pages
+        const isOnCoachPage = router.pathname.startsWith('/coach/') || router.asPath.startsWith('/coach/');
+        if (firestoreUser.subscriptionType === SubscriptionType.unsubscribed && !isOnCoachPage) {
           console.log('[SignInModal] Unsubscribed user, closing modal and redirecting');
           onClose?.();
           router.push('/subscribe');
           return;
+        } else if (isOnCoachPage) {
+          console.log('[SignInModal] User on coach page, skipping subscription requirement');
         }
       }
     } catch (err) {
@@ -470,6 +474,12 @@ const SignInModal: React.FC<SignInModalProps> = ({
         }
         
         setError(errorMessage);
+        // Show toast notification for better visibility
+        dispatch(showToast({ 
+          message: errorMessage, 
+          type: 'error',
+          duration: 5000
+        }));
         
         if (isSignUp) {
           onSignUpError?.(error);
@@ -478,6 +488,11 @@ const SignInModal: React.FC<SignInModalProps> = ({
         }
       } else {
         setError(errorMessage);
+        dispatch(showToast({ 
+          message: errorMessage, 
+          type: 'error',
+          duration: 5000
+        }));
         const genericError = new Error(errorMessage);
         if (isSignUp) {
           onSignUpError?.(genericError);
@@ -748,11 +763,15 @@ const SignInModal: React.FC<SignInModalProps> = ({
             return;
           }
 
-          if (userDoc.subscriptionType === SubscriptionType.unsubscribed) {
+          // Skip subscription requirement for coach pages
+          const isOnCoachPage = router.pathname.startsWith('/coach/') || router.asPath.startsWith('/coach/');
+          if (userDoc.subscriptionType === SubscriptionType.unsubscribed && !isOnCoachPage) {
             console.log('[SignInModal] Unsubscribed user, redirecting');
             onClose?.();
             router.push('/subscribe');
             return;
+          } else if (isOnCoachPage) {
+            console.log('[SignInModal] User on coach page, skipping subscription requirement');
           }
         }
       } catch (err) {
@@ -1011,7 +1030,8 @@ const SignInModal: React.FC<SignInModalProps> = ({
       }
 
       // Determine next step *after* potential auto-join attempt or deferral
-      if (refreshedUser.subscriptionType === SubscriptionType.unsubscribed) {
+      const isOnCoachPage = router.pathname.startsWith('/coach/') || router.asPath.startsWith('/coach/');
+      if (refreshedUser.subscriptionType === SubscriptionType.unsubscribed && !isOnCoachPage) {
         console.log('[SignInModal] Quiz complete. Unsubscribed. Redirecting to /subscribe');
         router.push('/subscribe'); // Navigate directly if unsubscribed
       } else {
@@ -1158,7 +1178,8 @@ const SignInModal: React.FC<SignInModalProps> = ({
               }
               
               // Handle next step based on subscription status
-              if (refreshedUser.subscriptionType === SubscriptionType.unsubscribed) {
+              const isOnCoachPage = router.pathname.startsWith('/coach/') || router.asPath.startsWith('/coach/');
+              if (refreshedUser.subscriptionType === SubscriptionType.unsubscribed && !isOnCoachPage) {
                 console.log('[SignInModal] Quiz skipped. Unsubscribed. Redirecting to /subscribe');
                 router.push('/subscribe');
               } else {
@@ -2326,8 +2347,9 @@ const SignInModal: React.FC<SignInModalProps> = ({
       const isOnPaymentPage = router.pathname.startsWith('/payment/');
       const isOnConnectPage = router.pathname.startsWith('/connect/') || router.asPath.startsWith('/connect/');
       const isOnCoachInvitePage = router.pathname.startsWith('/coach-invite/') || router.asPath.startsWith('/coach-invite/');
+      const isOnCoachPage = router.pathname.startsWith('/coach/') || router.asPath.startsWith('/coach/');
       
-      if (userDoc.subscriptionType === SubscriptionType.unsubscribed && !isOnPaymentPage && !isOnConnectPage && !isOnCoachInvitePage) {
+      if (userDoc.subscriptionType === SubscriptionType.unsubscribed && !isOnPaymentPage && !isOnConnectPage && !isOnCoachInvitePage && !isOnCoachPage) {
         console.log('[SignInModal] handleSignInSuccess: User is unsubscribed. Redirecting to /subscribe.');
         // Preserve roundIdRedirect if it exists for post-subscription flow
         if (roundIdRedirect) {
@@ -2336,8 +2358,8 @@ const SignInModal: React.FC<SignInModalProps> = ({
         router.push('/subscribe');
         // Return EARLY to prevent other redirect/close logic
         return; 
-      } else if (isOnPaymentPage || isOnConnectPage || isOnCoachInvitePage) {
-        console.log('[SignInModal] handleSignInSuccess: User is on payment/connect/coach-invite page, skipping subscription check.');
+      } else if (isOnPaymentPage || isOnConnectPage || isOnCoachInvitePage || isOnCoachPage) {
+        console.log('[SignInModal] handleSignInSuccess: User is on payment/connect/coach-invite/coach page, skipping subscription check.');
       }
       // *** End Explicit Subscription Check ***
 

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
+import { useDispatch } from 'react-redux';
 import { useUser } from '../../hooks/useUser';
 import { firebaseStorageService, UploadImageType } from '../../api/firebase/storage/service';
 import { userService } from '../../api/firebase/user';
@@ -9,9 +10,11 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { FaBars, FaTimes } from 'react-icons/fa';
 import { signOut } from 'firebase/auth';
 import { auth } from '../../api/firebase/config';
+import { showToast } from '../../redux/toastSlice';
 
 const CoachProfilePage: React.FC = () => {
   const router = useRouter();
+  const dispatch = useDispatch();
   const currentUser = useUser();
   const [bio, setBio] = useState('');
   const [serviceTitle, setServiceTitle] = useState('');
@@ -187,41 +190,141 @@ const CoachProfilePage: React.FC = () => {
   };
 
   const startStripeOnboarding = async () => {
-    if (!currentUser) return;
+    if (!currentUser) {
+      dispatch(showToast({ message: 'Please sign in to continue', type: 'error' }));
+      return;
+    }
     setStripeLoading(true);
     try {
+      console.log('[CoachProfile] Starting Stripe onboarding for user:', currentUser.id);
       const res = await fetch(`/.netlify/functions/create-connected-account?userId=${encodeURIComponent(currentUser.id)}`);
-      const json = await res.json().catch(()=>({}));
-      if (res.ok && json?.accountLink) {
-        // Open in new tab - more mobile-friendly approach
-        window.open(json.accountLink, '_blank', 'noopener,noreferrer');
+      
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error('[CoachProfile] Stripe onboarding API error:', { status: res.status, error: errorText });
+        dispatch(showToast({ 
+          message: `Failed to start onboarding (Error ${res.status}). Please try again or contact support.`, 
+          type: 'error',
+          duration: 5000
+        }));
         return;
       }
-      // Fallback: if Firestore stored the link, use it
+      
+      const json = await res.json().catch((err) => {
+        console.error('[CoachProfile] Failed to parse JSON response:', err);
+        return {};
+      });
+      
+      if (json?.accountLink) {
+        console.log('[CoachProfile] Opening Stripe onboarding in new tab');
+        const newWindow = window.open(json.accountLink, '_blank', 'noopener,noreferrer');
+        if (!newWindow || newWindow.closed) {
+          // Popup was blocked - show helpful message
+          dispatch(showToast({ 
+            message: 'Please allow popups for this site to complete Stripe onboarding', 
+            type: 'warning',
+            duration: 5000
+          }));
+          // Fallback: open in same tab
+          window.location.href = json.accountLink;
+        } else {
+          dispatch(showToast({ 
+            message: 'Opening Stripe onboarding in new tab...', 
+            type: 'info',
+            duration: 3000
+          }));
+        }
+        return;
+      }
+      
+      // No accountLink in response - try Firestore fallback
+      console.log('[CoachProfile] No accountLink in API response, checking Firestore');
       const ref = doc(db, 'users', currentUser.id);
       const snap = await getDoc(ref);
       const data: any = snap.exists() ? snap.data() : {};
       const link = data?.creator?.onboardingLink;
+      
       if (link) {
-        window.open(link, '_blank', 'noopener,noreferrer');
+        console.log('[CoachProfile] Found onboarding link in Firestore, opening in new tab');
+        const newWindow = window.open(link, '_blank', 'noopener,noreferrer');
+        if (!newWindow || newWindow.closed) {
+          dispatch(showToast({ 
+            message: 'Please allow popups for this site to complete Stripe onboarding', 
+            type: 'warning',
+            duration: 5000
+          }));
+          window.location.href = link;
+        }
+      } else {
+        // No link found anywhere
+        console.error('[CoachProfile] No onboarding link found in API or Firestore');
+        dispatch(showToast({ 
+          message: 'Unable to generate onboarding link. Please contact support with your user ID: ' + currentUser.id.slice(0, 8), 
+          type: 'error',
+          duration: 6000
+        }));
       }
+    } catch (err) {
+      console.error('[CoachProfile] Unexpected error during Stripe onboarding:', err);
+      dispatch(showToast({ 
+        message: 'An unexpected error occurred. Please try again or contact support.', 
+        type: 'error',
+        duration: 5000
+      }));
     } finally {
       setStripeLoading(false);
     }
   };
 
   const openStripeUpdate = async () => {
-    if (!currentUser) return;
+    if (!currentUser) {
+      dispatch(showToast({ message: 'Please sign in to continue', type: 'error' }));
+      return;
+    }
     setStripeLoading(true);
     try {
       const url = `/.netlify/functions/create-account-update-link?userId=${encodeURIComponent(currentUser.id)}&accountType=creator`;
       const res = await fetch(url);
+      
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error('[CoachProfile] Stripe update API error:', { status: res.status, error: errorText });
+        dispatch(showToast({ 
+          message: `Failed to open Stripe dashboard (Error ${res.status}). Please try again.`, 
+          type: 'error',
+          duration: 5000
+        }));
+        return;
+      }
+      
       const json = await res.json().catch(()=>({}));
       const link = json?.link || json?.onboardingLink || json?.accountLink;
-      if (res.ok && link) {
-        // Open in new tab - more mobile-friendly approach
-        window.open(link, '_blank', 'noopener,noreferrer');
+      
+      if (link) {
+        const newWindow = window.open(link, '_blank', 'noopener,noreferrer');
+        if (!newWindow || newWindow.closed) {
+          dispatch(showToast({ 
+            message: 'Please allow popups to access Stripe dashboard', 
+            type: 'warning',
+            duration: 5000
+          }));
+          window.location.href = link;
+        }
+      } else {
+        console.error('[CoachProfile] No link in update response');
+        dispatch(showToast({ 
+          message: 'Unable to generate Stripe dashboard link. Please contact support.', 
+          type: 'error',
+          duration: 5000
+        }));
       }
+    } catch (err) {
+      console.error('[CoachProfile] Unexpected error opening Stripe update:', err);
+      dispatch(showToast({ 
+        message: 'An unexpected error occurred. Please try again.', 
+        type: 'error',
+        duration: 5000
+      }));
     } finally {
       setStripeLoading(false);
     }

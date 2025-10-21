@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
+import { GetServerSideProps } from 'next';
 import { useUser, useUserLoading } from '../../hooks/useUser';
 import { coachService } from '../../api/firebase/coach';
 import { privacyService } from '../../api/firebase/privacy/service';
@@ -9,7 +10,13 @@ import { auth } from '../../api/firebase/config';
 import { FaCheckCircle, FaSpinner, FaExclamationTriangle, FaUser, FaChevronDown, FaSignOutAlt } from 'react-icons/fa';
 import PrivacyConsentModal from '../../components/PrivacyConsentModal';
 
-const CoachInvitePage: React.FC = () => {
+interface CoachInvitePageProps {
+  initialCoachInfo?: any;
+  referralCode?: string;
+  ogImage?: string;
+}
+
+const CoachInvitePage: React.FC<CoachInvitePageProps> = ({ initialCoachInfo, referralCode: serverReferralCode, ogImage: serverOgImage }) => {
   const router = useRouter();
   const { referralCode } = router.query;
   const currentUser = useUser();
@@ -19,7 +26,7 @@ const CoachInvitePage: React.FC = () => {
   const [connecting, setConnecting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [coachInfo, setCoachInfo] = useState<any>(null);
+  const [coachInfo, setCoachInfo] = useState<any>(initialCoachInfo || null);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -36,9 +43,15 @@ const CoachInvitePage: React.FC = () => {
       return;
     }
 
-    // Don't run if we already have coach info and are not loading
-    if (coachInfo && !loading) {
-      console.log('[CoachInvite] Already have coach info and not loading, skipping');
+    // Don't run if we already have coach info from SSR or previous fetch
+    if (coachInfo) {
+      console.log('[CoachInvite] Already have coach info, skipping fetch');
+      if (currentUser) {
+        setLoading(false);
+      } else if (userLoading === false) {
+        const redirectUrl = `/sign-up?coach=${referralCode}&redirect=${encodeURIComponent(router.asPath)}`;
+        router.push(redirectUrl);
+      }
       return;
     }
 
@@ -271,25 +284,36 @@ const CoachInvitePage: React.FC = () => {
     );
   }
 
-  // Dynamic OG/Twitter meta for rich previews
+  // Dynamic OG/Twitter meta for rich previews (use server-rendered values)
   const title = `You're invited to coach on Pulse`;
   const description = `Access athlete CRM and AI Cognitive Behavior Therapy.`;
-  const base = typeof window !== 'undefined' ? window.location.origin : 'https://fitwithpulse.ai';
-  const ogImage = coachInfo?.profileImage?.profileImageURL || `${base}/coach-invite-default.jpg`;
+  const base = 'https://fitwithpulse.ai';
+  const finalReferralCode = referralCode || serverReferralCode || '';
+  const ogImage = serverOgImage || coachInfo?.profileImage?.profileImageURL || `${base}/coach-invite-default.jpg`;
+  const pageUrl = `${base}/coach-invite/${finalReferralCode}`;
 
   return (
     <div className="min-h-screen bg-black flex items-center justify-center">
       <Head>
         <title>{title}</title>
+        <meta name="description" content={description} />
         <meta property="og:title" content={title} />
         <meta property="og:description" content={description} />
         <meta property="og:image" content={ogImage} />
-        <meta property="og:url" content={`${base}/coach-invite/${referralCode || ''}`} />
+        <meta property="og:image:secure_url" content={ogImage} />
+        <meta property="og:image:type" content="image/jpeg" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        <meta property="og:image:alt" content={`Join ${finalReferralCode} on Pulse`} />
+        <meta property="og:url" content={pageUrl} />
         <meta property="og:type" content="website" />
+        <meta property="og:site_name" content="Pulse Fitness" />
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content={title} />
         <meta name="twitter:description" content={description} />
         <meta name="twitter:image" content={ogImage} />
+        <meta name="twitter:image:alt" content={`Join ${finalReferralCode} on Pulse`} />
+        <link rel="canonical" href={pageUrl} />
       </Head>
       <div className="text-center max-w-md mx-auto p-8">
         {/* Signed in as badge with dropdown */}
@@ -375,6 +399,48 @@ const CoachInvitePage: React.FC = () => {
       </div>
     </div>
   );
+};
+
+export const getServerSideProps: GetServerSideProps<CoachInvitePageProps> = async ({ params, res }) => {
+  try {
+    const referralCode = params?.referralCode as string;
+    
+    if (!referralCode) {
+      return {
+        props: {
+          referralCode: '',
+          ogImage: 'https://fitwithpulse.ai/coach-invite-default.jpg'
+        }
+      };
+    }
+
+    // Set cache headers for better performance
+    res.setHeader(
+      'Cache-Control',
+      'public, s-maxage=300, stale-while-revalidate=600'
+    );
+
+    // Fetch coach info server-side
+    const coach = await coachService.findCoachByReferralCode(referralCode);
+    
+    const ogImage = coach?.profileImage?.profileImageURL || 'https://fitwithpulse.ai/coach-invite-default.jpg';
+
+    return {
+      props: {
+        initialCoachInfo: coach ? JSON.parse(JSON.stringify(coach)) : null,
+        referralCode,
+        ogImage
+      }
+    };
+  } catch (error) {
+    console.error('[CoachInvite SSR] Error fetching coach:', error);
+    return {
+      props: {
+        referralCode: params?.referralCode as string || '',
+        ogImage: 'https://fitwithpulse.ai/coach-invite-default.jpg'
+      }
+    };
+  }
 };
 
 export default CoachInvitePage;
