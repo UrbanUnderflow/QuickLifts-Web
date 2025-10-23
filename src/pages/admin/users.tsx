@@ -4,7 +4,7 @@ import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import { collection, getDocs, query, orderBy, doc, getDoc, setDoc, deleteDoc, writeBatch } from 'firebase/firestore';
 import { db, auth } from '../../api/firebase/config';
 import debounce from 'lodash.debounce';
-import { Trash2 as TrashIcon, AlertCircle, CheckCircle, Activity, Clock, Calendar, Dumbbell, Eye, XCircle, ArrowRight, ChevronRight, Code, Users, Shield } from 'lucide-react';
+import { Trash2 as TrashIcon, AlertCircle, CheckCircle, Activity, Clock, Calendar, Dumbbell, Eye, XCircle, ArrowRight, ChevronRight, Code, Users, Shield, LogIn } from 'lucide-react';
 import { workoutService } from '../../api/firebase/workout/service';
 import { Workout, WorkoutStatus, WorkoutSummary, RepsAndWeightLog } from '../../api/firebase/workout/types';
 import { ExerciseLog } from '../../api/firebase/exercise/types';
@@ -94,6 +94,9 @@ const UsersManagement: React.FC = () => {
 
   // State for adding users to 100trainers program
   const [processingAdd100Trainers, setProcessingAdd100Trainers] = useState<string | null>(null);
+
+  // State for remote login functionality
+  const [processingRemoteLogin, setProcessingRemoteLogin] = useState<string | null>(null);
 
   // Copy ID to clipboard and show toast
   const copyToClipboard = (id: string) => {
@@ -1578,6 +1581,87 @@ const UsersManagement: React.FC = () => {
       setProcessingAdd100Trainers(null);
     }
   };
+
+  // Remote login function
+  const handleRemoteLogin = async (user: User) => {
+    if (!user.email) {
+      setToastMessage({ 
+        type: 'error', 
+        text: 'User must have an email for remote login' 
+      });
+      return;
+    }
+
+    if (!window.confirm(`Remote login as ${user.username || user.email}?\n\nThis will open a new tab logged in as this user for debugging purposes.`)) {
+      return;
+    }
+
+    try {
+      setProcessingRemoteLogin(user.id);
+      
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        setToastMessage({ 
+          type: 'error', 
+          text: 'You must be logged in as an admin to use remote login' 
+        });
+        return;
+      }
+
+      // Generate remote login token
+      const response = await fetch('/.netlify/functions/generate-remote-login-token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          targetUserId: user.id,
+          adminUserId: currentUser.uid
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to generate remote login token');
+      }
+
+      const { token } = await response.json();
+
+      // Consume the token and get custom token
+      const loginResponse = await fetch('/.netlify/functions/consume-remote-login-token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ token })
+      });
+
+      if (!loginResponse.ok) {
+        const errorData = await loginResponse.json();
+        throw new Error(errorData.error || 'Failed to consume remote login token');
+      }
+
+      const { customToken, user: targetUser } = await loginResponse.json();
+
+      // Sign in with the custom token in a new tab
+      const loginUrl = `${window.location.origin}/remote-login?token=${customToken}&userId=${targetUser.id}&email=${encodeURIComponent(targetUser.email)}`;
+      window.open(loginUrl, '_blank', 'noopener,noreferrer');
+
+      setToastMessage({ 
+        type: 'success', 
+        text: `Remote login initiated for ${user.username || user.email}. Check the new tab.` 
+      });
+
+    } catch (error) {
+      console.error('Error with remote login:', error);
+      setToastMessage({ 
+        type: 'error', 
+        text: `Failed to remote login: ${error instanceof Error ? error.message : 'Unknown error'}` 
+      });
+    } finally {
+      setProcessingRemoteLogin(null);
+    }
+  };
   // *** END: Beta Applications Management Functions ***
 
   // Helper function to format role field
@@ -2552,6 +2636,21 @@ const UsersManagement: React.FC = () => {
                                   </svg>
                                 ) : (
                                   <Users className="h-3 w-3" />
+                                )}
+                              </button>
+                              <button
+                                onClick={() => handleRemoteLogin(user)}
+                                disabled={processingRemoteLogin === user.id || !user.email}
+                                className="px-2 py-1 rounded-md text-xs font-medium transition-colors bg-purple-900/30 text-purple-400 hover:bg-purple-900/50 border border-purple-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                                title={`Remote login as ${user.username || user.email}`}
+                              >
+                                {processingRemoteLogin === user.id ? (
+                                  <svg className="animate-spin h-3 w-3 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                  </svg>
+                                ) : (
+                                  <LogIn className="h-3 w-3" />
                                 )}
                               </button>
                             </div>

@@ -223,6 +223,24 @@ const handler = async (event) => {
         console.log(`[CreateConnectedAccount] Creating account with Pulse email: ${pulseEmail}`);
 
         // Create Stripe Express account with tax reporting capabilities
+        console.log(`[CreateConnectedAccount] About to create Stripe account with:`, {
+          type: 'express',
+          email: pulseEmail,
+          country: 'US',
+          capabilities: {
+            card_payments: { requested: true },
+            transfers: { requested: true }
+          },
+          business_type: 'individual',
+          settings: {
+            payouts: {
+              schedule: {
+                interval: 'daily'
+              }
+            }
+          }
+        });
+        
         account = await stripe.accounts.create({
             type: 'express',
             email: pulseEmail, // FORCE same email as Pulse profile
@@ -259,10 +277,29 @@ const handler = async (event) => {
     console.log('[CreateConnectedAccount] Account created:', account.id);
 
     // Create account link for onboarding
+    // Use username if available, otherwise use userId as fallback
+    const usernameOrId = userData.username && userData.username.trim() !== '' 
+      ? userData.username 
+      : userId;
+    
+    // Ensure we have a valid base URL
+    const baseUrl = process.env.SITE_URL || 'https://fitwithpulse.ai';
+    console.log(`[CreateConnectedAccount] Using base URL: ${baseUrl}`);
+    
+    const refreshUrl = `${baseUrl}/coach/profile`;
+    const returnUrl = `${baseUrl}/coach/profile?complete=true`;
+    
+    console.log(`[CreateConnectedAccount] Generated URLs:`, {
+      refreshUrl,
+      returnUrl,
+      refreshUrlValid: refreshUrl.startsWith('http'),
+      returnUrlValid: returnUrl.startsWith('http')
+    });
+    
     const accountLink = await stripe.accountLinks.create({
       account: account.id,
-      refresh_url: `${process.env.SITE_URL || 'https://fitwithpulse.ai'}/trainer/connect-account`,
-      return_url: `${process.env.SITE_URL || 'https://fitwithpulse.ai'}/${userData.username}/earnings?complete=true`,
+      refresh_url: refreshUrl,
+      return_url: returnUrl,
       type: "account_onboarding",
     });
 

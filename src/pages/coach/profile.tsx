@@ -208,7 +208,7 @@ const CoachProfilePage: React.FC = () => {
     setStripeLoading(true);
     try {
       console.log('[CoachProfile] Starting Stripe onboarding for user:', currentUser.id, 'email:', currentUser.email);
-      const res = await fetch(`/.netlify/functions/create-connected-account?userId=${encodeURIComponent(currentUser.id)}`);
+      const res = await fetch(`/.netlify/functions/create-connected-account-simple?userId=${encodeURIComponent(currentUser.id)}`);
       
       if (!res.ok) {
         let errorMessage = `Failed to start onboarding (Error ${res.status})`;
