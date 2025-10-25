@@ -241,6 +241,7 @@ const CoachDashboard: React.FC = () => {
             {[
               { href: '/coach/dashboard', label: 'Dashboard' },
               { href: '/coach/referrals', label: 'Referrals' },
+              { href: '/coach/revenue', label: 'Earnings' },
               { href: '/coach/staff', label: 'Staff' },
               { href: '/coach/inbox', label: 'Inbox' },
               { href: '/coach/profile', label: 'Profile' }
@@ -302,6 +303,7 @@ const CoachDashboard: React.FC = () => {
                 {[
                   { href: '/coach/dashboard', label: 'Dashboard' },
                   { href: '/coach/referrals', label: 'Referrals' },
+                  { href: '/coach/revenue', label: 'Earnings' },
                   { href: '/coach/staff', label: 'Staff' },
                   { href: '/coach/inbox', label: 'Inbox' },
                   { href: '/coach/profile', label: 'Profile' }
