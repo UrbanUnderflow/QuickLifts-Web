@@ -273,6 +273,16 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
     .reduce((sum, t) => sum + (t.amount || 0), 0);
   const derivedTotalLifetime = derivedCreatorLifetime + derivedPrizeLifetime;
 
+  // Base URL for functions
+  const API_BASE_URL = process.env.NODE_ENV === 'development' 
+    ? 'http://localhost:8888/.netlify/functions'
+    : 'https://fitwithpulse.ai/.netlify/functions';
+
+  // Determine if current user is viewing their own earnings
+  const isActualOwner = currentUser && profileUser && currentUser.id === profileUser.id;
+  const isOwnerOrPublic = !!isActualOwner || (allowPublicView && isAdminViewer);
+  const isViewOnly = !isActualOwner && allowPublicView && isAdminViewer;
+
   // Load connected athletes + subscription status when owner views their own page
   useEffect(() => {
     const loadAthleteSubs = async () => {
@@ -342,15 +352,6 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
     };
     loadAthleteSubs();
   }, [isActualOwner, profileUser?.id]);
-
-  const API_BASE_URL = process.env.NODE_ENV === 'development' 
-    ? 'http://localhost:8888/.netlify/functions'
-    : 'https://fitwithpulse.ai/.netlify/functions';
-
-  // Determine if current user is viewing their own earnings
-  const isActualOwner = currentUser && profileUser && currentUser.id === profileUser.id;
-  const isOwnerOrPublic = !!isActualOwner || (allowPublicView && isAdminViewer);
-  const isViewOnly = !isActualOwner && allowPublicView && isAdminViewer;
 
   // Authentication check
   useEffect(() => {
