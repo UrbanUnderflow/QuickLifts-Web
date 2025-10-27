@@ -1342,6 +1342,7 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
 
         {/* Payout Modal */}
         {showPayoutModal && (
+          <>
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
             <div className="bg-zinc-900 rounded-xl p-6 max-w-md w-full">
               <h3 className="text-xl font-semibold mb-4">Request Faster Payout</h3>
@@ -1473,6 +1474,7 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
               )}
             </div>
           )}
+          </>
         )}
 
         {/* Privacy Settings Modal */}
