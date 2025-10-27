@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import Header, { Section } from './Header';
 import Footer from './Footer/Footer';
-import CoachNavigation from './CoachNavigation';
+import CoachTopNav from './CoachTopNav';
 import CoachProtectedRoute from './CoachProtectedRoute';
 
 interface Props {
@@ -41,9 +41,9 @@ const CoachLayout: React.FC<Props> = ({
           theme="dark"
           hideNav={true}
         />
-        <CoachNavigation />
+        <CoachTopNav />
         
-        <main className="ml-64 pt-16">
+        <main className="pt-16">
           {children}
         </main>
       </div>

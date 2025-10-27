@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, runTransaction, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../api/firebase/config';
 import { User, SubscriptionType, SubscriptionPlatform, UserLevel } from '../api/firebase/user';
 import { userService } from '../api/firebase/user';
@@ -38,6 +38,11 @@ const SignUpPage: React.FC = () => {
     username?: string;
   }>({});
 
+  // Username live-check state
+  const [isCheckingUsername, setIsCheckingUsername] = useState(false);
+  const [isUsernameAvailable, setIsUsernameAvailable] = useState<boolean | null>(null);
+  const [usernameFormatError, setUsernameFormatError] = useState<string | null>(null);
+
   const isCoachSignUp = type === 'coach';
 
   // Clear error when user starts typing
@@ -51,6 +56,66 @@ const SignUpPage: React.FC = () => {
       setErrors(prev => ({ ...prev, [name]: undefined }));
     }
   };
+
+  // Helpers for username validation + availability
+  const normalizedUsername = (val: string) => val.trim().toLowerCase();
+  const validUsernameFormat = (val: string) => /^[a-z0-9_]{3,20}$/.test(val);
+
+  const checkUsernameAvailability = async (name: string): Promise<boolean> => {
+    const uname = normalizedUsername(name);
+    if (!validUsernameFormat(uname)) {
+      setUsernameFormatError('Use 3-20 chars: letters, numbers, underscore');
+      setIsUsernameAvailable(null);
+      return false;
+    }
+    setUsernameFormatError(null);
+    setIsCheckingUsername(true);
+    try {
+      const ref = doc(db, 'usernames', uname);
+      const snap = await getDoc(ref);
+      const taken = snap.exists();
+      setIsUsernameAvailable(!taken);
+      return !taken;
+    } catch (_) {
+      setIsUsernameAvailable(null);
+      return false;
+    } finally {
+      setIsCheckingUsername(false);
+    }
+  };
+
+  const claimUsername = async (uid: string, name: string) => {
+    const uname = normalizedUsername(name);
+    if (!validUsernameFormat(uname)) throw new Error('Invalid username');
+    await runTransaction(db, async (tx) => {
+      const ref = doc(db, 'usernames', uname);
+      const snap = await tx.get(ref);
+      if (snap.exists() && (snap.data() as any)?.userId !== uid) {
+        throw new Error('Username already taken');
+      }
+      tx.set(ref, { userId: uid, username: uname, createdAt: serverTimestamp() });
+    });
+  };
+
+  // Debounce live username availability checks
+  useEffect(() => {
+    const current = formData.username;
+    if (!current) {
+      setIsUsernameAvailable(null);
+      setUsernameFormatError(null);
+      return;
+    }
+    const timer = setTimeout(() => {
+      const uname = normalizedUsername(current);
+      if (!validUsernameFormat(uname)) {
+        setUsernameFormatError('Use 3-20 chars: letters, numbers, underscore');
+        setIsUsernameAvailable(null);
+        return;
+      }
+      checkUsernameAvailability(current);
+    }, 450);
+    return () => clearTimeout(timer);
+  }, [formData.username]);
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -87,10 +152,11 @@ const SignUpPage: React.FC = () => {
     // Username validation
     if (!formData.username) {
       newErrors.username = 'Username is required';
-    } else if (formData.username.length < 3) {
-      newErrors.username = 'Username must be at least 3 characters';
-    } else if (!/^[a-zA-Z0-9_]+$/.test(formData.username)) {
-      newErrors.username = 'Username can only contain letters, numbers, and underscores';
+    } else {
+      const uname = normalizedUsername(formData.username);
+      if (!validUsernameFormat(uname)) {
+        newErrors.username = 'Use 3-20 chars: letters, numbers, underscore';
+      }
     }
     
     setErrors(newErrors);
@@ -108,6 +174,14 @@ const SignUpPage: React.FC = () => {
     setError(null);
     
     try {
+      // Final username availability check before creating user
+      const uname = normalizedUsername(formData.username);
+      const available = await checkUsernameAvailability(uname);
+      if (!available) {
+        setIsLoading(false);
+        setError('Username is taken. Please choose another.');
+        return;
+      }
       // Create Firebase Auth user
       const userCredential = await createUserWithEmailAndPassword(
         auth, 
@@ -116,6 +190,8 @@ const SignUpPage: React.FC = () => {
       );
       
       const firebaseUser = userCredential.user;
+      // Reserve username atomically
+      await claimUsername(firebaseUser.uid, uname);
       
       // Upload profile image if provided
       let profileImageData = null;
@@ -145,8 +221,8 @@ const SignUpPage: React.FC = () => {
       const userData = {
         id: firebaseUser.uid,
         email: formData.email,
-        username: formData.username,
-        displayName: formData.username, // Use username as display name initially
+        username: uname,
+        displayName: uname, // Use username as display name initially
         role: isCoachSignUp ? 'coach' : 'athlete',
         registrationComplete: true, // Mark as complete since we're keeping it simple
         subscriptionType: SubscriptionType.unsubscribed,
@@ -349,11 +425,26 @@ const SignUpPage: React.FC = () => {
               type="text"
               value={formData.username}
               onChange={handleInputChange}
+              onBlur={() => checkUsernameAvailability(formData.username)}
               className={`w-full bg-zinc-900 border rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#E0FE10] transition ${
                 errors.username ? 'border-red-500' : 'border-zinc-700'
               }`}
               placeholder="your_username"
             />
+            <div className="text-xs mt-1">
+              {usernameFormatError && (
+                <span className="text-red-400">{usernameFormatError}</span>
+              )}
+              {!usernameFormatError && isCheckingUsername && (
+                <span className="text-zinc-400">Checking availability…</span>
+              )}
+              {!usernameFormatError && isUsernameAvailable === true && (
+                <span className="text-green-400">Username is available</span>
+              )}
+              {!usernameFormatError && isUsernameAvailable === false && (
+                <span className="text-red-400">Username is taken</span>
+              )}
+            </div>
             {errors.username && (
               <p className="text-red-400 text-sm mt-1">{errors.username}</p>
             )}

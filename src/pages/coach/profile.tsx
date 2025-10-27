@@ -522,7 +522,10 @@ const CoachProfilePage: React.FC = () => {
                       </div>
                     </div>
                     <div className="mt-4">
-                      <div className="text-sm text-zinc-400 mb-2">Recent sales</div>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="text-sm text-zinc-400">Recent sales</div>
+                        <a href={`/${currentUser?.username || 'me'}/earnings`} className="text-xs text-[#E0FE10] hover:underline">View full earnings</a>
+                      </div>
                       {earnings?.recentSales?.length ? (
                         <div className="border border-zinc-800 rounded-lg overflow-hidden">
                           <table className="min-w-full text-sm">

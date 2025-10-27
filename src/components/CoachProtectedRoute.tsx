@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
-import { useUser } from '../hooks/useUser';
+import { useUser, useUserLoading } from '../hooks/useUser';
 import { CoachModel } from '../types/Coach';
 import { db } from '../api/firebase/config';
 import { doc, getDoc } from 'firebase/firestore';
@@ -15,32 +15,38 @@ const CoachProtectedRoute: React.FC<Props> = ({
   requiresActiveSubscription = false 
 }) => {
   const currentUser = useUser();
+  const userLoading = useUserLoading();
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [coachProfile, setCoachProfile] = useState<CoachModel | null>(null);
 
   useEffect(() => {
     const checkCoachAccess = async () => {
+      // Wait for auth to finish initializing to avoid false redirects
+      if (userLoading) {
+        return;
+      }
       // If no user, redirect to home
       if (!currentUser) {
         router.push('/');
         return;
       }
 
-      // Check if user has coach role
-      if (currentUser.role !== 'coach') {
-        router.push('/');
-        return;
-      }
-
       try {
-        // Fetch coach profile
+        // Fetch coach profile first (source of truth for coach access)
         const coachDoc = await getDoc(doc(db, 'coaches', currentUser.id));
         
         if (!coachDoc.exists()) {
-          // User has coach role but no coach profile - redirect to setup
-          router.push('/coach/setup');
-          return;
+          // If no profile exists, fall back to role to decide where to go
+          if (currentUser.role === 'coach') {
+            // Coach role but missing profile → send to setup
+            router.push('/coach/setup');
+            return;
+          } else {
+            // Not a coach and no coach profile → home
+            router.push('/');
+            return;
+          }
         }
 
         const coachData = new CoachModel(coachDoc.id, coachDoc.data() as any);
@@ -67,7 +73,7 @@ const CoachProtectedRoute: React.FC<Props> = ({
     };
 
     checkCoachAccess();
-  }, [currentUser, router, requiresActiveSubscription]);
+  }, [currentUser, router, requiresActiveSubscription, userLoading]);
 
   if (loading) {
     return (

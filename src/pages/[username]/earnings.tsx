@@ -11,6 +11,11 @@ import Link from 'next/link';
 import { trackEvent } from '../../lib/analytics';
 import { useEmailMismatchDetection } from '../../hooks/useEmailMismatchDetection';
 import EmailMismatchModal from '../../components/EmailMismatchModal';
+import { coachService } from '../../api/firebase/coach/service';
+import subscriptionService from '../../api/firebase/subscription/service';
+import { db } from '../../api/firebase/config';
+import { doc, getDoc } from 'firebase/firestore';
+import { PRICING_INFO } from '../../utils/stripeConstants';
 
 // Define interfaces for unified earnings data
 interface UnifiedEarnings {
@@ -227,6 +232,20 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
   });
   const [autoFixAttempted, setAutoFixAttempted] = useState(false);
 
+  // Connected athletes subscriptions (coach view)
+  type AthleteSubRow = {
+    athleteUserId: string;
+    displayName?: string;
+    username?: string;
+    email?: string;
+    planType: 'pulsecheck-monthly' | 'pulsecheck-annual' | null;
+    expiration?: Date | null;
+    isActive: boolean;
+    monthlyCents: number; // gross estimated MRR
+  };
+  const [athleteSubs, setAthleteSubs] = useState<AthleteSubRow[]>([]);
+  const [isAthleteSubsLoading, setIsAthleteSubsLoading] = useState(false);
+
   // Email mismatch detection
   const {
     hasEmailMismatch,
@@ -253,6 +272,76 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
     .filter(t => t.type === 'prize_winning')
     .reduce((sum, t) => sum + (t.amount || 0), 0);
   const derivedTotalLifetime = derivedCreatorLifetime + derivedPrizeLifetime;
+
+  // Load connected athletes + subscription status when owner views their own page
+  useEffect(() => {
+    const loadAthleteSubs = async () => {
+      try {
+        if (!isActualOwner || !profileUser?.id) return;
+        setIsAthleteSubsLoading(true);
+        const connected = await coachService.getConnectedAthletes(profileUser.id);
+        const ATHLETE_MONTHLY = PRICING_INFO.ATHLETE.MONTHLY.amount; // cents
+        const ATHLETE_ANNUAL_MONTHLY_EQ = Math.round(PRICING_INFO.ATHLETE.ANNUAL.amount / 12);
+        const rows: AthleteSubRow[] = await Promise.all(
+          connected.map(async (a: any) => {
+            let planType: AthleteSubRow['planType'] = null;
+            let expiration: Date | null | undefined = null;
+            let isActive = false;
+            try {
+              const sref = doc(db, 'subscriptions', a.id);
+              const sdoc = await getDoc(sref);
+              if (sdoc.exists()) {
+                const sd: any = sdoc.data();
+                const plans: any[] = Array.isArray(sd?.plans) ? sd.plans : [];
+                const pulsePlans = plans.filter(p => p && typeof p.type === 'string' && p.type.startsWith('pulsecheck-'));
+                pulsePlans.sort((x, y) => (y?.expiration || 0) - (x?.expiration || 0));
+                const latest = pulsePlans[0];
+                if (latest) {
+                  planType = latest.type as AthleteSubRow['planType'];
+                  expiration = typeof latest.expiration === 'number' ? new Date(latest.expiration * 1000) : null;
+                  isActive = typeof latest.expiration === 'number' && latest.expiration > Math.floor(Date.now() / 1000);
+                } else {
+                  // Fallback to ensureActiveOrSyncPulseCheck for edge cases
+                  const status = await subscriptionService.ensureActiveOrSyncPulseCheck(a.id);
+                  isActive = !!status.isActive;
+                  expiration = status.latestExpiration || null;
+                }
+              }
+            } catch (_) {
+              try {
+                const status = await subscriptionService.ensureActiveOrSyncPulseCheck(a.id);
+                isActive = !!status.isActive;
+                expiration = status.latestExpiration || null;
+              } catch (_) {}
+            }
+
+            const monthlyCents = planType === 'pulsecheck-annual'
+              ? ATHLETE_ANNUAL_MONTHLY_EQ
+              : planType === 'pulsecheck-monthly'
+                ? ATHLETE_MONTHLY
+                : 0;
+
+            return {
+              athleteUserId: a.id,
+              displayName: a.displayName,
+              username: a.username,
+              email: a.email,
+              planType,
+              expiration,
+              isActive,
+              monthlyCents,
+            } as AthleteSubRow;
+          })
+        );
+        // Sort active first, then by name
+        rows.sort((r1, r2) => (Number(r2.isActive) - Number(r1.isActive)) || (r1.displayName || r1.username || '').localeCompare(r2.displayName || r2.username || ''));
+        setAthleteSubs(rows);
+      } finally {
+        setIsAthleteSubsLoading(false);
+      }
+    };
+    loadAthleteSubs();
+  }, [isActualOwner, profileUser?.id]);
 
   const API_BASE_URL = process.env.NODE_ENV === 'development' 
     ? 'http://localhost:8888/.netlify/functions'
@@ -1313,6 +1402,76 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
               </div>
             </div>
           </div>
+
+          {/* Connected Athletes Subscriptions */}
+          {isActualOwner && (
+            <div className="bg-zinc-900 p-6 rounded-xl mt-8">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-semibold">Connected Athletes Subscriptions</h3>
+                <div className="text-sm text-zinc-400">
+                  {isAthleteSubsLoading ? 'Loading…' : `${athleteSubs.filter(a=>a.isActive).length} active of ${athleteSubs.length}`}
+                </div>
+              </div>
+
+              {isAthleteSubsLoading ? (
+                <div className="space-y-3">
+                  {[...Array(4)].map((_, i) => (
+                    <div key={i} className="h-10 bg-zinc-800 rounded animate-pulse" />
+                  ))}
+                </div>
+              ) : athleteSubs.length === 0 ? (
+                <p className="text-zinc-400">No connected athletes yet.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full">
+                    <thead>
+                      <tr className="text-zinc-400 border-b border-zinc-800">
+                        <th className="text-left py-3">Athlete</th>
+                        <th className="text-left py-3">Plan</th>
+                        <th className="text-left py-3">Status</th>
+                        <th className="text-left py-3">Expires</th>
+                        <th className="text-right py-3">MRR</th>
+                        <th className="text-right py-3">Your Share (40%)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {athleteSubs.map((a) => {
+                        const shareCents = Math.round(a.monthlyCents * 0.4);
+                        return (
+                          <tr key={a.athleteUserId} className="border-b border-zinc-800">
+                            <td className="py-3 px-2 text-white">{a.displayName || a.username || a.athleteUserId.slice(0,6)}</td>
+                            <td className="py-3 px-2 text-zinc-300">{a.planType || '—'}</td>
+                            <td className="py-3 px-2">
+                              <span className={`px-2 py-1 rounded-md text-xs ${a.isActive ? 'bg-green-600/20 text-green-300 border border-green-700/40' : 'bg-zinc-800 text-zinc-400 border border-zinc-700'}`}>{a.isActive ? 'Active' : 'Inactive'}</span>
+                            </td>
+                            <td className="py-3 px-2 text-zinc-300">{a.expiration ? a.expiration.toLocaleDateString() : '—'}</td>
+                            <td className="py-3 px-2 text-right text-white">{a.monthlyCents ? `$${(a.monthlyCents/100).toFixed(2)}` : '—'}</td>
+                            <td className="py-3 px-2 text-right text-white">{a.monthlyCents ? `$${(shareCents/100).toFixed(2)}` : '—'}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Totals */}
+              {!isAthleteSubsLoading && athleteSubs.length > 0 && (
+                <div className="mt-4 text-right text-sm text-zinc-300">
+                  {(() => {
+                    const gross = athleteSubs.filter(a=>a.isActive).reduce((s, a) => s + a.monthlyCents, 0);
+                    const share = Math.round(gross * 0.4);
+                    return (
+                      <div>
+                        <div>Estimated gross MRR: <span className="text-white font-semibold">${(gross/100).toFixed(2)}</span></div>
+                        <div>Your estimated share (40%): <span className="text-white font-semibold">${(share/100).toFixed(2)}</span></div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+            </div>
+          )}
         )}
 
         {/* Privacy Settings Modal */}

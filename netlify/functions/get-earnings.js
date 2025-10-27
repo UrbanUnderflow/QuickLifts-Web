@@ -431,10 +431,27 @@ const handler = async (event) => {
           const buyerEmail = payment.buyerEmail || (payment.metadata && payment.metadata.buyerEmail) || '';
           const buyerUsername = payment.buyerUsername || (payment.metadata && payment.metadata.buyerUsername) || '';
 
+          // Normalize timestamp without falling back to "today"
+          let createdMs = undefined;
+          try {
+            if (payment.createdAt?.toDate?.()) {
+              createdMs = payment.createdAt.toDate().getTime();
+            } else if (typeof payment.createdAt === 'number') {
+              // seconds or ms
+              createdMs = payment.createdAt < 10000000000 ? payment.createdAt * 1000 : payment.createdAt;
+            } else if (payment.created) {
+              const num = typeof payment.created === 'string' ? parseFloat(payment.created) : payment.created;
+              createdMs = num < 10000000000 ? num * 1000 : num;
+            }
+          } catch (_) {}
+
+          const dateString = createdMs && !isNaN(createdMs)
+            ? new Date(createdMs).toISOString().split('T')[0]
+            : null;
+
           return {
-            date: payment.createdAt?.toDate?.() 
-              ? payment.createdAt.toDate().toISOString().split('T')[0] 
-              : new Date().toISOString().split('T')[0],
+            date: dateString,
+            created: createdMs ? Math.floor(createdMs / 1000) : null,
             roundTitle: payment.challengeTitle || 'Fitness Round',
             amount: (payment.amount / 100) || 0,
             status: payment.status || 'completed',
