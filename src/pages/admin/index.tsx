@@ -156,6 +156,12 @@ const adminCardsData = [
     link: "/admin/creatorProspects"
   },
   {
+    title: "University Prospects",
+    description: "Manage university-level decision maker prospects and outreach.",
+    icon: <Building2 className="w-5 h-5" />,
+    link: "/admin/universityProspects"
+  },
+  {
     title: "Daily Reflection",
     description: "Create and manage daily reflection prompts for users.",
     icon: <Edit3 className="w-5 h-5" />,
