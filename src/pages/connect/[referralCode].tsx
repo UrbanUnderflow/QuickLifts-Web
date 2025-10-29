@@ -484,6 +484,11 @@ const AthleteConnectPage: React.FC<AthleteConnectPageProps> = ({ initialCoachInf
                         if (!currentUser) return;
                         try {
                           setCreatingCheckout(true);
+                          // Open a placeholder tab synchronously to avoid mobile popup blockers
+                          let pendingWindow: Window | null = null;
+                          try {
+                            pendingWindow = window.open('', '_blank');
+                          } catch {}
                           // Resolve priceId precedence for checkout:
                           // 1) ?price=...
                           // 2) Selected plan from picker
@@ -506,22 +511,30 @@ const AthleteConnectPage: React.FC<AthleteConnectPageProps> = ({ initialCoachInf
                           if (res.ok && data.url) {
                             // Save return path for Safari mobile
                             try { sessionStorage.setItem('pulse_auth_return_path', router.asPath); } catch {}
-                            // Try opening Stripe Checkout in a new tab first to avoid in-app browser blocks
+                            // Navigate the pre-opened tab if available, else fallback
                             try {
-                              const newWindow = window.open(data.url as string, '_blank', 'noopener,noreferrer');
-                              if (!newWindow || newWindow.closed) {
-                                // Popup blocked or could not open: fallback to same-tab navigation
-                                window.location.href = data.url as string;
+                              if (pendingWindow && !pendingWindow.closed) {
+                                pendingWindow.location.href = data.url as string;
+                              } else {
+                                const newWindow = window.open(data.url as string, '_blank');
+                                if (!newWindow || newWindow.closed) {
+                                  window.location.href = data.url as string;
+                                }
                               }
-                            } catch (openErr) {
-                              // As a final fallback, navigate current tab
+                            } catch {
+                              if (pendingWindow && !pendingWindow.closed) pendingWindow.close();
                               window.location.href = data.url as string;
                             }
                           } else {
                             console.error('[SubscriptionGate] Failed to create checkout session', data);
+                            // Close placeholder if we opened it
+                            try { if (pendingWindow && !pendingWindow.closed) pendingWindow.close(); } catch {}
                           }
                         } catch (e) {
                           console.error('[SubscriptionGate] create checkout error', e);
+                          // Close placeholder if error
+                          // Note: pendingWindow may be undefined if blocked
+                          try { /* @ts-ignore */ if (pendingWindow && !pendingWindow.closed) pendingWindow.close(); } catch {}
                         } finally {
                           setCreatingCheckout(false);
                         }

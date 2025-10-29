@@ -86,6 +86,11 @@ const Subscribe: React.FC = () => {
     const priceId = planType === 'monthly' ? monthlyPriceId : annualPriceId;
 
     try {
+      // Open a placeholder tab synchronously to avoid mobile popup blockers
+      let pendingWindow: Window | null = null;
+      try {
+        pendingWindow = window.open('', '_blank');
+      } catch {}
       // 1. Call your Netlify Function to create a Checkout Session
       console.log('[Subscribe] Creating checkout session for:', { 
         userId: currentUser.id, 
@@ -117,11 +122,16 @@ const Subscribe: React.FC = () => {
       if (checkoutUrl) {
         console.log('[Subscribe] Opening Stripe Checkout in new tab');
         try {
-          const newWindow = window.open(checkoutUrl, '_blank', 'noopener,noreferrer');
-          if (!newWindow || newWindow.closed) {
-            window.location.href = checkoutUrl;
+          if (pendingWindow && !pendingWindow.closed) {
+            pendingWindow.location.href = checkoutUrl;
+          } else {
+            const newWindow = window.open(checkoutUrl, '_blank');
+            if (!newWindow || newWindow.closed) {
+              window.location.href = checkoutUrl;
+            }
           }
         } catch (openErr) {
+          try { if (pendingWindow && !pendingWindow.closed) pendingWindow.close(); } catch {}
           window.location.href = checkoutUrl;
         }
       } else {
