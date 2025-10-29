@@ -98,6 +98,31 @@ const UniversityProspectsPage: React.FC = () => {
   const [draftSavedAt, setDraftSavedAt] = useState<Date | null>(null);
   const PROGRAM_SIZE_OPTIONS: ProgramSize[] = ['0-5000','5000 - 10000','10000 - 15,000','15000 - 25000','25000 - 50000','50000 - 100000','100000+'];
   const dispatch = useDispatch();
+  const [initialEmailDraft, setInitialEmailDraft] = useState<{ subject: string; body: string; pilot: string; slots: string } | null>(null);
+
+  useEffect(() => {
+    if (emailOpen && emailProspect) {
+      setInitialEmailDraft({ subject: emailSubject, body: emailBody, pilot: pilotLength, slots: proposedSlots });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [emailOpen]);
+
+  const emailDirty = !!initialEmailDraft && (
+    initialEmailDraft.subject !== emailSubject ||
+    initialEmailDraft.body !== emailBody ||
+    initialEmailDraft.pilot !== pilotLength ||
+    initialEmailDraft.slots !== proposedSlots
+  );
+
+  const requestCloseEmail = async () => {
+    if (emailDirty) {
+      const shouldSave = window.confirm('You have unsaved changes. Click OK to save as a draft, or Cancel to discard.');
+      if (shouldSave) {
+        await saveEmailDraft();
+      }
+    }
+    setEmailOpen(false);
+  };
 
   const filtered = useMemo(() => {
     let rows = prospects;
@@ -483,11 +508,11 @@ const UniversityProspectsPage: React.FC = () => {
 
           {/* Email Generation & Send Modal */}
           {emailOpen && emailProspect && (
-            <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setEmailOpen(false)}>
+            <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
               <div className="bg-zinc-900 border border-zinc-800 rounded-xl w-full max-w-3xl" onClick={e=>e.stopPropagation()}>
                 <div className="p-4 border-b border-zinc-800 flex items-center justify-between">
                   <h3 className="text-xl font-semibold">Email {emailProspect.decisionMaker || emailProspect.university}</h3>
-                  <button className="text-zinc-400 hover:text-white" onClick={() => setEmailOpen(false)}>✕</button>
+                  <button className="text-zinc-400 hover:text-white" onClick={requestCloseEmail}>✕</button>
                 </div>
                 <div className="p-4 space-y-3">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

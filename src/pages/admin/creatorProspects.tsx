@@ -118,6 +118,26 @@ const CreatorProspectsPage: React.FC = () => {
   const [savingDraft, setSavingDraft] = useState(false);
   const [draftSavedAt, setDraftSavedAt] = useState<Date | null>(null);
   const dispatch = useDispatch();
+  const [initialDraft, setInitialDraft] = useState<{ body: string; slots: string; sender: 'tremaine'|'brand' } | null>(null);
+
+  useEffect(() => {
+    if (emailOpen && emailProspect) {
+      setInitialDraft({ body: emailBody, slots: proposedSlots, sender: senderType });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [emailOpen]);
+
+  const isDirty = !!initialDraft && (initialDraft.body !== emailBody || initialDraft.slots !== proposedSlots || initialDraft.sender !== senderType);
+
+  const requestCloseDm = async () => {
+    if (isDirty) {
+      const shouldSave = window.confirm('You have unsaved changes. Click OK to save as a draft, or Cancel to discard.');
+      if (shouldSave) {
+        await saveEmailDraft();
+      }
+    }
+    setEmailOpen(false);
+  };
 
   // Remove undefined recursively so Firestore doesn't receive invalid values
   const cleanForFirestore = (input: any): any => {
@@ -652,11 +672,11 @@ const CreatorProspectsPage: React.FC = () => {
 
           {/* Email Modal */}
           {emailOpen && emailProspect && (
-            <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setEmailOpen(false)}>
+            <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
               <div className="bg-zinc-900 border border-zinc-800 rounded-xl w-full max-w-3xl" onClick={e=>e.stopPropagation()}>
                 <div className="p-4 border-b border-zinc-800 flex items-center justify-between">
                   <h3 className="text-xl font-semibold">DM {emailProspect.displayName}</h3>
-                  <button className="text-zinc-400 hover:text-white" onClick={() => setEmailOpen(false)}>✕</button>
+                  <button className="text-zinc-400 hover:text-white" onClick={requestCloseDm}>✕</button>
                 </div>
                 <div className="p-4 space-y-3">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
