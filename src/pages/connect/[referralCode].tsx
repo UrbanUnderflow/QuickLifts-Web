@@ -72,6 +72,45 @@ const AthleteConnectPage: React.FC<AthleteConnectPageProps> = ({ initialCoachInf
   const defaultSelected = (planOptions.find(p => p.key === 'monthly') || planOptions[0])?.priceId;
   const [selectedPriceId, setSelectedPriceId] = useState<string | undefined>(defaultSelected);
 
+  // Helper: open Stripe Checkout with in-app browser handling and fallbacks
+  const openCheckoutUrl = (url: string) => {
+    const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+    // Common in-app browsers that often block or auto-close new tabs
+    const isInApp = /FBAN|FBAV|Instagram|LinkedInApp|Twitter|Outlook|Mail|Messenger|Snapchat|Pinterest/i.test(ua);
+    if (isInApp) {
+      // Prefer same-tab navigation in in-app browsers
+      window.location.href = url;
+      return;
+    }
+
+    let pendingWindow: Window | null = null;
+    const sameTabFallback = () => {
+      try { if (pendingWindow && !pendingWindow.closed) pendingWindow.close(); } catch {}
+      window.location.href = url;
+    };
+
+    try {
+      // Try opening a placeholder tab synchronously
+      try { pendingWindow = window.open('', '_blank'); } catch {}
+      if (pendingWindow && !pendingWindow.closed) {
+        pendingWindow.location.href = url;
+        // Timed fallback in case the new tab is auto-closed or blocked after navigation
+        setTimeout(() => {
+          if (!document.hidden) {
+            sameTabFallback();
+          }
+        }, 800);
+      } else {
+        const newWindow = window.open(url, '_blank');
+        if (!newWindow || newWindow.closed) {
+          sameTabFallback();
+        }
+      }
+    } catch {
+      sameTabFallback();
+    }
+  };
+
   // When connection succeeds, check subscription once
   useEffect(() => {
     if (!success || !currentUser?.id) {
@@ -512,20 +551,8 @@ const AthleteConnectPage: React.FC<AthleteConnectPageProps> = ({ initialCoachInf
                           if (res.ok && data.url) {
                             // Save return path for Safari mobile
                             try { sessionStorage.setItem('pulse_auth_return_path', router.asPath); } catch {}
-                            // Navigate the pre-opened tab if available, else fallback
-                            try {
-                              if (pendingWindow && !pendingWindow.closed) {
-                                pendingWindow.location.href = data.url as string;
-                              } else {
-                                const newWindow = window.open(data.url as string, '_blank');
-                                if (!newWindow || newWindow.closed) {
-                                  window.location.href = data.url as string;
-                                }
-                              }
-                            } catch {
-                              if (pendingWindow && !pendingWindow.closed) pendingWindow.close();
-                              window.location.href = data.url as string;
-                            }
+                            // Robust open with in-app handling and timed fallback
+                            openCheckoutUrl(data.url as string);
                           } else {
                             console.error('[SubscriptionGate] Failed to create checkout session', data);
                             // Close placeholder if we opened it

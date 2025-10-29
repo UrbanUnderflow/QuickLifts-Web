@@ -22,6 +22,41 @@ const Subscribe: React.FC = () => {
   const [isLocal, setIsLocal] = useState(false); // Track if running on localhost
   const [isSignInModalOpen, setIsSignInModalOpen] = useState(false); // Control SignInModal visibility
 
+  // Helper: open Stripe Checkout with in-app browser handling and fallbacks
+  const openCheckoutUrl = (url: string) => {
+    const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+    const isInApp = /FBAN|FBAV|Instagram|LinkedInApp|Twitter|Outlook|Mail|Messenger|Snapchat|Pinterest/i.test(ua);
+    if (isInApp) {
+      window.location.href = url;
+      return;
+    }
+
+    let pendingWindow: Window | null = null;
+    const sameTabFallback = () => {
+      try { if (pendingWindow && !pendingWindow.closed) pendingWindow.close(); } catch {}
+      window.location.href = url;
+    };
+
+    try {
+      try { pendingWindow = window.open('', '_blank'); } catch {}
+      if (pendingWindow && !pendingWindow.closed) {
+        pendingWindow.location.href = url;
+        setTimeout(() => {
+          if (!document.hidden) {
+            sameTabFallback();
+          }
+        }, 800);
+      } else {
+        const newWindow = window.open(url, '_blank');
+        if (!newWindow || newWindow.closed) {
+          sameTabFallback();
+        }
+      }
+    } catch {
+      sameTabFallback();
+    }
+  };
+
   useEffect(() => {
     const localCheck = isLocalhost();
     setIsLocal(localCheck);
@@ -120,20 +155,8 @@ const Subscribe: React.FC = () => {
       // Prefer opening the direct Checkout URL in a new tab (mobile-safe),
       // fallback to Stripe.js redirect if URL is not available
       if (checkoutUrl) {
-        console.log('[Subscribe] Opening Stripe Checkout in new tab');
-        try {
-          if (pendingWindow && !pendingWindow.closed) {
-            pendingWindow.location.href = checkoutUrl;
-          } else {
-            const newWindow = window.open(checkoutUrl, '_blank');
-            if (!newWindow || newWindow.closed) {
-              window.location.href = checkoutUrl;
-            }
-          }
-        } catch (openErr) {
-          try { if (pendingWindow && !pendingWindow.closed) pendingWindow.close(); } catch {}
-          window.location.href = checkoutUrl;
-        }
+        console.log('[Subscribe] Opening Stripe Checkout');
+        openCheckoutUrl(checkoutUrl);
       } else {
         console.log(`[Subscribe] Redirecting to Stripe Checkout with session ID: ${sessionId}`);
         const stripe = await stripePromise;
