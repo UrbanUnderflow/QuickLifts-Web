@@ -482,10 +482,11 @@ const AthleteConnectPage: React.FC<AthleteConnectPageProps> = ({ initialCoachInf
                     <button
                       onClick={async () => {
                         if (!currentUser) return;
+                        // Declare in the outer scope so it's visible in catch/finally
+                        let pendingWindow: Window | null = null;
                         try {
                           setCreatingCheckout(true);
                           // Open a placeholder tab synchronously to avoid mobile popup blockers
-                          let pendingWindow: Window | null = null;
                           try {
                             pendingWindow = window.open('', '_blank');
                           } catch {}
@@ -534,7 +535,7 @@ const AthleteConnectPage: React.FC<AthleteConnectPageProps> = ({ initialCoachInf
                           console.error('[SubscriptionGate] create checkout error', e);
                           // Close placeholder if error
                           // Note: pendingWindow may be undefined if blocked
-                          try { /* @ts-ignore */ if (pendingWindow && !pendingWindow.closed) pendingWindow.close(); } catch {}
+                          try { if (pendingWindow && !pendingWindow.closed) pendingWindow.close(); } catch {}
                         } finally {
                           setCreatingCheckout(false);
                         }
