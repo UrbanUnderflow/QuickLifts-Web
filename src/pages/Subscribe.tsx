@@ -148,24 +148,26 @@ const Subscribe: React.FC = () => {
 
       const sessionId = data.sessionId;
       const checkoutUrl = data.url as string | undefined;
+      const useServerRedirect = true;
+      if (useServerRedirect) {
+        const base = '/.netlify/functions/create-checkout-session';
+        const params = new URLSearchParams({ userId: currentUser.id, priceId });
+        const endpoint = `${base}?${params.toString()}`;
+        openCheckoutUrl(endpoint);
+        return;
+      }
+
       if (!sessionId && !checkoutUrl) {
         throw new Error('Could not retrieve checkout session.');
       }
 
-      // Prefer opening the direct Checkout URL in a new tab (mobile-safe),
-      // fallback to Stripe.js redirect if URL is not available
       if (checkoutUrl) {
-        console.log('[Subscribe] Opening Stripe Checkout');
         openCheckoutUrl(checkoutUrl);
       } else {
-        console.log(`[Subscribe] Redirecting to Stripe Checkout with session ID: ${sessionId}`);
         const stripe = await stripePromise;
         if (stripe) {
           const { error } = await stripe.redirectToCheckout({ sessionId });
-          if (error) {
-            console.error('[Subscribe] Stripe redirect error:', error);
-            setError(error.message || 'Failed to redirect to payment.');
-          }
+          if (error) setError(error.message || 'Failed to redirect to payment.');
         } else {
           throw new Error('Stripe.js failed to load.');
         }

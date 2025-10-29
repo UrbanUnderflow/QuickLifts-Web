@@ -521,14 +521,8 @@ const AthleteConnectPage: React.FC<AthleteConnectPageProps> = ({ initialCoachInf
                     <button
                       onClick={async () => {
                         if (!currentUser) return;
-                        // Declare in the outer scope so it's visible in catch/finally
-                        let pendingWindow: Window | null = null;
                         try {
                           setCreatingCheckout(true);
-                          // Open a placeholder tab synchronously to avoid mobile popup blockers
-                          try {
-                            pendingWindow = window.open('', '_blank');
-                          } catch {}
                           // Resolve priceId precedence for checkout:
                           // 1) ?price=...
                           // 2) Selected plan from picker
@@ -536,33 +530,21 @@ const AthleteConnectPage: React.FC<AthleteConnectPageProps> = ({ initialCoachInf
                           const priceFromQuery = (typeof router.query.price === 'string' && router.query.price) || undefined;
                           const athleteMonthlyFallback = isLocalhost ? 'price_test_athlete_monthly' : 'price_live_athlete_monthly';
                           const priceId = priceFromQuery || selectedPriceId || athleteMonthlyFallback;
-                          console.log('[SubscriptionGate] Creating checkout', { userId: currentUser.id, priceId, referralCode });
-                          const res = await fetch('/.netlify/functions/create-athlete-checkout-session', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                              userId: currentUser.id,
-                              email: currentUser.email,
-                              priceId,
-                              coachReferralCode: typeof referralCode === 'string' ? referralCode : undefined,
-                            })
+                          console.log('[SubscriptionGate] Starting server-redirect checkout', { userId: currentUser.id, priceId, referralCode });
+                          // Save return path for Safari mobile
+                          try { sessionStorage.setItem('pulse_auth_return_path', router.asPath); } catch {}
+                          // Build server redirect URL (function will 302 to Stripe)
+                          const base = '/.netlify/functions/create-athlete-checkout-session';
+                          const params = new URLSearchParams({
+                            userId: currentUser.id,
+                            priceId,
+                            email: currentUser.email || '',
+                            coachReferralCode: typeof referralCode === 'string' ? referralCode : ''
                           });
-                          const data = await res.json();
-                          if (res.ok && data.url) {
-                            // Save return path for Safari mobile
-                            try { sessionStorage.setItem('pulse_auth_return_path', router.asPath); } catch {}
-                            // Robust open with in-app handling and timed fallback
-                            openCheckoutUrl(data.url as string);
-                          } else {
-                            console.error('[SubscriptionGate] Failed to create checkout session', data);
-                            // Close placeholder if we opened it
-                            try { if (pendingWindow && !pendingWindow.closed) pendingWindow.close(); } catch {}
-                          }
+                          const redirectLauncher = `${base}?${params.toString()}`;
+                          openCheckoutUrl(redirectLauncher);
                         } catch (e) {
                           console.error('[SubscriptionGate] create checkout error', e);
-                          // Close placeholder if error
-                          // Note: pendingWindow may be undefined if blocked
-                          try { if (pendingWindow && !pendingWindow.closed) pendingWindow.close(); } catch {}
                         } finally {
                           setCreatingCheckout(false);
                         }

@@ -26,6 +26,34 @@ const handler = async (event) => {
   // Initialize Stripe with the appropriate key based on origin
   const stripe = getStripeInstance(event);
 
+  // GET mode: server-side redirect to Stripe (mobile-friendly)
+  if (event.httpMethod === 'GET') {
+    const qp = event.queryStringParameters || {};
+    const priceId = qp.priceId;
+    const userId = qp.userId;
+    if (!priceId || !userId) {
+      return { statusCode: 400, body: JSON.stringify({ message: 'Missing required parameters: priceId and userId' }) };
+    }
+    try {
+      const siteUrl = process.env.SITE_URL || 'https://fitwithpulse.ai';
+      const isLocalhost = isLocalhostRequest(event);
+      const baseUrl = isLocalhost ? (event.headers.origin || 'http://localhost:8888') : siteUrl;
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ['card'],
+        line_items: [ { price: priceId, quantity: 1 } ],
+        mode: 'subscription',
+        client_reference_id: userId,
+        success_url: `${baseUrl}/subscription-success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${baseUrl}/subscribe`,
+        subscription_data: { trial_period_days: 30, metadata: { userId, userType: 'athlete' } }
+      });
+      return { statusCode: 302, headers: { Location: session.url, 'Cache-Control': 'no-store' }, body: '' };
+    } catch (e) {
+      console.error('[CreateCheckoutSession][GET] Error:', e);
+      return { statusCode: 500, body: JSON.stringify({ message: 'Failed to create checkout session.' }) };
+    }
+  }
+
   if (event.httpMethod !== 'POST') {
     return {
       statusCode: 405,

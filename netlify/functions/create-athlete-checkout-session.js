@@ -40,6 +40,73 @@ const handler = async (event) => {
   // Initialize Stripe with the appropriate key based on origin
   const stripe = getStripeInstance(event);
 
+  // Support server-side redirect flow for better mobile behavior
+  if (event.httpMethod === 'GET') {
+    const qp = event.queryStringParameters || {};
+    const priceId = qp.priceId;
+    const userId = qp.userId;
+    const email = qp.email;
+    const coachReferralCode = qp.coachReferralCode;
+
+    if (!priceId || !userId) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ message: 'Missing required parameters: priceId and userId' })
+      };
+    }
+
+    try {
+      const siteUrl = process.env.SITE_URL || 'https://fitwithpulse.ai';
+      const isLocalhost = isLocalhostRequest(event);
+      const baseUrl = isLocalhost ? (event.headers.origin || 'http://localhost:8888') : siteUrl;
+
+      // Lookup coach if referral code provided (optional)
+      let coachId = '';
+      try {
+        if (coachReferralCode) {
+          const coachQuery = await db.collection('coaches')
+            .where('referralCode', '==', coachReferralCode)
+            .limit(1)
+            .get();
+          if (!coachQuery.empty) coachId = coachQuery.docs[0].id;
+        }
+      } catch {}
+
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ['card'],
+        line_items: [ { price: priceId, quantity: 1 } ],
+        mode: 'subscription',
+        client_reference_id: userId,
+        ...(email ? { customer_email: email } : {}),
+        success_url: `${baseUrl}/subscription-success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${baseUrl}/subscribe`,
+        metadata: {
+          userId,
+          userType: 'athlete',
+          linkedCoachId: coachId,
+          coachReferralCode: coachReferralCode || ''
+        },
+        subscription_data: {
+          metadata: { userId, userType: 'athlete', linkedCoachId: coachId || '' }
+        }
+      });
+
+      return {
+        statusCode: 302,
+        headers: {
+          ...headers,
+          Location: session.url,
+          'Cache-Control': 'no-store'
+        },
+        body: ''
+      };
+    } catch (err) {
+      console.error('[AthleteCheckout][GET] Error creating session:', err);
+      return { statusCode: 500, headers, body: JSON.stringify({ message: 'Failed to create athlete checkout session.' }) };
+    }
+  }
+
   if (event.httpMethod !== 'POST') {
     return {
       statusCode: 405,
