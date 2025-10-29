@@ -119,15 +119,74 @@ const CreatorProspectsPage: React.FC = () => {
   const [draftSavedAt, setDraftSavedAt] = useState<Date | null>(null);
   const dispatch = useDispatch();
   const [initialDraft, setInitialDraft] = useState<{ body: string; slots: string; sender: 'tremaine'|'brand' } | null>(null);
+  const [revPrompt, setRevPrompt] = useState('');
+  const [revLoading, setRevLoading] = useState(false);
+  const [revText, setRevText] = useState('');
 
   useEffect(() => {
     if (emailOpen && emailProspect) {
       setInitialDraft({ body: emailBody, slots: proposedSlots, sender: senderType });
+      setRevPrompt('');
+      setRevText('');
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [emailOpen]);
 
   const isDirty = !!initialDraft && (initialDraft.body !== emailBody || initialDraft.slots !== proposedSlots || initialDraft.sender !== senderType);
+
+  // Detect unsaved quick-add inputs
+  const isQuickAddDirty = useMemo(() => {
+    try { return JSON.stringify(form) !== JSON.stringify(emptyProspect); }
+    catch { return false; }
+  }, [form]);
+
+  const generateRevision = async () => {
+    if (!revPrompt.trim()) return;
+    setRevLoading(true);
+    try {
+      const res = await fetch('/api/gpt/revise-dm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: revPrompt,
+          currentBody: emailBody,
+          context: {
+            creator: emailProspect?.displayName || emailProspect?.handle,
+            niche: emailProspect?.niche,
+            platforms: emailProspect?.platforms
+          }
+        })
+      });
+      const json = await res.json();
+      if (!res.ok || !json.revisedBody) throw new Error(json.error || 'Failed to generate revision');
+      setRevText(json.revisedBody);
+      dispatch(showToast({ message: 'Revision generated', type: 'success' }));
+    } catch (e) {
+      console.error('[DM Revise] error', e);
+      dispatch(showToast({ message: 'Failed to generate revision', type: 'error' }));
+    } finally {
+      setRevLoading(false);
+    }
+  };
+
+  const replaceWithRevision = () => {
+    if (!revText) return;
+    setEmailBody(revText);
+    setRevText('');
+    setRevPrompt('');
+  };
+
+  // Warn before closing tab if unsaved work exists
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = 'You have unsaved changes. Progress will be lost.';
+    };
+    if (isQuickAddDirty || (emailOpen && isDirty)) {
+      window.addEventListener('beforeunload', handler);
+      return () => window.removeEventListener('beforeunload', handler);
+    }
+  }, [isQuickAddDirty, emailOpen, isDirty]);
 
   const requestCloseDm = async () => {
     if (isDirty) {
@@ -208,8 +267,9 @@ const CreatorProspectsPage: React.FC = () => {
     const name = (p.displayName || p.handle || 'there').split(' ')[0];
     const subject = 'Creator outreach'; // unused for DM copy
     const timeText = slots || 'before 12:45 PM most weekdays';
+    const platform = pickPrimaryPlatform(p);
     const body = from === 'tremaine'
-      ? `Hey ${name}! I’m Tremaine—big fan of your content. I’d love to hear more about how you’re building your community and what your goals are.\n\nI’m the founder of Pulse, a fitness app where creators, coaches, and instructors can create structured programs (we call them Rounds) of whatever length you like and get paid for them. We’ve already helped a couple of SoulCycle instructors launch and they each brought around 50 people into their first Round.\n\nWe’re still early and looking for like‑minded creators to grow with us. Would you be open to a conversation? I’m usually free ${timeText}—happy to find a time that suits you.`
+      ? `Hey ${name}! I’m Tremaine—loving your content. I’d love to hear more about how you’re building community and what your goals beyond ${platform} are. I’m a creator myself and I’m trying to be more intentional about building community among fitness creators, coaches, and trainers.\n\nI’m the founder of Pulse, a fitness app where creators, coaches, and instructors can create structured programs that turn into a kind of gamified, multiplayer group training. Your community can compete and connect with you through the program. They’re fully monetizable and a great way to identify your core people. We’ve already helped a couple of SoulCycle instructors launch their own Rounds and they each brought around 50 people into their first Round.\n\nWe’re still early and looking for like‑minded creators to grow with us. Would you be open to a conversation?`
       : `Hi ${name}! 👋\n\nWe’re the team at Pulse Fitness Collective. We’ve been watching you share your expertise and we love your energy and the community you’re building. We see you make content generally geared toward ${humanizeNiche(p.niche)}, and we think your messaging really resonates with our community as well.\n\nPulse is a platform built for creators to monetize and gamify their content through something we call Rounds. We’ve launched a few this year in partnership with SoulCycle, and we’ve got more in the works with a diverse set of creators.\n\nWe’re still early and bringing on like‑minded creators who want to grow with us. If you’re curious about how Pulse could support what you’re already doing, we’d love to chat and learn more about your goals. Just let us know a good time and we’ll make it work!`;
     return { subject, body };
   };
@@ -694,6 +754,26 @@ const CreatorProspectsPage: React.FC = () => {
                     <label className="text-xs text-zinc-400">Body</label>
                     <textarea className="w-full bg-zinc-800 rounded-lg px-3 py-3 h-72 resize-y" value={emailBody} onChange={e=>setEmailBody(e.target.value)} />
                   </div>
+                  <div className="pt-2">
+                    <label className="text-xs text-zinc-400">Revision Prompt (optional)</label>
+                    <div className="flex gap-2 items-start">
+                      <textarea className="w-full bg-zinc-800 rounded-lg px-3 py-3 h-24 resize-y" value={revPrompt} onChange={e=>setRevPrompt(e.target.value)} placeholder="Describe how you’d like to revise the message (tone, details, emphasis)…" />
+                      <button onClick={generateRevision} disabled={revLoading || !revPrompt.trim()} className="px-4 py-2 rounded-md bg-blue-600/20 border border-blue-500/40 text-blue-300 hover:bg-blue-600/30 whitespace-nowrap">{revLoading ? 'Thinking…' : 'Generate'}</button>
+                    </div>
+                  </div>
+                  {revText && (
+                    <div className="pt-2">
+                      <div className="flex items-center gap-2 my-2 text-zinc-400 text-xs">
+                        <div className="flex-1 h-px bg-zinc-700" />
+                        <span>Revisions</span>
+                        <div className="flex-1 h-px bg-zinc-700" />
+                      </div>
+                      <textarea className="w-full bg-zinc-900 rounded-lg px-3 py-3 h-64 resize-y" value={revText} onChange={e=>setRevText(e.target.value)} />
+                      <div className="mt-2 flex justify-end">
+                        <button onClick={replaceWithRevision} className="px-4 py-2 rounded-md bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/30">Replace Body</button>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div className="p-4 border-t border-zinc-800 flex justify-between gap-3">
                   <div className="text-xs text-zinc-500">This is a DM template. Copy and paste into the platform. {draftSavedAt ? <span className="text-green-400">Draft saved</span> : null}</div>

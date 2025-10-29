@@ -107,23 +107,35 @@ const Subscribe: React.FC = () => {
       }
 
       const sessionId = data.sessionId;
-      if (!sessionId) {
-        throw new Error('Could not retrieve session ID.');
+      const checkoutUrl = data.url as string | undefined;
+      if (!sessionId && !checkoutUrl) {
+        throw new Error('Could not retrieve checkout session.');
       }
 
-      // 2. Redirect to Stripe Checkout using the received sessionId
-      console.log(`[Subscribe] Redirecting to Stripe Checkout with session ID: ${sessionId}`);
-      const stripe = await stripePromise;
-      if (stripe) {
-        const { error } = await stripe.redirectToCheckout({ sessionId });
-        if (error) {
-          // This error is typically only shown if there's an issue *initiating* the redirect
-          // (e.g., network error, invalid session ID). Payment errors are handled by Stripe.
-          console.error('[Subscribe] Stripe redirect error:', error);
-          setError(error.message || 'Failed to redirect to payment.');
+      // Prefer opening the direct Checkout URL in a new tab (mobile-safe),
+      // fallback to Stripe.js redirect if URL is not available
+      if (checkoutUrl) {
+        console.log('[Subscribe] Opening Stripe Checkout in new tab');
+        try {
+          const newWindow = window.open(checkoutUrl, '_blank', 'noopener,noreferrer');
+          if (!newWindow || newWindow.closed) {
+            window.location.href = checkoutUrl;
+          }
+        } catch (openErr) {
+          window.location.href = checkoutUrl;
         }
       } else {
-        throw new Error('Stripe.js failed to load.');
+        console.log(`[Subscribe] Redirecting to Stripe Checkout with session ID: ${sessionId}`);
+        const stripe = await stripePromise;
+        if (stripe) {
+          const { error } = await stripe.redirectToCheckout({ sessionId });
+          if (error) {
+            console.error('[Subscribe] Stripe redirect error:', error);
+            setError(error.message || 'Failed to redirect to payment.');
+          }
+        } else {
+          throw new Error('Stripe.js failed to load.');
+        }
       }
 
     } catch (err: any) {

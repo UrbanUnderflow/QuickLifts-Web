@@ -114,6 +114,22 @@ const UniversityProspectsPage: React.FC = () => {
     initialEmailDraft.slots !== proposedSlots
   );
 
+  const isQuickAddDirty = useMemo(() => {
+    try { return JSON.stringify(form) !== JSON.stringify(emptyProspect); }
+    catch { return false; }
+  }, [form]);
+
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = 'You have unsaved changes. Progress will be lost.';
+    };
+    if (isQuickAddDirty || (emailOpen && emailDirty)) {
+      window.addEventListener('beforeunload', handler);
+      return () => window.removeEventListener('beforeunload', handler);
+    }
+  }, [isQuickAddDirty, emailOpen, emailDirty]);
+
   const requestCloseEmail = async () => {
     if (emailDirty) {
       const shouldSave = window.confirm('You have unsaved changes. Click OK to save as a draft, or Cancel to discard.');

@@ -506,7 +506,17 @@ const AthleteConnectPage: React.FC<AthleteConnectPageProps> = ({ initialCoachInf
                           if (res.ok && data.url) {
                             // Save return path for Safari mobile
                             try { sessionStorage.setItem('pulse_auth_return_path', router.asPath); } catch {}
-                            window.location.href = data.url as string;
+                            // Try opening Stripe Checkout in a new tab first to avoid in-app browser blocks
+                            try {
+                              const newWindow = window.open(data.url as string, '_blank', 'noopener,noreferrer');
+                              if (!newWindow || newWindow.closed) {
+                                // Popup blocked or could not open: fallback to same-tab navigation
+                                window.location.href = data.url as string;
+                              }
+                            } catch (openErr) {
+                              // As a final fallback, navigate current tab
+                              window.location.href = data.url as string;
+                            }
                           } else {
                             console.error('[SubscriptionGate] Failed to create checkout session', data);
                           }

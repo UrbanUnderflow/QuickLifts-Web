@@ -87,10 +87,10 @@ const handler = async (event) => {
 
     console.log(`[CreateCheckoutSession] Stripe session created successfully: ${session.id}`);
 
-    // Return the session ID to the frontend
+    // Return the session ID and url to the frontend (url enables mobile-safe new-tab fallback)
     return {
       statusCode: 200,
-      body: JSON.stringify({ sessionId: session.id }),
+      body: JSON.stringify({ sessionId: session.id, url: session.url }),
     };
 
   } catch (error) {
