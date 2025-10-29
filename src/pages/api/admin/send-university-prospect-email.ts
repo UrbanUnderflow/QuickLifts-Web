@@ -8,8 +8,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
   }
   try {
     const apiKey = process.env.BREVO_MARKETING_KEY || process.env.BREVO_API_KEY;
-    const senderEmail = process.env.BREVO_SENDER_EMAIL || 'no-reply@fitwithpulse.ai';
-    const senderName = process.env.BREVO_SENDER_NAME || 'Pulse';
+    const senderEmail = 'tre@fitwithpulse.ai';
+    const senderName = 'Tremaine Grant';
 
     if (!apiKey) {
       return res.status(500).json({ success: false, error: 'Brevo not configured' });

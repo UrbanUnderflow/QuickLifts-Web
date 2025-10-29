@@ -5,8 +5,9 @@ import { collection, addDoc, getDocs, orderBy, query, updateDoc, doc } from 'fir
 import { db } from '../../api/firebase/config';
 import { Check, User, Mail, Globe, Users, Target, Loader2, Filter } from 'lucide-react';
 import { convertFirestoreTimestamp, formatDate } from '../../utils/formatDate';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../../redux/store';
+import { showToast } from '../../redux/toastSlice';
 
 type ProspectStatus =
   | 'new'
@@ -79,7 +80,7 @@ const UniversityProspectsPage: React.FC = () => {
   const [prospects, setProspects] = useState<UniversityProspect[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<ProspectStatus | 'all'>('all');
+  const [statusFilter, setStatusFilter] = useState<ProspectStatus | 'all'>('new');
   const [priorityFilter, setPriorityFilter] = useState<ProspectPriority | 'all'>('all');
   const currentUser = useSelector((s: RootState) => s.user.currentUser);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -92,10 +93,11 @@ const UniversityProspectsPage: React.FC = () => {
   const [emailBody, setEmailBody] = useState('');
   const [emailSending, setEmailSending] = useState(false);
   const [pilotLength, setPilotLength] = useState('8–12 weeks');
-  const [proposedSlots, setProposedSlots] = useState('Tuesday 2:30 PM; Thursday 11 AM');
+  const [proposedSlots, setProposedSlots] = useState('Monday, Tuesday and Thursday before 12:45pm EST');
   const [savingDraft, setSavingDraft] = useState(false);
   const [draftSavedAt, setDraftSavedAt] = useState<Date | null>(null);
   const PROGRAM_SIZE_OPTIONS: ProgramSize[] = ['0-5000','5000 - 10000','10000 - 15,000','15000 - 25000','25000 - 50000','50000 - 100000','100000+'];
+  const dispatch = useDispatch();
 
   const filtered = useMemo(() => {
     let rows = prospects;
@@ -113,6 +115,12 @@ const UniversityProspectsPage: React.FC = () => {
     }
     return rows;
   }, [prospects, search, statusFilter, priorityFilter]);
+
+  const statusCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: prospects.length };
+    statuses.forEach(s => { counts[s.value] = prospects.filter(p => p.status === s.value).length; });
+    return counts;
+  }, [prospects]);
 
   const fetchProspects = async () => {
     setLoading(true);
@@ -143,7 +151,7 @@ const UniversityProspectsPage: React.FC = () => {
 
   const generateEmail = (p: UniversityProspect, pilot: string, slots: string): { subject: string; body: string } => {
     const sportPrimary = pickPrimarySport(p.sport);
-    const slotsText = slots || 'Tuesday 2:30 PM; Thursday 11 AM';
+    const slotsText = slots || 'Monday, Tuesday and Thursday before 12:45pm EST';
     const body = `Hi ${p.decisionMaker.split(' ')[0] || 'there'},\n\nI'm Tremaine Grant, founder of Pulse Fitness Collective. We built PulseCheck, a lightweight, always‑on sport‑psych companion and simple CRM that helps coaches track mood, RPE and readiness across large rosters. I know how hard it is for staffs to keep a close pulse on every athlete’s mental readiness, which is tightly linked to performance.\n\nPulseCheck improves session intent and adherence and gives coaches a centralized dashboard that flags athletes who might need extra attention. We can start a ${pilot || '8–12 weeks'} pilot with 1–3 teams (e.g., ${p.sport}). During the pilot we’ll track adherence, session‑intent and readiness trends and deliver a short impact report. If it’s a fit, scaling to more teams or department‑wide is straightforward, with the same workflows and flexible licensing. It’s turnkey: Pulse handles onboarding, daily check‑ins and weekly insight briefs. Data exports cleanly to CSV/Sheets.\n\nIf you’re open, I can share a brief overview and learn how you support your teams today. ${slotsText} could work on my end, but I’m happy to adjust to whatever’s easiest. Feel free to loop in performance or sport‑psych staff.\n\nBest,\nTremaine\nFounder & CEO, Pulse Fitness Collective\ntre@fitwithpulse.ai`;
     // Concise subject: prefer short, readable formats. If the full variant is long, fall back to a shorter pilot-oriented version.
     const fullSubject = `PulseCheck for ${sportPrimary} at ${p.university}`;
@@ -209,14 +217,18 @@ const UniversityProspectsPage: React.FC = () => {
           lastEmailBody: emailBody,
           lastEmailSentAt: new Date(),
           lastEmailMessageId: json.messageId || null,
+          status: 'contacted',
           updatedAt: new Date(),
           lastUpdatedBy: actor
         } as any);
+        // reflect locally in UI
+        setProspects(prev => prev.map(p => p.id === emailProspect.id ? { ...p, status: 'contacted', updatedAt: new Date(), lastUpdatedBy: actor } : p));
       }
+      dispatch(showToast({ message: 'Email sent successfully', type: 'success' }));
       setEmailOpen(false);
     } catch (e) {
       console.error('Send email failed', e);
-      alert('Failed to send email. Please try again.');
+      dispatch(showToast({ message: 'Failed to send email. Please try again.', type: 'error' }));
     } finally {
       setEmailSending(false);
     }
@@ -340,19 +352,28 @@ const UniversityProspectsPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Filters */}
-          <div className="flex flex-wrap items-center gap-3 mb-4">
-            <div className="flex items-center gap-2 text-zinc-400"><Filter className="w-4 h-4" />Filters</div>
-            <input placeholder="Search name, handle, email..." className="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 flex-1 min-w-[240px]"
-                   value={search} onChange={e=>setSearch(e.target.value)} />
-            <select className="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2" value={statusFilter} onChange={e=>setStatusFilter(e.target.value as any)}>
-              <option value="all">All Statuses</option>
-              {statuses.map(s=> <option key={s.value} value={s.value}>{s.label}</option>)}
-            </select>
-            <select className="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2" value={priorityFilter} onChange={e=>setPriorityFilter(e.target.value as any)}>
-              <option value="all">All Priorities</option>
-              {priorities.map(p=> <option key={p.value} value={p.value}>{p.label}</option>)}
-            </select>
+          {/* Filters and Status Tabs */}
+          <div className="flex flex-col gap-3 mb-4">
+            <div className="flex items-center gap-2 overflow-x-auto">
+              {(['all', ...statuses.map(s => s.value)] as Array<'all'|ProspectStatus>).map(s => (
+                <button
+                  key={s}
+                  onClick={() => setStatusFilter(s)}
+                  className={`px-3 py-1 rounded-full border text-sm whitespace-nowrap ${statusFilter===s ? 'bg-[#E0FE10] text-black border-[#E0FE10]' : 'bg-zinc-900 text-zinc-300 border-zinc-700 hover:bg-zinc-800'}`}
+                >
+                  {s === 'all' ? 'All' : statuses.find(x=>x.value===s)?.label} ({statusCounts[s] || 0})
+                </button>
+              ))}
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2 text-zinc-400"><Filter className="w-4 h-4" />Filters</div>
+              <input placeholder="Search name, email..." className="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 flex-1 min-w-[240px]"
+                     value={search} onChange={e=>setSearch(e.target.value)} />
+              <select className="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2" value={priorityFilter} onChange={e=>setPriorityFilter(e.target.value as any)}>
+                <option value="all">All Priorities</option>
+                {priorities.map(p=> <option key={p.value} value={p.value}>{p.label}</option>)}
+              </select>
+            </div>
           </div>
 
           {/* Table */}
