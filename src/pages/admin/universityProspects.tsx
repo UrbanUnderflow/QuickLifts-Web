@@ -541,7 +541,7 @@ const UniversityProspectsPage: React.FC = () => {
             <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setNotesOpen(false)}>
               <div className="bg-zinc-900 border border-zinc-800 rounded-xl w-full max-w-xl" onClick={e=>e.stopPropagation()}>
                 <div className="p-4 border-b border-zinc-800 flex items-center justify-between">
-                  <h3 className="text-xl font-semibold">Notes for {notesEditing.displayName}</h3>
+                  <h3 className="text-xl font-semibold">Notes for {notesEditing.decisionMaker || notesEditing.university}</h3>
                   <button className="text-zinc-400 hover:text-white" onClick={() => setNotesOpen(false)}>✕</button>
                 </div>
                 <div className="p-4">
