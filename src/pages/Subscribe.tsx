@@ -107,6 +107,14 @@ const Subscribe: React.FC = () => {
   const monthlyPriceId = isLocal ? TEST_MONTHLY_PRICE_ID : LIVE_MONTHLY_PRICE_ID;
   const annualPriceId = isLocal ? TEST_ANNUAL_PRICE_ID : LIVE_ANNUAL_PRICE_ID;
 
+  // Precompute hrefs for pure anchor navigation (Safari reliability)
+  const subscribeHref = (planType: 'monthly' | 'yearly') => {
+    if (!currentUser) return '#';
+    const priceId = planType === 'monthly' ? monthlyPriceId : annualPriceId;
+    const q = new URLSearchParams({ type: 'subscribe', userId: currentUser.id, priceId });
+    return `/checkout-redirect?${q.toString()}`;
+  };
+
   const handleSubscribeClick = async (planType: 'monthly' | 'yearly') => {
     // Check if user is logged in first
     if (!currentUser) {
@@ -486,13 +494,14 @@ const Subscribe: React.FC = () => {
                     </li>
                   </ul>
                   
-                  <button
-                    onClick={() => handleSubscribeClick('monthly')}
-                    disabled={isLoading}
-                    className={`w-full py-4 rounded-full text-lg font-semibold transition-all ${glassSecondary} ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  <a
+                    href={currentUser ? subscribeHref('monthly') : '#'}
+                    onClick={(e) => { if (!currentUser) { e.preventDefault(); setIsSignInModalOpen(true); return; } handleSubscribeClick('monthly'); }}
+                    className={`w-full py-4 rounded-full text-lg font-semibold transition-all ${glassSecondary} ${isLoading ? 'opacity-50 pointer-events-none' : ''} inline-flex items-center justify-center`}
+                    aria-disabled={isLoading}
                   >
                     {isLoading ? 'Processing...' : 'Start Monthly Plan'}
-                  </button>
+                  </a>
                 </div>
               </div>
               
@@ -535,13 +544,14 @@ const Subscribe: React.FC = () => {
                     </li>
                   </ul>
                   
-                  <button
-                    onClick={() => handleSubscribeClick('yearly')}
-                    disabled={isLoading}
-                    className={`w-full py-4 rounded-full text-lg font-semibold transition-all ${glassPrimary} ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  <a
+                    href={currentUser ? subscribeHref('yearly') : '#'}
+                    onClick={(e) => { if (!currentUser) { e.preventDefault(); setIsSignInModalOpen(true); return; } handleSubscribeClick('yearly'); }}
+                    className={`w-full py-4 rounded-full text-lg font-semibold transition-all ${glassPrimary} ${isLoading ? 'opacity-50 pointer-events-none' : ''} inline-flex items-center justify-center`}
+                    aria-disabled={isLoading}
                   >
                     {isLoading ? 'Processing...' : 'Get Started — First Month Free'}
-                  </button>
+                  </a>
                 </div>
               </div>
             </div>

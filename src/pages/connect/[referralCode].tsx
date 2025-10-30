@@ -72,6 +72,20 @@ const AthleteConnectPage: React.FC<AthleteConnectPageProps> = ({ initialCoachInf
   const defaultSelected = (planOptions.find(p => p.key === 'monthly') || planOptions[0])?.priceId;
   const [selectedPriceId, setSelectedPriceId] = useState<string | undefined>(defaultSelected);
 
+  // Precompute a pure href for Safari reliability (no JS required)
+  const checkoutHref = React.useMemo(() => {
+    if (!currentUser?.id) return '';
+    const priceId = selectedPriceId || HARD_CODED_PLANS.monthly.priceId;
+    const q = new URLSearchParams({
+      type: 'athlete',
+      userId: currentUser.id,
+      priceId,
+      email: currentUser.email || '',
+      coachReferralCode: typeof referralCode === 'string' ? referralCode : ''
+    });
+    return `/checkout-redirect?${q.toString()}`;
+  }, [currentUser?.id, currentUser?.email, selectedPriceId, referralCode]);
+
   // Helper: open Stripe Checkout with in-app browser handling and fallbacks
   const openCheckoutUrl = (url: string) => {
     const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
@@ -518,8 +532,9 @@ const AthleteConnectPage: React.FC<AthleteConnectPageProps> = ({ initialCoachInf
                     >
                       Not now
                     </button>
-                    <button
-                      onClick={async () => {
+                    <a
+                      href={checkoutHref || '#'}
+                      onClick={async (e) => {
                         if (!currentUser) return;
                         try {
                           setCreatingCheckout(true);
@@ -550,11 +565,11 @@ const AthleteConnectPage: React.FC<AthleteConnectPageProps> = ({ initialCoachInf
                           setCreatingCheckout(false);
                         }
                       }}
-                      disabled={creatingCheckout}
-                      className="px-4 py-2 bg-[#E0FE10] hover:bg-lime-400 rounded-lg text-black font-semibold disabled:opacity-50"
+                      className="px-4 py-2 bg-[#E0FE10] hover:bg-lime-400 rounded-lg text-black font-semibold disabled:opacity-50 inline-flex items-center justify-center"
+                      aria-disabled={creatingCheckout}
                     >
                       {creatingCheckout ? 'Redirecting…' : 'Subscribe'}
-                    </button>
+                    </a>
                   </div>
                 </div>
               </div>
