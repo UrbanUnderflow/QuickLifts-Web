@@ -37,45 +37,38 @@ const AthleteConnectPage: React.FC<AthleteConnectPageProps> = ({ initialCoachInf
   const [isSubscribed, setIsSubscribed] = useState<boolean | null>(null);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [creatingCheckout, setCreatingCheckout] = useState(false);
-  // Plan picker state (PulseCheck). We hard-code price IDs and display prices to avoid Netlify env dependency.
+  // Plan picker state (PulseCheck). Use env-configured price IDs in PROD; test IDs on localhost.
   const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-  const HARD_CODED_PLANS = {
-    monthly: {
-      // Stripe Price IDs: test vs live
-      // Updated TEST priceId per latest screenshot
-      priceId: isLocalhost ? 'price_1SHtdpRobSf56MUOMWHNd3ns' : 'price_1SHtQcRobSf56MUOgD0MHltS',
-      displayPrice: '24.99',
-    },
-    annual: {
-      priceId: isLocalhost ? 'price_1SHtgSRobSf56MUOcX5gfwUy' : 'price_1SHti3RobSf56MUOIULmEfK4',
-      displayPrice: '219.99',
-    },
-    // Weekly plan can be added here when a Stripe price is available
-  } as const;
+  const ENV_PRICE_MONTHLY = process.env.NEXT_PUBLIC_STRIPE_PRICE_PULSECHECK_MONTHLY;
+  const ENV_PRICE_ANNUAL = process.env.NEXT_PUBLIC_STRIPE_PRICE_PULSECHECK_ANNUAL;
+  const monthlyPriceIdResolved = isLocalhost ? 'price_1SHtdpRobSf56MUOMWHNd3ns' : ENV_PRICE_MONTHLY;
+  const annualPriceIdResolved = isLocalhost ? 'price_1SHtgSRobSf56MUOcX5gfwUy' : ENV_PRICE_ANNUAL;
+  const DISPLAY_MONTHLY = process.env.NEXT_PUBLIC_PULSECHECK_MONTHLY_DISPLAY || '24.99';
+  const DISPLAY_ANNUAL = process.env.NEXT_PUBLIC_PULSECHECK_ANNUAL_DISPLAY || '219.99';
 
   const planOptions = [
-    {
+    monthlyPriceIdResolved ? {
       key: 'monthly',
       label: 'Monthly',
       cadence: 'per month',
-      priceId: HARD_CODED_PLANS.monthly.priceId,
-      displayPrice: HARD_CODED_PLANS.monthly.displayPrice,
-    },
-    {
+      priceId: monthlyPriceIdResolved,
+      displayPrice: DISPLAY_MONTHLY,
+    } : null,
+    annualPriceIdResolved ? {
       key: 'annual',
       label: 'Annual',
       cadence: 'per year',
-      priceId: HARD_CODED_PLANS.annual.priceId,
-      displayPrice: HARD_CODED_PLANS.annual.displayPrice,
-    },
-  ];
+      priceId: annualPriceIdResolved,
+      displayPrice: DISPLAY_ANNUAL,
+    } : null,
+  ].filter(Boolean) as Array<{ key: 'monthly' | 'annual'; label: string; cadence: string; priceId: string; displayPrice: string; }>;
   const defaultSelected = (planOptions.find(p => p.key === 'monthly') || planOptions[0])?.priceId;
   const [selectedPriceId, setSelectedPriceId] = useState<string | undefined>(defaultSelected);
 
   // Precompute a pure href for Safari reliability (no JS required)
   const checkoutHref = React.useMemo(() => {
     if (!currentUser?.id) return '';
-    const priceId = selectedPriceId || HARD_CODED_PLANS.monthly.priceId;
+    const priceId = selectedPriceId || monthlyPriceIdResolved || '';
     const q = new URLSearchParams({
       type: 'athlete',
       userId: currentUser.id,
