@@ -534,15 +534,16 @@ const AthleteConnectPage: React.FC<AthleteConnectPageProps> = ({ initialCoachInf
                           // Save return path for Safari mobile
                           try { sessionStorage.setItem('pulse_auth_return_path', router.asPath); } catch {}
                           // Build server redirect URL (function will 302 to Stripe)
-                          const base = '/.netlify/functions/create-athlete-checkout-session';
+                          const base = '/checkout-redirect';
                           const params = new URLSearchParams({
+                            type: 'athlete',
                             userId: currentUser.id,
                             priceId,
                             email: currentUser.email || '',
                             coachReferralCode: typeof referralCode === 'string' ? referralCode : ''
                           });
-                          const redirectLauncher = `${base}?${params.toString()}`;
-                          openCheckoutUrl(redirectLauncher);
+                          const launcher = `${base}?${params.toString()}`;
+                          openCheckoutUrl(launcher);
                         } catch (e) {
                           console.error('[SubscriptionGate] create checkout error', e);
                         } finally {

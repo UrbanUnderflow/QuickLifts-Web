@@ -150,8 +150,8 @@ const Subscribe: React.FC = () => {
       const checkoutUrl = data.url as string | undefined;
       const useServerRedirect = true;
       if (useServerRedirect) {
-        const base = '/.netlify/functions/create-checkout-session';
-        const params = new URLSearchParams({ userId: currentUser.id, priceId });
+        const base = '/checkout-redirect';
+        const params = new URLSearchParams({ type: 'subscribe', userId: currentUser.id, priceId });
         const endpoint = `${base}?${params.toString()}`;
         openCheckoutUrl(endpoint);
         return;
