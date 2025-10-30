@@ -47,6 +47,7 @@ const handler = async (event) => {
     const userId = qp.userId;
     const email = qp.email;
     const coachReferralCode = qp.coachReferralCode;
+    const debug = qp.debug === '1' || qp.debug === 'true';
 
     if (!priceId || !userId) {
       return {
@@ -103,7 +104,14 @@ const handler = async (event) => {
       };
     } catch (err) {
       console.error('[AthleteCheckout][GET] Error creating session:', err);
-      return { statusCode: 500, headers, body: JSON.stringify({ message: 'Failed to create athlete checkout session.' }) };
+      return { 
+        statusCode: 500, 
+        headers, 
+        body: JSON.stringify({ 
+          message: 'Failed to create athlete checkout session.',
+          ...(debug ? { error: err?.message, code: err?.code } : {})
+        }) 
+      };
     }
   }
 

@@ -14,12 +14,14 @@ const CheckoutRedirectPage = () => {
     const priceId = typeof params.priceId === 'string' ? params.priceId : '';
     const email = typeof params.email === 'string' ? params.email : '';
     const coachReferralCode = typeof params.coachReferralCode === 'string' ? params.coachReferralCode : '';
+    const debug = typeof params.debug === 'string' ? params.debug : '';
 
     const q = new URLSearchParams();
     if (userId) q.set('userId', userId);
     if (priceId) q.set('priceId', priceId);
     if (email) q.set('email', email);
     if (coachReferralCode) q.set('coachReferralCode', coachReferralCode);
+    if (debug) q.set('debug', debug);
 
     // Choose the correct Netlify function endpoint; function performs a 302 to Stripe
     if (type === 'subscribe' || type === 'athlete') {

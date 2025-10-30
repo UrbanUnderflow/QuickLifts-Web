@@ -31,6 +31,7 @@ const handler = async (event) => {
     const qp = event.queryStringParameters || {};
     const priceId = qp.priceId;
     const userId = qp.userId;
+    const debug = qp.debug === '1' || qp.debug === 'true';
     if (!priceId || !userId) {
       return { statusCode: 400, body: JSON.stringify({ message: 'Missing required parameters: priceId and userId' }) };
     }
@@ -50,7 +51,7 @@ const handler = async (event) => {
       return { statusCode: 302, headers: { Location: session.url, 'Cache-Control': 'no-store' }, body: '' };
     } catch (e) {
       console.error('[CreateCheckoutSession][GET] Error:', e);
-      return { statusCode: 500, body: JSON.stringify({ message: 'Failed to create checkout session.' }) };
+      return { statusCode: 500, body: JSON.stringify({ message: 'Failed to create checkout session.', ...(debug ? { error: e?.message, code: e?.code } : {}) }) };
     }
   }
 
