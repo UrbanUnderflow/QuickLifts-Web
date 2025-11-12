@@ -5,6 +5,8 @@ import { useSelector } from 'react-redux';
 import { RootState } from '../../redux/store';
 import { creatorPagesService, CreatorLandingPage } from '../../api/firebase/creatorPages/service';
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { collection, getDocs, orderBy, query } from 'firebase/firestore';
+import { db } from '../../api/firebase/config';
 
 const CreatorLandingPageView: React.FC = () => {
   const router = useRouter();
@@ -34,9 +36,25 @@ const CreatorLandingPageView: React.FC = () => {
   const [editCtaType, setEditCtaType] = useState<'link'|'waitlist'>('waitlist');
   const [editCtaLabel, setEditCtaLabel] = useState('Join Waitlist');
   const [editCtaHref, setEditCtaHref] = useState('');
+  const [editCtaButtonColor, setEditCtaButtonColor] = useState('#E0FE10');
+  const [editCtaTextColor, setEditCtaTextColor] = useState('#000000');
   const [editSaving, setEditSaving] = useState(false);
 
+  // Waitlist viewer state
+  const [showWaitlistViewer, setShowWaitlistViewer] = useState(false);
+  const [waitlistEntries, setWaitlistEntries] = useState<Array<{id: string; name: string; email: string; createdAt: any}>>([]);
+  const [loadingWaitlist, setLoadingWaitlist] = useState(false);
+
   const isOwner = currentUser && data && currentUser.id === data.userId;
+
+  // Helper function to darken a hex color for border
+  const darkenColor = (hex: string, percent: number = 30): string => {
+    const num = parseInt(hex.replace('#', ''), 16);
+    const r = Math.max(0, Math.floor((num >> 16) * (1 - percent / 100)));
+    const g = Math.max(0, Math.floor(((num >> 8) & 0x00FF) * (1 - percent / 100)));
+    const b = Math.max(0, Math.floor((num & 0x0000FF) * (1 - percent / 100)));
+    return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
+  };
 
   useEffect(() => {
     if (!router.isReady || !username || !page) return;
@@ -122,6 +140,8 @@ const CreatorLandingPageView: React.FC = () => {
     setEditCtaType(data.ctaType || 'waitlist');
     setEditCtaLabel(data.ctaLabel || 'Join Waitlist');
     setEditCtaHref(data.ctaHref || '');
+    setEditCtaButtonColor(data.ctaButtonColor || '#E0FE10');
+    setEditCtaTextColor(data.ctaTextColor || '#000000');
     setEditMode(true);
   };
 
@@ -139,6 +159,67 @@ const CreatorLandingPageView: React.FC = () => {
     // Create preview URL
     const previewUrl = URL.createObjectURL(file);
     setEditBgImagePreview(previewUrl);
+  };
+
+  const handleOpenWaitlist = async () => {
+    if (!currentUser?.id || !data) return;
+    
+    setLoadingWaitlist(true);
+    setShowWaitlistViewer(true);
+    
+    try {
+      // Fetch waitlist entries from Firestore
+      // Path: creator-pages/{userId}/waitlist/{entryId}
+      const waitlistRef = collection(db, 'creator-pages', currentUser.id, 'waitlist');
+      const q = query(waitlistRef, orderBy('createdAt', 'desc'));
+      const snapshot = await getDocs(q);
+      
+      const entries = snapshot.docs
+        .map(doc => ({
+          id: doc.id,
+          name: doc.data().name || '',
+          email: doc.data().email || '',
+          pageName: doc.data().pageName || '',
+          createdAt: doc.data().createdAt,
+        }))
+        // Filter to only show entries for this specific page
+        .filter(entry => entry.pageName === data.slug);
+      
+      setWaitlistEntries(entries);
+    } catch (err) {
+      console.error('[Waitlist] Failed to load:', err);
+      alert('Failed to load waitlist. Please try again.');
+    } finally {
+      setLoadingWaitlist(false);
+    }
+  };
+
+  const handleExportWaitlist = () => {
+    if (waitlistEntries.length === 0) return;
+    
+    // Create CSV content
+    const headers = ['Name', 'Email', 'Joined'];
+    const rows = waitlistEntries.map(entry => [
+      entry.name,
+      entry.email,
+      entry.createdAt?.toDate ? entry.createdAt.toDate().toLocaleDateString() : 'N/A'
+    ]);
+    
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+    ].join('\n');
+    
+    // Download CSV
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `waitlist-${data.slug}-${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const handleEditSave = async () => {
@@ -175,6 +256,8 @@ const CreatorLandingPageView: React.FC = () => {
         ctaType: editCtaType,
         ctaLabel: editCtaLabel.trim(),
         ctaHref: editCtaType === 'link' ? editCtaHref.trim() : '',
+        ctaButtonColor: editCtaButtonColor,
+        ctaTextColor: editCtaTextColor,
       };
 
       await creatorPagesService.savePage(currentUser.id, currentUser.username || '', pageInput);
@@ -233,6 +316,14 @@ const CreatorLandingPageView: React.FC = () => {
             <span className="text-sm text-zinc-300">views</span>
           </div>
           
+          {/* View Waitlist button */}
+          <button
+            onClick={handleOpenWaitlist}
+            className="bg-white/10 backdrop-blur-sm hover:bg-white/20 text-white px-4 py-2 rounded-lg border border-white/20 transition-all duration-300 shadow-lg hover:shadow-xl"
+          >
+            View Waitlist
+          </button>
+          
           {/* Edit button */}
           <button
             onClick={handleEditOpen}
@@ -275,22 +366,26 @@ const CreatorLandingPageView: React.FC = () => {
                 href={data.ctaHref || '#'}
                 target="_blank"
                 rel="noreferrer"
-                className="group inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-[#E0FE10] to-lime-400 text-black px-8 py-4 text-lg font-semibold hover:shadow-2xl hover:shadow-lime-500/50 transition-all duration-300 hover:scale-105 active:scale-95"
+                className="inline-flex items-center justify-center rounded-lg px-6 py-3 font-semibold border-2 transition-all duration-300 shadow-lg hover:shadow-xl hover:opacity-90"
+                style={{
+                  backgroundColor: data.ctaButtonColor || '#E0FE10',
+                  color: data.ctaTextColor || '#000000',
+                  borderColor: darkenColor(data.ctaButtonColor || '#E0FE10', 30)
+                }}
               >
                 {data.ctaLabel || 'Learn more'}
-                <svg className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
-                </svg>
               </a>
             ) : (
               <button
                 onClick={() => setWaitlistOpen(true)}
-                className="group inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-[#E0FE10] to-lime-400 text-black px-8 py-4 text-lg font-semibold hover:shadow-2xl hover:shadow-lime-500/50 transition-all duration-300 hover:scale-105 active:scale-95"
+                className="inline-flex items-center justify-center rounded-lg px-6 py-3 font-semibold border-2 transition-all duration-300 shadow-lg hover:shadow-xl hover:opacity-90"
+                style={{
+                  backgroundColor: data.ctaButtonColor || '#E0FE10',
+                  color: data.ctaTextColor || '#000000',
+                  borderColor: darkenColor(data.ctaButtonColor || '#E0FE10', 30)
+                }}
               >
                 {data.ctaLabel || 'Join Waitlist'}
-                <svg className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
-                </svg>
               </button>
             )}
           </div>
@@ -336,6 +431,86 @@ const CreatorLandingPageView: React.FC = () => {
           animation: gradient 8s ease infinite;
         }
       `}</style>
+
+      {/* Waitlist Viewer Modal */}
+      {showWaitlistViewer && isOwner && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="bg-zinc-900 rounded-xl p-6 max-w-3xl w-full max-h-[80vh] overflow-hidden flex flex-col">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-2xl font-bold text-white">
+                Waitlist for "{data.title || data.slug}"
+              </h2>
+              <button 
+                onClick={() => setShowWaitlistViewer(false)} 
+                className="text-zinc-400 hover:text-white text-2xl"
+              >
+                ✕
+              </button>
+            </div>
+
+            {loadingWaitlist ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="w-8 h-8 border-4 border-[#E0FE10] border-t-transparent rounded-full animate-spin"></div>
+              </div>
+            ) : waitlistEntries.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12">
+                <svg className="w-16 h-16 text-zinc-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                </svg>
+                <p className="text-zinc-400 text-center">No waitlist signups yet</p>
+              </div>
+            ) : (
+              <>
+                <div className="mb-4 flex items-center justify-between">
+                  <div className="text-sm text-zinc-400">
+                    {waitlistEntries.length} {waitlistEntries.length === 1 ? 'signup' : 'signups'}
+                  </div>
+                  <button
+                    onClick={handleExportWaitlist}
+                    className="flex items-center gap-2 bg-[#E0FE10] text-black px-3 py-1.5 rounded-lg hover:bg-[#d0ee00] text-sm font-medium"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    Export CSV
+                  </button>
+                </div>
+                <div className="overflow-y-auto flex-1">
+                  <table className="w-full">
+                    <thead className="sticky top-0 bg-zinc-800 text-zinc-300 text-sm">
+                      <tr>
+                        <th className="text-left p-3 font-medium">Name</th>
+                        <th className="text-left p-3 font-medium">Email</th>
+                        <th className="text-left p-3 font-medium">Joined</th>
+                      </tr>
+                    </thead>
+                    <tbody className="text-white">
+                      {waitlistEntries.map((entry, idx) => (
+                        <tr key={entry.id} className={`border-b border-zinc-800 ${idx % 2 === 0 ? 'bg-zinc-900/50' : 'bg-zinc-800/30'}`}>
+                          <td className="p-3">{entry.name}</td>
+                          <td className="p-3 text-zinc-300">{entry.email}</td>
+                          <td className="p-3 text-sm text-zinc-400">
+                            {entry.createdAt?.toDate ? entry.createdAt.toDate().toLocaleDateString() : 'N/A'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+
+            <div className="mt-4">
+              <button
+                onClick={() => setShowWaitlistViewer(false)}
+                className="w-full bg-zinc-700 text-white px-4 py-3 rounded-lg hover:bg-zinc-600"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Edit Modal */}
       {editMode && isOwner && (
@@ -494,6 +669,28 @@ const CreatorLandingPageView: React.FC = () => {
                   />
                 </div>
               )}
+
+              {/* Button Colors */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm text-zinc-300 mb-2">Button Color</label>
+                  <input
+                    type="color"
+                    value={editCtaButtonColor}
+                    onChange={(e) => setEditCtaButtonColor(e.target.value)}
+                    className="w-full h-12 rounded-lg cursor-pointer"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-zinc-300 mb-2">Text Color</label>
+                  <input
+                    type="color"
+                    value={editCtaTextColor}
+                    onChange={(e) => setEditCtaTextColor(e.target.value)}
+                    className="w-full h-12 rounded-lg cursor-pointer"
+                  />
+                </div>
+              </div>
 
               {/* Actions */}
               <div className="flex gap-2 mt-6">

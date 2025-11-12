@@ -88,6 +88,8 @@ const Create: React.FC = () => {
   const [lpCtaType, setLpCtaType] = useState<'link'|'waitlist'>('waitlist');
   const [lpCtaLabel, setLpCtaLabel] = useState('Join Waitlist');
   const [lpCtaHref, setLpCtaHref] = useState('');
+  const [lpCtaButtonColor, setLpCtaButtonColor] = useState('#E0FE10');
+  const [lpCtaTextColor, setLpCtaTextColor] = useState('#000000');
   const [lpSaving, setLpSaving] = useState(false);
 
   const categories = [
@@ -1046,6 +1048,8 @@ const Create: React.FC = () => {
         ctaType: lpCtaType,
         ctaLabel: lpCtaLabel.trim(),
         ctaHref: lpCtaType === 'link' ? lpCtaHref.trim() : '',
+        ctaButtonColor: lpCtaButtonColor,
+        ctaTextColor: lpCtaTextColor,
       };
 
       await creatorPagesService.savePage(currentUser.id, currentUser.username || '', pageInput);
@@ -1064,6 +1068,8 @@ const Create: React.FC = () => {
       setLpCtaType('waitlist');
       setLpCtaLabel('Join Waitlist');
       setLpCtaHref('');
+      setLpCtaButtonColor('#E0FE10');
+      setLpCtaTextColor('#000000');
     } catch (err) {
       console.error('[Save Landing Page]', err);
       alert('Failed to save landing page. Please try again.');
@@ -1477,6 +1483,28 @@ const Create: React.FC = () => {
                   />
                 </div>
               )}
+
+              {/* Button Colors */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm text-zinc-300 mb-2">Button Color</label>
+                  <input
+                    type="color"
+                    value={lpCtaButtonColor}
+                    onChange={(e) => setLpCtaButtonColor(e.target.value)}
+                    className="w-full h-12 rounded-lg cursor-pointer"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-zinc-300 mb-2">Text Color</label>
+                  <input
+                    type="color"
+                    value={lpCtaTextColor}
+                    onChange={(e) => setLpCtaTextColor(e.target.value)}
+                    className="w-full h-12 rounded-lg cursor-pointer"
+                  />
+                </div>
+              </div>
 
               {/* Actions */}
               <div className="flex gap-2 mt-6">

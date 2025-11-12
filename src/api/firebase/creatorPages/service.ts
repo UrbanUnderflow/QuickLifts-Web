@@ -18,6 +18,8 @@ export interface CreatorLandingPage {
   ctaType?: CreatorCtaType;
   ctaLabel?: string;
   ctaHref?: string; // for link-button
+  ctaButtonColor?: string; // Custom button background color
+  ctaTextColor?: string; // Custom button text color
   viewCount?: number; // Track total page views
   updatedAt?: any;
   createdAt?: any;
@@ -52,6 +54,8 @@ export const creatorPagesService = {
       ctaType: input.ctaType || 'waitlist',
       ctaLabel: input.ctaLabel || 'Join Waitlist',
       ctaHref: input.ctaHref || '',
+      ctaButtonColor: input.ctaButtonColor || '#E0FE10',
+      ctaTextColor: input.ctaTextColor || '#000000',
       updatedAt: serverTimestamp(),
       // Only set createdAt and viewCount on new pages
       ...(isNewPage ? { 

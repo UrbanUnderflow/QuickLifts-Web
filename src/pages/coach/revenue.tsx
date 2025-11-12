@@ -63,7 +63,7 @@ const CoachRevenue: React.FC = () => {
     displayName?: string;
     username?: string;
     email?: string;
-    planType: 'pulsecheck-monthly' | 'pulsecheck-annual' | null;
+    planType: 'pulsecheck-monthly' | 'pulsecheck-annual' | 'Unknown' | null;
     expiration?: Date | null;
     isActive: boolean;
     monthlyCents: number;
