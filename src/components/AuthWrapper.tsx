@@ -81,6 +81,23 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     const raw = (path || '').split('?')[0].split('#')[0] || '/';
     // Preserve root "/" when trimming the trailing slash so home stays public
     const normalizedPath = (raw === '/' ? '/' : raw.replace(/\/$/, '')).toLowerCase();
+    const segments = normalizedPath.split('/').filter(Boolean);
+
+    // Treat creator landing pages (/{username}/{slug}) as public,
+    // as long as the first segment is not a reserved app prefix.
+    // This matches pages/[username]/[page].tsx routing.
+    if (segments.length === 2) {
+      const reservedPrefixes = new Set([
+        'round-invitation','round','profile','challenge','review','programming','press','100trainers',
+        'moveandfuelatl','investor','invest','connect','coach-invite','coach','admin','api','payment',
+        'subscribe','download','partner','winner','secure','haveyoupaid'
+      ]);
+      if (!reservedPrefixes.has(segments[0])) {
+        // Consider this a public landing page
+        return true;
+      }
+    }
+
     const isPublic = publicRoutes.includes(normalizedPath) || 
            publicPathPatterns.some(pattern => normalizedPath.startsWith(pattern));
     
@@ -117,6 +134,19 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     }
     
     return isPublic;
+  };
+ 
+  const isCreatorLandingPath = (path: string) => {
+    const raw = (path || '').split('?')[0].split('#')[0] || '/';
+    const normalizedPath = (raw === '/' ? '/' : raw.replace(/\/$/, '')).toLowerCase();
+    const segments = normalizedPath.split('/').filter(Boolean);
+    if (segments.length !== 2) return false;
+    const reservedPrefixes = new Set([
+      'round-invitation','round','profile','challenge','review','programming','press','100trainers',
+      'moveandfuelatl','investor','invest','connect','coach-invite','coach','admin','api','payment',
+      'subscribe','download','partner','winner','secure','haveyoupaid'
+    ]);
+    return !reservedPrefixes.has(segments[0]);
   };
  
     // Add debug useEffect to track currentUser changes with Safari-specific logging
@@ -224,7 +254,15 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
             // If the user is authenticated but missing required onboarding (e.g., username),
             // force the registration modal regardless of route visibility.
             if (activeUser && (!activeUser.username || activeUser.username.trim() === '')) {
-              console.log('[AuthWrapper] Authenticated but missing username. Showing registration modal.');
+              // Do NOT block public creator landing pages
+              if (isCreatorLandingPath(router.asPath || router.pathname)) {
+                console.log('[AuthWrapper] Authenticated but missing username on public landing page. Not showing modal.');
+                setShowSignInModal(false);
+                dispatch(setLoading(false));
+                setAuthChecked(true);
+                return;
+              }
+              console.log('[AuthWrapper] Authenticated but missing username. Showing registration modal (non-landing).');
               setShowSignInModal(true);
               dispatch(setLoading(false));
               setAuthChecked(true);
@@ -296,6 +334,10 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
               setShowSignInModal(true);
             } else {
               console.log(`[AuthWrapper] User not authenticated but on public route: ${router.pathname}. No modal needed.`);
+              // Ensure modal is not shown on creator landing pages
+              if (isCreatorLandingPath(router.asPath || router.pathname)) {
+                setShowSignInModal(false);
+              }
             }
           }
         } catch (error) {
