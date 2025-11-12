@@ -315,6 +315,31 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     }
   }, [auth, dispatch, router.pathname, router]);
 
+  // Open sign-in modal immediately if URL has ?signin or ?signup
+  useEffect(() => {
+    try {
+      const query = router?.query || {};
+      const wantsSignIn =
+        Object.prototype.hasOwnProperty.call(query, 'signin') ||
+        Object.prototype.hasOwnProperty.call(query, 'signup');
+      
+      if (wantsSignIn) {
+        if (!currentUser) {
+          console.log('[AuthWrapper] Query requested auth modal (?signin|?signup). Showing SignInModal.');
+          setShowSignInModal(true);
+          // Preserve intended path for post-login if current page is protected
+          if (!isPublicRoute(router.asPath || router.pathname)) {
+            dispatch(setLoginRedirectPath(router.asPath));
+          }
+        } else {
+          console.log('[AuthWrapper] Query requested auth modal but user is already authenticated. Ignoring.');
+        }
+      }
+    } catch (e) {
+      console.warn('[AuthWrapper] Error processing auth query params', e);
+    }
+  }, [router?.query, router?.asPath, router?.pathname, currentUser]);
+
  const handleSignInSuccess = () => {
    // Modal will auto-close based on Redux state
  };
