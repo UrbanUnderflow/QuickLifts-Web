@@ -179,7 +179,7 @@ const CreatorLandingPageView: React.FC = () => {
           id: doc.id,
           name: doc.data().name || '',
           email: doc.data().email || '',
-          pageName: doc.data().pageName || '',
+          pageName: doc.data().pageName || doc.data().page || '',
           createdAt: doc.data().createdAt,
         }))
         // Filter to only show entries for this specific page
@@ -292,6 +292,22 @@ const CreatorLandingPageView: React.FC = () => {
       <Head>
         <title>{data.title || `${data.username} — ${data.slug}`}</title>
         <meta name="description" content={data.headline || 'Creator page'} />
+        {/* Social preview meta */}
+        <meta property="og:title" content={data.title || `${data.username} — ${data.slug}`} />
+        <meta property="og:description" content={data.headline || (data.body || '').slice(0, 160)} />
+        <meta property="og:image" content={data.backgroundImageUrl || '/og-default.jpg'} />
+        <meta property="og:type" content="website" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={data.title || `${data.username} — ${data.slug}`} />
+        <meta name="twitter:description" content={data.headline || (data.body || '').slice(0, 160)} />
+        <meta name="twitter:image" content={data.backgroundImageUrl || '/og-default.jpg'} />
+        {/* Canonical URL */}
+        <link
+          rel="canonical"
+          href={`${process.env.NODE_ENV === 'development' ? 'http://localhost:8888' : 'https://fitwithpulse.ai'}/${username || ''}/${page || ''}`}
+        />
       </Head>
       {/* Overlay to ensure readability over any background image/color */}
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-black/80 via-black/60 to-black/80" aria-hidden />
