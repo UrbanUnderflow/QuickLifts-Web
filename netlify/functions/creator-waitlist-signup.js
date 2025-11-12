@@ -1,4 +1,4 @@
-const { db, headers } = require('./config/firebase');
+const { admin, db, headers } = require('./config/firebase');
 
 exports.handler = async (event) => {
   // CORS preflight
@@ -39,7 +39,7 @@ exports.handler = async (event) => {
       page,
       name,
       email: String(email).toLowerCase(),
-      createdAt: db.FieldValue.serverTimestamp()
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
     });
 
     // Attempt to fetch page details for email context

@@ -733,7 +733,7 @@ const CreatorLandingPageView: React.FC = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-6">
           <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold">Join the waitlist</h2>
+              <h2 className="text-xl font-semibold text-white">Join the waitlist</h2>
               <button className="text-zinc-400 hover:text-zinc-200" onClick={() => setWaitlistOpen(false)}>✕</button>
             </div>
             <form onSubmit={handleWaitlistSubmit} className="space-y-4">
