@@ -50,6 +50,15 @@ const CreatorLandingPageView: React.FC = () => {
           setError('Page not found');
         } else {
           setData(record);
+          
+          // Increment view count (only if not the owner viewing their own page)
+          const isOwnerViewing = currentUser && currentUser.id === record.userId;
+          if (!isOwnerViewing && record.userId) {
+            // Fire and forget - don't wait for this to complete
+            creatorPagesService.incrementPageView(record.userId, record.slug).catch(err => {
+              console.error('[Page View] Failed to increment:', err);
+            });
+          }
         }
       } catch (e: any) {
         setError(e?.message || 'Failed to load page');
@@ -60,7 +69,7 @@ const CreatorLandingPageView: React.FC = () => {
     return () => {
       active = false;
     };
-  }, [router.isReady, username, page]);
+  }, [router.isReady, username, page, currentUser]);
 
   const bgStyle = useMemo(() => {
     if (!data) return {};
@@ -211,14 +220,27 @@ const CreatorLandingPageView: React.FC = () => {
         <div className="absolute -bottom-8 left-20 w-72 h-72 bg-lime-500/10 rounded-full mix-blend-multiply filter blur-3xl opacity-70 animate-blob animation-delay-4000" />
       </div>
 
-      {/* Edit button for owner */}
+      {/* Owner controls */}
       {isOwner && !editMode && (
-        <button
-          onClick={handleEditOpen}
-          className="fixed top-6 right-6 z-40 bg-white/10 backdrop-blur-sm hover:bg-white/20 text-white px-4 py-2 rounded-lg border border-white/20 transition-all duration-300 shadow-lg hover:shadow-xl"
-        >
-          Edit Page
-        </button>
+        <div className="fixed top-6 right-6 z-40 flex gap-3">
+          {/* Views counter */}
+          <div className="flex items-center gap-2 bg-white/10 backdrop-blur-sm text-white px-4 py-2 rounded-lg border border-white/20 shadow-lg">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+            </svg>
+            <span className="font-medium">{data.viewCount || 0}</span>
+            <span className="text-sm text-zinc-300">views</span>
+          </div>
+          
+          {/* Edit button */}
+          <button
+            onClick={handleEditOpen}
+            className="bg-white/10 backdrop-blur-sm hover:bg-white/20 text-white px-4 py-2 rounded-lg border border-white/20 transition-all duration-300 shadow-lg hover:shadow-xl"
+          >
+            Edit Page
+          </button>
+        </div>
       )}
 
       <div className="relative min-h-screen text-white flex items-center justify-center px-6 py-20">

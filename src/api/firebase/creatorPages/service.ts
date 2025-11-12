@@ -18,6 +18,7 @@ export interface CreatorLandingPage {
   ctaType?: CreatorCtaType;
   ctaLabel?: string;
   ctaHref?: string; // for link-button
+  viewCount?: number; // Track total page views
   updatedAt?: any;
   createdAt?: any;
 }
@@ -33,6 +34,11 @@ export const creatorPagesService = {
     const sanitizedSlug = (input.slug || '').trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
     if (!sanitizedSlug) throw new Error('Page name (slug) is required');
     const ref = doc(db, ROOT, userId, 'pages', sanitizedSlug);
+    
+    // Check if page already exists to preserve createdAt
+    const existingDoc = await getDoc(ref);
+    const isNewPage = !existingDoc.exists();
+    
     const payload: CreatorLandingPage = {
       slug: sanitizedSlug,
       userId,
@@ -47,7 +53,11 @@ export const creatorPagesService = {
       ctaLabel: input.ctaLabel || 'Join Waitlist',
       ctaHref: input.ctaHref || '',
       updatedAt: serverTimestamp(),
-      createdAt: serverTimestamp(),
+      // Only set createdAt and viewCount on new pages
+      ...(isNewPage ? { 
+        createdAt: serverTimestamp(),
+        viewCount: 0 
+      } : {}),
     };
     await setDoc(ref, payload, { merge: true });
   },
@@ -58,6 +68,20 @@ export const creatorPagesService = {
     const ref = doc(db, ROOT, user.id, 'pages', slug);
     const snap = await getDoc(ref);
     return snap.exists() ? (snap.data() as CreatorLandingPage) : null;
+  },
+
+  async incrementPageView(userId: string, slug: string): Promise<void> {
+    const ref = doc(db, ROOT, userId, 'pages', slug);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) return;
+    
+    const currentData = snap.data() as CreatorLandingPage;
+    const newViewCount = (currentData.viewCount || 0) + 1;
+    
+    await setDoc(ref, {
+      viewCount: newViewCount,
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
   },
 
   async findUserIdByUsername(username: string): Promise<string | null> {
