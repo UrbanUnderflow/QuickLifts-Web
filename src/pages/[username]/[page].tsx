@@ -195,7 +195,7 @@ const CreatorLandingPageView: React.FC = () => {
   };
 
   const handleExportWaitlist = () => {
-    if (waitlistEntries.length === 0) return;
+    if (waitlistEntries.length === 0 || !data) return;
     
     // Create CSV content
     const headers = ['Name', 'Email', 'Joined'];
