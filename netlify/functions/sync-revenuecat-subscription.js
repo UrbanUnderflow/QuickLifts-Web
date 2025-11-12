@@ -88,6 +88,22 @@ function parseLatestExpiration(rcJson, projectLabel) {
   return latest;
 }
 
+function extractRcIdentifiers(rcJson) {
+  try {
+    const customer = rcJson?.customer || rcJson?.subscriber || rcJson || {};
+    const ids = new Set();
+    if (customer.app_user_id) ids.add(customer.app_user_id);
+    if (Array.isArray(customer.aliases)) customer.aliases.forEach((a) => a && ids.add(a));
+    if (Array.isArray(customer.app_user_ids)) customer.app_user_ids.forEach((a) => a && ids.add(a));
+    // Attributes may contain email
+    const attrs = customer.attributes || customer.subscriber_attributes || {};
+    const rcEmail = attrs.email?.value || attrs.email_address?.value || attrs['E - mail']?.value || null;
+    return { ids: Array.from(ids), rcEmail };
+  } catch (_) {
+    return { ids: [], rcEmail: null };
+  }
+}
+
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, body: JSON.stringify({ message: 'Method Not Allowed' }) };
@@ -140,8 +156,31 @@ exports.handler = async (event) => {
       throw new Error('Missing REVENUECAT_API_KEY or project-specific keys');
     }
 
-    // Use ONLY the provided userId for RC lookups
-    const candidates = [userId];
+    // Build candidate identifiers for RC lookup: Firebase uid + common aliases
+    let userEmail = null;
+    let username = null;
+    let rcAppUserId = null;
+    let rcAliases = [];
+    try {
+      const userSnap = await db.collection('users').doc(userId).get();
+      if (userSnap.exists) {
+        const ud = userSnap.data();
+        userEmail = ud?.email || null;
+        username = ud?.username || null;
+        rcAppUserId = ud?.rcAppUserId || ud?.revenuecat?.appUserId || null;
+        if (Array.isArray(ud?.revenuecat?.aliases)) rcAliases = rcAliases.concat(ud.revenuecat.aliases.filter(Boolean));
+      }
+    } catch (_) {}
+    try {
+      const subSnap = await db.collection('subscriptions').doc(userId).get();
+      if (subSnap.exists) {
+        const sd = subSnap.data();
+        if (!rcAppUserId && sd?.rcAppUserId) rcAppUserId = sd.rcAppUserId;
+        if (Array.isArray(sd?.rcAliases)) rcAliases = rcAliases.concat(sd.rcAliases.filter(Boolean));
+      }
+    } catch (_) {}
+
+    const candidates = Array.from(new Set([userId, username, userEmail, rcAppUserId, ...rcAliases].filter(Boolean)));
     console.log('[SyncRevenueCat] Attempting RC sync with', {
       userId,
       candidates,
@@ -151,6 +190,9 @@ exports.handler = async (event) => {
 
     let latestExpiration = null;
     let latestSourceProject = null;
+    let latestRcJson = null;
+    let discoveredIds = new Set();
+    let discoveredEmail = null;
     let tried = 0;
     for (const cfg of keyConfigs) {
       const projectLabel = cfg.label;
@@ -169,7 +211,11 @@ exports.handler = async (event) => {
           if (exp && (!latestExpiration || exp > latestExpiration)) {
             latestExpiration = exp;
             latestSourceProject = projectLabel;
+            latestRcJson = rc;
           }
+          const meta = extractRcIdentifiers(rc);
+          meta.ids.forEach((v) => discoveredIds.add(v));
+          if (meta.rcEmail && !discoveredEmail) discoveredEmail = meta.rcEmail;
           if (exp) break; // stop trying other candidates for this project once we have an expiration
         } catch (e) {
           console.warn(`[SyncRevenueCat] fetch error for project ${projectLabel} candidate ${candidate}:`, e.message);
@@ -184,17 +230,7 @@ exports.handler = async (event) => {
     // Upsert iOS subscription doc for this user and append to plans (append-only)
     // Use userId as the subscription document ID
     const subRef = db.collection('subscriptions').doc(userId);
-    // Read user for denormalized fields
-    let userEmail = null;
-    let username = null;
-    try {
-      const userSnap = await db.collection('users').doc(userId).get();
-      if (userSnap.exists) {
-        const ud = userSnap.data();
-        userEmail = ud?.email || null;
-        username = ud?.username || null;
-      }
-    } catch (_) {}
+    // userEmail and username already read above
     const nowSec = Math.floor(Date.now() / 1000);
     const expSec = Math.floor(latestExpiration.getTime() / 1000);
 
@@ -205,6 +241,8 @@ exports.handler = async (event) => {
       platform: 'ios',
       source: 'revenuecat',
       sourceProject: latestSourceProject,
+      rcAppUserId: Array.from(discoveredIds)[0] || null,
+      rcAliases: Array.from(discoveredIds),
       updatedAt: admin.firestore.Timestamp.fromMillis(nowSec * 1000),
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
@@ -212,7 +250,7 @@ exports.handler = async (event) => {
     // Determine plan type from product identifier if available in RC data
     let planType = null;
     try {
-      const customer = rcJson?.customer || rcJson?.subscriber || rcJson;
+      const customer = latestRcJson?.customer || latestRcJson?.subscriber || latestRcJson;
       const entitlements = customer?.entitlements || {};
       const anyEnt = Object.values(entitlements)[0] || {};
       const productId = anyEnt?.product_identifier || anyEnt?.productId || '';
@@ -221,8 +259,9 @@ exports.handler = async (event) => {
       else if (productId === 'pc_1y') planType = 'pulsecheck-annual';
     } catch (_) {}
 
-    // Append to plans only if we determined a planType
-    if (planType) {
+    // Append to plans. If planType is unknown, use a generic iOS RC label so client can compute active by expiration
+    if (!planType) planType = 'ios-revenuecat';
+    {
       const snap = await subRef.get();
       const data = snap.data() || {};
       const plans = Array.isArray(data.plans) ? data.plans : [];
@@ -243,6 +282,22 @@ exports.handler = async (event) => {
           })
         });
       }
+    }
+
+    // Store RC identifiers on user profile for future lookups
+    try {
+      const uref = db.collection('users').doc(userId);
+      const updates = {
+        revenuecat: {
+          appUserId: Array.from(discoveredIds)[0] || rcAppUserId || null,
+          aliases: Array.from(discoveredIds),
+          email: discoveredEmail || userEmail || null,
+          lastSyncedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }
+      };
+      await uref.set(updates, { merge: true });
+    } catch (e) {
+      console.warn('[SyncRevenueCat] failed to persist user.revenuecat metadata', e.message);
     }
 
     return { statusCode: 200, body: JSON.stringify({ message: 'Synced', latestExpiration, sourceProject: latestSourceProject }) };

@@ -12,6 +12,8 @@ import { db } from '../../../api/firebase/config';
 import { doc, updateDoc } from 'firebase/firestore';
 import { SimpleVideoTrimmer } from '../../../components/SimpleVideoTrimmer';
 import { useUser } from '../../../hooks/useUser';
+import { creatorPagesService } from '../../../api/firebase/creatorPages/service';
+import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 import { Exercise, ExerciseVideo, ExerciseAuthor, ExerciseCategory } from '../../../api/firebase/exercise/types';
 import { ProfileImage } from '../../../api/firebase/user/types';
@@ -70,6 +72,23 @@ const Create: React.FC = () => {
 
   // Modal states
   const [uploadedExerciseId, setUploadedExerciseId] = useState<string>('');
+
+  // Landing Page Builder modal state
+  const [showPageModal, setShowPageModal] = useState(false);
+  const [lpSlug, setLpSlug] = useState('');
+  const [lpTitle, setLpTitle] = useState('');
+  const [lpHeadline, setLpHeadline] = useState('');
+  const [lpBody, setLpBody] = useState('');
+  const [lpBgType, setLpBgType] = useState<'color'|'image'>('color');
+  const [lpBgColor, setLpBgColor] = useState('#0b0b0c');
+  const [lpBgImage, setLpBgImage] = useState('');
+  const [lpBgImageFile, setLpBgImageFile] = useState<File | null>(null);
+  const [lpBgImagePreview, setLpBgImagePreview] = useState<string | null>(null);
+  const [lpImageUploading, setLpImageUploading] = useState(false);
+  const [lpCtaType, setLpCtaType] = useState<'link'|'waitlist'>('waitlist');
+  const [lpCtaLabel, setLpCtaLabel] = useState('Join Waitlist');
+  const [lpCtaHref, setLpCtaHref] = useState('');
+  const [lpSaving, setLpSaving] = useState(false);
 
   const categories = [
     'Weight Training', 
@@ -970,6 +989,90 @@ const Create: React.FC = () => {
     }
   };
 
+  const handleLpImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    // Validate image type
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file');
+      return;
+    }
+
+    setLpBgImageFile(file);
+    // Create preview URL
+    const previewUrl = URL.createObjectURL(file);
+    setLpBgImagePreview(previewUrl);
+  };
+
+  const handleSaveLandingPage = async () => {
+    if (!currentUser?.id) {
+      alert('You must be logged in to create a landing page.');
+      return;
+    }
+    if (!lpSlug.trim()) {
+      alert('Please enter a page slug (URL).');
+      return;
+    }
+    if (!lpTitle.trim()) {
+      alert('Please enter a page title.');
+      return;
+    }
+
+    setLpSaving(true);
+    try {
+      let backgroundImageUrl = lpBgImage;
+
+      // Upload image if file is selected
+      if (lpBgType === 'image' && lpBgImageFile) {
+        setLpImageUploading(true);
+        const storage = getStorage();
+        const fileName = `${Date.now()}_${lpBgImageFile.name}`;
+        const imageRef = storageRef(storage, `landing-page/${currentUser.id}/${fileName}`);
+        
+        await uploadBytes(imageRef, lpBgImageFile);
+        backgroundImageUrl = await getDownloadURL(imageRef);
+        setLpImageUploading(false);
+      }
+
+      const pageInput = {
+        slug: lpSlug.trim().toLowerCase().replace(/\s+/g, '-'),
+        title: lpTitle.trim(),
+        headline: lpHeadline.trim(),
+        body: lpBody.trim(),
+        backgroundType: lpBgType,
+        backgroundColor: lpBgType === 'color' ? lpBgColor : '',
+        backgroundImageUrl: lpBgType === 'image' ? backgroundImageUrl : '',
+        ctaType: lpCtaType,
+        ctaLabel: lpCtaLabel.trim(),
+        ctaHref: lpCtaType === 'link' ? lpCtaHref.trim() : '',
+      };
+
+      await creatorPagesService.savePage(currentUser.id, currentUser.username || '', pageInput);
+      alert(`Landing page saved! Visit: /${currentUser.username || currentUser.id}/${pageInput.slug}`);
+      setShowPageModal(false);
+      // Reset form
+      setLpSlug('');
+      setLpTitle('');
+      setLpHeadline('');
+      setLpBody('');
+      setLpBgType('color');
+      setLpBgColor('#0b0b0c');
+      setLpBgImage('');
+      setLpBgImageFile(null);
+      setLpBgImagePreview(null);
+      setLpCtaType('waitlist');
+      setLpCtaLabel('Join Waitlist');
+      setLpCtaHref('');
+    } catch (err) {
+      console.error('[Save Landing Page]', err);
+      alert('Failed to save landing page. Please try again.');
+    } finally {
+      setLpSaving(false);
+      setLpImageUploading(false);
+    }
+  };
+
   return (
     <div className="max-w-xl mx-auto px-4 py-6">
       <div className="text-center text-white mb-6">
@@ -1202,6 +1305,197 @@ const Create: React.FC = () => {
               </button>
             </div>
           </details>
+        </div>
+      )}
+
+      {/* Create Landing Page Button */}
+      {!videoPreview && (
+        <div className="mt-6">
+          <button
+            onClick={() => setShowPageModal(true)}
+            className="w-full bg-zinc-800 hover:bg-zinc-700 text-white px-4 py-3 rounded-lg border border-zinc-700 transition-colors"
+          >
+            + Create Landing Page
+          </button>
+        </div>
+      )}
+
+      {/* Landing Page Builder Modal */}
+      {showPageModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="bg-zinc-900 rounded-xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-2xl font-bold text-white">Create Landing Page</h2>
+              <button onClick={() => setShowPageModal(false)} className="text-zinc-400 hover:text-white text-2xl">✕</button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Slug */}
+              <div>
+                <label className="block text-sm text-zinc-300 mb-2">Page URL Slug</label>
+                <div className="text-xs text-zinc-400 mb-1">Your page will be at: /{currentUser?.username}/{lpSlug || 'your-page'}</div>
+                <input
+                  type="text"
+                  value={lpSlug}
+                  onChange={(e) => setLpSlug(e.target.value)}
+                  placeholder="my-landing-page"
+                  className="w-full bg-zinc-800 border border-zinc-600 rounded-lg p-3 text-white placeholder-zinc-400"
+                />
+              </div>
+
+              {/* Title */}
+              <div>
+                <label className="block text-sm text-zinc-300 mb-2">Page Title</label>
+                <input
+                  type="text"
+                  value={lpTitle}
+                  onChange={(e) => setLpTitle(e.target.value)}
+                  placeholder="Welcome to My Page"
+                  className="w-full bg-zinc-800 border border-zinc-600 rounded-lg p-3 text-white placeholder-zinc-400"
+                />
+              </div>
+
+              {/* Headline */}
+              <div>
+                <label className="block text-sm text-zinc-300 mb-2">Headline (optional)</label>
+                <input
+                  type="text"
+                  value={lpHeadline}
+                  onChange={(e) => setLpHeadline(e.target.value)}
+                  placeholder="Join the movement"
+                  className="w-full bg-zinc-800 border border-zinc-600 rounded-lg p-3 text-white placeholder-zinc-400"
+                />
+              </div>
+
+              {/* Body */}
+              <div>
+                <label className="block text-sm text-zinc-300 mb-2">Body Text (optional)</label>
+                <textarea
+                  value={lpBody}
+                  onChange={(e) => setLpBody(e.target.value)}
+                  placeholder="Describe what you're offering..."
+                  rows={4}
+                  className="w-full bg-zinc-800 border border-zinc-600 rounded-lg p-3 text-white placeholder-zinc-400"
+                />
+              </div>
+
+              {/* Background Type */}
+              <div>
+                <label className="block text-sm text-zinc-300 mb-2">Background</label>
+                <div className="flex gap-2 mb-2">
+                  <button
+                    onClick={() => setLpBgType('color')}
+                    className={`px-3 py-1 rounded ${lpBgType === 'color' ? 'bg-[#E0FE10] text-black' : 'bg-zinc-700 text-white'}`}
+                  >
+                    Color
+                  </button>
+                  <button
+                    onClick={() => setLpBgType('image')}
+                    className={`px-3 py-1 rounded ${lpBgType === 'image' ? 'bg-[#E0FE10] text-black' : 'bg-zinc-700 text-white'}`}
+                  >
+                    Image
+                  </button>
+                </div>
+                {lpBgType === 'color' && (
+                  <input
+                    type="color"
+                    value={lpBgColor}
+                    onChange={(e) => setLpBgColor(e.target.value)}
+                    className="w-full h-12 rounded-lg cursor-pointer"
+                  />
+                )}
+                {lpBgType === 'image' && (
+                  <div className="space-y-2">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleLpImageSelect}
+                      className="w-full bg-zinc-800 border border-zinc-600 rounded-lg p-3 text-white file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:bg-[#E0FE10] file:text-black file:cursor-pointer hover:file:bg-[#d0ee00]"
+                    />
+                    {lpBgImagePreview && (
+                      <div className="relative w-full h-32 rounded-lg overflow-hidden border border-zinc-700">
+                        <img src={lpBgImagePreview} alt="Background preview" className="w-full h-full object-cover" />
+                        <button
+                          onClick={() => {
+                            setLpBgImageFile(null);
+                            setLpBgImagePreview(null);
+                          }}
+                          className="absolute top-2 right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-600"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    )}
+                    {lpImageUploading && (
+                      <p className="text-sm text-zinc-400">Uploading image...</p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* CTA Type */}
+              <div>
+                <label className="block text-sm text-zinc-300 mb-2">Button Type</label>
+                <div className="flex gap-2 mb-2">
+                  <button
+                    onClick={() => setLpCtaType('waitlist')}
+                    className={`px-3 py-1 rounded ${lpCtaType === 'waitlist' ? 'bg-[#E0FE10] text-black' : 'bg-zinc-700 text-white'}`}
+                  >
+                    Waitlist
+                  </button>
+                  <button
+                    onClick={() => setLpCtaType('link')}
+                    className={`px-3 py-1 rounded ${lpCtaType === 'link' ? 'bg-[#E0FE10] text-black' : 'bg-zinc-700 text-white'}`}
+                  >
+                    Link
+                  </button>
+                </div>
+              </div>
+
+              {/* CTA Label */}
+              <div>
+                <label className="block text-sm text-zinc-300 mb-2">Button Text</label>
+                <input
+                  type="text"
+                  value={lpCtaLabel}
+                  onChange={(e) => setLpCtaLabel(e.target.value)}
+                  placeholder="Join Waitlist"
+                  className="w-full bg-zinc-800 border border-zinc-600 rounded-lg p-3 text-white placeholder-zinc-400"
+                />
+              </div>
+
+              {/* CTA Href (if link) */}
+              {lpCtaType === 'link' && (
+                <div>
+                  <label className="block text-sm text-zinc-300 mb-2">Button Link</label>
+                  <input
+                    type="url"
+                    value={lpCtaHref}
+                    onChange={(e) => setLpCtaHref(e.target.value)}
+                    placeholder="https://example.com"
+                    className="w-full bg-zinc-800 border border-zinc-600 rounded-lg p-3 text-white placeholder-zinc-400"
+                  />
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex gap-2 mt-6">
+                <button
+                  onClick={() => setShowPageModal(false)}
+                  className="flex-1 bg-zinc-700 text-white px-4 py-3 rounded-lg hover:bg-zinc-600"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveLandingPage}
+                  disabled={lpSaving}
+                  className="flex-1 bg-[#E0FE10] text-black px-4 py-3 rounded-lg hover:bg-[#d0ee00] disabled:opacity-50"
+                >
+                  {lpSaving ? 'Saving...' : 'Save & Publish'}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

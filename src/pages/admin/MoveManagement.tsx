@@ -69,6 +69,7 @@ const MoveManagement: React.FC = () => {
   const [loadingExerciseVideos, setLoadingExerciseVideos] = useState(false);
 
   const [isTriggeringMOTD, setIsTriggeringMOTD] = useState(false);
+  const [settingMOTDForVideo, setSettingMOTDForVideo] = useState<string | null>(null);
   const [updatingItems, setUpdatingItems] = useState<{[reportId: string]: boolean}>({});
 
   // Search states
@@ -77,6 +78,11 @@ const MoveManagement: React.FC = () => {
   const [videoSearchTerm, setVideoSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [bodyPartFilter, setBodyPartFilter] = useState('');
+  // Creator filter (multi-select)
+  const [allCreators, setAllCreators] = useState<string[]>([]);
+  const [selectedCreators, setSelectedCreators] = useState<string[]>([]);
+  const [creatorSearch, setCreatorSearch] = useState('');
+  const [exerciseCreatorsMap, setExerciseCreatorsMap] = useState<Record<string, Set<string>>>({});
 
   // Video audit states
   const [allVideos, setAllVideos] = useState<ExerciseVideoDisplay[]>([]);
@@ -124,8 +130,22 @@ const MoveManagement: React.FC = () => {
       );
     }
 
+    // Filter by selected creators (exercise must have at least one video from any selected creator)
+    if (selectedCreators.length > 0) {
+      const selectedLower = selectedCreators.map(c => c.toLowerCase());
+      filtered = filtered.filter(ex => {
+        const creators = exerciseCreatorsMap[ex.id];
+        if (!creators || creators.size === 0) return false;
+        // case-insensitive intersection
+        for (const c of creators) {
+          if (selectedLower.includes((c || '').toLowerCase())) return true;
+        }
+        return false;
+      });
+    }
+
     setFilteredExercises(filtered);
-  }, [exercises, exerciseSearchTerm, categoryFilter, bodyPartFilter]);
+  }, [exercises, exerciseSearchTerm, categoryFilter, bodyPartFilter, selectedCreators, exerciseCreatorsMap]);
 
   // Filter reported items based on search term
   useEffect(() => {
@@ -288,6 +308,21 @@ const MoveManagement: React.FC = () => {
       setAllVideos(fetchedVideos);
       setFilteredAllVideos(fetchedVideos);
 
+      // Build creators index for exercise filter
+      const map: Record<string, Set<string>> = {};
+      const creatorsSet = new Set<string>();
+      for (const v of fetchedVideos) {
+        if (!v.exerciseId) continue;
+        if (!map[v.exerciseId]) map[v.exerciseId] = new Set<string>();
+        const uname = (v.username || '').trim();
+        if (uname) {
+          map[v.exerciseId].add(uname);
+          creatorsSet.add(uname);
+        }
+      }
+      setExerciseCreatorsMap(map);
+      setAllCreators(Array.from(creatorsSet).sort((a, b) => a.localeCompare(b)));
+
       // Detect orphaned videos (videos without corresponding exercises)
       const exerciseIds = new Set(exercises.map(ex => ex.id));
       const orphaned = fetchedVideos.filter(video => 
@@ -429,6 +464,34 @@ const MoveManagement: React.FC = () => {
       setToastMessage({ type: 'error', text: `Failed to set Move of the Day: ${errorMessage}` });
     } finally {
       setIsTriggeringMOTD(false);
+    }
+  };
+
+  const handleSetMoveOfTheDayForVideo = async (exerciseId: string, videoId: string) => {
+    if (!exerciseId || !videoId) {
+      setToastMessage({ type: 'error', text: 'Missing exerciseId or videoId' });
+      return;
+    }
+    if (!window.confirm('Set this video as today\'s Move of the Day? This will overwrite the current selection.')) return;
+    setSettingMOTDForVideo(videoId);
+    setToastMessage({ type: 'info', text: 'Setting Move of the Day...' });
+    try {
+      const auth = getAuth();
+      const currentUser = auth.currentUser;
+      if (!currentUser) throw new Error('Not signed in');
+      const idToken = await getIdToken(currentUser);
+      const response = await fetch('/.netlify/functions/manualTriggerMoveOfTheDay', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
+        body: JSON.stringify({ exerciseId, videoId })
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.error || data.message || 'Failed');
+      setToastMessage({ type: 'success', text: data.details?.message || 'Move of the Day updated' });
+    } catch (e: any) {
+      setToastMessage({ type: 'error', text: `Failed to set Move of the Day: ${e?.message || 'Unknown error'}` });
+    } finally {
+      setSettingMOTDForVideo(null);
     }
   };
 
@@ -741,6 +804,16 @@ const MoveManagement: React.FC = () => {
                       </div>
                       {/* Add date if available: <p className="text-xs text-gray-500 mt-1">Date: {formatDate(video.createdAt)}</p> */} 
                       {!video.thumbnail && <p className="text-xs text-orange-400 mt-1 italic">Thumbnail pending</p>}
+                      <div className="mt-3">
+                        <button
+                          onClick={() => handleSetMoveOfTheDayForVideo(video.exerciseId, video.id)}
+                          disabled={settingMOTDForVideo === video.id}
+                          className={`w-full px-2.5 py-1.5 rounded-md text-xs font-medium border transition-colors ${settingMOTDForVideo === video.id ? 'bg-gray-700/50 text-gray-400 border-gray-700 cursor-wait' : 'bg-green-900/40 text-green-300 border-green-800 hover:bg-green-800/60'}`}
+                          title="Set this as today\'s Move of the Day"
+                        >
+                          {settingMOTDForVideo === video.id ? 'Setting...' : 'Set Move of the Day'}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -843,7 +916,7 @@ const MoveManagement: React.FC = () => {
                   <Search className="h-5 w-5 text-[#d7ff00]" />
                   <h3 className="text-lg font-semibold text-white">Search & Filter Exercises</h3>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">Search by Name or ID</label>
                     <div className="relative">
@@ -883,8 +956,62 @@ const MoveManagement: React.FC = () => {
                       />
                     </div>
                   </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Filter by Creator</label>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <input
+                        type="text"
+                        placeholder="Search creators..."
+                        value={creatorSearch}
+                        onChange={(e) => setCreatorSearch(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 bg-[#1a1e24] border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#d7ff00] focus:border-transparent"
+                      />
+                      {/* Suggestion dropdown */}
+                      {creatorSearch && (
+                        <div className="absolute z-10 mt-1 w-full bg-[#1a1e24] border border-gray-700 rounded-lg max-h-40 overflow-y-auto">
+                          {allCreators
+                            .filter(c => c.toLowerCase().includes(creatorSearch.toLowerCase()))
+                            .filter(c => !selectedCreators.includes(c))
+                            .slice(0, 20)
+                            .map(c => (
+                              <button
+                                key={c}
+                                onClick={() => {
+                                  setSelectedCreators(prev => [...prev, c]);
+                                  setCreatorSearch('');
+                                }}
+                                className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#262a30]"
+                              >
+                                {c}
+                              </button>
+                            ))}
+                          {allCreators.filter(c => c.toLowerCase().includes(creatorSearch.toLowerCase())).length === 0 && (
+                            <div className="px-3 py-2 text-sm text-gray-500">No creators found</div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    {/* Selected chips */}
+                    {selectedCreators.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {selectedCreators.map(c => (
+                          <span key={c} className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded bg-blue-900/40 text-blue-300 border border-blue-800">
+                            {c}
+                            <button
+                              onClick={() => setSelectedCreators(prev => prev.filter(x => x !== c))}
+                              className="hover:text-[#d7ff00]"
+                              title="Remove"
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
-                {(exerciseSearchTerm || categoryFilter || bodyPartFilter) && (
+                {(exerciseSearchTerm || categoryFilter || bodyPartFilter || selectedCreators.length > 0) && (
                   <div className="flex items-center justify-between pt-2 border-t border-gray-600">
                     <p className="text-sm text-gray-400">
                       Showing {filteredExercises.length} of {exercises.length} exercises
@@ -894,6 +1021,8 @@ const MoveManagement: React.FC = () => {
                         setExerciseSearchTerm('');
                         setCategoryFilter('');
                         setBodyPartFilter('');
+                        setSelectedCreators([]);
+                        setCreatorSearch('');
                       }}
                       className="text-sm text-[#d7ff00] hover:text-[#b8d400] transition-colors"
                     >

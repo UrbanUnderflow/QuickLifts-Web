@@ -9,8 +9,8 @@ const getTodaysDocumentId = () => {
   return `${month}-${day}-${year}`;
 };
 
-// Core logic to select and save a move of the day (duplicated for now, consider shared util)
-async function selectAndSaveMove() {
+// Core logic to select and save a move of the day (random fallback)
+async function selectAndSaveMoveRandom() {
   console.log("[manualTriggerMoveOfTheDay] Executing core selectAndSaveMove logic.");
   const exercisesSnapshot = await db.collection("exercises").get();
   if (exercisesSnapshot.empty) {
@@ -105,7 +105,78 @@ exports.handler = async (event, context) => {
 
   console.log("[manualTriggerMoveOfTheDay] Netlify function triggered by admin.");
   try {
-    const result = await selectAndSaveMove(); // Call the core logic
+    let body = {};
+    try { body = JSON.parse(event.body || '{}'); } catch (_) {}
+
+    const { exerciseId, videoId } = body || {};
+    let result;
+    if (exerciseId || videoId) {
+      // Manual selection path
+      console.log('[manualTriggerMoveOfTheDay] Manual selection payload:', { exerciseId, videoId });
+      // Fetch exercise
+      let exerciseDoc = null;
+      if (exerciseId) {
+        // exercise documents may use a separate firestore doc id; we query by field id first
+        const q = await db.collection('exercises').where('id', '==', exerciseId).limit(1).get();
+        if (!q.empty) {
+          const d = q.docs[0];
+          exerciseDoc = { firestoreDocId: d.id, ...d.data() };
+        } else {
+          // fallback try by doc id
+          const d = await db.collection('exercises').doc(exerciseId).get();
+          if (d.exists) exerciseDoc = { firestoreDocId: d.id, ...d.data() };
+        }
+      }
+      if (!exerciseDoc && videoId) {
+        // derive exerciseId from video
+        const v = await db.collection('exerciseVideos').doc(videoId).get();
+        if (v.exists) {
+          const vd = v.data();
+          const exId = vd.exerciseId;
+          if (exId) {
+            const q2 = await db.collection('exercises').where('id', '==', exId).limit(1).get();
+            if (!q2.empty) {
+              const d = q2.docs[0];
+              exerciseDoc = { firestoreDocId: d.id, ...d.data() };
+            } else {
+              const d2 = await db.collection('exercises').doc(exId).get();
+              if (d2.exists) exerciseDoc = { firestoreDocId: d2.id, ...d2.data() };
+            }
+          }
+        }
+      }
+
+      if (!exerciseDoc) throw new Error('Exercise not found for provided identifiers');
+
+      // Fetch selected or random video for this exercise
+      let videoDoc = null;
+      if (videoId) {
+        const v = await db.collection('exerciseVideos').doc(videoId).get();
+        if (v.exists) videoDoc = { firestoreDocId: v.id, ...v.data() };
+      }
+      if (!videoDoc) {
+        const vids = await db.collection('exerciseVideos').where('exerciseId', '==', exerciseDoc.id || exerciseDoc.firestoreDocId).get();
+        if (vids.empty) throw new Error('No videos found for selected exercise');
+        const arr = [];
+        vids.forEach(d => arr.push({ firestoreDocId: d.id, ...d.data() }));
+        videoDoc = arr[Math.floor(Math.random() * arr.length)];
+      }
+
+      const documentId = getTodaysDocumentId();
+      const serverTimestamp = admin.firestore.FieldValue.serverTimestamp();
+      const moveOfTheDayData = {
+        exercise: exerciseDoc,
+        video: videoDoc,
+        selectedDateISO: new Date().toISOString(),
+        createdAt: serverTimestamp,
+        updatedAt: serverTimestamp,
+      };
+      await db.collection('moveOfTheDay').doc(documentId).set(moveOfTheDayData, { merge: true });
+      result = { success: true, message: `Move of the Day for ${documentId} set to ${exerciseDoc.name || exerciseDoc.id}.`, exerciseName: exerciseDoc.name, documentId };
+    } else {
+      // Random fallback
+      result = await selectAndSaveMoveRandom();
+    }
     return {
       statusCode: 200,
       headers,

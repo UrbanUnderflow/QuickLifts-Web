@@ -122,6 +122,12 @@ const CreatorProspectsPage: React.FC = () => {
   const [revPrompt, setRevPrompt] = useState('');
   const [revLoading, setRevLoading] = useState(false);
   const [revText, setRevText] = useState('');
+  // Bulk paste import state
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkText, setBulkText] = useState('');
+  const [bulkParsing, setBulkParsing] = useState(false);
+  const [bulkPreview, setBulkPreview] = useState<Array<CreatorProspect & { __duplicate?: boolean; __selected?: boolean }>>([]);
+  const [bulkSaving, setBulkSaving] = useState(false);
 
   useEffect(() => {
     if (emailOpen && emailProspect) {
@@ -131,6 +137,90 @@ const CreatorProspectsPage: React.FC = () => {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [emailOpen]);
+
+  const computeDuplicate = (p: Partial<CreatorProspect>) => {
+    const byEmail = p.email?.toLowerCase().trim();
+    const byHandle = p.handle?.toLowerCase().trim();
+    return prospects.some(ex => {
+      const exEmail = (ex.email || '').toLowerCase().trim();
+      const exHandle = (ex.handle || '').toLowerCase().trim();
+      return (byEmail && exEmail && byEmail === exEmail) || (byHandle && exHandle && byHandle === exHandle);
+    });
+  };
+
+  const parseBulk = async () => {
+    if (!bulkText.trim()) return;
+    setBulkParsing(true);
+    try {
+      const res = await fetch('/api/admin/extract-creator-prospects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: bulkText })
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed to parse');
+      const items: any[] = Array.isArray(json.prospects) ? json.prospects : [];
+      const preview = items.map((raw) => {
+        const p: CreatorProspect = {
+          displayName: (raw.displayName || '').toString(),
+          handle: (raw.handle || '').toString(),
+          email: (raw.email || '').toString(),
+          niche: (raw.niche || '').toString(),
+          country: (raw.country || '').toString(),
+          ethnicity: raw.ethnicity || '',
+          modality: raw.modality || '',
+          platforms: raw.platforms || {},
+          followers: raw.followers || {},
+          engagement: raw.engagement || {},
+          leadSource: 'bulk_text',
+          pastLaunchHistory: '',
+          priority: 'medium',
+          status: 'new',
+          notes: raw.notes || ''
+        };
+        const dup = computeDuplicate(p);
+        return { ...p, __duplicate: dup, __selected: !dup };
+      });
+      setBulkPreview(preview);
+      dispatch(showToast({ message: `Parsed ${preview.length} prospects`, type: 'success' }));
+    } catch (e) {
+      console.error('[CreatorProspects] bulk parse error', e);
+      dispatch(showToast({ message: 'Failed to parse pasted data', type: 'error' }));
+    } finally {
+      setBulkParsing(false);
+    }
+  };
+
+  const saveBulk = async () => {
+    const toSave = bulkPreview.filter(p => p.__selected && !p.__duplicate);
+    if (toSave.length === 0) { dispatch(showToast({ message: 'Nothing to save', type: 'error' })); return; }
+    setBulkSaving(true);
+    try {
+      const actor = (currentUser?.username || currentUser?.displayName || currentUser?.email || 'admin') as string;
+      const batch = toSave.map(async (p) => {
+        const payload: any = cleanForFirestore({
+          ...p,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          createdBy: actor,
+          lastUpdatedBy: actor
+        });
+        delete payload.__duplicate; delete payload.__selected;
+        await addDoc(collection(db, 'creator-prospects'), payload);
+      });
+      await Promise.all(batch);
+      await fetchProspects();
+      dispatch(showToast({ message: `Saved ${toSave.length} prospects`, type: 'success' }));
+      setBulkOpen(false);
+      setBulkText('');
+      setBulkPreview([]);
+    } catch (e) {
+      console.error('[CreatorProspects] bulk save error', e);
+      dispatch(showToast({ message: 'Failed to save some prospects', type: 'error' }));
+    } finally {
+      setBulkSaving(false);
+    }
+  };
 
   const isDirty = !!initialDraft && (initialDraft.body !== emailBody || initialDraft.slots !== proposedSlots || initialDraft.sender !== senderType);
 
@@ -501,6 +591,9 @@ const CreatorProspectsPage: React.FC = () => {
           <div className="mb-8">
             <h1 className="text-3xl font-bold">Creator Prospects</h1>
             <p className="text-zinc-400">Manage inbound and outbound creator opportunities.</p>
+            <div className="mt-3 flex gap-2">
+              <button onClick={() => setBulkOpen(true)} className="px-3 py-1.5 rounded-md bg-blue-600/20 border border-blue-500/40 text-blue-300 hover:bg-blue-600/30 text-sm">Bulk Paste Import</button>
+            </div>
           </div>
 
           {/* Quick Add Form */}
@@ -810,6 +903,70 @@ const CreatorProspectsPage: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Bulk Paste Modal */}
+      {bulkOpen && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setBulkOpen(false)}>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl w-full max-w-4xl" onClick={e=>e.stopPropagation()}>
+            <div className="p-4 border-b border-zinc-800 flex items-center justify-between">
+              <h3 className="text-xl font-semibold">Bulk Paste Import</h3>
+              <button className="text-zinc-400 hover:text-white" onClick={() => setBulkOpen(false)}>✕</button>
+            </div>
+            <div className="p-4 space-y-3">
+              <p className="text-sm text-white">Paste a list, table, or freeform text. We’ll extract creator details (name, email, niche, handles) and prepare a preview.</p>
+              <textarea className="w-full bg-zinc-800 rounded-lg px-3 py-3 h-48 resize-y text-white" placeholder="Paste data here..." value={bulkText} onChange={e=>setBulkText(e.target.value)} />
+              <div className="flex justify-end">
+                <button onClick={parseBulk} disabled={bulkParsing || !bulkText.trim()} className="px-4 py-2 rounded-md bg-blue-600/20 border border-blue-500/40 text-blue-300 hover:bg-blue-600/30">{bulkParsing ? 'Parsing…' : 'Parse'}</button>
+              </div>
+              {bulkPreview.length > 0 && (
+                <div className="mt-2">
+                  <div className="text-sm text-white mb-2">Preview ({bulkPreview.length}). Duplicates are disabled.</div>
+                  <div className="max-h-72 overflow-y-auto border border-zinc-800 rounded-lg">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-white border-b border-zinc-800">
+                          <th className="p-2 text-left">Add</th>
+                          <th className="p-2 text-left">Name</th>
+                          <th className="p-2 text-left">Handle</th>
+                          <th className="p-2 text-left">Email</th>
+                          <th className="p-2 text-left">Niche</th>
+                          <th className="p-2 text-left">Notes</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {bulkPreview.map((p, idx) => (
+                          <tr key={idx} className="border-b border-zinc-800">
+                            <td className="p-2">
+                              <input type="checkbox" checked={!!p.__selected && !p.__duplicate} disabled={p.__duplicate} onChange={(e)=>{
+                                setBulkPreview(prev=>prev.map((x,i)=> i===idx ? { ...x, __selected: e.target.checked } : x));
+                              }} />
+                              {p.__duplicate && <span className="ml-2 text-xs text-orange-400">duplicate</span>}
+                            </td>
+                            <td className="p-2 text-white">{p.displayName || '—'}</td>
+                            <td className="p-2 text-white">{p.handle || '—'}</td>
+                            <td className="p-2 text-white">{p.email || '—'}</td>
+                            <td className="p-2 text-white">{p.niche || '—'}</td>
+                            <td className="p-2 text-white">{p.notes || '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="p-4 border-t border-zinc-800 flex justify-between gap-3">
+              <div className="text-xs text-zinc-500">We’ll mark created records with status "new" and lead source "bulk_text".</div>
+              <div className="flex gap-2">
+                <button className="px-4 py-2 rounded-md bg-zinc-800 border border-zinc-700 text-zinc-300" onClick={()=>setBulkOpen(false)}>Close</button>
+                <button className="px-4 py-2 rounded-md bg-[#E0FE10] text-black font-semibold hover:bg-lime-400 disabled:opacity-60" disabled={bulkSaving || bulkPreview.filter(p=>p.__selected && !p.__duplicate).length===0} onClick={saveBulk}>
+                  {bulkSaving ? 'Saving…' : `Add ${bulkPreview.filter(p=>p.__selected && !p.__duplicate).length} Prospects`}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </AdminRouteGuard>
   );
 };

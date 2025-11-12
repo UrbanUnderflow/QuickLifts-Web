@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { collection, documentId, getDocs, limit, orderBy, query, startAfter, where } from 'firebase/firestore';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { collection, documentId, getDocs, limit, orderBy, query, startAfter, where, doc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
 import { convertFirestoreTimestamp } from '../../utils/formatDate';
 import Head from 'next/head';
@@ -16,6 +16,10 @@ type SubscriptionRow = {
   status?: string;
   isTrialing?: boolean;
   trialEndDate?: any;
+  // RevenueCat identifiers
+  rcAppUserId?: string | null;
+  rcAliases?: string[];
+  sourceProject?: string | null;
   // Authoritative append-only plans array
   plans?: Array<{
     type: string;
@@ -61,6 +65,11 @@ const SubscriptionsAdminPage: React.FC = () => {
   const [selectedSubscription, setSelectedSubscription] = useState<SubscriptionRow | null>(null);
   const [copiedId, setCopiedId] = useState<string>('');
   const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error' | 'info', text: string } | null>(null);
+  const [autoResolving, setAutoResolving] = useState(false);
+  const healedUserIdsRef = useRef<Set<string>>(new Set());
+  const [rcAppIdEdits, setRcAppIdEdits] = useState<Record<string, string>>({});
+  const [rcNewAliasEdits, setRcNewAliasEdits] = useState<Record<string, string>>({});
+  const [savingRcFor, setSavingRcFor] = useState<string | null>(null);
 
   // Helpers to read latest plan entry from append-only plans
   const getLatestPlanEntry = useCallback((doc: SubscriptionRow) => {
@@ -130,6 +139,42 @@ const SubscriptionsAdminPage: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Auto-resolve unknown statuses by pinging RevenueCat and Stripe history migrator
+  useEffect(() => {
+    const resolveUnknowns = async () => {
+      if (autoResolving) return;
+      const unknowns = subscriptions.filter(s => !s.status || s.status.toLowerCase() === 'unknown');
+      // Only attempt users we haven't tried this session
+      const candidates = unknowns
+        .filter(s => s.userId && !healedUserIdsRef.current.has(s.userId))
+        .slice(0, 5);
+      if (candidates.length === 0) return;
+      setAutoResolving(true);
+      try {
+        setToastMessage({ type: 'info', text: `Resolving ${candidates.length} unknown subscription(s)...` });
+        // Mark as attempted to prevent loops even if the requests 404
+        candidates.forEach(s => healedUserIdsRef.current.add(s.userId));
+        await Promise.all(candidates.map(async (s) => {
+          try {
+            if (s.userId) {
+              await fetch('/.netlify/functions/sync-revenuecat-subscription', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: s.userId })
+              });
+              await fetch('/.netlify/functions/migrate-expiration-history', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: s.userId })
+              });
+            }
+          } catch (_) { /* keep going */ }
+        }));
+        await loadPage(false);
+        setToastMessage({ type: 'success', text: 'Unknown subscriptions refreshed' });
+      } finally {
+        setAutoResolving(false);
+      }
+    };
+    resolveUnknowns();
+  }, [subscriptions, autoResolving, loadPage]);
+
   const filtered = useMemo(() => {
     const lower = search.trim().toLowerCase();
     const usernameLower = usernameSearch.trim().toLowerCase();
@@ -190,6 +235,60 @@ const SubscriptionsAdminPage: React.FC = () => {
       setToastMessage({ type: 'success', text: 'Stripe history migration completed' });
     } catch (_) {
       setToastMessage({ type: 'error', text: 'Failed to migrate Stripe history' });
+    }
+  };
+
+  // Save manual RevenueCat edits
+  const handleSaveRevenueCat = async (subscription: SubscriptionRow) => {
+    const subId = subscription.id;
+    const appUserId = (rcAppIdEdits[subId] ?? subscription.rcAppUserId ?? '').trim();
+    const newAlias = (rcNewAliasEdits[subId] ?? '').trim();
+    if (!appUserId && !newAlias) {
+      setToastMessage({ type: 'error', text: 'Enter an app_user_id or an alias to save' });
+      return;
+    }
+    setSavingRcFor(subId);
+    try {
+      const updatesSub: any = { updatedAt: new Date() };
+      const aliasOps: string[] = [];
+      if (appUserId) {
+        updatesSub.rcAppUserId = appUserId;
+        aliasOps.push(appUserId);
+      }
+      if (newAlias) aliasOps.push(newAlias);
+      if (aliasOps.length > 0) updatesSub.rcAliases = arrayUnion(...aliasOps);
+
+      const subRef = doc(db, 'subscriptions', subId);
+      await updateDoc(subRef, updatesSub);
+
+      // Mirror on users/{uid}
+      if (subscription.userId) {
+        const userRef = doc(db, 'users', subscription.userId);
+        const userUpdates: any = { 'revenuecat.lastSyncedAt': new Date() };
+        if (appUserId) userUpdates['revenuecat.appUserId'] = appUserId;
+        if (aliasOps.length > 0) userUpdates['revenuecat.aliases'] = arrayUnion(...aliasOps);
+        await updateDoc(userRef, userUpdates);
+      }
+
+      // Update local state optimistically
+      setSubscriptions(prev => prev.map(s => {
+        if (s.id !== subId) return s;
+        const mergedAliases = Array.isArray(s.rcAliases) ? new Set(s.rcAliases) : new Set<string>();
+        aliasOps.forEach(a => mergedAliases.add(a));
+        return {
+          ...s,
+          rcAppUserId: appUserId || s.rcAppUserId || null,
+          rcAliases: Array.from(mergedAliases)
+        } as any;
+      }));
+
+      // Clear alias input
+      setRcNewAliasEdits(prev => ({ ...prev, [subId]: '' }));
+      setToastMessage({ type: 'success', text: 'RevenueCat fields saved' });
+    } catch (e) {
+      setToastMessage({ type: 'error', text: 'Failed to save RevenueCat fields' });
+    } finally {
+      setSavingRcFor(null);
     }
   };
 
@@ -314,6 +413,69 @@ const SubscriptionsAdminPage: React.FC = () => {
                     <span className="px-2 py-1 bg-gray-900/30 text-gray-400 rounded-full text-xs font-medium border border-gray-700">
                       Not Trialing
                     </span>
+                  )}
+                </div>
+              </div>
+              {/** RevenueCat section inside column 2 to keep details visible */}
+              <div className="pt-2 border-t border-gray-800">
+                <div className="text-gray-400 text-xs mb-1">RevenueCat</div>
+                <div className="space-y-2">
+                  <div className="text-gray-300 text-sm font-mono break-all">
+                    <span className="text-gray-400 text-xs mr-2">app_user_id</span>
+                    <input
+                      className="bg-[#1a2230] border border-gray-700 rounded px-2 py-1 text-sm w-full text-gray-200"
+                      placeholder="Enter RC app_user_id"
+                      value={(rcAppIdEdits[subscription.id] ?? subscription.rcAppUserId ?? '')}
+                      onChange={(e) => setRcAppIdEdits(prev => ({ ...prev, [subscription.id]: e.target.value }))}
+                    />
+                    {subscription.rcAppUserId && (
+                      <button
+                        onClick={() => copyToClipboard(subscription.rcAppUserId as string)}
+                        className="hover:text-blue-400 ml-1"
+                        title="Copy app_user_id"
+                      >
+                        <Copy className="h-4 w-4 inline" />
+                      </button>
+                    )}
+                  </div>
+                  <div className="text-gray-300 text-sm font-mono break-all">
+                    <span className="text-gray-400 text-xs mr-2">aliases</span>
+                    {Array.isArray(subscription.rcAliases) && subscription.rcAliases.length > 0 ? (
+                      <div className="space-y-1">
+                        {subscription.rcAliases.map((a, i) => (
+                          <div key={`${a}-${i}`} className="flex items-center gap-1">
+                            <button
+                              onClick={() => copyToClipboard(a)}
+                              className="hover:text-blue-400 truncate"
+                              title="Copy alias"
+                            >
+                              {a}
+                            </button>
+                            <Copy className="h-3 w-3 opacity-70" />
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-gray-500">-</span>
+                    )}
+                    <div className="mt-2 flex gap-2 items-center">
+                      <input
+                        className="bg-[#1a2230] border border-gray-700 rounded px-2 py-1 text-sm text-gray-200 flex-1"
+                        placeholder="Add alias"
+                        value={rcNewAliasEdits[subscription.id] ?? ''}
+                        onChange={(e) => setRcNewAliasEdits(prev => ({ ...prev, [subscription.id]: e.target.value }))}
+                      />
+                      <button
+                        onClick={() => handleSaveRevenueCat(subscription)}
+                        disabled={savingRcFor === subscription.id}
+                        className={`px-2 py-1 rounded text-xs font-medium border ${savingRcFor === subscription.id ? 'bg-gray-700/30 text-gray-400 border-gray-700' : 'bg-green-900/30 text-green-400 border-green-900 hover:bg-green-800/40'}`}
+                      >
+                        {savingRcFor === subscription.id ? 'Saving...' : 'Save RC'}
+                      </button>
+                    </div>
+                  </div>
+                  {subscription.sourceProject && (
+                    <div className="text-gray-400 text-xs">project: <span className="text-gray-300">{subscription.sourceProject}</span></div>
                   )}
                 </div>
               </div>

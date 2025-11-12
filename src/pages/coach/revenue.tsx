@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useUser } from '../../hooks/useUser';
 import PageHead from '../../components/PageHead';
 import CoachLayout from '../../components/CoachLayout';
@@ -87,83 +87,123 @@ const CoachRevenue: React.FC = () => {
   const [expandedCoach, setExpandedCoach] = useState<string | null>(null);
   const [downloadingMonth, setDownloadingMonth] = useState<string | null>(null);
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        if (!currentUser?.id) return;
-        setAthleteLoading(true);
-        const connected = await coachService.getConnectedAthletes(currentUser.id);
-        const ATHLETE_MONTHLY = PRICING_INFO.ATHLETE.MONTHLY.amount; // cents
-        const ATHLETE_ANNUAL_EQ = Math.round(PRICING_INFO.ATHLETE.ANNUAL.amount / 12); // cents
-        const rows: AthleteSub[] = await Promise.all(
-          connected.map(async (a: any) => {
-            let planType: any = null; // accept any string type to display accurately
-            let expiration: Date | null | undefined = null;
-            let isActive = false;
-            try {
-              const sref = doc(db, 'subscriptions', a.id);
-              const sdoc = await getDoc(sref);
-              if (sdoc.exists()) {
-                const sd: any = sdoc.data();
-                const plans: any[] = Array.isArray(sd?.plans) ? sd.plans : [];
-                // take latest by expiration regardless of type
-                plans.sort((x, y) => (y?.expiration || 0) - (x?.expiration || 0));
-                const latest = plans[0];
-                if (latest) {
-                  planType = latest.type || null;
-                  expiration = typeof latest.expiration === 'number' ? new Date(latest.expiration * 1000) : null;
-                  isActive = typeof latest.expiration === 'number' && latest.expiration > Math.floor(Date.now() / 1000);
-                } else {
-                  const status = await subscriptionService.ensureActiveOrSync(a.id);
-                  isActive = !!status.isActive;
-                  expiration = status.latestExpiration || null;
-                }
-              }
-            } catch (_) {
-              try {
+  const reloadAthleteSubs = async () => {
+    try {
+      if (!currentUser?.id) return;
+      setAthleteLoading(true);
+      const connected = await coachService.getConnectedAthletes(currentUser.id);
+      const ATHLETE_MONTHLY = PRICING_INFO.ATHLETE.MONTHLY.amount; // cents
+      const ATHLETE_ANNUAL_EQ = Math.round(PRICING_INFO.ATHLETE.ANNUAL.amount / 12); // cents
+      const rows: AthleteSub[] = await Promise.all(
+        connected.map(async (a: any) => {
+          let planType: any = null; // accept any string type to display accurately
+          let expiration: Date | null | undefined = null;
+          let isActive = false;
+          try {
+            const sref = doc(db, 'subscriptions', a.id);
+            const sdoc = await getDoc(sref);
+            if (sdoc.exists()) {
+              const sd: any = sdoc.data();
+              const plans: any[] = Array.isArray(sd?.plans) ? sd.plans : [];
+              // take latest by expiration regardless of type
+              plans.sort((x, y) => (y?.expiration || 0) - (x?.expiration || 0));
+              const latest = plans[0];
+              if (latest) {
+                planType = latest.type || null;
+                expiration = typeof latest.expiration === 'number' ? new Date(latest.expiration * 1000) : null;
+                isActive = typeof latest.expiration === 'number' && latest.expiration > Math.floor(Date.now() / 1000);
+              } else {
                 const status = await subscriptionService.ensureActiveOrSync(a.id);
                 isActive = !!status.isActive;
                 expiration = status.latestExpiration || null;
-              } catch (_) {}
+              }
             }
+          } catch (_) {
+            try {
+              const status = await subscriptionService.ensureActiveOrSync(a.id);
+              isActive = !!status.isActive;
+              expiration = status.latestExpiration || null;
+            } catch (_) {}
+          }
 
-            // Determine price mapping based on plan type
-            let monthlyCents = 0;
-            const t = (planType || '').toString().toLowerCase();
-            // Beta grant first: always $0
-            if (t.includes('beta_grant')) {
-              monthlyCents = 0;
-            } else if (t.startsWith('pulsecheck-')) {
-              monthlyCents = t.includes('annual') ? ATHLETE_ANNUAL_EQ : ATHLETE_MONTHLY;
-            } else if (t.includes('pc_1y')) {
-              monthlyCents = ATHLETE_ANNUAL_EQ;
-            } else if (t.includes('pc_1m') || t.includes('pc_m') || t.includes('pc_month')) {
-              monthlyCents = ATHLETE_MONTHLY;
-            } else if (t) {
-              // Unknown type: default to monthly estimate 0 (safe)
-              monthlyCents = 0;
-            }
+          // Determine price mapping based on plan type
+          let monthlyCents = 0;
+          const t = (planType || '').toString().toLowerCase();
+          // Beta grant first: always $0
+          if (t.includes('beta_grant')) {
+            monthlyCents = 0;
+          } else if (t.startsWith('pulsecheck-')) {
+            monthlyCents = t.includes('annual') ? ATHLETE_ANNUAL_EQ : ATHLETE_MONTHLY;
+          } else if (t.includes('pc_1y')) {
+            monthlyCents = ATHLETE_ANNUAL_EQ;
+          } else if (t.includes('pc_1m') || t.includes('pc_m') || t.includes('pc_month')) {
+            monthlyCents = ATHLETE_MONTHLY;
+          } else if (t) {
+            // Unknown type: default to monthly estimate 0 (safe)
+            monthlyCents = 0;
+          }
 
-            return {
-              athleteUserId: a.id,
-              displayName: a.displayName,
-              username: a.username,
-              email: a.email,
-              planType,
-              expiration,
-              isActive,
-              monthlyCents,
-            } as AthleteSub;
-          })
-        );
-        rows.sort((a, b) => (Number(b.isActive) - Number(a.isActive)) || (a.displayName || a.username || '').localeCompare(b.displayName || b.username || ''));
-        setAthleteSubs(rows);
+          return {
+            athleteUserId: a.id,
+            displayName: a.displayName,
+            username: a.username,
+            email: a.email,
+            planType,
+            expiration,
+            isActive,
+            monthlyCents,
+          } as AthleteSub;
+        })
+      );
+      rows.sort((a, b) => (Number(b.isActive) - Number(a.isActive)) || (a.displayName || a.username || '').localeCompare(b.displayName || b.username || ''));
+      setAthleteSubs(rows);
+    } finally {
+      setAthleteLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        await reloadAthleteSubs();
       } finally {
-        setAthleteLoading(false);
+        // no-op
       }
     };
     load();
   }, [currentUser?.id]);
+
+  // Auto-self-heal unknown athlete subscription states by syncing RevenueCat and Stripe
+  const [autoResolving, setAutoResolving] = useState(false);
+  const healedTriedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const heal = async () => {
+      if (autoResolving) return;
+      const unknowns = athleteSubs.filter(a => (!a.planType || a.planType === 'Unknown') && !a.expiration && !a.isActive);
+      // Only attempt for users we haven't already tried during this session
+      const candidates = unknowns.filter(a => !healedTriedRef.current.has(a.athleteUserId));
+      if (candidates.length === 0) return;
+      setAutoResolving(true);
+      try {
+        const batch = candidates.slice(0, 5);
+        batch.forEach(a => healedTriedRef.current.add(a.athleteUserId));
+        await Promise.all(batch.map(async (a) => {
+          try {
+            await fetch('/.netlify/functions/sync-revenuecat-subscription', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: a.athleteUserId })
+            });
+            await fetch('/.netlify/functions/migrate-expiration-history', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: a.athleteUserId })
+            });
+          } catch (_) {}
+        }));
+        await reloadAthleteSubs();
+      } finally {
+        setAutoResolving(false);
+      }
+    };
+    heal();
+  }, [athleteSubs, autoResolving]);
 
   // Unified earnings (for creator sales and payout-like info)
   type UnifiedEarnings = {

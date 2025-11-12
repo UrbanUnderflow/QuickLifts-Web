@@ -423,30 +423,6 @@ const AthleteDetailsModal: React.FC<AthleteDetailsModalProps> = ({
                 )}
               </div>
 
-              {/* Recent Activity */}
-              <div className="bg-zinc-800 rounded-lg p-6">
-                <h3 className="text-lg font-semibold text-white mb-4">Recent Activity</h3>
-                
-                {sentimentHistory.slice(-7).reverse().map((record, index) => (
-                  <div key={index} className="flex items-center justify-between py-3 border-b border-zinc-700 last:border-b-0">
-                    <div className="flex items-center space-x-3">
-                      <div className={`w-3 h-3 rounded-full ${
-                        record.messageCount > 0 
-                          ? getSentimentColor(record.sentimentScore).replace('text-', 'bg-')
-                          : 'bg-zinc-600'
-                      }`} />
-                      <span className="text-white">{formatDate(record.date)}</span>
-                    </div>
-                    <div className="flex items-center space-x-4 text-sm">
-                      <span className="text-zinc-400">{record.messageCount} messages</span>
-                      <span className={record.messageCount > 0 ? getSentimentColor(record.sentimentScore) : 'text-zinc-500'}>
-                        {record.messageCount > 0 ? getSentimentLabel(record.sentimentScore) : 'No activity'}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
               {/* Recent Conversation Sessions */}
               <div className="bg-zinc-800 rounded-lg p-6">
                 <h3 className="text-lg font-semibold text-white mb-4 flex items-center justify-between">

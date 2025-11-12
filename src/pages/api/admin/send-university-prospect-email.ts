@@ -15,7 +15,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       return res.status(500).json({ success: false, error: 'Brevo not configured' });
     }
 
-    const { to, subject, textContent, htmlContent } = req.body || {};
+    const { to, subject, textContent, htmlContent, scheduledAt } = req.body || {};
     if (!to?.email || !subject || (!textContent && !htmlContent)) {
       return res.status(400).json({ success: false, error: 'Missing required fields' });
     }
@@ -27,6 +27,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       htmlContent: htmlContent || `<pre style="white-space:pre-wrap;font:14px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">${escapeHtml(textContent)}</pre>`,
       replyTo: { email: senderEmail, name: senderName }
     } as any;
+
+    // Optional scheduling per Brevo API (ISO8601 with timezone)
+    if (scheduledAt) {
+      const date = new Date(scheduledAt);
+      if (!isNaN(date.getTime())) {
+        payload.scheduledAt = date.toISOString();
+      }
+    }
 
     const response = await fetch('https://api.brevo.com/v3/smtp/email', {
       method: 'POST',

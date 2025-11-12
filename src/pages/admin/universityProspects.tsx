@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Head from 'next/head';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
-import { collection, addDoc, getDocs, orderBy, query, updateDoc, doc } from 'firebase/firestore';
+import { collection, addDoc, getDocs, orderBy, query, updateDoc, doc, writeBatch, deleteDoc } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
 import { Check, User, Mail, Globe, Users, Target, Loader2, Filter } from 'lucide-react';
 import { convertFirestoreTimestamp, formatDate } from '../../utils/formatDate';
@@ -43,6 +43,11 @@ interface UniversityProspect {
   updatedAt?: any;
   createdBy?: string;
   lastUpdatedBy?: string;
+  emailDraftSubject?: string;
+  emailDraftBody?: string;
+  lastEmailSubject?: string;
+  lastEmailBody?: string;
+  lastEmailSentAt?: any;
 }
 
 const emptyProspect: UniversityProspect = {
@@ -96,9 +101,33 @@ const UniversityProspectsPage: React.FC = () => {
   const [proposedSlots, setProposedSlots] = useState('Monday, Tuesday and Thursday before 12:45pm EST');
   const [savingDraft, setSavingDraft] = useState(false);
   const [draftSavedAt, setDraftSavedAt] = useState<Date | null>(null);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [scheduleDate, setScheduleDate] = useState<string>(''); // YYYY-MM-DD
+  const [scheduleTime, setScheduleTime] = useState<string>(''); // HH:MM
   const PROGRAM_SIZE_OPTIONS: ProgramSize[] = ['0-5000','5000 - 10000','10000 - 15,000','15000 - 25000','25000 - 50000','50000 - 100000','100000+'];
   const dispatch = useDispatch();
   const [initialEmailDraft, setInitialEmailDraft] = useState<{ subject: string; body: string; pilot: string; slots: string } | null>(null);
+  // Bulk paste import state
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkText, setBulkText] = useState('');
+  const [bulkParsing, setBulkParsing] = useState(false);
+  const [bulkPreview, setBulkPreview] = useState<Array<UniversityProspect & { __duplicate?: boolean; __selected?: boolean }>>([]);
+  const [bulkSaving, setBulkSaving] = useState(false);
+  // Scouting state
+  const [scouting, setScouting] = useState(false);
+  const [scoutLimit, setScoutLimit] = useState<number>(10);
+  // Temporary highlight for recently added scouted entries (clears on refresh/next batch)
+  const [highlightEmails, setHighlightEmails] = useState<Set<string>>(new Set());
+
+  const extractFirstUrl = (text?: string): string => {
+    if (!text) return '';
+    const m = text.match(/https?:\/\/\S+/i);
+    return m?.[0] || '';
+  };
+
+  const domainOf = (url: string): string => {
+    try { return new URL(url).hostname; } catch { return url; }
+  };
 
   useEffect(() => {
     if (emailOpen && emailProspect) {
@@ -132,10 +161,9 @@ const UniversityProspectsPage: React.FC = () => {
 
   const requestCloseEmail = async () => {
     if (emailDirty) {
-      const shouldSave = window.confirm('You have unsaved changes. Click OK to save as a draft, or Cancel to discard.');
-      if (shouldSave) {
-        await saveEmailDraft();
-      }
+      // OK => discard and close; Cancel => keep editing (no auto-save)
+      const discard = window.confirm('You have unsaved changes. Click OK to discard and close, or Cancel to keep editing.');
+      if (!discard) return;
     }
     setEmailOpen(false);
   };
@@ -162,6 +190,84 @@ const UniversityProspectsPage: React.FC = () => {
     statuses.forEach(s => { counts[s.value] = prospects.filter(p => p.status === s.value).length; });
     return counts;
   }, [prospects]);
+
+  const computeDuplicate = (p: Partial<UniversityProspect>) => {
+    const keyEmail = p.email?.toLowerCase().trim();
+    const keyDm = p.decisionMaker?.toLowerCase().trim();
+    return prospects.some(ex => {
+      const exEmail = (ex.email || '').toLowerCase().trim();
+      const exDm = (ex.decisionMaker || '').toLowerCase().trim();
+      return (keyEmail && exEmail && keyEmail === exEmail) || (keyDm && exDm && keyDm === exDm);
+    });
+  };
+
+  const parseBulk = async () => {
+    if (!bulkText.trim()) return;
+    setBulkParsing(true);
+    try {
+      const res = await fetch('/api/admin/extract-university-prospects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: bulkText })
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed to parse');
+      const items: any[] = Array.isArray(json.prospects) ? json.prospects : [];
+      const preview = items.map((raw) => {
+        const p: UniversityProspect = {
+          university: (raw.university || '').toString(),
+          sport: (raw.sport || '').toString(),
+          decisionMaker: (raw.decisionMaker || '').toString(),
+          title: (raw.title || '').toString(),
+          email: (raw.email || '').toString(),
+          programSize: (raw.programSize as ProgramSize) || '0-5000',
+          priority: 'medium',
+          status: 'new',
+          notes: raw.notes || ''
+        };
+        const dup = computeDuplicate(p);
+        return { ...p, __duplicate: dup, __selected: !dup };
+      });
+      setBulkPreview(preview);
+      dispatch(showToast({ message: `Parsed ${preview.length} prospects`, type: 'success' }));
+    } catch (e) {
+      console.error('[UniversityProspects] bulk parse error', e);
+      dispatch(showToast({ message: 'Failed to parse pasted data', type: 'error' }));
+    } finally {
+      setBulkParsing(false);
+    }
+  };
+
+  const saveBulk = async () => {
+    const toSave = bulkPreview.filter(p => p.__selected && !p.__duplicate);
+    if (toSave.length === 0) { dispatch(showToast({ message: 'Nothing to save', type: 'error' })); return; }
+    setBulkSaving(true);
+    try {
+      const actor = (currentUser?.username || currentUser?.displayName || currentUser?.email || 'admin') as string;
+      const batch = toSave.map(async (p) => {
+        const payload: any = {
+          ...p,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          createdBy: actor,
+          lastUpdatedBy: actor
+        };
+        delete payload.__duplicate; delete payload.__selected;
+        await addDoc(collection(db, 'university-prospects'), payload);
+      });
+      await Promise.all(batch);
+      await fetchProspects();
+      dispatch(showToast({ message: `Saved ${toSave.length} prospects`, type: 'success' }));
+      setBulkOpen(false);
+      setBulkText('');
+      setBulkPreview([]);
+    } catch (e) {
+      console.error('[UniversityProspects] bulk save error', e);
+      dispatch(showToast({ message: 'Failed to save some prospects', type: 'error' }));
+    } finally {
+      setBulkSaving(false);
+    }
+  };
 
   const fetchProspects = async () => {
     setLoading(true);
@@ -190,10 +296,34 @@ const UniversityProspectsPage: React.FC = () => {
     return parts[0] || 'Athletics';
   };
 
+  const isCoach = (title?: string, name?: string) => {
+    const t = (title || '').toLowerCase();
+    const n = (name || '').toLowerCase();
+    return t.includes('coach') || n.includes(' coach');
+  };
+
+  const firstNameOf = (full?: string) => (full || '').trim().split(/\s+/)[0] || 'there';
+  const lastNameOf = (full?: string) => {
+    if (!full) return '';
+    const tokens = full.trim().split(/\s+/);
+    if (tokens.length === 0) return '';
+    // Drop suffixes like Jr., Sr., III
+    const suffixes = new Set(['jr', 'jr.', 'sr', 'sr.', 'iii', 'ii']);
+    for (let i = tokens.length - 1; i >= 0; i--) {
+      const t = tokens[i].toLowerCase();
+      if (!suffixes.has(t)) return tokens[i];
+    }
+    return tokens[tokens.length - 1];
+  };
+
   const generateEmail = (p: UniversityProspect, pilot: string, slots: string): { subject: string; body: string } => {
     const sportPrimary = pickPrimarySport(p.sport);
     const slotsText = slots || 'Monday, Tuesday and Thursday before 12:45pm EST';
-    const body = `Hi ${p.decisionMaker.split(' ')[0] || 'there'},\n\nI'm Tremaine Grant, founder of Pulse Fitness Collective. We built PulseCheck, a lightweight, always‑on sport‑psych companion and simple CRM that helps coaches track mood, RPE and readiness across large rosters. I know how hard it is for staffs to keep a close pulse on every athlete’s mental readiness, which is tightly linked to performance.\n\nPulseCheck improves session intent and adherence and gives coaches a centralized dashboard that flags athletes who might need extra attention. We can start a ${pilot || '8–12 weeks'} pilot with 1–3 teams (e.g., ${p.sport}). During the pilot we’ll track adherence, session‑intent and readiness trends and deliver a short impact report. If it’s a fit, scaling to more teams or department‑wide is straightforward, with the same workflows and flexible licensing. It’s turnkey: Pulse handles onboarding, daily check‑ins and weekly insight briefs. Data exports cleanly to CSV/Sheets.\n\nIf you’re open, I can share a brief overview and learn how you support your teams today. ${slotsText} could work on my end, but I’m happy to adjust to whatever’s easiest. Feel free to loop in performance or sport‑psych staff.\n\nBest,\nTremaine\nFounder & CEO, Pulse Fitness Collective\ntre@fitwithpulse.ai`;
+    const greeting = isCoach(p.title, p.decisionMaker)
+      ? `Hi Coach ${lastNameOf(p.decisionMaker)},`
+      : `Hi ${firstNameOf(p.decisionMaker)},`;
+
+    const body = `${greeting}\n\nI'm Tremaine Grant, a former Track and Field athlete at Florida State University and now Founder & CEO of Pulse.\n\nHow badly do you need to track mood, readiness, and physical condition across your roster?\n\nMy team and I build Pulse Check to solve this issue for coaches like you. Pulse Check acts as a companion to your sports psychologist that is available to athletes 24/7, so that you can read each athlete’s mental and physical state daily, spot red flags early, and trigger 1 on 1 check‑ins with you or your sport psychologist on staff when it’s needed.\n\nIt is also a digital tool that helps you organize and manage all your roster information in one place, keeping track of communication, notes, and follow up for relationship building with your athletes.\n\nIf you’re open, I can share a brief overview and learn how you support your teams today. ${slotsText} could work on my end, but I’m happy to adjust to whatever’s easiest. Feel free to loop in performance or sport‑psych staff.\n\nBest,\nTremaine\nFounder & CEO, Pulse\n(954)-548-4221\ntre@fitwithpulse.ai`;
     // Concise subject: prefer short, readable formats. If the full variant is long, fall back to a shorter pilot-oriented version.
     const fullSubject = `PulseCheck for ${sportPrimary} at ${p.university}`;
     const shortSubject = `PulseCheck pilot for ${sportPrimary}`;
@@ -203,9 +333,23 @@ const UniversityProspectsPage: React.FC = () => {
 
   const openEmail = (row: UniversityProspect) => {
     setEmailProspect(row);
-    const { subject, body } = generateEmail(row, pilotLength, proposedSlots);
-    setEmailSubject(subject);
-    setEmailBody(body);
+    // Prefer previously saved draft values if present
+    const pilot = (row as any).pilotLength || pilotLength;
+    const slots = (row as any).proposedSlots || proposedSlots;
+    const savedSubject = row.emailDraftSubject;
+    const savedBody = row.emailDraftBody;
+    if (savedSubject && savedBody) {
+      setPilotLength(pilot);
+      setProposedSlots(slots);
+      setEmailSubject(savedSubject);
+      setEmailBody(savedBody);
+    } else {
+      const { subject, body } = generateEmail(row, pilot, slots);
+      setPilotLength(pilot);
+      setProposedSlots(slots);
+      setEmailSubject(subject);
+      setEmailBody(body);
+    }
     setEmailOpen(true);
   };
 
@@ -224,8 +368,10 @@ const UniversityProspectsPage: React.FC = () => {
         lastUpdatedBy: actor
       } as any);
       // reflect in local list so Updated column shows immediately
-      setProspects(prev => prev.map(p => p.id === emailProspect.id ? { ...p, lastUpdatedBy: actor, updatedAt: now } : p));
+      setProspects(prev => prev.map(p => p.id === emailProspect.id ? { ...p, emailDraftSubject: emailSubject, emailDraftBody: emailBody, lastUpdatedBy: actor, updatedAt: now } : p));
       setDraftSavedAt(now);
+      // Mark current content as the latest saved version to prevent further prompts
+      setInitialEmailDraft({ subject: emailSubject, body: emailBody, pilot: pilotLength, slots: proposedSlots });
       setTimeout(() => setDraftSavedAt(null), 2000);
     } catch (e) {
       console.error('Save draft failed', e);
@@ -270,6 +416,37 @@ const UniversityProspectsPage: React.FC = () => {
     } catch (e) {
       console.error('Send email failed', e);
       dispatch(showToast({ message: 'Failed to send email. Please try again.', type: 'error' }));
+    } finally {
+      setEmailSending(false);
+    }
+  };
+
+  const scheduleEmail = async () => {
+    if (!emailProspect?.email) return;
+    if (!scheduleDate || !scheduleTime) { alert('Choose a date and time'); return; }
+    const [hh, mm] = scheduleTime.split(':');
+    const when = new Date(scheduleDate + 'T' + (hh || '00') + ':' + (mm || '00') + ':00');
+    if (isNaN(when.getTime())) { alert('Invalid schedule time'); return; }
+    setEmailSending(true);
+    try {
+      const res = await fetch('/api/admin/send-university-prospect-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: { email: emailProspect.email, name: emailProspect.decisionMaker || emailProspect.university },
+          subject: emailSubject,
+          textContent: emailBody,
+          scheduledAt: when.toISOString()
+        })
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) throw new Error(json.error || 'Failed to schedule');
+      dispatch(showToast({ message: 'Email scheduled successfully', type: 'success' }));
+      setEmailOpen(false);
+      setScheduleOpen(false);
+    } catch (e) {
+      console.error('Schedule email failed', e);
+      dispatch(showToast({ message: 'Failed to schedule email. Please try again.', type: 'error' }));
     } finally {
       setEmailSending(false);
     }
@@ -350,6 +527,123 @@ const UniversityProspectsPage: React.FC = () => {
           <div className="mb-8">
             <h1 className="text-3xl font-bold">University Prospects</h1>
             <p className="text-zinc-400">Manage decision makers at universities.</p>
+            <div className="mt-3 flex gap-2">
+              <button onClick={() => setBulkOpen(true)} className="px-3 py-1.5 rounded-md bg-blue-600/20 border border-blue-500/40 text-blue-300 hover:bg-blue-600/30 text-sm">Bulk Paste Import</button>
+              <select
+                value={scoutLimit}
+                onChange={(e) => setScoutLimit(parseInt(e.target.value, 10))}
+                className="px-2 py-1.5 rounded-md bg-zinc-900 border border-zinc-700 text-zinc-200 text-sm"
+                title="Prospects per scout"
+              >
+                {[10,20,50,100].map(n => <option key={n} value={n}>{n} per scout</option>)}
+              </select>
+              <button
+                onClick={async () => {
+                  if (scouting) return;
+                  setScouting(true);
+                  try {
+                    // Optionally derive top sports focus from existing data
+                    const topSports = Array.from(new Set(prospects.map(p => (p.sport || '').split(',')[0].trim()).filter(Boolean))).slice(0, 3);
+                    const existingEmails = prospects.map(p => (p.email || '').toLowerCase().trim()).filter(Boolean);
+                    const existingNames = prospects.map(p => (p.decisionMaker || '').toLowerCase().trim().replace(/\s+/g, ' ')).filter(Boolean);
+                    const existingUniversities = prospects.map(p => (p.university || '').toLowerCase().trim()).filter(Boolean);
+                    const existingPairs = prospects.map(p => {
+                      const n = (p.decisionMaker || '').toLowerCase().trim().replace(/\s+/g, ' ');
+                      const u = (p.university || '').toLowerCase().trim();
+                      if (!n || !u) return '';
+                      return `${n}|${u}`;
+                    }).filter(Boolean);
+                    const res = await fetch('/api/admin/scout-university-prospects', {
+                      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sports: topSports, limit: scoutLimit, existing: { emails: existingEmails, decisionMakers: existingNames, universities: existingUniversities, pairs: existingPairs }, debug: true })
+                    });
+                    const json = await res.json();
+                    if (!res.ok) throw new Error(json.error || 'Failed to scout');
+                    const items: any[] = Array.isArray(json.prospects) ? json.prospects : [];
+                    const actor = (currentUser?.username || currentUser?.displayName || currentUser?.email || 'admin') as string;
+                    let added = 0; let skipped = 0; const newlyAddedEmails: string[] = [];
+                    for (const raw of items) {
+                      const candidate: UniversityProspect = {
+                        university: (raw.university || '').toString(),
+                        sport: (raw.sport || '').toString(),
+                        decisionMaker: (raw.decisionMaker || '').toString(),
+                        title: (raw.title || '').toString(),
+                        email: (raw.email || '').toString(),
+                        programSize: (raw.programSize as any) || '0-5000',
+                        priority: 'medium',
+                        status: 'new',
+                        notes: raw.notes || ''
+                      };
+                      if (computeDuplicate(candidate)) { skipped++; continue; }
+                      await addDoc(collection(db, 'university-prospects'), {
+                        ...candidate,
+                        createdAt: new Date(),
+                        updatedAt: new Date(),
+                        createdBy: actor,
+                        lastUpdatedBy: actor
+                      } as any);
+                      added++;
+                      if (candidate.email) newlyAddedEmails.push(candidate.email.toLowerCase().trim());
+                    }
+                    if (added > 0) await fetchProspects();
+                    // Replace highlight set with the newly added batch
+                    setHighlightEmails(new Set(newlyAddedEmails));
+                    const m = json.metrics || {};
+                    if (json.promptPreview) {
+                      console.log('[Scout] promptPreview', json.promptPreview);
+                    }
+                    if (Array.isArray(json.debugReport)) {
+                      const table = json.debugReport.map((r: any) => ({
+                        stage: r?.stage,
+                        reason: r?.reason,
+                        university: r?.p?.university,
+                        sport: r?.p?.sport,
+                        decisionMaker: r?.p?.decisionMaker,
+                        email: r?.p?.email
+                      }));
+                      console.groupCollapsed('[Scout] debugReport details');
+                      console.table(table);
+                      console.groupEnd();
+                    }
+                    console.log('[Scout] metrics', m);
+                    dispatch(showToast({ message: `Scouted ${items.length}. Added ${added}, skipped ${skipped}. Returned:${m.returned || items.length} AfterFilter:${m.afterFilter ?? '-'} Relaxed:${m.afterRelaxed ?? '-'}`, type: 'success' }));
+                  } catch (e) {
+                    console.error('[UniversityProspects] scout error', e);
+                    dispatch(showToast({ message: 'Failed to scout new prospects', type: 'error' }));
+                  } finally {
+                    setScouting(false);
+                  }
+                }}
+                disabled={scouting}
+                className={`px-3 py-1.5 rounded-md text-sm border ${scouting ? 'bg-gray-700/30 text-gray-400 border-gray-700' : 'bg-green-600/20 text-green-300 border-green-500/40 hover:bg-green-600/30'}`}
+              >
+                {scouting ? 'Scouting…' : 'Scout New Prospects'}
+              </button>
+              <button
+                onClick={async () => {
+                  try {
+                    const emailsToRemove = new Set(Array.from(highlightEmails));
+                    if (emailsToRemove.size === 0) { dispatch(showToast({ message: 'No recent scouted entries to discard', type: 'info' })); return; }
+                    const toDelete = prospects.filter(p => emailsToRemove.has((p.email || '').toLowerCase().trim()) && p.id);
+                    if (toDelete.length === 0) { dispatch(showToast({ message: 'No recent scouted entries to discard', type: 'info' })); return; }
+                    const ok = window.confirm(`Discard ${toDelete.length} recently scouted entr${toDelete.length === 1 ? 'y' : 'ies'}? This will delete them.`);
+                    if (!ok) return;
+                    const batch = writeBatch(db);
+                    toDelete.forEach(p => { if (p.id) batch.delete(doc(db, 'university-prospects', p.id)); });
+                    await batch.commit();
+                    setProspects(prev => prev.filter(p => !emailsToRemove.has((p.email || '').toLowerCase().trim())));
+                    setHighlightEmails(new Set());
+                    dispatch(showToast({ message: `Discarded ${toDelete.length} scouted entr${toDelete.length === 1 ? 'y' : 'ies'}`, type: 'success' }));
+                  } catch (e) {
+                    console.error('[UniversityProspects] discard recent error', e);
+                    dispatch(showToast({ message: 'Failed to discard recent scouted entries', type: 'error' }));
+                  }
+                }}
+                className="px-3 py-1.5 rounded-md bg-red-600/20 border border-red-500/40 text-red-300 hover:bg-red-600/30 text-sm"
+                title="Delete highlighted scouted entries"
+              >
+                Discard Recent Scout
+              </button>
+            </div>
           </div>
 
           {/* Quick Add Form */}
@@ -430,6 +724,7 @@ const UniversityProspectsPage: React.FC = () => {
                   <th className="text-left p-3">Student Body Range</th>
                   <th className="text-left p-3">Priority</th>
                   <th className="text-left p-3">Notes</th>
+                  <th className="text-left p-3">Source</th>
                   <th className="text-left p-3">Created By</th>
                   <th className="text-left p-3">Updated By</th>
                   <th className="text-left p-3">Status</th>
@@ -438,17 +733,19 @@ const UniversityProspectsPage: React.FC = () => {
               </thead>
               <tbody>
                 {loading && (
-                  <tr><td className="p-4 text-zinc-400" colSpan={10}>Loading…</td></tr>
+                  <tr><td className="p-4 text-zinc-400" colSpan={13}>Loading…</td></tr>
                 )}
                 {!loading && filtered.length === 0 && (
-                  <tr><td className="p-4 text-zinc-400" colSpan={10}>No prospects found.</td></tr>
+                  <tr><td className="p-4 text-zinc-400" colSpan={13}>No prospects found.</td></tr>
                 )}
                 {!loading && filtered.map(row => {
                   const updated = convertFirestoreTimestamp(row.updatedAt as any);
+                  const isNew = highlightEmails.has((row.email || '').toLowerCase().trim());
                   return (
-                    <tr key={row.id} className="border-b border-zinc-800 hover:bg-zinc-800/40">
+                    <tr key={row.id} className={`border-b border-zinc-800 hover:bg-zinc-800/40 ${isNew ? 'bg-green-900/10' : ''}`}>
                       <td className="p-3">
                         <div className="font-medium text-white">{row.university}</div>
+                        {isNew && <span className="ml-1 inline-block text-[10px] px-1.5 py-0.5 rounded bg-green-500/20 text-green-300 border border-green-600/40">Scouted</span>}
                       </td>
                       <td className="p-3 text-zinc-300">{row.sport}</td>
                       <td className="p-3 text-zinc-300">{row.decisionMaker}</td>
@@ -464,6 +761,11 @@ const UniversityProspectsPage: React.FC = () => {
                         ) : (
                           <span className="text-zinc-500 text-xs">—</span>
                         )}
+                      </td>
+                      <td className="p-3 text-zinc-300">
+                        {(() => { const url = extractFirstUrl(row.notes); return url ? (
+                          <a href={url} target="_blank" rel="noopener noreferrer" className="text-blue-300 hover:underline">{domainOf(url)}</a>
+                        ) : (<span className="text-zinc-500 text-xs">—</span>); })()}
                       </td>
                       <td className="p-3 text-zinc-300">{row.createdBy || '—'}</td>
                       <td className="p-3 text-zinc-300">{row.lastUpdatedBy || '—'}</td>
@@ -564,7 +866,13 @@ const UniversityProspectsPage: React.FC = () => {
                   <div className="text-xs text-zinc-500">
                     {draftSavedAt ? <span className="text-green-400">Draft saved</span> : 'This email will be sent via Brevo.'}
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 items-center">
+                    <button
+                      className="px-4 py-2 rounded-md bg-zinc-800 border border-zinc-700 text-zinc-300"
+                      onClick={() => setScheduleOpen(true)}
+                    >
+                      Schedule
+                    </button>
                     <button disabled={savingDraft} className="px-4 py-2 rounded-md bg-zinc-800 border border-zinc-700 text-zinc-300 disabled:opacity-60" onClick={saveEmailDraft}>
                       {savingDraft ? 'Saving…' : (draftSavedAt ? 'Saved' : 'Save Draft')}
                     </button>
@@ -573,6 +881,31 @@ const UniversityProspectsPage: React.FC = () => {
                     </button>
                   </div>
                 </div>
+                {/* Schedule modal */}
+                {scheduleOpen && (
+                  <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setScheduleOpen(false)}>
+                    <div className="bg-zinc-900 border border-zinc-800 rounded-xl w-full max-w-md" onClick={e=>e.stopPropagation()}>
+                      <div className="p-4 border-b border-zinc-800 flex items-center justify-between">
+                        <h4 className="text-lg font-semibold">Schedule Email</h4>
+                        <button className="text-zinc-400 hover:text-white" onClick={() => setScheduleOpen(false)}>✕</button>
+                      </div>
+                      <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-xs text-zinc-400">Date</label>
+                          <input type="date" className="w-full bg-zinc-800 rounded-lg px-3 py-2" value={scheduleDate} onChange={e=>setScheduleDate(e.target.value)} />
+                        </div>
+                        <div>
+                          <label className="text-xs text-zinc-400">Time</label>
+                          <input type="time" className="w-full bg-zinc-800 rounded-lg px-3 py-2" value={scheduleTime} onChange={e=>setScheduleTime(e.target.value)} />
+                        </div>
+                      </div>
+                      <div className="p-4 border-t border-zinc-800 flex justify-end gap-2">
+                        <button className="px-4 py-2 rounded-md bg-zinc-800 border border-zinc-700 text-zinc-300" onClick={() => setScheduleOpen(false)}>Cancel</button>
+                        <button className="px-4 py-2 rounded-md bg-[#E0FE10] text-black font-semibold hover:bg-lime-400" onClick={scheduleEmail}>Schedule</button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -595,6 +928,75 @@ const UniversityProspectsPage: React.FC = () => {
               </div>
             </div>
           )}
+
+          {/* Bulk Paste Import Modal */}
+          {bulkOpen && (
+            <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setBulkOpen(false)}>
+              <div className="bg-zinc-900 border border-zinc-800 rounded-xl w-full max-w-4xl" onClick={e=>e.stopPropagation()}>
+                <div className="p-4 border-b border-zinc-800 flex items-center justify-between">
+                  <h3 className="text-xl font-semibold">Bulk Paste Import</h3>
+                  <button className="text-zinc-400 hover:text-white" onClick={() => setBulkOpen(false)}>✕</button>
+                </div>
+                <div className="p-4 space-y-3">
+                  <p className="text-sm text-white">Paste a list, table, or freeform text. We’ll extract university prospect details (university, decision maker, title, email, sport, student body range) and prepare a preview.</p>
+                  <textarea className="w-full bg-zinc-800 rounded-lg px-3 py-3 h-48 resize-y text-white" placeholder="Paste data here..." value={bulkText} onChange={e=>setBulkText(e.target.value)} />
+                  <div className="flex justify-end">
+                    <button onClick={parseBulk} disabled={bulkParsing || !bulkText.trim()} className="px-4 py-2 rounded-md bg-blue-600/20 border border-blue-500/40 text-blue-300 hover:bg-blue-600/30">{bulkParsing ? 'Parsing…' : 'Parse'}</button>
+                  </div>
+                  {bulkPreview.length > 0 && (
+                    <div className="mt-2">
+                      <div className="text-sm text-white mb-2">Preview ({bulkPreview.length}). Duplicates are disabled.</div>
+                      <div className="max-h-72 overflow-y-auto border border-zinc-800 rounded-lg">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="text-white border-b border-zinc-800">
+                              <th className="p-2 text-left">Add</th>
+                              <th className="p-2 text-left">University</th>
+                              <th className="p-2 text-left">Decision Maker</th>
+                              <th className="p-2 text-left">Title</th>
+                              <th className="p-2 text-left">Email</th>
+                              <th className="p-2 text-left">Sport</th>
+                              <th className="p-2 text-left">Range</th>
+                              <th className="p-2 text-left">Notes</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {bulkPreview.map((p, idx) => (
+                              <tr key={idx} className="border-b border-zinc-800">
+                                <td className="p-2">
+                                  <input type="checkbox" checked={!!p.__selected && !p.__duplicate} disabled={p.__duplicate} onChange={(e)=>{
+                                    setBulkPreview(prev=>prev.map((x,i)=> i===idx ? { ...x, __selected: e.target.checked } : x));
+                                  }} />
+                                  {p.__duplicate && <span className="ml-2 text-xs text-orange-400">duplicate</span>}
+                                </td>
+                                <td className="p-2 text-white">{p.university || '—'}</td>
+                                <td className="p-2 text-white">{p.decisionMaker || '—'}</td>
+                                <td className="p-2 text-white">{p.title || '—'}</td>
+                                <td className="p-2 text-white">{p.email || '—'}</td>
+                                <td className="p-2 text-white">{p.sport || '—'}</td>
+                                <td className="p-2 text-white">{p.programSize || '—'}</td>
+                                <td className="p-2 text-white">{p.notes || '—'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <div className="p-4 border-t border-zinc-800 flex justify-between gap-3">
+                  <div className="text-xs text-zinc-500">New records will be created with status "new".</div>
+                  <div className="flex gap-2">
+                    <button className="px-4 py-2 rounded-md bg-zinc-800 border border-zinc-700 text-zinc-300" onClick={()=>setBulkOpen(false)}>Close</button>
+                    <button className="px-4 py-2 rounded-md bg-[#E0FE10] text-black font-semibold hover:bg-lime-400 disabled:opacity-60" disabled={bulkSaving || bulkPreview.filter(p=>p.__selected && !p.__duplicate).length===0} onClick={saveBulk}>
+                      {bulkSaving ? 'Saving…' : `Add ${bulkPreview.filter(p=>p.__selected && !p.__duplicate).length} Prospects`}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
         </div>
       </div>
     </AdminRouteGuard>
