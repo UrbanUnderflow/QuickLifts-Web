@@ -52,6 +52,7 @@ const BuildYourRound: React.FC = () => {
   const [exportSuccess, setExportSuccess] = useState(false);
   const [collapsedDays, setCollapsedDays] = useState<Set<number>>(new Set());
   const [collapsedSteps, setCollapsedSteps] = useState<Set<number>>(new Set([2,3,4,5,6,7]));
+  const [showWorksheet, setShowWorksheet] = useState(false);
   
   const [formData, setFormData] = useState<RoundData>({
     step1: { theme: '', goals: '' },
@@ -620,7 +621,22 @@ const BuildYourRound: React.FC = () => {
             </div>
           </section>
 
+          {/* Worksheet Toggle Button */}
+          <div className="mb-12 text-center">
+            <button
+              onClick={() => setShowWorksheet(!showWorksheet)}
+              className="inline-flex items-center gap-3 px-8 py-4 bg-gradient-to-r from-[#E0FE10] to-[#c5e310] text-black rounded-xl font-bold text-lg hover:shadow-lg hover:shadow-[#E0FE10]/20 transition-all duration-300 group"
+            >
+              <Target className="w-6 h-6 group-hover:rotate-12 transition-transform" />
+              <span>Plan Your Round Using Our Worksheet</span>
+              <ChevronDown className={`w-5 h-5 transition-transform duration-300 ${showWorksheet ? 'rotate-180' : ''}`} />
+            </button>
+            <p className="text-zinc-400 text-sm mt-3">A step-by-step guide to building your perfect Round</p>
+          </div>
+
           {/* The Breakdown */}
+          {showWorksheet && (
+          <>
           <section id="breakdown" className="mb-12 print:mb-8">
             <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 md:p-8">
               <div className="text-center mb-6">
@@ -905,6 +921,8 @@ const BuildYourRound: React.FC = () => {
               Download your complete round plan as JSON • All answers saved automatically
             </p>
           </div>
+          </>
+          )}
         </div>
       </div>
 
