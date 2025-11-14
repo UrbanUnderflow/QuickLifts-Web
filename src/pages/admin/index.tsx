@@ -244,6 +244,12 @@ const adminCardsData = [
     description: "Visual directory of all application links, routes, and pages organized by category.",
     icon: <FolderTree className="w-5 h-5" />,
     link: "/directory"
+  },
+  {
+    title: "Product Demos",
+    description: "Comprehensive video tutorials and product demonstrations for users and creators.",
+    icon: <ImageIcon className="w-5 h-5" />,
+    link: "/product-demos"
   }
 ];
 

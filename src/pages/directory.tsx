@@ -136,6 +136,7 @@ const Directory: NextPage = () => {
         { label: 'Creator', path: '/creator', description: 'Creator program' },
         { label: 'Get In Touch', path: '/GetInTouch', description: 'Contact form' },
         { label: 'Corporate Packages', path: '/corporate-packages', description: 'Enterprise solutions' },
+        { label: 'Product Demos', path: '/product-demos', description: 'Video tutorials and product demonstrations' },
         { label: 'Build Your Round', path: '/build-your-round', description: 'Create custom workout rounds' },
       ],
     },
