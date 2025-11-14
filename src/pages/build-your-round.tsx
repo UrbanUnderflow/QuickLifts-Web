@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
-import { Target, Calendar, Lightbulb, Camera, Users, Gift, TrendingUp, Plus, X, Mail, Download, ChevronDown } from 'lucide-react';
+import { Target, Calendar, Lightbulb, Camera, Users, Gift, TrendingUp, Plus, X, Mail, Download, ChevronDown, Zap } from 'lucide-react';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db, app } from '../api/firebase/config';
@@ -62,7 +62,7 @@ const BuildYourRound: React.FC = () => {
     step6: { reward: '', brandConnection: '', nonMonetary: '' },
     step7: { promotion: '', metrics: '' },
     days: [
-      { day: 'Day X', focusArea: 'Upper Body', moves: ['Barbell Flat Bench Press', 'Incline Dumbbell Press', '50 Push-Ups', 'Dumbbell Shoulder Press', 'Dumbbell Lateral Raises', 'Plank'] }
+      { day: 'Stack 1', focusArea: 'Upper Body', moves: ['Barbell Flat Bench Press', 'Incline Dumbbell Press', '50 Push-Ups', 'Dumbbell Shoulder Press', 'Dumbbell Lateral Raises', 'Plank'] }
     ]
   });
 
@@ -108,7 +108,7 @@ const BuildYourRound: React.FC = () => {
   const addDay = () => {
     setFormData(prev => ({
       ...prev,
-      days: [...prev.days, { day: `Day ${prev.days.length + 1}`, focusArea: '', moves: ['', '', '', '', '', ''] }]
+      days: [...prev.days, { day: `Stack ${prev.days.length + 1}`, focusArea: '', moves: ['', '', '', '', '', ''] }]
     }));
   };
 
@@ -272,84 +272,287 @@ const BuildYourRound: React.FC = () => {
           <section id="what-is-round" className="mb-12 print:mb-8">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
               {/* Left media */}
-              <div className="rounded-2xl overflow-hidden border border-zinc-800 bg-black">
+              <div className="flex justify-center lg:justify-start">
+                <div className="rounded-2xl overflow-hidden border border-zinc-800 bg-black max-w-xs w-full">
                 <img
                   src="/Winner1.png"
                   alt="Creator filming a workout"
                   className="w-full h-full object-cover"
                 />
+                </div>
               </div>
               {/* Right content */}
               <div>
                 <h2 className="text-5xl font-extrabold mb-4 text-white print:text-black print:text-2xl">What is a Round?</h2>
-                <p className="text-gray-300 leading-relaxed mb-4 text-lg print:text-black">
-                  A Round is a creator-led fitness journey in the Pulse app — a curated series of workouts, habits, and community challenges guiding participants toward a specific goal (e.g., 30-Day Core Reset or 7-Day Strength Sprint).
+                <p className="text-gray-300 leading-relaxed mb-6 text-lg print:text-black">
+                  A Round in Pulse is a time-bound group fitness challenge where creators and members train together toward a shared goal.
                 </p>
-                <p className="text-gray-300 leading-relaxed mb-6 print:text-black">
-                  Each Round lives at the intersection of:
-                </p>
-                <ul className="space-y-4 mb-8">
-                  <li className="flex items-start gap-3">
+                
+                <div className="space-y-4 mb-6">
+                  <div className="flex items-start gap-3">
                     <span className="w-8 h-8 rounded-lg bg-[#E0FE10]/20 border border-[#E0FE10]/30 flex items-center justify-center flex-shrink-0">
                       <Calendar className="w-4 h-4 text-[#E0FE10]" />
                     </span>
-                    <div className="text-gray-300 print:text-black"><strong className="text-white print:text-black">Structure:</strong> Clear timeline (e.g., 7, 14, or 30 days)</div>
-                  </li>
-                  <li className="flex items-start gap-3">
-                    <span className="w-8 h-8 rounded-lg bg-[#E0FE10]/20 border border-[#E0FE10]/30 flex items-center justify-center flex-shrink-0">
-                      <Lightbulb className="w-4 h-4 text-[#E0FE10]" />
-                    </span>
-                    <div className="text-gray-300 print:text-black"><strong className="text-white print:text-black">Story:</strong> A theme or focus that connects your content and motivates challengers</div>
-                  </li>
-                  <li className="flex items-start gap-3">
+                    <div>
+                      <h4 className="text-white font-semibold mb-1 print:text-black">Structure</h4>
+                      <p className="text-gray-300 text-sm print:text-black">A Round runs for a set duration (for example, 7 or 30 days). Each Round is built from "Moves" and "Stacks" — short video exercises and pre-built workouts — created by the community.</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-3">
                     <span className="w-8 h-8 rounded-lg bg-[#E0FE10]/20 border border-[#E0FE10]/30 flex items-center justify-center flex-shrink-0">
                       <Users className="w-4 h-4 text-[#E0FE10]" />
                     </span>
-                    <div className="text-gray-300 print:text-black"><strong className="text-white print:text-black">Social Energy:</strong> A built-in community of participants who move together, share progress, and engage directly with you as the coach</div>
-                  </li>
-                </ul>
+                    <div>
+                      <h4 className="text-white font-semibold mb-1 print:text-black">Participation</h4>
+                      <p className="text-gray-300 text-sm print:text-black">Users join a creator's Round to complete daily workouts, track progress, and interact with other participants through posts, check-ins, and leaderboard stats.</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-3">
+                    <span className="w-8 h-8 rounded-lg bg-[#E0FE10]/20 border border-[#E0FE10]/30 flex items-center justify-center flex-shrink-0">
+                      <Target className="w-4 h-4 text-[#E0FE10]" />
+                    </span>
+                    <div>
+                      <h4 className="text-white font-semibold mb-1 print:text-black">Purpose</h4>
+                      <p className="text-gray-300 text-sm print:text-black">It transforms individual training into a collective experience — blending accountability, competition, and community.</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-3">
+                    <span className="w-8 h-8 rounded-lg bg-[#E0FE10]/20 border border-[#E0FE10]/30 flex items-center justify-center flex-shrink-0">
+                      <TrendingUp className="w-4 h-4 text-[#E0FE10]" />
+                    </span>
+                    <div>
+                      <h4 className="text-white font-semibold mb-1 print:text-black">Creator Role</h4>
+                      <p className="text-gray-300 text-sm print:text-black">Coaches or fitness creators host Rounds around specific goals (e.g., "Core Reset," "Glute Growth," "Mobility Month"). They can monetize participation and grow their audience through engagement.</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-3">
+                    <span className="w-8 h-8 rounded-lg bg-[#E0FE10]/20 border border-[#E0FE10]/30 flex items-center justify-center flex-shrink-0">
+                      <Zap className="w-4 h-4 text-[#E0FE10]" />
+                    </span>
+                    <div>
+                      <h4 className="text-white font-semibold mb-1 print:text-black">AI Layer</h4>
+                      <p className="text-gray-300 text-sm print:text-black">Pulse's AI helps tailor difficulty and recovery pacing to each participant's level, so every member feels challenged but capable.</p>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="bg-[#E0FE10]/10 border border-[#E0FE10]/30 rounded-xl p-4">
                   <p className="text-[#e6ffc2]/90 italic">
-                    Rounds are how creators transform workouts into experiences — and experiences into income and community growth.
+                    In short, a Round is Pulse's version of a social fitness event — combining the structure of a challenge, the energy of a class, and the discoverability of a social platform.
                   </p>
                 </div>
               </div>
             </div>
           </section>
 
-          {/* How do Rounds work */}
+          {/* How to Upload a Move */}
           <section className="mb-12 print:mb-8">
-            <h2 className="text-3xl font-bold mb-8 text-white print:text-black print:text-xl">How do Rounds work?</h2>
-            <div className="relative overflow-hidden rounded-2xl p-6 md:p-8 bg-gradient-to-br from-[#0d1207] to-[#0f1408] border border-[#2c3320]">
-              {/* Dotted path */}
-              <div className="absolute left-6 top-16 bottom-16 hidden md:block">
-                <div className="h-full border-l-2 border-dashed border-[#9fb34b]/50" />
+            <div className="bg-gradient-to-br from-zinc-900 to-zinc-800 border border-zinc-700 rounded-2xl p-6 md:p-8 overflow-hidden">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-12 h-12 rounded-full bg-[#E0FE10]/20 border border-[#E0FE10]/30 flex items-center justify-center">
+                  <Camera className="w-6 h-6 text-[#E0FE10]" />
               </div>
-              <div className="space-y-8 md:space-y-10">
-                {[
-                  { title: 'Create', desc: 'Choose your theme, duration, and difficulty level. Each Round is made up of “Moves” (individual exercises) and “Stacks” (bundled routines).' },
-                  { title: 'Define', desc: 'Define what participants will achieve by the end — e.g., “Stronger core,” “Better mobility,” or “Consistency reset.”' },
-                  { title: 'Support', desc: 'Pulse helps with content structure, visuals, and onboarding. You can film at home or in-studio — your style sets the tone.' },
-                  { title: 'Launch', desc: 'Pulse amplifies your launch through in-app features and promotional assets.' },
-                  { title: 'Join', desc: 'Participants sign up, track progress, and share updates with the community.' },
-                  { title: 'Engage', desc: 'Respond to posts, celebrate wins, and keep your challengers motivated.' },
-                  { title: 'Earn', desc: 'Generate both active revenue (fees, sponsorships, partnerships) and passive income (replays, evergreen content).' }
-                ].map((step, i) => (
-                  <div key={i} className="grid grid-cols-[auto_1fr] gap-4 md:gap-6 items-start">
-                    <div className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-[#E0FE10] text-black font-bold flex items-center justify-center shadow-[0_0_0_6px_rgba(231,255,0,0.1)]">
-                      {i + 1}
+                <div>
+                  <h2 className="text-3xl font-bold text-white print:text-black print:text-xl">How to Upload a Move</h2>
+                  <p className="text-zinc-400 text-sm mt-1">Learn how to add exercises to your Pulse library</p>
                     </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+                {/* Video Tutorial */}
+                <div className="rounded-xl overflow-hidden border border-zinc-600 bg-black">
+                  <iframe
+                    className="w-full aspect-[9/16]"
+                    src="https://www.youtube.com/embed/FDqvrReKjyo"
+                    title="How to Upload a Move"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  />
+                </div>
+
+                {/* Instructions */}
+                <div className="space-y-4">
+                  <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="w-8 h-8 rounded-full bg-[#E0FE10] text-black font-bold flex items-center justify-center text-sm flex-shrink-0">1</div>
                     <div>
-                      <h3 className="text-xl md:text-2xl font-bold text-white mb-1">{step.title}</h3>
-                      <p className="text-gray-300 text-sm md:text-base max-w-2xl">{step.desc}</p>
+                        <h4 className="text-white font-semibold mb-1">Open the Pulse App</h4>
+                        <p className="text-zinc-400 text-sm">Navigate to the "Create" tab in your Pulse mobile app</p>
                     </div>
                   </div>
-                ))}
               </div>
-              <div className="mt-8 p-4 bg-[#E0FE10]/10 border border-[#E0FE10]/30 rounded-xl">
-                <p className="text-[#e6ffc2]/90 italic">
-                  Rounds are the heartbeat of Pulse — turning your expertise into a social, story‑driven experience that builds community, amplifies your voice, and drives growth.
-                </p>
+
+                  <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="w-8 h-8 rounded-full bg-[#E0FE10] text-black font-bold flex items-center justify-center text-sm flex-shrink-0">2</div>
+                      <div>
+                        <h4 className="text-white font-semibold mb-1">Record or Upload</h4>
+                        <p className="text-zinc-400 text-sm">Either record a new move or select an existing video from your library</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="w-8 h-8 rounded-full bg-[#E0FE10] text-black font-bold flex items-center justify-center text-sm flex-shrink-0">3</div>
+                      <div>
+                        <h4 className="text-white font-semibold mb-1">Add Details</h4>
+                        <p className="text-zinc-400 text-sm">Name your move, add a description, and tag relevant muscle groups</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="w-8 h-8 rounded-full bg-[#E0FE10] text-black font-bold flex items-center justify-center text-sm flex-shrink-0">4</div>
+                      <div>
+                        <h4 className="text-white font-semibold mb-1">Publish</h4>
+                        <p className="text-zinc-400 text-sm">Save your move to your library — it's now ready to add to any Round</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-[#E0FE10]/10 border border-[#E0FE10]/30 rounded-lg p-3 mt-4">
+                    <p className="text-[#e6ffc2]/90 text-sm">
+                      <strong>Pro Tip:</strong> Keep videos short (15-60 seconds) and focus on proper form. Your moves become the building blocks of your Rounds!
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* How to Create a Round */}
+          <section className="mb-12 print:mb-8">
+            <div className="bg-gradient-to-br from-zinc-900 to-zinc-800 border border-zinc-700 rounded-2xl p-6 md:p-8 overflow-hidden">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-12 h-12 rounded-full bg-[#E0FE10]/20 border border-[#E0FE10]/30 flex items-center justify-center">
+                  <Target className="w-6 h-6 text-[#E0FE10]" />
+                </div>
+                <div>
+                  <h2 className="text-3xl font-bold text-white print:text-black print:text-xl">How to Create a Round</h2>
+                  <p className="text-zinc-400 text-sm mt-1">Watch this quick tutorial to build your first Round</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+                {/* Video Tutorial */}
+                <div className="rounded-xl overflow-hidden border border-zinc-600 bg-black">
+                  <iframe
+                    className="w-full aspect-[9/16]"
+                    src="https://www.youtube.com/embed/MZ_CSr0Cyzs"
+                    title="How to Create a Round"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  />
+                </div>
+
+                {/* Key Steps */}
+                <div className="space-y-3">
+                  <p className="text-zinc-300 leading-relaxed mb-4">
+                    Creating a Round in Pulse is simple and powered by AI. Follow these steps:
+                  </p>
+
+                  <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-3">
+                    <div className="flex items-start gap-3">
+                      <div className="w-7 h-7 rounded-full bg-[#E0FE10] text-black font-bold flex items-center justify-center text-sm flex-shrink-0">1</div>
+                      <div>
+                        <h4 className="text-white font-semibold mb-1 text-sm">Open Create Round</h4>
+                        <p className="text-zinc-400 text-xs">Tap the plus button in the bottom navigation, then tap "Create a Round"</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-3">
+                    <div className="flex items-start gap-3">
+                      <div className="w-7 h-7 rounded-full bg-[#E0FE10] text-black font-bold flex items-center justify-center text-sm flex-shrink-0">2</div>
+                      <div>
+                        <h4 className="text-white font-semibold mb-1 text-sm">Choose Template or Custom</h4>
+                        <p className="text-zinc-400 text-xs">Use a pre-created template or build a custom Round from scratch</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-3">
+                    <div className="flex items-start gap-3">
+                      <div className="w-7 h-7 rounded-full bg-[#E0FE10] text-black font-bold flex items-center justify-center text-sm flex-shrink-0">3</div>
+                      <div>
+                        <h4 className="text-white font-semibold mb-1 text-sm">Add Title & Description</h4>
+                        <p className="text-zinc-400 text-xs">Write a title and description that other Pulse members will see</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-3">
+                    <div className="flex items-start gap-3">
+                      <div className="w-7 h-7 rounded-full bg-[#E0FE10] text-black font-bold flex items-center justify-center text-sm flex-shrink-0">4</div>
+                      <div>
+                        <h4 className="text-white font-semibold mb-1 text-sm">Give AI Instructions</h4>
+                        <p className="text-zinc-400 text-xs">Tell Neura (our AI) how to build your program. The more specific, the better</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-3">
+                    <div className="flex items-start gap-3">
+                      <div className="w-7 h-7 rounded-full bg-[#E0FE10] text-black font-bold flex items-center justify-center text-sm flex-shrink-0">5</div>
+                      <div>
+                        <h4 className="text-white font-semibold mb-1 text-sm">Select Unique Stacks</h4>
+                        <p className="text-zinc-400 text-xs">Choose how many unique routines (e.g., 2-3 unique workouts that repeat through the week)</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-3">
+                    <div className="flex items-start gap-3">
+                      <div className="w-7 h-7 rounded-full bg-[#E0FE10] text-black font-bold flex items-center justify-center text-sm flex-shrink-0">6</div>
+                      <div>
+                        <h4 className="text-white font-semibold mb-1 text-sm">Set Body Part Splits</h4>
+                        <p className="text-zinc-400 text-xs">Lock in muscle groups per stack (e.g., Stack 1: chest/biceps/triceps, Stack 2: back/shoulders)</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-3">
+                    <div className="flex items-start gap-3">
+                      <div className="w-7 h-7 rounded-full bg-[#E0FE10] text-black font-bold flex items-center justify-center text-sm flex-shrink-0">7</div>
+                      <div>
+                        <h4 className="text-white font-semibold mb-1 text-sm">Pre-Select Your Moves</h4>
+                        <p className="text-zinc-400 text-xs">Choose specific exercises. Neura will fill in gaps if needed</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-3">
+                    <div className="flex items-start gap-3">
+                      <div className="w-7 h-7 rounded-full bg-[#E0FE10] text-black font-bold flex items-center justify-center text-sm flex-shrink-0">8</div>
+                      <div>
+                        <h4 className="text-white font-semibold mb-1 text-sm">Add Optional Features</h4>
+                        <p className="text-zinc-400 text-xs">Enable step tracking, meal plans, macro tracking, or weigh-ins for progress monitoring</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-3">
+                    <div className="flex items-start gap-3">
+                      <div className="w-7 h-7 rounded-full bg-[#E0FE10] text-black font-bold flex items-center justify-center text-sm flex-shrink-0">9</div>
+                      <div>
+                        <h4 className="text-white font-semibold mb-1 text-sm">Set Dates & Rest Days</h4>
+                        <p className="text-zinc-400 text-xs">Choose start/end dates and rest days. Your Round is created in seconds!</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-[#E0FE10]/10 border border-[#E0FE10]/30 rounded-lg p-3 mt-4">
+                    <p className="text-[#e6ffc2]/90 text-sm">
+                      <strong>Pro Tip:</strong> You can swap moves, update details, and make edits after creation. This gives you a perfect starting point to get your Round locked, loaded, and ready to launch!
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
           </section>
@@ -606,12 +809,12 @@ const BuildYourRound: React.FC = () => {
             </div>
           </section>
 
-          {/* Daily Planner */}
+          {/* Stack Planner */}
           <section className="mb-12 print:mb-8 print:page-break-before">
             <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 md:p-8">
               <div className="text-center mb-6">
-                <h2 className="text-3xl font-bold text-white mb-2">Daily Planner</h2>
-                <p className="text-zinc-400 text-sm">Use this planner to map out each day of your Round. Add or remove days as needed.</p>
+                <h2 className="text-3xl font-bold text-white mb-2">Stack Planner</h2>
+                <p className="text-zinc-400 text-sm">Build your unique workout stacks. Each stack is a routine that can repeat throughout your Round.</p>
               </div>
               
               <div className="space-y-3">
@@ -629,8 +832,8 @@ const BuildYourRound: React.FC = () => {
                             value={day.day}
                             onChange={(e) => {e.stopPropagation(); updateDay(dayIndex, 'day', e.target.value);}}
                             onClick={(e) => e.stopPropagation()}
-                            className="font-bold text-lg bg-transparent text-white outline-none w-24"
-                            placeholder="Day #"
+                            className="font-bold text-lg bg-transparent text-white outline-none w-28"
+                            placeholder="Stack #"
                           />
                           <input
                             type="text"
@@ -684,7 +887,7 @@ const BuildYourRound: React.FC = () => {
                 onClick={addDay}
                 className="mt-4 w-full flex items-center justify-center gap-2 px-4 py-3 bg-[#E0FE10] text-black rounded-xl hover:bg-[#d0ee00] transition-colors font-semibold"
               >
-                <Plus className="w-4 h-4" /> Add Day
+                <Plus className="w-4 h-4" /> Add Stack
               </button>
             </div>
           </section>

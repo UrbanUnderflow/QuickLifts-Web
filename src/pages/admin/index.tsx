@@ -2,7 +2,7 @@ import React from 'react';
 import { useRouter } from 'next/router';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import Head from 'next/head';
-import { Users, Settings, BarChart2, Bell, FileText, CheckSquare, PlusSquare, Image as ImageIcon, Zap, TrendingUp, Dumbbell, Tag, Users2, Activity, Award, Clock, Gift, Edit3, Send, Server, ChevronDown, MessageCircle, Utensils, Code, Building2, Kanban, Layers, Bug } from 'lucide-react';
+import { Users, Settings, BarChart2, Bell, FileText, CheckSquare, PlusSquare, Image as ImageIcon, Zap, TrendingUp, Dumbbell, Tag, Users2, Activity, Award, Clock, Gift, Edit3, Send, Server, ChevronDown, MessageCircle, Utensils, Code, Building2, Kanban, Layers, Bug, FolderTree } from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '../../redux/store';
 import { toggleDevMode } from '../../redux/devModeSlice';
@@ -238,6 +238,12 @@ const adminCardsData = [
     description: "Debug why users aren't seeing active rounds. Analyze challenge filtering and data issues.",
     icon: <Bug className="w-5 h-5" />,
     link: "/admin/debugUserChallenge"
+  },
+  {
+    title: "Site Directory",
+    description: "Visual directory of all application links, routes, and pages organized by category.",
+    icon: <FolderTree className="w-5 h-5" />,
+    link: "/directory"
   }
 ];
 
