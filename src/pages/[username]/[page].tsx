@@ -18,6 +18,7 @@ const CreatorLandingPageView: React.FC = () => {
   const [waitlistOpen, setWaitlistOpen] = useState(false);
   const [wlName, setWlName] = useState('');
   const [wlEmail, setWlEmail] = useState('');
+  const [wlPhone, setWlPhone] = useState('');
   const [wlSubmitting, setWlSubmitting] = useState(false);
   const [wlSuccess, setWlSuccess] = useState<string | null>(null);
 
@@ -42,7 +43,7 @@ const CreatorLandingPageView: React.FC = () => {
 
   // Waitlist viewer state
   const [showWaitlistViewer, setShowWaitlistViewer] = useState(false);
-  const [waitlistEntries, setWaitlistEntries] = useState<Array<{id: string; name: string; email: string; createdAt: any}>>([]);
+  const [waitlistEntries, setWaitlistEntries] = useState<Array<{id: string; name: string; email: string; phone?: string; createdAt: any}>>([]);
   const [loadingWaitlist, setLoadingWaitlist] = useState(false);
 
   const isOwner = currentUser && data && currentUser.id === data.userId;
@@ -112,13 +113,14 @@ const CreatorLandingPageView: React.FC = () => {
       const res = await fetch('/.netlify/functions/creator-waitlist-signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, page, name: wlName, email: wlEmail }),
+        body: JSON.stringify({ username, page, name: wlName, email: wlEmail, phone: wlPhone }),
       });
       const json = await res.json();
       if (!res.ok || !json.success) throw new Error(json.error || 'Failed');
       setWlSuccess('Thanks! You are on the list.');
       setWlName('');
       setWlEmail('');
+      setWlPhone('');
     } catch (err: any) {
       setWlSuccess(err?.message || 'Unable to submit. Try again later.');
     } finally {
@@ -198,10 +200,11 @@ const CreatorLandingPageView: React.FC = () => {
     if (waitlistEntries.length === 0 || !data) return;
     
     // Create CSV content
-    const headers = ['Name', 'Email', 'Joined'];
+    const headers = ['Name', 'Email', 'Phone', 'Joined'];
     const rows = waitlistEntries.map(entry => [
       entry.name,
       entry.email,
+      entry.phone || '',
       entry.createdAt?.toDate ? entry.createdAt.toDate().toLocaleDateString() : 'N/A'
     ]);
     
@@ -497,6 +500,7 @@ const CreatorLandingPageView: React.FC = () => {
                       <tr>
                         <th className="text-left p-3 font-medium">Name</th>
                         <th className="text-left p-3 font-medium">Email</th>
+                        <th className="text-left p-3 font-medium">Phone</th>
                         <th className="text-left p-3 font-medium">Joined</th>
                       </tr>
                     </thead>
@@ -505,6 +509,7 @@ const CreatorLandingPageView: React.FC = () => {
                         <tr key={entry.id} className={`border-b border-zinc-800 ${idx % 2 === 0 ? 'bg-zinc-900/50' : 'bg-zinc-800/30'}`}>
                           <td className="p-3">{entry.name}</td>
                           <td className="p-3 text-zinc-300">{entry.email}</td>
+                          <td className="p-3 text-zinc-300">{entry.phone || '-'}</td>
                           <td className="p-3 text-sm text-zinc-400">
                             {entry.createdAt?.toDate ? entry.createdAt.toDate().toLocaleDateString() : 'N/A'}
                           </td>
@@ -751,6 +756,13 @@ const CreatorLandingPageView: React.FC = () => {
                 value={wlEmail}
                 onChange={(e) => setWlEmail(e.target.value)}
                 placeholder="Email"
+                className="w-full rounded-lg bg-zinc-800 px-4 py-3 text-white placeholder-zinc-500 outline-none focus:ring-2 focus:ring-lime-400"
+              />
+              <input
+                type="tel"
+                value={wlPhone}
+                onChange={(e) => setWlPhone(e.target.value)}
+                placeholder="Phone number (optional)"
                 className="w-full rounded-lg bg-zinc-800 px-4 py-3 text-white placeholder-zinc-500 outline-none focus:ring-2 focus:ring-lime-400"
               />
               <button

@@ -19,7 +19,7 @@ exports.handler = async (event) => {
   }
 
   try {
-    const { username, page, name, email } = JSON.parse(event.body || '{}');
+    const { username, page, name, email, phone } = JSON.parse(event.body || '{}');
     if (!username || !page || !name || !email) {
       return { statusCode: 400, headers, body: JSON.stringify({ success: false, error: 'Missing fields' }) };
     }
@@ -33,14 +33,21 @@ exports.handler = async (event) => {
     const userId = snap.docs[0].id;
 
     const ref = db.collection('creator-pages').doc(userId).collection('waitlist').doc();
-    await ref.set({
+    const waitlistData = {
       id: ref.id,
       username,
       page,
       name,
       email: String(email).toLowerCase(),
       createdAt: admin.firestore.FieldValue.serverTimestamp()
-    });
+    };
+    
+    // Add phone number if provided
+    if (phone && String(phone).trim()) {
+      waitlistData.phone = String(phone).trim();
+    }
+    
+    await ref.set(waitlistData);
 
     // Attempt to fetch page details for email context
     let pageTitle = page;
