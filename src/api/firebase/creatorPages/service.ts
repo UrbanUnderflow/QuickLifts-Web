@@ -9,17 +9,19 @@ export interface CreatorLandingPage {
   slug: string; // pagename in URL
   userId: string;
   username: string;
+  roundId?: string; // optional: attach landing page to a specific round
   title?: string;
   headline?: string;
   body?: string;
   backgroundType?: BackgroundType;
   backgroundColor?: string; // e.g., #0f0f10
   backgroundImageUrl?: string;
+  pageTextColor?: string; // Color for page text (headline, body)
   ctaType?: CreatorCtaType;
   ctaLabel?: string;
   ctaHref?: string; // for link-button
   ctaButtonColor?: string; // Custom button background color
-  ctaTextColor?: string; // Custom button text color
+  ctaTextColor?: string; // Custom button text color (text inside button)
   viewCount?: number; // Track total page views
   updatedAt?: any;
   createdAt?: any;
@@ -51,6 +53,7 @@ export const creatorPagesService = {
       backgroundType: input.backgroundType || 'color',
       backgroundColor: input.backgroundColor || '#0b0b0c',
       backgroundImageUrl: input.backgroundImageUrl || '',
+      pageTextColor: input.pageTextColor || '#FFFFFF',
       ctaType: input.ctaType || 'waitlist',
       ctaLabel: input.ctaLabel || 'Join Waitlist',
       ctaHref: input.ctaHref || '',

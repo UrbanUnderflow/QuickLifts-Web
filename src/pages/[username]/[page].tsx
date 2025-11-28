@@ -34,6 +34,7 @@ const CreatorLandingPageView: React.FC = () => {
   const [editBgImageFile, setEditBgImageFile] = useState<File | null>(null);
   const [editBgImagePreview, setEditBgImagePreview] = useState<string | null>(null);
   const [editImageUploading, setEditImageUploading] = useState(false);
+  const [editPageTextColor, setEditPageTextColor] = useState('#FFFFFF');
   const [editCtaType, setEditCtaType] = useState<'link'|'waitlist'>('waitlist');
   const [editCtaLabel, setEditCtaLabel] = useState('Join Waitlist');
   const [editCtaHref, setEditCtaHref] = useState('');
@@ -139,6 +140,7 @@ const CreatorLandingPageView: React.FC = () => {
     setEditBgImage(data.backgroundImageUrl || '');
     setEditBgImageFile(null);
     setEditBgImagePreview(data.backgroundImageUrl || null); // Show existing image as preview
+    setEditPageTextColor(data.pageTextColor || '#FFFFFF');
     setEditCtaType(data.ctaType || 'waitlist');
     setEditCtaLabel(data.ctaLabel || 'Join Waitlist');
     setEditCtaHref(data.ctaHref || '');
@@ -256,6 +258,7 @@ const CreatorLandingPageView: React.FC = () => {
         backgroundType: editBgType,
         backgroundColor: editBgType === 'color' ? editBgColor : '',
         backgroundImageUrl: editBgType === 'image' ? backgroundImageUrl : '',
+        pageTextColor: editPageTextColor,
         ctaType: editCtaType,
         ctaLabel: editCtaLabel.trim(),
         ctaHref: editCtaType === 'link' ? editCtaHref.trim() : '',
@@ -291,7 +294,7 @@ const CreatorLandingPageView: React.FC = () => {
   }
 
   return (
-    <div className="relative min-h-screen overflow-hidden" style={bgStyle}>
+    <>
       <Head>
         <title>{data.title || `${data.username} — ${data.slug}`}</title>
         <meta name="description" content={data.headline || 'Creator page'} />
@@ -311,9 +314,22 @@ const CreatorLandingPageView: React.FC = () => {
           rel="canonical"
           href={`${process.env.NODE_ENV === 'development' ? 'http://localhost:8888' : 'https://fitwithpulse.ai'}/${username || ''}/${page || ''}`}
         />
+        {/* Set viewport background color to match page background */}
+        <meta 
+          name="theme-color" 
+          content={data.backgroundType === 'color' ? (data.backgroundColor || '#0b0b0c') : '#0b0b0c'} 
+        />
       </Head>
-      {/* Overlay to ensure readability over any background image/color */}
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-black/80 via-black/60 to-black/80" aria-hidden />
+      
+      {/* Full viewport background wrapper */}
+      <div 
+        className="fixed inset-0 w-full h-full"
+        style={bgStyle}
+      />
+      
+      <div className="relative min-h-screen overflow-hidden">
+        {/* Overlay to ensure readability over any background image/color */}
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-black/80 via-black/60 to-black/80" aria-hidden />
 
       {/* Animated gradient orbs for visual interest */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
@@ -357,23 +373,30 @@ const CreatorLandingPageView: React.FC = () => {
         <div className="w-full max-w-4xl text-center space-y-8 animate-fadeIn">
           {/* Title with gradient */}
           {data.title && (
-            <h1 className="text-5xl md:text-7xl font-bold tracking-tight leading-tight">
-              <span className="bg-gradient-to-r from-white via-zinc-100 to-zinc-300 bg-clip-text text-transparent animate-gradient">
-                {data.title}
-              </span>
+            <h1 
+              className="text-5xl md:text-7xl font-bold tracking-tight leading-tight"
+              style={{ color: data.pageTextColor || '#FFFFFF' }}
+            >
+              {data.title}
             </h1>
           )}
 
           {/* Headline with accent */}
           {data.headline && (
-            <p className="text-xl md:text-2xl text-zinc-200/90 font-light max-w-2xl mx-auto leading-relaxed">
+            <p 
+              className="text-xl md:text-2xl font-light max-w-2xl mx-auto leading-relaxed"
+              style={{ color: data.pageTextColor || '#FFFFFF', opacity: 0.9 }}
+            >
               {data.headline}
             </p>
           )}
 
           {/* Body text */}
           {data.body && (
-            <p className="text-base md:text-lg text-zinc-300/80 max-w-2xl mx-auto leading-relaxed whitespace-pre-line">
+            <p 
+              className="text-base md:text-lg max-w-2xl mx-auto leading-relaxed whitespace-pre-line"
+              style={{ color: data.pageTextColor || '#FFFFFF', opacity: 0.8 }}
+            >
               {data.body}
             </p>
           )}
@@ -411,8 +434,11 @@ const CreatorLandingPageView: React.FC = () => {
 
           {/* Creator attribution */}
           <div className="pt-8">
-            <p className="text-sm text-zinc-400/60">
-              by <span className="text-zinc-300/80 font-medium">@{data.username}</span>
+            <p 
+              className="text-sm"
+              style={{ color: data.pageTextColor || '#FFFFFF', opacity: 0.6 }}
+            >
+              by <span className="font-medium" style={{ opacity: 0.8 }}>@{data.username}</span>
             </p>
           </div>
         </div>
@@ -646,6 +672,18 @@ const CreatorLandingPageView: React.FC = () => {
                 )}
               </div>
 
+              {/* Page Text Color */}
+              <div>
+                <label className="block text-sm text-zinc-300 mb-2">Page Text Color</label>
+                <p className="text-xs text-zinc-400 mb-2">Controls the color of headline and body text</p>
+                <input
+                  type="color"
+                  value={editPageTextColor}
+                  onChange={(e) => setEditPageTextColor(e.target.value)}
+                  className="w-full h-12 rounded-lg cursor-pointer"
+                />
+              </div>
+
               {/* CTA Type */}
               <div>
                 <label className="block text-sm text-zinc-300 mb-2">Button Type</label>
@@ -777,7 +815,7 @@ const CreatorLandingPageView: React.FC = () => {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 };
 
