@@ -3,7 +3,7 @@ import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { useSelector } from 'react-redux';
 import { RootState } from '../../redux/store';
-import { creatorPagesService, CreatorLandingPage } from '../../api/firebase/creatorPages/service';
+import { creatorPagesService, CreatorLandingPage, SponsorLogo } from '../../api/firebase/creatorPages/service';
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { collection, getDocs, orderBy, query } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
@@ -35,6 +35,7 @@ const CreatorLandingPageView: React.FC = () => {
   const [editBgImagePreview, setEditBgImagePreview] = useState<string | null>(null);
   const [editImageUploading, setEditImageUploading] = useState(false);
   const [editPageTextColor, setEditPageTextColor] = useState('#FFFFFF');
+  const [editSponsors, setEditSponsors] = useState<Array<{ url: string; label: string; href: string }>>([]);
   const [editCtaType, setEditCtaType] = useState<'link'|'waitlist'>('waitlist');
   const [editCtaLabel, setEditCtaLabel] = useState('Join Waitlist');
   const [editCtaHref, setEditCtaHref] = useState('');
@@ -141,6 +142,13 @@ const CreatorLandingPageView: React.FC = () => {
     setEditBgImageFile(null);
     setEditBgImagePreview(data.backgroundImageUrl || null); // Show existing image as preview
     setEditPageTextColor(data.pageTextColor || '#FFFFFF');
+    setEditSponsors(
+      (data.sponsorLogos || []).map((s) => ({
+        url: s.url || '',
+        label: s.label || '',
+        href: s.href || '',
+      }))
+    );
     setEditCtaType(data.ctaType || 'waitlist');
     setEditCtaLabel(data.ctaLabel || 'Join Waitlist');
     setEditCtaHref(data.ctaHref || '');
@@ -259,6 +267,13 @@ const CreatorLandingPageView: React.FC = () => {
         backgroundColor: editBgType === 'color' ? editBgColor : '',
         backgroundImageUrl: editBgType === 'image' ? backgroundImageUrl : '',
         pageTextColor: editPageTextColor,
+        sponsorLogos: editSponsors
+          .filter((s) => s.url.trim().length > 0)
+          .map((s): SponsorLogo => ({
+            url: s.url.trim(),
+            label: s.label.trim() || undefined,
+            href: s.href.trim() || undefined,
+          })),
         ctaType: editCtaType,
         ctaLabel: editCtaLabel.trim(),
         ctaHref: editCtaType === 'link' ? editCtaHref.trim() : '',
@@ -294,7 +309,7 @@ const CreatorLandingPageView: React.FC = () => {
   }
 
   return (
-    <>
+    <div className="relative min-h-screen overflow-hidden" style={bgStyle}>
       <Head>
         <title>{data.title || `${data.username} — ${data.slug}`}</title>
         <meta name="description" content={data.headline || 'Creator page'} />
@@ -320,16 +335,9 @@ const CreatorLandingPageView: React.FC = () => {
           content={data.backgroundType === 'color' ? (data.backgroundColor || '#0b0b0c') : '#0b0b0c'} 
         />
       </Head>
-      
-      {/* Full viewport background wrapper */}
-      <div 
-        className="fixed inset-0 w-full h-full"
-        style={bgStyle}
-      />
-      
-      <div className="relative min-h-screen overflow-hidden">
-        {/* Overlay to ensure readability over any background image/color */}
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-black/80 via-black/60 to-black/80" aria-hidden />
+
+      {/* Overlay to ensure readability over any background image/color */}
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-black/80 via-black/60 to-black/80" aria-hidden />
 
       {/* Animated gradient orbs for visual interest */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
@@ -432,14 +440,77 @@ const CreatorLandingPageView: React.FC = () => {
             )}
           </div>
 
+          {/* Sponsors */}
+          {Array.isArray(data.sponsorLogos) && data.sponsorLogos.length > 0 && (
+            <div className="pt-10 space-y-4">
+              <p
+                className="text-xs tracking-[0.2em] uppercase"
+                style={{ color: data.pageTextColor || '#FFFFFF', opacity: 0.6 }}
+              >
+                Sponsored by
+              </p>
+              <div className="flex flex-wrap justify-center gap-6 items-center">
+                {data.sponsorLogos
+                  ?.filter((s) => !!s.url)
+                  .map((s, idx) => {
+                    const img = (
+                      <img
+                        key={s.url + idx}
+                        src={s.url}
+                        alt={s.label || 'Sponsor logo'}
+                        className="max-h-10 md:max-h-12 object-contain opacity-90 hover:opacity-100 transition-opacity"
+                      />
+                    );
+                    return s.href ? (
+                      <a
+                        key={s.url + (s.href || '') + idx}
+                        href={s.href}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center justify-center"
+                      >
+                        {img}
+                      </a>
+                    ) : (
+                      <div
+                        key={s.url + idx}
+                        className="inline-flex items-center justify-center"
+                      >
+                        {img}
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+          )}
+
           {/* Creator attribution */}
-          <div className="pt-8">
+          <div className="pt-8 space-y-2">
             <p 
               className="text-sm"
               style={{ color: data.pageTextColor || '#FFFFFF', opacity: 0.6 }}
             >
-              by <span className="font-medium" style={{ opacity: 0.8 }}>@{data.username}</span>
+              by{' '}
+              <a
+                href={`/profile/${data.username}`}
+                className="font-medium underline-offset-2 hover:underline"
+                style={{ opacity: 0.8 }}
+              >
+                @{data.username}
+              </a>
             </p>
+
+            {/* Powered by Pulse footer */}
+            <a
+              href="https://fitwithpulse.ai"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center justify-center gap-2 text-xs uppercase tracking-[0.2em] text-zinc-400 hover:text-zinc-200 transition-colors"
+            >
+              <span className="h-px w-6 bg-zinc-500/60" />
+              <span>Powered by Pulse</span>
+              <span className="h-px w-6 bg-zinc-500/60" />
+            </a>
           </div>
         </div>
       </div>
@@ -684,6 +755,92 @@ const CreatorLandingPageView: React.FC = () => {
                 />
               </div>
 
+              {/* Sponsors */}
+              <div>
+                <label className="block text-sm text-zinc-300 mb-2">Sponsors (logos shown on page)</label>
+                <p className="text-xs text-zinc-400 mb-3">
+                  Add sponsor logo image URLs and optional links. These will appear in a \"Sponsored by\" row on the landing page.
+                </p>
+
+                {editSponsors.length === 0 && (
+                  <p className="text-xs text-zinc-500 mb-3">No sponsors added yet.</p>
+                )}
+
+                <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
+                  {editSponsors.map((sponsor, idx) => (
+                    <div
+                      key={idx}
+                      className="border border-zinc-700 rounded-lg p-3 flex flex-col gap-2 bg-zinc-900/60"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-zinc-400">Sponsor #{idx + 1}</span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setEditSponsors((prev) => prev.filter((_, i) => i !== idx))
+                          }
+                          className="text-zinc-500 hover:text-red-400 text-xs"
+                        >
+                          Remove
+                        </button>
+                      </div>
+
+                      <input
+                        type="text"
+                        value={sponsor.label}
+                        onChange={(e) =>
+                          setEditSponsors((prev) =>
+                            prev.map((p, i) =>
+                              i === idx ? { ...p, label: e.target.value } : p
+                            )
+                          )
+                        }
+                        placeholder="Sponsor name (optional, e.g. Nike)"
+                        className="w-full bg-zinc-800 border border-zinc-600 rounded-md p-2 text-sm text-white placeholder-zinc-500"
+                      />
+
+                      <input
+                        type="url"
+                        value={sponsor.url}
+                        onChange={(e) =>
+                          setEditSponsors((prev) =>
+                            prev.map((p, i) =>
+                              i === idx ? { ...p, url: e.target.value } : p
+                            )
+                          )
+                        }
+                        placeholder="Logo image URL (required)"
+                        className="w-full bg-zinc-800 border border-zinc-600 rounded-md p-2 text-sm text-white placeholder-zinc-500"
+                      />
+
+                      <input
+                        type="url"
+                        value={sponsor.href}
+                        onChange={(e) =>
+                          setEditSponsors((prev) =>
+                            prev.map((p, i) =>
+                              i === idx ? { ...p, href: e.target.value } : p
+                            )
+                          )
+                        }
+                        placeholder="Click-through link (optional, e.g. https://sponsor.com)"
+                        className="w-full bg-zinc-800 border border-zinc-600 rounded-md p-2 text-sm text-white placeholder-zinc-500"
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setEditSponsors((prev) => [...prev, { url: '', label: '', href: '' }])
+                  }
+                  className="mt-3 inline-flex items-center px-3 py-1.5 rounded-md bg-zinc-800 text-xs text-zinc-200 hover:bg-zinc-700 border border-zinc-600"
+                >
+                  + Add Sponsor Logo
+                </button>
+              </div>
+
               {/* CTA Type */}
               <div>
                 <label className="block text-sm text-zinc-300 mb-2">Button Type</label>
@@ -815,7 +972,7 @@ const CreatorLandingPageView: React.FC = () => {
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 };
 

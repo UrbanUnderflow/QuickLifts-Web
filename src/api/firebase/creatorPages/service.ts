@@ -5,6 +5,12 @@ import { userService } from '../user';
 export type CreatorCtaType = 'link' | 'waitlist';
 export type BackgroundType = 'color' | 'image';
 
+export interface SponsorLogo {
+  url: string;
+  label?: string;
+  href?: string;
+}
+
 export interface CreatorLandingPage {
   slug: string; // pagename in URL
   userId: string;
@@ -17,6 +23,7 @@ export interface CreatorLandingPage {
   backgroundColor?: string; // e.g., #0f0f10
   backgroundImageUrl?: string;
   pageTextColor?: string; // Color for page text (headline, body)
+  sponsorLogos?: SponsorLogo[]; // Logos for sponsors displayed on the page
   ctaType?: CreatorCtaType;
   ctaLabel?: string;
   ctaHref?: string; // for link-button
@@ -39,9 +46,10 @@ export const creatorPagesService = {
     if (!sanitizedSlug) throw new Error('Page name (slug) is required');
     const ref = doc(db, ROOT, userId, 'pages', sanitizedSlug);
     
-    // Check if page already exists to preserve createdAt
+    // Check if page already exists to preserve createdAt and existing sponsor logos when not provided
     const existingDoc = await getDoc(ref);
     const isNewPage = !existingDoc.exists();
+    const existingData = existingDoc.exists() ? (existingDoc.data() as CreatorLandingPage) : undefined;
     
     const payload: CreatorLandingPage = {
       slug: sanitizedSlug,
@@ -54,6 +62,7 @@ export const creatorPagesService = {
       backgroundColor: input.backgroundColor || '#0b0b0c',
       backgroundImageUrl: input.backgroundImageUrl || '',
       pageTextColor: input.pageTextColor || '#FFFFFF',
+      sponsorLogos: input.sponsorLogos ?? existingData?.sponsorLogos ?? [],
       ctaType: input.ctaType || 'waitlist',
       ctaLabel: input.ctaLabel || 'Join Waitlist',
       ctaHref: input.ctaHref || '',
