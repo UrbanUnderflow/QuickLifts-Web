@@ -5,7 +5,7 @@ import { useSelector } from 'react-redux';
 import { RootState } from '../../redux/store';
 import { creatorPagesService, CreatorLandingPage, SponsorLogo } from '../../api/firebase/creatorPages/service';
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { collection, getDocs, orderBy, query } from 'firebase/firestore';
+import { collection, getDocs, orderBy, query, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
 
 const CreatorLandingPageView: React.FC = () => {
@@ -54,6 +54,11 @@ const CreatorLandingPageView: React.FC = () => {
   const [emailFromName, setEmailFromName] = useState('Pulse: The Fitness Collective');
   const [emailSubject, setEmailSubject] = useState('');
   const [emailBody, setEmailBody] = useState('');
+  const [showTemplateEditor, setShowTemplateEditor] = useState(false);
+  const [templateFromName, setTemplateFromName] = useState('');
+  const [templateSubject, setTemplateSubject] = useState('');
+  const [templateBody, setTemplateBody] = useState('');
+  const [templateSaving, setTemplateSaving] = useState(false);
 
   const isOwner = currentUser && data && currentUser.id === data.userId;
 
@@ -214,12 +219,7 @@ const CreatorLandingPageView: React.FC = () => {
     }
   };
 
-  const buildDefaultEmailBody = (name: string) => {
-    const safeName = name?.trim() || 'there';
-    return `Hey ${safeName}! You’re in!
-
-
-Thank you for confirming your attendance for my STRETCH N SIP on Friday, December 5th at 7:00 PM, powered by Pulse: The Fitness Collective.
+  const DEFAULT_TEMPLATE_BODY = `Thank you for confirming your attendance for my STRETCH N SIP on Friday, December 5th at 7:00 PM, powered by Pulse: The Fitness Collective.
 
 I can’t wait to host you inside this luxurious space by The LeJardin Group for an evening of movement, restoration, and good vibes.
 
@@ -265,6 +265,16 @@ SOULCYCLE BUCKHEAD
 ATLANTA, GA 30326
 
 MOBILE: 954-658-6776`;
+
+  const buildDefaultEmailBody = (name: string, templateBody?: string | null) => {
+    const safeName = name?.trim() || 'there';
+    const baseBody =
+      (templateBody && typeof templateBody === 'string' && templateBody.trim().length
+        ? templateBody
+        : DEFAULT_TEMPLATE_BODY);
+    return `Hey ${safeName}! You’re in!
+
+${baseBody}`;
   };
 
   const formatUsernameForFromName = (username?: string | null): string => {
@@ -278,8 +288,15 @@ MOBILE: 954-658-6776`;
     setEmailPreviewEntry(entry);
     const defaultFromName = formatUsernameForFromName(currentUser?.username as string | undefined);
     setEmailFromName(defaultFromName);
-    setEmailSubject('You’re in for STRETCH N SIP on Friday, December 5th at 7:00 PM');
-    setEmailBody(buildDefaultEmailBody(entry.name));
+    const defaultSubject =
+      (data && (data as any).waitlistEmailSubject) ||
+      'You’re in for STRETCH N SIP on Friday, December 5th at 7:00 PM';
+    const defaultBody = buildDefaultEmailBody(
+      entry.name,
+      (data && (data as any).waitlistEmailBody) || null
+    );
+    setEmailSubject(defaultSubject);
+    setEmailBody(defaultBody);
     setWaitlistEmailStatus(null);
     setShowEmailPreview(true);
   };
@@ -330,6 +347,57 @@ MOBILE: 954-658-6776`;
       setWaitlistEmailStatus(err?.message || 'Failed to send emails. Please try again.');
     } finally {
       setSendingWaitlistEmails(false);
+    }
+  };
+
+  const handleOpenTemplateEditor = () => {
+    if (!currentUser?.id || !data) return;
+    const defaultFrom = formatUsernameForFromName(currentUser.username as string | undefined);
+    setTemplateFromName(((data as any).waitlistEmailFromName as string) || defaultFrom);
+    setTemplateSubject(
+      ((data as any).waitlistEmailSubject as string) ||
+        'You’re in for STRETCH N SIP on Friday, December 5th at 7:00 PM'
+    );
+    setTemplateBody(
+      ((data as any).waitlistEmailBody as string) || DEFAULT_TEMPLATE_BODY
+    );
+    setShowTemplateEditor(true);
+  };
+
+  const handleSaveTemplate = async () => {
+    if (!currentUser?.id || !data?.slug) return;
+    try {
+      setTemplateSaving(true);
+      const ref = doc(db, 'creator-pages', currentUser.id, 'pages', data.slug);
+      await setDoc(
+        ref,
+        {
+          waitlistEmailFromName: templateFromName,
+          waitlistEmailSubject: templateSubject,
+          waitlistEmailBody: templateBody,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+
+      // Update local page data so new defaults apply immediately
+      setData((prev) =>
+        prev
+          ? {
+              ...prev,
+              waitlistEmailFromName: templateFromName,
+              waitlistEmailSubject: templateSubject,
+              waitlistEmailBody: templateBody,
+            }
+          : prev
+      );
+
+      setShowTemplateEditor(false);
+    } catch (err) {
+      console.error('[Waitlist Template] Failed to save template:', err);
+      alert('Failed to save template. Please try again.');
+    } finally {
+      setTemplateSaving(false);
     }
   };
 
@@ -710,6 +778,20 @@ MOBILE: 954-658-6776`;
                   </div>
                   <div className="flex items-center gap-3">
                     <button
+                      onClick={handleOpenTemplateEditor}
+                      className="flex items-center gap-2 bg-zinc-800 text-zinc-100 px-3 py-1.5 rounded-lg hover:bg-zinc-700 text-sm font-medium border border-zinc-600"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M11 5h2m-1-1v2m-4 4h.01M7 15h10M5 19h14M5 11h4m6 0h4M5 7h4m6 0h4"
+                        />
+                      </svg>
+                      Edit Email Template
+                    </button>
+                    <button
                       onClick={handleExportWaitlist}
                       className="flex items-center gap-2 bg-[#E0FE10] text-black px-3 py-1.5 rounded-lg hover:bg-[#d0ee00] text-sm font-medium"
                     >
@@ -859,6 +941,99 @@ MOBILE: 954-658-6776`;
                     <span className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
                   )}
                   <span>{sendingWaitlistEmails ? 'Sending...' : 'Send Email'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Email Template Editor */}
+      {showTemplateEditor && data && (
+        <div className="fixed inset-0 z-[55] flex items-center justify-center bg-black/75 px-4">
+          <div className="bg-zinc-900 rounded-xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-zinc-700">
+            <div className="flex justify-between items-center mb-4">
+              <div>
+                <h2 className="text-xl font-semibold text-white">Edit Waitlist Email Template</h2>
+                <p className="text-xs text-zinc-400 mt-1">
+                  This template controls the default email content when you click &quot;Send Email&quot; for each
+                  person on the waitlist.
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  if (templateSaving) return;
+                  setShowTemplateEditor(false);
+                }}
+                className="text-zinc-400 hover:text-white text-2xl leading-none"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm text-zinc-300 mb-1">Default From name</label>
+                <input
+                  type="text"
+                  value={templateFromName}
+                  onChange={(e) => setTemplateFromName(e.target.value)}
+                  className="w-full bg-zinc-800 border border-zinc-600 rounded-lg p-2.5 text-sm text-white placeholder-zinc-500"
+                  placeholder="e.g. Jaidus, Coach Jaidus, Pulse: The Fitness Collective"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-zinc-300 mb-1">Default Subject</label>
+                <input
+                  type="text"
+                  value={templateSubject}
+                  onChange={(e) => setTemplateSubject(e.target.value)}
+                  className="w-full bg-zinc-800 border border-zinc-600 rounded-lg p-2.5 text-sm text-white placeholder-zinc-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-zinc-300 mb-1">Body template</label>
+                <p className="text-xs text-zinc-400 mb-2">
+                  This is everything <span className="font-semibold">below</span> the greeting. The greeting
+                  &quot;Hey [name]! You&apos;re in!&quot; will always be added automatically with each guest&apos;s
+                  name.
+                </p>
+                <textarea
+                  value={templateBody}
+                  onChange={(e) => setTemplateBody(e.target.value)}
+                  rows={14}
+                  className="w-full bg-zinc-800 border border-zinc-600 rounded-lg p-3 text-sm text-white placeholder-zinc-500 resize-none"
+                />
+              </div>
+            </div>
+
+            <div className="mt-6 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
+              <p className="text-xs text-zinc-500">
+                Changes here update the defaults for this landing page only. You can still personalize each email
+                before sending.
+              </p>
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={() => {
+                    if (templateSaving) return;
+                    setShowTemplateEditor(false);
+                  }}
+                  className="px-4 py-2 rounded-lg bg-zinc-800 text-sm text-white hover:bg-zinc-700"
+                  disabled={templateSaving}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveTemplate}
+                  className="px-4 py-2 rounded-lg bg-[#E0FE10] text-sm text-black font-semibold hover:bg-[#d0ee00] disabled:bg-zinc-700 disabled:text-zinc-300 flex items-center gap-2"
+                  disabled={templateSaving}
+                >
+                  {templateSaving && (
+                    <span className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                  )}
+                  <span>{templateSaving ? 'Saving...' : 'Save Template'}</span>
                 </button>
               </div>
             </div>

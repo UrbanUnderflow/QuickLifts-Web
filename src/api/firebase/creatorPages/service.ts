@@ -30,6 +30,10 @@ export interface CreatorLandingPage {
   ctaButtonColor?: string; // Custom button background color
   ctaTextColor?: string; // Custom button text color (text inside button)
   viewCount?: number; // Track total page views
+  // Optional email template fields for waitlist communications
+  waitlistEmailFromName?: string;
+  waitlistEmailSubject?: string;
+  waitlistEmailBody?: string;
   updatedAt?: any;
   createdAt?: any;
 }
