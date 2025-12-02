@@ -22,7 +22,9 @@ import {
   SunIcon,
   MoonIcon,
   CalendarDaysIcon,
-  PlayIcon
+  PlayIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
 } from '@heroicons/react/24/outline';
 import { useUser } from '../../../hooks/useUser';
 import { doc, getDoc } from 'firebase/firestore';
@@ -65,6 +67,9 @@ const Discover = () => {
   const [lastDoc, setLastDoc] = useState<DocumentSnapshot | null>(null);
   const [hasMore, setHasMore] = useState(true);
   const loaderRef = useRef(null);
+
+  // Mobile app menu (Pulse + caret -> shows More menu)
+  const [showMobileMoreMenu, setShowMobileMoreMenu] = useState(false);
 
   // For ongoing workout
   const [currentWorkout, setCurrentWorkout] = useState<Workout | null>(null);
@@ -1254,7 +1259,103 @@ const Discover = () => {
   return (
     <div className="max-w-xl mx-auto px-4 py-6 bg-zinc-900 min-h-screen">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-xl font-bold text-white">My Day</h1>
+        {/* Desktop: simple Pulse title (no dropdown) */}
+        <h1 className="hidden md:block text-xl font-bold text-white">Pulse</h1>
+
+        {/* Mobile: Pulse with slim chevron that opens More menu */}
+        <div className="relative md:hidden">
+          <button
+            type="button"
+            onClick={() => setShowMobileMoreMenu((v) => !v)}
+            className="inline-flex items-center gap-1 text-xl font-bold text-white"
+          >
+            <span>Pulse</span>
+            {showMobileMoreMenu ? (
+              <ChevronUpIcon className="w-4 h-4 text-zinc-300" />
+            ) : (
+              <ChevronDownIcon className="w-4 h-4 text-zinc-300" />
+            )}
+          </button>
+
+          {/* Mobile More menu dropdown (similar to desktop SideNav More) */}
+          {showMobileMoreMenu && (
+            <>
+              {/* Backdrop */}
+              <div
+                className="fixed inset-0 z-40"
+                onClick={() => setShowMobileMoreMenu(false)}
+              />
+
+              {/* Menu card */}
+              <div className="absolute mt-3 w-56 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl z-50 overflow-hidden">
+                {/* App Switcher – Pulse / PulseCheck */}
+                <button
+                  onClick={() => {
+                    router.push('/PulseCheck');
+                    setShowMobileMoreMenu(false);
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-white hover:bg-zinc-800 transition-colors"
+                >
+                  <img
+                    src="/pulseCheckIcon.png"
+                    alt="PulseCheck"
+                    className="w-5 h-5"
+                  />
+                  <span>PulseCheck</span>
+                </button>
+
+                <div className="border-t border-zinc-800" />
+
+                {/* About */}
+                <button
+                  onClick={() => {
+                    router.push('/about');
+                    setShowMobileMoreMenu(false);
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-white hover:bg-zinc-800 transition-colors"
+                >
+                  <span className="text-xl">i</span>
+                  <span>About</span>
+                </button>
+
+                <div className="border-t border-zinc-800" />
+
+                {/* Settings */}
+                <button
+                  onClick={() => {
+                    router.push('/settings');
+                    setShowMobileMoreMenu(false);
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-white hover:bg-zinc-800 transition-colors"
+                >
+                  <span className="text-xl">⚙️</span>
+                  <span>Settings</span>
+                </button>
+
+                <div className="border-t border-zinc-800" />
+
+                {/* Sign Out */}
+                <button
+                  onClick={async () => {
+                    try {
+                      const { signOut } = await import('../../../api/firebase/auth/methods');
+                      await signOut();
+                      router.push('/');
+                    } catch (error) {
+                      console.error('Error signing out:', error);
+                    } finally {
+                      setShowMobileMoreMenu(false);
+                    }
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-white hover:bg-zinc-800 transition-colors"
+                >
+                  <span className="text-xl">↩︎</span>
+                  <span>Sign Out</span>
+                </button>
+              </div>
+            </>
+          )}
+        </div>
       </div>
       
       {renderWelcomeSection()}

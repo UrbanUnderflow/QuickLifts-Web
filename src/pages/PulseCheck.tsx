@@ -10,6 +10,7 @@ import Chat from '../components/pulsecheck/Chat';
 import ConnectedCoachesBadge from '../components/pulsecheck/ConnectedCoachesBadge';
 import ProfilePhoto from '../components/pulsecheck/ProfilePhoto';
 import SideNav from '../components/Navigation/SideNav';
+import { ChevronDownIcon, ChevronUpIcon } from '@heroicons/react/24/outline';
 
 const STORAGE_KEY_PC = 'pulsecheck_has_seen_marketing';
 
@@ -86,6 +87,9 @@ const PulseCheckPage: NextPage = () => {
     // Waitlist form state
     const [showWaitlistForm, setShowWaitlistForm] = useState(false);
     const [waitlistUserType, setWaitlistUserType] = useState<'athlete' | 'coach' | undefined>(undefined);
+
+    // Mobile PulseCheck header menu (mirrors desktop More menu)
+    const [showMobileMoreMenu, setShowMobileMoreMenu] = useState(false);
     
     const questions = [
         "What was my sleep like last night?",
@@ -1559,7 +1563,104 @@ const PulseCheckPage: NextPage = () => {
                 {/* Main Content Area */}
                 <div className="md:ml-20 lg:ml-64">
                     <div className="fixed top-0 left-0 md:left-20 lg:left-64 right-0 z-10 flex items-center justify-between px-6 py-3 bg-black border-b border-zinc-800">
-                        <h1 className="text-xl font-bold text-white">PulseCheck</h1>
+                        <div className="flex items-center gap-2">
+                            {/* Desktop: text-only PulseCheck label */}
+                            <h1 className="hidden md:block text-xl font-bold text-white">PulseCheck</h1>
+
+                            {/* Mobile: PulseCheck with slim chevron and More menu */}
+                            <div className="relative md:hidden">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowMobileMoreMenu(v => !v)}
+                                    className="inline-flex items-center gap-1 text-xl font-bold text-white"
+                                >
+                                    <span>PulseCheck</span>
+                                    {showMobileMoreMenu ? (
+                                        <ChevronUpIcon className="w-4 h-4 text-zinc-300" />
+                                    ) : (
+                                        <ChevronDownIcon className="w-4 h-4 text-zinc-300" />
+                                    )}
+                                </button>
+
+                                {showMobileMoreMenu && (
+                                    <>
+                                        {/* Backdrop */}
+                                        <div
+                                            className="fixed inset-0 z-40"
+                                            onClick={() => setShowMobileMoreMenu(false)}
+                                        />
+
+                                        {/* Menu card */}
+                                        <div className="absolute mt-3 w-56 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl z-50 overflow-hidden">
+                                            {/* App Switcher – go back to Pulse home */}
+                                            <button
+                                                onClick={() => {
+                                                    window.location.href = '/';
+                                                    setShowMobileMoreMenu(false);
+                                                }}
+                                                className="w-full flex items-center gap-3 px-4 py-3 text-white hover:bg-zinc-800 transition-colors"
+                                            >
+                                                <img
+                                                    src="/pulseIcon.png"
+                                                    alt="Pulse"
+                                                    className="w-5 h-5"
+                                                />
+                                                <span>Pulse</span>
+                                            </button>
+
+                                            <div className="border-t border-zinc-800" />
+
+                                            {/* About */}
+                                            <button
+                                                onClick={() => {
+                                                    window.location.href = '/about';
+                                                    setShowMobileMoreMenu(false);
+                                                }}
+                                                className="w-full flex items-center gap-3 px-4 py-3 text-white hover:bg-zinc-800 transition-colors"
+                                            >
+                                                <span className="text-xl">i</span>
+                                                <span>About</span>
+                                            </button>
+
+                                            <div className="border-t border-zinc-800" />
+
+                                            {/* Settings */}
+                                            <button
+                                                onClick={() => {
+                                                    window.location.href = '/settings';
+                                                    setShowMobileMoreMenu(false);
+                                                }}
+                                                className="w-full flex items-center gap-3 px-4 py-3 text-white hover:bg-zinc-800 transition-colors"
+                                            >
+                                                <span className="text-xl">⚙️</span>
+                                                <span>Settings</span>
+                                            </button>
+
+                                            <div className="border-t border-zinc-800" />
+
+                                            {/* Sign Out */}
+                                            <button
+                                                onClick={async () => {
+                                                    try {
+                                                        const { signOut } = await import('../api/firebase/auth/methods');
+                                                        await signOut();
+                                                        window.location.href = '/';
+                                                    } catch (error) {
+                                                        console.error('Error signing out:', error);
+                                                    } finally {
+                                                        setShowMobileMoreMenu(false);
+                                                    }
+                                                }}
+                                                className="w-full flex items-center gap-3 px-4 py-3 text-white hover:bg-zinc-800 transition-colors"
+                                            >
+                                                <span className="text-xl">↩︎</span>
+                                                <span>Sign Out</span>
+                                            </button>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        </div>
                         <div className="flex items-center gap-3">
                             <ConnectedCoachesBadge />
                             <div className="hidden md:block">

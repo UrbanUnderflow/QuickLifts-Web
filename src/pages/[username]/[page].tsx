@@ -47,6 +47,13 @@ const CreatorLandingPageView: React.FC = () => {
   const [showWaitlistViewer, setShowWaitlistViewer] = useState(false);
   const [waitlistEntries, setWaitlistEntries] = useState<Array<{id: string; name: string; email: string; phone?: string; createdAt: any}>>([]);
   const [loadingWaitlist, setLoadingWaitlist] = useState(false);
+  const [sendingWaitlistEmails, setSendingWaitlistEmails] = useState(false);
+  const [waitlistEmailStatus, setWaitlistEmailStatus] = useState<string | null>(null);
+  const [showEmailPreview, setShowEmailPreview] = useState(false);
+  const [emailPreviewEntry, setEmailPreviewEntry] = useState<{ name: string; email: string } | null>(null);
+  const [emailFromName, setEmailFromName] = useState('Pulse: The Fitness Collective');
+  const [emailSubject, setEmailSubject] = useState('');
+  const [emailBody, setEmailBody] = useState('');
 
   const isOwner = currentUser && data && currentUser.id === data.userId;
 
@@ -178,6 +185,7 @@ const CreatorLandingPageView: React.FC = () => {
     
     setLoadingWaitlist(true);
     setShowWaitlistViewer(true);
+    setWaitlistEmailStatus(null);
     
     try {
       // Fetch waitlist entries from Firestore
@@ -203,6 +211,125 @@ const CreatorLandingPageView: React.FC = () => {
       alert('Failed to load waitlist. Please try again.');
     } finally {
       setLoadingWaitlist(false);
+    }
+  };
+
+  const buildDefaultEmailBody = (name: string) => {
+    const safeName = name?.trim() || 'there';
+    return `Hey ${safeName}! You’re in!
+
+
+Thank you for confirming your attendance for my STRETCH N SIP on Friday, December 5th at 7:00 PM, powered by Pulse: The Fitness Collective.
+
+I can’t wait to host you inside this luxurious space by The LeJardin Group for an evening of movement, restoration, and good vibes.
+
+Location:
+
+4730 Paran Valley NW
+Sandy Springs, GA
+
+What to Bring:
+
+– A yoga mat
+– A towel
+– Comfortable clothing for stretching
+
+There will be an array of wine and refreshments provided, including our featured red wine partner: CanArieCap.
+
+A Few Things to Know:
+
+– Some parts of the event will be filmed for future promotional content.
+– Space is limited. If you can no longer attend, please let me know so your spot can be offered to someone on the waitlist.
+– Alcohol will be served during the social hour. If you plan to drink, please arrange a rideshare, designated driver, or safe transportation option. Your safety matters.
+
+______________________________________________________________________________________________________________________________________
+
+Important Liability + Safety Notice
+
+By attending STRETCH N SIP, you acknowledge the following:
+
+– You are voluntarily participating in physical activity and assume all responsibility for your own health and safety during the event.
+– You release the event host, property owner, and any affiliated vendors from liability for injuries, accidents, or personal property loss that may occur during the event.
+– Once the event concludes and you leave the premises, you accept full responsibility for your transportation choices and personal conduct.
+– The host is not liable for any incidents, injuries, or damages that occur off-site or after your departure.
+
+We’re excited to Stretch, Sip, and unWine with you. See you soon!
+
+—Jaidus
+
+Jaidus Mondesir
+Artist | Health, Wellness, & Nutrition Coach | Travel Blogger
+
+SOULCYCLE BUCKHEAD
+3400 AROUND LENOX ROAD  NE
+ATLANTA, GA 30326
+
+MOBILE: 954-658-6776`;
+  };
+
+  const formatUsernameForFromName = (username?: string | null): string => {
+    if (!username || typeof username !== 'string') return 'Pulse: The Fitness Collective';
+    if (!username.length) return 'Pulse: The Fitness Collective';
+    return username.charAt(0).toUpperCase() + username.slice(1);
+  };
+
+  const handleOpenEmailPreview = (entry: { name: string; email: string }) => {
+    if (!entry.email) return;
+    setEmailPreviewEntry(entry);
+    const defaultFromName = formatUsernameForFromName(currentUser?.username as string | undefined);
+    setEmailFromName(defaultFromName);
+    setEmailSubject('You’re in for STRETCH N SIP on Friday, December 5th at 7:00 PM');
+    setEmailBody(buildDefaultEmailBody(entry.name));
+    setWaitlistEmailStatus(null);
+    setShowEmailPreview(true);
+  };
+
+  const handleSendWaitlistEmails = async (entry?: { name: string; email: string }) => {
+    const target = entry || emailPreviewEntry;
+    if (!target || !target.email) return;
+
+    try {
+      setSendingWaitlistEmails(true);
+      setWaitlistEmailStatus(null);
+
+      const res = await fetch('/.netlify/functions/send-creator-waitlist-event-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          entries: [
+            {
+              name: target.name,
+              email: target.email,
+              senderName: emailFromName,
+              subject: emailSubject,
+              body: emailBody,
+            },
+          ],
+        }),
+      });
+
+      const json = await res.json().catch(() => ({}));
+
+      if (!res.ok || !json.success) {
+        const message =
+          (json && (json.error || json.message)) ||
+          'Failed to send emails. Please try again.';
+        setWaitlistEmailStatus(message);
+        return;
+      }
+
+      const succeeded = json.succeeded ?? 0;
+      const failed = json.failed ?? 0;
+      setWaitlistEmailStatus(
+        `Emails sent to ${succeeded} participant${succeeded === 1 ? '' : 's'}${failed ? ` (${failed} failed)` : ''}.`
+      );
+      setShowEmailPreview(false);
+      setEmailPreviewEntry(null);
+    } catch (err: any) {
+      console.error('[Waitlist] Failed to send emails:', err);
+      setWaitlistEmailStatus(err?.message || 'Failed to send emails. Please try again.');
+    } finally {
+      setSendingWaitlistEmails(false);
     }
   };
 
@@ -581,16 +708,23 @@ const CreatorLandingPageView: React.FC = () => {
                   <div className="text-sm text-zinc-400">
                     {waitlistEntries.length} {waitlistEntries.length === 1 ? 'signup' : 'signups'}
                   </div>
-                  <button
-                    onClick={handleExportWaitlist}
-                    className="flex items-center gap-2 bg-[#E0FE10] text-black px-3 py-1.5 rounded-lg hover:bg-[#d0ee00] text-sm font-medium"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    Export CSV
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={handleExportWaitlist}
+                      className="flex items-center gap-2 bg-[#E0FE10] text-black px-3 py-1.5 rounded-lg hover:bg-[#d0ee00] text-sm font-medium"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      Export CSV
+                    </button>
+                  </div>
                 </div>
+                {waitlistEmailStatus && (
+                  <div className="mb-3 text-sm text-zinc-300">
+                    {waitlistEmailStatus}
+                  </div>
+                )}
                 <div className="overflow-y-auto flex-1">
                   <table className="w-full">
                     <thead className="sticky top-0 bg-zinc-800 text-zinc-300 text-sm">
@@ -599,6 +733,7 @@ const CreatorLandingPageView: React.FC = () => {
                         <th className="text-left p-3 font-medium">Email</th>
                         <th className="text-left p-3 font-medium">Phone</th>
                         <th className="text-left p-3 font-medium">Joined</th>
+                        <th className="text-left p-3 font-medium">Email</th>
                       </tr>
                     </thead>
                     <tbody className="text-white">
@@ -609,6 +744,15 @@ const CreatorLandingPageView: React.FC = () => {
                           <td className="p-3 text-zinc-300">{entry.phone || '-'}</td>
                           <td className="p-3 text-sm text-zinc-400">
                             {entry.createdAt?.toDate ? entry.createdAt.toDate().toLocaleDateString() : 'N/A'}
+                          </td>
+                          <td className="p-3">
+                            <button
+                              onClick={() => handleOpenEmailPreview({ name: entry.name, email: entry.email })}
+                              className="px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-500 text-black hover:bg-emerald-400 disabled:bg-zinc-700 disabled:text-zinc-300"
+                              disabled={sendingWaitlistEmails}
+                            >
+                              {sendingWaitlistEmails ? 'Sending...' : 'Send Email'}
+                            </button>
                           </td>
                         </tr>
                       ))}
@@ -625,6 +769,98 @@ const CreatorLandingPageView: React.FC = () => {
               >
                 Close
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Single Email Preview + Editor */}
+      {showEmailPreview && emailPreviewEntry && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 px-4">
+          <div className="bg-zinc-900 rounded-xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-zinc-700">
+            <div className="flex justify-between items-center mb-4">
+              <div>
+                <h2 className="text-xl font-semibold text-white">Send Email</h2>
+                <p className="text-sm text-zinc-400 mt-1">
+                  To: <span className="font-medium text-zinc-100">{emailPreviewEntry.name || emailPreviewEntry.email}</span>{' '}
+                  <span className="text-zinc-500">&lt;{emailPreviewEntry.email}&gt;</span>
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  if (sendingWaitlistEmails) return;
+                  setShowEmailPreview(false);
+                  setEmailPreviewEntry(null);
+                }}
+                className="text-zinc-400 hover:text-white text-2xl leading-none"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm text-zinc-300 mb-1">From name</label>
+                <input
+                  type="text"
+                  value={emailFromName}
+                  onChange={(e) => setEmailFromName(e.target.value)}
+                  className="w-full bg-zinc-800 border border-zinc-600 rounded-lg p-2.5 text-sm text-white placeholder-zinc-500"
+                  placeholder="e.g. Pulse: The Fitness Collective"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-zinc-300 mb-1">Subject</label>
+                <input
+                  type="text"
+                  value={emailSubject}
+                  onChange={(e) => setEmailSubject(e.target.value)}
+                  className="w-full bg-zinc-800 border border-zinc-600 rounded-lg p-2.5 text-sm text-white placeholder-zinc-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-zinc-300 mb-1">Body</label>
+                <p className="text-xs text-zinc-400 mb-2">
+                  This is the exact text that will be sent. You can personalize it for this guest before sending.
+                </p>
+                <textarea
+                  value={emailBody}
+                  onChange={(e) => setEmailBody(e.target.value)}
+                  rows={14}
+                  className="w-full bg-zinc-800 border border-zinc-600 rounded-lg p-3 text-sm text-white placeholder-zinc-500 resize-none"
+                />
+              </div>
+            </div>
+
+            <div className="mt-6 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
+              <p className="text-xs text-zinc-500">
+                Powered by Pulse Brevo integration. This send only affects this one recipient.
+              </p>
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={() => {
+                    if (sendingWaitlistEmails) return;
+                    setShowEmailPreview(false);
+                    setEmailPreviewEntry(null);
+                  }}
+                  className="px-4 py-2 rounded-lg bg-zinc-800 text-sm text-white hover:bg-zinc-700"
+                  disabled={sendingWaitlistEmails}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleSendWaitlistEmails(emailPreviewEntry)}
+                  className="px-4 py-2 rounded-lg bg-emerald-500 text-sm text-black font-semibold hover:bg-emerald-400 disabled:bg-zinc-700 disabled:text-zinc-300 flex items-center gap-2"
+                  disabled={sendingWaitlistEmails}
+                >
+                  {sendingWaitlistEmails && (
+                    <span className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                  )}
+                  <span>{sendingWaitlistEmails ? 'Sending...' : 'Send Email'}</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
