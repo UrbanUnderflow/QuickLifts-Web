@@ -722,14 +722,25 @@ ${baseBody}`;
     return <div className="min-h-screen bg-black text-white flex items-center justify-center">{error || 'Not found'}</div>;
   }
 
+  // Dynamic page meta - if a survey is being taken, emphasize the survey
+  const pageTitle =
+    activeSurveyForTaking
+      ? activeSurveyForTaking.title || 'Take our survey!'
+      : data.title || `${data.username} — ${data.slug}`;
+
+  const pageDescription =
+    activeSurveyForTaking
+      ? activeSurveyForTaking.description || 'Take our survey!'
+      : data.headline || (data.body || '').slice(0, 160);
+
   return (
     <div className="relative min-h-screen overflow-hidden" style={bgStyle}>
       <Head>
-        <title>{data.title || `${data.username} — ${data.slug}`}</title>
-        <meta name="description" content={data.headline || 'Creator page'} />
+        <title>{pageTitle}</title>
+        <meta name="description" content={pageDescription} />
         {/* Social preview meta */}
-        <meta property="og:title" content={data.title || `${data.username} — ${data.slug}`} />
-        <meta property="og:description" content={data.headline || (data.body || '').slice(0, 160)} />
+        <meta property="og:title" content={pageTitle} />
+        <meta property="og:description" content={pageDescription} />
         <meta property="og:image" content={data.backgroundImageUrl || '/og-default.jpg'} />
         <meta property="og:type" content="website" />
         <meta property="og:image:width" content="1200" />
