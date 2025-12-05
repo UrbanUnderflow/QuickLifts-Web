@@ -52,7 +52,7 @@ export interface SurveyResponse {
 // Check-in Types
 export interface WaiverSignature {
   signatureDataUrl: string; // Base64 data URL of signature
-  signedAt: any;
+  signedAt?: any; // Added by service via serverTimestamp()
   signedByName: string;
   signedByEmail?: string;
 }
