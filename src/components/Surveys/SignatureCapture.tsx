@@ -28,7 +28,7 @@ const SignatureCapture: React.FC<SignatureCaptureProps> = ({
     canvas.height = rect.height * window.devicePixelRatio;
     ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
 
-    // Set drawing styles
+    // Set drawing styles - use white for visibility on dark backgrounds during signing
     ctx.strokeStyle = '#FFFFFF';
     ctx.lineWidth = 2.5;
     ctx.lineCap = 'round';

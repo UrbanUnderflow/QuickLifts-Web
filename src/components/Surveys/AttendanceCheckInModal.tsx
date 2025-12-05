@@ -11,12 +11,28 @@ interface WaitlistEntry {
   checkedInAt?: any;
 }
 
+interface CheckInRecord {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  checkedInAt: any;
+  waiverSigned: boolean;
+  waiverSignature?: {
+    signatureDataUrl: string;
+    signedAt: any;
+    signedByName: string;
+    signedByEmail?: string;
+  };
+}
+
 interface AttendanceCheckInModalProps {
   isOpen: boolean;
   onClose: () => void;
   waitlistEntries: WaitlistEntry[];
   loading: boolean;
   onCheckIn: (entry: WaitlistEntry, signatureDataUrl: string) => Promise<void>;
+  onGetCheckInRecord?: (waitlistEntryId: string) => Promise<CheckInRecord | null>;
   eventTitle?: string;
   waiverContent?: string;
 }
@@ -57,6 +73,7 @@ const AttendanceCheckInModal: React.FC<AttendanceCheckInModalProps> = ({
   waitlistEntries,
   loading,
   onCheckIn,
+  onGetCheckInRecord,
   eventTitle = 'Event',
   waiverContent = DEFAULT_WAIVER_CONTENT,
 }) => {
@@ -67,6 +84,10 @@ const AttendanceCheckInModal: React.FC<AttendanceCheckInModalProps> = ({
   const [checkingIn, setCheckingIn] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [successName, setSuccessName] = useState('');
+  
+  // View waiver state
+  const [viewingWaiver, setViewingWaiver] = useState<CheckInRecord | null>(null);
+  const [loadingWaiver, setLoadingWaiver] = useState(false);
 
   // Filter entries based on search
   const filteredEntries = useMemo(() => {
@@ -123,6 +144,26 @@ const AttendanceCheckInModal: React.FC<AttendanceCheckInModalProps> = ({
     setSelectedEntry(null);
     setSignatureDataUrl(null);
     setWaiverAccepted(false);
+    setViewingWaiver(null);
+  };
+
+  const handleViewWaiver = async (entry: WaitlistEntry) => {
+    if (!onGetCheckInRecord) return;
+    
+    setLoadingWaiver(true);
+    try {
+      const record = await onGetCheckInRecord(entry.id);
+      if (record) {
+        setViewingWaiver(record);
+      } else {
+        alert('Could not find check-in record');
+      }
+    } catch (err) {
+      console.error('[ViewWaiver] Error:', err);
+      alert('Failed to load waiver');
+    } finally {
+      setLoadingWaiver(false);
+    }
   };
 
   if (!isOpen) return null;
@@ -133,7 +174,7 @@ const AttendanceCheckInModal: React.FC<AttendanceCheckInModalProps> = ({
         {/* Header */}
         <div className="flex justify-between items-center p-6 border-b border-zinc-700">
           <div className="flex items-center gap-3">
-            {selectedEntry && !showSuccess && (
+            {(selectedEntry || viewingWaiver) && !showSuccess && (
               <button
                 onClick={handleBack}
                 className="p-2 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors"
@@ -145,9 +186,9 @@ const AttendanceCheckInModal: React.FC<AttendanceCheckInModalProps> = ({
             )}
             <div>
               <h2 className="text-2xl font-bold text-white">
-                {showSuccess ? 'Check-In Complete!' : selectedEntry ? 'Sign Waiver' : 'Attendance Check-In'}
+                {viewingWaiver ? 'Signed Waiver' : showSuccess ? 'Check-In Complete!' : selectedEntry ? 'Sign Waiver' : 'Attendance Check-In'}
               </h2>
-              {!selectedEntry && !showSuccess && (
+              {!selectedEntry && !showSuccess && !viewingWaiver && (
                 <p className="text-sm text-zinc-400 mt-1">
                   {notCheckedIn.length} awaiting check-in • {checkedIn.length} checked in
                 </p>
@@ -164,7 +205,92 @@ const AttendanceCheckInModal: React.FC<AttendanceCheckInModalProps> = ({
 
         {/* Content */}
         <div className="flex-1 overflow-hidden min-h-0">
-          {showSuccess ? (
+          {viewingWaiver ? (
+            /* View Signed Waiver Screen */
+            <div className="flex flex-col h-full">
+              {/* Person Info */}
+              <div className="bg-zinc-800 p-4 border-b border-zinc-700">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-emerald-500 rounded-full flex items-center justify-center">
+                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-medium text-white">{viewingWaiver.name}</h3>
+                    <p className="text-sm text-zinc-400">{viewingWaiver.email}</p>
+                    <p className="text-xs text-emerald-400 mt-1">
+                      Checked in: {viewingWaiver.checkedInAt?.toDate 
+                        ? viewingWaiver.checkedInAt.toDate().toLocaleString() 
+                        : 'Recently'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Waiver Content */}
+              <div className="flex-1 overflow-y-auto p-6 space-y-6 min-h-0">
+                <div>
+                  <h4 className="text-sm font-medium text-zinc-300 mb-3">
+                    Signed Waiver for {eventTitle}
+                  </h4>
+                  <div className="bg-zinc-800 rounded-lg p-4 max-h-48 overflow-y-auto border border-zinc-700">
+                    <pre className="text-sm text-zinc-300 whitespace-pre-wrap font-sans leading-relaxed">
+                      {waiverContent}
+                    </pre>
+                  </div>
+                </div>
+
+                {/* Agreement Confirmation */}
+                <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-6 h-6 bg-emerald-500 rounded flex items-center justify-center flex-shrink-0">
+                      <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                    <span className="text-sm text-emerald-300">
+                      {viewingWaiver.name} agreed to the terms of the waiver
+                    </span>
+                  </div>
+                </div>
+
+                {/* Signature */}
+                {viewingWaiver.waiverSignature?.signatureDataUrl && (
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-sm text-zinc-300">Signature</label>
+                      <span className="text-xs text-zinc-500">
+                        Signed by: {viewingWaiver.waiverSignature.signedByName}
+                      </span>
+                    </div>
+                    <div className="bg-zinc-900 rounded-lg p-4 border-2 border-dashed border-[#E0FE10]/50">
+                      <img 
+                        src={viewingWaiver.waiverSignature.signatureDataUrl} 
+                        alt="Signature" 
+                        className="max-h-32 mx-auto"
+                      />
+                    </div>
+                    <p className="text-xs text-zinc-500 mt-2 text-center">
+                      Signed at: {viewingWaiver.waiverSignature.signedAt?.toDate 
+                        ? viewingWaiver.waiverSignature.signedAt.toDate().toLocaleString() 
+                        : 'Time not recorded'}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="p-6 border-t border-zinc-700">
+                <button
+                  onClick={() => setViewingWaiver(null)}
+                  className="w-full bg-zinc-700 text-white py-3 rounded-lg font-medium hover:bg-zinc-600 transition-colors"
+                >
+                  Back to List
+                </button>
+              </div>
+            </div>
+          ) : showSuccess ? (
             /* Success Screen */
             <div className="flex flex-col items-center justify-center h-full p-8 text-center">
               <div className="w-24 h-24 bg-emerald-500 rounded-full flex items-center justify-center mb-6 animate-bounce">
@@ -334,9 +460,11 @@ const AttendanceCheckInModal: React.FC<AttendanceCheckInModalProps> = ({
                           Checked In ({checkedIn.length})
                         </h3>
                         {checkedIn.map((entry) => (
-                          <div
+                          <button
                             key={entry.id}
-                            className="p-4 rounded-lg bg-emerald-500/10 border border-emerald-500/30 mb-2"
+                            onClick={() => handleViewWaiver(entry)}
+                            disabled={loadingWaiver || !onGetCheckInRecord}
+                            className="w-full text-left p-4 rounded-lg bg-emerald-500/10 border border-emerald-500/30 mb-2 hover:bg-emerald-500/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-3">
@@ -350,11 +478,18 @@ const AttendanceCheckInModal: React.FC<AttendanceCheckInModalProps> = ({
                                   <p className="text-sm text-zinc-400">{entry.email}</p>
                                 </div>
                               </div>
-                              <span className="text-xs text-emerald-400 bg-emerald-500/20 px-2 py-1 rounded-full">
-                                Checked In
-                              </span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-emerald-400 bg-emerald-500/20 px-2 py-1 rounded-full">
+                                  Checked In
+                                </span>
+                                {onGetCheckInRecord && (
+                                  <svg className="w-5 h-5 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                  </svg>
+                                )}
+                              </div>
                             </div>
-                          </div>
+                          </button>
                         ))}
                       </div>
                     )}

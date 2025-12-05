@@ -252,6 +252,52 @@ service cloud.firestore {
       allow write: if false; // Only server-side functions can write logs
     }
     
+    // Creator Pages (Landing Pages)
+    match /creator-pages/{userId} {
+      // Allow owner to read/write their creator pages root
+      allow read, write: if isOwner(userId) || isAdmin();
+      
+      // Pages subcollection
+      match /pages/{pageSlug} {
+        // Anyone can read published pages
+        allow read: if true;
+        // Only owner can write
+        allow write: if isOwner(userId) || isAdmin();
+        
+        // Surveys subcollection
+        match /surveys/{surveyId} {
+          // Anyone can read surveys (to take them)
+          allow read: if true;
+          // Only owner can create/edit/delete surveys
+          allow write: if isOwner(userId) || isAdmin();
+          
+          // Survey responses subcollection
+          match /responses/{responseId} {
+            // Owner can read responses
+            allow read: if isOwner(userId) || isAdmin();
+            // Anyone can submit a response
+            allow create: if true;
+            // Only owner can update/delete responses
+            allow update, delete: if isOwner(userId) || isAdmin();
+          }
+        }
+        
+        // Check-ins subcollection
+        match /check-ins/{checkInId} {
+          // Only owner can read/write check-ins
+          allow read, write: if isOwner(userId) || isAdmin();
+        }
+      }
+      
+      // Waitlist subcollection
+      match /waitlist/{entryId} {
+        // Owner can read/write waitlist entries
+        allow read, write: if isOwner(userId) || isAdmin();
+        // Anyone can create waitlist entries (signing up)
+        allow create: if true;
+      }
+    }
+    
     // Default deny rule for any unmatched documents
     match /{document=**} {
       allow read, write: if false;

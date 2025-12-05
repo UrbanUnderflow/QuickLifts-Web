@@ -245,22 +245,57 @@ export const creatorPagesService = {
     waitlistEntryId: string,
     checkInData: Omit<CheckInRecord, 'id' | 'checkedInAt'>
   ): Promise<string> {
-    // Save to check-ins collection
-    const checkInsRef = collection(db, ROOT, userId, 'pages', pageSlug, 'check-ins');
-    const newCheckInRef = await addDoc(checkInsRef, {
-      ...checkInData,
-      checkedInAt: serverTimestamp(),
-    });
+    console.log('[CheckIn Service] Starting check-in:', { userId, pageSlug, waitlistEntryId });
+    
+    try {
+      // Build check-in payload, excluding undefined values (Firestore doesn't allow undefined)
+      const checkInPayload: Record<string, any> = {
+        waitlistEntryId: checkInData.waitlistEntryId,
+        name: checkInData.name,
+        email: checkInData.email,
+        waiverSigned: checkInData.waiverSigned,
+        checkedInAt: serverTimestamp(),
+      };
 
-    // Update the waitlist entry to mark as checked in
-    const waitlistEntryRef = doc(db, ROOT, userId, 'waitlist', waitlistEntryId);
-    await setDoc(waitlistEntryRef, {
-      checkedIn: true,
-      checkedInAt: serverTimestamp(),
-      checkInId: newCheckInRef.id,
-    }, { merge: true });
+      // Only add optional fields if they have values
+      if (checkInData.phone) {
+        checkInPayload.phone = checkInData.phone;
+      }
+      if (checkInData.checkedInBy) {
+        checkInPayload.checkedInBy = checkInData.checkedInBy;
+      }
+      if (checkInData.waiverSignature) {
+        checkInPayload.waiverSignature = {
+          signatureDataUrl: checkInData.waiverSignature.signatureDataUrl,
+          signedByName: checkInData.waiverSignature.signedByName,
+          signedAt: serverTimestamp(),
+        };
+        if (checkInData.waiverSignature.signedByEmail) {
+          checkInPayload.waiverSignature.signedByEmail = checkInData.waiverSignature.signedByEmail;
+        }
+      }
 
-    return newCheckInRef.id;
+      // Save to check-ins collection
+      const checkInsRef = collection(db, ROOT, userId, 'pages', pageSlug, 'check-ins');
+      console.log('[CheckIn Service] Saving to check-ins collection...', checkInPayload);
+      const newCheckInRef = await addDoc(checkInsRef, checkInPayload);
+      console.log('[CheckIn Service] Check-in saved with ID:', newCheckInRef.id);
+
+      // Update the waitlist entry to mark as checked in
+      const waitlistEntryRef = doc(db, ROOT, userId, 'waitlist', waitlistEntryId);
+      console.log('[CheckIn Service] Updating waitlist entry...');
+      await setDoc(waitlistEntryRef, {
+        checkedIn: true,
+        checkedInAt: serverTimestamp(),
+        checkInId: newCheckInRef.id,
+      }, { merge: true });
+      console.log('[CheckIn Service] Waitlist entry updated');
+
+      return newCheckInRef.id;
+    } catch (err) {
+      console.error('[CheckIn Service] Error:', err);
+      throw err;
+    }
   },
 
   async getCheckIns(userId: string, pageSlug: string): Promise<CheckInRecord[]> {

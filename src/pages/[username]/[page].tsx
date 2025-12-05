@@ -565,36 +565,52 @@ ${baseBody}`;
     entry: { id: string; name: string; email: string; phone?: string },
     signatureDataUrl: string
   ) => {
-    if (!currentUser?.id || !data?.slug) return;
+    if (!currentUser?.id || !data?.slug) {
+      console.error('[CheckIn] Missing user or page data');
+      throw new Error('Missing required data');
+    }
     
-    await creatorPagesService.checkInAttendee(
-      currentUser.id,
-      data.slug,
-      entry.id,
-      {
-        waitlistEntryId: entry.id,
-        name: entry.name,
-        email: entry.email,
-        phone: entry.phone,
-        waiverSigned: true,
-        waiverSignature: {
-          signatureDataUrl,
-          signedAt: new Date(),
-          signedByName: entry.name,
-          signedByEmail: entry.email,
-        },
-        checkedInBy: currentUser.id,
-      }
-    );
+    console.log('[CheckIn] Starting check-in for:', entry.name, 'Entry ID:', entry.id);
     
-    // Update local state to show check-in immediately
-    setCheckInWaitlist(prev => 
-      prev.map(e => 
-        e.id === entry.id 
-          ? { ...e, checkedIn: true, checkedInAt: new Date() }
-          : e
-      )
-    );
+    try {
+      await creatorPagesService.checkInAttendee(
+        currentUser.id,
+        data.slug,
+        entry.id,
+        {
+          waitlistEntryId: entry.id,
+          name: entry.name,
+          email: entry.email,
+          phone: entry.phone,
+          waiverSigned: true,
+          waiverSignature: {
+            signatureDataUrl,
+            signedByName: entry.name,
+            signedByEmail: entry.email,
+          },
+          checkedInBy: currentUser.id,
+        }
+      );
+      
+      console.log('[CheckIn] Successfully checked in:', entry.name);
+      
+      // Update local state to show check-in immediately
+      setCheckInWaitlist(prev => 
+        prev.map(e => 
+          e.id === entry.id 
+            ? { ...e, checkedIn: true, checkedInAt: new Date() }
+            : e
+        )
+      );
+    } catch (err) {
+      console.error('[CheckIn] Error details:', err);
+      throw err;
+    }
+  };
+
+  const handleGetCheckInRecord = async (waitlistEntryId: string) => {
+    if (!currentUser?.id || !data?.slug) return null;
+    return creatorPagesService.getCheckInByWaitlistId(currentUser.id, data.slug, waitlistEntryId);
   };
 
   // Load surveys when page data is available (for owner)
@@ -1672,6 +1688,7 @@ ${baseBody}`;
         waitlistEntries={checkInWaitlist}
         loading={checkInLoading}
         onCheckIn={handleCheckInAttendee}
+        onGetCheckInRecord={handleGetCheckInRecord}
         eventTitle={data?.title || 'Event'}
       />
     </div>
