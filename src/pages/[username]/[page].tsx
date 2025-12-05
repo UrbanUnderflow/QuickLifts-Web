@@ -3,10 +3,11 @@ import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { useSelector } from 'react-redux';
 import { RootState } from '../../redux/store';
-import { creatorPagesService, CreatorLandingPage, SponsorLogo } from '../../api/firebase/creatorPages/service';
+import { creatorPagesService, CreatorLandingPage, SponsorLogo, Survey, SurveyResponse } from '../../api/firebase/creatorPages/service';
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { collection, getDocs, orderBy, query, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
+import { SurveyBuilderModal, SurveysListModal, SurveyResponsesModal, SurveyTakingModal, AttendanceCheckInModal } from '../../components/Surveys';
 
 const CreatorLandingPageView: React.FC = () => {
   const router = useRouter();
@@ -59,6 +60,32 @@ const CreatorLandingPageView: React.FC = () => {
   const [templateSubject, setTemplateSubject] = useState('');
   const [templateBody, setTemplateBody] = useState('');
   const [templateSaving, setTemplateSaving] = useState(false);
+
+  // Survey state
+  const [surveys, setSurveys] = useState<Survey[]>([]);
+  const [surveysLoading, setSurveysLoading] = useState(false);
+  const [showSurveyBuilder, setShowSurveyBuilder] = useState(false);
+  const [showSurveysList, setShowSurveysList] = useState(false);
+  const [showSurveyResponses, setShowSurveyResponses] = useState(false);
+  const [editingSurvey, setEditingSurvey] = useState<Survey | null>(null);
+  const [selectedSurveyForResponses, setSelectedSurveyForResponses] = useState<Survey | null>(null);
+  const [surveyResponses, setSurveyResponses] = useState<SurveyResponse[]>([]);
+  const [responsesLoading, setResponsesLoading] = useState(false);
+  const [showSurveyTaking, setShowSurveyTaking] = useState(false);
+  const [activeSurveyForTaking, setActiveSurveyForTaking] = useState<Survey | null>(null);
+
+  // Check-in state
+  const [showCheckIn, setShowCheckIn] = useState(false);
+  const [checkInWaitlist, setCheckInWaitlist] = useState<Array<{
+    id: string;
+    name: string;
+    email: string;
+    phone?: string;
+    createdAt: any;
+    checkedIn: boolean;
+    checkedInAt?: any;
+  }>>([]);
+  const [checkInLoading, setCheckInLoading] = useState(false);
 
   const isOwner = currentUser && data && currentUser.id === data.userId;
 
@@ -401,6 +428,182 @@ ${baseBody}`;
     }
   };
 
+  // Survey handlers
+  const loadSurveys = async () => {
+    if (!currentUser?.id || !data?.slug) return;
+    setSurveysLoading(true);
+    try {
+      const fetchedSurveys = await creatorPagesService.getSurveys(currentUser.id, data.slug);
+      setSurveys(fetchedSurveys);
+    } catch (err) {
+      console.error('[Surveys] Failed to load:', err);
+    } finally {
+      setSurveysLoading(false);
+    }
+  };
+
+  const handleOpenSurveyBuilder = () => {
+    setEditingSurvey(null);
+    setShowSurveyBuilder(true);
+  };
+
+  const handleOpenSurveysList = async () => {
+    await loadSurveys();
+    setShowSurveysList(true);
+  };
+
+  const handleSaveSurvey = async (surveyData: Omit<Survey, 'id' | 'userId' | 'pageSlug' | 'createdAt' | 'updatedAt'> & { id?: string }) => {
+    if (!currentUser?.id || !data?.slug) return;
+    
+    await creatorPagesService.saveSurvey(currentUser.id, data.slug, surveyData);
+    await loadSurveys();
+    setShowSurveyBuilder(false);
+    setEditingSurvey(null);
+  };
+
+  const handleEditSurvey = (survey: Survey) => {
+    setEditingSurvey(survey);
+    setShowSurveysList(false);
+    setShowSurveyBuilder(true);
+  };
+
+  const handleDeleteSurvey = async (surveyId: string) => {
+    if (!currentUser?.id || !data?.slug) return;
+    
+    await creatorPagesService.deleteSurvey(currentUser.id, data.slug, surveyId);
+    setSurveys(surveys.filter(s => s.id !== surveyId));
+  };
+
+  const handleViewSurveyResponses = async (survey: Survey) => {
+    if (!currentUser?.id || !data?.slug) return;
+    
+    setSelectedSurveyForResponses(survey);
+    setResponsesLoading(true);
+    setShowSurveysList(false);
+    setShowSurveyResponses(true);
+    
+    try {
+      const responses = await creatorPagesService.getSurveyResponses(currentUser.id, data.slug, survey.id);
+      setSurveyResponses(responses);
+    } catch (err) {
+      console.error('[Survey Responses] Failed to load:', err);
+    } finally {
+      setResponsesLoading(false);
+    }
+  };
+
+  const handleCopySurveyLink = (survey: Survey) => {
+    const baseUrl = process.env.NODE_ENV === 'development' 
+      ? 'http://localhost:8888' 
+      : 'https://fitwithpulse.ai';
+    const surveyLink = `${baseUrl}/${username}/${page}?survey=${survey.id}`;
+    navigator.clipboard.writeText(surveyLink);
+    alert('Survey link copied to clipboard!');
+  };
+
+  const handleTakeSurvey = (survey: Survey) => {
+    setActiveSurveyForTaking(survey);
+    setShowSurveyTaking(true);
+    setShowSurveysList(false);
+  };
+
+  const handleSubmitSurveyResponse = async (
+    answers: { [questionId: string]: string | number },
+    respondentName?: string,
+    respondentEmail?: string
+  ) => {
+    if (!data?.userId || !data?.slug || !activeSurveyForTaking) return;
+    
+    await creatorPagesService.submitSurveyResponse(
+      data.userId,
+      data.slug,
+      activeSurveyForTaking.id,
+      { answers, respondentName, respondentEmail }
+    );
+  };
+
+  // Check for survey query param on load (for visitors taking a survey)
+  useEffect(() => {
+    const loadSurveyFromParam = async () => {
+      if (!router.isReady || !data?.userId || !data?.slug) return;
+      
+      const surveyId = router.query.survey as string;
+      if (surveyId) {
+        try {
+          const survey = await creatorPagesService.getSurveyById(data.userId, data.slug, surveyId);
+          if (survey) {
+            setActiveSurveyForTaking(survey);
+            setShowSurveyTaking(true);
+          }
+        } catch (err) {
+          console.error('[Survey] Failed to load survey from URL:', err);
+        }
+      }
+    };
+    
+    loadSurveyFromParam();
+  }, [router.isReady, router.query.survey, data?.userId, data?.slug]);
+
+  // Check-in handlers
+  const handleOpenCheckIn = async () => {
+    if (!currentUser?.id || !data?.slug) return;
+    
+    setCheckInLoading(true);
+    setShowCheckIn(true);
+    
+    try {
+      const entries = await creatorPagesService.getWaitlistWithCheckInStatus(currentUser.id, data.slug);
+      setCheckInWaitlist(entries);
+    } catch (err) {
+      console.error('[CheckIn] Failed to load waitlist:', err);
+    } finally {
+      setCheckInLoading(false);
+    }
+  };
+
+  const handleCheckInAttendee = async (
+    entry: { id: string; name: string; email: string; phone?: string },
+    signatureDataUrl: string
+  ) => {
+    if (!currentUser?.id || !data?.slug) return;
+    
+    await creatorPagesService.checkInAttendee(
+      currentUser.id,
+      data.slug,
+      entry.id,
+      {
+        waitlistEntryId: entry.id,
+        name: entry.name,
+        email: entry.email,
+        phone: entry.phone,
+        waiverSigned: true,
+        waiverSignature: {
+          signatureDataUrl,
+          signedAt: new Date(),
+          signedByName: entry.name,
+          signedByEmail: entry.email,
+        },
+        checkedInBy: currentUser.id,
+      }
+    );
+    
+    // Update local state to show check-in immediately
+    setCheckInWaitlist(prev => 
+      prev.map(e => 
+        e.id === entry.id 
+          ? { ...e, checkedIn: true, checkedInAt: new Date() }
+          : e
+      )
+    );
+  };
+
+  // Load surveys when page data is available (for owner)
+  useEffect(() => {
+    if (currentUser?.id && data?.slug && currentUser.id === data.userId) {
+      loadSurveys();
+    }
+  }, [currentUser?.id, data?.slug, data?.userId]);
+
   const handleExportWaitlist = () => {
     if (waitlistEntries.length === 0 || !data) return;
     
@@ -560,6 +763,28 @@ ${baseBody}`;
             className="bg-white/10 backdrop-blur-sm hover:bg-white/20 text-white px-4 py-2 rounded-lg border border-white/20 transition-all duration-300 shadow-lg hover:shadow-xl"
           >
             View Waitlist
+          </button>
+          
+          {/* Attendance Check-In button */}
+          <button
+            onClick={handleOpenCheckIn}
+            className="bg-emerald-500/20 backdrop-blur-sm hover:bg-emerald-500/30 text-emerald-400 px-4 py-2 rounded-lg border border-emerald-500/30 transition-all duration-300 shadow-lg hover:shadow-xl flex items-center gap-2"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Attendance Check-In
+          </button>
+          
+          {/* Survey button - changes based on whether surveys exist */}
+          <button
+            onClick={surveys.length > 0 ? handleOpenSurveysList : handleOpenSurveyBuilder}
+            className="bg-white/10 backdrop-blur-sm hover:bg-white/20 text-white px-4 py-2 rounded-lg border border-white/20 transition-all duration-300 shadow-lg hover:shadow-xl flex items-center gap-2"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+            </svg>
+            {surveys.length > 0 ? 'View Surveys' : 'Add Survey'}
           </button>
           
           {/* Edit button */}
@@ -1383,6 +1608,72 @@ ${baseBody}`;
           </div>
         </div>
       )}
+
+      {/* Survey Builder Modal */}
+      <SurveyBuilderModal
+        isOpen={showSurveyBuilder}
+        onClose={() => {
+          setShowSurveyBuilder(false);
+          setEditingSurvey(null);
+        }}
+        onSave={handleSaveSurvey}
+        existingSurvey={editingSurvey}
+      />
+
+      {/* Surveys List Modal */}
+      <SurveysListModal
+        isOpen={showSurveysList}
+        onClose={() => setShowSurveysList(false)}
+        surveys={surveys}
+        loading={surveysLoading}
+        onEdit={handleEditSurvey}
+        onViewResponses={handleViewSurveyResponses}
+        onDelete={handleDeleteSurvey}
+        onCopySurveyLink={handleCopySurveyLink}
+        onCreateNew={() => {
+          setShowSurveysList(false);
+          handleOpenSurveyBuilder();
+        }}
+      />
+
+      {/* Survey Responses Modal */}
+      <SurveyResponsesModal
+        isOpen={showSurveyResponses}
+        onClose={() => {
+          setShowSurveyResponses(false);
+          setSelectedSurveyForResponses(null);
+          setSurveyResponses([]);
+        }}
+        survey={selectedSurveyForResponses}
+        responses={surveyResponses}
+        loading={responsesLoading}
+      />
+
+      {/* Survey Taking Modal (for visitors) */}
+      {activeSurveyForTaking && (
+        <SurveyTakingModal
+          isOpen={showSurveyTaking}
+          onClose={() => {
+            setShowSurveyTaking(false);
+            setActiveSurveyForTaking(null);
+            // Remove survey query param from URL
+            const newUrl = `/${username}/${page}`;
+            router.replace(newUrl, undefined, { shallow: true });
+          }}
+          survey={activeSurveyForTaking}
+          onSubmit={handleSubmitSurveyResponse}
+        />
+      )}
+
+      {/* Attendance Check-In Modal */}
+      <AttendanceCheckInModal
+        isOpen={showCheckIn}
+        onClose={() => setShowCheckIn(false)}
+        waitlistEntries={checkInWaitlist}
+        loading={checkInLoading}
+        onCheckIn={handleCheckInAttendee}
+        eventTitle={data?.title || 'Event'}
+      />
     </div>
   );
 };

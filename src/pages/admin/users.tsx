@@ -21,6 +21,8 @@ type User = {
   registrationComplete?: boolean;
   createdAt?: any;
   adminVerified?: boolean; // Flag to track actual admin status from admin collection
+  // Approximate number of videos the user has uploaded to the platform (if tracked)
+  videoCount?: number;
 };
 
 // Define a type for workout session display data
@@ -29,8 +31,8 @@ type WorkoutSessionDisplay = {
   logs: ExerciseLog[];
 };
 
-// Update TabType to include 'logs' and 'betaApplications'
-type TabType = 'all' | 'admins' | 'workoutSessions' | 'logs' | 'betaApplications';
+// Update TabType to include 'logs', 'betaApplications', and 'creators'
+type TabType = 'all' | 'admins' | 'creators' | 'workoutSessions' | 'logs' | 'betaApplications';
 
 const UsersManagement: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
@@ -434,6 +436,9 @@ const UsersManagement: React.FC = () => {
     // Apply tab filter
     if (tab === 'admins') {
       filtered = filtered.filter(user => user.adminVerified);
+    } else if (tab === 'creators') {
+      // Show only users who have uploaded videos (identified by videoCount > 0)
+      filtered = filtered.filter(user => (user.videoCount || 0) > 0);
     }
     
     // Apply search term filter
@@ -1843,6 +1848,28 @@ const UsersManagement: React.FC = () => {
                   {users.filter(u => u.adminVerified).length}
                 </span>
                 {activeTab === 'admins' && (
+                  <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-blue-500 via-purple-500 to-[#d7ff00]"></div>
+                )}
+              </button>
+              
+              {/* Creators Tab - users who have uploaded videos */}
+              <button
+                className={`py-2 px-4 mr-2 font-medium text-sm transition-colors relative ${
+                  activeTab === 'creators'
+                    ? 'text-[#d7ff00]'
+                    : 'text-gray-400 hover:text-gray-200'
+                } ${isBatchDeleting ? 'pointer-events-none opacity-60' : ''}`}
+                onClick={() => handleTabChange('creators')}
+                disabled={isBatchDeleting}
+              >
+                <div className="flex items-center">
+                  <Activity className="h-4 w-4 mr-1" />
+                  Creator Tab
+                  <span className="ml-2 px-2 py-0.5 bg-gray-800 rounded-full text-xs">
+                    {users.filter(u => (u.videoCount || 0) > 0).length}
+                  </span>
+                </div>
+                {activeTab === 'creators' && (
                   <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-blue-500 via-purple-500 to-[#d7ff00]"></div>
                 )}
               </button>
