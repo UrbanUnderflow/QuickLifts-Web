@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
+import type { GetServerSideProps } from 'next';
 import { useSelector } from 'react-redux';
 import { RootState } from '../../redux/store';
 import { creatorPagesService, CreatorLandingPage, SponsorLogo, Survey, SurveyResponse } from '../../api/firebase/creatorPages/service';
@@ -9,7 +10,11 @@ import { collection, getDocs, orderBy, query, doc, setDoc, serverTimestamp } fro
 import { db } from '../../api/firebase/config';
 import { SurveyBuilderModal, SurveysListModal, SurveyResponsesModal, SurveyTakingModal, AttendanceCheckInModal } from '../../components/Surveys';
 
-const CreatorLandingPageView: React.FC = () => {
+interface CreatorLandingPageProps {
+  initialIsSurveyShare?: boolean;
+}
+
+const CreatorLandingPageView: React.FC<CreatorLandingPageProps> = ({ initialIsSurveyShare }) => {
   const router = useRouter();
   const { username, page } = router.query as { username?: string; page?: string };
   const currentUser = useSelector((state: RootState) => state.user.currentUser);
@@ -722,16 +727,19 @@ ${baseBody}`;
     return <div className="min-h-screen bg-black text-white flex items-center justify-center">{error || 'Not found'}</div>;
   }
 
-  // Dynamic page meta - if a survey is being taken, emphasize the survey
-  const pageTitle =
-    activeSurveyForTaking
-      ? activeSurveyForTaking.title || 'Take our survey!'
-      : data.title || `${data.username} — ${data.slug}`;
+  // Dynamic page meta - if a survey link is being shared, emphasize the survey
+  const isSurveyShareMode =
+    !!activeSurveyForTaking ||
+    !!(typeof window === 'undefined' ? initialIsSurveyShare : undefined) ||
+    (!!router.query && !!(router.query as any).survey);
 
-  const pageDescription =
-    activeSurveyForTaking
-      ? activeSurveyForTaking.description || 'Take our survey!'
-      : data.headline || (data.body || '').slice(0, 160);
+  const pageTitle = isSurveyShareMode
+    ? activeSurveyForTaking?.title || 'Take our survey!'
+    : data.title || `${data.username} — ${data.slug}`;
+
+  const pageDescription = isSurveyShareMode
+    ? activeSurveyForTaking?.description || 'Take our survey!'
+    : data.headline || (data.body || '').slice(0, 160);
 
   return (
     <div className="relative min-h-screen overflow-hidden" style={bgStyle}>
@@ -1707,5 +1715,14 @@ ${baseBody}`;
 };
 
 export default CreatorLandingPageView;
+
+export const getServerSideProps: GetServerSideProps<CreatorLandingPageProps> = async (context) => {
+  const hasSurveyParam = typeof context.query.survey !== 'undefined';
+  return {
+    props: {
+      initialIsSurveyShare: hasSurveyParam,
+    },
+  };
+};
 
 
