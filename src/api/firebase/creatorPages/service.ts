@@ -186,8 +186,12 @@ export const creatorPagesService = {
       return survey.id;
     } else {
       // Create new survey
+      // Firestore does not allow undefined values, and we don't want to persist an undefined id field,
+      // so explicitly strip it out before writing.
+      const { id: _ignored, ...surveyWithoutId } = survey;
+
       const newSurveyRef = await addDoc(surveysRef, {
-        ...survey,
+        ...surveyWithoutId,
         userId,
         pageSlug,
         createdAt: serverTimestamp(),
