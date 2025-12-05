@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import SignatureCapture from './SignatureCapture';
+import type { CheckInRecord } from '../../api/firebase/creatorPages/service';
 
 interface WaitlistEntry {
   id: string;
@@ -9,21 +10,6 @@ interface WaitlistEntry {
   createdAt: any;
   checkedIn: boolean;
   checkedInAt?: any;
-}
-
-interface CheckInRecord {
-  id: string;
-  name: string;
-  email: string;
-  phone?: string;
-  checkedInAt: any;
-  waiverSigned: boolean;
-  waiverSignature?: {
-    signatureDataUrl: string;
-    signedAt: any;
-    signedByName: string;
-    signedByEmail?: string;
-  };
 }
 
 interface AttendanceCheckInModalProps {
