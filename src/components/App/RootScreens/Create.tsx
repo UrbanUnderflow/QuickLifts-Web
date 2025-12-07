@@ -961,8 +961,8 @@ const Create: React.FC = () => {
       
       console.log('[DEBUG] Generating AI caption with data:', data);
       
-      // Make API request to our backend
-      const response = await fetch('/api/generateCaption', {
+      // Make API request to our backend (Netlify function)
+      const response = await fetch('/.netlify/functions/generateCaption', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
