@@ -14,7 +14,13 @@ const { manualSyncWorkoutSessions } = require("./manualSync");
 const { manualSyncMealLogs } = require("./manualSyncMealLogs");
 const { updateParticipantCounts } = require("./updateParticipantCounts");
 // Import the new thumbnail / media functions
-const { generateThumbnailOnWrite, generateMissingThumbnails, processThumbnailQueue, generateGifForExerciseVideo } = require("./thumbnailGenerator");
+const {
+  generateThumbnailOnWrite,
+  generateMissingThumbnails,
+  processThumbnailQueue,
+  generateGifForExerciseVideo,
+  generateGifForExerciseVideoHttp,
+} = require("./thumbnailGenerator");
 // Import the Move of the Day function
 const { selectMoveOfTheDay } = require("./moveOfTheDay");
 
@@ -42,6 +48,7 @@ exports.generateThumbnailOnWrite = generateThumbnailOnWrite;
 exports.generateMissingThumbnails = generateMissingThumbnails; 
 exports.processThumbnailQueue = processThumbnailQueue; 
 exports.generateGifForExerciseVideo = generateGifForExerciseVideo;
+exports.generateGifForExerciseVideoHttp = generateGifForExerciseVideoHttp;
 
 // Export the Move of the Day function - THIS IS NOW DEPRECATED
 // exports.selectMoveOfTheDay = selectMoveOfTheDay;

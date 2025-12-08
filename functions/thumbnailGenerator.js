@@ -1,6 +1,6 @@
 // Import v2 functions
 const { onDocumentWritten } = require("firebase-functions/v2/firestore");
-const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
 const { onMessagePublished } = require("firebase-functions/v2/pubsub");
 const { logger } = require("firebase-functions");
 const admin = require("firebase-admin");
@@ -433,7 +433,7 @@ exports.processThumbnailQueue = onMessagePublished({
   }
 }); 
 
-// --- Cloud Function: Manually (re)generate thumbnail & GIF for a single ExerciseVideo ---
+// --- Cloud Function (callable): Manually (re)generate thumbnail & GIF for a single ExerciseVideo ---
 exports.generateGifForExerciseVideo = onCall({
   region: "us-central1",
   runtime: "nodejs22"
@@ -484,6 +484,88 @@ exports.generateGifForExerciseVideo = onCall({
     logger.error(`[Manual GIF] Failed to generate GIF for ${videoId}:`, error);
     throw new HttpsError('internal', 'Failed to generate GIF for this video.', {
       message: error?.message || String(error)
+    });
+  }
+});
+
+// --- Cloud Function (HTTP with CORS): Manually (re)generate thumbnail & GIF for a single ExerciseVideo ---
+exports.generateGifForExerciseVideoHttp = onRequest({
+  region: "us-central1",
+  runtime: "nodejs22",
+}, async (req, res) => {
+  // Basic CORS handling
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(204).send('');
+  }
+
+  if (req.method !== 'POST') {
+    return res.status(405).json({ success: false, message: 'Method not allowed. Use POST.' });
+  }
+
+  try {
+    const { videoId } = req.body || {};
+
+    if (!videoId || typeof videoId !== 'string') {
+      logger.warn('[Manual GIF HTTP] Missing or invalid videoId in request body:', req.body);
+      return res.status(400).json({ success: false, message: 'A valid videoId string is required.' });
+    }
+
+    logger.info(`[Manual GIF HTTP] Requested GIF generation for video ID: ${videoId}`);
+
+    const docRef = db.collection('exerciseVideos').doc(videoId);
+    const docSnap = await docRef.get();
+
+    if (!docSnap.exists) {
+      logger.warn(`[Manual GIF HTTP] ExerciseVideo document ${videoId} not found.`);
+      return res.status(404).json({ success: false, message: `ExerciseVideo document ${videoId} not found.` });
+    }
+
+    const videoData = docSnap.data();
+
+    if (
+      !videoData.videoURL ||
+      !(videoData.videoURL.startsWith('gs://') ||
+        videoData.videoURL.startsWith('https://firebasestorage.googleapis.com'))
+    ) {
+      logger.warn(`[Manual GIF HTTP] Invalid or missing videoURL for ${videoId}:`, videoData.videoURL);
+      return res.status(400).json({
+        success: false,
+        message: 'Video document is missing a supported videoURL (gs:// or https://firebasestorage.googleapis.com).',
+      });
+    }
+
+    logger.info(`[Manual GIF HTTP] Generating thumbnail/GIF for ${videoId} using videoURL ${videoData.videoURL}...`);
+    const { thumbnailUrl, gifUrl } = await generateThumbnail(videoData.videoURL, videoId);
+
+    const updateData = {
+      thumbnail: thumbnailUrl,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+    if (gifUrl) {
+      updateData.gifURL = gifUrl;
+    }
+
+    await docRef.update(updateData);
+
+    logger.info(
+      `[Manual GIF HTTP] Successfully updated ${videoId} with thumbnail${gifUrl ? ' and GIF' : ''} URL(s).`
+    );
+
+    return res.status(200).json({
+      success: true,
+      thumbnailUrl,
+      gifUrl: gifUrl || null,
+    });
+  } catch (error) {
+    logger.error('[Manual GIF HTTP] Failed to generate GIF:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to generate GIF for this video.',
+      error: error?.message || String(error),
     });
   }
 });

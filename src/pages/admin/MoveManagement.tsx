@@ -689,7 +689,8 @@ const MoveManagement: React.FC = () => {
     setToastMessage({ type: 'info', text: 'Requesting GIF generation for this video...' });
 
     try {
-      const response = await fetch('/.netlify/functions/generate-gif-for-exercise-video', {
+      // Directly call Firebase HTTP function with explicit CORS handling
+      const response = await fetch('https://us-central1-quicklifts-dd3f1.cloudfunctions.net/generateGifForExerciseVideoHttp', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -697,10 +698,27 @@ const MoveManagement: React.FC = () => {
         body: JSON.stringify({ videoId }),
       });
 
-      const data = await response.json();
+      const text = await response.text();
+      let data: any;
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch (e) {
+        console.error('[MoveManagement] Failed to parse GIF generation response JSON:', e, text);
+        throw new Error(`Unexpected response format (status ${response.status})`);
+      }
+
+      console.log('[MoveManagement] GIF generation HTTP response:', {
+        status: response.status,
+        ok: response.ok,
+        data,
+      });
 
       if (!response.ok || !data?.success) {
-        throw new Error(data?.message || 'GIF generation function reported failure.');
+        const failureMessage =
+          data?.message ||
+          data?.error ||
+          `GIF generation function reported failure (status ${response.status}).`;
+        throw new Error(failureMessage);
       }
 
       const gifUrl = data.gifUrl ?? data.gifURL ?? null;
