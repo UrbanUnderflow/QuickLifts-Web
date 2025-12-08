@@ -29,14 +29,19 @@ const THUMBNAIL_FOLDER = "thumbnails";
 const THUMBNAIL_MAX_WIDTH = 320; // Max width for thumbnails
 const THUMBNAIL_SUFFIX = "_thumb.jpg";
 
+// GIF generation config (shares bucket with thumbnails)
+const GIF_FOLDER = "gifs";
+const GIF_MAX_WIDTH = 320;
+const GIF_SUFFIX = ".gif";
+
 const pubSubClient = new PubSub();
 const TOPIC_NAME = 'thumbnail-generation-requests'; // Define topic name
 
 /**
- * Generates a thumbnail for a video stored in Firebase Storage.
+ * Generates a thumbnail (and best-effort GIF preview) for a video stored in Firebase Storage.
  * @param {string} videoUrl The URL of the video in Firebase Storage.
  * @param {string} exerciseVideoId The ID of the ExerciseVideo document.
- * @returns {Promise<string>} The public URL of the generated thumbnail.
+ * @returns {Promise<{ thumbnailUrl: string, gifUrl?: string }>} Public URLs of the generated assets.
  */
 async function generateThumbnail(videoUrl, exerciseVideoId) {
   logger.info(`[Thumbnail] Starting generation for video: ${videoUrl}, ID: ${exerciseVideoId}`);
@@ -74,6 +79,10 @@ async function generateThumbnail(videoUrl, exerciseVideoId) {
   const tempLocalThumb = path.join(os.tmpdir(), `thumb_${exerciseVideoId}.jpg`);
   const thumbStoragePath = `${THUMBNAIL_FOLDER}/${exerciseVideoId}${THUMBNAIL_SUFFIX}`;
 
+  // Temp + storage paths for GIF
+  const tempLocalGif = path.join(os.tmpdir(), `gif_${exerciseVideoId}.gif`);
+  const gifStoragePath = `${GIF_FOLDER}/${exerciseVideoId}${GIF_SUFFIX}`;
+
   const bucket = storage.bucket(bucketName); // Use parsed bucketName
   const thumbBucket = storage.bucket(THUMBNAIL_BUCKET);
 
@@ -107,7 +116,45 @@ async function generateThumbnail(videoUrl, exerciseVideoId) {
     });
     logger.info(`[Thumbnail] Thumbnail generated: ${tempLocalThumb}`);
 
-    // 3. Upload thumbnail to Storage
+    // 3. Generate GIF preview using ffmpeg (best-effort)
+    let gifPublicUrl;
+    try {
+      logger.info(`[GIF] Generating GIF at ${tempLocalGif}`);
+      await new Promise((resolve, reject) => {
+        ffmpeg(tempLocalFile)
+          .on("end", () => {
+            logger.info("[GIF] FFmpeg GIF processing finished.");
+            resolve();
+          })
+          .on("error", (err, stdout, stderr) => {
+            logger.error("[GIF] FFmpeg GIF error:", err.message);
+            logger.error("[GIF] FFmpeg GIF stderr:", stderr);
+            reject(new Error(`GIF FFmpeg failed: ${err.message}`));
+          })
+          .outputOptions([
+            "-vf",
+            `fps=10,scale=${GIF_MAX_WIDTH}:-1:flags=lanczos`,
+          ])
+          .toFormat("gif")
+          .save(tempLocalGif);
+      });
+
+      logger.info(`[GIF] Uploading GIF to ${gifStoragePath}`);
+      await thumbBucket.upload(tempLocalGif, {
+        destination: gifStoragePath,
+        metadata: {
+          contentType: "image/gif",
+        },
+      });
+      await thumbBucket.file(gifStoragePath).makePublic();
+      gifPublicUrl = `https://storage.googleapis.com/${THUMBNAIL_BUCKET}/${gifStoragePath}`;
+      logger.info(`[GIF] GIF public URL: ${gifPublicUrl}`);
+    } catch (gifError) {
+      // Don't fail the whole pipeline if GIF generation fails; thumbnail is primary.
+      logger.error("[GIF] Failed to generate GIF preview:", gifError);
+    }
+
+    // 4. Upload thumbnail to Storage
     logger.info(`[Thumbnail] Uploading thumbnail to ${thumbStoragePath}`);
     await thumbBucket.upload(tempLocalThumb, {
       destination: thumbStoragePath,
@@ -118,19 +165,24 @@ async function generateThumbnail(videoUrl, exerciseVideoId) {
     });
     logger.info(`[Thumbnail] Thumbnail uploaded successfully.`);
 
-    // 4. Make thumbnail public (or use signed URLs if preferred)
+    // 5. Make thumbnail public (or use signed URLs if preferred)
     await thumbBucket.file(thumbStoragePath).makePublic();
 
-    // 5. Get public URL
-    const publicUrl = `https://storage.googleapis.com/${THUMBNAIL_BUCKET}/${thumbStoragePath}`;
-    logger.info(`[Thumbnail] Thumbnail public URL: ${publicUrl}`);
-    return publicUrl;
+    // 6. Get public URLs
+    const thumbnailPublicUrl = `https://storage.googleapis.com/${THUMBNAIL_BUCKET}/${thumbStoragePath}`;
+    logger.info(`[Thumbnail] Thumbnail public URL: ${thumbnailPublicUrl}`);
+
+    return {
+      thumbnailUrl: thumbnailPublicUrl,
+      gifUrl: gifPublicUrl,
+    };
 
   } finally {
     // 6. Cleanup temporary files
     try {
       if (fs.existsSync(tempLocalFile)) fs.unlinkSync(tempLocalFile);
       if (fs.existsSync(tempLocalThumb)) fs.unlinkSync(tempLocalThumb);
+      if (fs.existsSync(tempLocalGif)) fs.unlinkSync(tempLocalGif);
       logger.info('[Thumbnail] Cleaned up temporary files.');
     } catch (cleanupError) {
       logger.error('[Thumbnail] Error cleaning up temp files:', cleanupError);
@@ -196,16 +248,20 @@ exports.generateThumbnailOnWrite = onDocumentWritten({
     }
   }
 
-  // --- Generate Thumbnail --- 
+  // --- Generate Thumbnail + GIF --- 
   try {
-    const thumbnailUrl = await generateThumbnail(dataAfter.videoURL, exerciseVideoId);
+    const { thumbnailUrl, gifUrl } = await generateThumbnail(dataAfter.videoURL, exerciseVideoId);
 
     // Update Firestore document
-    logger.info(`[Thumbnail Trigger] Updating Firestore for ${exerciseVideoId} with thumbnail URL.`);
-    await db.collection('exerciseVideos').doc(exerciseVideoId).update({ 
-        thumbnail: thumbnailUrl,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp() // Update timestamp
-    });
+    logger.info(`[Thumbnail Trigger] Updating Firestore for ${exerciseVideoId} with thumbnail${gifUrl ? " and GIF" : ""} URL(s).`);
+    const updateData = {
+      thumbnail: thumbnailUrl,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp() // Update timestamp
+    };
+    if (gifUrl) {
+      updateData.gifURL = gifUrl;
+    }
+    await db.collection('exerciseVideos').doc(exerciseVideoId).update(updateData);
     logger.info(`[Thumbnail Trigger] Firestore updated successfully for ${exerciseVideoId}.`);
     return null;
 
@@ -339,18 +395,22 @@ exports.processThumbnailQueue = onMessagePublished({
       return null;
     }
 
-    // Generate the thumbnail
-    logger.info(`[Thumbnail Processor] Generating thumbnail for ${exerciseVideoId}...`);
-    const thumbnailUrl = await generateThumbnail(videoData.videoURL, exerciseVideoId);
+    // Generate the thumbnail (and GIF)
+    logger.info(`[Thumbnail Processor] Generating thumbnail (and GIF) for ${exerciseVideoId}...`);
+    const { thumbnailUrl, gifUrl } = await generateThumbnail(videoData.videoURL, exerciseVideoId);
 
     // Update Firestore document
-    await docRef.update({
+    const updateData = {
       thumbnail: thumbnailUrl,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       thumbnailError: admin.firestore.FieldValue.delete() // Remove previous error if any
-    });
+    };
+    if (gifUrl) {
+      updateData.gifURL = gifUrl;
+    }
+    await docRef.update(updateData);
 
-    logger.info(`[Thumbnail Processor] Successfully processed ${exerciseVideoId}. Thumbnail URL added.`);
+    logger.info(`[Thumbnail Processor] Successfully processed ${exerciseVideoId}. Thumbnail URL${gifUrl ? " and GIF URL" : ""} added.`);
     return null;
 
   } catch (error) {
@@ -372,3 +432,58 @@ exports.processThumbnailQueue = onMessagePublished({
     return null;
   }
 }); 
+
+// --- Cloud Function: Manually (re)generate thumbnail & GIF for a single ExerciseVideo ---
+exports.generateGifForExerciseVideo = onCall({
+  region: "us-central1",
+  runtime: "nodejs22"
+}, async (request) => {
+  const videoId = request?.data?.videoId;
+
+  if (!videoId || typeof videoId !== 'string') {
+    throw new HttpsError('invalid-argument', 'A valid videoId string is required.');
+  }
+
+  logger.info(`[Manual GIF] Requested GIF generation for video ID: ${videoId}`);
+
+  const docRef = db.collection('exerciseVideos').doc(videoId);
+  const docSnap = await docRef.get();
+
+  if (!docSnap.exists) {
+    throw new HttpsError('not-found', `ExerciseVideo document ${videoId} not found.`);
+  }
+
+  const videoData = docSnap.data();
+
+  if (!videoData.videoURL || !(videoData.videoURL.startsWith('gs://') || videoData.videoURL.startsWith('https://firebasestorage.googleapis.com'))) {
+    throw new HttpsError('failed-precondition', 'Video document is missing a supported videoURL (gs:// or https://firebasestorage.googleapis.com).');
+  }
+
+  try {
+    logger.info(`[Manual GIF] Generating thumbnail/GIF for ${videoId}...`);
+    const { thumbnailUrl, gifUrl } = await generateThumbnail(videoData.videoURL, videoId);
+
+    const updateData = {
+      thumbnail: thumbnailUrl,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+    if (gifUrl) {
+      updateData.gifURL = gifUrl;
+    }
+
+    await docRef.update(updateData);
+
+    logger.info(`[Manual GIF] Successfully updated ${videoId} with thumbnail${gifUrl ? ' and GIF' : ''} URL(s).`);
+
+    return {
+      success: true,
+      thumbnailUrl,
+      gifUrl: gifUrl || null
+    };
+  } catch (error) {
+    logger.error(`[Manual GIF] Failed to generate GIF for ${videoId}:`, error);
+    throw new HttpsError('internal', 'Failed to generate GIF for this video.', {
+      message: error?.message || String(error)
+    });
+  }
+});

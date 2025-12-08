@@ -24,6 +24,7 @@ interface ExerciseVideoDisplay {
   exerciseId: string;
   videoURL: string;
   thumbnail?: string;
+  gifURL?: string;
   username?: string;
   createdAt?: any; // Firestore Timestamp or Date
   // Add other fields from your ExerciseVideo class as needed
@@ -93,6 +94,7 @@ const MoveManagement: React.FC = () => {
   const [showOrphanedOnly, setShowOrphanedOnly] = useState(false);
   const [deletingVideos, setDeletingVideos] = useState<{[videoId: string]: boolean}>({});
   const [deletingExercises, setDeletingExercises] = useState<{[exerciseId: string]: boolean}>({});
+  const [generatingGif, setGeneratingGif] = useState<{[videoId: string]: boolean}>({});
 
   // Show/hide toast
   useEffect(() => {
@@ -297,6 +299,7 @@ const MoveManagement: React.FC = () => {
         return {
           id: doc.id,
           exerciseId: data.exerciseId,
+          gifURL: data.gifURL,
           videoURL: data.videoURL,
           thumbnail: data.thumbnail,
           username: data.username,
@@ -372,6 +375,7 @@ const MoveManagement: React.FC = () => {
           const data = doc.data();
           return {
               id: doc.id,
+              gifURL: data.gifURL,
               exerciseId: data.exerciseId,
               videoURL: data.videoURL,
               thumbnail: data.thumbnail,
@@ -674,6 +678,68 @@ const MoveManagement: React.FC = () => {
     }
   };
 
+  const handleGenerateGifForVideo = async (videoId: string) => {
+    if (!videoId) return;
+
+    if (!window.confirm("Generate (or regenerate) a GIF preview for this video? This may take up to a minute.")) {
+      return;
+    }
+
+    setGeneratingGif(prev => ({ ...prev, [videoId]: true }));
+    setToastMessage({ type: 'info', text: 'Requesting GIF generation for this video...' });
+
+    try {
+      const response = await fetch('/.netlify/functions/generate-gif-for-exercise-video', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ videoId }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data?.success) {
+        throw new Error(data?.message || 'GIF generation function reported failure.');
+      }
+
+      const gifUrl = data.gifUrl ?? data.gifURL ?? null;
+      const thumbnailUrl = data.thumbnailUrl ?? data.thumbnail ?? null;
+
+      // Optimistically update local state so UI reflects new URLs without reload
+      setExerciseVideos(prev =>
+        prev.map(v =>
+          v.id === videoId
+            ? {
+                ...v,
+                gifURL: (gifUrl ?? undefined) || v.gifURL,
+                thumbnail: (thumbnailUrl ?? undefined) || v.thumbnail,
+              }
+            : v
+        )
+      );
+      setFilteredExerciseVideos(prev =>
+        prev.map(v =>
+          v.id === videoId
+            ? {
+                ...v,
+                gifURL: (gifUrl ?? undefined) || v.gifURL,
+                thumbnail: (thumbnailUrl ?? undefined) || v.thumbnail,
+              }
+            : v
+        )
+      );
+
+      setToastMessage({ type: 'success', text: 'GIF generation completed for this video (refresh after a moment if it does not appear immediately).' });
+    } catch (err) {
+      console.error('[MoveManagement] Error generating GIF for video:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error during GIF generation.';
+      setToastMessage({ type: 'error', text: `GIF generation failed: ${errorMessage}` });
+    } finally {
+      setGeneratingGif(prev => ({ ...prev, [videoId]: false }));
+    }
+  };
+
   // Format date helper (if needed for video timestamps etc.)
   const formatDate = (dateValue: any): string => {
     if (!dateValue) return 'N/A';
@@ -800,6 +866,63 @@ const MoveManagement: React.FC = () => {
                           >
                             <Copy className="h-3 w-3" />
                           </button>
+                        </div>
+                      </div>
+                      <div className="mb-2">
+                        <p className="text-xs text-gray-500 mb-1">GIF URL:</p>
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-center gap-2 p-2 bg-[#1a1e24] rounded border border-gray-600">
+                            <p className="text-xs text-gray-300 font-mono flex-1 break-all">
+                              {video.gifURL || 'No GIF URL set'}
+                            </p>
+                            {video.gifURL ? (
+                              <button
+                                onClick={() => handleCopyToClipboard(video.gifURL || '', 'GIF URL')}
+                                className="p-1 text-gray-400 hover:text-[#d7ff00] transition-colors flex-shrink-0"
+                                title="Copy GIF URL"
+                              >
+                                <Copy className="h-3 w-3" />
+                              </button>
+                            ) : null}
+                          </div>
+                          {!video.gifURL && (
+                            <button
+                              onClick={() => handleGenerateGifForVideo(video.id)}
+                              disabled={!!generatingGif[video.id]}
+                              className={`inline-flex items-center justify-center px-2.5 py-1.5 rounded-md text-[11px] font-medium border transition-colors ${
+                                generatingGif[video.id]
+                                  ? 'bg-gray-700/60 text-gray-400 border-gray-600 cursor-wait'
+                                  : 'bg-purple-900/50 text-purple-200 border-purple-700 hover:bg-purple-800/70'
+                              }`}
+                              title="Manually generate a GIF preview for this video"
+                            >
+                              {generatingGif[video.id] ? (
+                                <>
+                                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                  Generating GIF...
+                                </>
+                              ) : (
+                                'Generate GIF'
+                              )}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <div className="mb-2">
+                        <p className="text-xs text-gray-500 mb-1">Thumbnail URL:</p>
+                        <div className="flex items-center gap-2 p-2 bg-[#1a1e24] rounded border border-gray-600">
+                          <p className="text-xs text-gray-300 font-mono flex-1 break-all">
+                            {video.thumbnail || 'No thumbnail URL set'}
+                          </p>
+                          {video.thumbnail && (
+                            <button
+                              onClick={() => handleCopyToClipboard(video.thumbnail || '', 'Thumbnail URL')}
+                              className="p-1 text-gray-400 hover:text-[#d7ff00] transition-colors flex-shrink-0"
+                              title="Copy thumbnail URL"
+                            >
+                              <Copy className="h-3 w-3" />
+                            </button>
+                          )}
                         </div>
                       </div>
                       {/* Add date if available: <p className="text-xs text-gray-500 mt-1">Date: {formatDate(video.createdAt)}</p> */} 

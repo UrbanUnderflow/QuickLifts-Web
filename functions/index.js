@@ -13,8 +13,8 @@ const { syncStackToRoot } = require("./syncStacks");
 const { manualSyncWorkoutSessions } = require("./manualSync");
 const { manualSyncMealLogs } = require("./manualSyncMealLogs");
 const { updateParticipantCounts } = require("./updateParticipantCounts");
-// Import the new thumbnail functions
-const { generateThumbnailOnWrite, generateMissingThumbnails, processThumbnailQueue } = require("./thumbnailGenerator");
+// Import the new thumbnail / media functions
+const { generateThumbnailOnWrite, generateMissingThumbnails, processThumbnailQueue, generateGifForExerciseVideo } = require("./thumbnailGenerator");
 // Import the Move of the Day function
 const { selectMoveOfTheDay } = require("./moveOfTheDay");
 
@@ -37,10 +37,11 @@ exports.sendDirectMessageNotification = require("./directMessageNotifications").
 // Export the new single notification function
 exports.sendSingleNotification = require("./sendSingleNotification").sendSingleNotification; 
 
-// Export the new thumbnail functions
+// Export the new thumbnail / media functions
 exports.generateThumbnailOnWrite = generateThumbnailOnWrite;
 exports.generateMissingThumbnails = generateMissingThumbnails; 
 exports.processThumbnailQueue = processThumbnailQueue; 
+exports.generateGifForExerciseVideo = generateGifForExerciseVideo;
 
 // Export the Move of the Day function - THIS IS NOW DEPRECATED
 // exports.selectMoveOfTheDay = selectMoveOfTheDay;

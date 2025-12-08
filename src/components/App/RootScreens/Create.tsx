@@ -471,8 +471,31 @@ const Create: React.FC = () => {
       const exists = await exerciseService.verifyExerciseExistsByName(exerciseName.trim());
       
       if (exists) {
-        // If it exists, get the full exercise data
-        console.log('[DEBUG] Found existing exercise with this name');
+        // If it exists, prefer fetching the exercise with its mapped videos so previews can render
+        console.log('[DEBUG] Found existing exercise with this name. Fetching exercises with videos for preview.');
+        await exerciseService.fetchExercises();
+        const allExercisesWithVideos = exerciseService.allExercises;
+
+        // Try to find matching exercises (case-insensitive) that include video metadata
+        const matchingExercises = allExercisesWithVideos.filter((exercise) => {
+          const isMatch = exercise.name.toLowerCase() === exerciseName.trim().toLowerCase();
+          if (isMatch) {
+            console.log('[DEBUG] Matched existing exercise with videos for preview:', {
+              id: exercise.id,
+              name: exercise.name,
+              videoCount: exercise.videos?.length ?? 0,
+            });
+          }
+          return isMatch;
+        });
+
+        if (matchingExercises.length > 0) {
+          console.log(`[DEBUG] Returning ${matchingExercises.length} matching exercises with videos for vault checker preview`);
+          return matchingExercises;
+        }
+
+        // Fallback: if for some reason videos weren't mapped, still return the base exercise data
+        console.log('[DEBUG] Existing exercise has no mapped videos; falling back to getExerciseByName result');
         const exercise = await exerciseService.getExerciseByName(exerciseName.trim());
         return exercise ? [exercise] : [];
       }
@@ -1600,30 +1623,37 @@ const SimilarExercisesModal: React.FC<SimilarExercisesModalProps> = ({
 
           {/* Exercise Cards */}
           <div className="space-y-4">
-            {similarExercises.map((exercise) => (
-              <button
-                key={exercise.id}
-                onClick={() => onSelectExercise(exercise)}
-                className="w-full bg-zinc-800 rounded-xl overflow-hidden hover:bg-zinc-700 transition-colors"
-              >
-                <div className="aspect-square w-full relative">
-                  {exercise.videos?.[0]?.gifURL ? (
-                    <img 
-                      src={exercise.videos[0].gifURL} 
-                      alt={exercise.name}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full bg-zinc-700 flex items-center justify-center">
-                      <span className="text-zinc-400">No preview</span>
-                    </div>
-                  )}
-                </div>
-                <div className="p-4 text-left">
-                  <h4 className="text-white font-medium">{exercise.name}</h4>
-                </div>
-              </button>
-            ))}
+            {similarExercises.map((exercise) => {
+              const previewVideo = exercise.videos?.find(
+                (video) => video.gifURL || video.thumbnail
+              );
+              const previewUrl = previewVideo?.gifURL || previewVideo?.thumbnail;
+
+              return (
+                <button
+                  key={exercise.id}
+                  onClick={() => onSelectExercise(exercise)}
+                  className="w-full bg-zinc-800 rounded-xl overflow-hidden hover:bg-zinc-700 transition-colors"
+                >
+                  <div className="aspect-square w-full relative">
+                    {previewUrl ? (
+                      <img
+                        src={previewUrl}
+                        alt={exercise.name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-zinc-700 flex items-center justify-center">
+                        <span className="text-zinc-400">No preview</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-4 text-left">
+                    <h4 className="text-white font-medium">{exercise.name}</h4>
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>
