@@ -73,7 +73,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
   ].map(route => route?.toLowerCase());
  
   const publicPathPatterns = [
-    '/round-invitation', '/round', '/profile', '/challenge', '/review', '/programming', '/press', '/100trainers', '/MoveAndFuelATL', '/investor', '/invest', '/connect', '/coach-invite'
+    '/round-invitation', '/round', '/round-library', '/profile', '/challenge', '/review', '/programming', '/press', '/100trainers', '/MoveAndFuelATL', '/investor', '/invest', '/connect', '/coach-invite'
   ].map(pattern => pattern.toLowerCase());
  
   const isPublicRoute = (path: string) => {
@@ -88,7 +88,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     // This matches pages/[username]/[page].tsx routing.
     if (segments.length === 2) {
       const reservedPrefixes = new Set([
-        'round-invitation','round','profile','challenge','review','programming','press','100trainers',
+        'round-invitation','round','round-library','profile','challenge','review','programming','press','100trainers',
         'moveandfuelatl','investor','invest','connect','coach-invite','coach','admin','api','payment',
         'subscribe','download','partner','winner','secure','haveyoupaid'
       ]);
@@ -142,7 +142,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     const segments = normalizedPath.split('/').filter(Boolean);
     if (segments.length !== 2) return false;
     const reservedPrefixes = new Set([
-      'round-invitation','round','profile','challenge','review','programming','press','100trainers',
+      'round-invitation','round','round-library','profile','challenge','review','programming','press','100trainers',
       'moveandfuelatl','investor','invest','connect','coach-invite','coach','admin','api','payment',
       'subscribe','download','partner','winner','secure','haveyoupaid'
     ]);
