@@ -283,7 +283,11 @@ export const SimpleVideoTrimmer: React.FC<VideoTrimmerProps> = ({
         try {
           // Combine chunks into a single file
           const blob = new Blob(chunksRef.current, { type: mimeType });
-          const trimmedFile = new File([blob], 'trimmedFile.webm', { type: mimeType });
+          // Always save the trimmed file with an .mp4 extension so downstream
+          // uploaders and storage paths never use .webm in the name.
+          const baseName = file.name?.replace(/\.[^/.]+$/, '') || 'trimmedFile';
+          const trimmedFileName = `${baseName}.mp4`;
+          const trimmedFile = new File([blob], trimmedFileName, { type: 'video/mp4' });
 
           console.log('[VideoTrimmer] Trim complete', {
             originalSize: file.size,

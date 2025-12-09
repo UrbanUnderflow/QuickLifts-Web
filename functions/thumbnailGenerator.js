@@ -492,16 +492,9 @@ exports.generateGifForExerciseVideo = onCall({
 exports.generateGifForExerciseVideoHttp = onRequest({
   region: "us-central1",
   runtime: "nodejs22",
+  // Let the v2 HTTPS layer handle CORS for these origins, including preflight.
+  cors: ["http://localhost:8888", "https://fitwithpulse.ai"],
 }, async (req, res) => {
-  // Basic CORS handling
-  res.set('Access-Control-Allow-Origin', '*');
-  res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-
-  if (req.method === 'OPTIONS') {
-    return res.status(204).send('');
-  }
-
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, message: 'Method not allowed. Use POST.' });
   }
@@ -568,4 +561,164 @@ exports.generateGifForExerciseVideoHttp = onRequest({
       error: error?.message || String(error),
     });
   }
+});
+
+// --- Cloud Function (callable): Normalize an ExerciseVideo's backing file name to .mp4 and update URLs ---
+exports.normalizeExerciseVideoToMp4 = onCall({
+  region: "us-central1",
+  runtime: "nodejs22",
+}, async (request) => {
+  const videoId = request?.data?.videoId;
+
+  if (!videoId || typeof videoId !== "string") {
+    throw new HttpsError("invalid-argument", "A valid videoId string is required.");
+  }
+
+  logger.info(`[NormalizeToMp4] Requested normalization for video ID: ${videoId}`);
+
+  const docRef = db.collection("exerciseVideos").doc(videoId);
+  const docSnap = await docRef.get();
+
+  if (!docSnap.exists) {
+    throw new HttpsError("not-found", `ExerciseVideo document ${videoId} not found.`);
+  }
+
+  const videoData = docSnap.data() || {};
+
+  const rawPath =
+    videoData.originalVideoStoragePath ||
+    videoData.originalVideoUrl ||
+    videoData.videoURL;
+
+  if (!rawPath || typeof rawPath !== "string") {
+    throw new HttpsError(
+      "failed-precondition",
+      "No storage path or videoURL found on ExerciseVideo document."
+    );
+  }
+
+  // Reuse the same parsing logic style as generateThumbnail
+  let bucketName;
+  let filePath;
+
+  try {
+    if (rawPath.startsWith("gs://")) {
+      bucketName = rawPath.split("/")[2];
+      filePath = rawPath.split("/").slice(3).join("/");
+    } else if (rawPath.startsWith("https://firebasestorage.googleapis.com")) {
+      const urlParts = rawPath.split("/");
+      const bucketIndex = urlParts.findIndex((part) => part === "b") + 1;
+      const pathIndex = urlParts.findIndex((part) => part === "o") + 1;
+      if (bucketIndex > 0 && pathIndex > 0 && pathIndex > bucketIndex) {
+        bucketName = urlParts[bucketIndex];
+        filePath = decodeURIComponent(
+          urlParts
+            .slice(pathIndex)
+            .join("/")
+            .split("?")[0]
+        );
+      } else {
+        throw new Error(`Could not parse HTTPS URL format: ${rawPath}`);
+      }
+    } else {
+      throw new Error(
+        `Invalid or unsupported storage path format: ${rawPath}. Must start with gs:// or https://firebasestorage.googleapis.com`
+      );
+    }
+  } catch (e) {
+    logger.error("[NormalizeToMp4] Failed to parse storage path:", rawPath, e);
+    throw new HttpsError(
+      "invalid-argument",
+      `Could not parse storage location from path: ${rawPath}`
+    );
+  }
+
+  if (!bucketName || !filePath) {
+    throw new HttpsError(
+      "invalid-argument",
+      `Failed to extract bucket or file path from: ${rawPath}`
+    );
+  }
+
+  logger.info("[NormalizeToMp4] Parsed storage location", {
+    bucketName,
+    filePath,
+  });
+
+  // If it already looks like an .mp4, just confirm URLs and return.
+  if (/\.mp4$/i.test(filePath)) {
+    const publicUrl = videoData.videoURL || rawPath;
+    logger.info(
+      "[NormalizeToMp4] File already appears to be .mp4, no rename needed.",
+      { bucketName, filePath, publicUrl }
+    );
+    return {
+      success: true,
+      videoURL: publicUrl,
+      storagePath: `gs://${bucketName}/${filePath}`,
+      alreadyMp4: true,
+    };
+  }
+
+  // Build new path with .mp4 extension
+  const newFilePath = filePath.replace(/\.[^/.]+$/, ".mp4");
+  const bucket = storage.bucket(bucketName);
+  const sourceFile = bucket.file(filePath);
+  const destFile = bucket.file(newFilePath);
+
+  logger.info("[NormalizeToMp4] Copying file to new .mp4 path", {
+    from: filePath,
+    to: newFilePath,
+  });
+
+  try {
+    await sourceFile.copy(destFile);
+    // Best-effort: ensure metadata advertises MP4
+    try {
+      await destFile.setMetadata({ contentType: "video/mp4" });
+    } catch (metaError) {
+      logger.warn("[NormalizeToMp4] Failed to set metadata on new mp4 file:", metaError);
+    }
+  } catch (copyError) {
+    logger.error("[NormalizeToMp4] Failed to copy file to mp4 path:", copyError);
+    throw new HttpsError(
+      "internal",
+      "Failed to create .mp4 copy of the video file.",
+      { message: copyError?.message || String(copyError) }
+    );
+  }
+
+  // Best-effort: delete old file, but don't fail normalization if this delete fails
+  try {
+    await sourceFile.delete();
+    logger.info("[NormalizeToMp4] Deleted original file after successful copy.");
+  } catch (deleteError) {
+    logger.warn("[NormalizeToMp4] Failed to delete original file:", deleteError);
+  }
+
+  const newGsPath = `gs://${bucketName}/${newFilePath}`;
+  const newPublicUrl = `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(
+    newFilePath
+  )}?alt=media`;
+
+  const updateData = {
+    videoURL: newPublicUrl,
+    originalVideoStoragePath: newGsPath,
+    originalVideoUrl: newPublicUrl,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  };
+
+  logger.info("[NormalizeToMp4] Updating ExerciseVideo document with new paths", {
+    videoId,
+    updateData,
+  });
+
+  await docRef.update(updateData);
+
+  return {
+    success: true,
+    videoURL: newPublicUrl,
+    storagePath: newGsPath,
+    alreadyMp4: false,
+  };
 });

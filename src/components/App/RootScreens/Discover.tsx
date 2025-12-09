@@ -30,6 +30,7 @@ import { useUser } from '../../../hooks/useUser';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../../api/firebase/config';
 import { ExerciseVideo } from '../../../api/firebase/exercise/types';
+import WorkoutTypeSelector from '../../App/Dashboard/WorkoutTypeSelector';
 
 // Enum for category tabs
 const CategoryTab = {
@@ -39,7 +40,7 @@ const CategoryTab = {
   PEOPLE: 'People'
 };
 
-const Discover = () => {
+const Discover: React.FC = () => {
   const router = useRouter();
   const currentUser = useUser();
   const [selectedCategory, setSelectedCategory] = useState(CategoryTab.ALL);
@@ -73,6 +74,7 @@ const Discover = () => {
 
   // For ongoing workout
   const [currentWorkout, setCurrentWorkout] = useState<Workout | null>(null);
+  const [showWorkoutTypeSelector, setShowWorkoutTypeSelector] = useState(false);
   
   // Time-based greeting
   const getTimeBasedGreeting = () => {
@@ -328,9 +330,62 @@ const Discover = () => {
     
     const lowerQuery = query.toLowerCase().trim();
     
-    // Filter exercises - This section needs to be re-evaluated as trendingExercises is removed.
-    // For now, an empty array will be set, or we search all exercises from DB (out of scope for this change)
-    setFilteredExercises([]); 
+    // Filter moves (exercises) similar to iOS HomePulseView using the in-memory exercise cache
+    try {
+      let all = exerciseService.allExercises || [];
+
+      // If exercises haven't been loaded yet, fetch them once
+      if (!all.length) {
+        await exerciseService.fetchExercises();
+        all = exerciseService.allExercises || [];
+      }
+
+      const normalized = lowerQuery;
+
+      const matchingExercises = all.filter((exercise) => {
+        const nameMatch = (exercise.name || '').toLowerCase().includes(normalized);
+
+        const primaryMatch = (exercise.primaryBodyParts || []).some((part) =>
+          (part || '').toLowerCase().includes(normalized)
+        );
+
+        const secondaryMatch = (exercise.secondaryBodyParts || []).some((part) =>
+          (part || '').toLowerCase().includes(normalized)
+        );
+
+        const tagMatch = (exercise.tags || []).some((tag) =>
+          (tag || '').toLowerCase().includes(normalized)
+        );
+
+        const descriptionMatch = (exercise.description || '')
+          .toLowerCase()
+          .includes(normalized);
+
+        const stepsMatch = (exercise.steps || []).some((step) =>
+          (step || '').toLowerCase().includes(normalized)
+        );
+
+        const captionMatch = (exercise.videos || []).some((video) =>
+          (video.caption || '').toLowerCase().includes(normalized)
+        );
+
+        return (
+          nameMatch ||
+          primaryMatch ||
+          secondaryMatch ||
+          tagMatch ||
+          descriptionMatch ||
+          stepsMatch ||
+          captionMatch
+        );
+      });
+
+      const limitedExercises = matchingExercises.slice(0, 50);
+      setFilteredExercises(limitedExercises);
+    } catch (error) {
+      console.error('Error searching exercises:', error);
+      setFilteredExercises([]);
+    }
     
     // Filter rounds
     const matchingUserChallenges = activeRounds.filter(round => 
@@ -428,43 +483,50 @@ const Discover = () => {
 
   const renderWelcomeSection = () => {
     // Use the currentUser from the useUser hook defined at the top of the component
-    
+    const greeting = getTimeBasedGreeting();
+    const message = getMyDayMessage();
+
     return (
-      <div className="bg-zinc-800 bg-opacity-30 rounded-lg shadow p-4 mb-8">
-        <div className="flex justify-between items-center">
-          <div>
-            <div className="flex items-center text-[#E0FE10] mb-1">
-              {getTimeBasedIcon()}
-              <p className="text-md font-medium ml-2">{getTimeBasedGreeting()},</p>
-            </div>
-            {/* Use currentUser from hook, provide default if null */}
-            <h2 className="text-xl font-bold text-white">{currentUser?.username || 'Fitness Enthusiast'}</h2> 
-            <p className="text-sm text-zinc-400 mt-2">{getMyDayMessage()}</p>
+      <div className="mb-8">
+        <div className="relative overflow-hidden rounded-2xl border border-zinc-800 bg-gradient-to-br from-lime-500/10 via-zinc-900 to-cyan-500/10 px-4 py-4 sm:px-6 sm:py-5 shadow-lg">
+          <div className="absolute inset-0 pointer-events-none">
+            <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-lime-400/10" />
+            <div className="absolute -left-16 bottom-0 h-40 w-40 rounded-full bg-cyan-400/5" />
           </div>
-          
-          <div className="flex items-center justify-center w-12 h-12 rounded-full bg-[#E0FE10] bg-opacity-20">
-            {/* Check if currentUser and profileImage exist before accessing URL */}
-            {currentUser?.profileImage?.profileImageURL ? (
-              <img 
-                src={currentUser.profileImage.profileImageURL} 
-                alt="Profile" 
-                className="w-11 h-11 rounded-full object-cover"
-              />
-            ) : (
-              <div className="flex items-center justify-center w-11 h-11">
-                {getTimeBasedIcon()} 
+
+          <div className="relative flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <div className="flex items-center text-[#E0FE10] mb-1">
+                {getTimeBasedIcon()}
+                <p className="ml-2 text-sm font-medium sm:text-base">
+                  {greeting},
+                </p>
               </div>
-            )}
+              {/* Use currentUser from hook, provide default if null */}
+              <h2 className="truncate text-xl font-bold text-white sm:text-2xl">
+                {currentUser?.username || 'Fitness Enthusiast'}
+              </h2>
+              <p className="mt-2 text-sm text-zinc-400 sm:text-base">
+                {message}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowWorkoutTypeSelector(true)}
+              className="relative inline-flex shrink-0 items-center justify-center rounded-full bg-[#E0FE10] px-4 py-2 text-xs font-semibold text-zinc-900 shadow-lg shadow-lime-400/30 transition hover:bg-lime-300 sm:px-5 sm:py-2.5 sm:text-sm"
+            >
+              <SparklesIcon className="mr-1.5 h-4 w-4 sm:h-5 sm:w-5" />
+              <span>Start today&apos;s workout</span>
+            </button>
           </div>
         </div>
-        
-        <div className="h-0.5 mt-4 bg-gradient-to-r from-green-400 via-teal-500 to-blue-500 rounded-full"></div>
       </div>
     );
   };
 
   const renderSearchBar = () => (
-    <div className="relative flex items-center bg-zinc-800 rounded-lg mb-6 shadow-lg border border-zinc-700/30">
+    <div className="relative mb-6 flex items-center rounded-lg border border-zinc-700/30 bg-zinc-800 shadow-lg">
       <MagnifyingGlassIcon className="w-5 h-5 ml-4 text-zinc-400" />
       <input
         type="text"
@@ -476,7 +538,12 @@ const Discover = () => {
       />
       {searchText && (
         <button 
-          onClick={() => setSearchText('')}
+          onClick={() => {
+            setSearchText('');
+            setIsSearching(false);
+            setSelectedCategory(CategoryTab.ALL);
+            clearSearch();
+          }}
           className="absolute right-4"
         >
           <XCircleIcon className="w-5 h-5 text-zinc-500 hover:text-zinc-300 transition-colors" />
@@ -519,6 +586,43 @@ const Discover = () => {
         return null;
     }
   };
+
+  const renderQuickActions = () => (
+    <div className="mb-8">
+      <h3 className="mb-3 text-white font-bold">Quick Actions</h3>
+      <div
+        className="relative overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/80 p-4 sm:p-5 shadow-lg"
+      >
+        <div className="absolute inset-0 bg-gradient-to-r from-[#E0FE10]/5 via-transparent to-cyan-400/10 pointer-events-none" />
+        <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#E0FE10] text-zinc-900 shadow-lg shadow-[#E0FE10]/40 sm:h-12 sm:w-12">
+              <SparklesIcon className="h-6 w-6" />
+            </div>
+            <div>
+              <h4 className="text-base font-semibold text-white sm:text-lg">
+                Start a workout
+              </h4>
+              <p className="mt-1 text-xs text-zinc-400 sm:text-sm">
+                Get a personalized AI-powered stack in seconds, using your favorite creator moves.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 sm:flex-col sm:items-end sm:gap-2">
+            <button
+              type="button"
+              onClick={() => setShowWorkoutTypeSelector(true)}
+              className="inline-flex items-center justify-center rounded-full bg-[#E0FE10] px-4 py-2 text-xs font-semibold text-zinc-900 shadow-md shadow-lime-400/40 transition hover:bg-lime-300 sm:px-5 sm:text-sm"
+            >
+              <SparklesIcon className="mr-1.5 h-4 w-4" />
+              <span>Start</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 
   const renderTodaysMissions = () => {
     if (!currentUser) return null;
@@ -697,20 +801,46 @@ const Discover = () => {
         <div className="relative">
           <div className="carousel flex gap-4 overflow-x-auto pb-4 scrollbar-none">
             {activeRounds.map((round, index) => {
-              const daysLeft = Math.max(0, Math.floor((new Date(round.challenge?.endDate ?? new Date()).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)));
-              
+              const now = new Date();
+              const challengeStart = new Date(round.challenge?.startDate || now);
+              const challengeEnd = new Date(round.challenge?.endDate || now);
+
+              const daysLeft = Math.max(
+                0,
+                Math.floor(
+                  (challengeEnd.getTime() - now.getTime()) /
+                    (1000 * 60 * 60 * 24)
+                )
+              );
+
               // Calculate progress based on time elapsed (days passed vs total days)
               const totalDays = round.challenge?.durationInDays || 30;
-              const startDate = new Date(round.challenge?.startDate || new Date());
-              const endDate = new Date(round.challenge?.endDate || new Date());
+              const startDate = new Date(round.challenge?.startDate || now);
               const today = new Date();
-              
+
+              startDate.setHours(0, 0, 0, 0);
+              today.setHours(0, 0, 0, 0);
+
               // Calculate days passed since challenge started
-              const daysPassed = Math.max(0, Math.floor((today.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)));
-              
+              const rawDaysPassed = Math.floor(
+                (today.getTime() - startDate.getTime()) /
+                  (1000 * 60 * 60 * 24)
+              );
+              const daysPassed = Math.max(0, rawDaysPassed);
+
               // Progress is based on time elapsed, not workouts completed
-              const progressPercentage = Math.max(0, Math.min(100, (daysPassed / totalDays) * 100));
-              
+              const progressPercentage = Math.max(
+                0,
+                Math.min(100, (daysPassed / totalDays) * 100)
+              );
+
+              let todaysLabel = 'Starts soon';
+              if (rawDaysPassed >= totalDays) {
+                todaysLabel = 'Challenge completed';
+              } else if (rawDaysPassed >= 0) {
+                todaysLabel = `Day ${daysPassed + 1} of ${totalDays}`;
+              }
+
               // Debug logging for progress calculation
               console.log(`📊 [renderActiveRounds] Time-based progress for ${round.challenge?.title}:`, {
                 totalDays,
@@ -718,72 +848,101 @@ const Discover = () => {
                 daysPassed,
                 progressPercentage: Math.round(progressPercentage),
                 startDate: startDate.toISOString(),
-                endDate: endDate.toISOString(),
+                endDate: challengeEnd.toISOString(),
                 today: today.toISOString()
               });
 
               return (
-                <div 
+                <div
                   key={round.id || index}
-                  className="min-w-[300px] bg-zinc-800 rounded-xl p-5 snap-start cursor-pointer hover:bg-zinc-750 transition-colors"
+                  className="min-w-[300px] snap-start cursor-pointer rounded-2xl bg-zinc-900/80 p-5 transition-colors hover:bg-zinc-800"
                   onClick={() => selectRound(round)}
                 >
-                  <div className="flex justify-between items-start mb-3">
+                  <div className="mb-3 flex items-start justify-between">
                     <div>
-                      <h4 className="text-white font-semibold text-base mb-1">
-                        {round.challenge?.title || "Active Round"}
+                      <h4 className="mb-1 text-base font-semibold text-white">
+                        {round.challenge?.title || 'Active Round'}
                       </h4>
-                      <p className="text-zinc-400 text-sm">
+                      <p className="text-sm text-zinc-400">
                         {daysLeft} {daysLeft === 1 ? 'day' : 'days'} left
                       </p>
                     </div>
                     <div className="text-right">
-                      <div className="text-[#E0FE10] font-bold text-lg">
+                      <div className="text-lg font-bold text-[#E0FE10]">
                         {round.pulsePoints?.totalPoints || 0}
                       </div>
                       <div className="text-xs text-zinc-500">Points</div>
                     </div>
                   </div>
-                  
+
                   {/* Progress Bar */}
                   <div className="mb-4">
-                    <div className="flex justify-between text-xs text-zinc-400 mb-1">
+                    <div className="mb-1 flex justify-between text-xs text-zinc-400">
                       <span>Progress</span>
                       <span>{Math.round(progressPercentage)}%</span>
                     </div>
-                    <div className="w-full bg-zinc-700 h-2 rounded-full overflow-hidden">
-                      <div 
-                        className="bg-gradient-to-r from-[#E0FE10] to-[#a5c600] h-2 rounded-full transition-all duration-300" 
-                        style={{ 
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-700">
+                      <div
+                        className="h-2 rounded-full bg-gradient-to-r from-[#E0FE10] to-[#a5c600] transition-all duration-300"
+                        style={{
                           width: `${progressPercentage}%`,
-                          minWidth: progressPercentage > 0 ? '2px' : '0px' // Ensure visibility for any progress
+                          minWidth: progressPercentage > 0 ? '2px' : '0px', // Ensure visibility for any progress
                         }}
                       ></div>
                     </div>
                   </div>
-                  
+
                   {/* Stats Grid */}
                   <div className="grid grid-cols-3 gap-3">
                     <div className="text-center">
-                      <div className="text-white font-semibold text-sm">
+                      <div className="text-sm font-semibold text-white">
                         {round.completedWorkouts?.length || 0}/{totalDays}
                       </div>
-                      <div className="text-xs text-zinc-500 mt-0.5">Workouts</div>
+                      <div className="mt-0.5 text-xs text-zinc-500">
+                        Workouts
+                      </div>
                     </div>
-                    
+
                     <div className="text-center">
-                      <div className="text-white font-semibold text-sm">
+                      <div className="text-sm font-semibold text-white">
                         {round.currentStreak || 0}
                       </div>
-                      <div className="text-xs text-zinc-500 mt-0.5">Streak</div>
+                      <div className="mt-0.5 text-xs text-zinc-500">
+                        Streak
+                      </div>
                     </div>
-                    
+
                     <div className="text-center">
-                      <div className="text-white font-semibold text-sm">
+                      <div className="text-sm font-semibold text-white">
                         {Math.round(progressPercentage)}%
                       </div>
-                      <div className="text-xs text-zinc-500 mt-0.5">Time</div>
+                      <div className="mt-0.5 text-xs text-zinc-500">
+                        Time
+                      </div>
                     </div>
+                  </div>
+
+                  {/* Today's Workout Row */}
+                  <div className="mt-4 flex items-center justify-between gap-3 border-t border-zinc-800 pt-3">
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
+                        Today&apos;s Workout
+                      </p>
+                      <p className="mt-0.5 truncate text-sm text-white">
+                        {todaysLabel}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        selectRound(round);
+                      }}
+                      className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-[#E0FE10] px-3 py-1.5 text-xs font-semibold text-zinc-900 shadow-md shadow-lime-400/40 transition hover:bg-lime-300"
+                    >
+                      <PlayIcon className="h-4 w-4" />
+                      <span>Start workout</span>
+                    </button>
                   </div>
                 </div>
               );
@@ -1203,7 +1362,7 @@ const Discover = () => {
           <div className="mb-8">
             <h3 className="text-white font-bold mb-4">Moves</h3>
             
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {filteredExercises.map((exercise) => (
                 <div 
                   key={exercise.id}
@@ -1248,7 +1407,7 @@ const Discover = () => {
   };
 
   // Main render method
-  if (loading && !trendingExercises.length) {
+  if (loading && !trendingExercises.length && !showWorkoutTypeSelector) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-zinc-900">
         <div className="w-12 h-12 border-t-2 border-[#E0FE10] rounded-full animate-spin"></div>
@@ -1258,7 +1417,7 @@ const Discover = () => {
 
   return (
     <div className="max-w-xl mx-auto px-4 py-6 bg-zinc-900 min-h-screen">
-      <div className="flex justify-between items-center mb-6">
+      <div className="mb-6 flex items-center justify-between">
         {/* Desktop: simple Pulse title (no dropdown) */}
         <h1 className="hidden md:block text-xl font-bold text-white">Pulse</h1>
 
@@ -1356,61 +1515,90 @@ const Discover = () => {
             </>
           )}
         </div>
+
+        {/* Search toggle icon (matches iOS behavior of entering a dedicated search state) */}
+        <button
+          type="button"
+          onClick={() => {
+            if (isSearching) {
+              setIsSearching(false);
+              setSearchText('');
+              setSelectedCategory(CategoryTab.ALL);
+              clearSearch();
+            } else {
+              setIsSearching(true);
+            }
+          }}
+          className="ml-3 inline-flex h-9 w-9 items-center justify-center rounded-full border border-zinc-700 bg-zinc-900 text-zinc-300 hover:border-zinc-500 hover:text-white"
+        >
+          <MagnifyingGlassIcon className="h-5 w-5" />
+        </button>
       </div>
-      
-      {renderWelcomeSection()}
-      {renderSearchBar()}
-      
-      {searchText ? 
-        renderSearchResults() : 
-        (
-          <>
-            {renderCategoryTabs()}
-            
-            {selectedCategory === CategoryTab.ALL && (
-              <>
-                {renderContinueWorkoutCard()}
-                {renderTodaysMissions()}
-                {renderActiveRounds()}
-                {renderTrendingRounds()}
-                {renderMoveOfTheDaySection()}
-                {renderFeaturedCreators()}
-              </>
-            )}
-            
-            {selectedCategory === CategoryTab.MOVES && (
-              <>
-                {renderMoveOfTheDaySection()}
-                {renderTrendingRounds()}
-              </>
-            )}
-            
-            {selectedCategory === CategoryTab.ROUNDS && (
-              <>
-                {renderTodaysMissions()}
-                {renderActiveRounds()}
-                {renderFeaturedRounds()}
-                <div className="bg-zinc-800 rounded-lg p-6 mb-8">
-                  <h3 className="text-white font-bold mb-2">Discover More Rounds</h3>
-                  <p className="text-zinc-400 text-sm mb-4">
-                    Search and join training programs created by the community. Train together and push each other to new heights!
-                  </p>
-                  <button 
-                    onClick={() => router.push('/rounds')}
-                    className="bg-zinc-700 text-white px-4 py-2 rounded-lg font-medium"
-                  >
-                    Browse All Rounds
-                  </button>
-                </div>
-              </>
-            )}
-            
-            {selectedCategory === CategoryTab.PEOPLE && (
-              renderFeaturedCreators()
-            )}
-          </>
-        )
-      }
+
+      {showWorkoutTypeSelector ? (
+        <WorkoutTypeSelector
+          onClose={() => setShowWorkoutTypeSelector(false)}
+          onCreateWorkout={(selectedParts) => {
+            console.log('Selected body parts:', selectedParts);
+            // TODO: Implement workout generation flow using selectedParts
+            setShowWorkoutTypeSelector(false);
+          }}
+        />
+      ) : isSearching ? (
+        <>
+          {renderSearchBar()}
+          {renderSearchResults()}
+        </>
+      ) : (
+        <>
+          {renderWelcomeSection()}
+          {renderCategoryTabs()}
+
+          {selectedCategory === CategoryTab.ALL && (
+            <>
+              {renderContinueWorkoutCard()}
+              {renderQuickActions()}
+              {renderActiveRounds()}
+              {renderMoveOfTheDaySection()}
+              {/* Temporarily hiding Trending Rounds until we have more data */}
+              {/* {renderTrendingRounds()} */}
+              {renderFeaturedCreators()}
+            </>
+          )}
+          
+          {selectedCategory === CategoryTab.MOVES && (
+            <>
+              {renderMoveOfTheDaySection()}
+              {/* Temporarily hiding Trending Rounds until we have more data */}
+              {/* {renderTrendingRounds()} */}
+            </>
+          )}
+          
+          {selectedCategory === CategoryTab.ROUNDS && (
+            <>
+              {renderTodaysMissions()}
+              {renderActiveRounds()}
+              {renderFeaturedRounds()}
+              <div className="bg-zinc-800 rounded-lg p-6 mb-8">
+                <h3 className="text-white font-bold mb-2">Discover More Rounds</h3>
+                <p className="text-zinc-400 text-sm mb-4">
+                  Search and join training programs created by the community. Train together and push each other to new heights!
+                </p>
+                <button 
+                  onClick={() => router.push('/rounds')}
+                  className="bg-zinc-700 text-white px-4 py-2 rounded-lg font-medium"
+                >
+                  Browse All Rounds
+                </button>
+              </div>
+            </>
+          )}
+          
+          {selectedCategory === CategoryTab.PEOPLE && (
+            renderFeaturedCreators()
+          )}
+        </>
+      )}
     </div>
   );
 };

@@ -10,7 +10,6 @@ import WorkoutReadyView from "../components/WorkoutReadyView";
 import InProgressExercise from '../components/App/InProgressExercise/InProgressExercise';
 import { SelectedRootTabs } from '../types/DashboardTypes';
 import { RootState } from '../redux/store';
-import WorkoutPanel from '../components/App/Dashboard/WorkoutPanel';
 import { ExerciseLog } from '../api/firebase/exercise/types';
 import { Workout, WorkoutStatus, WorkoutSummary, RepsAndWeightLog } from '../api/firebase/workout/types';
 import { workoutService } from '../api/firebase/workout/service';
@@ -32,7 +31,6 @@ interface HomeContentProps {
 const HomeContent: React.FC<HomeContentProps> = ({ onAbout }) => {
   const router = useRouter();
   const [selectedTab, setSelectedTab] = useState<SelectedRootTabs>(SelectedRootTabs.Discover);
-  const [isWorkoutPanelOpen, setIsWorkoutPanelOpen] = useState(false);
   const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0);
 
   const { currentUser } = useSelector((state: RootState) => state.user);
@@ -478,28 +476,6 @@ const performExerciseSubmission = async (updatedLogs: ExerciseLog[]) => {
     }
   };
 
-  // Modify WorkoutPanel to use new startWorkout method
-  const handleStartWorkout = async (workout: Workout) => {
-    try {
-      if (userId) {
-        // Save workout session and get logs
-        const savedSessionData = await workoutService.saveWorkoutSession({
-          userId,
-          workout,
-          logs: workout.logs || [] // Assuming initial logs might be on the template
-        });
-
-        // Extract workout and logs before calling startWorkout
-        if (savedSessionData && savedSessionData.workout) {
-          startWorkout(savedSessionData.workout, savedSessionData.logs || []);
-          setIsWorkoutPanelOpen(false);
-        }
-      }
-    } catch (error) {
-      console.error('Error starting workout:', error);
-    }
-  };
-
   // Main render logic
   return (
     <div className="min-h-screen bg-zinc-900">
@@ -515,12 +491,6 @@ const performExerciseSubmission = async (updatedLogs: ExerciseLog[]) => {
             {renderContent()}
           </div>
 
-          {/* Render WorkoutPanel if needed */}
-          <WorkoutPanel
-            isVisible={isWorkoutPanelOpen}
-            onClose={() => setIsWorkoutPanelOpen(false)}
-            onStartWorkout={handleStartWorkout}
-          />
         </>
       )}
     </div>

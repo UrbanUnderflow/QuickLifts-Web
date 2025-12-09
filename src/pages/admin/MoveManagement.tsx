@@ -5,6 +5,7 @@ import { collection, getDocs, query, orderBy, where, getCountFromServer, doc, up
 import { db, storage } from '../../api/firebase/config';
 import { ref as storageRef, deleteObject, getMetadata } from 'firebase/storage';
 import { getAuth, getIdToken } from 'firebase/auth';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { Dumbbell, Video, PlayCircle, RefreshCw, AlertCircle, CheckCircle, Loader2, Eye, XCircle, ImageIcon, Check, X, Search, Filter, Trash2, Copy } from 'lucide-react';
 import { Exercise, ExerciseVideo } from '../../api/firebase/exercise/types'; // Assuming types are here
 
@@ -48,7 +49,7 @@ interface ReportedItemDisplay {
 }
 
 const MoveManagement: React.FC = () => {
-  const [activeSubTab, setActiveSubTab] = useState<'allMoves' | 'reportedContent' | 'videoAudit'>('allMoves');
+  const [activeSubTab, setActiveSubTab] = useState<'allMoves' | 'reportedContent' | 'videoAudit' | 'missingGifs'>('allMoves');
   const [exercises, setExercises] = useState<ExerciseDisplay[]>([]);
   const [filteredExercises, setFilteredExercises] = useState<ExerciseDisplay[]>([]);
   const [loadingExercises, setLoadingExercises] = useState(true);
@@ -92,9 +93,11 @@ const MoveManagement: React.FC = () => {
   const [orphanedVideos, setOrphanedVideos] = useState<ExerciseVideoDisplay[]>([]);
   const [allVideoSearchTerm, setAllVideoSearchTerm] = useState('');
   const [showOrphanedOnly, setShowOrphanedOnly] = useState(false);
+  const [showMissingGifOnly, setShowMissingGifOnly] = useState(false);
   const [deletingVideos, setDeletingVideos] = useState<{[videoId: string]: boolean}>({});
   const [deletingExercises, setDeletingExercises] = useState<{[exerciseId: string]: boolean}>({});
   const [generatingGif, setGeneratingGif] = useState<{[videoId: string]: boolean}>({});
+  const [normalizingVideos, setNormalizingVideos] = useState<{[videoId: string]: boolean}>({});
 
   // Show/hide toast
   useEffect(() => {
@@ -179,12 +182,16 @@ const MoveManagement: React.FC = () => {
     setFilteredExerciseVideos(filtered);
   }, [exerciseVideos, videoSearchTerm]);
 
-  // Filter all videos based on search term and orphaned filter
+  // Filter all videos based on search term, orphaned filter, and missing GIF filter
   useEffect(() => {
     let filtered = allVideos;
 
     if (showOrphanedOnly) {
       filtered = orphanedVideos;
+    }
+
+    if (showMissingGifOnly) {
+      filtered = filtered.filter(video => !video.gifURL);
     }
 
     if (allVideoSearchTerm) {
@@ -196,7 +203,7 @@ const MoveManagement: React.FC = () => {
     }
 
     setFilteredAllVideos(filtered);
-  }, [allVideos, orphanedVideos, allVideoSearchTerm, showOrphanedOnly]);
+  }, [allVideos, orphanedVideos, allVideoSearchTerm, showOrphanedOnly, showMissingGifOnly]);
 
   const fetchExercises = useCallback(async () => {
     console.log('[MoveManagement] Fetching exercises...');
@@ -686,39 +693,19 @@ const MoveManagement: React.FC = () => {
     }
 
     setGeneratingGif(prev => ({ ...prev, [videoId]: true }));
-    setToastMessage({ type: 'info', text: 'Requesting GIF generation for this video...' });
+    setToastMessage({ type: 'info', text: 'Generating GIF for this specific video...' });
 
     try {
-      // Directly call Firebase HTTP function with explicit CORS handling
-      const response = await fetch('https://us-central1-quicklifts-dd3f1.cloudfunctions.net/generateGifForExerciseVideoHttp', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ videoId }),
-      });
+      const functionsInstance = getFunctions();
+      const generateGifCallable = httpsCallable(functionsInstance, 'generateGifForExerciseVideo');
+      console.log('[MoveManagement] Calling generateGifForExerciseVideo for video:', videoId);
+      const result = await generateGifCallable({ videoId });
+      const data = result.data as { success?: boolean; gifUrl?: string | null; gifURL?: string | null; thumbnailUrl?: string | null; thumbnail?: string | null; message?: string; error?: string };
 
-      const text = await response.text();
-      let data: any;
-      try {
-        data = text ? JSON.parse(text) : {};
-      } catch (e) {
-        console.error('[MoveManagement] Failed to parse GIF generation response JSON:', e, text);
-        throw new Error(`Unexpected response format (status ${response.status})`);
-      }
+      console.log('[MoveManagement] generateGifForExerciseVideo result:', data);
 
-      console.log('[MoveManagement] GIF generation HTTP response:', {
-        status: response.status,
-        ok: response.ok,
-        data,
-      });
-
-      if (!response.ok || !data?.success) {
-        const failureMessage =
-          data?.message ||
-          data?.error ||
-          `GIF generation function reported failure (status ${response.status}).`;
-        throw new Error(failureMessage);
+      if (!data || data.success === false) {
+        throw new Error(data?.message || data?.error || 'GIF generation function reported failure.');
       }
 
       const gifUrl = data.gifUrl ?? data.gifURL ?? null;
@@ -748,13 +735,88 @@ const MoveManagement: React.FC = () => {
         )
       );
 
-      setToastMessage({ type: 'success', text: 'GIF generation completed for this video (refresh after a moment if it does not appear immediately).' });
+      setToastMessage({
+        type: 'success',
+        text: gifUrl
+          ? 'GIF generated for this video.'
+          : 'Thumbnail updated for this video (GIF may not have been generated).',
+      });
     } catch (err) {
       console.error('[MoveManagement] Error generating GIF for video:', err);
       const errorMessage = err instanceof Error ? err.message : 'Unknown error during GIF generation.';
       setToastMessage({ type: 'error', text: `GIF generation failed: ${errorMessage}` });
     } finally {
       setGeneratingGif(prev => ({ ...prev, [videoId]: false }));
+    }
+  };
+
+  const handleNormalizeVideoToMp4 = async (video: ExerciseVideoDisplay) => {
+    if (!video?.id) return;
+
+    if (!window.confirm("Set this video's backing file name to .mp4 and update its URL on the ExerciseVideo document? This will copy the file in Storage and may delete the old .webm object.")) {
+      return;
+    }
+
+    setNormalizingVideos(prev => ({ ...prev, [video.id]: true }));
+    setToastMessage({ type: 'info', text: 'Normalizing video file to .mp4...' });
+
+    try {
+      const functionsInstance = getFunctions();
+      const normalizeCallable = httpsCallable(functionsInstance, 'normalizeExerciseVideoToMp4');
+      console.log('[MoveManagement] Calling normalizeExerciseVideoToMp4 for video:', video.id);
+      const result = await normalizeCallable({ videoId: video.id });
+      const data = result.data as {
+        success?: boolean;
+        videoURL?: string;
+        storagePath?: string;
+        message?: string;
+        error?: string;
+        alreadyMp4?: boolean;
+      };
+
+      console.log('[MoveManagement] normalizeExerciseVideoToMp4 result:', data);
+
+      if (!data || data.success === false) {
+        throw new Error(data?.message || data?.error || 'Normalization function reported failure.');
+      }
+
+      const newUrl = data.videoURL || video.videoURL;
+
+      if (newUrl) {
+        setExerciseVideos(prev =>
+          prev.map(v =>
+            v.id === video.id
+              ? {
+                  ...v,
+                  videoURL: newUrl,
+                }
+              : v
+          )
+        );
+        setFilteredExerciseVideos(prev =>
+          prev.map(v =>
+            v.id === video.id
+              ? {
+                  ...v,
+                  videoURL: newUrl,
+                }
+              : v
+          )
+        );
+      }
+
+      setToastMessage({
+        type: 'success',
+        text: data.alreadyMp4
+          ? 'Video was already using an .mp4 file name.'
+          : 'Video file renamed to .mp4 and URL updated.',
+      });
+    } catch (err) {
+      console.error('[MoveManagement] Error normalizing video to mp4:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error during normalization.';
+      setToastMessage({ type: 'error', text: `Set as MP4 failed: ${errorMessage}` });
+    } finally {
+      setNormalizingVideos(prev => ({ ...prev, [video.id]: false }));
     }
   };
 
@@ -921,6 +983,46 @@ const MoveManagement: React.FC = () => {
                                 </>
                               ) : (
                                 'Generate GIF'
+                              )}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <div className="mb-2">
+                        <p className="text-xs text-gray-500 mb-1">Video URL:</p>
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-center gap-2 p-2 bg-[#1a1e24] rounded border border-gray-600">
+                            <p className="text-xs text-gray-300 font-mono flex-1 break-all">
+                              {video.videoURL || 'No video URL set'}
+                            </p>
+                            {video.videoURL && (
+                              <button
+                                onClick={() => handleCopyToClipboard(video.videoURL || '', 'Video URL')}
+                                className="p-1 text-gray-400 hover:text-[#d7ff00] transition-colors flex-shrink-0"
+                                title="Copy video URL"
+                              >
+                                <Copy className="h-3 w-3" />
+                              </button>
+                            )}
+                          </div>
+                          {video.videoURL && video.videoURL.includes('.webm') && (
+                            <button
+                              onClick={() => handleNormalizeVideoToMp4(video)}
+                              disabled={!!normalizingVideos[video.id]}
+                              className={`inline-flex items-center justify-center px-2.5 py-1.5 rounded-md text-[11px] font-medium border transition-colors ${
+                                normalizingVideos[video.id]
+                                  ? 'bg-gray-700/60 text-gray-400 border-gray-600 cursor-wait'
+                                  : 'bg-indigo-900/50 text-indigo-200 border-indigo-700 hover:bg-indigo-800/70'
+                              }`}
+                              title="Rename backing file to .mp4 and update ExerciseVideo URL"
+                            >
+                              {normalizingVideos[video.id] ? (
+                                <>
+                                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                  Setting as MP4...
+                                </>
+                              ) : (
+                                'Set as MP4'
                               )}
                             </button>
                           )}
@@ -1229,21 +1331,35 @@ const MoveManagement: React.FC = () => {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">Filter Options</label>
-                    <div className="flex items-center">
-                      <input
-                        type="checkbox"
-                        id="showOrphanedOnly"
-                        checked={showOrphanedOnly}
-                        onChange={(e) => setShowOrphanedOnly(e.target.checked)}
-                        className="mr-2 h-4 w-4 text-[#d7ff00] bg-[#1a1e24] border-gray-600 rounded focus:ring-[#d7ff00] focus:ring-2"
-                      />
-                      <label htmlFor="showOrphanedOnly" className="text-sm text-gray-300">
-                        Show orphaned videos only ({orphanedVideos.length})
-                      </label>
+                    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-4">
+                      <div className="flex items-center">
+                        <input
+                          type="checkbox"
+                          id="showOrphanedOnly"
+                          checked={showOrphanedOnly}
+                          onChange={(e) => setShowOrphanedOnly(e.target.checked)}
+                          className="mr-2 h-4 w-4 text-[#d7ff00] bg-[#1a1e24] border-gray-600 rounded focus:ring-[#d7ff00] focus:ring-2"
+                        />
+                        <label htmlFor="showOrphanedOnly" className="text-sm text-gray-300">
+                          Show orphaned videos only ({orphanedVideos.length})
+                        </label>
+                      </div>
+                      <div className="flex items-center">
+                        <input
+                          type="checkbox"
+                          id="showMissingGifOnly"
+                          checked={showMissingGifOnly}
+                          onChange={(e) => setShowMissingGifOnly(e.target.checked)}
+                          className="mr-2 h-4 w-4 text-[#d7ff00] bg-[#1a1e24] border-gray-600 rounded focus:ring-[#d7ff00] focus:ring-2"
+                        />
+                        <label htmlFor="showMissingGifOnly" className="text-sm text-gray-300">
+                          Show videos without GIFs ({allVideos.filter(video => !video.gifURL).length})
+                        </label>
+                      </div>
                     </div>
                   </div>
                 </div>
-                {(allVideoSearchTerm || showOrphanedOnly) && (
+                {(allVideoSearchTerm || showOrphanedOnly || showMissingGifOnly) && (
                   <div className="flex items-center justify-between pt-2 border-t border-gray-600">
                     <p className="text-sm text-gray-400">
                       Showing {filteredAllVideos.length} of {allVideos.length} videos
@@ -1252,6 +1368,7 @@ const MoveManagement: React.FC = () => {
                       onClick={() => {
                         setAllVideoSearchTerm('');
                         setShowOrphanedOnly(false);
+                        setShowMissingGifOnly(false);
                       }}
                       className="text-sm text-[#d7ff00] hover:text-[#b8d400] transition-colors"
                     >
@@ -1266,13 +1383,19 @@ const MoveManagement: React.FC = () => {
           {/* Tab Navigation */}
           <div className="mb-6 border-b border-gray-700 flex space-x-1">
             <button 
-              onClick={() => setActiveSubTab('allMoves')}
+              onClick={() => {
+                setActiveSubTab('allMoves');
+                setShowMissingGifOnly(false);
+              }}
               className={`py-2 px-4 text-sm font-medium transition-colors rounded-t-md flex items-center gap-2 ${activeSubTab === 'allMoves' ? 'bg-[#262a30] text-[#d7ff00] border-x border-t border-gray-700' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-700/30'}`}
             >
               <Dumbbell className="h-4 w-4" /> All Exercises
             </button>
             <button 
-              onClick={() => setActiveSubTab('reportedContent')}
+              onClick={() => {
+                setActiveSubTab('reportedContent');
+                setShowMissingGifOnly(false);
+              }}
               className={`py-2 px-4 text-sm font-medium transition-colors rounded-t-md flex items-center gap-2 ${activeSubTab === 'reportedContent' ? 'bg-[#262a30] text-[#d7ff00] border-x border-t border-gray-700' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-700/30'}`}
             >
               <AlertCircle className="h-4 w-4" /> Reported Content
@@ -1283,7 +1406,10 @@ const MoveManagement: React.FC = () => {
               )}
             </button>
             <button 
-              onClick={() => setActiveSubTab('videoAudit')}
+              onClick={() => {
+                setActiveSubTab('videoAudit');
+                setShowMissingGifOnly(false);
+              }}
               className={`py-2 px-4 text-sm font-medium transition-colors rounded-t-md flex items-center gap-2 ${activeSubTab === 'videoAudit' ? 'bg-[#262a30] text-[#d7ff00] border-x border-t border-gray-700' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-700/30'}`}
             >
               <Video className="h-4 w-4" /> Video Audit
@@ -1292,6 +1418,15 @@ const MoveManagement: React.FC = () => {
                   {orphanedVideos.length}
                 </span>
               )}
+            </button>
+            <button 
+              onClick={() => {
+                setActiveSubTab('missingGifs');
+                setShowMissingGifOnly(true);
+              }}
+              className={`py-2 px-4 text-sm font-medium transition-colors rounded-t-md flex items-center gap-2 ${activeSubTab === 'missingGifs' ? 'bg-[#262a30] text-[#d7ff00] border-x border-t border-gray-700' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-700/30'}`}
+            >
+              <ImageIcon className="h-4 w-4" /> Missing GIFs
             </button>
           </div>
 
@@ -1473,7 +1608,7 @@ const MoveManagement: React.FC = () => {
             )
           )}
 
-          {activeSubTab === 'videoAudit' && (
+          {(activeSubTab === 'videoAudit' || activeSubTab === 'missingGifs') && (
             loadingAllVideos ? (
               <div className="flex justify-center items-center py-20"><Loader2 className="h-10 w-10 text-[#d7ff00] animate-spin" /></div>
             ) : filteredAllVideos.length === 0 && allVideos.length === 0 && !error ? (
@@ -1561,11 +1696,28 @@ const MoveManagement: React.FC = () => {
                           <td className="py-4 px-5 text-sm text-gray-400">{video.createdAt ? formatDate(video.createdAt) : 'N/A'}</td>
                           <td className="py-4 px-5 text-center">
                             {video.videoURL ? (
-                              <a href={video.videoURL} target="_blank" rel="noopener noreferrer"
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (video.exerciseId) {
+                                    const exercise = exercises.find(ex => ex.id === video.exerciseId);
+                                    
+                                    if (exercise) {
+                                      setSelectedExercise(exercise);
+                                      fetchExerciseVideos(exercise.id);
+                                    } else {
+                                      // Fallback: open raw video in new tab if we can't resolve the exercise
+                                      window.open(video.videoURL, '_blank', 'noopener,noreferrer');
+                                    }
+                                  } else {
+                                    // No exerciseId, open raw video
+                                    window.open(video.videoURL, '_blank', 'noopener,noreferrer');
+                                  }
+                                }}
                                 className="px-2.5 py-1.5 rounded-md text-xs font-medium border bg-blue-900/40 text-blue-300 border-blue-800 hover:bg-blue-800/60 transition-colors flex items-center mx-auto gap-1.5"
                               >
                                 <PlayCircle className="h-3.5 w-3.5" /> View
-                              </a>
+                              </button>
                             ) : (
                               <span className="text-xs text-gray-500">No URL</span>
                             )}

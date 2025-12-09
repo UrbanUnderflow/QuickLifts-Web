@@ -20,6 +20,7 @@ const {
   processThumbnailQueue,
   generateGifForExerciseVideo,
   generateGifForExerciseVideoHttp,
+  normalizeExerciseVideoToMp4,
 } = require("./thumbnailGenerator");
 // Import the Move of the Day function
 const { selectMoveOfTheDay } = require("./moveOfTheDay");
@@ -49,6 +50,7 @@ exports.generateMissingThumbnails = generateMissingThumbnails;
 exports.processThumbnailQueue = processThumbnailQueue; 
 exports.generateGifForExerciseVideo = generateGifForExerciseVideo;
 exports.generateGifForExerciseVideoHttp = generateGifForExerciseVideoHttp;
+exports.normalizeExerciseVideoToMp4 = normalizeExerciseVideoToMp4;
 
 // Export the Move of the Day function - THIS IS NOW DEPRECATED
 // exports.selectMoveOfTheDay = selectMoveOfTheDay;

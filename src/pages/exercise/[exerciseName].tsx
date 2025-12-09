@@ -190,12 +190,16 @@ export default function ExerciseView({ initialExerciseData, error: serverError }
     }
 
     return (
-      <div ref={containerRef} className="relative w-full h-full" onClick={handlePlayPause}>
+      <div
+        ref={containerRef}
+        className="relative flex h-full w-full items-center justify-center"
+        onClick={handlePlayPause}
+      >
         <video
           ref={videoRef}
           src={videoURL}
           poster={thumbnail || undefined}
-          className="w-full h-full object-contain"
+          className="w-full max-w-3xl max-h-[calc(100vh-160px)] object-contain"
           loop
           muted={isMuted}
           playsInline
@@ -208,8 +212,8 @@ export default function ExerciseView({ initialExerciseData, error: serverError }
         />
         
         {caption && (
-          <div className="absolute bottom-16 left-0 right-0 p-4 text-center">
-            <div className="inline-block max-w-md bg-black/70 text-white p-3 rounded-lg text-sm">
+          <div className="pointer-events-none absolute bottom-6 left-0 right-0 flex justify-center px-4">
+            <div className="inline-block max-w-xl rounded-2xl bg-black/75 px-4 py-3 text-sm text-white shadow-lg shadow-black/60">
               {caption}
             </div>
           </div>
@@ -341,7 +345,7 @@ export default function ExerciseView({ initialExerciseData, error: serverError }
               key={selectedVideo.id} // Force remount when video changes
               videoURL={selectedVideo.videoURL} 
               thumbnail={selectedVideo.thumbnail} 
-              caption={selectedVideo.caption}
+              caption={selectedVideo.caption || exercise.description}
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-white">

@@ -28,6 +28,9 @@ async function getExerciseByName(name) {
   }
 
   try {
+    // Preserve the original slug from the URL (kebab-case, possibly with %2D)
+    const originalSlug = name;
+    
     // First decode any URL-encoded hyphens (%2D) back to actual hyphens
     const decodedName = name.replace(/%2D/g, '-');
     
@@ -77,14 +80,40 @@ async function getExerciseByName(name) {
       const snapshot = await exercisesRef.where('name', '==', formattedName).get();
 
       if (snapshot.empty) {
-        // Try case-insensitive search
-        console.log('Exact match not found, trying case-insensitive search');
+        // Try case-insensitive search and also slug-based matching (new + legacy)
+        console.log('Exact match not found, trying case-insensitive and slug-based search');
         const allExercisesSnapshot = await exercisesRef.limit(200).get();
         
         let matchDoc = null;
+        const candidateSlug = originalSlug.toLowerCase();
+
         allExercisesSnapshot.forEach(doc => {
-          const exerciseName = doc.data().name;
-          if (exerciseName && exerciseName.toLowerCase() === formattedName.toLowerCase()) {
+          if (matchDoc) return;
+
+          const data = doc.data();
+          const exerciseName = data.name;
+          if (!exerciseName) return;
+
+          const normalizedName = exerciseName.toLowerCase();
+
+          // 1) Case-insensitive name match
+          if (normalizedName === formattedName.toLowerCase()) {
+            matchDoc = doc;
+            return;
+          }
+
+          // 2) New slug algorithm (encodes existing hyphens as %2D, then kebab-case)
+          const newSlug = exerciseName
+            .replace(/-/g, '%2D')
+            .toLowerCase()
+            .replace(/\s+/g, '-');
+
+          // 3) Legacy slug algorithm (just kebab-case, leaves hyphens alone)
+          const legacySlug = exerciseName
+            .toLowerCase()
+            .replace(/\s+/g, '-');
+
+          if (candidateSlug === newSlug || candidateSlug === legacySlug) {
             matchDoc = doc;
           }
         });
