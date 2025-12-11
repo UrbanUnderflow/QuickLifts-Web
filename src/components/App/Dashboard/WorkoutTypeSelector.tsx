@@ -225,7 +225,7 @@ const WorkoutTypeSelector: React.FC<WorkoutTypeSelectorProps> = ({
                             allExercises.find(ex => ex.name.toLowerCase().trim() === key);
 
                           if (match) {
-                            exerciseDetails.push({
+                            exerciseDetails.push(new ExerciseDetail({
                               exercise: match,
                               exerciseName: match.name,
                               category: match.category,
@@ -233,8 +233,8 @@ const WorkoutTypeSelector: React.FC<WorkoutTypeSelectorProps> = ({
                               isSplit: false,
                               isMissing: false,
                               groupId: groupIndex,
-                              exerciseLogId: null,
-                            });
+                              exerciseLogId: undefined,
+                            }));
                           }
                         });
                       });
@@ -243,7 +243,7 @@ const WorkoutTypeSelector: React.FC<WorkoutTypeSelectorProps> = ({
                     // Fallback: if AI output couldn't be mapped, just use filtered exercises
                     if (!exerciseDetails.length) {
                       console.warn('AI response could not be mapped to exercises; falling back to filtered list');
-                      exerciseDetails = filtered.slice(0, 6).map((ex, index) => ({
+                      exerciseDetails = filtered.slice(0, 6).map((ex, index) => new ExerciseDetail({
                         exercise: ex,
                         exerciseName: ex.name,
                         category: ex.category,
@@ -251,7 +251,7 @@ const WorkoutTypeSelector: React.FC<WorkoutTypeSelectorProps> = ({
                         isSplit: false,
                         isMissing: false,
                         groupId: Math.floor(index / 2),
-                        exerciseLogId: null,
+                        exerciseLogId: undefined,
                       }));
                     }
 

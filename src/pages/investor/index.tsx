@@ -3174,6 +3174,36 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                                     <p className="text-zinc-500 text-sm">Payment processor data</p>
                                 </div>
                             </a>
+                            
+                            {/* Profit & Loss */}
+                            <a
+                                href="/investor-docs/profit-loss-statement.pdf"
+                                download
+                                className="flex items-center gap-4 p-4 bg-zinc-800/70 rounded-lg hover:bg-zinc-800 transition-colors group"
+                            >
+                                <div className="w-12 h-12 rounded-lg bg-emerald-500/10 flex items-center justify-center group-hover:bg-emerald-500/20 transition-colors">
+                                    <Download className="w-6 h-6 text-emerald-400" />
+                                </div>
+                                <div>
+                                    <p className="text-white font-medium">Profit & Loss Statement</p>
+                                    <p className="text-zinc-500 text-sm">Income statement</p>
+                                </div>
+                            </a>
+                            
+                            {/* Balance Sheet */}
+                            <a
+                                href="/investor-docs/balance-sheet.pdf"
+                                download
+                                className="flex items-center gap-4 p-4 bg-zinc-800/70 rounded-lg hover:bg-zinc-800 transition-colors group"
+                            >
+                                <div className="w-12 h-12 rounded-lg bg-amber-500/10 flex items-center justify-center group-hover:bg-amber-500/20 transition-colors">
+                                    <Download className="w-6 h-6 text-amber-400" />
+                                </div>
+                                <div>
+                                    <p className="text-white font-medium">Balance Sheet</p>
+                                    <p className="text-zinc-500 text-sm">Assets & liabilities</p>
+                                </div>
+                            </a>
                         </div>
                         
                         <p className="text-zinc-500 text-xs mt-4">
