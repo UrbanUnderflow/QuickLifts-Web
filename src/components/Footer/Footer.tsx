@@ -99,7 +99,7 @@ const Footer = () => {
         
         {/* Copyright */}
         <div className="border-t border-zinc-800 pt-8 text-center">
-          <p className="text-zinc-500 text-sm">© {new Date().getFullYear()} Pulse Fitness. All rights reserved.</p>
+          <p className="text-zinc-500 text-sm">© {new Date().getFullYear()} Pulse Intelligence Labs, Inc. All rights reserved.</p>
         </div>
       </div>
       

@@ -678,6 +678,33 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
   if (!hasAccess) {
     return (
       <div className="min-h-screen bg-zinc-950 flex items-center justify-center px-4">
+        <Head>
+          <title>Investor Dataroom | Pulse Intelligence Labs</title>
+          <meta name="description" content="Access confidential investor materials for Pulse Intelligence Labs - the creator-powered fitness platform." />
+          
+          {/* Open Graph */}
+          <meta property="og:title" content="Investor Dataroom | Pulse Intelligence Labs" />
+          <meta property="og:description" content="Access confidential investor materials for Pulse - the creator-powered fitness platform turning short workout videos into multiplayer training experiences." />
+          <meta property="og:image" content="https://fitwithpulse.ai/InvestPreviewImg.png" />
+          <meta property="og:image:secure_url" content="https://fitwithpulse.ai/InvestPreviewImg.png" />
+          <meta property="og:image:type" content="image/png" />
+          <meta property="og:image:width" content="1200" />
+          <meta property="og:image:height" content="630" />
+          <meta property="og:image:alt" content="Pulse Intelligence Labs - Investor Dataroom" />
+          <meta property="og:url" content="https://fitwithpulse.ai/investor" />
+          <meta property="og:type" content="website" />
+          <meta property="og:site_name" content="Pulse Intelligence Labs" />
+          
+          {/* Twitter Card */}
+          <meta name="twitter:card" content="summary_large_image" />
+          <meta name="twitter:title" content="Investor Dataroom | Pulse Intelligence Labs" />
+          <meta name="twitter:description" content="Access confidential investor materials for Pulse - the creator-powered fitness platform." />
+          <meta name="twitter:image" content="https://fitwithpulse.ai/InvestPreviewImg.png" />
+          <meta name="twitter:image:alt" content="Pulse Intelligence Labs - Investor Dataroom" />
+          
+          {/* Additional */}
+          <link rel="canonical" href="https://fitwithpulse.ai/investor" />
+        </Head>
         <PageHead 
           metaData={metaData} 
           pageOgUrl="https://fitwithpulse.ai/investor" 
@@ -756,6 +783,33 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
 
   return (
     <div className="min-h-screen bg-zinc-950">
+      <Head>
+        <title>Investor Dataroom | Pulse Intelligence Labs</title>
+        <meta name="description" content="Access confidential investor materials for Pulse Intelligence Labs - the creator-powered fitness platform." />
+        
+        {/* Open Graph */}
+        <meta property="og:title" content="Investor Dataroom | Pulse Intelligence Labs" />
+        <meta property="og:description" content="Access confidential investor materials for Pulse - the creator-powered fitness platform turning short workout videos into multiplayer training experiences." />
+        <meta property="og:image" content="https://fitwithpulse.ai/InvestPreviewImg.png" />
+        <meta property="og:image:secure_url" content="https://fitwithpulse.ai/InvestPreviewImg.png" />
+        <meta property="og:image:type" content="image/png" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        <meta property="og:image:alt" content="Pulse Intelligence Labs - Investor Dataroom" />
+        <meta property="og:url" content="https://fitwithpulse.ai/investor" />
+        <meta property="og:type" content="website" />
+        <meta property="og:site_name" content="Pulse Intelligence Labs" />
+        
+        {/* Twitter Card */}
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="Investor Dataroom | Pulse Intelligence Labs" />
+        <meta name="twitter:description" content="Access confidential investor materials for Pulse - the creator-powered fitness platform." />
+        <meta name="twitter:image" content="https://fitwithpulse.ai/InvestPreviewImg.png" />
+        <meta name="twitter:image:alt" content="Pulse Intelligence Labs - Investor Dataroom" />
+        
+        {/* Additional */}
+        <link rel="canonical" href="https://fitwithpulse.ai/investor" />
+      </Head>
       <PageHead 
         metaData={metaData} 
         pageOgUrl="https://fitwithpulse.ai/investor" 
@@ -981,90 +1035,166 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                 ref={(el) => { sectionsRef.current.overview = el; }}
                 className="mb-20"
               >
-                <div className="flex items-center justify-between mb-6">
+                {/* Header with gradient accent */}
+                <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
                   <div className="flex items-center">
-                    <div className="w-10 h-10 rounded-full bg-[#E0FE10] flex items-center justify-center mr-4">
-                      <span className="font-bold text-black">1</span>
+                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#E0FE10] to-[#a8c40a] flex items-center justify-center mr-4 shadow-lg shadow-[#E0FE10]/20">
+                      <span className="font-bold text-black text-lg">1</span>
                     </div>
-                    <h2 className="text-white text-3xl font-bold">Company Overview</h2>
+                    <div>
+                      <h2 className="text-white text-3xl font-bold">Company Overview</h2>
+                      <p className="text-zinc-500 text-sm">The future of fitness is social</p>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-3">
                     <a
                       href="/PulseIntelligenceLabsCertificateofIncorporation.pdf"
                       download
-                      className="inline-flex items-center gap-2 px-3 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg text-xs text-zinc-200 transition-colors"
+                      className="inline-flex items-center gap-2 px-4 py-2.5 bg-zinc-800/80 hover:bg-zinc-700 border border-zinc-700 hover:border-zinc-600 rounded-xl text-xs text-zinc-200 transition-all duration-300 backdrop-blur-sm"
                     >
-                      <Download className="w-3 h-3" />
+                      <Download className="w-3.5 h-3.5" />
                       Certificate of Incorporation
                     </a>
                     <a
-                      href="/investor-docs/Founder-IP-Assignment-Agreement.html"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 px-3 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg text-xs text-zinc-200 transition-colors"
+                      href="/Founder Intellectual Property Assignment Agreement - Pulse Intelligence Labs.pdf"
+                      download="Founder-IP-Assignment-Agreement.pdf"
+                      className="inline-flex items-center gap-2 px-4 py-2.5 bg-zinc-800/80 hover:bg-zinc-700 border border-zinc-700 hover:border-zinc-600 rounded-xl text-xs text-zinc-200 transition-all duration-300 backdrop-blur-sm"
                     >
-                      <Download className="w-3 h-3" />
+                      <Download className="w-3.5 h-3.5" />
                       IP Assignment Agreement
                     </a>
                   </div>
                 </div>
                 
-                <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8 mb-10">
-                  <p className="text-zinc-200 text-xl leading-relaxed mb-2 font-medium">
-                    Pulse is the <span className="text-[#E0FE10]">creator-powered fitness platform</span> that turns short workout videos into multiplayer, playlist-style training experiences.
-                  </p>
-                  <p className="text-zinc-400 text-sm mb-6">
-                    Creators upload Moves, Pulse assembles them into Sequences, and users train together in real time with leaderboards, scoring, and social motivation.
-                  </p>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                    <div className="bg-zinc-800/50 rounded-lg p-4">
-                      <p className="text-[#E0FE10] font-semibold mb-2">For Creators</p>
-                      <p className="text-zinc-400 text-sm">Upload Moves, earn every time they&apos;re used. Pulse handles distribution and payouts.</p>
-                    </div>
-                    <div className="bg-zinc-800/50 rounded-lg p-4">
-                      <p className="text-[#E0FE10] font-semibold mb-2">For Users</p>
-                      <p className="text-zinc-400 text-sm">Personalized workouts, group challenges, leaderboards. Fitness that feels social.</p>
-                    </div>
-                  </div>
-
-                  <div className="bg-zinc-800/30 rounded-lg p-4 border-l-2 border-[#E0FE10]">
-                    <p className="text-zinc-300 text-sm">
-                      <span className="text-white font-medium">The Model:</span> Creators upload Moves → Pulse transforms them into Stacks (structured workouts) and Rounds (group challenges) → Users train socially → Creators earn through setting custom pricing, and content usage.
-                    </p>
-                  </div>
-                  
-                  {/* Mission, Vision, Values Cards */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
-                    <div className="bg-zinc-800/70 rounded-lg p-5">
-                      <h4 className="text-[#E0FE10] font-medium mb-3">Mission</h4>
-                      <p className="text-zinc-400 text-sm">Make fitness feel social, accessible, and community-driven — powered by real creators and real human connection.</p>
-                    </div>
+                {/* Main content card with animated background */}
+                <div className="relative rounded-2xl overflow-hidden mb-10">
+                  {/* Animated gradient background */}
+                  <div className="absolute inset-0 bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-800">
                     <div 
-                      className="bg-gradient-to-br from-zinc-800/70 to-zinc-700/70 rounded-lg p-5 cursor-pointer hover:from-zinc-700/70 hover:to-zinc-600/70 transition-all duration-300 border border-zinc-700/50 hover:border-[#E0FE10]/30 group"
-                      onClick={() => switchSection('vision')}
-                    >
-                      <div className="flex items-center justify-between mb-3">
-                        <h4 className="text-[#E0FE10] font-medium group-hover:text-[#d8f521] transition-colors">Vision</h4>
-                        <div className="w-6 h-6 rounded-full bg-[#E0FE10]/20 flex items-center justify-center group-hover:bg-[#E0FE10]/30 transition-colors">
-                          <span className="text-[#E0FE10] text-xs">→</span>
-                        </div>
-                      </div>
-                      <p className="text-zinc-400 text-sm group-hover:text-zinc-300 transition-colors">
-                        Build the first operating system for human health — wellness that&apos;s continuous, adaptive, and embedded into daily life.
-                      </p>
-                      <p className="text-zinc-500 text-xs mt-2 group-hover:text-zinc-400 transition-colors">
-                        Click to explore our vision →
+                      className="absolute w-[400px] h-[400px] rounded-full opacity-10"
+                      style={{
+                        background: 'radial-gradient(circle, #E0FE10 0%, transparent 70%)',
+                        top: '-20%',
+                        right: '-10%',
+                        filter: 'blur(60px)',
+                      }}
+                    />
+                    <div 
+                      className="absolute w-[300px] h-[300px] rounded-full opacity-10"
+                      style={{
+                        background: 'radial-gradient(circle, #8B5CF6 0%, transparent 70%)',
+                        bottom: '-15%',
+                        left: '-5%',
+                        filter: 'blur(60px)',
+                      }}
+                    />
+                  </div>
+                  
+                  <div className="relative border border-zinc-800/50 rounded-2xl p-8 md:p-10 backdrop-blur-sm">
+                    {/* Hero statement */}
+                    <div className="max-w-3xl mb-10">
+                      <h3 className="text-white text-2xl md:text-3xl font-bold leading-tight mb-4">
+                        Pulse is the <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#E0FE10] to-[#a8c40a]">creator-powered fitness platform</span> that turns short workout videos into multiplayer, playlist-style training experiences.
+                      </h3>
+                      <p className="text-zinc-400 text-base leading-relaxed">
+                        Creators upload Moves, Pulse assembles them into Stacks, and users train together in real time with leaderboards, scoring, and social motivation.
                       </p>
                     </div>
-                    <div className="bg-zinc-800/70 rounded-lg p-5">
-                      <h4 className="text-[#E0FE10] font-medium mb-3">Values</h4>
-                      <ul className="text-zinc-400 text-sm space-y-1">
-                        <li>• Community-first</li>
-                        <li>• Authentic, creator-powered fitness</li>
-                        <li>• Inclusivity and accessibility</li>
-                        <li>• Tech that enhances human connection</li>
-                      </ul>
+                    
+                    {/* For Creators / For Users cards */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-8">
+                      <div className="group relative bg-gradient-to-br from-zinc-800/80 to-zinc-800/40 rounded-xl p-6 border border-zinc-700/50 hover:border-[#E0FE10]/30 transition-all duration-300">
+                        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-[#E0FE10] to-transparent rounded-t-xl opacity-60"></div>
+                        <div className="flex items-center gap-3 mb-3">
+                          <div className="w-10 h-10 rounded-xl bg-[#E0FE10]/10 flex items-center justify-center">
+                            <span className="text-[#E0FE10] text-lg">🎬</span>
+                          </div>
+                          <h4 className="text-[#E0FE10] font-semibold text-lg">For Creators</h4>
+                        </div>
+                        <p className="text-zinc-300 text-sm leading-relaxed">Upload Moves, earn every time they&apos;re used. Pulse handles distribution and payouts.</p>
+                      </div>
+                      <div className="group relative bg-gradient-to-br from-zinc-800/80 to-zinc-800/40 rounded-xl p-6 border border-zinc-700/50 hover:border-[#E0FE10]/30 transition-all duration-300">
+                        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-[#E0FE10] to-transparent rounded-t-xl opacity-60"></div>
+                        <div className="flex items-center gap-3 mb-3">
+                          <div className="w-10 h-10 rounded-xl bg-[#E0FE10]/10 flex items-center justify-center">
+                            <span className="text-[#E0FE10] text-lg">💪</span>
+                          </div>
+                          <h4 className="text-[#E0FE10] font-semibold text-lg">For Users</h4>
+                        </div>
+                        <p className="text-zinc-300 text-sm leading-relaxed">Personalized workouts, group challenges, leaderboards. Fitness that feels social.</p>
+                      </div>
+                    </div>
+
+                    {/* The Model - highlighted callout */}
+                    <div className="relative bg-gradient-to-r from-[#E0FE10]/10 via-[#E0FE10]/5 to-transparent rounded-xl p-5 border border-[#E0FE10]/20 mb-10">
+                      <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-[#E0FE10] to-[#E0FE10]/30 rounded-l-xl"></div>
+                      <p className="text-zinc-200 text-sm leading-relaxed pl-2">
+                        <span className="text-[#E0FE10] font-semibold">The Model:</span> Creators upload Moves → Pulse transforms them into <span className="text-white font-medium">Stacks</span> (structured workouts) and <span className="text-white font-medium">Rounds</span> (group challenges) → Users train socially → Creators earn through custom pricing and content usage.
+                      </p>
+                    </div>
+                    
+                    {/* Mission, Vision, Values Cards */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                      {/* Mission Card */}
+                      <div className="group bg-zinc-800/50 rounded-xl p-6 border border-zinc-700/50 hover:border-zinc-600/50 transition-all duration-300 hover:transform hover:scale-[1.02]">
+                        <div className="flex items-center gap-3 mb-4">
+                          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500/20 to-blue-600/10 flex items-center justify-center">
+                            <span className="text-blue-400 text-lg">🎯</span>
+                          </div>
+                          <h4 className="text-white font-semibold text-lg">Mission</h4>
+                        </div>
+                        <p className="text-zinc-400 text-sm leading-relaxed">Make fitness feel social, accessible, and community-driven — powered by real creators and real human connection.</p>
+                      </div>
+                      
+                      {/* Vision Card - clickable */}
+                      <div 
+                        className="group relative bg-gradient-to-br from-[#E0FE10]/10 to-zinc-800/50 rounded-xl p-6 cursor-pointer border border-[#E0FE10]/20 hover:border-[#E0FE10]/40 transition-all duration-300 hover:transform hover:scale-[1.02] hover:shadow-lg hover:shadow-[#E0FE10]/10"
+                        onClick={() => switchSection('vision')}
+                      >
+                        <div className="absolute top-4 right-4 w-8 h-8 rounded-full bg-[#E0FE10]/20 flex items-center justify-center group-hover:bg-[#E0FE10]/30 transition-all duration-300 group-hover:scale-110">
+                          <span className="text-[#E0FE10] text-sm">→</span>
+                        </div>
+                        <div className="flex items-center gap-3 mb-4">
+                          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#E0FE10]/20 to-[#E0FE10]/10 flex items-center justify-center">
+                            <span className="text-[#E0FE10] text-lg">🚀</span>
+                          </div>
+                          <h4 className="text-[#E0FE10] font-semibold text-lg">Vision</h4>
+                        </div>
+                        <p className="text-zinc-300 text-sm leading-relaxed mb-3">
+                          Build the first operating system for human health — wellness that&apos;s continuous, adaptive, and embedded into daily life.
+                        </p>
+                        <p className="text-[#E0FE10]/70 text-xs font-medium group-hover:text-[#E0FE10] transition-colors">
+                          Explore our vision →
+                        </p>
+                      </div>
+                      
+                      {/* Values Card */}
+                      <div className="group bg-zinc-800/50 rounded-xl p-6 border border-zinc-700/50 hover:border-zinc-600/50 transition-all duration-300 hover:transform hover:scale-[1.02]">
+                        <div className="flex items-center gap-3 mb-4">
+                          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500/20 to-purple-600/10 flex items-center justify-center">
+                            <span className="text-purple-400 text-lg">💎</span>
+                          </div>
+                          <h4 className="text-white font-semibold text-lg">Values</h4>
+                        </div>
+                        <ul className="text-zinc-400 text-sm space-y-2">
+                          <li className="flex items-center gap-2">
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#E0FE10]"></span>
+                            Community-first
+                          </li>
+                          <li className="flex items-center gap-2">
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#E0FE10]"></span>
+                            Authentic, creator-powered fitness
+                          </li>
+                          <li className="flex items-center gap-2">
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#E0FE10]"></span>
+                            Inclusivity and accessibility
+                          </li>
+                          <li className="flex items-center gap-2">
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#E0FE10]"></span>
+                            Tech that enhances connection
+                          </li>
+                        </ul>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -4376,9 +4506,8 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                             </div>
                           </a>
                           <a 
-                            href="/investor-docs/Founder-IP-Assignment-Agreement.html" 
-                            target="_blank"
-                            rel="noopener noreferrer"
+                            href="/Founder Intellectual Property Assignment Agreement - Pulse Intelligence Labs.pdf" 
+                            download="Founder-IP-Assignment-Agreement.pdf"
                             className="flex items-center gap-4 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-purple-500/30 rounded-xl transition-all group"
                           >
                             <div className="w-12 h-12 rounded-lg bg-purple-500/10 flex items-center justify-center flex-shrink-0">
@@ -4386,7 +4515,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                             </div>
                             <div className="flex-1">
                               <div className="text-white font-medium group-hover:text-purple-400 transition-colors">IP Assignment Agreement</div>
-                              <div className="text-zinc-500 text-sm">HTML • Founder IP Assignment</div>
+                              <div className="text-zinc-500 text-sm">PDF • Signed Founder IP Assignment</div>
                             </div>
                           </a>
                         </div>
