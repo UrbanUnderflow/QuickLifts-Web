@@ -3,7 +3,7 @@ import Head from 'next/head';
 import { useRouter } from 'next/router';
 import dynamic from 'next/dynamic';
 import { GetServerSideProps } from 'next';
-import { ArrowUpRight, Download, ChevronRight, ArrowLeft, TrendingUp } from 'lucide-react';
+import { ArrowUpRight, Download, ChevronRight, ArrowLeft, TrendingUp, Lock, Loader2, Mail, AlertCircle } from 'lucide-react';
 
 import Footer from '../../components/Footer/Footer';
 import PageHead from '../../components/PageHead';
@@ -59,6 +59,35 @@ type SectionRefs = {
   [key: string]: HTMLElement | null;
 };
 
+// Section access interface
+interface SectionAccess {
+  overview: boolean;
+  product: boolean;
+  traction: boolean;
+  ip: boolean;
+  vision: boolean;
+  market: boolean;
+  techstack: boolean;
+  team: boolean;
+  financials: boolean;
+  deck: boolean;
+  investment: boolean;
+}
+
+const DEFAULT_SECTION_ACCESS: SectionAccess = {
+  overview: true,
+  product: true,
+  traction: true,
+  ip: true,
+  vision: true,
+  market: true,
+  techstack: true,
+  team: true,
+  financials: true,
+  deck: true,
+  investment: true,
+};
+
 // Type for financial data
 interface FinancialMetrics {
   revenue?: string;
@@ -89,13 +118,149 @@ interface InvestorDataroomPageProps {
   metaData?: SerializablePageMetaDataForInvestor | null;
 }
 
+// Valid section IDs for URL navigation
+const VALID_SECTIONS = ['overview', 'product', 'traction', 'ip', 'vision', 'market', 'techstack', 'team', 'financials', 'deck', 'investment'] as const;
+
 const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => {
+  const router = useRouter();
+  
+  // Access control state
+  const [hasAccess, setHasAccess] = useState<boolean | null>(null);
+  const [accessEmail, setAccessEmail] = useState('');
+  const [isCheckingAccess, setIsCheckingAccess] = useState(false);
+  const [accessError, setAccessError] = useState<string | null>(null);
+  const [isInitializing, setIsInitializing] = useState(true);
+  const [sectionAccess, setSectionAccess] = useState<SectionAccess>(DEFAULT_SECTION_ACCESS);
+  const [pendingSection, setPendingSection] = useState<string | null>(null);
+
   const [activeSection, setActiveSection] = useState<string>('overview');
   const [financialMetrics, setFinancialMetrics] = useState<FinancialMetrics | null>(null);
   const [kEffectiveMetrics, setKEffectiveMetrics] = useState<KEffectiveMetrics | null>(null);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [isLoadingKMetrics, setIsLoadingKMetrics] = useState(true);
   const [activeRetentionTab, setActiveRetentionTab] = useState<string>('retention');
+  const [activeRevenueYear, setActiveRevenueYear] = useState<'2025' | '2024'>('2025');
+
+  // Handle URL query parameter for section navigation
+  useEffect(() => {
+    const sectionParam = router.query.section as string;
+    if (sectionParam && VALID_SECTIONS.includes(sectionParam as any)) {
+      // Store pending section to apply after access is verified
+      setPendingSection(sectionParam);
+    }
+  }, [router.query.section]);
+
+  // Apply pending section after access is verified
+  useEffect(() => {
+    if (hasAccess && pendingSection) {
+      setActiveSection(pendingSection);
+      setPendingSection(null);
+    }
+  }, [hasAccess, pendingSection]);
+
+  // Check for stored access on mount
+  useEffect(() => {
+    const storedEmail = localStorage.getItem('investorAccessEmail');
+    const storedSectionAccess = localStorage.getItem('investorSectionAccess');
+    
+    if (storedEmail) {
+      // Try to use cached section access first for faster load
+      if (storedSectionAccess) {
+        try {
+          setSectionAccess(JSON.parse(storedSectionAccess));
+        } catch (e) {
+          // Ignore parse errors
+        }
+      }
+      verifyAccess(storedEmail, true);
+    } else {
+      setIsInitializing(false);
+    }
+  }, []);
+
+  const verifyAccess = async (email: string, isAutoCheck: boolean = false) => {
+    if (!email.trim()) {
+      setAccessError('Please enter your email address');
+      return;
+    }
+
+    setIsCheckingAccess(true);
+    setAccessError(null);
+
+    try {
+      const accessRef = collection(db, 'investorAccess');
+      const q = query(accessRef, where('email', '==', email.toLowerCase().trim()));
+      const snapshot = await getDocs(q);
+
+      if (!snapshot.empty) {
+        const accessDoc = snapshot.docs[0].data();
+        if (accessDoc.isApproved) {
+          setHasAccess(true);
+          // Store section access from Firestore, falling back to defaults
+          const storedSectionAccess = accessDoc.sectionAccess || DEFAULT_SECTION_ACCESS;
+          setSectionAccess(storedSectionAccess);
+          localStorage.setItem('investorAccessEmail', email.toLowerCase().trim());
+          localStorage.setItem('investorSectionAccess', JSON.stringify(storedSectionAccess));
+        } else {
+          setHasAccess(false);
+          setAccessError('Your access has been revoked. Please contact invest@fitwithpulse.ai');
+          localStorage.removeItem('investorAccessEmail');
+          localStorage.removeItem('investorSectionAccess');
+        }
+      } else {
+        setHasAccess(false);
+        if (!isAutoCheck) {
+          setAccessError('This email does not have access to the investor dataroom. Please contact invest@fitwithpulse.ai to request access.');
+        }
+        localStorage.removeItem('investorAccessEmail');
+        localStorage.removeItem('investorSectionAccess');
+      }
+    } catch (error) {
+      console.error('Error verifying access:', error);
+      setAccessError('An error occurred. Please try again.');
+    } finally {
+      setIsCheckingAccess(false);
+      setIsInitializing(false);
+    }
+  };
+
+  const handleAccessSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    verifyAccess(accessEmail);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('investorAccessEmail');
+    localStorage.removeItem('investorSectionAccess');
+    setHasAccess(null);
+    setAccessEmail('');
+    setSectionAccess(DEFAULT_SECTION_ACCESS);
+  };
+
+  // Helper to check if a section is accessible
+  const hasSectionAccess = (sectionId: keyof SectionAccess): boolean => {
+    return sectionAccess[sectionId] ?? true;
+  };
+
+  // Locked section component
+  const LockedSectionView: React.FC<{ sectionName: string }> = ({ sectionName }) => (
+    <div className="flex flex-col items-center justify-center py-20 px-8">
+      <div className="w-20 h-20 rounded-full bg-zinc-800 flex items-center justify-center mb-6">
+        <Lock className="w-10 h-10 text-zinc-600" />
+      </div>
+      <h2 className="text-white text-2xl font-bold mb-2">Section Locked</h2>
+      <p className="text-zinc-400 text-center max-w-md mb-6">
+        You don't have access to the <span className="text-white font-medium">{sectionName}</span> section. 
+        Contact us to request full dataroom access.
+      </p>
+      <a
+        href="mailto:invest@fitwithpulse.ai?subject=Request%20Full%20Dataroom%20Access"
+        className="px-6 py-3 bg-[#E0FE10] text-black font-semibold rounded-lg hover:bg-[#d8f521] transition-colors"
+      >
+        Request Access
+      </a>
+    </div>
+  );
   
   // Refs for sections
   const sectionsRef = useRef<SectionRefs>({
@@ -114,42 +279,14 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
 
 
 
-  // Function to scroll to section
-  const scrollToSection = (sectionId: string) => {
+  // Function to switch section (show/hide instead of scroll)
+  const switchSection = (sectionId: string) => {
     setActiveSection(sectionId);
-    const element = sectionsRef.current[sectionId];
-    if (element) {
-      const offset = 100;
-      const elementPosition = element.getBoundingClientRect().top;
-      const offsetPosition = elementPosition + window.pageYOffset - offset;
-      window.scrollTo({
-        top: offsetPosition,
-        behavior: 'smooth'
-      });
-    }
+    // Update URL with section parameter (shallow update, no page reload)
+    router.push(`/investor?section=${sectionId}`, undefined, { shallow: true });
+    // Scroll to top of content area when switching sections
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
-
-  // Track active section on scroll
-  useEffect(() => {
-    const handleScroll = () => {
-      const scrollPosition = window.scrollY + 150;
-      
-      Object.keys(sectionsRef.current).forEach((section) => {
-        const element = sectionsRef.current[section];
-        if (element) {
-          const top = element.offsetTop;
-          const height = element.offsetHeight;
-          
-          if (scrollPosition >= top && scrollPosition <= top + height) {
-            setActiveSection(section);
-          }
-        }
-      });
-    };
-    
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
 
   // Fetch financial data
   useEffect(() => {
@@ -289,6 +426,95 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
     fetchKEffectiveMetrics();
   }, []);
 
+  // Show loading state while initializing
+  if (isInitializing) {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-[#E0FE10] animate-spin" />
+      </div>
+    );
+  }
+
+  // Show access gate if not authenticated
+  if (!hasAccess) {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex items-center justify-center px-4">
+        <PageHead 
+          metaData={metaData} 
+          pageOgUrl="https://fitwithpulse.ai/investor" 
+        />
+        <div className="max-w-md w-full">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8">
+            <div className="flex justify-center mb-6">
+              <div className="w-16 h-16 rounded-full bg-[#E0FE10]/10 flex items-center justify-center">
+                <Lock className="w-8 h-8 text-[#E0FE10]" />
+              </div>
+            </div>
+            
+            <h1 className="text-white text-2xl font-bold text-center mb-2">Investor Dataroom</h1>
+            <p className="text-zinc-400 text-center mb-8">
+              Enter your email to access confidential investor materials.
+            </p>
+            
+            <form onSubmit={handleAccessSubmit} className="space-y-4">
+              <div>
+                <div className="relative">
+                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500" />
+                  <input
+                    type="email"
+                    value={accessEmail}
+                    onChange={(e) => {
+                      setAccessEmail(e.target.value);
+                      setAccessError(null);
+                    }}
+                    placeholder="Enter your email address"
+                    className="w-full pl-12 pr-4 py-3 bg-zinc-800 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-[#E0FE10] focus:border-transparent"
+                    disabled={isCheckingAccess}
+                  />
+                </div>
+              </div>
+              
+              {accessError && (
+                <div className="flex items-start gap-2 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
+                  <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                  <p className="text-red-400 text-sm">{accessError}</p>
+                </div>
+              )}
+              
+              <button
+                type="submit"
+                disabled={isCheckingAccess || !accessEmail.trim()}
+                className="w-full py-3 bg-[#E0FE10] text-black font-semibold rounded-lg hover:bg-[#d8f521] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+              >
+                {isCheckingAccess ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  'Access Dataroom'
+                )}
+              </button>
+            </form>
+            
+            <div className="mt-6 pt-6 border-t border-zinc-800">
+              <p className="text-zinc-500 text-sm text-center">
+                Don't have access?{' '}
+                <a 
+                  href="mailto:invest@fitwithpulse.ai?subject=Investor%20Dataroom%20Access%20Request" 
+                  className="text-[#E0FE10] hover:underline"
+                >
+                  Request access
+                </a>
+              </p>
+            </div>
+          </div>
+          
+          <p className="text-zinc-600 text-xs text-center mt-4">
+            This dataroom contains confidential information intended only for authorized investors.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-zinc-950">
       <PageHead 
@@ -296,7 +522,13 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
         pageOgUrl="https://fitwithpulse.ai/investor" 
       />
 
-
+      {/* Logout button - fixed position */}
+      <button
+        onClick={handleLogout}
+        className="fixed top-4 right-4 z-50 px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-400 text-sm hover:text-white hover:border-zinc-600 transition-colors"
+      >
+        Sign Out
+      </button>
 
       {/* Hero Section */}
       <section className="relative min-h-[60vh] flex flex-col items-center justify-center text-center px-8 py-20 overflow-hidden">
@@ -358,7 +590,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                   ].map((item) => (
                     <button
                       key={item.id}
-                      onClick={() => scrollToSection(item.id)}
+                      onClick={() => switchSection(item.id)}
                       className={`flex items-center w-full text-left px-4 py-3 rounded-lg transition-colors ${
                         activeSection === item.id
                           ? 'bg-[#E0FE10]/10 text-[#E0FE10]'
@@ -386,6 +618,8 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
             {/* Main Content */}
             <div className="lg:w-3/4">
               {/* Company Overview Section */}
+              {activeSection === 'overview' && (
+                hasSectionAccess('overview') ? (
               <section 
                 id="overview" 
                 ref={(el) => { sectionsRef.current.overview = el; }}
@@ -487,8 +721,14 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                   </div>
                 </div>
               </section>
+                ) : (
+                  <LockedSectionView sectionName="Company Overview" />
+                )
+              )}
               
               {/* Product & Technology Section */}
+              {activeSection === 'product' && (
+                hasSectionAccess('product') ? (
               <section 
                 id="product" 
                 ref={(el) => { sectionsRef.current.product = el; }}
@@ -811,8 +1051,15 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                   </div>
                 </div>
               </section>
+                ) : (
+                  <LockedSectionView sectionName="Product & Technology" />
+                )
+              )}
               
               {/* Traction & Metrics Section */}
+              {activeSection === 'traction' && (
+                hasSectionAccess('traction') ? (
+              <>
               <section 
                 id="traction" 
                 ref={(el) => { sectionsRef.current.traction = el; }}
@@ -877,8 +1124,8 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                     <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-zinc-900 to-zinc-800 p-1">
                       <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-[#d7ff00]/10"></div>
                       <div className="relative bg-zinc-900 rounded-lg p-6 text-center">
-                        <p className="text-zinc-400 text-sm font-medium mb-2">Revenue (4 months)</p>
-                        <p className="text-white text-3xl font-bold mb-1">$2.5K</p>
+                        <p className="text-zinc-400 text-sm font-medium mb-2">Revenue (YTD 2025)</p>
+                        <p className="text-white text-3xl font-bold mb-1">$3.1K</p>
                         <p className="text-[#E0FE10] text-sm">Monetization validated</p>
                       </div>
                     </div>
@@ -1383,8 +1630,15 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                   </ul>
                 </div>
               </div>
+              </>
+                ) : (
+                  <LockedSectionView sectionName="Traction & Metrics" />
+                )
+              )}
 
                {/* IP & Defensibility Section */}
+                {activeSection === 'ip' && (
+                  hasSectionAccess('ip') ? (
                 <section
                     id="ip"
                     ref={(el) => { sectionsRef.current.ip = el; }}
@@ -1499,8 +1753,15 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                     </div>
                     </div>
                 </section>
+                  ) : (
+                    <LockedSectionView sectionName="IP & Moats" />
+                  )
+                )}
 
                 {/* Vision & Evolution Section */}
+                {activeSection === 'vision' && (
+                  hasSectionAccess('vision') ? (
+                <>
                 <section 
                     id="vision" 
                     ref={(el) => { sectionsRef.current.vision = el; }}
@@ -1664,8 +1925,15 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                     </div>
                     </div>
                 </section>
+                </>
+                  ) : (
+                    <LockedSectionView sectionName="Vision & Evolution" />
+                  )
+                )}
 
                 {/* Market Opportunity Section */}
+                {activeSection === 'market' && (
+                  hasSectionAccess('market') ? (
                 <section 
                     id="market" 
                     ref={(el) => { sectionsRef.current.market = el; }}
@@ -2014,8 +2282,14 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                     </div>
                     </div>
                 </section>
+                  ) : (
+                    <LockedSectionView sectionName="Market Opportunity" />
+                  )
+                )}
 
                 {/* Technical Stack Section */}
+                {activeSection === 'techstack' && (
+                  hasSectionAccess('techstack') ? (
                 <section 
                     id="techstack" 
                     ref={(el) => { sectionsRef.current.techstack = el; }}
@@ -2229,8 +2503,14 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                         </div>
                     </div>
                 </section>
+                  ) : (
+                    <LockedSectionView sectionName="Tech Stack" />
+                  )
+                )}
 
                 {/* Team Section */}
+                {activeSection === 'team' && (
+                  hasSectionAccess('team') ? (
                 <section 
                     id="team" 
                     ref={(el) => { sectionsRef.current.team = el; }}
@@ -2417,8 +2697,14 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                     </div>
                     </div>
                 </section>
+                  ) : (
+                    <LockedSectionView sectionName="Team" />
+                  )
+                )}
 
                 {/* Financial Information Section */}
+                {activeSection === 'financials' && (
+                  hasSectionAccess('financials') ? (
                 <section 
                     id="financials" 
                     ref={(el) => { sectionsRef.current.financials = el; }}
@@ -2432,241 +2718,391 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                     </div>
                     
                     <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8 mb-10">
-                    <h3 className="text-white text-xl font-semibold mb-6">Business Model</h3>
+                    <h3 className="text-white text-xl font-semibold mb-6">Revenue Streams</h3>
                     
-                    <p className="text-zinc-400 text-lg mb-6">
-                        Pulse operates on a premium subscription model with monthly and annual options, 
-                        driving reliable recurring revenue streams with strong margins and high user commitment.
-                    </p>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
-                        <div className="bg-zinc-800/70 rounded-lg p-5 relative overflow-hidden">
-                        <div className="absolute -right-4 -top-4 bg-[#E0FE10] text-black text-xs font-bold py-1 px-3 rounded-bl-lg">
-                            MOST POPULAR
-                        </div>
-                        <h4 className="text-[#E0FE10] font-medium mb-3">Monthly Premium</h4>
-                        <p className="text-zinc-400 mb-3">Full access to all features, workouts, and community tools.</p>
-                        <p className="text-white font-medium">$4.99/month</p>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        {/* Monthly Subscription */}
+                        <div className="bg-zinc-800/70 rounded-lg p-6 relative overflow-hidden">
+                            <div className="absolute -right-4 -top-4 bg-[#E0FE10] text-black text-xs font-bold py-1 px-3 rounded-bl-lg">
+                                MOST POPULAR
+                            </div>
+                            <h4 className="text-[#E0FE10] font-medium mb-2">Monthly Premium</h4>
+                            <p className="text-white text-2xl font-bold mb-2">$4.99<span className="text-zinc-400 text-sm font-normal">/month</span></p>
+                            <p className="text-zinc-400 text-sm">Full platform access</p>
                         </div>
                         
-                        <div className="bg-zinc-800/70 rounded-lg p-5">
-                        <h4 className="text-[#E0FE10] font-medium mb-3">Annual Premium</h4>
-                        <p className="text-zinc-400 mb-3">Yearly premium subscription with significant discount and best value.</p>
-                        <p className="text-white font-medium">$39.99/year</p>
-                        <p className="text-[#E0FE10] text-sm mt-2">Save 33% vs monthly</p>
+                        {/* Annual Subscription */}
+                        <div className="bg-zinc-800/70 rounded-lg p-6">
+                            <h4 className="text-[#E0FE10] font-medium mb-2">Annual Premium</h4>
+                            <p className="text-white text-2xl font-bold mb-2">$39.99<span className="text-zinc-400 text-sm font-normal">/year</span></p>
+                            <p className="text-zinc-400 text-sm">Save 33% vs monthly</p>
+                        </div>
+                        
+                        {/* Platform Fee */}
+                        <div className="bg-zinc-800/70 rounded-lg p-6 border border-[#E0FE10]/30">
+                            <h4 className="text-[#E0FE10] font-medium mb-2">Platform Fee</h4>
+                            <p className="text-white text-2xl font-bold mb-2">3%<span className="text-zinc-400 text-sm font-normal"> of transaction</span></p>
+                            <p className="text-zinc-400 text-sm">On premium-priced Rounds</p>
+                        </div>
+                    </div>
+                    </div>
+                    
+                    {/* Monthly Revenue Chart */}
+                    <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8 mb-10">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4">
+                        <div>
+                            <h3 className="text-white text-xl font-semibold mb-1">Monthly Revenue</h3>
+                            <p className="text-zinc-400 text-sm">
+                                {activeRevenueYear === '2025' 
+                                    ? 'Actual revenue performance January - November 2025' 
+                                    : 'Stealth mode organic App Store revenue 2024'}
+                            </p>
+                        </div>
+                        
+                        {/* Year Toggle */}
+                        <div className="flex items-center bg-zinc-800 rounded-lg overflow-hidden text-sm mt-4 sm:mt-0">
+                            <button 
+                                onClick={() => setActiveRevenueYear('2025')}
+                                className={`px-4 py-2 font-medium transition-colors ${activeRevenueYear === '2025' ? 'bg-[#E0FE10] text-black' : 'text-zinc-400 hover:text-white'}`}
+                            >
+                                2025
+                            </button>
+                            <button 
+                                onClick={() => setActiveRevenueYear('2024')}
+                                className={`px-4 py-2 font-medium transition-colors ${activeRevenueYear === '2024' ? 'bg-[#E0FE10] text-black' : 'text-zinc-400 hover:text-white'}`}
+                            >
+                                2024
+                            </button>
                         </div>
                     </div>
                     
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                        <div>
-                        <h4 className="text-white text-lg font-semibold mb-4">Revenue Breakdown</h4>
-                        <div className="space-y-3">
-                            <div className="flex justify-between items-center">
-                            <span className="text-zinc-400">Premium Subscriptions</span>
-                            <span className="text-white font-medium">100%</span>
-                            </div>
-                            <div className="w-full bg-zinc-800 h-3 rounded-full overflow-hidden">
-                            <div className="bg-[#E0FE10] h-full rounded-full" style={{ width: '100%' }}></div>
-                            </div>
-                            
-                            <div className="bg-zinc-800/50 rounded-lg p-4 mt-4">
-                            <h5 className="text-[#E0FE10] text-sm font-medium mb-2">Current Revenue Mix (4 months)</h5>
-                            <div className="flex justify-between items-center mb-1">
-                                <span className="text-zinc-400 text-sm">Annual ($39.99) • 80 subs</span>
-                                <span className="text-white font-medium">$1,400 (56%)</span>
-                            </div>
-                            <div className="flex justify-between items-center mb-3">
-                                <span className="text-zinc-400 text-sm">Monthly ($4.99) • 64 subs</span>
-                                <span className="text-white font-medium">$1,100 (44%)</span>
-                            </div>
-                            <div className="border-t border-zinc-700 pt-2">
-                                <div className="flex justify-between items-center">
-                                    <span className="text-white text-sm font-medium">Total Revenue</span>
-                                    <span className="text-[#E0FE10] font-bold">$2,500</span>
+                    {/* Revenue Narrative */}
+                    <div className="bg-zinc-800/30 rounded-lg p-4 mb-6">
+                        {activeRevenueYear === '2025' ? (
+                            <div className="space-y-3">
+                                <p className="text-zinc-300 text-sm leading-relaxed">
+                                    <span className="text-[#E0FE10] font-medium">2025 was intentionally small.</span> We launched lean, tested with creators one-on-one, and optimized based on real conversations. The revenue spikes (Feb, May-Jun) directly correlate with Round launches—validating our core thesis: <span className="text-white font-medium">Rounds = Subscriptions.</span>
+                                </p>
+                                <div className="bg-zinc-900/50 rounded-lg p-3 border-l-2 border-[#E0FE10]/50">
+                                    <p className="text-zinc-400 text-xs font-medium mb-2">Problems we identified:</p>
+                                    <ul className="text-zinc-400 text-xs space-y-1">
+                                        <li>• Round creation was too long—creators dropped off mid-flow</li>
+                                        <li>• No retargeting for participants after a Round ended</li>
+                                    </ul>
                                 </div>
-                                <p className="text-zinc-500 text-xs mt-1">Since January 2025 launch</p>
+                                <p className="text-zinc-400 text-sm leading-relaxed">
+                                    We spent H2 building <span className="text-[#E0FE10]">AI templating</span> and <span className="text-[#E0FE10]">automated Round generation</span> to solve these friction points. The path forward is clear: optimize the funnel from signup → Round launch.
+                                </p>
                             </div>
+                        ) : (
+                            <div className="space-y-3">
+                                <p className="text-zinc-300 text-sm leading-relaxed">
+                                    <span className="text-blue-400 font-medium">2024 was our stealth year.</span> With zero marketing spend, we generated $2,011 in <span className="text-white">subscription revenue</span> through organic App Store discovery, private invitations to fitness seekers, and one-on-one training sessions using the app.
+                                </p>
+                                <p className="text-zinc-400 text-sm leading-relaxed">
+                                    This validated our core product before the public launch—and revealed a pattern: users who trained <span className="text-white">together</span> retained longer and paid more. That insight became the foundation for Rounds, our main subscription driver.
+                                </p>
+                                <div className="bg-zinc-900/50 rounded-lg p-3 border-l-2 border-blue-400/50">
+                                    <p className="text-zinc-500 text-xs italic">
+                                        Note: We focused on subscription revenue. Additional revenue from one-off personal training sessions is not included in these figures.
+                                    </p>
+                                </div>
                             </div>
-                        </div>
+                        )}
+                    </div>
+                    
+                    {/* Bar Chart */}
+                    <div className="relative">
+                        {/* Y-axis labels */}
+                        <div className="absolute left-0 top-0 h-64 w-12 flex flex-col justify-between text-right pr-2">
+                            {activeRevenueYear === '2025' ? (
+                                <>
+                                    <span className="text-zinc-500 text-xs">$700</span>
+                                    <span className="text-zinc-500 text-xs">$525</span>
+                                    <span className="text-zinc-500 text-xs">$350</span>
+                                    <span className="text-zinc-500 text-xs">$175</span>
+                                    <span className="text-zinc-500 text-xs">$0</span>
+                                </>
+                            ) : (
+                                <>
+                                    <span className="text-zinc-500 text-xs">$500</span>
+                                    <span className="text-zinc-500 text-xs">$375</span>
+                                    <span className="text-zinc-500 text-xs">$250</span>
+                                    <span className="text-zinc-500 text-xs">$125</span>
+                                    <span className="text-zinc-500 text-xs">$0</span>
+                                </>
+                            )}
                         </div>
                         
-                        <div>
-                        <h4 className="text-white text-lg font-semibold mb-4">Key Financial Metrics</h4>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="bg-zinc-800/50 rounded-lg p-4">
-                            <p className="text-zinc-400 text-sm">Total Revenue</p>
-                            <p className="text-white text-xl font-bold">$2.5K</p>
-                            <p className="text-[#E0FE10] text-xs">4 months</p>
+                        {/* Chart area */}
+                        <div className="ml-14">
+                            {/* Grid lines */}
+                            <div className="absolute left-14 right-0 top-0 h-64 flex flex-col justify-between pointer-events-none">
+                                <div className="border-t border-zinc-800 w-full"></div>
+                                <div className="border-t border-zinc-800 w-full"></div>
+                                <div className="border-t border-zinc-800 w-full"></div>
+                                <div className="border-t border-zinc-800 w-full"></div>
+                                <div className="border-t border-zinc-800 w-full"></div>
                             </div>
                             
-                            <div className="bg-zinc-800/50 rounded-lg p-4">
-                            <p className="text-zinc-400 text-sm">Conversion Rate</p>
-                            <p className="text-white text-xl font-bold">18%</p>
-                            <p className="text-[#E0FE10] text-xs">2x industry avg</p>
+                            {/* Bars Container */}
+                            <div className="flex items-end gap-2 h-64 relative z-10">
+                                {activeRevenueYear === '2025' ? (
+                                    // 2025 Data
+                                    [
+                                        { month: 'Jan', value: 246 },
+                                        { month: 'Feb', value: 633 },
+                                        { month: 'Mar', value: 268 },
+                                        { month: 'Apr', value: 220 },
+                                        { month: 'May', value: 373 },
+                                        { month: 'Jun', value: 512 },
+                                        { month: 'Jul', value: 346 },
+                                        { month: 'Aug', value: 128 },
+                                        { month: 'Sep', value: 115 },
+                                        { month: 'Oct', value: 173 },
+                                        { month: 'Nov', value: 134 },
+                                        { month: 'Dec', value: null },
+                                    ].map((item, index) => (
+                                        <div key={index} className="flex-1 flex flex-col items-center justify-end h-full group">
+                                            {item.value !== null ? (
+                                                <div 
+                                                    className="w-full bg-gradient-to-t from-[#E0FE10] to-[#E0FE10]/70 rounded-t-sm hover:from-[#E0FE10] hover:to-[#E0FE10] transition-all cursor-pointer relative"
+                                                    style={{ height: `${(item.value / 700) * 256}px` }}
+                                                >
+                                                    <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-zinc-700 text-white text-xs py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-20">
+                                                        ${item.value}
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div 
+                                                    className="w-full bg-zinc-700/50 rounded-t-sm border-2 border-dashed border-zinc-500 cursor-pointer relative"
+                                                    style={{ height: '40px' }}
+                                                >
+                                                    <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-zinc-700 text-white text-xs py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-20">
+                                                        In Progress
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))
+                                ) : (
+                                    // 2024 Data
+                                    [
+                                        { month: 'Jan', value: 137 },
+                                        { month: 'Feb', value: 89 },
+                                        { month: 'Mar', value: 135 },
+                                        { month: 'Apr', value: 111 },
+                                        { month: 'May', value: 107 },
+                                        { month: 'Jun', value: 293 },
+                                        { month: 'Jul', value: 397 },
+                                        { month: 'Aug', value: 157 },
+                                        { month: 'Sep', value: 96 },
+                                        { month: 'Oct', value: 201 },
+                                        { month: 'Nov', value: 168 },
+                                        { month: 'Dec', value: 120 },
+                                    ].map((item, index) => (
+                                        <div key={index} className="flex-1 flex flex-col items-center justify-end h-full group">
+                                            <div 
+                                                className="w-full bg-gradient-to-t from-blue-500 to-blue-400/70 rounded-t-sm hover:from-blue-400 hover:to-blue-400 transition-all cursor-pointer relative"
+                                                style={{ height: `${(item.value / 500) * 256}px` }}
+                                            >
+                                                <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-zinc-700 text-white text-xs py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-20">
+                                                    ${item.value}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
                             </div>
                             
-                            <div className="bg-zinc-800/50 rounded-lg p-4">
-                            <p className="text-zinc-400 text-sm">ARPU</p>
-                            <p className="text-white text-xl font-bold">$4.34</p>
-                            <p className="text-[#E0FE10] text-xs">Monthly average</p>
-                            </div>
-                            
-                            <div className="bg-zinc-800/50 rounded-lg p-4">
-                            <p className="text-zinc-400 text-sm">Monthly Churn</p>
-                            <p className="text-white text-xl font-bold">6.5%</p>
-                            <p className="text-zinc-300 text-xs">Low for early stage</p>
+                            {/* X-axis labels */}
+                            <div className="flex gap-2 mt-3 text-xs text-zinc-500">
+                                {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((month) => (
+                                    <span key={month} className="flex-1 text-center">{month}</span>
+                                ))}
                             </div>
                         </div>
-                        </div>
+                    </div>
+                    
+                    {/* Summary Stats */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
+                        {activeRevenueYear === '2025' ? (
+                            <>
+                                <div className="bg-zinc-800/50 rounded-lg p-4 text-center">
+                                    <p className="text-zinc-400 text-sm">YTD Revenue</p>
+                                    <p className="text-[#E0FE10] text-2xl font-bold">$3,148</p>
+                                    <p className="text-zinc-500 text-xs">Jan - Nov 2025</p>
+                                </div>
+                                <div className="bg-zinc-800/50 rounded-lg p-4 text-center">
+                                    <p className="text-zinc-400 text-sm">Peak Month</p>
+                                    <p className="text-white text-2xl font-bold">$633</p>
+                                    <p className="text-zinc-500 text-xs">February 2025</p>
+                                </div>
+                                <div className="bg-zinc-800/50 rounded-lg p-4 text-center">
+                                    <p className="text-zinc-400 text-sm">Monthly Avg</p>
+                                    <p className="text-white text-2xl font-bold">$286</p>
+                                    <p className="text-zinc-500 text-xs">11-month average</p>
+                                </div>
+                                <div className="bg-zinc-800/50 rounded-lg p-4 text-center">
+                                    <p className="text-zinc-400 text-sm">Best Quarter</p>
+                                    <p className="text-white text-2xl font-bold">Q2</p>
+                                    <p className="text-zinc-500 text-xs">$1,105 total</p>
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                <div className="bg-zinc-800/50 rounded-lg p-4 text-center">
+                                    <p className="text-zinc-400 text-sm">Annual Revenue</p>
+                                    <p className="text-blue-400 text-2xl font-bold">$2,011</p>
+                                    <p className="text-zinc-500 text-xs">Full Year 2024</p>
+                                </div>
+                                <div className="bg-zinc-800/50 rounded-lg p-4 text-center">
+                                    <p className="text-zinc-400 text-sm">Peak Month</p>
+                                    <p className="text-white text-2xl font-bold">$397</p>
+                                    <p className="text-zinc-500 text-xs">July 2024</p>
+                                </div>
+                                <div className="bg-zinc-800/50 rounded-lg p-4 text-center">
+                                    <p className="text-zinc-400 text-sm">Monthly Avg</p>
+                                    <p className="text-white text-2xl font-bold">$168</p>
+                                    <p className="text-zinc-500 text-xs">12-month average</p>
+                                </div>
+                                <div className="bg-zinc-800/50 rounded-lg p-4 text-center">
+                                    <p className="text-zinc-400 text-sm">Best Quarter</p>
+                                    <p className="text-white text-2xl font-bold">Q3</p>
+                                    <p className="text-zinc-500 text-xs">$650 total</p>
+                                </div>
+                            </>
+                        )}
                     </div>
                     </div>
                     
                     <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8">
-                    <div className="flex justify-between items-center mb-6">
-                        <h3 className="text-white text-xl font-semibold">Financial Projections</h3>
+                    <h3 className="text-white text-xl font-semibold mb-6">Revenue Model & Projections</h3>
+                    
+                    {/* Current vs Target Economics */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                        {/* Current Reality */}
+                        <div className="bg-zinc-800/50 rounded-xl p-6 border border-zinc-700">
+                            <div className="flex items-center gap-2 mb-4">
+                                <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
+                                <h4 className="text-blue-400 font-medium">Current Reality (2024-2025)</h4>
+                            </div>
+                            <div className="space-y-3 text-sm">
+                                <div className="flex justify-between">
+                                    <span className="text-zinc-400">Total Revenue</span>
+                                    <span className="text-white font-medium">~$5,200</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-zinc-400">Trial Conversion</span>
+                                    <span className="text-white font-medium">18%</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-zinc-400">Avg Seekers/Round</span>
+                                    <span className="text-white font-medium">8-15</span>
+                                </div>
+                            </div>
+                            <div className="mt-4 p-3 bg-zinc-900/50 rounded-lg">
+                                <p className="text-zinc-500 text-xs">
+                                    Reflects: Previously 30-day trials (now 7-day), users canceling post-Round, unoptimized Round creation, mixed subscription tiers, intentionally small creator base.
+                                </p>
+                            </div>
+                        </div>
                         
-                        <div className="flex items-center bg-zinc-800 rounded-lg overflow-hidden text-sm">
-                        <button className="px-3 py-1 bg-[#E0FE10] text-black font-medium">3 Year</button>
-                        <button className="px-3 py-1 text-zinc-400">5 Year</button>
+                        {/* Target Model */}
+                        <div className="bg-zinc-800/50 rounded-xl p-6 border border-[#E0FE10]/30">
+                            <div className="flex items-center gap-2 mb-4">
+                                <div className="w-2 h-2 bg-[#E0FE10] rounded-full"></div>
+                                <h4 className="text-[#E0FE10] font-medium">Target Model (Post-Optimization)</h4>
+                            </div>
+                            <div className="space-y-3 text-sm">
+                                <div className="flex justify-between">
+                                    <span className="text-zinc-400">Revenue/Round</span>
+                                    <span className="text-white font-medium">$2,080</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-zinc-400">Target Seekers/Round</span>
+                                    <span className="text-white font-medium">50</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-zinc-400">LTV/Creator (2 Rounds)</span>
+                                    <span className="text-[#E0FE10] font-medium">$4,080</span>
+                                </div>
+                            </div>
+                            <div className="mt-4 p-3 bg-zinc-900/50 rounded-lg">
+                                <p className="text-zinc-500 text-xs">
+                                    Requires: AI-powered Round creation (built), retargeting system (in development), optimized trial-to-paid conversion, creator audience building tools.
+                                </p>
+                            </div>
                         </div>
                     </div>
                     
+                    {/* The Gap Explanation */}
+                    <div className="bg-gradient-to-r from-blue-500/10 to-[#E0FE10]/10 rounded-xl p-6 mb-8 border border-zinc-700">
+                        <h4 className="text-white font-medium mb-3">Bridging the Gap: Current → Target</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                            <div className="bg-zinc-900/50 rounded-lg p-4">
+                                <p className="text-[#E0FE10] font-medium mb-1">1. Round Creation Speed</p>
+                                <p className="text-zinc-400 text-xs">AI templating reduces creation from 45min → 5min. More Rounds = more revenue events.</p>
+                            </div>
+                            <div className="bg-zinc-900/50 rounded-lg p-4">
+                                <p className="text-[#E0FE10] font-medium mb-1">2. Seeker Retargeting</p>
+                                <p className="text-zinc-400 text-xs">Post-Round re-engagement to drive annual subscriptions. Currently no system exists.</p>
+                            </div>
+                            <div className="bg-zinc-900/50 rounded-lg p-4">
+                                <p className="text-[#E0FE10] font-medium mb-1">3. Trial Optimization ✓</p>
+                                <p className="text-zinc-400 text-xs">Already shifted from 30-day → 7-day trial. Previously, users would complete a Round then cancel before paying.</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {/* Conservative Projections */}
+                    <h4 className="text-white font-medium mb-4">Conservative Growth Projections</h4>
                     <div className="bg-zinc-800/50 rounded-xl overflow-hidden">
                         <table className="w-full text-left">
                         <thead>
                             <tr className="border-b border-zinc-700">
                             <th className="py-4 px-6 text-zinc-400 font-medium">Metric</th>
-                            <th className="py-4 px-6 text-zinc-400 font-medium">Year 1 (2025)</th>
-                            <th className="py-4 px-6 text-zinc-400 font-medium">Year 2 (2026)</th>
-                            <th className="py-4 px-6 text-zinc-400 font-medium">Year 3 (2027)</th>
+                            <th className="py-4 px-6 text-zinc-400 font-medium">2026</th>
+                            <th className="py-4 px-6 text-zinc-400 font-medium">2027</th>
+                            <th className="py-4 px-6 text-zinc-400 font-medium">2028</th>
                             </tr>
                         </thead>
                         <tbody>
                             <tr className="border-b border-zinc-700">
-                            <td className="py-4 px-6 text-white">Revenue</td>
-                            <td className="py-4 px-6 text-white">$28K</td>
-                            <td className="py-4 px-6 text-white">$485K</td>
-                            <td className="py-4 px-6 text-white">$2.8M</td>
+                            <td className="py-4 px-6 text-white">Active Creators</td>
+                            <td className="py-4 px-6 text-white">50</td>
+                            <td className="py-4 px-6 text-white">200</td>
+                            <td className="py-4 px-6 text-white">750</td>
                             </tr>
                             <tr className="border-b border-zinc-700">
-                            <td className="py-4 px-6 text-white">User Base</td>
-                            <td className="py-4 px-6 text-white">2.5K</td>
-                            <td className="py-4 px-6 text-white">18K</td>
-                            <td className="py-4 px-6 text-white">85K</td>
+                            <td className="py-4 px-6 text-white">Avg Seekers/Round</td>
+                            <td className="py-4 px-6 text-white">25</td>
+                            <td className="py-4 px-6 text-white">35</td>
+                            <td className="py-4 px-6 text-white">50</td>
                             </tr>
                             <tr className="border-b border-zinc-700">
-                            <td className="py-4 px-6 text-white">Paying Subscribers</td>
-                            <td className="py-4 px-6 text-white">450</td>
-                            <td className="py-4 px-6 text-white">3.2K</td>
-                            <td className="py-4 px-6 text-white">15K</td>
+                            <td className="py-4 px-6 text-white">Revenue/Creator</td>
+                            <td className="py-4 px-6 text-white">$1,080</td>
+                            <td className="py-4 px-6 text-white">$1,480</td>
+                            <td className="py-4 px-6 text-white">$2,080</td>
                             </tr>
-                            <tr>
-                            <td className="py-4 px-6 text-white">Monthly Churn</td>
-                            <td className="py-4 px-6 text-white">8%</td>
-                            <td className="py-4 px-6 text-white">6%</td>
-                            <td className="py-4 px-6 text-white">4%</td>
+                            <tr className="border-b border-zinc-700 bg-zinc-800/30">
+                            <td className="py-4 px-6 text-[#E0FE10] font-medium">Annual Revenue</td>
+                            <td className="py-4 px-6 text-[#E0FE10] font-bold">$108K</td>
+                            <td className="py-4 px-6 text-[#E0FE10] font-bold">$592K</td>
+                            <td className="py-4 px-6 text-[#E0FE10] font-bold">$3.1M</td>
                             </tr>
                         </tbody>
                         </table>
                     </div>
                     
                     <p className="text-zinc-500 text-sm mt-4 italic">
-                        Note: Detailed financial projections and audited financials are available upon request with signed NDA.
+                        Conservative model assumes gradual improvement in seekers/Round as optimization work ships. Revenue/Creator calculated at $80 creator + (seekers × $40 × 50% annual conversion).
                     </p>
                     </div>
                     
-                    {/* Revenue Story Section */}
-                    <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8 mb-10">
-                    <h3 className="text-white text-xl font-semibold mb-6">Revenue Story: From Launch to Scale</h3>
-                    
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
-                        {/* Phase 1: Early Validation */}
-                        <div className="bg-zinc-800/50 rounded-xl p-6">
-                        <div className="flex items-center mb-4">
-                            <div className="w-8 h-8 rounded-full bg-[#E0FE10]/20 flex items-center justify-center mr-3">
-                            <span className="text-[#E0FE10] text-sm font-bold">1</span>
-                            </div>
-                            <h4 className="text-white font-semibold">Early Validation</h4>
-                        </div>
-                        <p className="text-zinc-400 text-sm mb-3">January - April 2025</p>
-                        <div className="space-y-2 text-sm">
-                            <div className="flex justify-between">
-                            <span className="text-zinc-400">Revenue:</span>
-                            <span className="text-white font-medium">$2,500</span>
-                            </div>
-                            <div className="flex justify-between">
-                            <span className="text-zinc-400">Subscribers:</span>
-                            <span className="text-white font-medium">144</span>
-                            </div>
-                            <div className="flex justify-between">
-                            <span className="text-zinc-400">Conversion:</span>
-                            <span className="text-[#E0FE10] font-medium">18%</span>
-                            </div>
-                        </div>
-                        <p className="text-zinc-500 text-xs mt-3">
-                            Strong early monetization validates premium model and user willingness to pay
-                        </p>
-                        </div>
-                        
-                        {/* Phase 2: Creator Scaling */}
-                        <div className="bg-zinc-800/50 rounded-xl p-6">
-                        <div className="flex items-center mb-4">
-                            <div className="w-8 h-8 rounded-full bg-[#E0FE10]/20 flex items-center justify-center mr-3">
-                            <span className="text-[#E0FE10] text-sm font-bold">2</span>
-                            </div>
-                            <h4 className="text-white font-semibold">Creator Scaling</h4>
-                        </div>
-                        <p className="text-zinc-400 text-sm mb-3">Q3-Q4 2025 (Projected)</p>
-                        <div className="space-y-2 text-sm">
-                            <div className="flex justify-between">
-                            <span className="text-zinc-400">Revenue:</span>
-                            <span className="text-white font-medium">$28K</span>
-                            </div>
-                            <div className="flex justify-between">
-                            <span className="text-zinc-400">Subscribers:</span>
-                            <span className="text-white font-medium">450</span>
-                            </div>
-                            <div className="flex justify-between">
-                            <span className="text-zinc-400">Creators:</span>
-                            <span className="text-[#E0FE10] font-medium">50+</span>
-                            </div>
-                        </div>
-                        <p className="text-zinc-500 text-xs mt-3">
-                            Creator flywheel accelerates growth as each creator brings their audience
-                        </p>
-                        </div>
-                        
-                        {/* Phase 3: Market Expansion */}
-                        <div className="bg-zinc-800/50 rounded-xl p-6">
-                        <div className="flex items-center mb-4">
-                            <div className="w-8 h-8 rounded-full bg-[#E0FE10]/20 flex items-center justify-center mr-3">
-                            <span className="text-[#E0FE10] text-sm font-bold">3</span>
-                            </div>
-                            <h4 className="text-white font-semibold">Market Expansion</h4>
-                        </div>
-                        <p className="text-zinc-400 text-sm mb-3">2026-2027 (Projected)</p>
-                        <div className="space-y-2 text-sm">
-                            <div className="flex justify-between">
-                            <span className="text-zinc-400">Revenue:</span>
-                            <span className="text-white font-medium">$2.8M</span>
-                            </div>
-                            <div className="flex justify-between">
-                            <span className="text-zinc-400">Subscribers:</span>
-                            <span className="text-white font-medium">15K</span>
-                            </div>
-                            <div className="flex justify-between">
-                            <span className="text-zinc-400">ARPU:</span>
-                            <span className="text-[#E0FE10] font-medium">$15.50</span>
-                            </div>
-                        </div>
-                        <p className="text-zinc-500 text-xs mt-3">
-                            Premium features and creator revenue sharing drive higher ARPU
-                        </p>
-                        </div>
-                    </div>
-                    
                     {/* Key Revenue Insights */}
-                    <div className="bg-gradient-to-r from-[#E0FE10]/10 to-[#E0FE10]/5 border border-[#E0FE10]/20 rounded-xl p-6">
+                    <div className="bg-gradient-to-r from-[#E0FE10]/10 to-[#E0FE10]/5 border border-[#E0FE10]/20 rounded-xl p-6 mt-10 mb-10">
                         <h4 className="text-[#E0FE10] font-semibold mb-4">💡 Key Revenue Insights</h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
@@ -2685,53 +3121,99 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                         </div>
                         </div>
                     </div>
+
+                    {/* Financial Documents */}
+                    <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8 mb-10">
+                        <h3 className="text-white text-xl font-semibold mb-4">Financial Documents</h3>
+                        <p className="text-zinc-400 mb-6">
+                            Download verified bank statements showing revenue transactions and payment history.
+                        </p>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {/* 2025 Statements */}
+                            <a
+                                href="/investor-docs/bank-statements-2025.pdf"
+                                download
+                                className="flex items-center gap-4 p-4 bg-zinc-800/70 rounded-lg hover:bg-zinc-800 transition-colors group"
+                            >
+                                <div className="w-12 h-12 rounded-lg bg-[#E0FE10]/10 flex items-center justify-center group-hover:bg-[#E0FE10]/20 transition-colors">
+                                    <Download className="w-6 h-6 text-[#E0FE10]" />
+                                </div>
+                                <div>
+                                    <p className="text-white font-medium">2025 Bank Statements</p>
+                                    <p className="text-zinc-500 text-sm">Jan - Dec 2025</p>
+                                </div>
+                            </a>
+                            
+                            {/* 2024 Statements */}
+                            <a
+                                href="/investor-docs/bank-statements-2024.pdf"
+                                download
+                                className="flex items-center gap-4 p-4 bg-zinc-800/70 rounded-lg hover:bg-zinc-800 transition-colors group"
+                            >
+                                <div className="w-12 h-12 rounded-lg bg-blue-500/10 flex items-center justify-center group-hover:bg-blue-500/20 transition-colors">
+                                    <Download className="w-6 h-6 text-blue-400" />
+                                </div>
+                                <div>
+                                    <p className="text-white font-medium">2024 Bank Statements</p>
+                                    <p className="text-zinc-500 text-sm">Jan - Dec 2024</p>
+                                </div>
+                            </a>
+                            
+                            {/* Revenue Verification */}
+                            <a
+                                href="/investor-docs/stripe-revenue-report.pdf"
+                                download
+                                className="flex items-center gap-4 p-4 bg-zinc-800/70 rounded-lg hover:bg-zinc-800 transition-colors group"
+                            >
+                                <div className="w-12 h-12 rounded-lg bg-purple-500/10 flex items-center justify-center group-hover:bg-purple-500/20 transition-colors">
+                                    <Download className="w-6 h-6 text-purple-400" />
+                                </div>
+                                <div>
+                                    <p className="text-white font-medium">Stripe Revenue Report</p>
+                                    <p className="text-zinc-500 text-sm">Payment processor data</p>
+                                </div>
+                            </a>
+                        </div>
+                        
+                        <p className="text-zinc-500 text-xs mt-4">
+                            📋 These documents contain sensitive financial information. By downloading, you agree to maintain confidentiality.
+                        </p>
                     </div>
                     
                     <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8">
                     <h3 className="text-white text-xl font-semibold mb-6">Why Invest in Pulse?</h3>
                     
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-zinc-900 to-zinc-800 p-1">
                         <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-[#d7ff00]/10"></div>
-                        <div className="relative bg-zinc-900 rounded-lg p-6 h-full">
-                            <h4 className="text-[#E0FE10] font-medium mb-3">Early Stage Validation</h4>
-                            <p className="text-zinc-400">
-                            Strong early metrics with 808 users, 61% retention, and 18% conversion rate in just 4 months 
-                            since public launch, demonstrating clear product-market fit.
-                            </p>
+                        <div className="relative bg-zinc-900 rounded-lg p-5 h-full">
+                            <h4 className="text-[#E0FE10] font-medium mb-2">Validated Product-Market Fit</h4>
+                            <p className="text-zinc-400 text-sm">61% retention, 18% conversion—users pay and stay.</p>
                         </div>
                         </div>
                         
                         <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-zinc-900 to-zinc-800 p-1">
                         <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-[#d7ff00]/10"></div>
-                        <div className="relative bg-zinc-900 rounded-lg p-6 h-full">
-                            <h4 className="text-[#E0FE10] font-medium mb-3">Creator-Driven Growth</h4>
-                            <p className="text-zinc-400">
-                            Proven creator acquisition model with 37.5x user multiplier per creator and validation 
-                            from SoulCycle instructors bringing 75 paying users.
-                            </p>
+                        <div className="relative bg-zinc-900 rounded-lg p-5 h-full">
+                            <h4 className="text-[#E0FE10] font-medium mb-2">Creator Flywheel</h4>
+                            <p className="text-zinc-400 text-sm">Each creator brings 37.5x users. Zero paid acquisition.</p>
                         </div>
                         </div>
                         
                         <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-zinc-900 to-zinc-800 p-1">
                         <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-[#d7ff00]/10"></div>
-                        <div className="relative bg-zinc-900 rounded-lg p-6 h-full">
-                            <h4 className="text-[#E0FE10] font-medium mb-3">Experienced Founder</h4>
-                            <p className="text-zinc-400">
-                            Led by Tremaine Grant, first-generation Jamaican-American software engineer with proven 
-                            track record in building and scaling consumer products.
-                            </p>
+                        <div className="relative bg-zinc-900 rounded-lg p-5 h-full">
+                            <h4 className="text-[#E0FE10] font-medium mb-2">Technical Founder</h4>
+                            <p className="text-zinc-400 text-sm">Solo-built iOS + web platform. Capital efficient.</p>
                         </div>
                         </div>
                         
                         <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-zinc-900 to-zinc-800 p-1">
                         <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-[#d7ff00]/10"></div>
-                        <div className="relative bg-zinc-900 rounded-lg p-6 h-full">
-                            <h4 className="text-[#E0FE10] font-medium mb-3">Massive Market Opportunity</h4>
-                            <p className="text-zinc-400">
-                            Operating in the $120B+ global fitness app market with a unique social-first approach 
-                            that differentiates from existing competitors.
-                            </p>
+                        <div className="relative bg-zinc-900 rounded-lg p-5 h-full">
+                            <h4 className="text-[#E0FE10] font-medium mb-2">$120B+ Market</h4>
+                            <p className="text-zinc-400 text-sm">Social-first approach in a fragmented fitness market.</p>
                         </div>
                         </div>
                     </div>
@@ -2746,8 +3228,14 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                     </div>
                     </div>
                 </section>
+                  ) : (
+                    <LockedSectionView sectionName="Financials" />
+                  )
+                )}
 
                 {/* Pitch Deck Section */}
+                {activeSection === 'deck' && (
+                  hasSectionAccess('deck') ? (
                 <section 
                     id="deck" 
                     ref={(el) => { sectionsRef.current.deck = el; }}
@@ -2786,8 +3274,14 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                     </div>
                     </div>
                 </section>
+                  ) : (
+                    <LockedSectionView sectionName="Pitch Deck" />
+                  )
+                )}
 
                 {/* Investment Opportunity Section */}
+                {activeSection === 'investment' && (
+                  hasSectionAccess('investment') ? (
                 <section 
                     id="investment" 
                     ref={(el) => { sectionsRef.current.investment = el; }}
@@ -2864,48 +3358,36 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                     <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8">
                     <h3 className="text-white text-xl font-semibold mb-6">Why Invest in Pulse?</h3>
                     
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-zinc-900 to-zinc-800 p-1">
                         <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-[#d7ff00]/10"></div>
-                        <div className="relative bg-zinc-900 rounded-lg p-6 h-full">
-                            <h4 className="text-[#E0FE10] font-medium mb-3">Early Stage Validation</h4>
-                            <p className="text-zinc-400">
-                            Strong early metrics with 808 users, 61% retention, and 18% conversion rate in just 4 months 
-                            since public launch, demonstrating clear product-market fit.
-                            </p>
+                        <div className="relative bg-zinc-900 rounded-lg p-5 h-full">
+                            <h4 className="text-[#E0FE10] font-medium mb-2">Validated Product-Market Fit</h4>
+                            <p className="text-zinc-400 text-sm">61% retention, 18% conversion—users pay and stay.</p>
                         </div>
                         </div>
                         
                         <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-zinc-900 to-zinc-800 p-1">
                         <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-[#d7ff00]/10"></div>
-                        <div className="relative bg-zinc-900 rounded-lg p-6 h-full">
-                            <h4 className="text-[#E0FE10] font-medium mb-3">Creator-Driven Growth</h4>
-                            <p className="text-zinc-400">
-                            Proven creator acquisition model with 37.5x user multiplier per creator and validation 
-                            from SoulCycle instructors bringing 75 paying users.
-                            </p>
+                        <div className="relative bg-zinc-900 rounded-lg p-5 h-full">
+                            <h4 className="text-[#E0FE10] font-medium mb-2">Creator Flywheel</h4>
+                            <p className="text-zinc-400 text-sm">Each creator brings 37.5x users. Zero paid acquisition.</p>
                         </div>
                         </div>
                         
                         <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-zinc-900 to-zinc-800 p-1">
                         <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-[#d7ff00]/10"></div>
-                        <div className="relative bg-zinc-900 rounded-lg p-6 h-full">
-                            <h4 className="text-[#E0FE10] font-medium mb-3">Experienced Founder</h4>
-                            <p className="text-zinc-400">
-                            Led by Tremaine Grant, first-generation Jamaican-American software engineer with proven 
-                            track record in building and scaling consumer products.
-                            </p>
+                        <div className="relative bg-zinc-900 rounded-lg p-5 h-full">
+                            <h4 className="text-[#E0FE10] font-medium mb-2">Technical Founder</h4>
+                            <p className="text-zinc-400 text-sm">Solo-built iOS + web platform. Capital efficient.</p>
                         </div>
                         </div>
                         
                         <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-zinc-900 to-zinc-800 p-1">
                         <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-[#d7ff00]/10"></div>
-                        <div className="relative bg-zinc-900 rounded-lg p-6 h-full">
-                            <h4 className="text-[#E0FE10] font-medium mb-3">Massive Market Opportunity</h4>
-                            <p className="text-zinc-400">
-                            Operating in the $120B+ global fitness app market with a unique social-first approach 
-                            that differentiates from existing competitors.
-                            </p>
+                        <div className="relative bg-zinc-900 rounded-lg p-5 h-full">
+                            <h4 className="text-[#E0FE10] font-medium mb-2">$120B+ Market</h4>
+                            <p className="text-zinc-400 text-sm">Social-first approach in a fragmented fitness market.</p>
                         </div>
                         </div>
                     </div>
@@ -2920,6 +3402,10 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                     </div>
                     </div>
                 </section>
+                  ) : (
+                    <LockedSectionView sectionName="Investment Opportunity" />
+                  )
+                )}
 
                 {/* Security & Compliance Footer */}
                 <section className="py-8 bg-zinc-950 border-t border-zinc-800">

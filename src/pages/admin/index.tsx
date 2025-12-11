@@ -216,6 +216,12 @@ const adminCardsData = [
     link: "/admin/vcDatabase"
   },
   {
+    title: "Investor Dataroom Access",
+    description: "Manage email-based access permissions for the investor dataroom page.",
+    icon: <Users className="w-5 h-5" />,
+    link: "/admin/investorAccess"
+  },
+  {
     title: "Assign Prize Money",
     description: "Add and manage prize money for challenges. Set prize amounts and distribution types.",
     icon: <Award className="w-5 h-5" />,
