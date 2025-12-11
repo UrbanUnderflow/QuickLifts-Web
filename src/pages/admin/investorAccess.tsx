@@ -33,7 +33,6 @@ const INVESTOR_SECTIONS = [
   { id: 'captable', label: 'Cap Table' },
   { id: 'deck', label: 'Pitch Deck' },
   { id: 'investment', label: 'Investment' },
-  { id: 'documents', label: 'All Documents' },
 ] as const;
 
 type SectionId = typeof INVESTOR_SECTIONS[number]['id'];
@@ -51,7 +50,6 @@ interface SectionAccess {
   captable: boolean;
   deck: boolean;
   investment: boolean;
-  documents: boolean;
 }
 
 const DEFAULT_SECTION_ACCESS: SectionAccess = {
@@ -67,7 +65,6 @@ const DEFAULT_SECTION_ACCESS: SectionAccess = {
   captable: true,
   deck: true,
   investment: true,
-  documents: true,
 };
 
 interface InvestorAccess {
