@@ -698,7 +698,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                     </div>
                     <div 
                       className="bg-gradient-to-br from-zinc-800/70 to-zinc-700/70 rounded-lg p-5 cursor-pointer hover:from-zinc-700/70 hover:to-zinc-600/70 transition-all duration-300 border border-zinc-700/50 hover:border-[#E0FE10]/30 group"
-                      onClick={() => scrollToSection('vision')}
+                      onClick={() => switchSection('vision')}
                     >
                       <div className="flex items-center justify-between mb-3">
                         <h4 className="text-[#E0FE10] font-medium group-hover:text-[#d8f521] transition-colors">Vision</h4>
