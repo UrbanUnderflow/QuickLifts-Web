@@ -43,6 +43,16 @@ const RoundLibraryPage: React.FC = () => {
     error: null,
   });
 
+  // Helper to safely derive a human-readable format label from challengeType
+  const getChallengeFormatLabel = (challenge: Challenge): string => {
+    const type = (challenge.challengeType as unknown as string) || 'workout';
+
+    if (type === 'steps') return 'Steps Challenge';
+    if (type === 'habit') return 'Habit Challenge';
+
+    return 'Workout Program';
+  };
+
   useEffect(() => {
     const fetchRoundByOriginalId = async () => {
       if (!router.isReady || !id) return;
@@ -188,11 +198,7 @@ const RoundLibraryPage: React.FC = () => {
               <div className="bg-zinc-900/80 border border-zinc-800 rounded-xl px-4 py-3">
                 <div className="text-xs uppercase tracking-wide text-zinc-400">Format</div>
                 <div className="text-xl font-semibold mt-1">
-                  {challenge.challengeType === 'steps'
-                    ? 'Steps Challenge'
-                    : challenge.challengeType === 'habit'
-                    ? 'Habit Challenge'
-                    : 'Workout Program'}
+                  {getChallengeFormatLabel(challenge)}
                 </div>
               </div>
 

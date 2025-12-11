@@ -3054,6 +3054,32 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                             </div>
                         </div>
                     </div>
+
+                    {/* 2026 Focus Card */}
+                    <div className="bg-zinc-900/60 rounded-xl border border-zinc-800 p-6 mb-8">
+                        <div className="flex items-center gap-3 mb-3">
+                            <span className="text-yellow-300 text-xl">⚡</span>
+                            <h4 className="text-white font-medium">2026: Turning Rounds into Predictable Revenue</h4>
+                        </div>
+                        <div className="space-y-4">
+                            <div>
+                                <p className="text-zinc-100 text-sm italic border-l-2 border-zinc-700 pl-3">
+                                    “2026 will be our first year of consistent Round cadence, which should smooth revenue from spikes into predictable monthly growth.”
+                                </p>
+                                <p className="text-zinc-400 text-sm mt-1">
+                                    This makes clear our path to a <span className="italic">stable subscription business</span> instead of one-off spikes.
+                                </p>
+                            </div>
+                            <div>
+                                <p className="text-zinc-100 text-sm italic border-l-2 border-zinc-700 pl-3">
+                                    “While revenue paused, engagement, retention, and sharability increased — signaling that the engine improves as we refine it.”
+                                </p>
+                                <p className="text-zinc-400 text-sm mt-1">
+                                    We’re explicitly orienting 2026 around <span className="italic">leading indicators</span> (Rounds, engagement, retention) that compound into revenue as optimization lands.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
                     
                     {/* Conservative Projections */}
                     <h4 className="text-white font-medium mb-4">Conservative Growth Projections</h4>
