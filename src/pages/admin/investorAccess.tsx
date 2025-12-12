@@ -35,7 +35,6 @@ const INVESTOR_SECTIONS = [
   { id: 'financials', label: 'Financials' },
   { id: 'captable', label: 'Cap Table' },
   { id: 'deck', label: 'Pitch Deck' },
-  { id: 'investment', label: 'Investment' },
   { id: 'documents', label: 'All Documents' },
 ] as const;
 
@@ -53,7 +52,6 @@ interface SectionAccess {
   financials: boolean;
   captable: boolean;
   deck: boolean;
-  investment: boolean;
   documents: boolean;
 }
 
@@ -69,7 +67,6 @@ const DEFAULT_SECTION_ACCESS: SectionAccess = {
   financials: true,
   captable: true,
   deck: true,
-  investment: true,
   documents: true,
 };
 

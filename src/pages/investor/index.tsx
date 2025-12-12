@@ -72,7 +72,6 @@ interface SectionAccess {
   financials: boolean;
   captable: boolean;
   deck: boolean;
-  investment: boolean;
   documents: boolean;
 }
 
@@ -88,7 +87,6 @@ const DEFAULT_SECTION_ACCESS: SectionAccess = {
   financials: true,
   captable: true,
   deck: true,
-  investment: true,
   documents: true,
 };
 
@@ -530,7 +528,6 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
     financials: null,
     captable: null,
     deck: null,
-    investment: null,
     documents: null,
   });
 
@@ -1013,8 +1010,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                     { id: 'financials', label: 'Financial Information', number: 9 },
                     { id: 'captable', label: 'Cap Table', number: 10 },
                     { id: 'deck', label: 'Pitch Deck', number: 11 },
-                    { id: 'investment', label: 'Investment Opportunity', number: 12 },
-                    { id: 'documents', label: 'All Documents', number: 13 },
+                    { id: 'documents', label: 'All Documents', number: 12 },
                   ].map((item) => (
                     <button
                       key={item.id}
@@ -4337,134 +4333,6 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                   )
                 )}
 
-                {/* Investment Opportunity Section */}
-                {activeSection === 'investment' && (
-                  hasSectionAccess('investment') ? (
-                <section 
-                    id="investment" 
-                    ref={(el) => { sectionsRef.current.investment = el; }}
-                    className="mb-20"
-                >
-                    <div className="flex items-center mb-6">
-                    <div className="w-10 h-10 rounded-full bg-[#E0FE10] flex items-center justify-center mr-4">
-                        <span className="font-bold text-black">11</span>
-                    </div>
-                    <h2 className="text-white text-3xl font-bold">Investment Opportunity</h2>
-                    </div>
-                    
-                    <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8 mb-10">                    
-                    
-                    <div className="flex flex-col md:flex-row gap-8">
-                        <div className="md:w-1/2">
-                        <h3 className="text-white text-xl font-semibold mb-4">Seed Funding Round</h3>
-                        
-                        <div className="space-y-6">
-                            <div>
-                            <p className="text-zinc-400 mb-1">Target Raise</p>
-                            <p className="text-white text-3xl font-bold">$750K</p>
-                            </div>
-                            
-                            <div>
-                            <p className="text-zinc-400 mb-1">Pre-Money Valuation</p>
-                            <p className="text-white text-3xl font-bold">$3.5 Million</p>
-                            </div>
-                            
-                            <div>
-                            <p className="text-zinc-400 mb-1">Minimum Investment</p>
-                            <p className="text-white text-xl font-medium">$25,000</p>
-                            </div>
-                            
-                            <div>
-                            <p className="text-zinc-400 mb-1">Funding Use</p>
-                            <ul className="text-white space-y-1 mt-2">
-                                <li>• Creator acquisition (60%)</li>
-                                <li>• Product development (25%)</li>
-                                <li>• Team expansion (10%)</li>
-                                <li>• Operations (5%)</li>
-                            </ul>
-                            </div>
-                        </div>
-                        </div>
-                        
-                        <div className="md:w-1/2">
-                        <h3 className="text-white text-xl font-semibold mb-4">Fundraising Timeline</h3>
-                        
-                        <div className="relative pl-8 pb-8 border-l border-zinc-700">
-                            <div className="absolute left-0 top-0 w-3 h-3 -ml-1.5 rounded-full bg-[#E0FE10]"></div>
-                            <h4 className="text-white font-medium mb-1">Bootstrap Phase - Completed</h4>
-                            <p className="text-zinc-400 text-sm mb-1">2023-2024</p>
-                            <p className="text-zinc-400">$7K self-funded to build MVP and validate product-market fit</p>
-                        </div>
-                        
-                        <div className="relative pl-8 pb-8 border-l border-zinc-700">
-                            <div className="absolute left-0 top-0 w-3 h-3 -ml-1.5 rounded-full bg-[#E0FE10]"></div>
-                            <h4 className="text-white font-medium mb-1">Seed Round - Current</h4>
-                            <p className="text-zinc-400 text-sm mb-1">Q2 2025</p>
-                            <p className="text-zinc-400">$750K to accelerate creator acquisition and scale platform</p>
-                        </div>
-                        
-                        <div className="relative pl-8 border-l border-zinc-700">
-                            <div className="absolute left-0 top-0 w-3 h-3 -ml-1.5 rounded-full bg-zinc-700"></div>
-                            <h4 className="text-white font-medium mb-1">Series A - Projected</h4>
-                            <p className="text-zinc-400 text-sm mb-1">Q4 2026</p>
-                            <p className="text-zinc-400">Targeting $5M+ for market expansion and feature development</p>
-                        </div>
-                        </div>
-                    </div>
-                    </div>
-                    
-                    <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8">
-                    <h3 className="text-white text-xl font-semibold mb-6">Why Invest in Pulse?</h3>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-zinc-900 to-zinc-800 p-1">
-                        <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-[#d7ff00]/10"></div>
-                        <div className="relative bg-zinc-900 rounded-lg p-5 h-full">
-                            <h4 className="text-[#E0FE10] font-medium mb-2">Validated Product-Market Fit</h4>
-                            <p className="text-zinc-400 text-sm">78% retention, 18% conversion—users pay and stay.</p>
-                        </div>
-                        </div>
-                        
-                        <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-zinc-900 to-zinc-800 p-1">
-                        <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-[#d7ff00]/10"></div>
-                        <div className="relative bg-zinc-900 rounded-lg p-5 h-full">
-                            <h4 className="text-[#E0FE10] font-medium mb-2">Creator Flywheel</h4>
-                            <p className="text-zinc-400 text-sm">Each creator brings 37.5x users. Zero paid acquisition.</p>
-                        </div>
-                        </div>
-                        
-                        <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-zinc-900 to-zinc-800 p-1">
-                        <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-[#d7ff00]/10"></div>
-                        <div className="relative bg-zinc-900 rounded-lg p-5 h-full">
-                            <h4 className="text-[#E0FE10] font-medium mb-2">Technical Founder</h4>
-                            <p className="text-zinc-400 text-sm">Solo-built iOS + web platform. Capital efficient.</p>
-                        </div>
-                        </div>
-                        
-                        <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-zinc-900 to-zinc-800 p-1">
-                        <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-[#d7ff00]/10"></div>
-                        <div className="relative bg-zinc-900 rounded-lg p-5 h-full">
-                            <h4 className="text-[#E0FE10] font-medium mb-2">$120B+ Market</h4>
-                            <p className="text-zinc-400 text-sm">Social-first approach in a fragmented fitness market.</p>
-                        </div>
-                        </div>
-                    </div>
-                    
-                    <div className="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
-                        <a href="https://calendly.com/tre-aqo7/30min" target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center px-8 py-4 bg-[#E0FE10] hover:bg-[#d8f521] text-black font-bold rounded-lg transition-colors text-center">
-                        Schedule Investor Meeting
-                        </a>
-                        <a href="mailto:invest@fitwithpulse.ai?subject=Request%20for%20Due%20Diligence%20Access&body=Hello%20Pulse%20Team%2C%0A%0AI%20am%20interested%20in%20learning%20more%20about%20Pulse%20and%20would%20like%20to%20request%20access%20to%20your%20due%20diligence%20materials.%0A%0APlease%20provide%20me%20with%20access%20to%3A%0A-%20Detailed%20financial%20statements%0A-%20Legal%20documents%20and%20cap%20table%0A-%20Product%20roadmap%20and%20technical%20documentation%0A-%20Customer%20references%20and%20case%20studies%0A-%20Any%20additional%20materials%20relevant%20for%20investment%20evaluation%0A%0AThank%20you%20for%20your%20time%20and%20consideration.%0A%0ABest%20regards%2C%0A[Your%20Name]" className="inline-flex items-center justify-center px-8 py-4 border border-zinc-700 hover:border-[#E0FE10] text-white font-medium rounded-lg transition-colors text-center">
-                        Request Due Diligence Access
-                        </a>
-                    </div>
-                    </div>
-                </section>
-                  ) : (
-                    <LockedSectionView sectionName="Investment Opportunity" />
-                  )
-                )}
-
                 {/* All Documents Section */}
                 {activeSection === 'documents' && (
                   hasSectionAccess('documents') ? (
@@ -4475,7 +4343,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                 >
                     <div className="flex items-center mb-8">
                     <div className="w-10 h-10 rounded-full bg-[#E0FE10] flex items-center justify-center mr-4">
-                        <span className="font-bold text-black">13</span>
+                        <span className="font-bold text-black">12</span>
                     </div>
                     <h2 className="text-white text-3xl font-bold">All Documents</h2>
                     </div>
