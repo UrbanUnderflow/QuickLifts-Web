@@ -72,7 +72,6 @@ interface SectionAccess {
   financials: boolean;
   captable: boolean;
   deck: boolean;
-  investment: boolean;
   documents: boolean;
 }
 
@@ -88,7 +87,6 @@ const DEFAULT_SECTION_ACCESS: SectionAccess = {
   financials: true,
   captable: true,
   deck: true,
-  investment: true,
   documents: true,
 };
 
@@ -147,6 +145,8 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
   const [activePLYear, setActivePLYear] = useState<'2025' | '2024'>('2025');
   const [isBalanceSheetModalOpen, setIsBalanceSheetModalOpen] = useState(false);
   const [activeBalanceSheetYear, setActiveBalanceSheetYear] = useState<'2025' | '2024'>('2025');
+  const [isExpenseReportModalOpen, setIsExpenseReportModalOpen] = useState(false);
+  const [selectedExpenseMonths, setSelectedExpenseMonths] = useState<string[]>([]);
 
   const [activeSection, setActiveSection] = useState<string>('overview');
   const [financialMetrics, setFinancialMetrics] = useState<FinancialMetrics | null>(null);
@@ -187,35 +187,19 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
   ];
 
   const pnl2025 = [
-    // NOTE: 2025 recurring + non-recurring tie to the Expense Reports + The Chart CSV.
-    { month: 'January', revenue: 246.0, recurring: 536.79, oneOff: 200.0, total: 736.79, net: -490.79 },
-    { month: 'February', revenue: 633.0, recurring: 526.8, oneOff: 39.99, total: 566.79, net: 66.21 },
-    { month: 'March', revenue: 268.0, recurring: 526.8, oneOff: 39.99, total: 566.79, net: -298.79 },
-    { month: 'April', revenue: 220.0, recurring: 526.8, oneOff: 198.24, total: 725.04, net: -505.04 },
-    { month: 'May', revenue: 373.0, recurring: 526.8, oneOff: 953.24, total: 1480.04, net: -1107.04 },
-    { month: 'June', revenue: 512.0, recurring: 526.8, oneOff: 119.92, total: 646.72, net: -134.72 },
-    { month: 'July', revenue: 346.0, recurring: 551.8, oneOff: 119.92, total: 671.72, net: -325.72 },
-    { month: 'August', revenue: 128.0, recurring: 626.8, oneOff: 1711.72, total: 2338.52, net: -2210.52 },
-    { month: 'September', revenue: 115.0, recurring: 626.8, oneOff: 404.86, total: 1031.66, net: -916.66 },
-    { month: 'October', revenue: 173.0, recurring: 626.8, oneOff: 514.22, total: 1141.02, net: -968.02 },
-    { month: 'November', revenue: 134.0, recurring: 626.8, oneOff: 0.0, total: 626.8, net: -492.8 },
+    // Updated to match monthly expense reports (Jan–Nov 2025)
+    { month: 'January', revenue: 246, recurring: 536.79, oneOff: 200.0, total: 736.79, net: -490.79 },
+    { month: 'February', revenue: 633, recurring: 526.8, oneOff: 39.99, total: 566.79, net: 66.21 },
+    { month: 'March', revenue: 268, recurring: 526.8, oneOff: 39.99, total: 566.79, net: -298.79 },
+    { month: 'April', revenue: 220, recurring: 526.8, oneOff: 198.24, total: 725.04, net: -505.04 },
+    { month: 'May', revenue: 373, recurring: 526.8, oneOff: 953.24, total: 1480.04, net: -1107.04 },
+    { month: 'June', revenue: 512, recurring: 526.8, oneOff: 119.92, total: 646.72, net: -134.72 },
+    { month: 'July', revenue: 346, recurring: 551.8, oneOff: 119.92, total: 671.72, net: -325.72 },
+    { month: 'August', revenue: 128, recurring: 626.8, oneOff: 1711.72, total: 2338.52, net: -2210.52 },
+    { month: 'September', revenue: 115, recurring: 626.8, oneOff: 404.86, total: 1031.66, net: -916.66 },
+    { month: 'October', revenue: 173, recurring: 626.8, oneOff: 514.22, total: 1141.02, net: -968.02 },
+    { month: 'November', revenue: 134, recurring: 626.8, oneOff: 0.0, total: 626.8, net: -492.8 },
   ];
-
-  const theChart2025 = [
-    { month: 'January 2025', revenue: 246.0, spend: 736.79, net: -490.79 },
-    { month: 'February 2025', revenue: 633.0, spend: 566.79, net: 66.21 },
-    { month: 'March 2025', revenue: 268.0, spend: 566.79, net: -298.79 },
-    { month: 'April 2025', revenue: 220.0, spend: 725.04, net: -505.04 },
-    { month: 'May 2025', revenue: 373.0, spend: 1480.04, net: -1107.04 },
-    { month: 'June 2025', revenue: 512.0, spend: 646.72, net: -134.72 },
-    { month: 'July 2025', revenue: 346.0, spend: 671.72, net: -325.72 },
-    { month: 'August 2025', revenue: 128.0, spend: 2338.52, net: -2210.52 },
-    { month: 'September 2025', revenue: 115.0, spend: 1031.66, net: -916.66 },
-    { month: 'October 2025', revenue: 173.0, spend: 1141.02, net: -968.02 },
-    { month: 'November 2025', revenue: 134.0, spend: 626.8, net: -492.8 },
-  ] as const;
-
-  const theChartMax2025 = Math.max(...theChart2025.map(r => Math.max(r.revenue, r.spend)));
 
   const pnl2024 = [
     { month: 'January', revenue: 137, recurring: 413.97, oneOff: 0, total: 413.97, net: -276.97 },
@@ -259,6 +243,810 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
 
   const formatCurrency = (value: number) =>
     `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  // Generate P&L PDF
+  const generatePLPdf = () => {
+    const data = activePLYear === '2025' ? pnl2025 : pnl2024;
+    const totals = activePLYear === '2025' ? pnlTotals2025 : pnlTotals2024;
+    const yearLabel = activePLYear === '2025' ? '2025 (Jan–Nov)' : '2024 (Full Year)';
+    
+    const tableRows = data.map(row => `
+      <tr>
+        <td style="padding: 10px; border-bottom: 1px solid #e5e5e5;">${row.month}</td>
+        <td style="padding: 10px; border-bottom: 1px solid #e5e5e5; text-align: right;">$${row.revenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+        <td style="padding: 10px; border-bottom: 1px solid #e5e5e5; text-align: right;">$${row.recurring.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+        <td style="padding: 10px; border-bottom: 1px solid #e5e5e5; text-align: right;">$${row.oneOff.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+        <td style="padding: 10px; border-bottom: 1px solid #e5e5e5; text-align: right;">$${row.total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+        <td style="padding: 10px; border-bottom: 1px solid #e5e5e5; text-align: right; color: ${row.net >= 0 ? '#10b981' : '#ef4444'};">$${row.net.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+      </tr>
+    `).join('');
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Profit & Loss Statement - Pulse Intelligence Labs</title>
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 40px; color: #111; }
+            h1 { font-size: 24px; margin-bottom: 5px; }
+            .subtitle { color: #666; font-size: 14px; margin-bottom: 30px; }
+            .summary { display: flex; gap: 20px; margin-bottom: 30px; }
+            .summary-box { flex: 1; padding: 20px; background: #f9fafb; border-radius: 8px; }
+            .summary-label { color: #666; font-size: 12px; margin-bottom: 5px; }
+            .summary-value { font-size: 24px; font-weight: bold; }
+            .summary-value.positive { color: #10b981; }
+            .summary-value.negative { color: #ef4444; }
+            table { width: 100%; border-collapse: collapse; font-size: 14px; }
+            th { text-align: left; padding: 12px 10px; background: #f3f4f6; font-weight: 600; }
+            th:not(:first-child) { text-align: right; }
+            .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e5e5; font-size: 12px; color: #666; }
+            @media print { body { padding: 20px; } }
+          </style>
+        </head>
+        <body>
+          <h1>Profit & Loss Statement - ${yearLabel}</h1>
+          <p class="subtitle">Pulse Intelligence Labs, Inc. | Generated ${new Date().toLocaleDateString()}</p>
+          
+          <div class="summary">
+            <div class="summary-box">
+              <div class="summary-label">Total Revenue</div>
+              <div class="summary-value">$${totals.revenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+            </div>
+            <div class="summary-box">
+              <div class="summary-label">Total Expenses</div>
+              <div class="summary-value">$${totals.total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+            </div>
+            <div class="summary-box">
+              <div class="summary-label">Net Income</div>
+              <div class="summary-value ${totals.net >= 0 ? 'positive' : 'negative'}">$${totals.net.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+            </div>
+          </div>
+          
+          <table>
+            <thead>
+              <tr>
+                <th>Month</th>
+                <th>Revenue</th>
+                <th>Recurring Expenses</th>
+                <th>Non-Recurring Expenses</th>
+                <th>Total Expenses</th>
+                <th>Net Income</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${tableRows}
+            </tbody>
+          </table>
+          
+          <div class="footer">
+            <p>© ${new Date().getFullYear()} Pulse Intelligence Labs, Inc. All rights reserved.</p>
+            <p>This document contains confidential financial information intended for authorized investors only.</p>
+          </div>
+        </body>
+      </html>
+    `;
+
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(html);
+      printWindow.document.close();
+      printWindow.focus();
+      setTimeout(() => {
+        printWindow.print();
+      }, 250);
+    }
+  };
+
+  // Generate Balance Sheet PDF (both years)
+  const generateBalanceSheetPdf = () => {
+    const fmt = (value: number) => 
+      `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+    const generateYearPage = (year: '2024' | '2025') => {
+      const getValue = (item: { y2024: number; y2025: number }) => 
+        year === '2025' ? item.y2025 : item.y2024;
+
+      const totalAssets = getValue(balanceSheetData.assets.totalAssets);
+      const totalLiabilities = getValue(balanceSheetData.liabilities.totalCurrentLiabilities) + 
+                              getValue(balanceSheetData.liabilities.totalLongTermLiabilities);
+      const totalEquity = getValue(balanceSheetData.ownersEquity.totalOwnersEquity);
+
+      const currentAssetsRows = balanceSheetData.assets.currentAssets
+        .map(item => `<tr class="item"><td>${item.account}</td><td>${fmt(getValue(item))}</td></tr>`)
+        .join('');
+      
+      const fixedAssetsRows = balanceSheetData.assets.fixedAssets
+        .map(item => `<tr class="item"><td>${item.account}</td><td>${fmt(getValue(item))}</td></tr>`)
+        .join('');
+      
+      const otherAssetsRows = balanceSheetData.assets.otherAssets
+        .map(item => `<tr class="item"><td>${item.account}</td><td>${fmt(getValue(item))}</td></tr>`)
+        .join('');
+
+      const currentLiabilitiesRows = balanceSheetData.liabilities.currentLiabilities
+        .map(item => `<tr class="item"><td>${item.account}</td><td>${fmt(getValue(item))}</td></tr>`)
+        .join('');
+      
+      const longTermLiabilitiesRows = balanceSheetData.liabilities.longTermLiabilities
+        .map(item => `<tr class="item"><td>${item.account}</td><td>${fmt(getValue(item))}</td></tr>`)
+        .join('');
+
+      const equityRows = balanceSheetData.ownersEquity.items
+        .map(item => `<tr class="item"><td>${item.account}</td><td>${fmt(getValue(item))}</td></tr>`)
+        .join('');
+
+      return `
+        <div class="page">
+          <h1>${year} Balance Sheet</h1>
+          <p class="subtitle">Pulse Intelligence Labs, Inc. | As of ${year} | Generated ${new Date().toLocaleDateString()}</p>
+          
+          <div class="summary">
+            <div class="summary-box">
+              <div class="summary-label">Total Assets</div>
+              <div class="summary-value">${fmt(totalAssets)}</div>
+            </div>
+            <div class="summary-box">
+              <div class="summary-label">Total Liabilities</div>
+              <div class="summary-value">${fmt(totalLiabilities)}</div>
+            </div>
+            <div class="summary-box">
+              <div class="summary-label">Owner's Equity</div>
+              <div class="summary-value ${totalEquity >= 0 ? 'positive' : 'negative'}">${fmt(totalEquity)}</div>
+            </div>
+          </div>
+          
+          <table>
+            <thead>
+              <tr>
+                <th>Account</th>
+                <th>Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="section-header"><td colspan="2">ASSETS</td></tr>
+              <tr class="subsection-header"><td colspan="2">Current Assets</td></tr>
+              ${currentAssetsRows}
+              <tr class="total-row"><td>Total Current Assets</td><td>${fmt(getValue(balanceSheetData.assets.totalCurrentAssets))}</td></tr>
+              
+              <tr class="subsection-header"><td colspan="2">Fixed Assets</td></tr>
+              ${fixedAssetsRows}
+              <tr class="total-row"><td>Total Fixed Assets</td><td>${fmt(getValue(balanceSheetData.assets.totalFixedAssets))}</td></tr>
+              
+              <tr class="subsection-header"><td colspan="2">Other Assets</td></tr>
+              ${otherAssetsRows}
+              <tr class="total-row"><td>Total Other Assets</td><td>${fmt(getValue(balanceSheetData.assets.totalOtherAssets))}</td></tr>
+              
+              <tr class="grand-total"><td>Total Assets</td><td>${fmt(getValue(balanceSheetData.assets.totalAssets))}</td></tr>
+              
+              <tr class="section-header"><td colspan="2">LIABILITIES</td></tr>
+              <tr class="subsection-header"><td colspan="2">Current Liabilities</td></tr>
+              ${currentLiabilitiesRows}
+              <tr class="total-row"><td>Total Current Liabilities</td><td>${fmt(getValue(balanceSheetData.liabilities.totalCurrentLiabilities))}</td></tr>
+              
+              <tr class="subsection-header"><td colspan="2">Long-term Liabilities</td></tr>
+              ${longTermLiabilitiesRows}
+              <tr class="total-row"><td>Total Long-term Liabilities</td><td>${fmt(getValue(balanceSheetData.liabilities.totalLongTermLiabilities))}</td></tr>
+              
+              <tr class="grand-total"><td>Total Liabilities</td><td>${fmt(totalLiabilities)}</td></tr>
+              
+              <tr class="section-header"><td colspan="2">OWNER'S EQUITY</td></tr>
+              ${equityRows}
+              <tr class="grand-total"><td>Total Owner's Equity</td><td>${fmt(getValue(balanceSheetData.ownersEquity.totalOwnersEquity))}</td></tr>
+              
+              <tr class="grand-total"><td><strong>TOTAL LIABILITIES & EQUITY</strong></td><td><strong>${fmt(getValue(balanceSheetData.totalLiabilitiesAndEquity))}</strong></td></tr>
+            </tbody>
+          </table>
+          
+          <div class="note">
+            <strong>Note:</strong> Owner's Equity reflects cumulative founder capital contributions net of operating losses. Cash balance reflects current on-hand funds as of report date.
+          </div>
+        </div>
+      `;
+    };
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Balance Sheet - Pulse Intelligence Labs</title>
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 0; color: #111; margin: 0; }
+            .page { padding: 40px; page-break-after: always; }
+            .page:last-child { page-break-after: avoid; }
+            h1 { font-size: 24px; margin-bottom: 5px; }
+            .subtitle { color: #666; font-size: 14px; margin-bottom: 30px; }
+            .summary { display: flex; gap: 20px; margin-bottom: 30px; }
+            .summary-box { flex: 1; padding: 20px; background: #f9fafb; border-radius: 8px; }
+            .summary-label { color: #666; font-size: 12px; margin-bottom: 5px; }
+            .summary-value { font-size: 24px; font-weight: bold; }
+            .summary-value.positive { color: #10b981; }
+            .summary-value.negative { color: #ef4444; }
+            table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 20px; }
+            th { text-align: left; padding: 10px 8px; background: #f3f4f6; font-weight: 600; }
+            th:last-child { text-align: right; }
+            td { padding: 8px; border-bottom: 1px solid #e5e5e5; }
+            td:last-child { text-align: right; }
+            .section-header td { background: #1f2937; color: white; font-weight: 600; padding: 10px 8px; }
+            .subsection-header td { background: #f3f4f6; font-weight: 500; color: #374151; padding-left: 16px; }
+            .item td:first-child { padding-left: 32px; }
+            .total-row td { font-weight: 600; background: #f9fafb; }
+            .grand-total td { font-weight: 700; background: #E0FE10; color: #000; }
+            .note { margin-top: 20px; padding: 15px; background: #f9fafb; border-left: 3px solid #E0FE10; font-size: 12px; color: #555; }
+            .footer { padding: 20px 40px; border-top: 1px solid #e5e5e5; font-size: 11px; color: #666; }
+            @media print { 
+              body { padding: 0; } 
+              .page { padding: 20px; }
+            }
+          </style>
+        </head>
+        <body>
+          ${generateYearPage('2025')}
+          ${generateYearPage('2024')}
+          
+          <div class="footer">
+            <p>© ${new Date().getFullYear()} Pulse Intelligence Labs, Inc. All rights reserved.</p>
+            <p>This document contains confidential financial information intended for authorized investors only.</p>
+          </div>
+        </body>
+      </html>
+    `;
+
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(html);
+      printWindow.document.close();
+      printWindow.focus();
+      setTimeout(() => {
+        printWindow.print();
+      }, 250);
+    }
+  };
+
+  // Generate Cap Table PDF
+  const generateCapTablePdf = () => {
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Cap Table - Pulse Intelligence Labs</title>
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 40px; color: #111; margin: 0; }
+            h1 { font-size: 28px; margin-bottom: 5px; }
+            .subtitle { color: #666; font-size: 14px; margin-bottom: 30px; }
+            .summary { display: flex; gap: 20px; margin-bottom: 30px; }
+            .summary-box { flex: 1; padding: 20px; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb; }
+            .summary-label { color: #666; font-size: 12px; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.5px; }
+            .summary-value { font-size: 24px; font-weight: bold; }
+            .summary-value.highlight { color: #65a30d; }
+            table { width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 30px; }
+            th { text-align: left; padding: 12px 10px; background: #f3f4f6; font-weight: 600; border-bottom: 2px solid #e5e5e5; }
+            th.right { text-align: right; }
+            td { padding: 12px 10px; border-bottom: 1px solid #e5e5e5; }
+            td.right { text-align: right; }
+            .role { color: #666; font-size: 12px; margin-top: 2px; }
+            .highlight { color: #65a30d; font-weight: 600; }
+            .muted { color: #9ca3af; }
+            .total-row td { font-weight: 700; background: #f9fafb; border-top: 2px solid #d1d5db; }
+            .notes { background: #f9fafb; border-radius: 8px; padding: 24px; margin-top: 30px; }
+            .notes h3 { font-size: 16px; font-weight: 600; margin: 0 0 16px 0; }
+            .notes ul { margin: 0; padding-left: 20px; }
+            .notes li { margin-bottom: 8px; color: #374151; font-size: 13px; line-height: 1.5; }
+            .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e5e5; font-size: 11px; color: #666; }
+            @media print { body { padding: 20px; } }
+          </style>
+        </head>
+        <body>
+          <h1>Capitalization Table</h1>
+          <p class="subtitle">Pulse Intelligence Labs, Inc. | As of Incorporation | Generated ${new Date().toLocaleDateString()}</p>
+          
+          <div class="summary">
+            <div class="summary-box">
+              <div class="summary-label">Authorized Shares</div>
+              <div class="summary-value">10,000,000</div>
+            </div>
+            <div class="summary-box">
+              <div class="summary-label">Issued & Outstanding</div>
+              <div class="summary-value highlight">9,000,000</div>
+            </div>
+            <div class="summary-box">
+              <div class="summary-label">Unissued (Equity Pool)</div>
+              <div class="summary-value">1,000,000</div>
+            </div>
+          </div>
+          
+          <table>
+            <thead>
+              <tr>
+                <th>Shareholder</th>
+                <th class="right">Shares</th>
+                <th class="right">Ownership</th>
+                <th>Vesting</th>
+                <th>Cliff</th>
+                <th>Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>
+                  <strong>Tremaine Grant</strong>
+                  <div class="role">Founder</div>
+                </td>
+                <td class="right">9,000,000</td>
+                <td class="right highlight">90%</td>
+                <td>4 years</td>
+                <td>1 year</td>
+                <td>Double-trigger acceleration</td>
+              </tr>
+              <tr>
+                <td>
+                  <span class="muted">Employee Equity Pool</span>
+                  <div class="role">Unissued / Reserved</div>
+                </td>
+                <td class="right muted">1,000,000</td>
+                <td class="right muted">10%</td>
+                <td class="muted">—</td>
+                <td class="muted">—</td>
+                <td class="muted">Reserved for future hires (ESOP)</td>
+              </tr>
+              <tr class="total-row">
+                <td>Total</td>
+                <td class="right">10,000,000</td>
+                <td class="right">100%</td>
+                <td></td>
+                <td></td>
+                <td></td>
+              </tr>
+            </tbody>
+          </table>
+          
+          <div class="notes">
+            <h3>Notes</h3>
+            <ul>
+              <li>Only the founder has issued shares at this time.</li>
+              <li>The 10% employee equity pool is authorized but unissued (ESOP not yet formally created).</li>
+              <li>Founder vesting follows standard 4-year schedule with 1-year cliff per Atlas defaults.</li>
+              <li>Double-trigger acceleration applies on change of control + termination.</li>
+              <li>Vesting start date: Date of incorporation.</li>
+            </ul>
+          </div>
+          
+          <div class="footer">
+            <p>© ${new Date().getFullYear()} Pulse Intelligence Labs, Inc. All rights reserved.</p>
+            <p>This document contains confidential financial information intended for authorized investors only.</p>
+          </div>
+        </body>
+      </html>
+    `;
+
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(html);
+      printWindow.document.close();
+      printWindow.focus();
+      setTimeout(() => {
+        printWindow.print();
+      }, 250);
+    }
+  };
+
+  // Generate Founder RSPA PDF
+  const generateRSPAPdf = () => {
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Founder Restricted Stock Purchase Agreement - Pulse Intelligence Labs</title>
+          <style>
+            body { font-family: 'Times New Roman', Times, serif; padding: 50px 60px; color: #111; margin: 0; line-height: 1.6; font-size: 14px; }
+            h1 { font-size: 18px; text-align: center; margin-bottom: 20px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; }
+            .intro { margin-bottom: 30px; text-align: justify; }
+            h3 { font-size: 14px; margin-top: 25px; margin-bottom: 10px; font-weight: bold; }
+            p { margin-bottom: 12px; text-align: justify; }
+            ul { margin: 10px 0 15px 20px; }
+            li { margin-bottom: 6px; }
+            .highlight { font-weight: bold; }
+            hr { border: none; border-top: 1px solid #333; margin: 30px 0; }
+            .signature-section { margin-top: 50px; page-break-before: always; padding-top: 40px; }
+            .signature-block { margin-top: 40px; }
+            .signature-line { border-bottom: 1px solid #333; width: 250px; margin-bottom: 5px; height: 30px; }
+            .signature-name { font-weight: bold; }
+            .signature-title { color: #666; font-size: 12px; }
+            .section-letter { margin-left: 20px; }
+            .footer { margin-top: 60px; padding-top: 20px; border-top: 1px solid #ccc; font-size: 11px; color: #666; text-align: center; }
+            @media print { 
+              body { padding: 30px 40px; }
+              .signature-section { page-break-before: always; }
+            }
+          </style>
+        </head>
+        <body>
+          <h1>Founder Restricted Stock Purchase Agreement</h1>
+          
+          <p class="intro">
+            This Founder Restricted Stock Purchase Agreement (the "Agreement") is entered into as of the date of incorporation (the "Effective Date"), by and between <span class="highlight">Pulse Intelligence Labs, Inc.</span>, a Delaware corporation (the "Company"), and <span class="highlight">Tremaine Grant</span> ("Founder").
+          </p>
+          
+          <hr />
+          
+          <h3>1. Purchase of Shares</h3>
+          <p>
+            The Company hereby issues and sells to Founder, and Founder hereby purchases from the Company, <span class="highlight">9,000,000 shares of the Company's Common Stock</span> (the "Shares") at a purchase price of <span class="highlight">$0.00001 per share</span>, for an aggregate purchase price of <span class="highlight">$90.00</span>.
+          </p>
+          
+          <hr />
+          
+          <h3>2. Vesting Schedule</h3>
+          <p>The Shares shall be subject to vesting as follows:</p>
+          <ul>
+            <li><span class="highlight">Vesting Term:</span> 4 years</li>
+            <li><span class="highlight">Cliff:</span> 1 year</li>
+            <li><span class="highlight">Vesting Start Date:</span> Date of incorporation</li>
+            <li><span class="highlight">Cliff Vesting:</span> 25% of the Shares shall vest on the one-year anniversary of the Vesting Start Date</li>
+            <li><span class="highlight">Monthly Vesting:</span> The remaining Shares shall vest in equal monthly installments over the subsequent 36 months, subject to Founder's continuous service to the Company</li>
+          </ul>
+          
+          <hr />
+          
+          <h3>3. Company Right of Repurchase</h3>
+          <p>
+            In the event Founder's service relationship with the Company terminates for any reason, the Company shall have the right to repurchase any <span class="highlight">unvested Shares</span> at the original purchase price per share.
+          </p>
+          <p>
+            This right of repurchase shall lapse with respect to Shares as they vest.
+          </p>
+          
+          <hr />
+          
+          <h3>4. Vesting Acceleration</h3>
+          <p>
+            The Shares shall be subject to <span class="highlight">double-trigger acceleration</span>, such that all unvested Shares shall vest immediately if:
+          </p>
+          <p class="section-letter">(a) the Company undergoes a Change in Control, and</p>
+          <p class="section-letter">(b) Founder is terminated without cause or resigns for good reason within the applicable post-transaction period.</p>
+          
+          <hr />
+          
+          <h3>5. Intellectual Property Assignment</h3>
+          <p>
+            Founder hereby irrevocably assigns to the Company all right, title, and interest in and to any and all intellectual property, inventions, works of authorship, software, trade secrets, designs, processes, and developments created by Founder, whether before or after incorporation, that relate to the Company's business, products, or technology.
+          </p>
+          <p>
+            Founder agrees to execute any documents reasonably necessary to confirm or perfect such assignment.
+          </p>
+          
+          <hr />
+          
+          <h3>6. Section 83(b) Election</h3>
+          <p>
+            Founder acknowledges that the Shares are subject to vesting and that Founder may file an election under <span class="highlight">Section 83(b) of the Internal Revenue Code</span> within 30 days of the purchase date. Founder acknowledges that failure to timely file such election may result in adverse tax consequences.
+          </p>
+          
+          <hr />
+          
+          <h3>7. Representations</h3>
+          <p>Founder represents that:</p>
+          <p class="section-letter">(a) Founder is acquiring the Shares for investment purposes only;</p>
+          <p class="section-letter">(b) Founder has had the opportunity to ask questions and receive information regarding the Company;</p>
+          <p class="section-letter">(c) Founder understands the speculative nature of the investment.</p>
+          
+          <hr />
+          
+          <h3>8. Governing Law</h3>
+          <p>
+            This Agreement shall be governed by and construed in accordance with the laws of the State of Delaware.
+          </p>
+          
+          <hr />
+          
+          <div class="signature-section">
+            <p>IN WITNESS WHEREOF, the parties have executed this Agreement as of the Effective Date.</p>
+            
+            <div class="signature-block">
+              <p class="signature-name">Pulse Intelligence Labs, Inc.</p>
+              <div class="signature-line"></div>
+              <p>By: Tremaine Grant</p>
+              <p class="signature-title">Title: Chief Executive Officer</p>
+            </div>
+            
+            <div class="signature-block">
+              <p class="signature-name">Founder:</p>
+              <div class="signature-line"></div>
+              <p>Tremaine Grant</p>
+            </div>
+          </div>
+          
+          <div class="footer">
+            <p>© ${new Date().getFullYear()} Pulse Intelligence Labs, Inc. All rights reserved.</p>
+            <p>This document contains confidential information intended for authorized parties only.</p>
+          </div>
+        </body>
+      </html>
+    `;
+
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(html);
+      printWindow.document.close();
+      printWindow.focus();
+      setTimeout(() => {
+        printWindow.print();
+      }, 250);
+    }
+  };
+
+  // Generate Advisor Agreement PDF
+  const generateAdvisorAgreementPdf = () => {
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Independent Advisor Agreement - Pulse Intelligence Labs</title>
+          <style>
+            body { font-family: 'Times New Roman', Times, serif; padding: 50px 60px; color: #111; margin: 0; line-height: 1.6; font-size: 14px; }
+            h1 { font-size: 18px; text-align: center; margin-bottom: 20px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; }
+            .intro { margin-bottom: 30px; text-align: justify; }
+            h3 { font-size: 14px; margin-top: 25px; margin-bottom: 10px; font-weight: bold; }
+            p { margin-bottom: 12px; text-align: justify; }
+            .highlight { font-weight: bold; }
+            .signature-section { margin-top: 50px; page-break-before: always; padding-top: 40px; }
+            .signature-block { margin-top: 40px; }
+            .signature-line { border-bottom: 1px solid #333; width: 250px; margin-bottom: 5px; height: 30px; }
+            .signature-name { font-weight: bold; }
+            .signature-title { color: #666; font-size: 12px; }
+            .date-row { display: flex; align-items: center; gap: 10px; margin-top: 15px; }
+            .date-label { font-weight: bold; }
+            .date-value { border-bottom: 1px solid #333; min-width: 150px; padding-bottom: 2px; }
+            .footer { margin-top: 60px; padding-top: 20px; border-top: 1px solid #ccc; font-size: 11px; color: #666; text-align: center; }
+            @media print { 
+              body { padding: 30px 40px; }
+              .signature-section { page-break-before: always; }
+            }
+          </style>
+        </head>
+        <body>
+          <h1>Independent Advisor / Trial Contractor Agreement</h1>
+          
+          <p class="intro">
+            This Independent Advisor / Trial Contractor Agreement (the "Agreement") is entered into as of <span class="highlight">${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span> (the "Effective Date"), by and between <span class="highlight">Pulse Intelligence Labs, Inc.</span>, a Delaware corporation (the "Company"), and <span class="highlight">Bobby Nweke</span> ("Advisor").
+          </p>
+          
+          <h3>1. Advisory Relationship</h3>
+          <p>
+            The Company engages Advisor in a non-exclusive, advisory and trial capacity, and Advisor agrees to provide strategic, operational, and organizational support services as requested by the Company from time to time (the "Services"). Advisor's role is exploratory and intended to evaluate potential future collaboration.
+          </p>
+          
+          <h3>2. No Employment Relationship</h3>
+          <p>
+            Advisor acknowledges and agrees that Advisor is not an employee, officer, or agent of the Company. Nothing in this Agreement creates an employment relationship, partnership, joint venture, or agency relationship between the parties.
+          </p>
+          
+          <h3>3. Compensation</h3>
+          <p>
+            Advisor will not receive any salary, wages, fees, or other compensation for Services performed under this Agreement unless and until otherwise agreed in writing by the Company. Advisor acknowledges that no equity, ownership interest, or future compensation is granted or promised under this Agreement.
+          </p>
+          
+          <h3>4. Intellectual Property Assignment</h3>
+          <p>
+            Advisor hereby irrevocably assigns to the Company all right, title, and interest in and to any and all inventions, works of authorship, developments, designs, software, documentation, processes, trade secrets, ideas, and other intellectual property conceived, created, or reduced to practice by Advisor, solely or jointly with others, in connection with or related to the Services or the Company's business (the "Work Product").
+          </p>
+          <p>
+            Advisor agrees to execute any documents reasonably necessary to confirm or perfect such assignment.
+          </p>
+          
+          <h3>5. Confidentiality</h3>
+          <p>
+            Advisor agrees to hold in strict confidence all non-public information disclosed by the Company, including but not limited to product plans, business strategies, financial information, technical data, and customer information ("Confidential Information"). Advisor shall not disclose or use Confidential Information for any purpose other than performing Services under this Agreement.
+          </p>
+          
+          <h3>6. Term and Termination</h3>
+          <p>
+            This Agreement shall commence on the Effective Date and may be terminated at any time by either party, with or without cause, upon written notice to the other party. Upon termination, Advisor shall promptly return or destroy all Company materials and Confidential Information.
+          </p>
+          
+          <h3>7. No Obligation</h3>
+          <p>
+            Nothing in this Agreement obligates either party to enter into any future employment, equity, or co-founder relationship. Any such relationship would require a separate written agreement.
+          </p>
+          
+          <h3>8. Governing Law</h3>
+          <p>
+            This Agreement shall be governed by and construed in accordance with the laws of the State of Delaware, without regard to conflict of laws principles.
+          </p>
+          
+          <div class="signature-section">
+            <p>IN WITNESS WHEREOF, the parties have executed this Agreement as of the Effective Date.</p>
+            
+            <div class="signature-block">
+              <p class="signature-name">Pulse Intelligence Labs, Inc.</p>
+              <div class="signature-line"></div>
+              <p>By: Tremaine Grant</p>
+              <p class="signature-title">Title: CEO</p>
+              <div class="date-row">
+                <span class="date-label">Date:</span>
+                <span class="date-value">${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span>
+              </div>
+            </div>
+            
+            <div class="signature-block">
+              <p class="signature-name">Advisor:</p>
+              <div class="signature-line"></div>
+              <p>Bobby Nweke</p>
+              <div class="date-row">
+                <span class="date-label">Date:</span>
+                <span class="date-value">${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span>
+              </div>
+            </div>
+          </div>
+          
+          <div class="footer">
+            <p>© ${new Date().getFullYear()} Pulse Intelligence Labs, Inc. All rights reserved.</p>
+            <p>This document contains confidential information intended for authorized parties only.</p>
+          </div>
+        </body>
+      </html>
+    `;
+
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(html);
+      printWindow.document.close();
+      printWindow.focus();
+      setTimeout(() => {
+        printWindow.print();
+      }, 250);
+    }
+  };
+
+  // Generate Contractor Agreement PDF (Lola - Design)
+  const generateContractorAgreementPdf = () => {
+    const contractorName = "Lola";
+    const currentDate = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Independent Contractor Agreement - Pulse Intelligence Labs</title>
+          <style>
+            body { font-family: 'Times New Roman', Times, serif; padding: 50px 60px; color: #111; margin: 0; line-height: 1.6; font-size: 14px; }
+            h1 { font-size: 18px; text-align: center; margin-bottom: 20px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; }
+            .intro { margin-bottom: 30px; text-align: justify; }
+            h3 { font-size: 14px; margin-top: 25px; margin-bottom: 10px; font-weight: bold; }
+            p { margin-bottom: 12px; text-align: justify; }
+            .highlight { font-weight: bold; }
+            .subsection { margin-left: 20px; margin-top: 10px; }
+            .subsection-title { font-weight: bold; margin-bottom: 5px; }
+            .signature-section { margin-top: 50px; page-break-before: always; padding-top: 40px; }
+            .signature-block { margin-top: 40px; }
+            .signature-line { border-bottom: 1px solid #333; width: 250px; margin-bottom: 5px; height: 30px; }
+            .signature-name { font-weight: bold; }
+            .signature-title { color: #666; font-size: 12px; }
+            .date-row { display: flex; align-items: center; gap: 10px; margin-top: 15px; }
+            .date-label { font-weight: bold; }
+            .date-value { border-bottom: 1px solid #333; min-width: 150px; padding-bottom: 2px; }
+            .footer { margin-top: 60px; padding-top: 20px; border-top: 1px solid #ccc; font-size: 11px; color: #666; text-align: center; }
+            @media print { 
+              body { padding: 30px 40px; }
+              .signature-section { page-break-before: always; }
+            }
+          </style>
+        </head>
+        <body>
+          <h1>Independent Contractor Agreement</h1>
+          
+          <p class="intro">
+            This Independent Contractor Agreement (the "Agreement") is entered into as of <span class="highlight">${currentDate}</span> (the "Effective Date"), by and between <span class="highlight">Pulse Intelligence Labs, Inc.</span>, a Delaware corporation (the "Company"), and <span class="highlight">${contractorName}</span> ("Contractor").
+          </p>
+          
+          <h3>1. Services</h3>
+          <p>
+            Contractor agrees to provide product design and related creative services, including but not limited to UI/UX design, visual assets, and design support, as requested by the Company from time to time (the "Services").
+          </p>
+          
+          <h3>2. Independent Contractor Relationship</h3>
+          <p>
+            Contractor is an independent contractor and not an employee, partner, agent, or representative of the Company. Contractor shall have no authority to bind the Company. Contractor is solely responsible for all taxes, withholdings, and other statutory, regulatory, or contractual obligations of any sort arising from compensation paid under this Agreement.
+          </p>
+          
+          <h3>3. Compensation</h3>
+          <p>
+            Company shall pay Contractor a monthly retainer of <span class="highlight">$100 USD</span> for Services performed under this Agreement, unless otherwise agreed in writing by the parties. Payments shall be made electronically. Contractor acknowledges that no benefits, equity, or additional compensation are provided.
+          </p>
+          
+          <h3>4. Intellectual Property Assignment</h3>
+          
+          <div class="subsection">
+            <p class="subsection-title">(a) Assignment</p>
+            <p>
+              Contractor hereby irrevocably assigns to the Company all right, title, and interest in and to any and all work product, deliverables, designs, inventions, improvements, works of authorship, software, trade secrets, and other intellectual property created, conceived, reduced to practice, or developed by Contractor, solely or jointly with others, in connection with the Services or relating to the Company's business, products, or technology (collectively, the "Work Product").
+            </p>
+            <p>
+              To the extent any Work Product does not qualify as a "work made for hire," Contractor hereby assigns all right, title, and interest therein to the Company.
+            </p>
+          </div>
+          
+          <div class="subsection">
+            <p class="subsection-title">(b) Retroactive Assignment of Prior Work</p>
+            <p>
+              Contractor acknowledges that Contractor has previously provided services to the Company prior to the Effective Date of this Agreement. Contractor hereby irrevocably assigns to the Company all right, title, and interest in and to any and all Work Product created by Contractor for or on behalf of the Company at any time prior to or after the Effective Date, whether or not such work was created under a prior informal or unwritten arrangement.
+            </p>
+          </div>
+          
+          <div class="subsection">
+            <p class="subsection-title">(c) Further Assurances</p>
+            <p>
+              Contractor agrees to execute any documents and take any actions reasonably necessary to confirm or perfect the Company's ownership of the Work Product.
+            </p>
+          </div>
+          
+          <h3>5. Confidentiality</h3>
+          <p>
+            Contractor agrees to hold in strict confidence all non-public, proprietary, or confidential information disclosed by the Company, including but not limited to product designs, source materials, business plans, technical information, customer data, and trade secrets ("Confidential Information"). Contractor shall not disclose or use Confidential Information for any purpose other than performing Services under this Agreement.
+          </p>
+          
+          <h3>6. International Contractor Acknowledgment</h3>
+          <p>
+            Contractor represents that Contractor is located outside of the United States and acknowledges that Contractor is solely responsible for compliance with all applicable local laws, regulations, and tax obligations in Contractor's jurisdiction.
+          </p>
+          
+          <h3>7. Term and Termination</h3>
+          <p>
+            This Agreement shall commence on the Effective Date and may be terminated by either party at any time, with or without cause, upon written notice. Upon termination, Contractor shall promptly return or destroy all Company materials and Confidential Information.
+          </p>
+          
+          <h3>8. No Equity or Employment Rights</h3>
+          <p>
+            Nothing in this Agreement grants Contractor any equity interest, ownership rights, or right to future employment with the Company, whether express or implied.
+          </p>
+          
+          <h3>9. Governing Law</h3>
+          <p>
+            This Agreement shall be governed by and construed in accordance with the laws of the State of Delaware, without regard to conflict of laws principles.
+          </p>
+          
+          <div class="signature-section">
+            <p>IN WITNESS WHEREOF, the parties have executed this Agreement as of the Effective Date.</p>
+            
+            <div class="signature-block">
+              <p class="signature-name">Pulse Intelligence Labs, Inc.</p>
+              <div class="signature-line"></div>
+              <p>By: Tremaine Grant</p>
+              <p class="signature-title">Title: CEO</p>
+              <div class="date-row">
+                <span class="date-label">Date:</span>
+                <span class="date-value">${currentDate}</span>
+              </div>
+            </div>
+            
+            <div class="signature-block">
+              <p class="signature-name">Contractor:</p>
+              <div class="signature-line"></div>
+              <p>${contractorName}</p>
+              <div class="date-row">
+                <span class="date-label">Date:</span>
+                <span class="date-value">${currentDate}</span>
+              </div>
+            </div>
+          </div>
+          
+          <div class="footer">
+            <p>© ${new Date().getFullYear()} Pulse Intelligence Labs, Inc. All rights reserved.</p>
+            <p>This document contains confidential information intended for authorized parties only.</p>
+          </div>
+        </body>
+      </html>
+    `;
+
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(html);
+      printWindow.document.close();
+      printWindow.focus();
+      setTimeout(() => {
+        printWindow.print();
+      }, 250);
+    }
+  };
 
   // Balance Sheet Data
   const balanceSheetData = {
@@ -341,8 +1129,23 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
     { id: 'aug25', label: 'August 2025', file: '/BankStatements-August.pdf' },
     { id: 'sep25', label: 'September 2025', file: '/BankStatements-Sept.pdf' },
     { id: 'oct25', label: 'October 2025', file: '/BankStatements-October.pdf' },
-    { id: 'oct25_mercury', label: 'October 2025 (Mercury)', file: '/BankStatements-Oct-2.pdf' },
+    { id: 'oct25_mercury', label: 'October 2025 (Mercury)', file: '/BankStatments-Oct-2.pdf' },
     { id: 'nov25', label: 'November 2025', file: '/BankStatements-Novemebr.pdf' },
+  ];
+
+  // Monthly expense reports (detailed line-by-line expenses)
+  const expenseReports = [
+    { id: 'jan25', label: 'January 2025', file: '/ExpenseReport-Jan25.pdf' },
+    { id: 'feb25', label: 'February 2025', file: '/ExpenseReport-Feb25.pdf' },
+    { id: 'mar25', label: 'March 2025', file: '/ExpenseReport-Mar25.pdf' },
+    { id: 'apr25', label: 'April 2025', file: '/ExpenseReport-Apr25.pdf' },
+    { id: 'may25', label: 'May 2025', file: '/ExpenseReport-May25.pdf' },
+    { id: 'jun25', label: 'June 2025', file: '/ExpenseReport-Jun25.pdf' },
+    { id: 'jul25', label: 'July 2025', file: '/ExpenseReport-Jul25.pdf' },
+    { id: 'aug25', label: 'August 2025', file: '/ExpenseReport-Aug25.pdf' },
+    { id: 'sep25', label: 'September 2025', file: '/ExpenseReport-Sep25.pdf' },
+    { id: 'oct25', label: 'October 2025', file: '/ExpenseReport-Oct25.pdf' },
+    { id: 'nov25', label: 'November 2025', file: '/ExpenseReport-Nov25.pdf' },
   ];
 
   // Handle URL query parameter for section navigation (only on initial load)
@@ -509,29 +1312,430 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
     setIsBank2025ModalOpen(false);
   };
 
-  const handleDownloadTheChartCsv = () => {
-    if (typeof window === 'undefined') return;
+  const toggleExpenseMonth = (id: string) => {
+    setSelectedExpenseMonths(prev =>
+      prev.includes(id) ? prev.filter(m => m !== id) : [...prev, id]
+    );
+  };
 
-    const header = 'Month,Revenue,Spend,Net';
-    const rows = theChart2025.map(r => {
-      const revenue = r.revenue.toFixed(2);
-      const spend = r.spend.toFixed(2);
-      const net = r.net.toFixed(2);
-      // Month values have no commas, so no need to quote.
-      return `${r.month},${revenue},${spend},${net}`;
+  // Expense report data
+  const expenseReportData: Record<string, {
+    month: string;
+    year: string;
+    monthlyExpenses: Array<{ item: string; amount: number }>;
+    monthlyTotal: number;
+    monthlyIncome: number;
+    miscExpenses: Array<{ item: string; amount: number; paymentMethod: string }>;
+    miscTotal: number;
+  }> = {
+    'jan25': {
+      month: 'January',
+      year: '2025',
+      monthlyExpenses: [
+        { item: 'Figma', amount: 40.00 },
+        { item: 'ChatGPT', amount: 20.00 },
+        { item: 'GSuite', amount: 52.80 },
+        { item: 'Product Designer Contractor', amount: 100.00 },
+        { item: 'SendInBlue', amount: 69.00 },
+        { item: 'Cursor', amount: 200.00 },
+        { item: 'Claude AI', amount: 20.00 },
+        { item: 'Google One', amount: 20.00 },
+        { item: 'ElevenLabs', amount: 5.00 },
+        { item: 'Capcut', amount: 9.99 },
+      ],
+      monthlyTotal: 536.79,
+      monthlyIncome: 246.00,
+      miscExpenses: [
+        { item: 'WWW.PERPLEXITY.AI', amount: 200.00, paymentMethod: 'Discover' },
+      ],
+      miscTotal: 200.00,
+    },
+    'feb25': {
+      month: 'February',
+      year: '2025',
+      monthlyExpenses: [
+        { item: 'Figma', amount: 40.00 },
+        { item: 'ChatGPT', amount: 20.00 },
+        { item: 'GSuite', amount: 52.80 },
+        { item: 'Product Design Lead', amount: 100.00 },
+        { item: 'SendInBlue', amount: 69.00 },
+        { item: 'Cursor', amount: 200.00 },
+        { item: 'Claude AI', amount: 20.00 },
+        { item: 'Google One', amount: 20.00 },
+        { item: 'ElevenLabs', amount: 5.00 },
+      ],
+      monthlyTotal: 526.80,
+      monthlyIncome: 633.00,
+      miscExpenses: [
+        { item: 'FITWITHPULSE.AI', amount: 39.99, paymentMethod: 'Discover' },
+      ],
+      miscTotal: 39.99,
+    },
+    'mar25': {
+      month: 'March',
+      year: '2025',
+      monthlyExpenses: [
+        { item: 'Figma', amount: 40.00 },
+        { item: 'ChatGPT', amount: 20.00 },
+        { item: 'GSuite', amount: 52.80 },
+        { item: 'Product Design Lead', amount: 100.00 },
+        { item: 'SendInBlue', amount: 69.00 },
+        { item: 'Cursor', amount: 200.00 },
+        { item: 'Claude AI', amount: 20.00 },
+        { item: 'Google One', amount: 20.00 },
+        { item: 'ElevenLabs', amount: 5.00 },
+      ],
+      monthlyTotal: 526.80,
+      monthlyIncome: 268.00,
+      miscExpenses: [
+        { item: 'FITWITHPULSE.AI', amount: 39.99, paymentMethod: 'Discover' },
+      ],
+      miscTotal: 39.99,
+    },
+    'apr25': {
+      month: 'April',
+      year: '2025',
+      monthlyExpenses: [
+        { item: 'Figma', amount: 40.00 },
+        { item: 'ChatGPT', amount: 20.00 },
+        { item: 'GSuite', amount: 52.80 },
+        { item: 'Product Design Lead', amount: 100.00 },
+        { item: 'SendInBlue', amount: 69.00 },
+        { item: 'Cursor', amount: 200.00 },
+        { item: 'Claude AI', amount: 20.00 },
+        { item: 'Google One', amount: 20.00 },
+        { item: 'ElevenLabs', amount: 5.00 },
+      ],
+      monthlyTotal: 526.80,
+      monthlyIncome: 220.00,
+      miscExpenses: [
+        { item: 'FITWITHPULSE.AI', amount: 39.99, paymentMethod: 'Discover' },
+        { item: 'FIVERR - RESOURCE HIRE', amount: 158.25, paymentMethod: 'Discover' },
+      ],
+      miscTotal: 198.24,
+    },
+    'may25': {
+      month: 'May',
+      year: '2025',
+      monthlyExpenses: [
+        { item: 'Figma', amount: 40.00 },
+        { item: 'ChatGPT', amount: 20.00 },
+        { item: 'GSuite', amount: 52.80 },
+        { item: 'Product Design Lead', amount: 100.00 },
+        { item: 'SendInBlue', amount: 69.00 },
+        { item: 'Cursor', amount: 200.00 },
+        { item: 'Claude AI', amount: 20.00 },
+        { item: 'Google One', amount: 20.00 },
+        { item: 'ElevenLabs', amount: 5.00 },
+      ],
+      monthlyTotal: 526.80,
+      monthlyIncome: 373.00,
+      miscExpenses: [
+        { item: 'CURSOR USAGE MID MAY', amount: 20.00, paymentMethod: 'Discover' },
+        { item: 'REBRANDLAND.NET', amount: 25.00, paymentMethod: 'Discover' },
+        { item: 'DROPBOX DOCSEND', amount: 120.00, paymentMethod: 'None' },
+        { item: 'UNITED STATES PATENT APPLICATION', amount: 700.00, paymentMethod: 'Apple Card' },
+        { item: 'PUBLIC PARKING FOR PITCH EVENT', amount: 6.00, paymentMethod: 'Apple Card' },
+        { item: 'PRIMA FLYERS', amount: 82.24, paymentMethod: 'Apple Card' },
+      ],
+      miscTotal: 953.24,
+    },
+    'jun25': {
+      month: 'June',
+      year: '2025',
+      monthlyExpenses: [
+        { item: 'Figma', amount: 40.00 },
+        { item: 'ChatGPT', amount: 20.00 },
+        { item: 'GSuite', amount: 52.80 },
+        { item: 'Product Design Lead', amount: 100.00 },
+        { item: 'SendInBlue', amount: 69.00 },
+        { item: 'Cursor', amount: 200.00 },
+        { item: 'Claude AI', amount: 20.00 },
+        { item: 'Google One', amount: 20.00 },
+        { item: 'ElevenLabs', amount: 5.00 },
+      ],
+      monthlyTotal: 526.80,
+      monthlyIncome: 512.00,
+      miscExpenses: [
+        { item: 'PARKING', amount: 36.31, paymentMethod: 'Discover' },
+        { item: 'CURSOR EXTRA USAGE', amount: 83.61, paymentMethod: 'Discover' },
+      ],
+      miscTotal: 119.92,
+    },
+    'jul25': {
+      month: 'July',
+      year: '2025',
+      monthlyExpenses: [
+        { item: 'Figma', amount: 40.00 },
+        { item: 'ChatGPT', amount: 20.00 },
+        { item: 'GSuite', amount: 52.80 },
+        { item: 'Product Design Lead', amount: 100.00 },
+        { item: 'SendInBlue', amount: 69.00 },
+        { item: 'Cursor', amount: 200.00 },
+        { item: 'Claude AI', amount: 45.00 },
+        { item: 'Google One', amount: 20.00 },
+        { item: 'ElevenLabs', amount: 5.00 },
+      ],
+      monthlyTotal: 551.80,
+      monthlyIncome: 346.00,
+      miscExpenses: [
+        { item: 'PARKING', amount: 36.31, paymentMethod: 'Discover' },
+        { item: 'CURSOR EXTRA USAGE', amount: 83.61, paymentMethod: 'Discover' },
+      ],
+      miscTotal: 119.92,
+    },
+    'aug25': {
+      month: 'August',
+      year: '2025',
+      monthlyExpenses: [
+        { item: 'Figma', amount: 40.00 },
+        { item: 'ChatGPT', amount: 20.00 },
+        { item: 'GSuite', amount: 52.80 },
+        { item: 'Product Design Lead', amount: 100.00 },
+        { item: 'SendInBlue', amount: 69.00 },
+        { item: 'Cursor', amount: 200.00 },
+        { item: 'Claude AI', amount: 20.00 },
+        { item: 'SwitchYards', amount: 100.00 },
+        { item: 'Google One', amount: 20.00 },
+        { item: 'ElevenLabs', amount: 5.00 },
+      ],
+      monthlyTotal: 626.80,
+      monthlyIncome: 128.00,
+      miscExpenses: [
+        { item: 'Pulse Challenge Winner Prize', amount: 1034.00, paymentMethod: 'Apple Card' },
+        { item: 'PEER POP.io', amount: 92.38, paymentMethod: 'Apple Card' },
+        { item: 'CURSOR EXTRA USAGE', amount: 50.00, paymentMethod: 'Apple Card' },
+        { item: 'FLIGHT DELTA(AUSTIN)TRE', amount: 89.18, paymentMethod: 'Apple Card' },
+        { item: 'FLIGHT DELTA(AUSTIN)BOBBY', amount: 89.18, paymentMethod: 'Apple Card' },
+        { item: 'FLIGHT DELTA(ATL-RETURN)TRE', amount: 178.49, paymentMethod: 'Apple Card' },
+        { item: 'FLIGHT DELTA(ATL-RETURN)BOBBY', amount: 178.49, paymentMethod: 'Apple Card' },
+      ],
+      miscTotal: 1711.72,
+    },
+    'sep25': {
+      month: 'September',
+      year: '2025',
+      monthlyExpenses: [
+        { item: 'Figma', amount: 40.00 },
+        { item: 'ChatGPT', amount: 20.00 },
+        { item: 'GSuite', amount: 52.80 },
+        { item: 'Product Design Lead', amount: 100.00 },
+        { item: 'SendInBlue', amount: 69.00 },
+        { item: 'Cursor', amount: 200.00 },
+        { item: 'Claude AI', amount: 20.00 },
+        { item: 'SwitchYards', amount: 100.00 },
+        { item: 'Google One', amount: 20.00 },
+        { item: 'ElevenLabs', amount: 5.00 },
+      ],
+      monthlyTotal: 626.80,
+      monthlyIncome: 115.00,
+      miscExpenses: [
+        { item: 'CURSOR EXTRA USAGE', amount: 9.81, paymentMethod: 'Apple Card' },
+        { item: 'CURSOR EXTRA USAGE', amount: 20.05, paymentMethod: 'Apple Card' },
+        { item: 'CONFETTI SOCIAL(SOCIAL MEDIA CONSULT.)', amount: 375.00, paymentMethod: 'Chase' },
+      ],
+      miscTotal: 404.86,
+    },
+    'oct25': {
+      month: 'October',
+      year: '2025',
+      monthlyExpenses: [
+        { item: 'Figma', amount: 40.00 },
+        { item: 'ChatGPT', amount: 20.00 },
+        { item: 'GSuite', amount: 52.80 },
+        { item: 'Product Design Lead', amount: 100.00 },
+        { item: 'SendInBlue', amount: 69.00 },
+        { item: 'Cursor', amount: 200.00 },
+        { item: 'Claude AI', amount: 20.00 },
+        { item: 'SwitchYards', amount: 100.00 },
+        { item: 'Google One', amount: 20.00 },
+        { item: 'ElevenLabs', amount: 5.00 },
+      ],
+      monthlyTotal: 626.80,
+      monthlyIncome: 173.00,
+      miscExpenses: [
+        { item: 'FLIGHT SF(AWS RETREAT) - BOBBY', amount: 514.22, paymentMethod: 'Apple Card' },
+      ],
+      miscTotal: 514.22,
+    },
+    'nov25': {
+      month: 'November',
+      year: '2025',
+      monthlyExpenses: [
+        { item: 'Figma', amount: 40.00 },
+        { item: 'ChatGPT', amount: 20.00 },
+        { item: 'GSuite', amount: 52.80 },
+        { item: 'Product Design Lead', amount: 100.00 },
+        { item: 'SendInBlue', amount: 69.00 },
+        { item: 'Cursor', amount: 200.00 },
+        { item: 'Claude AI', amount: 20.00 },
+        { item: 'SwitchYards', amount: 100.00 },
+        { item: 'Google One', amount: 20.00 },
+        { item: 'ElevenLabs', amount: 5.00 },
+      ],
+      monthlyTotal: 626.80,
+      monthlyIncome: 134.00,
+      miscExpenses: [],
+      miscTotal: 0.00,
+    },
+  };
+
+  const generateExpenseReportPdf = (reportId: string) => {
+    const data = expenseReportData[reportId];
+    if (!data) return;
+
+    const fmt = (value: number) => 
+      `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+    const afterMonthly = data.monthlyIncome - data.monthlyTotal;
+    const afterMonthlyAndMisc = data.monthlyIncome - data.monthlyTotal + data.miscTotal;
+    const afterDebtMonthlyMisc = afterMonthly; // Assuming debt equals misc for this calculation
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>${data.month} ${data.year} Expense Report - Pulse Intelligence Labs</title>
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 40px; color: #111; margin: 0; }
+            h1 { font-size: 24px; margin-bottom: 5px; }
+            .subtitle { color: #666; font-size: 14px; margin-bottom: 30px; }
+            .two-column { display: flex; gap: 30px; margin-bottom: 30px; }
+            .column { flex: 1; }
+            .section-title { font-size: 16px; font-weight: 600; margin-bottom: 15px; color: #1f2937; }
+            table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 20px; }
+            th { text-align: left; padding: 10px 8px; background: #f3f4f6; font-weight: 600; border-bottom: 2px solid #e5e5e5; }
+            th.right { text-align: right; }
+            td { padding: 8px; border-bottom: 1px solid #e5e5e5; }
+            td.right { text-align: right; }
+            .total-row td { font-weight: 700; background: #f9fafb; border-top: 2px solid #d1d5db; }
+            .summary-box { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 15px; margin-bottom: 20px; }
+            .summary-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #e5e7eb; }
+            .summary-row:last-child { border-bottom: none; }
+            .summary-label { color: #666; font-size: 13px; }
+            .summary-value { font-weight: 600; font-size: 13px; }
+            .summary-value.negative { color: #dc2626; }
+            .summary-value.positive { color: #16a34a; }
+            .payment-method { font-size: 11px; color: #6b7280; font-style: italic; }
+            .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e5e5; font-size: 11px; color: #666; text-align: center; }
+            @media print { body { padding: 20px; } }
+          </style>
+        </head>
+        <body>
+          <h1>${data.month} ${data.year} Expense Report</h1>
+          <p class="subtitle">Pulse Intelligence Labs, Inc. | Generated ${new Date().toLocaleDateString()}</p>
+          
+          <div class="two-column">
+            <div class="column">
+              <div class="section-title">Monthly Expenses</div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Item</th>
+                    <th class="right">Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${data.monthlyExpenses.map(exp => `
+                    <tr>
+                      <td>${exp.item}</td>
+                      <td class="right">${fmt(exp.amount)}</td>
+                    </tr>
+                  `).join('')}
+                  <tr class="total-row">
+                    <td>Total</td>
+                    <td class="right">${fmt(data.monthlyTotal)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            
+            <div class="column">
+              <div class="section-title">Financial Summary</div>
+              <div class="summary-box">
+                <div class="summary-row">
+                  <span class="summary-label">Monthly Income</span>
+                  <span class="summary-value">${fmt(data.monthlyIncome)}</span>
+                </div>
+                <div class="summary-row">
+                  <span class="summary-label">After Monthly</span>
+                  <span class="summary-value ${afterMonthly < 0 ? 'negative' : 'positive'}">${fmt(afterMonthly)}</span>
+                </div>
+                <div class="summary-row">
+                  <span class="summary-label">Total Misc.</span>
+                  <span class="summary-value">${fmt(data.miscTotal)}</span>
+                </div>
+                <div class="summary-row">
+                  <span class="summary-label">After Monthly & misc.</span>
+                  <span class="summary-value ${afterMonthlyAndMisc < 0 ? 'negative' : 'positive'}">${fmt(afterMonthlyAndMisc)}</span>
+                </div>
+                <div class="summary-row">
+                  <span class="summary-label">After Debt & Monthly & misc.</span>
+                  <span class="summary-value ${afterDebtMonthlyMisc < 0 ? 'negative' : 'positive'}">${fmt(afterDebtMonthlyMisc)}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="section-title">Miscellaneous Expenses</div>
+          <table>
+            <thead>
+              <tr>
+                <th>Item</th>
+                <th class="right">Amount</th>
+                <th>Payment Method</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${data.miscExpenses.map(exp => `
+                <tr>
+                  <td>${exp.item}</td>
+                  <td class="right">${fmt(exp.amount)}</td>
+                  <td><span class="payment-method">${exp.paymentMethod}</span></td>
+                </tr>
+              `).join('')}
+              <tr class="total-row">
+                <td>Total</td>
+                <td class="right">${fmt(data.miscTotal)}</td>
+                <td></td>
+              </tr>
+            </tbody>
+          </table>
+          
+          <div class="footer">
+            <p>© ${new Date().getFullYear()} Pulse Intelligence Labs, Inc. All rights reserved.</p>
+            <p>This document contains confidential financial information intended for authorized investors only.</p>
+          </div>
+        </body>
+      </html>
+    `;
+
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(html);
+      printWindow.document.close();
+      printWindow.focus();
+      setTimeout(() => {
+        printWindow.print();
+      }, 250);
+    }
+  };
+
+  const handleDownloadSelectedExpenseReports = () => {
+    if (typeof window === 'undefined') return;
+    const selected = expenseReports.filter(r => selectedExpenseMonths.includes(r.id));
+    if (!selected.length) return;
+
+    // Generate PDFs for each selected report
+    selected.forEach(report => {
+      if (expenseReportData[report.id]) {
+        generateExpenseReportPdf(report.id);
+        // Add a small delay between multiple PDFs
+        setTimeout(() => {}, 500);
+      }
     });
 
-    const csv = [header, ...rows].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'Pulse-The-Chart-2025.csv';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    setIsExpenseReportModalOpen(false);
   };
 
   // Helper to check if a section is accessible
@@ -572,7 +1776,6 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
     financials: null,
     captable: null,
     deck: null,
-    investment: null,
     documents: null,
   });
 
@@ -1055,8 +2258,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                     { id: 'financials', label: 'Financial Information', number: 9 },
                     { id: 'captable', label: 'Cap Table', number: 10 },
                     { id: 'deck', label: 'Pitch Deck', number: 11 },
-                    { id: 'investment', label: 'Investment Opportunity', number: 12 },
-                    { id: 'documents', label: 'All Documents', number: 13 },
+                    { id: 'documents', label: 'All Documents', number: 12 },
                   ].map((item) => (
                     <button
                       key={item.id}
@@ -2806,9 +4008,19 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                         <div className="p-6">
                             <h4 className="text-white font-semibold mb-1">Lola</h4>
                             <p className="text-[#E0FE10] text-sm font-medium mb-3">Design Lead</p>
-                            <p className="text-zinc-400 text-sm">
+                            <p className="text-zinc-400 text-sm mb-3">
                             UX visionary crafting intuitive, accessible fitness experiences. Expert in design systems and user-centered product strategy.
                             </p>
+                            <button
+                                type="button"
+                                onClick={generateContractorAgreementPdf}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-zinc-700/50 hover:bg-zinc-700 border border-zinc-600 rounded-lg text-xs text-zinc-300 hover:text-white transition-colors"
+                            >
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                                Contractor Agreement
+                            </button>
                         </div>
                         </div>
                         
@@ -2842,9 +4054,19 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                         <div className="p-6">
                             <h4 className="text-white font-semibold mb-1">Bobby</h4>
                             <p className="text-[#E0FE10] text-sm font-medium mb-3">Chief of Staff</p>
-                            <p className="text-zinc-400 text-sm">
+                            <p className="text-zinc-400 text-sm mb-3">
                             Harvard-educated, former TED coach. Brings storytelling, operational excellence, and investor communications.
                             </p>
+                            <button
+                                type="button"
+                                onClick={generateAdvisorAgreementPdf}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-zinc-700/50 hover:bg-zinc-700 border border-zinc-600 rounded-lg text-xs text-zinc-300 hover:text-white transition-colors"
+                            >
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                                Advisor Agreement
+                            </button>
                         </div>
                         </div>
                     </div>
@@ -2857,8 +4079,33 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                         <div className="flex items-start gap-4">
                         <div className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0">
                             <img 
-                            src="/Val.jpg"
+                            src="zak.jpg"
                             alt="Advisor 1" 
+                            className="w-full h-full object-cover"
+                            />
+                        </div>
+                        <div>
+                            <h4 className="text-white font-semibold mb-1">
+                              <a href="https://www.linkedin.com/in/marqueszak/" 
+                                 target="_blank" 
+                                 rel="noopener noreferrer"
+                                 className="hover:text-[#E0FE10] transition-colors underline decoration-dotted flex items-center gap-1">
+                                Marques Zak
+                                <ArrowUpRight className="h-3 w-3" />
+                              </a>
+                            </h4>
+                            <p className="text-[#E0FE10] text-sm font-medium mb-2">Marketing and Growth</p>
+                            <p className="text-zinc-400 text-sm">
+                            Advertising Hall of Achievement inductee. Marketing exec at PepsiCo and American Express. Advises on brand strategy and growth.
+                            </p>
+                        </div>
+                        </div>
+                        
+                        <div className="flex items-start gap-4">
+                        <div className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0">
+                            <img 
+                            src="/Val.jpg"
+                            alt="Advisor 2" 
                             className="w-full h-full object-cover"
                             />
                         </div>
@@ -2883,7 +4130,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                         <div className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0">
                             <img 
                             src="/Deray.png"
-                            alt="Advisor 2" 
+                            alt="Advisor 3" 
                             className="w-full h-full object-cover"
                             />
                         </div>
@@ -2900,31 +4147,6 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                             <p className="text-[#E0FE10] text-sm font-medium mb-2">Community Building and Organizing</p>
                             <p className="text-zinc-400 text-sm">
                             Civil rights activist and community organizer. Expert in rallying people around shared causes. Advises on authentic community building.
-                            </p>
-                        </div>
-                        </div>
-                        
-                        <div className="flex items-start gap-4">
-                        <div className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0">
-                            <img 
-                            src="zak.jpg"
-                            alt="Advisor 3" 
-                            className="w-full h-full object-cover"
-                            />
-                        </div>
-                        <div>
-                            <h4 className="text-white font-semibold mb-1">
-                              <a href="https://www.linkedin.com/in/marqueszak/" 
-                                 target="_blank" 
-                                 rel="noopener noreferrer"
-                                 className="hover:text-[#E0FE10] transition-colors underline decoration-dotted flex items-center gap-1">
-                                Marques Zak
-                                <ArrowUpRight className="h-3 w-3" />
-                              </a>
-                            </h4>
-                            <p className="text-[#E0FE10] text-sm font-medium mb-2">Marketing and Growth</p>
-                            <p className="text-zinc-400 text-sm">
-                            Advertising Hall of Achievement inductee. Marketing exec at PepsiCo and American Express. Advises on brand strategy and growth.
                             </p>
                         </div>
                         </div>
@@ -3418,115 +4640,6 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                         </div>
                     </div>
 
-                    {/* The Chart */}
-                    <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8 mb-10">
-                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
-                            <div>
-                                <h3 className="text-white text-xl font-semibold mb-1">The Chart</h3>
-                                <p className="text-zinc-400 text-sm">2025 monthly revenue, spend, and net (Jan–Nov).</p>
-                            </div>
-                            <button
-                                type="button"
-                                onClick={handleDownloadTheChartCsv}
-                                className="inline-flex items-center justify-center px-4 py-2 rounded-lg bg-zinc-800/70 hover:bg-zinc-800 border border-zinc-700 hover:border-[#E0FE10]/40 text-sm font-medium text-zinc-200 hover:text-white transition-colors"
-                            >
-                                <Download className="w-4 h-4 mr-2" />
-                                Download CSV
-                            </button>
-                        </div>
-
-                        {/* Chart (Revenue vs Spend) */}
-                        <div className="relative">
-                            {/* Grid */}
-                            <div className="absolute inset-x-0 top-0 h-56 flex flex-col justify-between pointer-events-none">
-                                <div className="border-t border-zinc-800/80 w-full" />
-                                <div className="border-t border-zinc-800/60 w-full" />
-                                <div className="border-t border-zinc-800/60 w-full" />
-                                <div className="border-t border-zinc-800/60 w-full" />
-                                <div className="border-t border-zinc-800/80 w-full" />
-                            </div>
-
-                            <div className="flex items-end gap-3 h-56 relative z-10">
-                                {theChart2025.map((row) => {
-                                    const monthShort = row.month.split(' ')[0].slice(0, 3);
-                                    const revenueH = (row.revenue / theChartMax2025) * 224; // 56 * 4 = 224px
-                                    const spendH = (row.spend / theChartMax2025) * 224;
-                                    const netIsPositive = row.net >= 0;
-
-                                    return (
-                                        <div key={row.month} className="flex-1 flex flex-col items-center justify-end h-full">
-                                            <div className="w-full flex items-end gap-1 h-full">
-                                                <div className="flex-1 flex items-end h-full group">
-                                                    <div
-                                                        className="w-full rounded-t-sm bg-gradient-to-t from-[#E0FE10]/80 to-[#E0FE10]/40 border border-[#E0FE10]/20"
-                                                        style={{ height: `${Math.max(4, revenueH)}px` }}
-                                                    >
-                                                        <div className="absolute -translate-y-10 opacity-0 group-hover:opacity-100 transition-opacity text-xs bg-zinc-800 text-white px-2 py-1 rounded">
-                                                            Revenue: ${row.revenue.toFixed(2)}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <div className="flex-1 flex items-end h-full group">
-                                                    <div
-                                                        className="w-full rounded-t-sm bg-gradient-to-t from-rose-500/70 to-rose-500/30 border border-rose-500/20"
-                                                        style={{ height: `${Math.max(4, spendH)}px` }}
-                                                    >
-                                                        <div className="absolute -translate-y-10 opacity-0 group-hover:opacity-100 transition-opacity text-xs bg-zinc-800 text-white px-2 py-1 rounded">
-                                                            Spend: ${row.spend.toFixed(2)}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <div className="mt-3 text-xs text-zinc-500">{monthShort}</div>
-                                            <div className={`mt-1 text-[11px] font-medium ${netIsPositive ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                                {netIsPositive ? '+' : ''}${row.net.toFixed(2)}
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-
-                            <div className="mt-4 flex items-center gap-4 text-xs text-zinc-400">
-                                <div className="flex items-center gap-2">
-                                    <span className="inline-block w-3 h-3 rounded bg-[#E0FE10]/70 border border-[#E0FE10]/30" />
-                                    Revenue
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <span className="inline-block w-3 h-3 rounded bg-rose-500/60 border border-rose-500/30" />
-                                    Spend
-                                </div>
-                                <div className="text-zinc-500">Net shown under each month</div>
-                            </div>
-                        </div>
-
-                        {/* Table */}
-                        <div className="mt-8 rounded-xl border border-zinc-800 overflow-hidden">
-                            <table className="w-full text-sm">
-                                <thead className="bg-zinc-800/60">
-                                    <tr>
-                                        <th className="text-left px-4 py-3 text-zinc-400 font-medium">Month</th>
-                                        <th className="text-right px-4 py-3 text-zinc-400 font-medium">Revenue</th>
-                                        <th className="text-right px-4 py-3 text-zinc-400 font-medium">Spend</th>
-                                        <th className="text-right px-4 py-3 text-zinc-400 font-medium">Net</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-zinc-800">
-                                    {theChart2025.map((row) => (
-                                        <tr key={`row-${row.month}`} className="bg-zinc-900/30">
-                                            <td className="px-4 py-3 text-white">{row.month}</td>
-                                            <td className="px-4 py-3 text-right text-zinc-200">${row.revenue.toFixed(2)}</td>
-                                            <td className="px-4 py-3 text-right text-zinc-200">${row.spend.toFixed(2)}</td>
-                                            <td className={`px-4 py-3 text-right font-medium ${row.net >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                                {row.net >= 0 ? '+' : ''}${row.net.toFixed(2)}
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
                     {/* Financial Documents */}
                     <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8 mb-10">
                         <h3 className="text-white text-xl font-semibold mb-1">Financial Documents</h3>
@@ -3613,6 +4726,24 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                                 <div>
                                     <p className="text-white font-medium">Balance Sheet</p>
                                     <p className="text-zinc-500 text-sm">Assets & liabilities</p>
+                                </div>
+                            </button>
+                            
+                            {/* Expense Reports */}
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setIsExpenseReportModalOpen(true);
+                                    setSelectedExpenseMonths(expenseReports.map(r => r.id));
+                                }}
+                                className="flex items-center gap-4 p-4 bg-zinc-800/70 rounded-lg hover:bg-zinc-800 transition-colors group text-left"
+                            >
+                                <div className="w-12 h-12 rounded-lg bg-rose-500/10 flex items-center justify-center group-hover:bg-rose-500/20 transition-colors">
+                                    <Download className="w-6 h-6 text-rose-400" />
+                                </div>
+                                <div>
+                                    <p className="text-white font-medium">Expense Reports</p>
+                                    <p className="text-zinc-500 text-sm">Month-to-month detailed expenses</p>
                                 </div>
                             </button>
                         </div>
@@ -3782,6 +4913,86 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                         </div>
                     )}
 
+                    {/* Expense Reports Modal */}
+                    {isExpenseReportModalOpen && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+                            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-lg w-full p-6">
+                                <div className="flex items-center justify-between mb-4">
+                                    <div>
+                                        <h4 className="text-white text-lg font-semibold">Expense Reports</h4>
+                                        <p className="text-zinc-400 text-xs mt-1">
+                                            Select the months you'd like to download. Each file shows detailed line-by-line expenses for that month.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="max-h-64 overflow-y-auto rounded-lg border border-zinc-800 bg-zinc-950/60 mb-4">
+                                    <div className="flex items-center justify-between px-4 py-2 border-b border-zinc-800 text-xs text-zinc-400">
+                                        <button
+                                            type="button"
+                                            onClick={() => setSelectedExpenseMonths(expenseReports.map(r => r.id))}
+                                            className="hover:text-[#E0FE10] transition-colors"
+                                        >
+                                            Select all
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setSelectedExpenseMonths([])}
+                                            className="hover:text-[#E0FE10] transition-colors"
+                                        >
+                                            Clear
+                                        </button>
+                                    </div>
+                                    <ul className="divide-y divide-zinc-800 text-sm">
+                                        {expenseReports.map(report => {
+                                            const checked = selectedExpenseMonths.includes(report.id);
+                                            return (
+                                                <li
+                                                    key={report.id}
+                                                    className="flex items-center justify-between px-4 py-2 cursor-pointer hover:bg-zinc-900/70"
+                                                    onClick={() => toggleExpenseMonth(report.id)}
+                                                >
+                                                    <div className="flex items-center gap-3">
+                                                        <div
+                                                            className={`w-4 h-4 rounded border flex items-center justify-center text-[10px] ${
+                                                                checked
+                                                                    ? 'border-[#E0FE10] bg-[#E0FE10]/20 text-[#E0FE10]'
+                                                                    : 'border-zinc-600 text-transparent'
+                                                            }`}
+                                                        >
+                                                            ✓
+                                                        </div>
+                                                        <span className="text-white">{report.label}</span>
+                                                    </div>
+                                                    <span className="text-zinc-500 text-xs">Detailed expenses</span>
+                                                </li>
+                                            );
+                                        })}
+                                    </ul>
+                                </div>
+
+                                <div className="flex justify-end gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsExpenseReportModalOpen(false)}
+                                        className="px-4 py-2 rounded-lg border border-zinc-700 text-sm text-zinc-200 hover:bg-zinc-800 transition-colors"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={handleDownloadSelectedExpenseReports}
+                                        disabled={!selectedExpenseMonths.length}
+                                        className="px-4 py-2 rounded-lg bg-[#E0FE10] text-sm font-semibold text-black hover:bg-[#d8f521] disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center"
+                                    >
+                                        <Download className="w-4 h-4 mr-2" />
+                                        Download selected
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     {/* 2024 Bank Statements Info Modal */}
                     {isBank2024ModalOpen && (
                         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
@@ -3898,14 +5109,14 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                                             High-level P&amp;L for {activePLYear} subscription revenue. All amounts in USD.
                                         </p>
                                     </div>
-                                    <a
-                                        href="/investor-docs/profit-loss-statement.pdf"
-                                        download
+                                    <button
+                                        type="button"
+                                        onClick={generatePLPdf}
                                         className="inline-flex items-center px-3 py-1.5 rounded-lg bg-[#E0FE10] text-xs font-semibold text-black hover:bg-[#d8f521] transition-colors"
                                     >
                                         <Download className="w-3 h-3 mr-1" />
                                         Download PDF
-                                    </a>
+                                    </button>
                                 </div>
 
                                 {/* Year tabs */}
@@ -3968,7 +5179,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                                                     Recurring&nbsp;Expenses
                                                 </th>
                                                 <th className="text-right px-3 py-2 text-zinc-400 font-medium">
-                                                    One-off&nbsp;Expenses
+                                                    Non-Recurring&nbsp;Expenses
                                                 </th>
                                                 <th className="text-right px-3 py-2 text-zinc-400 font-medium">Total Expenses</th>
                                                 <th className="text-right px-3 py-2 text-zinc-400 font-medium">Net Income</th>
@@ -4029,14 +5240,14 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                                             Assets, liabilities, and owner&apos;s equity as of {activeBalanceSheetYear}. All amounts in USD.
                                         </p>
                                     </div>
-                                    <a
-                                        href="/investor-docs/balance-sheet.pdf"
-                                        download
+                                    <button
+                                        type="button"
+                                        onClick={generateBalanceSheetPdf}
                                         className="inline-flex items-center px-3 py-1.5 rounded-lg bg-[#E0FE10] text-xs font-semibold text-black hover:bg-[#d8f521] transition-colors"
                                     >
                                         <Download className="w-3 h-3 mr-1" />
                                         Download PDF
-                                    </a>
+                                    </button>
                                 </div>
 
                                 {/* Year tabs */}
@@ -4251,6 +5462,13 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                                     </table>
                                 </div>
 
+                                {/* Explanatory Note */}
+                                <div className="mt-4 p-3 bg-zinc-800/50 border border-zinc-700/50 rounded-lg">
+                                    <p className="text-zinc-400 text-xs leading-relaxed">
+                                        <span className="text-zinc-300 font-medium">Note:</span> Owner&apos;s Equity reflects cumulative founder capital contributions net of operating losses. Cash balance reflects current on-hand funds as of report date.
+                                    </p>
+                                </div>
+
                                 <div className="flex justify-end mt-4">
                                     <button
                                         type="button"
@@ -4324,11 +5542,23 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                     ref={(el) => { sectionsRef.current.captable = el; }}
                     className="mb-20"
                 >
-                    <div className="flex items-center mb-6">
-                        <div className="w-10 h-10 rounded-full bg-[#E0FE10] flex items-center justify-center mr-4">
-                            <span className="font-bold text-black">10</span>
+                    <div className="flex items-center justify-between mb-6">
+                        <div className="flex items-center">
+                            <div className="w-10 h-10 rounded-full bg-[#E0FE10] flex items-center justify-center mr-4">
+                                <span className="font-bold text-black">10</span>
+                            </div>
+                            <h2 className="text-white text-3xl font-bold">Cap Table</h2>
                         </div>
-                        <h2 className="text-white text-3xl font-bold">Cap Table</h2>
+                        <button
+                            type="button"
+                            onClick={generateCapTablePdf}
+                            className="flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg text-sm text-zinc-200 transition-colors"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            Download PDF
+                        </button>
                     </div>
 
                     <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8 mb-6">
@@ -4435,6 +5665,21 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                                 <span>Vesting start date: Date of incorporation.</span>
                             </li>
                         </ul>
+                        
+                        {/* RSPA Download */}
+                        <div className="mt-6 pt-4 border-t border-zinc-800">
+                            <a
+                                href="/Founder Restricted Stock Purchase Agreement - Pulse Intelligence Labs.pdf"
+                                download="Founder-RSPA.pdf"
+                                className="inline-flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg text-sm text-zinc-200 transition-colors"
+                            >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                                Download Founder RSPA (PDF)
+                            </a>
+                            <p className="text-zinc-500 text-xs mt-2">Founder Restricted Stock Purchase Agreement</p>
+                        </div>
                     </div>
                 </section>
                   ) : (
@@ -4488,134 +5733,6 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                   )
                 )}
 
-                {/* Investment Opportunity Section */}
-                {activeSection === 'investment' && (
-                  hasSectionAccess('investment') ? (
-                <section 
-                    id="investment" 
-                    ref={(el) => { sectionsRef.current.investment = el; }}
-                    className="mb-20"
-                >
-                    <div className="flex items-center mb-6">
-                    <div className="w-10 h-10 rounded-full bg-[#E0FE10] flex items-center justify-center mr-4">
-                        <span className="font-bold text-black">11</span>
-                    </div>
-                    <h2 className="text-white text-3xl font-bold">Investment Opportunity</h2>
-                    </div>
-                    
-                    <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8 mb-10">                    
-                    
-                    <div className="flex flex-col md:flex-row gap-8">
-                        <div className="md:w-1/2">
-                        <h3 className="text-white text-xl font-semibold mb-4">Seed Funding Round</h3>
-                        
-                        <div className="space-y-6">
-                            <div>
-                            <p className="text-zinc-400 mb-1">Target Raise</p>
-                            <p className="text-white text-3xl font-bold">$750K</p>
-                            </div>
-                            
-                            <div>
-                            <p className="text-zinc-400 mb-1">Pre-Money Valuation</p>
-                            <p className="text-white text-3xl font-bold">$3.5 Million</p>
-                            </div>
-                            
-                            <div>
-                            <p className="text-zinc-400 mb-1">Minimum Investment</p>
-                            <p className="text-white text-xl font-medium">$25,000</p>
-                            </div>
-                            
-                            <div>
-                            <p className="text-zinc-400 mb-1">Funding Use</p>
-                            <ul className="text-white space-y-1 mt-2">
-                                <li>• Creator acquisition (60%)</li>
-                                <li>• Product development (25%)</li>
-                                <li>• Team expansion (10%)</li>
-                                <li>• Operations (5%)</li>
-                            </ul>
-                            </div>
-                        </div>
-                        </div>
-                        
-                        <div className="md:w-1/2">
-                        <h3 className="text-white text-xl font-semibold mb-4">Fundraising Timeline</h3>
-                        
-                        <div className="relative pl-8 pb-8 border-l border-zinc-700">
-                            <div className="absolute left-0 top-0 w-3 h-3 -ml-1.5 rounded-full bg-[#E0FE10]"></div>
-                            <h4 className="text-white font-medium mb-1">Bootstrap Phase - Completed</h4>
-                            <p className="text-zinc-400 text-sm mb-1">2023-2024</p>
-                            <p className="text-zinc-400">$7K self-funded to build MVP and validate product-market fit</p>
-                        </div>
-                        
-                        <div className="relative pl-8 pb-8 border-l border-zinc-700">
-                            <div className="absolute left-0 top-0 w-3 h-3 -ml-1.5 rounded-full bg-[#E0FE10]"></div>
-                            <h4 className="text-white font-medium mb-1">Seed Round - Current</h4>
-                            <p className="text-zinc-400 text-sm mb-1">Q2 2025</p>
-                            <p className="text-zinc-400">$750K to accelerate creator acquisition and scale platform</p>
-                        </div>
-                        
-                        <div className="relative pl-8 border-l border-zinc-700">
-                            <div className="absolute left-0 top-0 w-3 h-3 -ml-1.5 rounded-full bg-zinc-700"></div>
-                            <h4 className="text-white font-medium mb-1">Series A - Projected</h4>
-                            <p className="text-zinc-400 text-sm mb-1">Q4 2026</p>
-                            <p className="text-zinc-400">Targeting $5M+ for market expansion and feature development</p>
-                        </div>
-                        </div>
-                    </div>
-                    </div>
-                    
-                    <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8">
-                    <h3 className="text-white text-xl font-semibold mb-6">Why Invest in Pulse?</h3>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-zinc-900 to-zinc-800 p-1">
-                        <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-[#d7ff00]/10"></div>
-                        <div className="relative bg-zinc-900 rounded-lg p-5 h-full">
-                            <h4 className="text-[#E0FE10] font-medium mb-2">Validated Product-Market Fit</h4>
-                            <p className="text-zinc-400 text-sm">78% retention, 18% conversion—users pay and stay.</p>
-                        </div>
-                        </div>
-                        
-                        <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-zinc-900 to-zinc-800 p-1">
-                        <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-[#d7ff00]/10"></div>
-                        <div className="relative bg-zinc-900 rounded-lg p-5 h-full">
-                            <h4 className="text-[#E0FE10] font-medium mb-2">Creator Flywheel</h4>
-                            <p className="text-zinc-400 text-sm">Each creator brings 37.5x users. Zero paid acquisition.</p>
-                        </div>
-                        </div>
-                        
-                        <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-zinc-900 to-zinc-800 p-1">
-                        <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-[#d7ff00]/10"></div>
-                        <div className="relative bg-zinc-900 rounded-lg p-5 h-full">
-                            <h4 className="text-[#E0FE10] font-medium mb-2">Technical Founder</h4>
-                            <p className="text-zinc-400 text-sm">Solo-built iOS + web platform. Capital efficient.</p>
-                        </div>
-                        </div>
-                        
-                        <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-zinc-900 to-zinc-800 p-1">
-                        <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-[#d7ff00]/10"></div>
-                        <div className="relative bg-zinc-900 rounded-lg p-5 h-full">
-                            <h4 className="text-[#E0FE10] font-medium mb-2">$120B+ Market</h4>
-                            <p className="text-zinc-400 text-sm">Social-first approach in a fragmented fitness market.</p>
-                        </div>
-                        </div>
-                    </div>
-                    
-                    <div className="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
-                        <a href="https://calendly.com/tre-aqo7/30min" target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center px-8 py-4 bg-[#E0FE10] hover:bg-[#d8f521] text-black font-bold rounded-lg transition-colors text-center">
-                        Schedule Investor Meeting
-                        </a>
-                        <a href="mailto:invest@fitwithpulse.ai?subject=Request%20for%20Due%20Diligence%20Access&body=Hello%20Pulse%20Team%2C%0A%0AI%20am%20interested%20in%20learning%20more%20about%20Pulse%20and%20would%20like%20to%20request%20access%20to%20your%20due%20diligence%20materials.%0A%0APlease%20provide%20me%20with%20access%20to%3A%0A-%20Detailed%20financial%20statements%0A-%20Legal%20documents%20and%20cap%20table%0A-%20Product%20roadmap%20and%20technical%20documentation%0A-%20Customer%20references%20and%20case%20studies%0A-%20Any%20additional%20materials%20relevant%20for%20investment%20evaluation%0A%0AThank%20you%20for%20your%20time%20and%20consideration.%0A%0ABest%20regards%2C%0A[Your%20Name]" className="inline-flex items-center justify-center px-8 py-4 border border-zinc-700 hover:border-[#E0FE10] text-white font-medium rounded-lg transition-colors text-center">
-                        Request Due Diligence Access
-                        </a>
-                    </div>
-                    </div>
-                </section>
-                  ) : (
-                    <LockedSectionView sectionName="Investment Opportunity" />
-                  )
-                )}
-
                 {/* All Documents Section */}
                 {activeSection === 'documents' && (
                   hasSectionAccess('documents') ? (
@@ -4626,7 +5743,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                 >
                     <div className="flex items-center mb-8">
                     <div className="w-10 h-10 rounded-full bg-[#E0FE10] flex items-center justify-center mr-4">
-                        <span className="font-bold text-black">13</span>
+                        <span className="font-bold text-black">12</span>
                     </div>
                     <h2 className="text-white text-3xl font-bold">All Documents</h2>
                     </div>
@@ -4697,6 +5814,45 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                               <div className="text-zinc-500 text-sm">PDF • Signed Founder IP Assignment</div>
                             </div>
                           </a>
+                          <a 
+                            href="/Founder Restricted Stock Purchase Agreement - Pulse Intelligence Labs.pdf"
+                            download="Founder-RSPA.pdf"
+                            className="flex items-center gap-4 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-purple-500/30 rounded-xl transition-all group"
+                          >
+                            <div className="w-12 h-12 rounded-lg bg-purple-500/10 flex items-center justify-center flex-shrink-0">
+                              <Download className="w-5 h-5 text-purple-400" />
+                            </div>
+                            <div className="flex-1">
+                              <div className="text-white font-medium group-hover:text-purple-400 transition-colors">Founder RSPA</div>
+                              <div className="text-zinc-500 text-sm">PDF • Signed Restricted Stock Purchase Agreement</div>
+                            </div>
+                          </a>
+                          <button 
+                            type="button"
+                            onClick={generateAdvisorAgreementPdf}
+                            className="flex items-center gap-4 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-purple-500/30 rounded-xl transition-all group text-left"
+                          >
+                            <div className="w-12 h-12 rounded-lg bg-purple-500/10 flex items-center justify-center flex-shrink-0">
+                              <Download className="w-5 h-5 text-purple-400" />
+                            </div>
+                            <div className="flex-1">
+                              <div className="text-white font-medium group-hover:text-purple-400 transition-colors">Advisor Agreement</div>
+                              <div className="text-zinc-500 text-sm">PDF • Independent Advisor / Trial Contractor</div>
+                            </div>
+                          </button>
+                          <button 
+                            type="button"
+                            onClick={generateContractorAgreementPdf}
+                            className="flex items-center gap-4 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-purple-500/30 rounded-xl transition-all group text-left"
+                          >
+                            <div className="w-12 h-12 rounded-lg bg-purple-500/10 flex items-center justify-center flex-shrink-0">
+                              <Download className="w-5 h-5 text-purple-400" />
+                            </div>
+                            <div className="flex-1">
+                              <div className="text-white font-medium group-hover:text-purple-400 transition-colors">Contractor Agreement</div>
+                              <div className="text-zinc-500 text-sm">PDF • Independent Contractor (Design)</div>
+                            </div>
+                          </button>
                         </div>
                       </div>
 
@@ -4789,7 +5945,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                             <Download className="w-4 h-4 text-orange-400 flex-shrink-0" />
                             <span className="text-zinc-300 group-hover:text-orange-400 transition-colors">October</span>
                           </a>
-                          <a href="/BankStatements-Oct-2.pdf" download className="flex items-center gap-2 p-3 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-orange-500/30 rounded-lg transition-all group text-sm">
+                          <a href="/BankStatments-Oct-2.pdf" download className="flex items-center gap-2 p-3 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-orange-500/30 rounded-lg transition-all group text-sm">
                             <Download className="w-4 h-4 text-orange-400 flex-shrink-0" />
                             <span className="text-zinc-300 group-hover:text-orange-400 transition-colors">Oct (Mercury)</span>
                           </a>
