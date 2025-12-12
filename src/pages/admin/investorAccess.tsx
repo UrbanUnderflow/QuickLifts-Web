@@ -114,7 +114,6 @@ const InvestorAccessPage: React.FC = () => {
   // Access logs state
   const [accessLogs, setAccessLogs] = useState<AccessLog[]>([]);
   const [userAccessLogs, setUserAccessLogs] = useState<AccessLog[]>([]);
-  const [loadingLogs, setLoadingLogs] = useState(false);
   
   // New user form state
   const [newEmail, setNewEmail] = useState('');
@@ -172,30 +171,14 @@ const InvestorAccessPage: React.FC = () => {
     }
   };
 
-  const fetchUserAccessLogs = async (email: string) => {
-    setLoadingLogs(true);
-    try {
-      const logsRef = collection(db, 'investorAccessLogs');
-      const q = query(logsRef, where('email', '==', email.toLowerCase()), orderBy('accessedAt', 'desc'));
-      const snapshot = await getDocs(q);
-      
-      const logs: AccessLog[] = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-      } as AccessLog));
-      
-      setUserAccessLogs(logs);
-    } catch (error) {
-      console.error('Error fetching user access logs:', error);
-    } finally {
-      setLoadingLogs(false);
-    }
-  };
-
-  const handleViewLogs = async (user: InvestorAccess) => {
+  const handleViewLogs = (user: InvestorAccess) => {
     setSelectedUser(user);
+    // Filter from already-fetched logs
+    const userLogs = accessLogs.filter(
+      log => log.email.toLowerCase() === user.email.toLowerCase()
+    );
+    setUserAccessLogs(userLogs);
     setShowLogsModal(true);
-    await fetchUserAccessLogs(user.email);
   };
 
   const getAccessCount = (email: string): number => {
@@ -934,11 +917,7 @@ const InvestorAccessPage: React.FC = () => {
             </div>
             
             <div className="flex-1 overflow-y-auto">
-              {loadingLogs ? (
-                <div className="flex items-center justify-center py-12">
-                  <Loader2 className="animate-spin text-zinc-400" size={32} />
-                </div>
-              ) : userAccessLogs.length === 0 ? (
+              {userAccessLogs.length === 0 ? (
                 <div className="text-center py-12">
                   <Clock className="mx-auto mb-3 text-zinc-600" size={48} />
                   <p className="text-zinc-400">No access logs yet</p>

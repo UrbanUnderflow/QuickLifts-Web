@@ -948,7 +948,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
               href="mailto:invest@fitwithpulse.ai" 
               className="inline-flex items-center justify-center px-8 py-4 bg-zinc-800/80 backdrop-blur-sm hover:bg-zinc-700 text-white font-semibold rounded-xl border border-zinc-700 transition-all duration-300 hover:-translate-y-0.5"
             >
-              Contact Investors Team
+              Contact Us
             </a>
           </div>
         </div>
