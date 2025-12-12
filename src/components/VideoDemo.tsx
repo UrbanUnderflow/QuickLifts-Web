@@ -10,7 +10,7 @@ const VideoDemo: React.FC = () => (
       <div className="w-full h-[400px] md:h-[500px] lg:h-[600px]">
         <iframe
           className="w-full h-full"
-          src="https://www.youtube.com/embed/8Ous6Wqvn7o?rel=0&modestbranding=1&playsinline=1"
+          src="https://www.youtube.com/embed/hYzwB92MGy4?rel=0&modestbranding=1&playsinline=1"
           loading="lazy"
           title="Pulse Product Walk-Through"
           allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture"

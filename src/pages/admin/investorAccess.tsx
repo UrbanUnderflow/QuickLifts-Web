@@ -14,11 +14,8 @@ import {
   Mail,
   Settings,
   Check,
-  Eye,
-  Clock,
-  Activity,
 } from 'lucide-react';
-import { collection, getDocs, doc, updateDoc, addDoc, deleteDoc, query, orderBy, where } from 'firebase/firestore';
+import { collection, getDocs, doc, updateDoc, addDoc, deleteDoc, query, orderBy } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 
@@ -35,7 +32,7 @@ const INVESTOR_SECTIONS = [
   { id: 'financials', label: 'Financials' },
   { id: 'captable', label: 'Cap Table' },
   { id: 'deck', label: 'Pitch Deck' },
-  { id: 'documents', label: 'All Documents' },
+  { id: 'investment', label: 'Investment' },
 ] as const;
 
 type SectionId = typeof INVESTOR_SECTIONS[number]['id'];
@@ -52,7 +49,7 @@ interface SectionAccess {
   financials: boolean;
   captable: boolean;
   deck: boolean;
-  documents: boolean;
+  investment: boolean;
 }
 
 const DEFAULT_SECTION_ACCESS: SectionAccess = {
@@ -67,7 +64,7 @@ const DEFAULT_SECTION_ACCESS: SectionAccess = {
   financials: true,
   captable: true,
   deck: true,
-  documents: true,
+  investment: true,
 };
 
 interface InvestorAccess {
@@ -82,17 +79,6 @@ interface InvestorAccess {
   notes?: string;
 }
 
-interface AccessLog {
-  id: string;
-  email: string;
-  investorAccessId: string;
-  name?: string;
-  company?: string;
-  accessedAt: any;
-  userAgent?: string;
-  isAutoLogin?: boolean;
-}
-
 const InvestorAccessPage: React.FC = () => {
   const [accessList, setAccessList] = useState<InvestorAccess[]>([]);
   const [filteredList, setFilteredList] = useState<InvestorAccess[]>([]);
@@ -102,15 +88,8 @@ const InvestorAccessPage: React.FC = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [showLogsModal, setShowLogsModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState<InvestorAccess | null>(null);
   const [isModalLoading, setIsModalLoading] = useState(false);
-  const [emailStatus, setEmailStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
-  const [sendEmail, setSendEmail] = useState(true); // Checkbox state for sending email
-  
-  // Access logs state
-  const [accessLogs, setAccessLogs] = useState<AccessLog[]>([]);
-  const [userAccessLogs, setUserAccessLogs] = useState<AccessLog[]>([]);
   
   // New user form state
   const [newEmail, setNewEmail] = useState('');
@@ -124,7 +103,6 @@ const InvestorAccessPage: React.FC = () => {
 
   useEffect(() => {
     fetchAccessList();
-    fetchAllAccessLogs();
   }, []);
 
   useEffect(() => {
@@ -151,68 +129,6 @@ const InvestorAccessPage: React.FC = () => {
     }
   };
 
-  const fetchAllAccessLogs = async () => {
-    try {
-      const logsRef = collection(db, 'investorAccessLogs');
-      const q = query(logsRef, orderBy('accessedAt', 'desc'));
-      const snapshot = await getDocs(q);
-      
-      const logs: AccessLog[] = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-      } as AccessLog));
-      
-      setAccessLogs(logs);
-    } catch (error) {
-      console.error('Error fetching access logs:', error);
-    }
-  };
-
-  const handleViewLogs = (user: InvestorAccess) => {
-    setSelectedUser(user);
-    // Filter from already-fetched logs
-    const userLogs = accessLogs.filter(
-      log => log.email.toLowerCase() === user.email.toLowerCase()
-    );
-    setUserAccessLogs(userLogs);
-    setShowLogsModal(true);
-  };
-
-  const getAccessCount = (email: string): number => {
-    return accessLogs.filter(log => log.email.toLowerCase() === email.toLowerCase()).length;
-  };
-
-  const getLastAccess = (email: string): string => {
-    const userLogs = accessLogs.filter(log => log.email.toLowerCase() === email.toLowerCase());
-    if (userLogs.length === 0) return 'Never';
-    const lastLog = userLogs[0]; // Already sorted desc
-    return formatDateTime(lastLog.accessedAt);
-  };
-
-  const formatDateTime = (date: any): string => {
-    if (!date) return 'Unknown';
-    
-    try {
-      let d: Date;
-      if (date && typeof date.toDate === 'function') {
-        d = date.toDate();
-      } else {
-        d = new Date(date);
-      }
-      
-      return d.toLocaleString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true
-      });
-    } catch (error) {
-      return 'Invalid date';
-    }
-  };
-
   const filterList = () => {
     if (!searchTerm) {
       setFilteredList(accessList);
@@ -234,15 +150,12 @@ const InvestorAccessPage: React.FC = () => {
     setNewCompany('');
     setNewNotes('');
     setNewSectionAccess({ ...DEFAULT_SECTION_ACCESS });
-    setSendEmail(true);
-    setEmailStatus('idle');
   };
 
   const handleAddUser = async () => {
     if (!newEmail.trim()) return;
     
     setIsModalLoading(true);
-    setEmailStatus('idle');
     try {
       const accessRef = collection(db, 'investorAccess');
       await addDoc(accessRef, {
@@ -255,33 +168,6 @@ const InvestorAccessPage: React.FC = () => {
         createdAt: new Date(),
         updatedAt: new Date(),
       });
-      
-      // Send access notification email if checkbox is checked
-      if (sendEmail) {
-        setEmailStatus('sending');
-        try {
-          const emailResponse = await fetch('/.netlify/functions/send-investor-access-email', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              email: newEmail.toLowerCase().trim(),
-              name: newName.trim() || null,
-            }),
-          });
-          
-          if (emailResponse.ok) {
-            setEmailStatus('sent');
-          } else {
-            console.error('Failed to send access email');
-            setEmailStatus('error');
-          }
-        } catch (emailError) {
-          console.error('Error sending access email:', emailError);
-          setEmailStatus('error');
-        }
-      }
       
       resetAddForm();
       setShowAddModal(false);
@@ -504,7 +390,7 @@ const InvestorAccessPage: React.FC = () => {
           </div>
 
           {/* Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             <div className="bg-zinc-800 rounded-lg p-4">
               <div className="text-zinc-400 text-sm">Total Granted</div>
               <div className="text-white text-2xl font-bold">{accessList.length}</div>
@@ -513,12 +399,6 @@ const InvestorAccessPage: React.FC = () => {
               <div className="text-zinc-400 text-sm">Active Access</div>
               <div className="text-green-500 text-2xl font-bold">
                 {accessList.filter(u => u.isApproved).length}
-              </div>
-            </div>
-            <div className="bg-zinc-800 rounded-lg p-4">
-              <div className="text-zinc-400 text-sm">Total Visits</div>
-              <div className="text-[#E0FE10] text-2xl font-bold">
-                {accessLogs.length}
               </div>
             </div>
             <div className="bg-zinc-800 rounded-lg p-4">
@@ -564,8 +444,7 @@ const InvestorAccessPage: React.FC = () => {
                     <th className="px-4 py-3">Name</th>
                     <th className="px-4 py-3">Company</th>
                     <th className="px-4 py-3">Sections</th>
-                    <th className="px-4 py-3">Visits</th>
-                    <th className="px-4 py-3">Last Access</th>
+                    <th className="px-4 py-3">Added</th>
                     <th className="px-4 py-3">Status</th>
                     <th className="px-4 py-3">Actions</th>
                   </tr>
@@ -607,18 +486,7 @@ const InvestorAccessPage: React.FC = () => {
                             {countEnabledSections(user.sectionAccess)}/{INVESTOR_SECTIONS.length}
                           </span>
                         </td>
-                        <td className="px-4 py-3">
-                          <button
-                            onClick={() => handleViewLogs(user)}
-                            className="flex items-center gap-1.5 text-sm hover:text-[#E0FE10] transition-colors"
-                          >
-                            <Activity size={14} className="text-zinc-500" />
-                            <span className={getAccessCount(user.email) > 0 ? 'text-[#E0FE10]' : 'text-zinc-500'}>
-                              {getAccessCount(user.email)}
-                            </span>
-                          </button>
-                        </td>
-                        <td className="px-4 py-3 text-zinc-400 text-sm">{getLastAccess(user.email)}</td>
+                        <td className="px-4 py-3 text-zinc-400 text-sm">{formatDate(user.createdAt)}</td>
                         <td className="px-4 py-3">
                           {user.isApproved ? (
                             <span className="px-2 py-1 rounded-full bg-green-500/20 text-green-500 text-xs font-medium">
@@ -720,26 +588,6 @@ const InvestorAccessPage: React.FC = () => {
                   rows={2}
                   className="w-full px-4 py-2 rounded-md bg-zinc-700 text-white border border-zinc-600 focus:outline-none focus:ring-1 focus:ring-[#E0FE10] resize-none"
                 />
-              </div>
-              
-              {/* Send Email Checkbox */}
-              <div 
-                className="flex items-center gap-3 p-3 bg-zinc-700/50 rounded-lg cursor-pointer hover:bg-zinc-700 transition-colors"
-                onClick={() => setSendEmail(!sendEmail)}
-              >
-                <div
-                  className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors flex-shrink-0 ${
-                    sendEmail
-                      ? 'bg-[#E0FE10] border-[#E0FE10]'
-                      : 'border-zinc-500 bg-transparent'
-                  }`}
-                >
-                  {sendEmail && <Check size={14} className="text-black" />}
-                </div>
-                <div>
-                  <span className="text-white text-sm font-medium">Send access notification email</span>
-                  <p className="text-zinc-500 text-xs mt-0.5">Email will include dataroom link and access instructions</p>
-                </div>
               </div>
             </div>
             
@@ -891,82 +739,6 @@ const InvestorAccessPage: React.FC = () => {
                   )}
                 </button>
               </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Access Logs Modal */}
-      {showLogsModal && selectedUser && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur flex items-center justify-center z-50 p-4">
-          <div className="bg-zinc-800 rounded-xl p-6 max-w-2xl w-full max-h-[80vh] overflow-hidden flex flex-col">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="text-xl font-bold text-white">Access History</h3>
-                <p className="text-zinc-400 text-sm">{selectedUser.email}</p>
-              </div>
-              <div className="flex items-center gap-4">
-                <div className="text-right">
-                  <p className="text-[#E0FE10] text-2xl font-bold">{userAccessLogs.length}</p>
-                  <p className="text-zinc-500 text-xs">Total Visits</p>
-                </div>
-              </div>
-            </div>
-            
-            <div className="flex-1 overflow-y-auto">
-              {userAccessLogs.length === 0 ? (
-                <div className="text-center py-12">
-                  <Clock className="mx-auto mb-3 text-zinc-600" size={48} />
-                  <p className="text-zinc-400">No access logs yet</p>
-                  <p className="text-zinc-600 text-sm mt-1">This user hasn&apos;t accessed the dataroom</p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {userAccessLogs.map((log, index) => (
-                    <div 
-                      key={log.id} 
-                      className="bg-zinc-700/50 rounded-lg p-4 flex items-center justify-between"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-[#E0FE10]/10 flex items-center justify-center">
-                          <span className="text-[#E0FE10] text-xs font-bold">{userAccessLogs.length - index}</span>
-                        </div>
-                        <div>
-                          <p className="text-white text-sm font-medium">
-                            {formatDateTime(log.accessedAt)}
-                          </p>
-                          <p className="text-zinc-500 text-xs">
-                            {log.isAutoLogin ? 'Auto-login (returning visit)' : 'Manual login'}
-                          </p>
-                        </div>
-                      </div>
-                      {log.userAgent && (
-                        <div className="text-right">
-                          <p className="text-zinc-500 text-xs truncate max-w-[200px]" title={log.userAgent}>
-                            {log.userAgent.includes('iPhone') ? '📱 iPhone' : 
-                             log.userAgent.includes('Android') ? '📱 Android' :
-                             log.userAgent.includes('Mac') ? '💻 Mac' :
-                             log.userAgent.includes('Windows') ? '💻 Windows' : '🌐 Browser'}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-            
-            <div className="mt-4 pt-4 border-t border-zinc-700">
-              <button
-                onClick={() => {
-                  setShowLogsModal(false);
-                  setSelectedUser(null);
-                  setUserAccessLogs([]);
-                }}
-                className="w-full px-4 py-3 rounded-lg border border-zinc-600 text-white hover:bg-zinc-700 transition-colors"
-              >
-                Close
-              </button>
             </div>
           </div>
         </div>
