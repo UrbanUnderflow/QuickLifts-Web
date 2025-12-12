@@ -73,6 +73,7 @@ interface SectionAccess {
   captable: boolean;
   deck: boolean;
   investment: boolean;
+  documents: boolean;
 }
 
 const DEFAULT_SECTION_ACCESS: SectionAccess = {
@@ -88,6 +89,7 @@ const DEFAULT_SECTION_ACCESS: SectionAccess = {
   captable: true,
   deck: true,
   investment: true,
+  documents: true,
 };
 
 // Type for financial data
