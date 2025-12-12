@@ -123,7 +123,7 @@ interface InvestorDataroomPageProps {
 }
 
 // Valid section IDs for URL navigation
-const VALID_SECTIONS = ['overview', 'product', 'traction', 'ip', 'vision', 'market', 'techstack', 'team', 'financials', 'captable', 'deck', 'investment'] as const;
+const VALID_SECTIONS = ['overview', 'product', 'traction', 'ip', 'vision', 'market', 'techstack', 'team', 'financials', 'captable', 'deck', 'investment', 'documents'] as const;
 
 const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => {
   const router = useRouter();
@@ -513,6 +513,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
     captable: null,
     deck: null,
     investment: null,
+    documents: null,
   });
 
 
@@ -541,7 +542,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
             revenue: "$2.5K",
             users: "808",
             growth: "22% MoM",
-            retention: "61%"
+            retention: "78%"
           });
         }
       } catch (error) {
@@ -550,7 +551,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
           revenue: "$2.5K",
           users: "808",
           growth: "22% MoM",
-          retention: "61%"
+          retention: "78%"
         });
       } finally {
         setIsLoadingData(false);
@@ -677,6 +678,33 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
   if (!hasAccess) {
     return (
       <div className="min-h-screen bg-zinc-950 flex items-center justify-center px-4">
+        <Head>
+          <title>Investor Dataroom | Pulse Intelligence Labs</title>
+          <meta name="description" content="Access confidential investor materials for Pulse Intelligence Labs - the creator-powered fitness platform." />
+          
+          {/* Open Graph */}
+          <meta property="og:title" content="Investor Dataroom | Pulse Intelligence Labs" />
+          <meta property="og:description" content="Access confidential investor materials for Pulse - the creator-powered fitness platform turning short workout videos into multiplayer training experiences." />
+          <meta property="og:image" content="https://fitwithpulse.ai/InvestPreviewImg.png" />
+          <meta property="og:image:secure_url" content="https://fitwithpulse.ai/InvestPreviewImg.png" />
+          <meta property="og:image:type" content="image/png" />
+          <meta property="og:image:width" content="1200" />
+          <meta property="og:image:height" content="630" />
+          <meta property="og:image:alt" content="Pulse Intelligence Labs - Investor Dataroom" />
+          <meta property="og:url" content="https://fitwithpulse.ai/investor" />
+          <meta property="og:type" content="website" />
+          <meta property="og:site_name" content="Pulse Intelligence Labs" />
+          
+          {/* Twitter Card */}
+          <meta name="twitter:card" content="summary_large_image" />
+          <meta name="twitter:title" content="Investor Dataroom | Pulse Intelligence Labs" />
+          <meta name="twitter:description" content="Access confidential investor materials for Pulse - the creator-powered fitness platform." />
+          <meta name="twitter:image" content="https://fitwithpulse.ai/InvestPreviewImg.png" />
+          <meta name="twitter:image:alt" content="Pulse Intelligence Labs - Investor Dataroom" />
+          
+          {/* Additional */}
+          <link rel="canonical" href="https://fitwithpulse.ai/investor" />
+        </Head>
         <PageHead 
           metaData={metaData} 
           pageOgUrl="https://fitwithpulse.ai/investor" 
@@ -755,6 +783,33 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
 
   return (
     <div className="min-h-screen bg-zinc-950">
+      <Head>
+        <title>Investor Dataroom | Pulse Intelligence Labs</title>
+        <meta name="description" content="Access confidential investor materials for Pulse Intelligence Labs - the creator-powered fitness platform." />
+        
+        {/* Open Graph */}
+        <meta property="og:title" content="Investor Dataroom | Pulse Intelligence Labs" />
+        <meta property="og:description" content="Access confidential investor materials for Pulse - the creator-powered fitness platform turning short workout videos into multiplayer training experiences." />
+        <meta property="og:image" content="https://fitwithpulse.ai/InvestPreviewImg.png" />
+        <meta property="og:image:secure_url" content="https://fitwithpulse.ai/InvestPreviewImg.png" />
+        <meta property="og:image:type" content="image/png" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        <meta property="og:image:alt" content="Pulse Intelligence Labs - Investor Dataroom" />
+        <meta property="og:url" content="https://fitwithpulse.ai/investor" />
+        <meta property="og:type" content="website" />
+        <meta property="og:site_name" content="Pulse Intelligence Labs" />
+        
+        {/* Twitter Card */}
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="Investor Dataroom | Pulse Intelligence Labs" />
+        <meta name="twitter:description" content="Access confidential investor materials for Pulse - the creator-powered fitness platform." />
+        <meta name="twitter:image" content="https://fitwithpulse.ai/InvestPreviewImg.png" />
+        <meta name="twitter:image:alt" content="Pulse Intelligence Labs - Investor Dataroom" />
+        
+        {/* Additional */}
+        <link rel="canonical" href="https://fitwithpulse.ai/investor" />
+      </Head>
       <PageHead 
         metaData={metaData} 
         pageOgUrl="https://fitwithpulse.ai/investor" 
@@ -769,36 +824,154 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
       </button>
 
       {/* Hero Section */}
-      <section className="relative min-h-[60vh] flex flex-col items-center justify-center text-center px-8 py-20 overflow-hidden">
-        <div className="absolute inset-0 bg-zinc-900"></div>
-        <div className="absolute inset-0 bg-gradient-to-tr from-zinc-950 via-zinc-900 to-zinc-800 opacity-40"></div>
-        <div className="absolute inset-0">
-          <div className="absolute top-20 left-20 w-64 h-64 bg-[#E0FE10]/5 rounded-full filter blur-3xl animate-pulse-slow"></div>
-          <div className="absolute bottom-20 right-20 w-96 h-96 bg-[#E0FE10]/5 rounded-full filter blur-3xl animate-pulse-slow animation-delay-2000"></div>
-        </div>
+      <section className="relative min-h-[70vh] flex flex-col items-center justify-center text-center px-8 py-24 overflow-hidden">
+        {/* Base background */}
+        <div className="absolute inset-0 bg-[#0a0a0a]"></div>
         
-        <div className="absolute inset-0 opacity-10">
-          <div className="h-full w-full bg-[url('/grid-pattern.svg')] bg-repeat"></div>
+        {/* Animated gradient orbs */}
+        <div className="absolute inset-0 overflow-hidden">
+          {/* Large lime orb - slow float */}
+          <div 
+            className="absolute w-[600px] h-[600px] rounded-full opacity-20"
+            style={{
+              background: 'radial-gradient(circle, #E0FE10 0%, transparent 70%)',
+              top: '-10%',
+              right: '-10%',
+              animation: 'float 20s ease-in-out infinite',
+              filter: 'blur(80px)',
+            }}
+          />
+          {/* Medium purple orb */}
+          <div 
+            className="absolute w-[400px] h-[400px] rounded-full opacity-15"
+            style={{
+              background: 'radial-gradient(circle, #8B5CF6 0%, transparent 70%)',
+              bottom: '10%',
+              left: '-5%',
+              animation: 'float 25s ease-in-out infinite reverse',
+              filter: 'blur(60px)',
+            }}
+          />
+          {/* Small blue orb */}
+          <div 
+            className="absolute w-[300px] h-[300px] rounded-full opacity-10"
+            style={{
+              background: 'radial-gradient(circle, #3B82F6 0%, transparent 70%)',
+              top: '40%',
+              left: '30%',
+              animation: 'float 18s ease-in-out infinite',
+              filter: 'blur(50px)',
+            }}
+          />
+          {/* Accent lime orb */}
+          <div 
+            className="absolute w-[200px] h-[200px] rounded-full opacity-25"
+            style={{
+              background: 'radial-gradient(circle, #E0FE10 0%, transparent 70%)',
+              bottom: '20%',
+              right: '20%',
+              animation: 'pulse 8s ease-in-out infinite',
+              filter: 'blur(40px)',
+            }}
+          />
         </div>
 
+        {/* Subtle grid overlay */}
+        <div className="absolute inset-0 opacity-[0.03]">
+          <div 
+            className="h-full w-full"
+            style={{
+              backgroundImage: 'linear-gradient(rgba(224,254,16,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(224,254,16,0.3) 1px, transparent 1px)',
+              backgroundSize: '60px 60px',
+            }}
+          />
+        </div>
+
+        {/* Noise texture overlay */}
+        <div className="absolute inset-0 opacity-[0.02] mix-blend-overlay" style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg viewBox=\'0 0 200 200\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cfilter id=\'noise\'%3E%3CfeTurbulence type=\'fractalNoise\' baseFrequency=\'0.65\' numOctaves=\'3\' stitchTiles=\'stitch\'/%3E%3C/filter%3E%3Crect width=\'100%25\' height=\'100%25\' filter=\'url(%23noise)\'/%3E%3C/svg%3E")' }}></div>
+
+        {/* Gradient overlays for depth */}
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-[#0a0a0a]/80"></div>
+        <div className="absolute inset-0 bg-gradient-to-t from-transparent via-transparent to-[#0a0a0a]/50"></div>
+
+        {/* Content */}
         <div className="relative z-20 max-w-4xl mx-auto">
-          <h2 className="text-[#E0FE10] uppercase tracking-wide font-semibold mb-4">Investor Relations</h2>
-          <h1 className="text-white text-5xl sm:text-7xl font-bold mb-8">Pulse Investor Dataroom</h1>
-          <p className="text-zinc-400 text-xl leading-relaxed mb-12">
-            800+ members, 61% retention & 144 paying subscribers after 4 months.<br />
-            <span className="text-zinc-500">Building the social gateway to the future of health.</span>
+          {/* Badge */}
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#E0FE10]/10 border border-[#E0FE10]/20 mb-6">
+            <div className="w-2 h-2 rounded-full bg-[#E0FE10] animate-pulse"></div>
+            <span className="text-[#E0FE10] text-sm font-medium tracking-wide">INVESTOR RELATIONS</span>
+          </div>
+          
+          {/* Main heading with gradient */}
+          <h1 className="text-white text-5xl sm:text-7xl font-bold mb-6 leading-tight">
+            Pulse Investor
+            <br />
+            <span className="bg-gradient-to-r from-[#E0FE10] via-[#c5e310] to-[#E0FE10] bg-clip-text text-transparent">
+              Dataroom
+            </span>
+          </h1>
+          
+          {/* Tagline */}
+          <p className="text-zinc-400 text-xl leading-relaxed mb-10 max-w-2xl mx-auto">
+            Building the social gateway to the future of health.
           </p>
+          
+          {/* CTAs */}
           <div className="flex flex-wrap justify-center gap-4">
             <a 
-              href="/PulsePitchDeck.pdf" 
-              download="PulsePitchDeck.pdf"
-              className="inline-flex items-center justify-center px-8 py-3 bg-[#E0FE10] hover:bg-[#d8f521] text-black font-medium rounded-lg transition-colors"
+              href="/PulseDeck12_9.pdf" 
+              download="PulseDeck12_9.pdf"
+              className="group inline-flex items-center justify-center px-8 py-4 bg-[#E0FE10] hover:bg-[#d8f521] text-black font-semibold rounded-xl transition-all duration-300 hover:shadow-lg hover:shadow-[#E0FE10]/20 hover:-translate-y-0.5"
             >
-              <Download className="mr-2 h-5 w-5" />
+              <Download className="mr-2 h-5 w-5 group-hover:animate-bounce" />
               Download Pitch Deck
+            </a>
+            <a 
+              href="mailto:invest@fitwithpulse.ai" 
+              className="inline-flex items-center justify-center px-8 py-4 bg-zinc-800/80 backdrop-blur-sm hover:bg-zinc-700 text-white font-semibold rounded-xl border border-zinc-700 transition-all duration-300 hover:-translate-y-0.5"
+            >
+              Contact Investors Team
             </a>
           </div>
         </div>
+
+        {/* Scroll indicator */}
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-20">
+          <div className="flex flex-col items-center gap-2 text-zinc-500">
+            <span className="text-xs tracking-wider">SCROLL TO EXPLORE</span>
+            <div className="w-6 h-10 rounded-full border-2 border-zinc-600 flex items-start justify-center p-2">
+              <div className="w-1.5 h-3 bg-zinc-500 rounded-full animate-bounce"></div>
+            </div>
+          </div>
+        </div>
+
+        {/* CSS Animations */}
+        <style jsx>{`
+          @keyframes float {
+            0%, 100% {
+              transform: translate(0, 0) scale(1);
+            }
+            25% {
+              transform: translate(30px, -30px) scale(1.05);
+            }
+            50% {
+              transform: translate(-20px, 20px) scale(0.95);
+            }
+            75% {
+              transform: translate(20px, 10px) scale(1.02);
+            }
+          }
+          @keyframes pulse {
+            0%, 100% {
+              opacity: 0.25;
+              transform: scale(1);
+            }
+            50% {
+              opacity: 0.4;
+              transform: scale(1.1);
+            }
+          }
+        `}</style>
       </section>
 
       {/* Main Content with Navigation */}
@@ -823,6 +996,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                     { id: 'captable', label: 'Cap Table', number: 10 },
                     { id: 'deck', label: 'Pitch Deck', number: 11 },
                     { id: 'investment', label: 'Investment Opportunity', number: 12 },
+                    { id: 'documents', label: 'All Documents', number: 13 },
                   ].map((item) => (
                     <button
                       key={item.id}
@@ -861,90 +1035,166 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                 ref={(el) => { sectionsRef.current.overview = el; }}
                 className="mb-20"
               >
-                <div className="flex items-center justify-between mb-6">
+                {/* Header with gradient accent */}
+                <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
                   <div className="flex items-center">
-                    <div className="w-10 h-10 rounded-full bg-[#E0FE10] flex items-center justify-center mr-4">
-                      <span className="font-bold text-black">1</span>
+                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#E0FE10] to-[#a8c40a] flex items-center justify-center mr-4 shadow-lg shadow-[#E0FE10]/20">
+                      <span className="font-bold text-black text-lg">1</span>
                     </div>
-                    <h2 className="text-white text-3xl font-bold">Company Overview</h2>
+                    <div>
+                      <h2 className="text-white text-3xl font-bold">Company Overview</h2>
+                      <p className="text-zinc-500 text-sm">The future of fitness is social</p>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-3">
                     <a
                       href="/PulseIntelligenceLabsCertificateofIncorporation.pdf"
                       download
-                      className="inline-flex items-center gap-2 px-3 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg text-xs text-zinc-200 transition-colors"
+                      className="inline-flex items-center gap-2 px-4 py-2.5 bg-zinc-800/80 hover:bg-zinc-700 border border-zinc-700 hover:border-zinc-600 rounded-xl text-xs text-zinc-200 transition-all duration-300 backdrop-blur-sm"
                     >
-                      <Download className="w-3 h-3" />
+                      <Download className="w-3.5 h-3.5" />
                       Certificate of Incorporation
                     </a>
                     <a
-                      href="/investor-docs/Founder-IP-Assignment-Agreement.html"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 px-3 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg text-xs text-zinc-200 transition-colors"
+                      href="/Founder Intellectual Property Assignment Agreement - Pulse Intelligence Labs.pdf"
+                      download="Founder-IP-Assignment-Agreement.pdf"
+                      className="inline-flex items-center gap-2 px-4 py-2.5 bg-zinc-800/80 hover:bg-zinc-700 border border-zinc-700 hover:border-zinc-600 rounded-xl text-xs text-zinc-200 transition-all duration-300 backdrop-blur-sm"
                     >
-                      <Download className="w-3 h-3" />
+                      <Download className="w-3.5 h-3.5" />
                       IP Assignment Agreement
                     </a>
                   </div>
                 </div>
                 
-                <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8 mb-10">
-                  <p className="text-zinc-200 text-xl leading-relaxed mb-2 font-medium">
-                    Pulse is the <span className="text-[#E0FE10]">creator-powered fitness platform</span> that turns short workout videos into multiplayer, playlist-style training experiences.
-                  </p>
-                  <p className="text-zinc-400 text-sm mb-6">
-                    Creators upload Moves, Pulse assembles them into Sequences, and users train together in real time with leaderboards, scoring, and social motivation.
-                  </p>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                    <div className="bg-zinc-800/50 rounded-lg p-4">
-                      <p className="text-[#E0FE10] font-semibold mb-2">For Creators</p>
-                      <p className="text-zinc-400 text-sm">Upload Moves, earn every time they&apos;re used. Pulse handles distribution and payouts.</p>
-                    </div>
-                    <div className="bg-zinc-800/50 rounded-lg p-4">
-                      <p className="text-[#E0FE10] font-semibold mb-2">For Users</p>
-                      <p className="text-zinc-400 text-sm">Personalized workouts, group challenges, leaderboards. Fitness that feels social.</p>
-                    </div>
-                  </div>
-
-                  <div className="bg-zinc-800/30 rounded-lg p-4 border-l-2 border-[#E0FE10]">
-                    <p className="text-zinc-300 text-sm">
-                      <span className="text-white font-medium">The Model:</span> Creators upload Moves → Pulse transforms them into Stacks (structured workouts) and Rounds (group challenges) → Users train socially → Creators earn through setting custom pricing, and content usage.
-                    </p>
-                  </div>
-                  
-                  {/* Mission, Vision, Values Cards */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
-                    <div className="bg-zinc-800/70 rounded-lg p-5">
-                      <h4 className="text-[#E0FE10] font-medium mb-3">Mission</h4>
-                      <p className="text-zinc-400 text-sm">Make fitness feel social, accessible, and community-driven — powered by real creators and real human connection.</p>
-                    </div>
+                {/* Main content card with animated background */}
+                <div className="relative rounded-2xl overflow-hidden mb-10">
+                  {/* Animated gradient background */}
+                  <div className="absolute inset-0 bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-800">
                     <div 
-                      className="bg-gradient-to-br from-zinc-800/70 to-zinc-700/70 rounded-lg p-5 cursor-pointer hover:from-zinc-700/70 hover:to-zinc-600/70 transition-all duration-300 border border-zinc-700/50 hover:border-[#E0FE10]/30 group"
-                      onClick={() => switchSection('vision')}
-                    >
-                      <div className="flex items-center justify-between mb-3">
-                        <h4 className="text-[#E0FE10] font-medium group-hover:text-[#d8f521] transition-colors">Vision</h4>
-                        <div className="w-6 h-6 rounded-full bg-[#E0FE10]/20 flex items-center justify-center group-hover:bg-[#E0FE10]/30 transition-colors">
-                          <span className="text-[#E0FE10] text-xs">→</span>
-                        </div>
-                      </div>
-                      <p className="text-zinc-400 text-sm group-hover:text-zinc-300 transition-colors">
-                        Build the first operating system for human health — wellness that&apos;s continuous, adaptive, and embedded into daily life.
-                      </p>
-                      <p className="text-zinc-500 text-xs mt-2 group-hover:text-zinc-400 transition-colors">
-                        Click to explore our vision →
+                      className="absolute w-[400px] h-[400px] rounded-full opacity-10"
+                      style={{
+                        background: 'radial-gradient(circle, #E0FE10 0%, transparent 70%)',
+                        top: '-20%',
+                        right: '-10%',
+                        filter: 'blur(60px)',
+                      }}
+                    />
+                    <div 
+                      className="absolute w-[300px] h-[300px] rounded-full opacity-10"
+                      style={{
+                        background: 'radial-gradient(circle, #8B5CF6 0%, transparent 70%)',
+                        bottom: '-15%',
+                        left: '-5%',
+                        filter: 'blur(60px)',
+                      }}
+                    />
+                  </div>
+                  
+                  <div className="relative border border-zinc-800/50 rounded-2xl p-8 md:p-10 backdrop-blur-sm">
+                    {/* Hero statement */}
+                    <div className="max-w-3xl mb-10">
+                      <h3 className="text-white text-2xl md:text-3xl font-bold leading-tight mb-4">
+                        Pulse is the <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#E0FE10] to-[#a8c40a]">creator-powered fitness platform</span> that turns short workout videos into multiplayer, playlist-style training experiences.
+                      </h3>
+                      <p className="text-zinc-400 text-base leading-relaxed">
+                        Creators upload Moves, Pulse assembles them into Stacks, and users train together in real time with leaderboards, scoring, and social motivation.
                       </p>
                     </div>
-                    <div className="bg-zinc-800/70 rounded-lg p-5">
-                      <h4 className="text-[#E0FE10] font-medium mb-3">Values</h4>
-                      <ul className="text-zinc-400 text-sm space-y-1">
-                        <li>• Community-first</li>
-                        <li>• Authentic, creator-powered fitness</li>
-                        <li>• Inclusivity and accessibility</li>
-                        <li>• Tech that enhances human connection</li>
-                      </ul>
+                    
+                    {/* For Creators / For Users cards */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-8">
+                      <div className="group relative bg-gradient-to-br from-zinc-800/80 to-zinc-800/40 rounded-xl p-6 border border-zinc-700/50 hover:border-[#E0FE10]/30 transition-all duration-300">
+                        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-[#E0FE10] to-transparent rounded-t-xl opacity-60"></div>
+                        <div className="flex items-center gap-3 mb-3">
+                          <div className="w-10 h-10 rounded-xl bg-[#E0FE10]/10 flex items-center justify-center">
+                            <span className="text-[#E0FE10] text-lg">🎬</span>
+                          </div>
+                          <h4 className="text-[#E0FE10] font-semibold text-lg">For Creators</h4>
+                        </div>
+                        <p className="text-zinc-300 text-sm leading-relaxed">Upload Moves, earn every time they&apos;re used. Pulse handles distribution and payouts.</p>
+                      </div>
+                      <div className="group relative bg-gradient-to-br from-zinc-800/80 to-zinc-800/40 rounded-xl p-6 border border-zinc-700/50 hover:border-[#E0FE10]/30 transition-all duration-300">
+                        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-[#E0FE10] to-transparent rounded-t-xl opacity-60"></div>
+                        <div className="flex items-center gap-3 mb-3">
+                          <div className="w-10 h-10 rounded-xl bg-[#E0FE10]/10 flex items-center justify-center">
+                            <span className="text-[#E0FE10] text-lg">💪</span>
+                          </div>
+                          <h4 className="text-[#E0FE10] font-semibold text-lg">For Users</h4>
+                        </div>
+                        <p className="text-zinc-300 text-sm leading-relaxed">Personalized workouts, group challenges, leaderboards. Fitness that feels social.</p>
+                      </div>
+                    </div>
+
+                    {/* The Model - highlighted callout */}
+                    <div className="relative bg-gradient-to-r from-[#E0FE10]/10 via-[#E0FE10]/5 to-transparent rounded-xl p-5 border border-[#E0FE10]/20 mb-10">
+                      <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-[#E0FE10] to-[#E0FE10]/30 rounded-l-xl"></div>
+                      <p className="text-zinc-200 text-sm leading-relaxed pl-2">
+                        <span className="text-[#E0FE10] font-semibold">The Model:</span> Creators upload Moves → Pulse transforms them into <span className="text-white font-medium">Stacks</span> (structured workouts) and <span className="text-white font-medium">Rounds</span> (group challenges) → Users train socially → Creators earn through custom pricing and content usage.
+                      </p>
+                    </div>
+                    
+                    {/* Mission, Vision, Values Cards */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                      {/* Mission Card */}
+                      <div className="group bg-zinc-800/50 rounded-xl p-6 border border-zinc-700/50 hover:border-zinc-600/50 transition-all duration-300 hover:transform hover:scale-[1.02]">
+                        <div className="flex items-center gap-3 mb-4">
+                          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500/20 to-blue-600/10 flex items-center justify-center">
+                            <span className="text-blue-400 text-lg">🎯</span>
+                          </div>
+                          <h4 className="text-white font-semibold text-lg">Mission</h4>
+                        </div>
+                        <p className="text-zinc-400 text-sm leading-relaxed">Make fitness feel social, accessible, and community-driven — powered by real creators and real human connection.</p>
+                      </div>
+                      
+                      {/* Vision Card - clickable */}
+                      <div 
+                        className="group relative bg-gradient-to-br from-[#E0FE10]/10 to-zinc-800/50 rounded-xl p-6 cursor-pointer border border-[#E0FE10]/20 hover:border-[#E0FE10]/40 transition-all duration-300 hover:transform hover:scale-[1.02] hover:shadow-lg hover:shadow-[#E0FE10]/10"
+                        onClick={() => switchSection('vision')}
+                      >
+                        <div className="absolute top-4 right-4 w-8 h-8 rounded-full bg-[#E0FE10]/20 flex items-center justify-center group-hover:bg-[#E0FE10]/30 transition-all duration-300 group-hover:scale-110">
+                          <span className="text-[#E0FE10] text-sm">→</span>
+                        </div>
+                        <div className="flex items-center gap-3 mb-4">
+                          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#E0FE10]/20 to-[#E0FE10]/10 flex items-center justify-center">
+                            <span className="text-[#E0FE10] text-lg">🚀</span>
+                          </div>
+                          <h4 className="text-[#E0FE10] font-semibold text-lg">Vision</h4>
+                        </div>
+                        <p className="text-zinc-300 text-sm leading-relaxed mb-3">
+                          Build the first operating system for human health — wellness that&apos;s continuous, adaptive, and embedded into daily life.
+                        </p>
+                        <p className="text-[#E0FE10]/70 text-xs font-medium group-hover:text-[#E0FE10] transition-colors">
+                          Explore our vision →
+                        </p>
+                      </div>
+                      
+                      {/* Values Card */}
+                      <div className="group bg-zinc-800/50 rounded-xl p-6 border border-zinc-700/50 hover:border-zinc-600/50 transition-all duration-300 hover:transform hover:scale-[1.02]">
+                        <div className="flex items-center gap-3 mb-4">
+                          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500/20 to-purple-600/10 flex items-center justify-center">
+                            <span className="text-purple-400 text-lg">💎</span>
+                          </div>
+                          <h4 className="text-white font-semibold text-lg">Values</h4>
+                        </div>
+                        <ul className="text-zinc-400 text-sm space-y-2">
+                          <li className="flex items-center gap-2">
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#E0FE10]"></span>
+                            Community-first
+                          </li>
+                          <li className="flex items-center gap-2">
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#E0FE10]"></span>
+                            Authentic, creator-powered fitness
+                          </li>
+                          <li className="flex items-center gap-2">
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#E0FE10]"></span>
+                            Inclusivity and accessibility
+                          </li>
+                          <li className="flex items-center gap-2">
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#E0FE10]"></span>
+                            Tech that enhances connection
+                          </li>
+                        </ul>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1125,119 +1375,104 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                 ref={(el) => { sectionsRef.current.traction = el; }}
                 className="mb-20"
               >
-                <div className="flex items-center mb-6">
+                <div className="flex items-center mb-8">
                   <div className="w-10 h-10 rounded-full bg-[#E0FE10] flex items-center justify-center mr-4">
                     <span className="font-bold text-black">3</span>
                   </div>
                   <h2 className="text-white text-3xl font-bold">Traction & Metrics</h2>
                 </div>
-                
-                <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8 mb-10">
-                  <h3 className="text-white text-xl font-semibold mb-6">Key Performance Indicators</h3>
-                  
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-6 mb-14">
-                    <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-zinc-900 to-zinc-800 p-1">
-                      <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-[#d7ff00]/10"></div>
-                      <div className="relative bg-zinc-900 rounded-lg p-6 text-center">
-                        <p className="text-zinc-400 text-sm font-medium mb-2">Total Members</p>
-                        <p className="text-white text-3xl font-bold mb-1">808</p>
-                        <p className="text-[#E0FE10] text-sm">Since Jan 2025 launch</p>
+
+                {/* Hero Stats Row */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
+                  <div className="bg-gradient-to-br from-[#E0FE10]/20 to-[#E0FE10]/5 border border-[#E0FE10]/30 rounded-2xl p-6 text-center">
+                    <div className="text-[#E0FE10] text-4xl font-bold mb-1">3</div>
+                    <div className="text-zinc-300 text-sm font-medium">Rounds Launched</div>
+                    <div className="text-zinc-500 text-xs mt-1">2025 YTD</div>
+                  </div>
+                  <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 text-center">
+                    <div className="text-white text-4xl font-bold mb-1">150+</div>
+                    <div className="text-zinc-300 text-sm font-medium">Total Participants</div>
+                    <div className="text-zinc-500 text-xs mt-1">Across all Rounds</div>
+                  </div>
+                  <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 text-center">
+                    <div className="text-white text-4xl font-bold mb-1">$0</div>
+                    <div className="text-zinc-300 text-sm font-medium">Paid Marketing</div>
+                    <div className="text-zinc-500 text-xs mt-1">100% organic growth</div>
+                  </div>
+                  <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 text-center">
+                    <div className="text-white text-4xl font-bold mb-1">1</div>
+                    <div className="text-zinc-300 text-sm font-medium">Brand Partner</div>
+                    <div className="text-zinc-500 text-xs mt-1">SoulCycle</div>
+                  </div>
+                </div>
+
+                {/* Creator Spotlight: Jaidus × SoulCycle */}
+                <div className="bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-800 border border-zinc-700 rounded-2xl overflow-hidden mb-10">
+                  {/* Header with SoulCycle partnership badge */}
+                  <div className="bg-gradient-to-r from-[#E0FE10]/10 via-transparent to-transparent p-6 border-b border-zinc-800">
+                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                      <div>
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-2xl">🔥</span>
+                          <h3 className="text-white text-2xl font-bold">Creator Spotlight: Jaidus × SoulCycle</h3>
+                        </div>
+                        <p className="text-zinc-400">From studio energy to digital movement — how one coach turned sweat into story.</p>
                       </div>
-                    </div>
-                    
-                    <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-zinc-900 to-zinc-800 p-1">
-                      <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-[#d7ff00]/10"></div>
-                      <div className="relative bg-zinc-900 rounded-lg p-6 text-center">
-                        <p className="text-zinc-400 text-sm font-medium mb-2">Monthly Active Users</p>
-                        <p className="text-white text-3xl font-bold mb-1">286</p>
-                        <p className="text-[#E0FE10] text-sm">61% retention rate</p>
-                      </div>
-                    </div>
-                    
-                    <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-zinc-900 to-zinc-800 p-1">
-                      <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-[#d7ff00]/10"></div>
-                      <div className="relative bg-zinc-900 rounded-lg p-6 text-center">
-                        <p className="text-zinc-400 text-sm font-medium mb-2">Paying Subscribers</p>
-                        <p className="text-white text-3xl font-bold mb-1">144</p>
-                        <p className="text-[#E0FE10] text-sm">18% conversion rate</p>
-                      </div>
-                    </div>
-                    
-                    <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-zinc-900 to-zinc-800 p-1">
-                      <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-[#d7ff00]/10"></div>
-                      <div className="relative bg-zinc-900 rounded-lg p-6 text-center">
-                        <p className="text-zinc-400 text-sm font-medium mb-2">MRR</p>
-                        <p className="text-white text-3xl font-bold mb-1">$625</p>
-                        <p className="text-[#E0FE10] text-sm">Growing monthly</p>
-                      </div>
-                    </div>
-                    
-                    <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-zinc-900 to-zinc-800 p-1">
-                      <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-[#d7ff00]/10"></div>
-                      <div className="relative bg-zinc-900 rounded-lg p-6 text-center">
-                        <p className="text-zinc-400 text-sm font-medium mb-2">CAC</p>
-                        <p className="text-white text-3xl font-bold mb-1">$0</p>
-                        <p className="text-[#E0FE10] text-sm">100% organic growth</p>
-                      </div>
-                    </div>
-                    
-                    <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-zinc-900 to-zinc-800 p-1">
-                      <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-[#d7ff00]/10"></div>
-                      <div className="relative bg-zinc-900 rounded-lg p-6 text-center">
-                        <p className="text-zinc-400 text-sm font-medium mb-2">Revenue (YTD 2025)</p>
-                        <p className="text-white text-3xl font-bold mb-1">$3.1K</p>
-                        <p className="text-[#E0FE10] text-sm">Monetization validated</p>
+                      <div className="flex items-center gap-3 bg-zinc-800/80 rounded-xl px-4 py-3 border border-zinc-700">
+                        <img 
+                          src="/soulcycle.png" 
+                          alt="SoulCycle" 
+                          className="w-10 h-10 rounded-lg object-contain bg-white p-1"
+                        />
+                        <div>
+                          <div className="text-white font-semibold text-sm">SoulCycle Partnership</div>
+                          <div className="text-zinc-400 text-xs">First Pulse-branded Round</div>
+                        </div>
                       </div>
                     </div>
                   </div>
-                  
-                  {/* Engagement Metrics Row */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-14">
-                    <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-zinc-900 to-zinc-800 p-1">
-                      <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-[#d7ff00]/10"></div>
-                      <div className="relative bg-zinc-900 rounded-lg p-6 text-center">
-                        <p className="text-zinc-400 text-sm font-medium mb-2">Avg. Session Time</p>
-                        <p className="text-white text-3xl font-bold mb-1">1h 29m</p>
-                        <p className="text-[#E0FE10] text-sm">High user engagement</p>
+
+                  <div className="p-6 md:p-8">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+                      {/* Video */}
+                      <div className="rounded-xl overflow-hidden border border-zinc-700 bg-black aspect-video">
+                        <video
+                          className="w-full h-full object-cover"
+                          controls
+                          playsInline
+                          src="/JaidusNewYear.mov"
+                        >
+                          Your browser does not support the video tag.
+                        </video>
                       </div>
-                    </div>
-                    
-                    <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-zinc-900 to-zinc-800 p-1">
-                      <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-[#d7ff00]/10"></div>
-                      <div className="relative bg-zinc-900 rounded-lg p-6 text-center">
-                        <p className="text-zinc-400 text-sm font-medium mb-2">Sessions per User</p>
-                        <p className="text-white text-3xl font-bold mb-1">4.8</p>
-                        <p className="text-[#E0FE10] text-sm">Strong habit formation</p>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  {/* Analytics Dashboard Section */}
-                  <div className="mb-12">
-                    <h4 className="text-white text-lg font-semibold mb-6">Analytics Dashboard</h4>
-                    <p className="text-zinc-400 text-sm mb-8">Real-time metrics from our analytics platform showing subscription breakdown, retention trends, and conversion performance.</p>
-                    
-                    {/* Data Sources */}
-                    <div className="bg-zinc-800/30 rounded-xl p-6 mb-8">
-                      <h5 className="text-white font-medium mb-4">Data Sources & Tech Stack</h5>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div className="flex items-center gap-3 bg-zinc-900/50 rounded-lg p-3">
-                          <div className="w-8 h-8 bg-orange-500/20 rounded-lg flex items-center justify-center">
-                            <span className="text-orange-400 text-xs font-bold">FB</span>
+
+                      {/* Stats & Info */}
+                      <div className="space-y-6">
+                        {/* Highlight stats */}
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="bg-zinc-800/70 border border-zinc-700 rounded-xl p-4 text-center">
+                            <div className="text-[#E0FE10] text-2xl font-bold">30</div>
+                            <div className="text-zinc-400 text-xs mt-1">Day Challenge</div>
                           </div>
-                          <div>
-                            <p className="text-white text-sm font-medium">Firebase</p>
-                            <p className="text-zinc-400 text-xs">User data & auth</p>
+                          <div className="bg-zinc-800/70 border border-zinc-700 rounded-xl p-4 text-center">
+                            <div className="text-[#E0FE10] text-2xl font-bold">46</div>
+                            <div className="text-zinc-400 text-xs mt-1">Participants</div>
                           </div>
                         </div>
-                        
-                        <div className="flex items-center gap-3 bg-zinc-900/50 rounded-lg p-3">
-                          <div className="w-8 h-8 bg-purple-500/20 rounded-lg flex items-center justify-center">
-                            <span className="text-purple-400 text-xs font-bold">MP</span>
-                          </div>
-                          <div>
-                            <p className="text-white text-sm font-medium">Mixpanel</p>
-                            <p className="text-zinc-400 text-xs">Event tracking</p>
+
+                        {/* Quote */}
+                        <div className="bg-[#E0FE10]/10 border border-[#E0FE10]/30 rounded-xl p-5">
+                          <p className="text-[#e6ffc2]/90 text-lg italic">&ldquo;Pulse helped me turn my workouts into something people feel part of.&rdquo;</p>
+                          <p className="text-[#e6ffc2]/70 text-sm mt-3">— Jaidus Mondesir, Creator & Coach</p>
+                        </div>
+
+                        {/* Key wins */}
+                        <div className="space-y-3">
+                          <div className="flex items-start gap-3">
+                            <div className="w-6 h-6 rounded-full bg-[#E0FE10]/20 border border-[#E0FE10]/30 flex items-center justify-center flex-shrink-0 mt-0.5">
+                              <span className="text-[#E0FE10] text-xs">✓</span>
+                            </div>
+                            <div className="text-zinc-300 text-sm">Built 30-Day Ab Challenge — first creator-led Round on Pulse</div>
                           </div>
                           <div className="flex items-start gap-3">
                             <div className="w-6 h-6 rounded-full bg-[#E0FE10]/20 border border-[#E0FE10]/30 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -1245,451 +1480,300 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                             </div>
                             <div className="text-zinc-300 text-sm">Trained 46 people simultaneously with live, high-energy experience</div>
                           </div>
-                          <div>
-                            <p className="text-white text-sm font-medium">App Store Connect</p>
-                            <p className="text-zinc-400 text-xs">App metrics</p>
-                          </div>
-                        </div>
-                        
-                        <div className="flex items-center gap-3 bg-zinc-900/50 rounded-lg p-3">
-                          <div className="w-8 h-8 bg-green-500/20 rounded-lg flex items-center justify-center">
-                            <span className="text-green-400 text-xs font-bold">RC</span>
-                          </div>
-                          <div>
-                            <p className="text-white text-sm font-medium">RevenueCat</p>
-                            <p className="text-zinc-400 text-xs">Subscriptions</p>
+                          <div className="flex items-start gap-3">
+                            <div className="w-6 h-6 rounded-full bg-[#E0FE10]/20 border border-[#E0FE10]/30 flex items-center justify-center flex-shrink-0 mt-0.5">
+                              <span className="text-[#E0FE10] text-xs">✓</span>
+                            </div>
+                            <div className="text-zinc-300 text-sm">Partnered with SoulCycle to offer free 7-day rides to winners</div>
                           </div>
                         </div>
                       </div>
                     </div>
-                    
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-                      {/* Subscription Overview */}
-                      <div>
-                        <div className="flex items-center justify-between mb-4">
-                          <h5 className="text-white font-medium">Subscription Overview</h5>
-                          <span className="text-zinc-400 text-sm">May 2025</span>
-                        </div>
-                        <SubscriptionOverview />
-                      </div>
-                      
-                      {/* Conversion to Paid */}
-                      <div>
-                        <div className="flex items-center justify-between mb-4">
-                          <h5 className="text-white font-medium">Conversion to Standard Paid Subscriptions</h5>
-                          <span className="text-zinc-400 text-sm">Last 30 Days</span>
-                        </div>
-                        <ConversionChart />
-                      </div>
-                    </div>
-                    
-                    {/* Retention Rate Chart */}
-                    <div className="mb-8">
-                      <div className="flex items-center justify-between mb-4">
-                        <h5 className="text-white font-medium">Retention and Conversion Rates</h5>
-                        <div className="flex items-center gap-4">
-                          <label className="flex items-center text-zinc-400 text-sm">
-                            <input type="checkbox" className="mr-2" />
-                            Show average
-                          </label>
-                        </div>
-                      </div>
-                      
-                      <div className="bg-zinc-800/30 rounded-xl p-6">
-                        <div className="flex gap-6 mb-4 text-sm">
-                          <button 
-                            onClick={() => setActiveRetentionTab('retention')}
-                            className={`pb-1 transition-colors ${
-                              activeRetentionTab === 'retention' 
-                                ? 'text-sky-400 border-b-2 border-sky-400' 
-                                : 'text-zinc-400 hover:text-white'
-                            }`}
-                          >
-                            Retention Rate
-                          </button>
-                          <button 
-                            onClick={() => setActiveRetentionTab('conversion')}
-                            className={`pb-1 transition-colors ${
-                              activeRetentionTab === 'conversion' 
-                                ? 'text-sky-400 border-b-2 border-sky-400' 
-                                : 'text-zinc-400 hover:text-white'
-                            }`}
-                          >
-                            Conversion Rate by Introductory Offer
-                          </button>
-                        </div>
-                        <RetentionRateChart />
-                        
-                        {/* Chart Legend */}
-                        <div className="mt-4 flex items-center justify-between text-xs text-zinc-400">
-                          <span>Performance Scale:</span>
-                          <div className="flex items-center gap-2">
-                            <span>0%</span>
-                            <div className="w-20 h-2 bg-gradient-to-r from-red-500/20 via-yellow-500/20 to-[#E0FE10]/20 rounded-full"></div>
-                            <span>100%</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    {/* User Engagement Analytics */}
-                    <div className="mb-8">
-                      <div className="flex items-center justify-between mb-4">
-                        <h5 className="text-white font-medium">User Engagement Analytics</h5>
-                        <span className="text-zinc-400 text-sm">May 2025</span>
-                      </div>
-                      <EngagementChart />
-                    </div>
-                    
-                    {/* K-Effective Viral Growth Snapshot */}
-                    <div className="mb-8">
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center gap-3">
-                          <TrendingUp className="h-5 w-5 text-[#E0FE10]" />
-                          <h5 className="text-white font-medium">Viral Growth Snapshot</h5>
-                        </div>
-                        <span className="text-zinc-400 text-sm">Morning Mobility Challenge • May 6 - June 6</span>
-                      </div>
-                      
-                      {isLoadingKMetrics ? (
-                        <div className="bg-zinc-800/30 rounded-xl p-8 flex items-center justify-center">
-                          <div className="text-zinc-400">Loading viral metrics...</div>
-                        </div>
-                      ) : kEffectiveMetrics ? (
-                        <div className="bg-gradient-to-br from-zinc-800/60 to-zinc-900/60 rounded-xl p-6 border border-[#E0FE10]/20">
-                          {/* Main K-Effective Metric */}
-                          <div className="text-center mb-6">
-                            <div className="inline-flex items-center gap-2 bg-[#E0FE10]/10 rounded-lg px-4 py-2 mb-2">
-                              <span className="text-[#E0FE10] text-sm font-medium">Effective K-Factor (May 6 - June 6)</span>
-                            </div>
-                            <div className="text-white text-4xl font-bold mb-1">{kEffectiveMetrics.kEffective}</div>
-                            <p className="text-zinc-400 text-sm">
-                              {kEffectiveMetrics.referredSignups} referred sign-ups from {kEffectiveMetrics.activeReferrers} active referrers
-                            </p>
-                          </div>
-                          
-                          {/* Key Metrics Grid */}
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                            <div className="bg-zinc-900/50 rounded-lg p-4 text-center">
-                              <div className="text-[#E0FE10] text-lg font-bold">{kEffectiveMetrics.viralPercentage}%</div>
-                              <div className="text-zinc-400 text-xs">of new users via referrals</div>
-                            </div>
-                            <div className="bg-zinc-900/50 rounded-lg p-4 text-center">
-                              <div className="text-[#E0FE10] text-lg font-bold">{kEffectiveMetrics.viralCycleTime}d</div>
-                              <div className="text-zinc-400 text-xs">viral cycle time</div>
-                            </div>
-                            <div className="bg-zinc-900/50 rounded-lg p-4 text-center">
-                              <div className="text-[#E0FE10] text-lg font-bold">{kEffectiveMetrics.shareToFirstWorkoutRate}%</div>
-                              <div className="text-zinc-400 text-xs">share-to-workout rate</div>
-                            </div>
-                            <div className="bg-zinc-900/50 rounded-lg p-4 text-center">
-                              <div className="text-[#E0FE10] text-lg font-bold">{kEffectiveMetrics.timeToSecondShare}d</div>
-                              <div className="text-zinc-400 text-xs">time to second share</div>
-                            </div>
-                          </div>
-                          
-                          {/* Breakdown */}
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div className="bg-zinc-800/30 rounded-lg p-4">
-                              <h6 className="text-white font-medium mb-3">Creator-Driven Virality</h6>
-                              <div className="space-y-2">
-                                <div className="flex justify-between items-center">
-                                  <span className="text-zinc-400 text-sm">Total Participants</span>
-                                  <span className="text-white font-medium">{kEffectiveMetrics.totalParticipants}</span>
-                                </div>
-                                <div className="flex justify-between items-center">
-                                  <span className="text-zinc-400 text-sm">Referred Joins</span>
-                                  <span className="text-[#E0FE10] font-medium">{kEffectiveMetrics.referredSignups}</span>
-                                </div>
-                                <div className="flex justify-between items-center">
-                                  <span className="text-zinc-400 text-sm">Direct Joins</span>
-                                  <span className="text-white font-medium">{kEffectiveMetrics.directJoins}</span>
-                                </div>
-                              </div>
-                            </div>
-                            
-                            <div className="bg-zinc-800/30 rounded-lg p-4">
-                              <h6 className="text-white font-medium mb-3">Why This Matters</h6>
-                              <div className="space-y-2 text-sm">
-                                <div className="flex items-start gap-2">
-                                  <div className="w-1.5 h-1.5 rounded-full bg-[#E0FE10] mt-2 flex-shrink-0"></div>
-                                  <span className="text-zinc-400">K &gt; 1.0 = viral loop scales without paid acquisition</span>
-                                </div>
-                                <div className="flex items-start gap-2">
-                                  <div className="w-1.5 h-1.5 rounded-full bg-[#E0FE10] mt-2 flex-shrink-0"></div>
-                                  <span className="text-zinc-400">Immune to missing-invite noise</span>
-                                </div>
-                                <div className="flex items-start gap-2">
-                                  <div className="w-1.5 h-1.5 rounded-full bg-[#E0FE10] mt-2 flex-shrink-0"></div>
-                                  <span className="text-zinc-400">Measures actual results, not attempts</span>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                          
-                          {/* Methodology Note */}
-                          <div className="mt-4 p-3 bg-zinc-900/30 rounded-lg border-l-2 border-[#E0FE10]/50">
-                            <p className="text-zinc-400 text-xs">
-                              <strong className="text-[#E0FE10]">Methodology:</strong> K<sub>effective</sub> = New sign-ups attributed to referrals ÷ Active referrers in same period. 
-                              Focused on Morning Mobility challenge to demonstrate creator-driven viral mechanics.
-                            </p>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="bg-zinc-800/30 rounded-xl p-8 text-center">
-                          <div className="text-zinc-400">Unable to load viral metrics</div>
-                        </div>
-                      )}
-                    </div>
-                    
-                    {/* Viral Story & Network Effect */}
-                    <div className="mb-8">
-                      <div className="bg-gradient-to-br from-[#E0FE10]/10 to-[#E0FE10]/5 border border-[#E0FE10]/20 rounded-xl p-6">
-                        <h5 className="text-white font-semibold mb-4 flex items-center gap-2">
-                          <span className="text-2xl">🚀</span>
-                          Small Creator Cohort Proves Flywheel
-                        </h5>
-                        
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                          {/* Viral Flow */}
-                          <div>
-                            <div className="bg-zinc-900/50 rounded-lg p-4 mb-4">
-                              <div className="flex items-center justify-between text-center">
-                                <div>
-                                  <div className="text-[#E0FE10] text-2xl font-bold">6</div>
-                                  <div className="text-zinc-400 text-xs">active referrers</div>
-                                </div>
-                                <div className="text-[#E0FE10] text-xl">→</div>
-                                <div>
-                                  <div className="text-[#E0FE10] text-2xl font-bold">59</div>
-                                  <div className="text-zinc-400 text-xs">net sign-ups</div>
-                                </div>
-                                <div className="text-[#E0FE10] text-xl">→</div>
-                                <div>
-                                  <div className="text-[#E0FE10] text-2xl font-bold">81</div>
-                                  <div className="text-zinc-400 text-xs">total participants</div>
-                                </div>
-                              </div>
-                              <div className="text-center mt-3 pt-3 border-t border-zinc-700">
-                                <span className="text-zinc-300 text-sm">Loop time: </span>
-                                <span className="text-[#E0FE10] font-semibold">6.3 days</span>
-                              </div>
-                            </div>
-                            
-                            <div className="bg-zinc-800/50 rounded-lg p-4">
-                              <h6 className="text-white font-medium mb-2">Next Step Projection:</h6>
-                              <div className="text-zinc-300 text-sm space-y-1">
-                                <div><span className="text-[#E0FE10]">100 active referrers</span> → <span className="text-[#E0FE10]">600+ sign-ups</span></div>
-                                <div><span className="text-[#E0FE10]">CAC &lt;$1</span> vs. <span className="text-zinc-500 line-through">$4.75 paid</span></div>
-                              </div>
-                            </div>
-                          </div>
-                          
-                          {/* Network Visualization Concept */}
-                          <div className="flex items-center justify-center">
-                            <div className="bg-zinc-900/50 rounded-lg p-6 w-full">
-                              <p className="text-zinc-400 text-sm mb-4 text-center">Viral Effect</p>
-                              <ReferralGraph data={sampleGraph} className="rounded-lg border border-zinc-700/50" />
-                              <div className="mt-3 text-[#E0FE10] text-xs font-medium text-center">
-                                One referrer shares → multiple children join → children become referrers → viral branching effect
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    {/* What the Numbers Really Mean */}
-                    {kEffectiveMetrics && (
-                      <div className="mb-8">
-                        <h5 className="text-white font-medium mb-4">What the Numbers Really Mean</h5>
-                        <div className="bg-zinc-800/30 rounded-xl overflow-hidden">
-                          <table className="w-full text-left">
-                            <thead>
-                              <tr className="border-b border-zinc-700 bg-zinc-900/50">
-                                <th className="py-3 px-4 text-zinc-400 font-medium text-sm">Metric</th>
-                                <th className="py-3 px-4 text-zinc-400 font-medium text-sm">Interpretation</th>
-                                <th className="py-3 px-4 text-zinc-400 font-medium text-sm">Investor Takeaway</th>
-                              </tr>
-                            </thead>
-                            <tbody className="text-sm">
-                              <tr className="border-b border-zinc-700">
-                                <td className="py-3 px-4 text-[#E0FE10] font-medium">K-eff = {kEffectiveMetrics.kEffective}</td>
-                                <td className="py-3 px-4 text-zinc-300">Each active referrer → {kEffectiveMetrics.kEffective} credited sign-ups</td>
-                                <td className="py-3 px-4 text-zinc-300">Viral loop &gt; 1 ⇒ product can grow "for free"</td>
-                              </tr>
-                              <tr className="border-b border-zinc-700">
-                                <td className="py-3 px-4 text-[#E0FE10] font-medium">{kEffectiveMetrics.viralPercentage}% via referrals</td>
-                                <td className="py-3 px-4 text-zinc-300">Majority of growth is peer-driven</td>
-                                <td className="py-3 px-4 text-zinc-300"><strong>Paid CAC isn't the growth engine—community is</strong></td>
-                              </tr>
-                              <tr className="border-b border-zinc-700">
-                                <td className="py-3 px-4 text-[#E0FE10] font-medium">{kEffectiveMetrics.viralCycleTime}d cycle time</td>
-                                <td className="py-3 px-4 text-zinc-300">Host → child joins in under a week</td>
-                                <td className="py-3 px-4 text-zinc-300">Loop spins fast; LTV realized quickly</td>
-                              </tr>
-                              <tr className="border-b border-zinc-700">
-                                <td className="py-3 px-4 text-[#E0FE10] font-medium">{kEffectiveMetrics.shareToFirstWorkoutRate}% share-to-workout</td>
-                                <td className="py-3 px-4 text-zinc-300">Referred sign-ups actually finish a Round</td>
-                                <td className="py-3 px-4 text-zinc-300">Referred users are quality users, not tourists</td>
-                              </tr>
-                              <tr>
-                                <td className="py-3 px-4 text-[#E0FE10] font-medium">{kEffectiveMetrics.timeToSecondShare}d to 2nd share</td>
-                                <td className="py-3 px-4 text-zinc-300">They pay it forward within ~2 weeks</td>
-                                <td className="py-3 px-4 text-zinc-300">Flywheel self-propagates</td>
-                              </tr>
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 </div>
-              </section>
-              
-              {/* Data Glossary */}
-              <div className="mb-8">
-                <details className="bg-zinc-800/30 rounded-xl overflow-hidden">
-                  <summary className="cursor-pointer p-6 hover:bg-zinc-800/50 transition-colors">
-                    <div className="flex items-center justify-between">
-                      <h5 className="text-white font-medium">📊 Data Glossary</h5>
-                      <span className="text-zinc-400 text-sm">Click to expand definitions</span>
+
+                {/* 2025 Rounds Timeline */}
+                <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 md:p-8 mb-10">
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="w-8 h-8 rounded-lg bg-[#E0FE10]/20 border border-[#E0FE10]/30 flex items-center justify-center">
+                      <TrendingUp className="w-4 h-4 text-[#E0FE10]" />
                     </div>
-                  </summary>
-                  <div className="px-6 pb-6 border-t border-zinc-700">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                      <div className="bg-zinc-900/50 rounded-lg p-4">
-                        <h6 className="text-[#E0FE10] font-medium mb-2">Effective K-Factor</h6>
-                        <p className="text-zinc-400 text-sm">Our viral growth metric calculated as: New sign-ups attributed to referrals ÷ Active referrers in the same period. This approach is immune to missing-invite noise and measures actual results rather than attempts. Values above 1.0 indicate viral growth that can scale without paid acquisition.</p>
+                    <h3 className="text-white text-xl font-semibold">2025 Rounds</h3>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {/* Round 1 */}
+                    <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-5 hover:border-[#E0FE10]/30 transition-colors">
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-xs font-medium px-2 py-1 rounded-full bg-green-500/20 text-green-400">Completed</span>
+                        <span className="text-zinc-500 text-xs">Jan - Feb</span>
                       </div>
-                      <div className="bg-zinc-900/50 rounded-lg p-4">
-                        <h6 className="text-[#E0FE10] font-medium mb-2">CAC (Customer Acquisition Cost)</h6>
-                        <p className="text-zinc-400 text-sm">Total cost to acquire one paying customer, including marketing spend, sales costs, and onboarding expenses.</p>
+                      <h4 className="text-white font-semibold mb-1">30 Day Abs Challenge</h4>
+                      <p className="text-zinc-400 text-sm mb-3">Core focus with Jaidus</p>
+                      <div className="flex items-center gap-4 text-sm">
+                        <div><span className="text-[#E0FE10] font-bold">46</span> <span className="text-zinc-500">seekers</span></div>
                       </div>
-                      <div className="bg-zinc-900/50 rounded-lg p-4">
-                        <h6 className="text-[#E0FE10] font-medium mb-2">Retention Rate</h6>
-                        <p className="text-zinc-400 text-sm">Percentage of users who remain active after a specific time period. Critical metric for subscription businesses.</p>
+                    </div>
+                    
+                    {/* Round 2 */}
+                    <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-5 hover:border-[#E0FE10]/30 transition-colors">
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-xs font-medium px-2 py-1 rounded-full bg-green-500/20 text-green-400">Completed</span>
+                        <span className="text-zinc-500 text-xs">Mar - Apr</span>
                       </div>
-                      <div className="bg-zinc-900/50 rounded-lg p-4">
-                        <h6 className="text-[#E0FE10] font-medium mb-2">ARPU (Average Revenue Per User)</h6>
-                        <p className="text-zinc-400 text-sm">Average monthly revenue generated per user, calculated as total revenue divided by active users.</p>
+                      <h4 className="text-white font-semibold mb-1">30 Day Squat Challenge</h4>
+                      <p className="text-zinc-400 text-sm mb-3">Lower body focus</p>
+                      <div className="flex items-center gap-4 text-sm">
+                        <div><span className="text-[#E0FE10] font-bold">37</span> <span className="text-zinc-500">seekers</span></div>
                       </div>
-                      <div className="bg-zinc-900/50 rounded-lg p-4">
-                        <h6 className="text-[#E0FE10] font-medium mb-2">Churn Rate</h6>
-                        <p className="text-zinc-400 text-sm">Percentage of subscribers who cancel their subscription in a given period. Lower is better.</p>
+                    </div>
+                    
+                    {/* Round 3 */}
+                    <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-5 hover:border-[#E0FE10]/30 transition-colors">
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-xs font-medium px-2 py-1 rounded-full bg-green-500/20 text-green-400">Completed</span>
+                        <span className="text-zinc-500 text-xs">May - Jun</span>
                       </div>
-                      <div className="bg-zinc-900/50 rounded-lg p-4">
-                        <h6 className="text-[#E0FE10] font-medium mb-2">Creator Multiplier</h6>
-                        <p className="text-zinc-400 text-sm">Average number of users acquired per creator partner. Measures effectiveness of creator-driven growth strategy.</p>
+                      <h4 className="text-white font-semibold mb-1">Morning Mobility</h4>
+                      <p className="text-zinc-400 text-sm mb-3">30-day mobility challenge</p>
+                      <div className="flex items-center gap-4 text-sm">
+                        <div><span className="text-[#E0FE10] font-bold">83</span> <span className="text-zinc-500">seekers</span></div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Growth Arrow */}
+                  <div className="mt-6 pt-6 border-t border-zinc-800">
+                    <div className="flex items-center justify-center gap-8">
+                      <div className="text-center">
+                        <div className="text-zinc-500 text-sm">Round 1</div>
+                        <div className="text-white font-bold">46</div>
+                      </div>
+                      <div className="text-[#E0FE10]">→</div>
+                      <div className="text-center">
+                        <div className="text-zinc-500 text-sm">Round 2</div>
+                        <div className="text-white font-bold">37</div>
+                      </div>
+                      <div className="text-[#E0FE10]">→</div>
+                      <div className="text-center">
+                        <div className="text-zinc-500 text-sm">Round 3</div>
+                        <div className="text-[#E0FE10] font-bold">83</div>
+                      </div>
+                      <div className="bg-[#E0FE10]/10 rounded-lg px-3 py-1.5">
+                        <span className="text-[#E0FE10] text-sm font-medium">+80% growth</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Two Column: Early Validation + Process Optimizations */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10">
+                  {/* Early Stage Validation */}
+                  <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 md:p-8">
+                    <h3 className="text-white text-xl font-bold mb-2">Early Stage Validation</h3>
+                    <p className="text-zinc-400 text-sm mb-6">
+                      Strong early metrics since January 2025 public launch demonstrate product-market fit and scalable unit economics.
+                    </p>
+                    
+                    <div className="grid grid-cols-2 gap-4 mb-6">
+                      <div className="text-center py-4 bg-zinc-800/50 rounded-xl">
+                        <div className="text-zinc-400 text-sm mb-1">Retention Rate</div>
+                        <div className="text-white text-3xl font-bold">78%</div>
+                        <div className="text-zinc-500 text-xs mt-1">Above industry avg</div>
+                      </div>
+                      <div className="text-center py-4 bg-zinc-800/50 rounded-xl">
+                        <div className="text-zinc-400 text-sm mb-1">Conversion Rate</div>
+                        <div className="text-white text-3xl font-bold">18%</div>
+                        <div className="text-zinc-500 text-xs mt-1">2x industry avg</div>
+                      </div>
+                      <div className="text-center py-4 bg-zinc-800/50 rounded-xl">
+                        <div className="text-zinc-400 text-sm mb-1">Creator Multiplier</div>
+                        <div className="text-white text-3xl font-bold">37.5x</div>
+                        <div className="text-zinc-500 text-xs mt-1">Users per creator</div>
+                      </div>
+                      <div className="text-center py-4 bg-zinc-800/50 rounded-xl">
+                        <div className="text-zinc-400 text-sm mb-1">Monthly Churn</div>
+                        <div className="text-white text-3xl font-bold">6.5%</div>
+                        <div className="text-zinc-500 text-xs mt-1">Low for early stage</div>
+                      </div>
+                    </div>
+                    
+                    <div className="bg-zinc-800/30 rounded-xl p-4">
+                      <h4 className="text-[#E0FE10] text-sm font-medium mb-3">Subscription Mix</h4>
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                          <span className="text-zinc-400 text-sm">Annual ($39.99)</span>
+                          <span className="text-white font-semibold">56%</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-zinc-400 text-sm">Monthly ($4.99)</span>
+                          <span className="text-white font-semibold">44%</span>
+                        </div>
+                      </div>
+                      <p className="text-zinc-500 text-xs mt-3">Strong annual uptake shows user confidence</p>
+                    </div>
+                  </div>
+
+                  {/* Process Optimizations */}
+                  <div className="bg-gradient-to-br from-[#E0FE10]/10 to-transparent border border-[#E0FE10]/20 rounded-2xl p-6 md:p-8">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="w-8 h-8 rounded-lg bg-[#E0FE10]/20 flex items-center justify-center">
+                        <span className="text-lg">⚡</span>
+                      </div>
+                      <h3 className="text-white text-xl font-bold">2025 Optimizations</h3>
+                    </div>
+                    <p className="text-zinc-400 text-sm mb-6">
+                      Key learnings from our first 3 Rounds, now baked into the platform.
+                    </p>
+                    
+                    <div className="space-y-4">
+                      <div className="bg-zinc-900/50 rounded-xl p-4 border border-zinc-800">
+                        <div className="flex items-start gap-3">
+                          <div className="w-6 h-6 rounded-full bg-green-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                            <span className="text-green-400 text-xs">✓</span>
+                          </div>
+                          <div>
+                            <div className="text-white font-medium">7-Day Trial</div>
+                            <div className="text-zinc-400 text-sm">Reduced from 30 days — prevents post-Round cancellations</div>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="bg-zinc-900/50 rounded-xl p-4 border border-zinc-800">
+                        <div className="flex items-start gap-3">
+                          <div className="w-6 h-6 rounded-full bg-green-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                            <span className="text-green-400 text-xs">✓</span>
+                          </div>
+                          <div>
+                            <div className="text-white font-medium">AI Round Builder</div>
+                            <div className="text-zinc-400 text-sm">Creators can now launch Rounds in &lt;5 min vs. hours</div>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="bg-zinc-900/50 rounded-xl p-4 border border-zinc-800">
+                        <div className="flex items-start gap-3">
+                          <div className="w-6 h-6 rounded-full bg-green-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                            <span className="text-green-400 text-xs">✓</span>
+                          </div>
+                          <div>
+                            <div className="text-white font-medium">Referral System</div>
+                            <div className="text-zinc-400 text-sm">Built-in viral loop with trackable K-factor metrics</div>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="bg-zinc-900/50 rounded-xl p-4 border border-zinc-800">
+                        <div className="flex items-start gap-3">
+                          <div className="w-6 h-6 rounded-full bg-green-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                            <span className="text-green-400 text-xs">✓</span>
+                          </div>
+                          <div>
+                            <div className="text-white font-medium">Round Frequency</div>
+                            <div className="text-zinc-400 text-sm">Targeting bi-weekly Rounds in 2026 (was ~1/quarter)</div>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </details>
-              </div>
-              
-              {/* Growth Metrics Charts */}
-              <div className="space-y-12 mb-10">
-                <div>
-                  <h4 className="text-white text-lg font-semibold mb-4">Organic Growth Economics</h4>
+                </div>
+
+                {/* Program Support Networks */}
+                <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 md:p-8 mb-10">
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center">
+                      <span className="text-lg">🤝</span>
+                    </div>
+                    <h3 className="text-white text-xl font-bold">Program Support Networks</h3>
+                  </div>
                   <p className="text-zinc-400 text-sm mb-6">
-                    Community-driven acquisition costs and viral coefficient trends showing sustainable growth without paid marketing dependency.
+                    Backed by top startup programs providing mentorship, resources, and network access.
                   </p>
                   
-                  {/* Organic vs Paid Comparison */}
-                  <div className="bg-zinc-800/30 rounded-xl p-6 mb-6">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                      <div className="text-center">
-                        <div className="text-[#E0FE10] text-2xl font-bold mb-1">$0</div>
-                        <div className="text-zinc-400 text-sm">Current CAC</div>
-                        <div className="text-zinc-500 text-xs">100% organic</div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {/* AWS Startups */}
+                    <a 
+                      href="https://aws.amazon.com/startups" 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-5 flex flex-col items-center text-center hover:border-orange-500/30 transition-colors group cursor-pointer"
+                    >
+                      <div className="w-full h-14 flex items-center justify-center mb-3">
+                        <img 
+                          src="/awsstartups.png" 
+                          alt="AWS Startups" 
+                          className="max-h-full max-w-full object-contain"
+                        />
                       </div>
-                      <div className="text-center">
-                        <div className="text-zinc-500 text-2xl font-bold mb-1 line-through">$4.75</div>
-                        <div className="text-zinc-400 text-sm">Industry Paid CAC</div>
-                        <div className="text-zinc-500 text-xs">Traditional approach</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-[#E0FE10] text-2xl font-bold mb-1">&lt;$1</div>
-                        <div className="text-zinc-400 text-sm">Projected CAC at scale</div>
-                        <div className="text-zinc-500 text-xs">With 100+ creators</div>
-                      </div>
-                    </div>
-                    
-                    <div className="mt-4 p-3 bg-[#E0FE10]/10 rounded-lg border border-[#E0FE10]/20">
-                      <p className="text-[#E0FE10] text-sm font-medium text-center">
-                        💡 Paid CAC isn't the growth engine—community is
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
+                      <h4 className="text-white font-semibold text-sm mb-1 group-hover:text-orange-400 transition-colors">AWS Startups</h4>
+                      <p className="text-zinc-500 text-xs">Cloud credits</p>
+                    </a>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="bg-zinc-800/50 rounded-xl p-6">
-                  <h4 className="text-white text-lg font-semibold mb-4">Early Stage Validation</h4>
-                  <p className="text-zinc-400 mb-4">
-                    Strong early metrics since January 2025 public launch demonstrate product-market fit and scalable unit economics.
+                    {/* Techstars */}
+                    <a 
+                      href="https://www.techstars.com" 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-5 flex flex-col items-center text-center hover:border-green-500/30 transition-colors group cursor-pointer"
+                    >
+                      <div className="w-full h-14 flex items-center justify-center mb-3">
+                        <img 
+                          src="/techstars.png" 
+                          alt="Techstars" 
+                          className="max-h-full max-w-full object-contain"
+                        />
+                      </div>
+                      <h4 className="text-white font-semibold text-sm mb-1 group-hover:text-green-400 transition-colors">Techstars</h4>
+                      <p className="text-zinc-500 text-xs">Accelerator network</p>
+                    </a>
+
+                    {/* FounderU */}
+                    <a 
+                      href="https://www.founder.university" 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-5 flex flex-col items-center text-center hover:border-blue-500/30 transition-colors group cursor-pointer"
+                    >
+                      <div className="w-full h-14 flex items-center justify-center mb-3">
+                        <img 
+                          src="/founderu.png" 
+                          alt="FounderU" 
+                          className="max-h-full max-w-full object-contain"
+                        />
+                      </div>
+                      <h4 className="text-white font-semibold text-sm mb-1 group-hover:text-blue-400 transition-colors">FounderU</h4>
+                      <p className="text-zinc-500 text-xs">Founder program</p>
+                    </a>
+
+                    {/* Launch */}
+                    <a 
+                      href="https://www.launchaccelerator.co" 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-5 flex flex-col items-center text-center hover:border-purple-500/30 transition-colors group cursor-pointer"
+                    >
+                      <div className="w-full h-14 flex items-center justify-center mb-3">
+                        <img 
+                          src="/Launch.png" 
+                          alt="Launch" 
+                          className="max-h-full max-w-full object-contain"
+                        />
+                      </div>
+                      <h4 className="text-white font-semibold text-sm mb-1 group-hover:text-purple-400 transition-colors">Launch</h4>
+                      <p className="text-zinc-500 text-xs">Accelerator</p>
+                    </a>
+                  </div>
+                </div>
+
+                {/* Bottom CTA */}
+                <div className="bg-gradient-to-r from-[#E0FE10]/10 via-[#E0FE10]/5 to-transparent border border-[#E0FE10]/20 rounded-2xl p-6 text-center">
+                  <p className="text-zinc-300 text-lg">
+                    <span className="text-[#E0FE10] font-semibold">3 Rounds. 150+ participants. $0 paid marketing.</span>
+                    <br />
+                    <span className="text-zinc-400">The flywheel is spinning — now it&apos;s time to scale.</span>
                   </p>
-                  <div className="grid grid-cols-2 gap-4 text-center mb-4">
-                    <div>
-                      <p className="text-zinc-400 text-sm">Retention Rate</p>
-                      <p className="text-white text-xl font-bold">61%</p>
-                      <p className="text-zinc-500 text-xs">Above industry avg</p>
-                    </div>
-                    <div>
-                      <p className="text-zinc-400 text-sm">Conversion Rate</p>
-                      <p className="text-white text-xl font-bold">18%</p>
-                      <p className="text-zinc-500 text-xs">2x industry avg</p>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4 text-center mb-4">
-                    <div>
-                      <p className="text-zinc-400 text-sm">Creator Multiplier</p>
-                      <p className="text-white text-xl font-bold">37.5x</p>
-                      <p className="text-zinc-500 text-xs">Users per creator</p>
-                    </div>
-                    <div>
-                      <p className="text-zinc-400 text-sm">Monthly Churn</p>
-                      <p className="text-white text-xl font-bold">6.5%</p>
-                      <p className="text-zinc-500 text-xs">Low for early stage</p>
-                    </div>
-                  </div>
-                  <div className="bg-zinc-900/50 rounded-lg p-4">
-                    <h5 className="text-[#E0FE10] text-sm font-medium mb-2">Subscription Mix</h5>
-                    <div className="flex justify-between items-center mb-1">
-                      <span className="text-zinc-400 text-sm">Annual ($39.99)</span>
-                      <span className="text-white font-medium">80 subs (56%)</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-zinc-400 text-sm">Monthly ($4.99)</span>
-                      <span className="text-white font-medium">64 subs (44%)</span>
-                    </div>
-                    <p className="text-zinc-500 text-xs mt-2">Strong annual uptake shows user confidence</p>
-                  </div>
                 </div>
-                
-                <div className="bg-zinc-800/50 rounded-xl p-6">
-                  <h4 className="text-white text-lg font-semibold mb-4">Growth Channels</h4>
-                  <ul className="space-y-3">
-                    <li className="flex justify-between items-center">
-                      <span className="text-zinc-400">Creator-Led Acquisition</span>
-                      <span className="text-white font-medium">65%</span>
-                    </li>
-                    <li className="flex justify-between items-center">
-                      <span className="text-zinc-400">Social Media Marketing (TikTok, Instagram)</span>
-                      <span className="text-white font-medium">20%</span>
-                    </li>
-                    <li className="flex justify-between items-center">
-                      <span className="text-zinc-400">Word of Mouth</span>
-                      <span className="text-white font-medium">10%</span>
-                    </li>
-                    <li className="flex justify-between items-center">
-                      <span className="text-zinc-400">Direct/Organic</span>
-                      <span className="text-white font-medium">5%</span>
-                    </li>
-                  </ul>
-                </div>
-              </div>
+              </section>
               </>
                 ) : (
                   <LockedSectionView sectionName="Traction & Metrics" />
@@ -1705,112 +1789,134 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                     className="mb-20"
                 >
                     {/* header */}
-                    <div className="flex items-center mb-6">
+                    <div className="flex items-center mb-8">
                     <div className="w-10 h-10 rounded-full bg-[#E0FE10] flex items-center justify-center mr-4">
                         <span className="font-bold text-black">4</span>
                     </div>
                     <h2 className="text-white text-3xl font-bold">IP &amp; Defensibility</h2>
                     </div>
 
-                    {/* gradient-frame wrapper */}
-                    <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-zinc-900 to-zinc-800 p-[2px]">
-                    <div className="absolute inset-0 bg-gradient-to-r from-blue-500/20 via-purple-500/20 to-[#d7ff00]/20 animate-[spin_10s_linear_infinite] opacity-25" />
-                    <div className="relative bg-zinc-900 rounded-lg p-8 lg:p-10 space-y-10">
-
-                        {/* secured filings table */}
-                        <div>
-                        <h3 className="text-white text-xl font-semibold mb-6">Secured Filings</h3>
-                        <div className="overflow-x-auto">
-                            <table className="w-full border-collapse text-left">
-                            <thead>
-                                <tr className="border-b border-zinc-800 text-zinc-400 text-sm">
-                                {['Filing', 'Type', 'Jurisdiction', 'Status', 'Coverage', 'Filed'].map(h => (
-                                    <th key={h} className="py-3 pr-6 font-medium">{h}</th>
-                                ))}
-                                </tr>
-                            </thead>
-                            <tbody className="text-sm">
-                                {[
-                                {
-                                    filing: 'Pulse Programming™',
-                                    type: 'Trademark',
-                                    jur: 'USPTO',
-                                    status: 'Registered',
-                                    cov: 'Software class 9 · 42',
-                                    filed: 'Aug 2024',
-                                },
-                                {
-                                    filing: 'Pulse Programming – AI Stack Generation',
-                                    type: 'Provisional Patent',
-                                    jur: 'USPTO',
-                                    status: 'Filed',
-                                    cov: 'Method for AI-generated workout programs',
-                                    filed: 'Feb 2025',
-                                },
-                                {
-                                    filing: 'Rounds™',
-                                    type: 'Trademark',
-                                    jur: 'USPTO',
-                                    status: 'Pending',
-                                    cov: 'Community-fitness software',
-                                    filed: 'Jan 2025',
-                                },
-                                ].map(r => (
-                                <tr key={r.filing} className="border-b border-zinc-800 last:border-0">
-                                    <td className="py-4 pr-6 text-white">
-                                    {r.filing === 'Pulse Programming™' ? (
-                                        <a 
-                                        href="https://fitwithpulse.ai/programming" 
-                                        target="_blank" 
-                                        rel="noopener noreferrer"
-                                        className="text-[#E0FE10] hover:text-[#d8f521] transition-colors underline decoration-dotted"
-                                        >
-                                        {r.filing}
-                                        </a>
-                                    ) : (
-                                        r.filing
-                                    )}
-                                    </td>
-                                    <td className="py-4 pr-6 text-zinc-300">{r.type}</td>
-                                    <td className="py-4 pr-6 text-zinc-300">{r.jur}</td>
-                                    <td className="py-4 pr-6">
-                                    <span className={`px-2 py-1 rounded text-xs font-medium
-                                        ${r.status === 'Registered' ? 'bg-green-600/20 text-green-400'
-                                        : 'bg-yellow-600/20 text-yellow-400'}`}>
-                                        {r.status}
-                                    </span>
-                                    </td>
-                                    <td className="py-4 pr-6 text-zinc-300">{r.cov}</td>
-                                    <td className="py-4 text-zinc-300">{r.filed}</td>
-                                </tr>
-                                ))}
-                            </tbody>
-                            </table>
+                    {/* Provisional Patent Hero */}
+                    <div className="bg-gradient-to-br from-[#E0FE10]/10 via-zinc-900 to-zinc-900 border border-[#E0FE10]/20 rounded-2xl p-6 md:p-8 mb-8">
+                      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+                        <div className="flex items-start gap-4">
+                          <div className="w-14 h-14 rounded-xl bg-[#E0FE10]/20 border border-[#E0FE10]/30 flex items-center justify-center flex-shrink-0">
+                            <span className="text-2xl">📜</span>
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-xs font-medium px-2 py-1 rounded-full bg-yellow-500/20 text-yellow-400">Provisional Patent</span>
+                              <span className="text-zinc-500 text-xs">USPTO • Filed Feb 2025</span>
+                            </div>
+                            <h3 className="text-white text-xl font-bold mb-1">Pulse Programming – AI Stack Generation</h3>
+                            <p className="text-zinc-400 text-sm">Method for AI-generated workout programs from atomic exercise content</p>
+                          </div>
                         </div>
+                        <div className="bg-zinc-800/60 rounded-xl px-5 py-4 text-center md:text-right">
+                          <div className="text-[#E0FE10] text-sm font-medium mb-1">12-Month Window</div>
+                          <div className="text-zinc-400 text-xs">To convert to full patent</div>
                         </div>
-
-                        {/* pipeline & funding call-out */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        {/* pipeline card */}
-                        <div className="bg-zinc-800/60 rounded-lg p-6 md:col-span-2">
-                            <h4 className="text-[#E0FE10] font-medium mb-3">Pipeline (Next 12 Months)</h4>
-                            <ul className="space-y-2 text-sm text-zinc-400">
-                            <li>• 3 additional patent applications drafted and ready to file → <span className="text-zinc-200">pending funding</span></li>
-                            <li>• EU trademark filings for Pulse Programming™ & Rounds™ → <span className="text-zinc-200">Q4 2025</span></li>
-                            <li>• Design patent for on-watch real-time "Energy Story" UI → <span className="text-zinc-200">Q1 2026</span></li>
-                            </ul>
-                        </div>
-
-                        {/* funding accelerator card */}
-                        <div className="bg-zinc-800/60 rounded-lg p-6 flex flex-col justify-between">
-                            <h4 className="text-[#E0FE10] font-medium mb-3">Capital = Acceleration</h4>
-                            <p className="text-zinc-400 text-sm mb-4">
-                            Additional funding allows us to fast-track international trademarks and convert provisionals before expiry—locking in a multi-year moat.
-                            </p>
-                        </div>
-                        </div>
-
+                      </div>
                     </div>
+
+                    {/* Technical IP Grid */}
+                    <div className="mb-8">
+                      <h3 className="text-white text-xl font-semibold mb-6">Technical IP & Proprietary Systems</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* iOS App */}
+                        <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6 hover:border-[#E0FE10]/30 transition-colors group">
+                          <div className="flex items-start gap-4">
+                            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500/20 to-purple-500/20 border border-blue-500/30 flex items-center justify-center flex-shrink-0">
+                              <span className="text-xl">📱</span>
+                            </div>
+                            <div className="flex-1">
+                              <h4 className="text-white font-semibold mb-1 group-hover:text-[#E0FE10] transition-colors">iOS App</h4>
+                              <p className="text-zinc-400 text-sm mb-3">Native Swift application with Apple Watch integration</p>
+                              <div className="flex flex-wrap gap-2">
+                                <span className="text-xs px-2 py-1 rounded-full bg-zinc-800 text-zinc-400">SwiftUI</span>
+                                <span className="text-xs px-2 py-1 rounded-full bg-zinc-800 text-zinc-400">HealthKit</span>
+                                <span className="text-xs px-2 py-1 rounded-full bg-zinc-800 text-zinc-400">WatchOS</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Web App */}
+                        <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6 hover:border-[#E0FE10]/30 transition-colors group">
+                          <div className="flex items-start gap-4">
+                            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-green-500/20 to-teal-500/20 border border-green-500/30 flex items-center justify-center flex-shrink-0">
+                              <span className="text-xl">🌐</span>
+                            </div>
+                            <div className="flex-1">
+                              <h4 className="text-white font-semibold mb-1 group-hover:text-[#E0FE10] transition-colors">Web App</h4>
+                              <p className="text-zinc-400 text-sm mb-3">Full-featured web platform for creators and users</p>
+                              <div className="flex flex-wrap gap-2">
+                                <span className="text-xs px-2 py-1 rounded-full bg-zinc-800 text-zinc-400">Next.js</span>
+                                <span className="text-xs px-2 py-1 rounded-full bg-zinc-800 text-zinc-400">React</span>
+                                <span className="text-xs px-2 py-1 rounded-full bg-zinc-800 text-zinc-400">TypeScript</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* PulseCheck */}
+                        <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6 hover:border-[#E0FE10]/30 transition-colors group">
+                          <div className="flex items-start gap-4">
+                            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500/20 to-pink-500/20 border border-purple-500/30 flex items-center justify-center flex-shrink-0">
+                              <span className="text-xl">🧠</span>
+                            </div>
+                            <div className="flex-1">
+                              <h4 className="text-white font-semibold mb-1 group-hover:text-[#E0FE10] transition-colors">PulseCheck</h4>
+                              <p className="text-zinc-400 text-sm mb-3">AI-powered mindset chatbot for mental wellness check-ins</p>
+                              <div className="flex flex-wrap gap-2">
+                                <span className="text-xs px-2 py-1 rounded-full bg-zinc-800 text-zinc-400">GPT-4</span>
+                                <span className="text-xs px-2 py-1 rounded-full bg-zinc-800 text-zinc-400">Conversational AI</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Athlete CRM */}
+                        <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6 hover:border-[#E0FE10]/30 transition-colors group">
+                          <div className="flex items-start gap-4">
+                            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-500/20 to-yellow-500/20 border border-orange-500/30 flex items-center justify-center flex-shrink-0">
+                              <span className="text-xl">📊</span>
+                            </div>
+                            <div className="flex-1">
+                              <h4 className="text-white font-semibold mb-1 group-hover:text-[#E0FE10] transition-colors">Athlete CRM</h4>
+                              <p className="text-zinc-400 text-sm mb-3">Client management system for coaches and creators</p>
+                              <div className="flex flex-wrap gap-2">
+                                <span className="text-xs px-2 py-1 rounded-full bg-zinc-800 text-zinc-400">Analytics</span>
+                                <span className="text-xs px-2 py-1 rounded-full bg-zinc-800 text-zinc-400">Progress Tracking</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Moat Summary */}
+                    <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6">
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="w-8 h-8 rounded-lg bg-[#E0FE10]/20 flex items-center justify-center">
+                          <span className="text-lg">🛡️</span>
+                        </div>
+                        <h4 className="text-white font-semibold">Defensibility Summary</h4>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="bg-zinc-800/50 rounded-xl p-4 text-center">
+                          <div className="text-[#E0FE10] text-2xl font-bold mb-1">1</div>
+                          <div className="text-zinc-400 text-sm">Provisional Patent</div>
+                        </div>
+                        <div className="bg-zinc-800/50 rounded-xl p-4 text-center">
+                          <div className="text-[#E0FE10] text-2xl font-bold mb-1">4</div>
+                          <div className="text-zinc-400 text-sm">Proprietary Systems</div>
+                        </div>
+                        <div className="bg-zinc-800/50 rounded-xl p-4 text-center">
+                          <div className="text-[#E0FE10] text-2xl font-bold mb-1">2+</div>
+                          <div className="text-zinc-400 text-sm">Years of Dev</div>
+                        </div>
+                      </div>
                     </div>
                 </section>
                   ) : (
@@ -1949,7 +2055,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                             </li>
                             <li className="flex items-start gap-2">
                             <span className="text-[#E0FE10] mt-1">•</span>
-                            <span>61% retention, 1h 29m sessions</span>
+                            <span>78% retention, 1h 29m sessions</span>
                             </li>
                         </ul>
                         </div>
@@ -1999,347 +2105,360 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                     ref={(el) => { sectionsRef.current.market = el; }}
                     className="mb-20"
                 >
-                    <div className="flex items-center mb-6">
+                    <div className="flex items-center mb-8">
                     <div className="w-10 h-10 rounded-full bg-[#E0FE10] flex items-center justify-center mr-4">
                         <span className="font-bold text-black">6</span>
                     </div>
                     <h2 className="text-white text-3xl font-bold">Market Opportunity</h2>
                     </div>
-                    
-                    <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8 mb-10">
-                    <h3 className="text-white text-xl font-semibold mb-4">The Fitness Landscape</h3>
-                    
-                    <p className="text-zinc-400 text-lg mb-6">
-                        The fitness industry represents a massive and rapidly growing market opportunity, with multiple layers 
-                        of addressable segments that Pulse is uniquely positioned to capture through our creator-driven approach.
-                    </p>
-                    
-                    {/* Market Size Visualization */}
-                    <div className="mb-10">
-                        <h4 className="text-white text-lg font-semibold mb-6">Market Analysis</h4>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                            {/* Total Addressable Market */}
-                            <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-zinc-800 to-zinc-700 p-6">
-                                <div className="absolute inset-0 bg-gradient-to-r from-zinc-600/20 to-zinc-500/20"></div>
-                                <div className="relative">
-                                    <div className="text-center mb-4">
-                                        <div className="w-full h-32 bg-zinc-600 rounded-lg mb-4 flex items-center justify-center">
-                                            <span className="text-white text-sm font-medium">Total Fitness Industry</span>
-                                        </div>
-                                    </div>
-                                    <h5 className="text-white text-2xl font-bold mb-2">$244 Bn</h5>
-                                    <p className="text-[#E0FE10] text-sm font-medium mb-2">Total Addressable Market</p>
-                                    <p className="text-zinc-400 text-sm">Total Fitness Industry Value 2023</p>
-                                    <p className="text-zinc-500 text-xs">(5.6% growth rate)</p>
-                                </div>
-                            </div>
-                            
-                            {/* Serviceable Addressable Market */}
-                            <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-zinc-800 to-zinc-700 p-6">
-                                <div className="absolute inset-0 bg-gradient-to-r from-zinc-600/20 to-zinc-500/20"></div>
-                                <div className="relative">
-                                    <div className="text-center mb-4">
-                                        <div className="w-full h-32 bg-zinc-600 rounded-lg mb-4 flex items-center justify-center">
-                                            <span className="text-white text-sm font-medium">Influence & Fitness Seekers</span>
-                                        </div>
-                                    </div>
-                                    <h5 className="text-white text-2xl font-bold mb-2">$41.3 Bn</h5>
-                                    <p className="text-[#E0FE10] text-sm font-medium mb-2">Serviceable Addressable Market</p>
-                                    <p className="text-zinc-400 text-sm">Based on influence & fitness seeker population</p>
-                                </div>
-                            </div>
-                            
-                            {/* Service Obtainable Market */}
-                            <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-[#E0FE10]/20 to-[#E0FE10]/10 p-6 border-2 border-[#E0FE10]/30">
-                                <div className="relative">
-                                    <div className="text-center mb-4">
-                                        <div className="w-full h-32 bg-[#E0FE10] rounded-lg mb-4 flex items-center justify-center">
-                                            <span className="text-black text-sm font-medium">Pulse Target Market</span>
-                                        </div>
-                                    </div>
-                                    <h5 className="text-white text-2xl font-bold mb-2">$810 Million</h5>
-                                    <p className="text-[#E0FE10] text-sm font-medium mb-2">Service Obtainable Market</p>
-                                    <p className="text-zinc-300 text-sm">5M users (over 5 years period)</p>
-                                </div>
-                            </div>
+
+                    {/* Bottoms-Up TAM Approach */}
+                    <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 md:p-8 mb-8">
+                      <div className="flex items-center gap-3 mb-6">
+                        <div className="w-8 h-8 rounded-lg bg-[#E0FE10]/20 flex items-center justify-center">
+                          <span className="text-lg">📊</span>
                         </div>
-                        
-                        <div className="bg-zinc-800/30 rounded-lg p-4 text-center">
-                            <p className="text-zinc-400 text-sm">
-                                <span className="text-[#E0FE10] font-medium">Source:</span> 
-                                <a href="https://www.wellnesscreatives.com/fitness-industry-statistics-growth/" 
-                                   className="text-zinc-300 hover:text-[#E0FE10] transition-colors ml-1" 
-                                   target="_blank" 
-                                   rel="noopener noreferrer">
-                                    Wellness Creatives Fitness Industry Analysis
-                                </a>
-                            </p>
+                        <h3 className="text-white text-xl font-semibold">Bottoms-Up TAM</h3>
+                      </div>
+                      
+                      {/* Visual Flow: ICP → Beachhead → GTM → TAM → Path to $100M */}
+                      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+                        <div className="bg-zinc-800/50 rounded-xl p-4 text-center border border-zinc-700">
+                          <div className="w-12 h-12 rounded-full bg-zinc-700/50 mx-auto mb-3 flex items-center justify-center">
+                            <span className="text-xl">👤</span>
+                          </div>
+                          <div className="text-orange-400 text-xs font-bold mb-1">ICP</div>
+                          <div className="text-zinc-400 text-xs">Who are our ideal customers</div>
                         </div>
+                        <div className="bg-zinc-800/50 rounded-xl p-4 text-center border border-zinc-700">
+                          <div className="w-12 h-12 rounded-full bg-zinc-700/50 mx-auto mb-3 flex items-center justify-center">
+                            <span className="text-xl">📍</span>
+                          </div>
+                          <div className="text-orange-400 text-xs font-bold mb-1">BEACHHEAD</div>
+                          <div className="text-zinc-400 text-xs">Who we are starting with</div>
+                        </div>
+                        <div className="bg-zinc-800/50 rounded-xl p-4 text-center border border-zinc-700">
+                          <div className="w-12 h-12 rounded-full bg-zinc-700/50 mx-auto mb-3 flex items-center justify-center">
+                            <span className="text-xl">🔍</span>
+                          </div>
+                          <div className="text-orange-400 text-xs font-bold mb-1">GTM</div>
+                          <div className="text-zinc-400 text-xs">Where we find them & how we sell</div>
+                        </div>
+                        <div className="bg-zinc-800/50 rounded-xl p-4 text-center border border-zinc-700">
+                          <div className="w-12 h-12 rounded-full bg-zinc-700/50 mx-auto mb-3 flex items-center justify-center">
+                            <span className="text-xl">👥</span>
+                          </div>
+                          <div className="text-orange-400 text-xs font-bold mb-1">TAM</div>
+                          <div className="text-zinc-400 text-xs">How big can this get</div>
+                        </div>
+                        <div className="bg-zinc-800/50 rounded-xl p-4 text-center border border-zinc-700">
+                          <div className="w-12 h-12 rounded-full bg-zinc-700/50 mx-auto mb-3 flex items-center justify-center">
+                            <span className="text-xl">📈</span>
+                          </div>
+                          <div className="text-orange-400 text-xs font-bold mb-1">PATH TO $100M</div>
+                          <div className="text-zinc-400 text-xs">How we will scale</div>
+                        </div>
+                      </div>
                     </div>
-                    
-                    {/* Key Market Drivers */}
-                    <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-zinc-900 to-zinc-800 p-1 mb-8">
-                        <div className="absolute inset-0 bg-gradient-to-r from-blue-500/20 via-purple-500/20 to-[#d7ff00]/20"></div>
-                        <div className="relative bg-zinc-900 rounded-lg p-6">
-                        <h4 className="text-white text-lg font-semibold mb-4">Key Market Drivers</h4>
-                        
-                        <div className="space-y-4">
-                            <div className="flex items-start gap-3">
-                            <div className="w-6 h-6 rounded-full bg-[#E0FE10]/20 flex items-center justify-center flex-shrink-0 mt-1">
-                                <span className="text-[#E0FE10] text-xs font-bold">1</span>
-                            </div>
-                            <div>
-                                <p className="text-white font-medium">Rising Health Consciousness</p>
-                                <p className="text-zinc-400">Increasing awareness of health and fitness, especially post-pandemic</p>
-                            </div>
-                            </div>
-                            
-                            <div className="flex items-start gap-3">
-                            <div className="w-6 h-6 rounded-full bg-[#E0FE10]/20 flex items-center justify-center flex-shrink-0 mt-1">
-                                <span className="text-[#E0FE10] text-xs font-bold">2</span>
-                            </div>
-                            <div>
-                                <p className="text-white font-medium">Social Connection Demand</p>
-                                <p className="text-zinc-400">Growing desire for community and connection in fitness journeys</p>
-                            </div>
-                            </div>
-                            
-                            <div className="flex items-start gap-3">
-                            <div className="w-6 h-6 rounded-full bg-[#E0FE10]/20 flex items-center justify-center flex-shrink-0 mt-1">
-                                <span className="text-[#E0FE10] text-xs font-bold">3</span>
-                            </div>
-                            <div>
-                                <p className="text-white font-medium">Digital Transformation</p>
-                                <p className="text-zinc-400">Rapid adoption of digital fitness solutions and mobile technology</p>
-                            </div>
-                            </div>
-                            
-                            <div className="flex items-start gap-3">
-                            <div className="w-6 h-6 rounded-full bg-[#E0FE10]/20 flex items-center justify-center flex-shrink-0 mt-1">
-                                <span className="text-[#E0FE10] text-xs font-bold">4</span>
-                            </div>
-                            <div>
-                                <p className="text-white font-medium">Creator Economy Growth</p>
-                                <p className="text-zinc-400">Fitness influencers driving engagement and monetization opportunities</p>
-                            </div>
-                            </div>
+
+                    {/* Beachhead Market - Hero Section */}
+                    <div className="bg-gradient-to-br from-[#E0FE10]/10 via-zinc-900 to-zinc-900 border border-[#E0FE10]/20 rounded-2xl p-6 md:p-8 mb-8">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-xs font-medium px-2 py-1 rounded-full bg-[#E0FE10]/20 text-[#E0FE10]">Beachhead Market</span>
+                      </div>
+                      <h3 className="text-white text-2xl font-bold mb-2">Fitness Instructors & Studio Coaches</h3>
+                      <p className="text-zinc-400 mb-6">We start here because they already have highly supportive audiences who trust their guidance and are primed to convert.</p>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                        <div className="bg-zinc-800/50 rounded-xl p-5 text-center">
+                          <div className="text-white text-3xl font-bold mb-1">350,000</div>
+                          <div className="text-zinc-400 text-sm">Personal trainers & fitness instructors</div>
+                          <div className="text-[#E0FE10] text-xs mt-1">(12% growth rate)</div>
                         </div>
+                        <div className="bg-zinc-800/50 rounded-xl p-5 text-center">
+                          <div className="flex items-center justify-center gap-2 mb-1">
+                            <span className="text-[#E0FE10] text-xl">×</span>
+                          </div>
+                          <div className="text-white text-3xl font-bold">$4,080</div>
+                          <div className="text-zinc-400 text-sm">Annual LTV per creator</div>
                         </div>
+                        <div className="bg-[#E0FE10] rounded-xl p-5 text-center">
+                          <div className="flex items-center justify-center gap-2 mb-1">
+                            <span className="text-black text-xl">=</span>
+                          </div>
+                          <div className="text-black text-3xl font-bold">$1.4 Billion</div>
+                          <div className="text-black/70 text-sm">Beachhead TAM</div>
+                        </div>
+                      </div>
+
+                      {/* Why Beachhead */}
+                      <div className="bg-zinc-800/30 rounded-xl p-5 border border-zinc-700">
+                        <h4 className="text-white font-semibold mb-3">Why Fitness Instructors First?</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div className="flex items-start gap-3">
+                            <div className="w-6 h-6 rounded-full bg-[#E0FE10]/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                              <span className="text-[#E0FE10] text-xs">✓</span>
+                            </div>
+                            <div className="text-zinc-300 text-sm">Built-in audiences who trust their recommendations</div>
+                          </div>
+                          <div className="flex items-start gap-3">
+                            <div className="w-6 h-6 rounded-full bg-[#E0FE10]/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                              <span className="text-[#E0FE10] text-xs">✓</span>
+                            </div>
+                            <div className="text-zinc-300 text-sm">Already creating content (Moves) in their daily work</div>
+                          </div>
+                          <div className="flex items-start gap-3">
+                            <div className="w-6 h-6 rounded-full bg-[#E0FE10]/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                              <span className="text-[#E0FE10] text-xs">✓</span>
+                            </div>
+                            <div className="text-zinc-300 text-sm">Strong community dynamics = natural viral loops</div>
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                        <div className="bg-zinc-800/50 rounded-xl p-6">
-                        <h4 className="text-[#E0FE10] font-medium mb-3">Mobile Fitness App Market</h4>
-                        <p className="text-white text-3xl font-bold mb-2">$120B+</p>
-                        <p className="text-zinc-400 mb-3">Projected global fitness app market by 2030</p>
-                        <p className="text-zinc-500 text-xs">
-                            <a href="https://www.grandviewresearch.com/industry-analysis/fitness-app-market" 
-                               className="hover:text-[#E0FE10] transition-colors" 
-                               target="_blank" 
-                               rel="noopener noreferrer">
-                                Source: Grand View Research
-                            </a>
+
+                    {/* Our Take - Revenue Model */}
+                    <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 md:p-8 mb-8">
+                      <h3 className="text-white text-xl font-semibold mb-6">Our Take: How We Earn Per Round</h3>
+                      
+                      <div className="flex flex-col md:flex-row items-center justify-center gap-6 mb-8">
+                        <div className="bg-zinc-800/50 rounded-xl p-6 text-center">
+                          <div className="text-zinc-400 text-sm mb-1">Creator</div>
+                          <div className="text-white text-2xl font-bold">$80</div>
+                        </div>
+                        <div className="text-[#E0FE10] text-3xl font-bold">+</div>
+                        <div className="text-center">
+                          <span className="text-zinc-400 text-lg">(</span>
+                          <div className="inline-block bg-zinc-800/50 rounded-xl px-6 py-4 mx-2">
+                            <div className="text-zinc-400 text-xs mb-1">subscription fee</div>
+                            <div className="text-white text-2xl font-bold">$40</div>
+                          </div>
+                          <span className="text-[#E0FE10] text-3xl font-bold mx-2">×</span>
+                          <div className="inline-block bg-zinc-800/50 rounded-xl px-6 py-4 mx-2">
+                            <div className="text-zinc-400 text-xs mb-1">Subscribers</div>
+                            <div className="text-white text-2xl font-bold">50</div>
+                          </div>
+                          <span className="text-zinc-400 text-lg">)</span>
+                        </div>
+                        <div className="text-[#E0FE10] text-3xl font-bold">=</div>
+                        <div className="bg-[#E0FE10] rounded-xl p-6 text-center">
+                          <div className="text-black/70 text-sm mb-1">Per Round</div>
+                          <div className="text-black text-3xl font-bold">$2,080</div>
+                        </div>
+                      </div>
+
+                      <div className="bg-zinc-800/30 rounded-xl p-5 text-center">
+                        <p className="text-zinc-300 text-lg">
+                          We encourage fitness creators to host at least <span className="text-[#E0FE10] font-bold">2 Standard Rounds</span> per year
                         </p>
+                        <div className="mt-3 flex items-center justify-center gap-4">
+                          <span className="text-white text-xl">2 Rounds</span>
+                          <span className="text-[#E0FE10]">×</span>
+                          <span className="text-white text-xl">$2,000 each</span>
+                          <span className="text-[#E0FE10]">=</span>
+                          <span className="text-[#E0FE10] text-2xl font-bold">$4,080</span>
+                          <span className="text-zinc-400 text-sm">/year</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* ICP - Full Creator Population */}
+                    <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 md:p-8 mb-8">
+                      <h3 className="text-white text-xl font-semibold mb-6">Ideal Customer Profile (ICP)</h3>
+                      
+                      <div className="text-center mb-6">
+                        <div className="text-[#E0FE10] text-5xl md:text-6xl font-bold mb-2">1,350,000</div>
+                        <p className="text-zinc-400">Total addressable fitness creators</p>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                        <div className="bg-zinc-800/50 rounded-xl p-4 text-center">
+                          <div className="text-white font-medium text-sm">Certified Instructors</div>
+                        </div>
+                        <div className="bg-zinc-800/50 rounded-xl p-4 text-center">
+                          <div className="text-white font-medium text-sm">Group Fitness Instructors</div>
+                        </div>
+                        <div className="bg-zinc-800/50 rounded-xl p-4 text-center">
+                          <div className="text-white font-medium text-sm">Online Trainers</div>
+                        </div>
+                        <div className="bg-zinc-800/50 rounded-xl p-4 text-center">
+                          <div className="text-white font-medium text-sm">Fitness Creators &gt;10K followers</div>
+                        </div>
+                        <div className="bg-zinc-800/50 rounded-xl p-4 text-center">
+                          <div className="text-white font-medium text-sm">Athlete-Adjacent Creators</div>
+                        </div>
+                        <div className="bg-zinc-800/50 rounded-xl p-4 text-center">
+                          <div className="text-white font-medium text-sm">Studio Instructors (Pilates, Cycle, HIIT)</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Path to $100M */}
+                    <div className="bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-800 border border-zinc-700 rounded-2xl p-6 md:p-8 mb-8 relative overflow-hidden">
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-[#E0FE10]/5 to-transparent"></div>
+                      <div className="relative">
+                        <div className="flex items-center justify-between mb-6">
+                          <h3 className="text-[#E0FE10] text-2xl font-bold">Path to $100M</h3>
+                          <span className="text-zinc-400">25,000 Creators</span>
                         </div>
                         
-                        <div className="bg-zinc-800/50 rounded-xl p-6">
-                        <h4 className="text-[#E0FE10] font-medium mb-3">Target User Base</h4>
-                        <p className="text-white text-3xl font-bold mb-2">820M+</p>
-                        <p className="text-zinc-400">Active fitness enthusiasts worldwide</p>
-                        </div>
-                    </div>
-                    </div>
-                    
-                    <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8">
-                    <h3 className="text-white text-xl font-semibold mb-4">Competitive Landscape</h3>
-                    
-                    <p className="text-zinc-400 text-lg mb-6">
-                        People connect with real people. Where else can we upload content, track fitness progress, and make money supporting people's growth?
-                    </p>
-                    
-                    {/* Competitor Cards */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                        {/* Pulse */}
-                        <div className="bg-zinc-800/50 rounded-xl p-6 border-2 border-[#E0FE10]/30">
-                            <div className="flex items-center mb-4">
-                                <div className="w-12 h-12 rounded-full bg-[#E0FE10] flex items-center justify-center mr-3">
-                                    <span className="text-black font-bold text-lg">P</span>
-                                </div>
-                                <div>
-                                    <h4 className="text-white font-semibold">Pulse</h4>
-                                    <p className="text-zinc-400 text-sm">2025</p>
-                                </div>
+                        {/* Growth Curve Visualization */}
+                        <div className="relative mb-8">
+                          <div className="flex items-end justify-between gap-2 md:gap-4 h-48">
+                            <div className="flex-1 flex flex-col items-center justify-end">
+                              <div className="text-[#E0FE10] text-lg md:text-xl font-bold mb-2">$1M</div>
+                              <div className="w-full bg-zinc-700/50 rounded-t-lg" style={{ height: '20%' }}></div>
+                              <div className="mt-2 text-center">
+                                <div className="text-white text-sm font-medium">123</div>
+                                <div className="text-zinc-500 text-xs">creators</div>
+                              </div>
                             </div>
-                            <div className="space-y-2 text-sm mb-4">
-                                <p className="text-white">$4.99/month</p>
-                                <p className="text-white">$39.99/annually</p>
+                            <div className="flex-1 flex flex-col items-center justify-end">
+                              <div className="text-[#E0FE10] text-lg md:text-xl font-bold mb-2">$10M</div>
+                              <div className="w-full bg-zinc-700/50 rounded-t-lg" style={{ height: '35%' }}></div>
+                              <div className="mt-2 text-center">
+                                <div className="text-white text-sm font-medium">2,450</div>
+                                <div className="text-zinc-500 text-xs">creators</div>
+                              </div>
                             </div>
-                        </div>
-                        
-                        {/* Strava */}
-                        <div className="bg-zinc-800/50 rounded-xl p-6">
-                            <div className="flex items-center mb-4">
-                                <div className="w-12 h-12 rounded-full bg-orange-500 flex items-center justify-center mr-3">
-                                    <span className="text-white font-bold text-lg">S</span>
-                                </div>
-                                <div>
-                                    <h4 className="text-white font-semibold">Strava</h4>
-                                    <p className="text-zinc-400 text-sm">2009</p>
-                                </div>
+                            <div className="flex-1 flex flex-col items-center justify-end">
+                              <div className="text-[#E0FE10] text-lg md:text-xl font-bold mb-2">$50M</div>
+                              <div className="w-full bg-zinc-700/50 rounded-t-lg" style={{ height: '60%' }}></div>
+                              <div className="mt-2 text-center">
+                                <div className="text-white text-sm font-medium">12,500</div>
+                                <div className="text-zinc-500 text-xs">creators</div>
+                                <div className="text-[#E0FE10] text-xs mt-1">625K seekers</div>
+                              </div>
                             </div>
-                            <div className="space-y-2 text-sm mb-4">
-                                <p className="text-white">$11.99/month</p>
-                                <p className="text-white">$79.99/annually</p>
-                                <p className="text-zinc-400">100+ million users</p>
+                            <div className="flex-1 flex flex-col items-center justify-end">
+                              <div className="text-[#E0FE10] text-2xl md:text-3xl font-bold mb-2">$100M</div>
+                              <div className="w-full bg-[#E0FE10]/30 rounded-t-lg border-2 border-[#E0FE10]" style={{ height: '100%' }}></div>
+                              <div className="mt-2 text-center">
+                                <div className="text-[#E0FE10] text-sm font-bold">25,000</div>
+                                <div className="text-zinc-500 text-xs">creators</div>
+                              </div>
                             </div>
+                          </div>
                         </div>
                         
-                        {/* Trainerize */}
-                        <div className="bg-zinc-800/50 rounded-xl p-6">
-                            <div className="flex items-center mb-4">
-                                <div className="w-12 h-12 rounded-full bg-blue-500 flex items-center justify-center mr-3">
-                                    <span className="text-white font-bold text-lg">T</span>
-                                </div>
-                                <div>
-                                    <h4 className="text-white font-semibold">Trainerize</h4>
-                                    <p className="text-zinc-400 text-sm">2008</p>
-                                </div>
-                            </div>
-                            <div className="space-y-2 text-sm mb-4">
-                                <p className="text-white">$5/per client</p>
-                                <p className="text-white">$250/500 client</p>
-                                <p className="text-zinc-400">1.6 million trainers</p>
-                            </div>
+                        <div className="bg-zinc-800/50 rounded-xl p-4 text-center">
+                          <p className="text-zinc-400 text-sm">
+                            At <span className="text-[#E0FE10] font-medium">$4,080 annual LTV per creator</span>, 
+                            we need only <span className="text-white font-medium">1.9%</span> of the ICP (1.35M creators) to reach $100M ARR
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Adjacent Markets - Creator Economy */}
+                    <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 md:p-8">
+                      <div className="flex items-center gap-3 mb-6">
+                        <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center">
+                          <span className="text-lg">🚀</span>
+                        </div>
+                        <div>
+                          <h3 className="text-white text-xl font-semibold">Adjacent Markets</h3>
+                          <p className="text-zinc-400 text-sm">The broader creator economy opportunity</p>
+                        </div>
+                      </div>
+
+                      {/* Creator Economy Hero */}
+                      <div className="bg-gradient-to-br from-purple-900/30 to-zinc-900 rounded-xl p-6 mb-6 border border-purple-500/20">
+                        <div className="text-center mb-6">
+                          <div className="text-white text-4xl md:text-5xl font-bold mb-2">$120B+</div>
+                          <div className="text-zinc-400">Creator Economy</div>
+                          <p className="text-zinc-500 text-sm mt-2">Transforming how creators monetize their content</p>
                         </div>
                         
-                        {/* Instagram */}
-                        <div className="bg-zinc-800/50 rounded-xl p-6">
-                            <div className="flex items-center mb-4">
-                                <div className="w-12 h-12 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center mr-3">
-                                    <span className="text-white font-bold text-lg">I</span>
-                                </div>
-                                <div>
-                                    <h4 className="text-white font-semibold">Instagram</h4>
-                                    <p className="text-zinc-400 text-sm">2010</p>
-                                </div>
+                        {/* Platform Comparison */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                          <div className="bg-purple-900/30 border border-purple-500/30 rounded-xl p-5">
+                            <h4 className="text-purple-400 font-semibold mb-4">Twitch Streamers</h4>
+                            <div className="space-y-3">
+                              <div className="flex justify-between items-center">
+                                <span className="text-zinc-400 text-sm">Streamers</span>
+                                <span className="text-white font-medium">7M</span>
+                              </div>
+                              <div className="flex justify-between items-center">
+                                <span className="text-zinc-400 text-sm">Influencer Marketing</span>
+                                <span className="text-white font-medium">$1.9B</span>
+                              </div>
+                              <div className="flex justify-between items-center">
+                                <span className="text-zinc-400 text-sm">Ad Revenue</span>
+                                <span className="text-white font-medium">$667M</span>
+                              </div>
                             </div>
-                            <div className="space-y-2 text-sm mb-4">
-                                <p className="text-white">Free</p>
-                                <p className="text-zinc-400">estimated 280 million</p>
-                                <p className="text-zinc-400">fitness content creators</p>
+                          </div>
+                          
+                          <div className="flex items-center justify-center">
+                            <div className="text-center">
+                              <div className="text-white text-4xl font-bold">50x</div>
+                              <div className="text-zinc-500 text-sm">Difference</div>
                             </div>
+                          </div>
+                          
+                          <div className="bg-red-900/30 border border-red-500/30 rounded-xl p-5">
+                            <h4 className="text-red-400 font-semibold mb-4">YouTubers</h4>
+                            <div className="space-y-3">
+                              <div className="flex justify-between items-center">
+                                <span className="text-zinc-400 text-sm">Active Channels</span>
+                                <span className="text-white font-medium">114M</span>
+                              </div>
+                              <div className="flex justify-between items-center">
+                                <span className="text-zinc-400 text-sm">Influencer Marketing</span>
+                                <span className="text-white font-medium">$88.9B</span>
+                              </div>
+                              <div className="flex justify-between items-center">
+                                <span className="text-zinc-400 text-sm">Ad Revenue</span>
+                                <span className="text-white font-medium">$31.5B</span>
+                              </div>
+                            </div>
+                          </div>
                         </div>
-                    </div>
-                    
-                    {/* Feature Comparison Table */}
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left">
-                        <thead>
-                            <tr className="border-b border-zinc-700 bg-zinc-900/50">
-                                <th className="py-3 px-4 text-zinc-400 font-medium text-sm">Feature</th>
-                                <th className="py-3 px-4 text-zinc-400 font-medium text-sm text-center">Pulse</th>
-                                <th className="py-3 px-4 text-zinc-400 font-medium text-sm text-center">Strava</th>
-                                <th className="py-3 px-4 text-zinc-400 font-medium text-sm text-center">Trainerize</th>
-                                <th className="py-3 px-4 text-zinc-400 font-medium text-sm text-center">Instagram</th>
-                            </tr>
-                        </thead>
-                        <tbody className="text-sm">
-                            <tr className="border-b border-zinc-700">
-                                <td className="py-3 px-4 text-white">Fitness Specific</td>
-                                <td className="py-3 px-4 text-center">
-                                    <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-green-500/20">
-                                        <span className="text-green-400">✓</span>
-                                    </span>
-                                </td>
-                                <td className="py-3 px-4 text-center">
-                                    <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-green-500/20">
-                                        <span className="text-green-400">✓</span>
-                                    </span>
-                                </td>
-                                <td className="py-3 px-4 text-center">
-                                    <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-green-500/20">
-                                        <span className="text-green-400">✓</span>
-                                    </span>
-                                </td>
-                                <td className="py-3 px-4 text-center">
-                                    <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-red-500/20">
-                                        <span className="text-red-400">✗</span>
-                                    </span>
-                                </td>
-                            </tr>
-                            <tr className="border-b border-zinc-700">
-                                <td className="py-3 px-4 text-white">User Generated Content (UGC)</td>
-                                <td className="py-3 px-4 text-center">
-                                    <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-green-500/20">
-                                        <span className="text-green-400">✓</span>
-                                    </span>
-                                </td>
-                                <td className="py-3 px-4 text-center">
-                                    <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-red-500/20">
-                                        <span className="text-red-400">✗</span>
-                                    </span>
-                                </td>
-                                <td className="py-3 px-4 text-center">
-                                    <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-red-500/20">
-                                        <span className="text-red-400">✗</span>
-                                    </span>
-                                </td>
-                                <td className="py-3 px-4 text-center">
-                                    <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-green-500/20">
-                                        <span className="text-green-400">✓</span>
-                                    </span>
-                                </td>
-                            </tr>
-                            <tr className="border-b border-zinc-700">
-                                <td className="py-3 px-4 text-white">AI Curated Workouts</td>
-                                <td className="py-3 px-4 text-center">
-                                    <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-green-500/20">
-                                        <span className="text-green-400">✓</span>
-                                    </span>
-                                </td>
-                                <td className="py-3 px-4 text-center">
-                                    <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-green-500/20">
-                                        <span className="text-green-400">✓</span>
-                                    </span>
-                                </td>
-                                <td className="py-3 px-4 text-center">
-                                    <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-red-500/20">
-                                        <span className="text-red-400">✗</span>
-                                    </span>
-                                </td>
-                                <td className="py-3 px-4 text-center">
-                                    <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-red-500/20">
-                                        <span className="text-red-400">✗</span>
-                                    </span>
-                                </td>
-                            </tr>
-                            <tr>
-                                <td className="py-3 px-4 text-white">Creator Compensation</td>
-                                <td className="py-3 px-4 text-center">
-                                    <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-green-500/20">
-                                        <span className="text-green-400">✓</span>
-                                    </span>
-                                </td>
-                                <td className="py-3 px-4 text-center">
-                                    <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-red-500/20">
-                                        <span className="text-red-400">✗</span>
-                                    </span>
-                                </td>
-                                <td className="py-3 px-4 text-center">
-                                    <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-red-500/20">
-                                        <span className="text-red-400">✗</span>
-                                    </span>
-                                </td>
-                                <td className="py-3 px-4 text-center">
-                                    <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-red-500/20">
-                                        <span className="text-red-400">✗</span>
-                                    </span>
-                                </td>
-                            </tr>
-                        </tbody>
-                        </table>
-                    </div>
+                      </div>
+
+                      {/* Why Start Fitness */}
+                      <div className="bg-zinc-800/30 rounded-xl p-5">
+                        <h4 className="text-white font-semibold mb-4">Why Fitness Creators Are Our Entry Point</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="flex items-start gap-3">
+                            <div className="w-6 h-6 rounded-full bg-[#E0FE10]/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                              <span className="text-[#E0FE10] text-xs">1</span>
+                            </div>
+                            <div>
+                              <p className="text-white font-medium text-sm">Pre-built trust relationships</p>
+                              <p className="text-zinc-400 text-xs">Audiences follow their instructors from studio to digital</p>
+                            </div>
+                          </div>
+                          <div className="flex items-start gap-3">
+                            <div className="w-6 h-6 rounded-full bg-[#E0FE10]/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                              <span className="text-[#E0FE10] text-xs">2</span>
+                            </div>
+                            <div>
+                              <p className="text-white font-medium text-sm">Content creation is natural</p>
+                              <p className="text-zinc-400 text-xs">They film workouts daily — Pulse just packages it</p>
+                            </div>
+                          </div>
+                          <div className="flex items-start gap-3">
+                            <div className="w-6 h-6 rounded-full bg-[#E0FE10]/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                              <span className="text-[#E0FE10] text-xs">3</span>
+                            </div>
+                            <div>
+                              <p className="text-white font-medium text-sm">Community-first culture</p>
+                              <p className="text-zinc-400 text-xs">Group fitness = built-in viral mechanics</p>
+                            </div>
+                          </div>
+                          <div className="flex items-start gap-3">
+                            <div className="w-6 h-6 rounded-full bg-[#E0FE10]/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                              <span className="text-[#E0FE10] text-xs">4</span>
+                            </div>
+                            <div>
+                              <p className="text-white font-medium text-sm">Expandable model</p>
+                              <p className="text-zinc-400 text-xs">Same playbook applies to yoga, dance, wellness, etc.</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                 </section>
                   ) : (
@@ -2442,7 +2561,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                                 </div>
                                 <div className="flex justify-between items-center">
                                     <span className="text-zinc-300">Models</span>
-                                    <span className="text-[#E0FE10] font-medium">GPT-4o, GPT-4o-mini</span>
+                                    <span className="text-[#E0FE10] font-medium">Latest OpenAI models</span>
                                 </div>
                                 <div className="flex justify-between items-center">
                                     <span className="text-zinc-300">Image Processing</span>
@@ -2600,9 +2719,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                             <h4 className="text-white font-semibold mb-1">Tremaine</h4>
                             <p className="text-[#E0FE10] text-sm font-medium mb-3">CEO & Founder</p>
                             <p className="text-zinc-400 text-sm">
-                            Principal engineer, former D1 track and field athlete, and personal trainer of 10+ years. 
-                            Experience launching and scaling software at Fortune 500 companies like General Motors, IQVIA, 
-                            and Pfizer, to startups like Warby Parker. Passionate about the intersection of technology and health.
+                            Former D1 athlete, 10+ year personal trainer, principal engineer. Built software at GM, Pfizer, and Warby Parker.
                             </p>
                         </div>
                         </div>
@@ -2620,9 +2737,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                             <h4 className="text-white font-semibold mb-1">Lola</h4>
                             <p className="text-[#E0FE10] text-sm font-medium mb-3">Design Lead</p>
                             <p className="text-zinc-400 text-sm">
-                            Creative visionary leading our design strategy and user experience. Expert in creating 
-                            intuitive interfaces that make fitness accessible and engaging for everyone. Passionate about 
-                            crafting accessible design that's both creative and uniquely compelling.
+                            UX visionary crafting intuitive, accessible fitness experiences. Expert in design systems and user-centered product strategy.
                             </p>
                         </div>
                         </div>
@@ -2640,9 +2755,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                             <h4 className="text-white font-semibold mb-1">Ricardo</h4>
                             <p className="text-[#E0FE10] text-sm font-medium mb-3">Digital Creators Lead</p>
                             <p className="text-zinc-400 text-sm">
-                            Exercise science major and veteran who leads our creator acquisition and partnership strategy. 
-                            Passionate about people and social media, with proven experience growing Instagram accounts 
-                            to over 50K followers. Expert in building relationships with fitness influencers and scaling creator-driven growth.
+                            Exercise science major and veteran. Grew Instagram to 50K+. Leads creator acquisition and influencer partnerships.
                             </p>
                         </div>
                         </div>
@@ -2660,9 +2773,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                             <h4 className="text-white font-semibold mb-1">Bobby</h4>
                             <p className="text-[#E0FE10] text-sm font-medium mb-3">Chief of Staff</p>
                             <p className="text-zinc-400 text-sm">
-                            Harvard-educated strategic advisor and former TED coach who brings top-tier storytelling guidance 
-                            and operational excellence to Pulse. Expert in translating complex ideas into compelling narratives 
-                            that drive investor confidence and team alignment. Passionate about scaling mission-driven organizations.
+                            Harvard-educated, former TED coach. Brings storytelling, operational excellence, and investor communications.
                             </p>
                         </div>
                         </div>
@@ -2693,10 +2804,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                             </h4>
                             <p className="text-[#E0FE10] text-sm font-medium mb-2">Happiness, Inclusion & Bias</p>
                             <p className="text-zinc-400 text-sm">
-                            #1 Amazon Seller and creator of the TED talk "How to Outsmart Your Unconscious Bias" (500k+ views). 
-                            Former Silicon Valley securities lawyer, VC consultant, and tech-startup CEO who has advised Fortune 500 teams 
-                            on growth through inclusion. At Pulse, she brings expertise in brand narrative, bias-free community design, 
-                            and helping creators communicate value that converts audiences into loyal users.
+                            TED speaker (500k+ views), #1 Amazon Seller. Former VC consultant and tech CEO. Advises on brand narrative and inclusive community design.
                             </p>
                         </div>
                         </div>
@@ -2721,9 +2829,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                             </h4>
                             <p className="text-[#E0FE10] text-sm font-medium mb-2">Community Building and Organizing</p>
                             <p className="text-zinc-400 text-sm">
-                            Renowned civil rights activist and community organizer who has mastered the art of rallying people 
-                            around a shared cause. As a newly passionate fitness enthusiast, DeRay brings a unique perspective 
-                            on human behavior and motivation—essential insights for building authentic communities that inspire lasting change.
+                            Civil rights activist and community organizer. Expert in rallying people around shared causes. Advises on authentic community building.
                             </p>
                         </div>
                         </div>
@@ -2748,9 +2854,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                             </h4>
                             <p className="text-[#E0FE10] text-sm font-medium mb-2">Marketing and Growth</p>
                             <p className="text-zinc-400 text-sm">
-                            Marketing executive with leadership roles at PepsiCo and American Express. Recent inductee into the 
-                            Advertising Hall of Achievement, Marques brings years of experience creating memorable brand experiences 
-                            and driving explosive growth through innovative marketing strategies that resonate with diverse audiences.
+                            Advertising Hall of Achievement inductee. Marketing exec at PepsiCo and American Express. Advises on brand strategy and growth.
                             </p>
                         </div>
                         </div>
@@ -3989,7 +4093,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                         <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-[#d7ff00]/10"></div>
                         <div className="relative bg-zinc-900 rounded-lg p-5 h-full">
                             <h4 className="text-[#E0FE10] font-medium mb-2">Validated Product-Market Fit</h4>
-                            <p className="text-zinc-400 text-sm">61% retention, 18% conversion—users pay and stay.</p>
+                            <p className="text-zinc-400 text-sm">78% retention, 18% conversion—users pay and stay.</p>
                         </div>
                         </div>
                         
@@ -4188,8 +4292,8 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                         </p>
                         <div className="flex flex-wrap gap-4 justify-center">
                         <a 
-                            href="/PulsePitchDeck.pdf" 
-                            download="PulsePitchDeck.pdf"
+                            href="/PulseDeck12_9.pdf" 
+                            download="PulseDeck12_9.pdf"
                             className="inline-flex items-center justify-center px-6 py-3 bg-[#E0FE10] hover:bg-[#d8f521] text-black font-medium rounded-lg transition-colors"
                         >
                             <Download className="mr-2 h-5 w-5" />
@@ -4289,7 +4393,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                         <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-[#d7ff00]/10"></div>
                         <div className="relative bg-zinc-900 rounded-lg p-5 h-full">
                             <h4 className="text-[#E0FE10] font-medium mb-2">Validated Product-Market Fit</h4>
-                            <p className="text-zinc-400 text-sm">61% retention, 18% conversion—users pay and stay.</p>
+                            <p className="text-zinc-400 text-sm">78% retention, 18% conversion—users pay and stay.</p>
                         </div>
                         </div>
                         
@@ -4402,9 +4506,8 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                             </div>
                           </a>
                           <a 
-                            href="/investor-docs/Founder-IP-Assignment-Agreement.html" 
-                            target="_blank"
-                            rel="noopener noreferrer"
+                            href="/Founder Intellectual Property Assignment Agreement - Pulse Intelligence Labs.pdf" 
+                            download="Founder-IP-Assignment-Agreement.pdf"
                             className="flex items-center gap-4 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-purple-500/30 rounded-xl transition-all group"
                           >
                             <div className="w-12 h-12 rounded-lg bg-purple-500/10 flex items-center justify-center flex-shrink-0">
@@ -4412,7 +4515,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                             </div>
                             <div className="flex-1">
                               <div className="text-white font-medium group-hover:text-purple-400 transition-colors">IP Assignment Agreement</div>
-                              <div className="text-zinc-500 text-sm">HTML • Founder IP Assignment</div>
+                              <div className="text-zinc-500 text-sm">PDF • Signed Founder IP Assignment</div>
                             </div>
                           </a>
                         </div>

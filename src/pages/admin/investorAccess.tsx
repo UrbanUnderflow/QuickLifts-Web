@@ -33,7 +33,7 @@ const INVESTOR_SECTIONS = [
   { id: 'captable', label: 'Cap Table' },
   { id: 'deck', label: 'Pitch Deck' },
   { id: 'investment', label: 'Investment' },
-  { id: 'documents', label: 'Documents' },
+  { id: 'documents', label: 'All Documents' },
 ] as const;
 
 type SectionId = typeof INVESTOR_SECTIONS[number]['id'];
@@ -93,6 +93,8 @@ const InvestorAccessPage: React.FC = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState<InvestorAccess | null>(null);
   const [isModalLoading, setIsModalLoading] = useState(false);
+  const [emailStatus, setEmailStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+  const [sendEmail, setSendEmail] = useState(true); // Checkbox state for sending email
   
   // New user form state
   const [newEmail, setNewEmail] = useState('');
@@ -153,12 +155,15 @@ const InvestorAccessPage: React.FC = () => {
     setNewCompany('');
     setNewNotes('');
     setNewSectionAccess({ ...DEFAULT_SECTION_ACCESS });
+    setSendEmail(true);
+    setEmailStatus('idle');
   };
 
   const handleAddUser = async () => {
     if (!newEmail.trim()) return;
     
     setIsModalLoading(true);
+    setEmailStatus('idle');
     try {
       const accessRef = collection(db, 'investorAccess');
       await addDoc(accessRef, {
@@ -171,6 +176,33 @@ const InvestorAccessPage: React.FC = () => {
         createdAt: new Date(),
         updatedAt: new Date(),
       });
+      
+      // Send access notification email if checkbox is checked
+      if (sendEmail) {
+        setEmailStatus('sending');
+        try {
+          const emailResponse = await fetch('/.netlify/functions/send-investor-access-email', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              email: newEmail.toLowerCase().trim(),
+              name: newName.trim() || null,
+            }),
+          });
+          
+          if (emailResponse.ok) {
+            setEmailStatus('sent');
+          } else {
+            console.error('Failed to send access email');
+            setEmailStatus('error');
+          }
+        } catch (emailError) {
+          console.error('Error sending access email:', emailError);
+          setEmailStatus('error');
+        }
+      }
       
       resetAddForm();
       setShowAddModal(false);
@@ -591,6 +623,26 @@ const InvestorAccessPage: React.FC = () => {
                   rows={2}
                   className="w-full px-4 py-2 rounded-md bg-zinc-700 text-white border border-zinc-600 focus:outline-none focus:ring-1 focus:ring-[#E0FE10] resize-none"
                 />
+              </div>
+              
+              {/* Send Email Checkbox */}
+              <div 
+                className="flex items-center gap-3 p-3 bg-zinc-700/50 rounded-lg cursor-pointer hover:bg-zinc-700 transition-colors"
+                onClick={() => setSendEmail(!sendEmail)}
+              >
+                <div
+                  className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors flex-shrink-0 ${
+                    sendEmail
+                      ? 'bg-[#E0FE10] border-[#E0FE10]'
+                      : 'border-zinc-500 bg-transparent'
+                  }`}
+                >
+                  {sendEmail && <Check size={14} className="text-black" />}
+                </div>
+                <div>
+                  <span className="text-white text-sm font-medium">Send access notification email</span>
+                  <p className="text-zinc-500 text-xs mt-0.5">Email will include dataroom link and access instructions</p>
+                </div>
               </div>
             </div>
             
