@@ -9,7 +9,7 @@ import Footer from '../../components/Footer/Footer';
 import PageHead from '../../components/PageHead';
 import { adminMethods } from '../../api/firebase/admin/methods';
 import { PageMetaData as FirestorePageMetaData } from '../../api/firebase/admin/types';
-import { doc, getDoc, collection, getDocs, query, where } from 'firebase/firestore';
+import { doc, getDoc, collection, getDocs, query, where, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
 import { UserChallenge } from '../../api/firebase/workout/types';
 import { convertFirestoreTimestamp } from '../../utils/formatDate';
@@ -384,14 +384,32 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
       const snapshot = await getDocs(q);
 
       if (!snapshot.empty) {
-        const accessDoc = snapshot.docs[0].data();
-        if (accessDoc.isApproved) {
+        const accessDoc = snapshot.docs[0];
+        const accessData = accessDoc.data();
+        if (accessData.isApproved) {
           setHasAccess(true);
           // Store section access from Firestore, falling back to defaults
-          const storedSectionAccess = accessDoc.sectionAccess || DEFAULT_SECTION_ACCESS;
+          const storedSectionAccess = accessData.sectionAccess || DEFAULT_SECTION_ACCESS;
           setSectionAccess(storedSectionAccess);
           localStorage.setItem('investorAccessEmail', email.toLowerCase().trim());
           localStorage.setItem('investorSectionAccess', JSON.stringify(storedSectionAccess));
+          
+          // Log this access event for analytics
+          try {
+            const logsRef = collection(db, 'investorAccessLogs');
+            await addDoc(logsRef, {
+              email: email.toLowerCase().trim(),
+              investorAccessId: accessDoc.id,
+              name: accessData.name || null,
+              company: accessData.company || null,
+              accessedAt: serverTimestamp(),
+              userAgent: typeof window !== 'undefined' ? window.navigator.userAgent : null,
+              isAutoLogin: isAutoCheck,
+            });
+          } catch (logError) {
+            console.error('Error logging access:', logError);
+            // Don't block access if logging fails
+          }
         } else {
           setHasAccess(false);
           setAccessError('Your access has been revoked. Please contact invest@fitwithpulse.ai');
@@ -2695,11 +2713,21 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                     ref={(el) => { sectionsRef.current.team = el; }}
                     className="mb-20"
                 >
-                    <div className="flex items-center mb-6">
-                    <div className="w-10 h-10 rounded-full bg-[#E0FE10] flex items-center justify-center mr-4">
-                        <span className="font-bold text-black">8</span>
-                    </div>
-                    <h2 className="text-white text-3xl font-bold">Team</h2>
+                    <div className="flex items-center justify-between mb-6">
+                      <div className="flex items-center">
+                        <div className="w-10 h-10 rounded-full bg-[#E0FE10] flex items-center justify-center mr-4">
+                            <span className="font-bold text-black">8</span>
+                        </div>
+                        <h2 className="text-white text-3xl font-bold">Team</h2>
+                      </div>
+                      <a
+                        href="/org.pdf"
+                        download="Pulse-Org-Chart.pdf"
+                        className="inline-flex items-center gap-2 px-4 py-2.5 bg-zinc-800/80 hover:bg-zinc-700 border border-zinc-700 hover:border-zinc-600 rounded-xl text-sm text-zinc-200 transition-all duration-300"
+                      >
+                        <Download className="w-4 h-4" />
+                        Org Chart
+                      </a>
                     </div>
                     
                     <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8 mb-10">
