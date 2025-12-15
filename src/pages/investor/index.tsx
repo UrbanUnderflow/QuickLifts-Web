@@ -1048,7 +1048,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
     }
   };
 
-  // Balance Sheet Data
+  // Balance Sheet Data (template-based; do not auto-derive from P&L)
   const balanceSheetData = {
     assets: {
       currentAssets: [
