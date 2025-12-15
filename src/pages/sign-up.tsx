@@ -13,7 +13,7 @@ import { FaGoogle, FaApple } from 'react-icons/fa';
 
 const SignUpPage: React.FC = () => {
   const router = useRouter();
-  const { type, coach, redirect } = router.query; // Get the type, coach, and redirect parameters
+  const { type, coach, redirect, invite } = router.query; // Get the type, coach, redirect, and invite attribution parameters
   
   const [formData, setFormData] = useState({
     email: '',
@@ -251,6 +251,26 @@ const SignUpPage: React.FC = () => {
       // Create User instance and save to Firestore
       const user = new User(firebaseUser.uid, userData);
       await userService.updateUser(firebaseUser.uid, user);
+
+      // If coach signup came from the team-owned /coach-onboard invite link, persist attribution for monitoring.
+      // NOTE: We intentionally use a separate param name (`invite`) to avoid colliding with coach-to-coach referral kickback logic.
+      if (isCoachSignUp && invite && typeof invite === 'string') {
+        const code = invite.trim();
+        if (code) {
+          try {
+            await userService.updateUser(firebaseUser.uid, {
+              onboardInvite: {
+                source: 'coach-onboard',
+                code,
+                capturedAt: Math.floor(Date.now() / 1000),
+              },
+            });
+          } catch (e) {
+            // Non-blocking: do not fail signup if attribution write fails
+            console.warn('[SignUp] Failed to persist onboard invite attribution:', e);
+          }
+        }
+      }
       
       // If user came from a coach invite link, auto-connect them
       if (coach && typeof coach === 'string' && !isCoachSignUp) {

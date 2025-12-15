@@ -7,7 +7,18 @@ const CoachOnboardPage: React.FC = () => {
   const router = useRouter();
 
   const handleRegister = () => {
-    router.push('/sign-up?type=coach');
+    // Team-owned invite attribution (separate from coach-to-coach referral kickback links)
+    // Accept either ?invite= (preferred) or legacy ?ref= and pass through as ?invite=
+    const rawInvite =
+      (typeof router.query.invite === 'string' && router.query.invite) ||
+      (typeof router.query.ref === 'string' && router.query.ref) ||
+      '';
+    const invite = rawInvite ? rawInvite.trim() : '';
+
+    const params = new URLSearchParams({ type: 'coach' });
+    if (invite) params.set('invite', invite);
+
+    router.push(`/sign-up?${params.toString()}`);
   };
 
   return (

@@ -42,6 +42,14 @@ const CoachSignUpPage: React.FC = () => {
     }
   };
 
+  // Persist team-owned invite code from ?invite= in localStorage so we can attribute after sign-up
+  useEffect(() => {
+    const invite = (router.query.invite as string) || '';
+    if (typeof window !== 'undefined' && invite) {
+      try { localStorage.setItem('pulse_onboard_invite_code', invite.trim()); } catch (_) {}
+    }
+  }, [router.query.invite]);
+
   // Persist referrer code from ?ref= in localStorage so we can link after sign-up
   useEffect(() => {
     const ref = (router.query.ref as string) || '';
@@ -58,6 +66,24 @@ const CoachSignUpPage: React.FC = () => {
       await coachService.connectCoachToCoachByReferralCode(uid, inviteeUsername || '', inviteeEmail || '', ref);
       try { localStorage.removeItem('pulse_referring_coach_code'); } catch (_) {}
     } catch (_) { /* ignore linking failure */ }
+  };
+
+  const maybePersistOnboardInvite = async (uid: string) => {
+    try {
+      if (typeof window === 'undefined') return;
+      const code = (localStorage.getItem('pulse_onboard_invite_code') || '').trim();
+      if (!code) return;
+      await userService.updateUser(uid, {
+        onboardInvite: {
+          source: 'coach-onboard',
+          code,
+          capturedAt: Math.floor(Date.now() / 1000),
+        }
+      });
+      try { localStorage.removeItem('pulse_onboard_invite_code'); } catch (_) {}
+    } catch (_) {
+      // Non-blocking: do not fail signup if attribution write fails
+    }
   };
 
   // Username helpers
@@ -122,6 +148,7 @@ const CoachSignUpPage: React.FC = () => {
       createdAt: new Date(), updatedAt: new Date()
     });
     await userService.updateUser(uid, u);
+    await maybePersistOnboardInvite(uid);
   };
 
   // If already signed-in with a complete user profile, auto-create coach profile and skip the form

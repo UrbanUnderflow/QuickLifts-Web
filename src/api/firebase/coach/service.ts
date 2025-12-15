@@ -261,6 +261,7 @@ class CoachService {
       
       const userData = userDoc.data();
       const existingStripeId = userData.creator?.stripeAccountId;
+      const onboardInvite = (userData as any)?.onboardInvite || null;
 
       // Generate referral code if not provided
       const finalReferralCode = referralCode || this.generateReferralCode();
@@ -280,6 +281,7 @@ class CoachService {
         userType: 'partner',
         subscriptionStatus: 'partner',
         stripeCustomerId: existingStripeId || '',
+        onboardInvite,
         createdAt: dateToUnixTimestamp(new Date()),
         updatedAt: dateToUnixTimestamp(new Date())
       };
@@ -328,6 +330,18 @@ class CoachService {
       
       // Generate referral code for coach
       const coachReferralCode = this.generateReferralCode();
+
+      // Pull through any team-owned /coach-onboard invite attribution for monitoring
+      let onboardInvite: any = null;
+      try {
+        const userRef = doc(db, 'users', userId);
+        const userDoc = await getDoc(userRef);
+        if (userDoc.exists()) {
+          onboardInvite = (userDoc.data() as any)?.onboardInvite || null;
+        }
+      } catch (_) {
+        onboardInvite = null;
+      }
       
       // Create coach profile using userId as document ID
       const coachRef = doc(db, 'coaches', userId);
@@ -338,6 +352,7 @@ class CoachService {
         subscriptionStatus,
         stripeCustomerId,
         linkedPartnerId,
+        onboardInvite,
         createdAt: dateToUnixTimestamp(new Date()),
         updatedAt: dateToUnixTimestamp(new Date())
       };
