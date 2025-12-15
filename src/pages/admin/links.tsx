@@ -58,6 +58,7 @@ const sections: Section[] = [
     title: 'Admin',
     items: [
       { name: 'Admin Home', url: '/admin' },
+      { name: 'Coach Invite Links', url: '/admin/coachInvites' },
       { name: 'Manage Meta', url: '/admin/manageMeta' },
       { name: 'Subscriptions', url: '/admin/subscriptions' },
       { name: 'Programming Access', url: '/admin/programmingAccess' },

@@ -2,7 +2,7 @@ import React from 'react';
 import { useRouter } from 'next/router';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import Head from 'next/head';
-import { Users, Settings, BarChart2, Bell, FileText, CheckSquare, PlusSquare, Image as ImageIcon, Zap, TrendingUp, Dumbbell, Tag, Users2, Activity, Award, Clock, Gift, Edit3, Send, Server, ChevronDown, MessageCircle, Utensils, Code, Building2, Kanban, Layers, Bug, FolderTree, PenTool } from 'lucide-react';
+import { Users, Settings, BarChart2, Bell, FileText, CheckSquare, PlusSquare, Image as ImageIcon, Zap, TrendingUp, Dumbbell, Tag, Users2, Activity, Award, Clock, Gift, Edit3, Send, Server, ChevronDown, MessageCircle, Utensils, Code, Building2, Kanban, Layers, Bug, FolderTree, PenTool, Link as LinkIcon } from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '../../redux/store';
 import { toggleDevMode } from '../../redux/devModeSlice';
@@ -47,6 +47,12 @@ const AdminCard: React.FC<AdminCardProps> = ({ title, description, icon, link })
 };
 
 const adminCardsData = [
+  {
+    title: "Coach Invite Links",
+    description: "Generate team-owned /coach-onboard invite links and monitor attribution by invite code.",
+    icon: <LinkIcon className="w-5 h-5" />,
+    link: "/admin/coachInvites"
+  },
   {
     title: "Subscriptions",
     description: "View subscription records, latest expiration, and sync history.",
