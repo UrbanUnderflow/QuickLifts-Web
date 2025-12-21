@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { FileText, Check, AlertCircle, Download } from 'lucide-react';
@@ -10,6 +10,8 @@ interface SigningRequest {
   documentType: 'advisor' | 'contractor';
   documentName: string;
   recipientName: string;
+  // Optional: legal name to use in the agreement body (without altering signature)
+  recipientLegalName?: string;
   recipientEmail: string;
   status: 'pending' | 'sent' | 'viewed' | 'signed';
   createdAt: Timestamp;
@@ -44,6 +46,12 @@ const SignDocument: React.FC = () => {
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [signing, setSigning] = useState(false);
   const [signed, setSigned] = useState(false);
+  const downloadTriggeredRef = useRef(false);
+
+  const legalName = useMemo(() => {
+    const typed = request?.signatureData?.typedName || typedName;
+    return (typed || request?.recipientName || '').trim();
+  }, [request?.recipientName, request?.signatureData?.typedName, typedName]);
 
   useEffect(() => {
     if (id) {
@@ -76,6 +84,8 @@ const SignDocument: React.FC = () => {
       if (data.status === 'signed') {
         setSigned(true);
         setTypedName(data.signatureData?.typedName || '');
+        const fontIdx = signatureFonts.findIndex(f => f.name === data.signatureData?.signatureFont);
+        if (fontIdx >= 0) setSelectedFont(fontIdx);
       }
     } catch (err) {
       console.error('Error fetching signing request:', err);
@@ -84,6 +94,16 @@ const SignDocument: React.FC = () => {
       setLoading(false);
     }
   };
+
+  // If opened with ?download=true on a signed request, auto-generate the signed PDF
+  useEffect(() => {
+    if (!signed || !request) return;
+    if (!download) return;
+    if (downloadTriggeredRef.current) return;
+    downloadTriggeredRef.current = true;
+    generateSignedPdf();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [download, request, signed]);
 
   const handleSign = async () => {
     if (!request || !typedName.trim() || !agreedToTerms) return;
@@ -149,12 +169,18 @@ const SignDocument: React.FC = () => {
       year: 'numeric' 
     });
     
-    const signatureStyle = `font-family: '${signatureFonts[selectedFont].name}', cursive; font-size: 28px; color: #1a1a1a;`;
+    // Preserve original signature font if already signed
+    const signedFontIdx = signatureFonts.findIndex(f => f.name === request.signatureData?.signatureFont);
+    const fontIdxToUse = signedFontIdx >= 0 ? signedFontIdx : selectedFont;
+    const signatureStyle = `font-family: '${signatureFonts[fontIdxToUse].name}', cursive; font-size: 28px; color: #1a1a1a;`;
     
     // Generate different documents based on type
+    const signatureName = (request.signatureData?.typedName || typedName || request.recipientName).trim();
+    // Agreement party name should be the legal name (if provided), otherwise fall back to signature name
+    const agreementName = (request.recipientLegalName || '').trim() || signatureName || request.recipientName.trim();
     const documentContent = request.documentType === 'advisor' 
-      ? generateAdvisorAgreementHtml(request.recipientName, currentDate, typedName, signatureStyle)
-      : generateContractorAgreementHtml(request.recipientName, currentDate, typedName, signatureStyle);
+      ? generateAdvisorAgreementHtml(agreementName, currentDate, signatureName, signatureStyle)
+      : generateContractorAgreementHtml(agreementName, currentDate, signatureName, signatureStyle);
     
     const printWindow = window.open('', '_blank');
     if (printWindow) {
@@ -252,7 +278,8 @@ const SignDocument: React.FC = () => {
         <div class="audit-info">
           <strong>Electronic Signature Audit Trail</strong><br>
           Document signed electronically on ${date}<br>
-          Signer: ${name} (${signature})<br>
+          Signer (legal name): ${name}<br>
+          Typed signature: ${signature}<br>
           This document is legally binding under the ESIGN Act and UETA.
         </div>
         
@@ -364,7 +391,8 @@ const SignDocument: React.FC = () => {
         <div class="audit-info">
           <strong>Electronic Signature Audit Trail</strong><br>
           Document signed electronically on ${date}<br>
-          Signer: ${name} (${signature})<br>
+          Signer (legal name): ${name}<br>
+          Typed signature: ${signature}<br>
           This document is legally binding under the ESIGN Act and UETA.
         </div>
         
@@ -435,7 +463,7 @@ const SignDocument: React.FC = () => {
               </div>
               <div>
                 <h1 className="text-xl font-semibold">{request.documentName}</h1>
-                <p className="text-zinc-400">Prepared for: {request.recipientName}</p>
+                <p className="text-zinc-400">Prepared for: {legalName || request.recipientName}</p>
               </div>
             </div>
             <p className="text-zinc-500 text-sm">

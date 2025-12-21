@@ -11,6 +11,7 @@ const CoachTopNav: React.FC = () => {
   const router = useRouter();
   const currentUser = useUser();
   const [referralCode, setReferralCode] = useState<string>('');
+  const [canSeeEarnings, setCanSeeEarnings] = useState<boolean>(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
@@ -21,6 +22,9 @@ const CoachTopNav: React.FC = () => {
         if (snap.exists()) {
           const data: any = snap.data();
           setReferralCode(data?.referralCode || '');
+          // Earnings tab should only show for partnership coaches.
+          // Primary flag: `earningsAccess === true`. Fallback: partners.
+          setCanSeeEarnings(!!(data?.earningsAccess === true || data?.userType === 'partner'));
         }
       } catch (_) {}
     };
@@ -37,7 +41,7 @@ const CoachTopNav: React.FC = () => {
   const items = [
     { href: '/coach/dashboard', label: 'Dashboard' },
     { href: '/coach/referrals', label: 'Referrals' },
-    { href: '/coach/revenue', label: 'Earnings' },
+    ...(canSeeEarnings ? [{ href: '/coach/revenue', label: 'Earnings' }] : []),
     { href: '/coach/staff', label: 'Staff' },
     { href: '/coach/inbox', label: 'Inbox' },
     { href: '/coach/profile', label: 'Profile' }

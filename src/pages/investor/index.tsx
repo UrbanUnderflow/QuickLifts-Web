@@ -249,6 +249,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
     const data = activePLYear === '2025' ? pnl2025 : pnl2024;
     const totals = activePLYear === '2025' ? pnlTotals2025 : pnlTotals2024;
     const yearLabel = activePLYear === '2025' ? '2025 (Jan–Nov)' : '2024 (Full Year)';
+    const is2025 = activePLYear === '2025';
     
     const tableRows = data.map(row => `
       <tr>
@@ -260,6 +261,48 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
         <td style="padding: 10px; border-bottom: 1px solid #e5e5e5; text-align: right; color: ${row.net >= 0 ? '#10b981' : '#ef4444'};">$${row.net.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
       </tr>
     `).join('');
+
+    const breakdownRows = is2025
+      ? categoryTotals2025.map(row => `
+        <tr>
+          <td style="padding: 8px; border-bottom: 1px solid #e5e5e5;">${row.month}</td>
+          <td style="padding: 8px; border-bottom: 1px solid #e5e5e5; text-align: right;">$${row.totals.software_tools.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+          <td style="padding: 8px; border-bottom: 1px solid #e5e5e5; text-align: right;">$${row.totals.contractors.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+          <td style="padding: 8px; border-bottom: 1px solid #e5e5e5; text-align: right;">$${row.totals.marketing_growth.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+          <td style="padding: 8px; border-bottom: 1px solid #e5e5e5; text-align: right;">$${row.totals.sales_fundraising.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+          <td style="padding: 8px; border-bottom: 1px solid #e5e5e5; text-align: right;">$${row.totals.legal_ip.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+          <td style="padding: 8px; border-bottom: 1px solid #e5e5e5; text-align: right;">$${row.totals.travel_events.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+          <td style="padding: 8px; border-bottom: 1px solid #e5e5e5; text-align: right;">$${row.totals.other.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+          <td style="padding: 8px; border-bottom: 1px solid #e5e5e5; text-align: right; font-weight: 700;">$${row.totalExpenses.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+        </tr>
+      `).join('')
+      : '';
+
+    const breakdownTotals = is2025
+      ? categoryTotals2025.reduce(
+          (acc, row) => {
+            acc.software_tools += row.totals.software_tools;
+            acc.contractors += row.totals.contractors;
+            acc.marketing_growth += row.totals.marketing_growth;
+            acc.sales_fundraising += row.totals.sales_fundraising;
+            acc.legal_ip += row.totals.legal_ip;
+            acc.travel_events += row.totals.travel_events;
+            acc.other += row.totals.other;
+            acc.total += row.totalExpenses;
+            return acc;
+          },
+          {
+            software_tools: 0,
+            contractors: 0,
+            marketing_growth: 0,
+            sales_fundraising: 0,
+            legal_ip: 0,
+            travel_events: 0,
+            other: 0,
+            total: 0,
+          }
+        )
+      : null;
 
     const html = `
       <!DOCTYPE html>
@@ -279,6 +322,11 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
             table { width: 100%; border-collapse: collapse; font-size: 14px; }
             th { text-align: left; padding: 12px 10px; background: #f3f4f6; font-weight: 600; }
             th:not(:first-child) { text-align: right; }
+            .section-title { margin-top: 28px; font-size: 14px; font-weight: 700; color: #111; }
+            .note { color: #666; font-size: 12px; margin: 6px 0 12px; }
+            .small-table { font-size: 12px; }
+            .small-table th { padding: 10px 8px; }
+            .small-table td { padding: 8px; }
             .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e5e5; font-size: 12px; color: #666; }
             @media print { body { padding: 20px; } }
           </style>
@@ -317,6 +365,40 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
               ${tableRows}
             </tbody>
           </table>
+
+          ${is2025 ? `
+            <div class="section-title">Expense Breakdown by Category (2025)</div>
+            <div class="note">Revenue stream: Subscriptions. Expenses categorized from line-item expense reports.</div>
+            <table class="small-table">
+              <thead>
+                <tr>
+                  <th>Month</th>
+                  <th>Software</th>
+                  <th>Contractors</th>
+                  <th>Marketing</th>
+                  <th>Sales/Fundraising</th>
+                  <th>Legal/IP</th>
+                  <th>Travel</th>
+                  <th>Other</th>
+                  <th>Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${breakdownRows}
+                <tr>
+                  <td style="padding: 10px; font-weight: 700; background: #f9fafb; border-top: 2px solid #d1d5db;">YTD</td>
+                  <td style="padding: 10px; text-align: right; font-weight: 700; background: #f9fafb; border-top: 2px solid #d1d5db;">$${(breakdownTotals?.software_tools ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                  <td style="padding: 10px; text-align: right; font-weight: 700; background: #f9fafb; border-top: 2px solid #d1d5db;">$${(breakdownTotals?.contractors ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                  <td style="padding: 10px; text-align: right; font-weight: 700; background: #f9fafb; border-top: 2px solid #d1d5db;">$${(breakdownTotals?.marketing_growth ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                  <td style="padding: 10px; text-align: right; font-weight: 700; background: #f9fafb; border-top: 2px solid #d1d5db;">$${(breakdownTotals?.sales_fundraising ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                  <td style="padding: 10px; text-align: right; font-weight: 700; background: #f9fafb; border-top: 2px solid #d1d5db;">$${(breakdownTotals?.legal_ip ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                  <td style="padding: 10px; text-align: right; font-weight: 700; background: #f9fafb; border-top: 2px solid #d1d5db;">$${(breakdownTotals?.travel_events ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                  <td style="padding: 10px; text-align: right; font-weight: 700; background: #f9fafb; border-top: 2px solid #d1d5db;">$${(breakdownTotals?.other ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                  <td style="padding: 10px; text-align: right; font-weight: 800; background: #f9fafb; border-top: 2px solid #d1d5db;">$${(breakdownTotals?.total ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                </tr>
+              </tbody>
+            </table>
+          ` : ''}
           
           <div class="footer">
             <p>© ${new Date().getFullYear()} Pulse Intelligence Labs, Inc. All rights reserved.</p>
@@ -1579,6 +1661,124 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
       miscTotal: 0.00,
     },
   };
+
+  // Investor-style expense categories (derived from expense line items)
+  type ExpenseCategory =
+    | 'software_tools'
+    | 'contractors'
+    | 'marketing_growth'
+    | 'sales_fundraising'
+    | 'legal_ip'
+    | 'travel_events'
+    | 'other';
+
+  const EXPENSE_CATEGORY_LABELS: Record<ExpenseCategory, string> = {
+    software_tools: 'Software & Tools',
+    contractors: 'Contractors',
+    marketing_growth: 'Marketing & Growth',
+    sales_fundraising: 'Sales / Fundraising',
+    legal_ip: 'Legal & IP',
+    travel_events: 'Travel & Events',
+    other: 'Other',
+  };
+
+  const getExpenseCategory = (rawItem: string): ExpenseCategory => {
+    const item = rawItem.toLowerCase();
+
+    // Travel & events
+    if (item.includes('flight') || item.includes('agoda') || item.includes('hotel') || item.includes('parking')) {
+      return 'travel_events';
+    }
+
+    // Legal / IP
+    if (item.includes('patent')) return 'legal_ip';
+
+    // Sales / fundraising
+    if (item.includes('docsend') || item.includes('rebrandland') || item.includes('pitch competition')) {
+      return 'sales_fundraising';
+    }
+
+    // Marketing & growth
+    if (item.includes('confetti social') || item.includes('flyers') || item.includes('capcut') || item.includes('fiverr')) {
+      return 'marketing_growth';
+    }
+
+    // Prizes / community incentives (bucketed under Marketing & Growth for investor view)
+    if (item.includes('winner prize') || item.includes('challenge winner')) {
+      return 'marketing_growth';
+    }
+
+    // Contractors (product/design)
+    if (item.includes('product design lead') || item.includes('product designer contractor')) {
+      return 'contractors';
+    }
+
+    // Software & tools (default for named tools/vendors)
+    if (
+      item.includes('chatgpt') ||
+      item.includes('claude') ||
+      item.includes('cursor') ||
+      item.includes('figma') ||
+      item.includes('google one') ||
+      item.includes('elevenlabs') ||
+      item.includes('sendinblue') ||
+      item.includes('brevo') ||
+      item.includes('perplexity') ||
+      item.includes('fitwithpulse.ai')
+    ) {
+      return 'software_tools';
+    }
+
+    return 'other';
+  };
+
+  const buildCategoryTotalsFor2025 = () => {
+    const monthOrder: Array<{ id: keyof typeof expenseReportData; label: string }> = [
+      { id: 'jan25', label: 'January' },
+      { id: 'feb25', label: 'February' },
+      { id: 'mar25', label: 'March' },
+      { id: 'apr25', label: 'April' },
+      { id: 'may25', label: 'May' },
+      { id: 'jun25', label: 'June' },
+      { id: 'jul25', label: 'July' },
+      { id: 'aug25', label: 'August' },
+      { id: 'sep25', label: 'September' },
+      { id: 'oct25', label: 'October' },
+      { id: 'nov25', label: 'November' },
+    ];
+
+    const init = (): Record<ExpenseCategory, number> => ({
+      software_tools: 0,
+      contractors: 0,
+      marketing_growth: 0,
+      sales_fundraising: 0,
+      legal_ip: 0,
+      travel_events: 0,
+      other: 0,
+    });
+
+    return monthOrder.map(({ id, label }) => {
+      const data = expenseReportData[id];
+      const totals = init();
+
+      data.monthlyExpenses.forEach(e => {
+        totals[getExpenseCategory(e.item)] += e.amount;
+      });
+      data.miscExpenses.forEach(e => {
+        totals[getExpenseCategory(e.item)] += e.amount;
+      });
+
+      const totalExpenses = Object.values(totals).reduce((a, b) => a + b, 0);
+      return {
+        month: label,
+        revenue: pnl2025.find(r => r.month === label)?.revenue ?? 0,
+        totals,
+        totalExpenses,
+      };
+    });
+  };
+
+  const categoryTotals2025 = buildCategoryTotalsFor2025();
 
   const generateExpenseReportPdf = (reportId: string) => {
     const data = expenseReportData[reportId];
@@ -5213,6 +5413,50 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                                         </tbody>
                                     </table>
                                 </div>
+
+                                {/* Investor-style breakdown (2025 only) */}
+                                {activePLYear === '2025' && (
+                                    <div className="mt-6">
+                                        <div className="flex items-baseline justify-between mb-2">
+                                            <h5 className="text-white text-sm font-semibold">Expense Breakdown by Category (2025)</h5>
+                                            <p className="text-zinc-500 text-xs">Revenue stream: Subscriptions</p>
+                                        </div>
+                                        <div className="rounded-lg border border-zinc-800 overflow-hidden text-[11px]">
+                                            <div className="overflow-x-auto">
+                                                <table className="min-w-[980px] w-full">
+                                                    <thead className="bg-zinc-900/80 border-b border-zinc-800">
+                                                        <tr>
+                                                            <th className="text-left px-3 py-2 text-zinc-400 font-medium">Month</th>
+                                                            <th className="text-right px-3 py-2 text-zinc-400 font-medium">Software</th>
+                                                            <th className="text-right px-3 py-2 text-zinc-400 font-medium">Contractors</th>
+                                                            <th className="text-right px-3 py-2 text-zinc-400 font-medium">Marketing</th>
+                                                            <th className="text-right px-3 py-2 text-zinc-400 font-medium">Sales/Fundraising</th>
+                                                            <th className="text-right px-3 py-2 text-zinc-400 font-medium">Legal/IP</th>
+                                                            <th className="text-right px-3 py-2 text-zinc-400 font-medium">Travel</th>
+                                                            <th className="text-right px-3 py-2 text-zinc-400 font-medium">Other</th>
+                                                            <th className="text-right px-3 py-2 text-zinc-400 font-medium">Total</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {categoryTotals2025.map(row => (
+                                                            <tr key={row.month} className="border-b border-zinc-800/70">
+                                                                <td className="px-3 py-2 text-white">{row.month}</td>
+                                                                <td className="px-3 py-2 text-right text-zinc-100">{formatCurrency(row.totals.software_tools)}</td>
+                                                                <td className="px-3 py-2 text-right text-zinc-100">{formatCurrency(row.totals.contractors)}</td>
+                                                                <td className="px-3 py-2 text-right text-zinc-100">{formatCurrency(row.totals.marketing_growth)}</td>
+                                                                <td className="px-3 py-2 text-right text-zinc-100">{formatCurrency(row.totals.sales_fundraising)}</td>
+                                                                <td className="px-3 py-2 text-right text-zinc-100">{formatCurrency(row.totals.legal_ip)}</td>
+                                                                <td className="px-3 py-2 text-right text-zinc-100">{formatCurrency(row.totals.travel_events)}</td>
+                                                                <td className="px-3 py-2 text-right text-zinc-100">{formatCurrency(row.totals.other)}</td>
+                                                                <td className="px-3 py-2 text-right text-zinc-100 font-semibold">{formatCurrency(row.totalExpenses)}</td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
 
                                 <div className="flex justify-end mt-4">
                                     <button

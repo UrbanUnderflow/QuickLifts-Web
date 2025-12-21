@@ -16,6 +16,7 @@ const CoachProfilePage: React.FC = () => {
   const router = useRouter();
   const dispatch = useDispatch();
   const currentUser = useUser();
+  const [canSeeEarnings, setCanSeeEarnings] = useState(false);
   const [bio, setBio] = useState('');
   const [serviceTitle, setServiceTitle] = useState('');
   const [serviceDescription, setServiceDescription] = useState('');
@@ -37,6 +38,20 @@ const CoachProfilePage: React.FC = () => {
   const [earnings, setEarnings] = useState<{ totalEarned: number; pendingPayout: number; availableBalance: number; recentSales: Array<{date:string, amount:number, roundTitle:string}> } | null>(null);
   const [buyers, setBuyers] = useState<Record<string, { username?: string; email?: string }>>({});
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  useEffect(() => {
+    const loadCoachFlags = async () => {
+      if (!currentUser?.id) return;
+      try {
+        const snap = await getDoc(doc(db, 'coaches', currentUser.id));
+        const data: any = snap.exists() ? snap.data() : null;
+        setCanSeeEarnings(!!(data?.earningsAccess === true || data?.userType === 'partner'));
+      } catch (_) {
+        setCanSeeEarnings(false);
+      }
+    };
+    loadCoachFlags();
+  }, [currentUser?.id]);
 
   useEffect(()=>{
     const load = async () => {
@@ -377,7 +392,7 @@ const CoachProfilePage: React.FC = () => {
             {[
               { href: '/coach/dashboard', label: 'Dashboard' },
               { href: '/coach/referrals', label: 'Referrals' },
-              { href: '/coach/revenue', label: 'Earnings' },
+              ...(canSeeEarnings ? [{ href: '/coach/revenue', label: 'Earnings' }] : []),
               { href: '/coach/staff', label: 'Staff' },
               { href: '/coach/profile', label: 'Profile' }
             ].map((item) => {
@@ -420,7 +435,7 @@ const CoachProfilePage: React.FC = () => {
                 {[
                   { href: '/coach/dashboard', label: 'Dashboard' },
                   { href: '/coach/referrals', label: 'Referrals' },
-                  { href: '/coach/revenue', label: 'Earnings' },
+                  ...(canSeeEarnings ? [{ href: '/coach/revenue', label: 'Earnings' }] : []),
                   { href: '/coach/staff', label: 'Staff' },
                   { href: '/coach/inbox', label: 'Inbox' },
                   { href: '/coach/profile', label: 'Profile' }

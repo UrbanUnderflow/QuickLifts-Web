@@ -78,6 +78,12 @@ const adminCardsData = [
     link: "/admin/projectManagement"
   },
   {
+    title: "Review Tracker",
+    description: "Track weekly progress and manage monthly reviews. Add context, generate drafts, and publish updates.",
+    icon: <Edit3 className="w-5 h-5" />,
+    link: "/admin/reviewTracker"
+  },
+  {
     title: "Application Metrics",
     description: "Monitor key application metrics, user engagement, and performance data.",
     icon: <BarChart2 className="w-5 h-5" />,

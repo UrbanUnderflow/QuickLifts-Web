@@ -38,6 +38,7 @@ type Membership = {
 const StaffPage: React.FC = () => {
   const router = useRouter();
   const currentUser = useUser();
+  const [canSeeEarnings, setCanSeeEarnings] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [showModal, setShowModal] = useState(false);
@@ -50,6 +51,19 @@ const StaffPage: React.FC = () => {
   const [selectedAthletes, setSelectedAthletes] = useState<string[]>([]);
   const [memberOf, setMemberOf] = useState<Membership[]>([]);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  useEffect(() => {
+    const loadCoachFlags = async () => {
+      if (!currentUser?.id) return;
+      try {
+        const profile = await coachService.getCoachProfile(currentUser.id);
+        setCanSeeEarnings(!!(profile?.earningsAccess === true || profile?.userType === 'partner'));
+      } catch (_) {
+        setCanSeeEarnings(false);
+      }
+    };
+    loadCoachFlags();
+  }, [currentUser?.id]);
 
   // Load staff from Firestore
   useEffect(() => {
@@ -284,7 +298,7 @@ const StaffPage: React.FC = () => {
             {[
               { href: '/coach/dashboard', label: 'Dashboard' },
               { href: '/coach/referrals', label: 'Referrals' },
-              { href: '/coach/revenue', label: 'Earnings' },
+              ...(canSeeEarnings ? [{ href: '/coach/revenue', label: 'Earnings' }] : []),
               { href: '/coach/staff', label: 'Staff' },
               { href: '/coach/inbox', label: 'Inbox' },
               { href: '/coach/profile', label: 'Profile' }
@@ -324,7 +338,7 @@ const StaffPage: React.FC = () => {
                 {[
                   { href: '/coach/dashboard', label: 'Dashboard' },
                   { href: '/coach/referrals', label: 'Referrals' },
-                  { href: '/coach/revenue', label: 'Earnings' },
+                  ...(canSeeEarnings ? [{ href: '/coach/revenue', label: 'Earnings' }] : []),
                   { href: '/coach/staff', label: 'Staff' },
                   { href: '/coach/inbox', label: 'Inbox' },
                   { href: '/coach/profile', label: 'Profile' }

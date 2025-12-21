@@ -262,6 +262,8 @@ class CoachService {
       const userData = userDoc.data();
       const existingStripeId = userData.creator?.stripeAccountId;
       const onboardInvite = (userData as any)?.onboardInvite || null;
+      const onboardEarningsAccess = (onboardInvite as any)?.earningsAccess;
+      const onboardCoachType = (onboardInvite as any)?.coachType;
 
       // Generate referral code if not provided
       const finalReferralCode = referralCode || this.generateReferralCode();
@@ -275,7 +277,7 @@ class CoachService {
       
       // Create coach profile using userId as document ID
       const coachRef = doc(db, 'coaches', userId);
-      const coachData = {
+      const coachData: Record<string, any> = {
         userId,
         referralCode: finalReferralCode,
         userType: 'partner',
@@ -285,6 +287,8 @@ class CoachService {
         createdAt: dateToUnixTimestamp(new Date()),
         updatedAt: dateToUnixTimestamp(new Date())
       };
+      if (typeof onboardEarningsAccess === 'boolean') coachData.earningsAccess = onboardEarningsAccess;
+      if (typeof onboardCoachType === 'string' && onboardCoachType.trim()) coachData.coachType = onboardCoachType.trim();
       
       batch.set(coachRef, coachData);
       
@@ -342,10 +346,12 @@ class CoachService {
       } catch (_) {
         onboardInvite = null;
       }
+      const onboardEarningsAccess = (onboardInvite as any)?.earningsAccess;
+      const onboardCoachType = (onboardInvite as any)?.coachType;
       
       // Create coach profile using userId as document ID
       const coachRef = doc(db, 'coaches', userId);
-      const coachData = {
+      const coachData: Record<string, any> = {
         userId,
         referralCode: coachReferralCode,
         userType: 'coach',
@@ -356,6 +362,8 @@ class CoachService {
         createdAt: dateToUnixTimestamp(new Date()),
         updatedAt: dateToUnixTimestamp(new Date())
       };
+      if (typeof onboardEarningsAccess === 'boolean') coachData.earningsAccess = onboardEarningsAccess;
+      if (typeof onboardCoachType === 'string' && onboardCoachType.trim()) coachData.coachType = onboardCoachType.trim();
       
       batch.set(coachRef, coachData);
       

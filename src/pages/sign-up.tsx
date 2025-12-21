@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { doc, getDoc, runTransaction, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, limit, query, runTransaction, serverTimestamp, where } from 'firebase/firestore';
 import { auth, db } from '../api/firebase/config';
 import { User, SubscriptionType, SubscriptionPlatform, UserLevel } from '../api/firebase/user';
 import { userService } from '../api/firebase/user';
@@ -258,11 +258,25 @@ const SignUpPage: React.FC = () => {
         const code = invite.trim();
         if (code) {
           try {
+            // Enrich with admin-configured metadata from `coach-onboard-invites` if present.
+            let inviteMeta: any = null;
+            try {
+              const invRef = collection(db, 'coach-onboard-invites');
+              const invQ = query(invRef, where('code', '==', code.toUpperCase()), limit(1));
+              const invSnap = await getDocs(invQ);
+              if (!invSnap.empty) inviteMeta = invSnap.docs[0].data();
+            } catch (_) {
+              inviteMeta = null;
+            }
+
             await userService.updateUser(firebaseUser.uid, {
               onboardInvite: {
                 source: 'coach-onboard',
-                code,
+                code: code.toUpperCase(),
                 capturedAt: Math.floor(Date.now() / 1000),
+                label: inviteMeta?.label ?? null,
+                coachType: inviteMeta?.coachType ?? null,
+                earningsAccess: typeof inviteMeta?.earningsAccess === 'boolean' ? inviteMeta.earningsAccess : null,
               },
             });
           } catch (e) {

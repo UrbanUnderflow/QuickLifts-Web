@@ -40,6 +40,20 @@ export interface CoachFirestoreData {
   subscriptionStatus: 'active' | 'past_due' | 'canceled' | 'partner';
   promoCodeUsed?: string; // For partners: track which promo code was used (if any)
   userType?: 'coach' | 'partner'; // Distinguish between paying coaches and partners
+  // Partnership / eligibility flags (used to gate Earnings/Revenue UI)
+  // - earningsAccess: explicit toggle for coaches you have a partnership with
+  // - coachType: optional classification string (e.g. 'partnered', 'self_serve', 'enterprise')
+  earningsAccess?: boolean;
+  coachType?: string;
+  // Team-owned coach onboarding invite attribution (copied from `users.onboardInvite`)
+  onboardInvite?: {
+    source?: string;
+    code?: string;
+    capturedAt?: number;
+    label?: string | null;
+    coachType?: string | null;
+    earningsAccess?: boolean | null;
+  } | null;
   createdAt: number | string | Date;
   updatedAt: number | string | Date;
 }
@@ -69,6 +83,9 @@ export class CoachModel {
   subscriptionStatus: 'active' | 'past_due' | 'canceled' | 'partner';
   promoCodeUsed?: string;
   userType?: 'coach' | 'partner';
+  earningsAccess?: boolean;
+  coachType?: string;
+  onboardInvite?: CoachFirestoreData['onboardInvite'];
   createdAt: Date;
   updatedAt: Date;
 
@@ -82,6 +99,9 @@ export class CoachModel {
     this.subscriptionStatus = data.subscriptionStatus;
     this.promoCodeUsed = data.promoCodeUsed;
     this.userType = data.userType;
+    this.earningsAccess = data.earningsAccess;
+    this.coachType = data.coachType;
+    this.onboardInvite = data.onboardInvite ?? null;
     this.createdAt = convertFirestoreTimestamp(data.createdAt);
     this.updatedAt = convertFirestoreTimestamp(data.updatedAt);
   }
@@ -109,6 +129,15 @@ export class CoachModel {
     }
     if (this.userType) {
       dict.userType = this.userType;
+    }
+    if (typeof this.earningsAccess === 'boolean') {
+      dict.earningsAccess = this.earningsAccess;
+    }
+    if (this.coachType) {
+      dict.coachType = this.coachType;
+    }
+    if (this.onboardInvite) {
+      dict.onboardInvite = this.onboardInvite;
     }
 
     return dict;

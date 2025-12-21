@@ -16,6 +16,7 @@ const ReferralsPage: React.FC = () => {
   const [connectedCoaches, setConnectedCoaches] = useState<Array<{ userId: string; username: string; email: string; connectedAt?: number }>>([]);
   const [coachConnectStatus, setCoachConnectStatus] = useState<string | null>(null);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [canSeeEarnings, setCanSeeEarnings] = useState(false);
 
   useEffect(() => {
     const init = async () => {
@@ -23,6 +24,7 @@ const ReferralsPage: React.FC = () => {
       try {
         const profile = await coachService.getCoachProfile(currentUser.id);
         if (!profile) return;
+        setCanSeeEarnings(!!(profile.earningsAccess === true || profile.userType === 'partner'));
         const baseUrl = window.location.origin;
         
         // Simple direct link for athlete connections (browser-based flow)
@@ -55,7 +57,7 @@ const ReferralsPage: React.FC = () => {
             {[
               { href: '/coach/dashboard', label: 'Dashboard' },
               { href: '/coach/referrals', label: 'Referrals' },
-              { href: '/coach/revenue', label: 'Earnings' },
+              ...(canSeeEarnings ? [{ href: '/coach/revenue', label: 'Earnings' }] : []),
               { href: '/coach/staff', label: 'Staff' },
               { href: '/coach/inbox', label: 'Inbox' },
               { href: '/coach/profile', label: 'Profile' }
@@ -95,7 +97,7 @@ const ReferralsPage: React.FC = () => {
                 {[
                   { href: '/coach/dashboard', label: 'Dashboard' },
                   { href: '/coach/referrals', label: 'Referrals' },
-                  { href: '/coach/revenue', label: 'Earnings' },
+                  ...(canSeeEarnings ? [{ href: '/coach/revenue', label: 'Earnings' }] : []),
                   { href: '/coach/staff', label: 'Staff' },
                   { href: '/coach/inbox', label: 'Inbox' },
                   { href: '/coach/profile', label: 'Profile' }

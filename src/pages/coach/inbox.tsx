@@ -35,6 +35,7 @@ const InboxPage: React.FC = () => {
     otherUserId?: string;
   }>>([]);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [canSeeEarnings, setCanSeeEarnings] = useState(false);
   const handleSignOut = async () => {
     try {
       await signOut(auth);
@@ -46,6 +47,20 @@ const InboxPage: React.FC = () => {
   };
 
   // Manual accept only; no auto-accept from URL
+
+  useEffect(() => {
+    const loadCoachFlags = async () => {
+      if (!currentUser?.id) return;
+      try {
+        const snap = await getDoc(doc(db, 'coaches', currentUser.id));
+        const data: any = snap.exists() ? snap.data() : null;
+        setCanSeeEarnings(!!(data?.earningsAccess === true || data?.userType === 'partner'));
+      } catch (_) {
+        setCanSeeEarnings(false);
+      }
+    };
+    loadCoachFlags();
+  }, [currentUser?.id]);
 
   useEffect(() => {
     const loadInvites = async () => {
@@ -201,7 +216,7 @@ const InboxPage: React.FC = () => {
             {[
               { href: '/coach/dashboard', label: 'Dashboard' },
               { href: '/coach/referrals', label: 'Referrals' },
-              { href: '/coach/revenue', label: 'Earnings' },
+              ...(canSeeEarnings ? [{ href: '/coach/revenue', label: 'Earnings' }] : []),
               { href: '/coach/staff', label: 'Staff' },
               { href: '/coach/inbox', label: 'Inbox' },
               { href: '/coach/profile', label: 'Profile' }
@@ -238,7 +253,7 @@ const InboxPage: React.FC = () => {
                 {[
                   { href: '/coach/dashboard', label: 'Dashboard' },
                   { href: '/coach/referrals', label: 'Referrals' },
-                  { href: '/coach/revenue', label: 'Earnings' },
+                  ...(canSeeEarnings ? [{ href: '/coach/revenue', label: 'Earnings' }] : []),
                   { href: '/coach/staff', label: 'Staff' },
                   { href: '/coach/inbox', label: 'Inbox' },
                   { href: '/coach/profile', label: 'Profile' }

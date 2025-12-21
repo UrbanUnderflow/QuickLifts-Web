@@ -163,3 +163,15 @@
   # Unified sentiment analysis for web and iOS
   timeout = 30
 
+# Review Automation Functions
+[functions.send-weekly-review-checkin]
+  # Send weekly check-in email every Friday at 9am EST (14:00 UTC)
+  schedule = "0 14 * * 5"
+
+[functions.send-review-draft-reminder]
+  # Check every Saturday at 9am EST if it's time to send draft reminder
+  schedule = "0 14 * * 6"
+
+[functions.trigger-review-checkin]
+  # Manual trigger for weekly check-in email (no schedule)
+

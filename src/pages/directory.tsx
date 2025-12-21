@@ -141,6 +141,19 @@ const Directory: NextPage = () => {
       ],
     },
     {
+      title: 'Reviews & Reports',
+      icon: '📊',
+      links: [
+        { label: 'Reviews Home', path: '/review', description: 'All monthly and quarterly reviews' },
+        { label: 'Q2 2025 Review', path: '/review/q2-25', description: 'Q2 2025 quarterly review' },
+        { label: 'Q1 2025 Review', path: '/review/q1-25', description: 'Q1 2025 quarterly review' },
+        { label: 'December 2024', path: '/review/dec24', description: 'December 2024 monthly review' },
+        { label: 'November 2024', path: '/review/nov24', description: 'November 2024 monthly review' },
+        { label: '2024 Year in Review', path: '/review/yearInReview', description: '2024 annual review' },
+        { label: '2025 Year in Review', path: '/review/year2025', description: '2025 annual review' },
+      ],
+    },
+    {
       title: 'Social Media',
       icon: '🔗',
       links: [

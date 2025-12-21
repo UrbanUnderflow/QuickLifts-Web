@@ -19,6 +19,8 @@ type InviteLog = {
   id: string;
   code: string;
   label?: string;
+  coachType?: string | null;
+  earningsAccess?: boolean | null;
   createdAt?: any;
   createdByUserId?: string;
   createdByEmail?: string;
@@ -46,6 +48,8 @@ const CoachInvitesAdminPage: React.FC = () => {
   const currentUser = useUser();
   const [code, setCode] = useState('');
   const [label, setLabel] = useState('');
+  const [coachType, setCoachType] = useState<string>('partnered');
+  const [earningsAccess, setEarningsAccess] = useState<boolean>(true);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [recent, setRecent] = useState<InviteLog[]>([]);
@@ -108,6 +112,8 @@ const CoachInvitesAdminPage: React.FC = () => {
       await addDoc(collection(db, 'coach-onboard-invites'), {
         code: inviteCode,
         label: label.trim() || null,
+        coachType: coachType?.trim() || null,
+        earningsAccess: !!earningsAccess,
         createdAt: serverTimestamp(),
         createdByUserId: currentUser?.id || null,
         createdByEmail: currentUser?.email || null,
@@ -210,6 +216,43 @@ const CoachInvitesAdminPage: React.FC = () => {
                     placeholder="e.g. Tremaine cold outreach list"
                     className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-3 text-white"
                   />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm text-zinc-300 mb-2">Coach Type</label>
+                    <select
+                      value={coachType}
+                      onChange={(e) => setCoachType(e.target.value)}
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-3 text-white"
+                    >
+                      <option value="partnered">Partnered (earnings eligible)</option>
+                      <option value="self_serve">Self-serve</option>
+                      <option value="enterprise">Enterprise</option>
+                      <option value="other">Other</option>
+                    </select>
+                    <div className="text-xs text-zinc-500 mt-2">
+                      This is stored on the invite and copied to the coach profile on signup.
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm text-zinc-300 mb-2">Earnings Tab Access</label>
+                    <button
+                      type="button"
+                      onClick={() => setEarningsAccess(v => !v)}
+                      className={`w-full border rounded-lg px-4 py-3 text-sm font-semibold transition-colors ${
+                        earningsAccess
+                          ? 'bg-[#E0FE10] text-black border-[#E0FE10]'
+                          : 'bg-zinc-950 text-zinc-200 border-zinc-800 hover:bg-zinc-900'
+                      }`}
+                    >
+                      {earningsAccess ? 'Enabled' : 'Disabled'}
+                    </button>
+                    <div className="text-xs text-zinc-500 mt-2">
+                      When disabled, the coach will not see the Earnings tab or `/coach/revenue`.
+                    </div>
+                  </div>
                 </div>
 
                 <div>
@@ -323,7 +366,21 @@ const CoachInvitesAdminPage: React.FC = () => {
                       <div key={r.id} className="bg-zinc-950 border border-zinc-800 rounded-lg p-3 flex items-center justify-between gap-3">
                         <div className="min-w-0">
                           <div className="text-white font-medium truncate">{r.code}</div>
-                          <div className="text-xs text-zinc-500 truncate">{r.label || '—'}</div>
+                          <div className="text-xs text-zinc-500 truncate">
+                            {r.label || '—'}
+                            {typeof r.earningsAccess === 'boolean' && (
+                              <span className={`ml-2 inline-flex items-center px-2 py-0.5 rounded-full border text-[10px] ${
+                                r.earningsAccess ? 'border-[#E0FE10]/40 text-[#E0FE10]' : 'border-zinc-700 text-zinc-400'
+                              }`}>
+                                earnings {r.earningsAccess ? 'on' : 'off'}
+                              </span>
+                            )}
+                            {r.coachType ? (
+                              <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full border border-zinc-700 text-zinc-300 text-[10px]">
+                                {r.coachType}
+                              </span>
+                            ) : null}
+                          </div>
                         </div>
                         <div className="flex items-center gap-2 flex-shrink-0">
                           <button

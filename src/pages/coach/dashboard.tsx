@@ -23,6 +23,7 @@ const CoachDashboard: React.FC = () => {
   const [sharedByCoach, setSharedByCoach] = useState<Array<{coachId: string; coachName?: string; athletes: any[]}>>([]);
   const [pendingInvites, setPendingInvites] = useState<{ coachId: string; coachName?: string; permission: 'full'|'limited'; allowedAthletes?: string[] }[]>([]);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const canSeeEarnings = !!(coachProfile?.earningsAccess === true || coachProfile?.userType === 'partner');
   
   
   const handleSignOut = async () => {
@@ -241,7 +242,7 @@ const CoachDashboard: React.FC = () => {
             {[
               { href: '/coach/dashboard', label: 'Dashboard' },
               { href: '/coach/referrals', label: 'Referrals' },
-              { href: '/coach/revenue', label: 'Earnings' },
+              ...(canSeeEarnings ? [{ href: '/coach/revenue', label: 'Earnings' }] : []),
               { href: '/coach/staff', label: 'Staff' },
               { href: '/coach/inbox', label: 'Inbox' },
               { href: '/coach/profile', label: 'Profile' }
@@ -303,7 +304,7 @@ const CoachDashboard: React.FC = () => {
                 {[
                   { href: '/coach/dashboard', label: 'Dashboard' },
                   { href: '/coach/referrals', label: 'Referrals' },
-                  { href: '/coach/revenue', label: 'Earnings' },
+                  ...(canSeeEarnings ? [{ href: '/coach/revenue', label: 'Earnings' }] : []),
                   { href: '/coach/staff', label: 'Staff' },
                   { href: '/coach/inbox', label: 'Inbox' },
                   { href: '/coach/profile', label: 'Profile' }

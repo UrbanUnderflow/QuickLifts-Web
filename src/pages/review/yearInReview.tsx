@@ -1,22 +1,21 @@
-import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import React, { useEffect } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
+import Head from 'next/head';
+import confetti from 'canvas-confetti';
 import { 
   Users, 
   UserPlus, 
   Smartphone, 
-  Award, 
-  Calendar,
   ArrowUpRight,
   Building2,
   Rocket,
   Code,
-  ChevronRight,
-  Star,
-  Timer,
+  CheckCircle,
   Target,
-  ArrowLeft
+  ArrowLeft,
+  ArrowRight,
+  Sparkles,
+  Download
 } from 'lucide-react';
 
 const yearEndStats = [
@@ -24,25 +23,16 @@ const yearEndStats = [
     label: "Beta Testers",
     value: "150+",
     icon: Users,
-    color: "#E0FE10"
   },
   {
     label: "Team Growth",
-    value: "3 New Hires",
+    value: "2 New Team Members",
     icon: UserPlus,
-    color: "#FF6B6B"
   },
   {
     label: "App Updates",
     value: "12",
     icon: Smartphone,
-    color: "#4ECDC4"
-  },
-  {
-    label: "Programs Completed",
-    value: "2",
-    icon: Award,
-    color: "#FFD93D"
   }
 ];
 
@@ -52,395 +42,299 @@ const milestones = [
     title: "Beta Launch",
     description: "Launched our beta version in the App Store with limited features, beginning our journey with early adopters.",
     icon: Rocket,
-    color: "#E0FE10"
+    featured: true
   },
   {
     month: "April",
     title: "Beta Completion",
     description: "Successfully completed three rounds of beta testing, implementing valuable user feedback.",
     icon: Users,
-    color: "#FF6B6B"
   },
   {
     month: "May",
-    title: "Public Launch",
-    description: "Officially launched Pulse 1.0 to the public, marking our first major release.",
+    title: "Major Update to 1.0",
+    description: "Shipped major update to version 1.0 after incorporating beta testing feedback.",
     icon: Smartphone,
-    color: "#4ECDC4"
   },
   {
     month: "July",
     title: "Operation Hope",
     description: "Graduated from Operation Hope program in Atlanta, expanding our business knowledge.",
     icon: Building2,
-    color: "#FFD93D"
   },
   {
     month: "September",
     title: "Web Development",
     description: "Kicked off web app development and complete website redesign.",
     icon: Code,
-    color: "#E0FE10"
   },
   {
     month: "December",
     title: "Rounds Launch",
-    description: "Launched Rounds feature with successful kickoff event at SoulCycle Buckhead.",
+    description: "Shipped first version of Rounds with successful kickoff event at SoulCycle Buckhead.",
     icon: Users,
-    color: "#FF6B6B"
-  }
-];
-
-const quarters = [
-  {
-    quarter: "Q1",
-    title: "Foundation Building",
-    description: "Launched beta testing program and gathered initial user feedback",
-    achievements: [
-      "Launched in App Store",
-      "Started beta testing program",
-      "Gathered user feedback",
-      "Implemented core features"
-    ],
-    stats: {
-      betaTesters: "50+",
-      updates: "4",
-      feedback: "100+"
-    }
-  },
-  {
-    quarter: "Q2",
-    title: "Public Release",
-    description: "Successfully launched Pulse 1.0 and applied to accelerator programs",
-    achievements: [
-      "Released version 1.0",
-      "Applied to TechStars",
-      "Improved storytelling",
-      "Enhanced user experience"
-    ],
-    stats: {
-      users: "100+",
-      updates: "3",
-      engagement: "75%"
-    }
-  },
-  {
-    quarter: "Q3",
-    title: "Team Expansion",
-    description: "Grew our team and began web development initiatives",
-    achievements: [
-      "Hired web developer",
-      "Started web app development",
-      "Redesigned website",
-      "Expanded team capabilities"
-    ],
-    stats: {
-      newHires: "2",
-      projects: "3",
-      milestones: "4"
-    }
-  },
-  {
-    quarter: "Q4",
-    title: "Feature Innovation",
-    description: "Launched Rounds and expanded our presence in the fitness community",
-    achievements: [
-      "Launched Rounds feature",
-      "Hosted first live event",
-      "Created press kit",
-      "Built community partnerships"
-    ],
-    stats: {
-      events: "2",
-      features: "5",
-      partners: "3"
-    }
   }
 ];
 
 const YearInReview = () => {
-  const [activeQuarter, setActiveQuarter] = useState(0);
+  useEffect(() => {
+    // Celebration confetti burst on page load
+    const duration = 3000;
+    const end = Date.now() + duration;
+
+    const frame = () => {
+      // Launch confetti from the left
+      confetti({
+        particleCount: 3,
+        angle: 60,
+        spread: 55,
+        origin: { x: 0, y: 0.6 },
+        colors: ['#f59e0b', '#fbbf24', '#fcd34d', '#1f2937', '#374151']
+      });
+      // Launch confetti from the right
+      confetti({
+        particleCount: 3,
+        angle: 120,
+        spread: 55,
+        origin: { x: 1, y: 0.6 },
+        colors: ['#f59e0b', '#fbbf24', '#fcd34d', '#1f2937', '#374151']
+      });
+
+      if (Date.now() < end) {
+        requestAnimationFrame(frame);
+      }
+    };
+
+    // Initial burst
+    confetti({
+      particleCount: 100,
+      spread: 70,
+      origin: { y: 0.6 },
+      colors: ['#f59e0b', '#fbbf24', '#fcd34d', '#1f2937', '#374151']
+    });
+
+    // Continuous side confetti
+    frame();
+  }, []);
 
   return (
-    <div className="min-h-screen bg-zinc-900">
-      {/* Navigation */}
-      <div className="bg-zinc-900 text-white py-4">
-        <div className="max-w-7xl mx-auto px-4">
-          <Link href="/review" className="flex items-center text-sm gap-2 text-[#E0FE10] hover:underline">
-            <ArrowLeft size={20} />
-            View All Reviews
-          </Link>
+    <>
+      <Head>
+        <title>2024 Year in Review | Pulse</title>
+        <meta name="description" content="Pulse 2024 Year in Review - From beta testing to Rounds launch, a transformative year of building, learning, and growing together." />
+      </Head>
+      
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100">
+        {/* Subtle gradient orbs for depth */}
+        <div className="fixed inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute -top-40 -right-40 w-96 h-96 bg-gradient-to-br from-gray-200/40 to-transparent rounded-full blur-3xl" />
+          <div className="absolute top-1/3 -left-40 w-80 h-80 bg-gradient-to-br from-gray-100/60 to-transparent rounded-full blur-3xl" />
+          <div className="absolute bottom-1/4 right-0 w-72 h-72 bg-gradient-to-br from-blue-100/20 to-transparent rounded-full blur-3xl" />
         </div>
-      </div>
 
-      {/* Hero Section */}
-      <div className="relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-zinc-900 to-black" />
-        <div className="relative max-w-7xl mx-auto py-32 px-4 sm:px-6 lg:px-8">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8 }}
-            className="text-center"
-          >
-            <h1 className="text-4xl sm:text-7xl font-bold font-['Thunder'] text-white mb-6">
-              2024: A Year of
-              <span className="text-[#E0FE10]"> Building</span> and
-              <span className="text-[#E0FE10]"> Growing</span>
-            </h1>
-            <p className="text-xl text-zinc-400 max-w-3xl mx-auto">
-              From beta testing to our Rounds launch, 2024 was a transformative year 
-              for Pulse. Here's our journey of building, learning, and growing together.
-            </p>
-          </motion.div>
+        {/* Navigation */}
+        <div className="relative border-b border-gray-200/60 backdrop-blur-sm bg-white/70">
+          <div className="max-w-4xl mx-auto px-6 py-4">
+            <Link href="/review" className="inline-flex items-center text-sm text-gray-600 hover:text-black transition-colors">
+              <ArrowLeft size={16} className="mr-2" />
+              All Reviews
+            </Link>
+          </div>
         </div>
-      </div>
 
-      {/* Year End Stats */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-20">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {yearEndStats.map((stat, index) => (
-            <motion.div
-              key={stat.label}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: index * 0.1 }}
-              className="bg-zinc-800 rounded-xl p-6 border border-zinc-700"
-            >
-              <div className="flex items-center gap-4">
-                <div 
-                  className="p-3 rounded-lg" 
-                  style={{ backgroundColor: stat.color + '20' }}
-                >
-                  <stat.icon 
-                    size={24} 
-                    style={{ color: stat.color }} 
-                  />
-                </div>
-                <div>
-                  <div className="text-3xl font-bold text-white mb-1">
-                    {stat.value}
-                  </div>
-                  <div className="text-zinc-400">
-                    {stat.label}
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          ))}
-        </div>
-      </div>
-
-      {/* Timeline Section */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.5 }}
-          className="mb-12"
-        >
-          <h2 className="text-3xl sm:text-5xl font-bold font-['Thunder'] text-white mb-4">
-            Our Journey Through <span className="text-[#E0FE10]">2024</span>
-          </h2>
-          <p className="text-zinc-400">
-            A timeline of key moments that shaped our year
+        {/* Header */}
+        <div className="relative max-w-4xl mx-auto px-6 pt-16 pb-12">
+          <p className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-4">
+            Year in Review
           </p>
-        </motion.div>
+          <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">
+            2024: A Year of Building and Growing
+          </h1>
+          <p className="text-xl text-gray-600 leading-relaxed mb-8 max-w-2xl" data-description="true">
+            From beta testing to our Rounds launch, 2024 was a transformative year 
+            for Pulse. Here's our journey of building, learning, and growing together.
+          </p>
+          <a
+            href="/PulseDeck12_9.pdf"
+            download
+            className="inline-flex items-center gap-2 px-5 py-3 bg-gray-900 text-white rounded-xl font-medium hover:bg-gray-800 transition-all hover:shadow-lg hover:shadow-gray-900/20"
+          >
+            <Download size={18} />
+            Download PDF
+          </a>
+        </div>
 
-        <div className="space-y-12">
-          {milestones.map((milestone, index) => (
-            <motion.div
-              key={milestone.month}
-              initial={{ opacity: 0, x: index % 2 === 0 ? -20 : 20 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.5 }}
-              className="relative"
-            >
-              <div className="flex items-center gap-8">
-                <div 
-                  className="w-24 h-24 rounded-xl flex items-center justify-center"
-                  style={{ backgroundColor: milestone.color + '20' }}
-                >
-                  <milestone.icon 
-                    size={32} 
-                    style={{ color: milestone.color }} 
-                  />
-                </div>
-                <div>
-                  <div className="text-zinc-500 mb-1">
-                    {milestone.month}
+        {/* Year End Stats */}
+        <div className="relative max-w-4xl mx-auto px-6 pb-16">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {yearEndStats.map((stat, index) => (
+              <div
+                key={stat.label}
+                className="bg-white/60 backdrop-blur-lg border border-gray-200/50 rounded-xl p-5 hover:bg-white/80 hover:shadow-lg hover:shadow-gray-200/30 transition-all duration-300"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
+                    <stat.icon size={20} className="text-gray-700" />
                   </div>
-                  <h3 className="text-xl font-bold text-white mb-2">
-                    {milestone.title}
-                  </h3>
-                  <p className="text-zinc-400">
-                    {milestone.description}
-                  </p>
+                  <div>
+                    <div className="text-xl font-bold text-gray-900">
+                      {stat.value}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {stat.label}
+                    </div>
+                  </div>
                 </div>
               </div>
-            </motion.div>
-          ))}
-        </div>
-      </div>
-
-      {/* Quarterly Breakdown */}
-      <div className="bg-black py-24">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <motion.div
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            viewport={{ once: true }}
-            className="mb-12"
-          >
-            <h2 className="text-3xl sm:text-5xl font-bold font-['Thunder'] text-white mb-4">
-              Quarterly <span className="text-[#E0FE10]">Breakdown</span>
-            </h2>
-            <p className="text-zinc-400">
-              A detailed look at our progress throughout the year
-            </p>
-          </motion.div>
-
-          <div className="grid grid-cols-4 gap-4 mb-8">
-            {quarters.map((q, index) => (
-              <button
-                key={q.quarter}
-                onClick={() => setActiveQuarter(index)}
-                className={`p-4 rounded-lg transition-all ${
-                  activeQuarter === index 
-                    ? 'bg-[#E0FE10] text-black' 
-                    : 'bg-zinc-800 text-white hover:bg-zinc-700'
-                }`}
-              >
-                {q.quarter}
-              </button>
             ))}
           </div>
+        </div>
 
-          <motion.div
-            key={activeQuarter}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="bg-zinc-800 rounded-xl p-8"
-          >
-            <h3 className="text-2xl font-bold text-white mb-4">
-              {quarters[activeQuarter].title}
-            </h3>
-            <p className="text-zinc-400 mb-8">
-              {quarters[activeQuarter].description}
-            </p>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div>
-                <h4 className="text-[#E0FE10] font-bold mb-4">Key Achievements</h4>
-                <ul className="space-y-3">
-                  {quarters[activeQuarter].achievements.map((achievement, index) => (
-                    <li key={index} className="flex items-center gap-2 text-zinc-300">
-                      <ChevronRight className="text-[#E0FE10]" size={16} />
-                      {achievement}
-                    </li>
-                  ))}
-                </ul>
+        {/* Timeline Section */}
+        <div className="relative">
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-gray-100/50 to-transparent" />
+          <div className="relative max-w-4xl mx-auto px-6 py-16">
+            <div className="flex items-center gap-3 mb-8">
+              <div className="w-8 h-8 rounded-lg bg-gray-900 flex items-center justify-center">
+                <Rocket size={16} className="text-white" />
               </div>
-              <div>
-                <h4 className="text-[#E0FE10] font-bold mb-4">Quarter Stats</h4>
-                <div className="grid grid-cols-2 gap-4">
-                  {Object.entries(quarters[activeQuarter].stats).map(([key, value]) => (
-                    <div key={key} className="bg-zinc-700 rounded-lg p-4">
-                      <div className="text-2xl font-bold text-white">{value}</div>
-                      <div className="text-zinc-400 capitalize">{key}</div>
+              <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wide">
+                Our Journey Through 2024
+              </h2>
+            </div>
+
+            <div className="space-y-4">
+              {milestones.map((milestone, index) => (
+                <div
+                  key={milestone.month}
+                  className={`relative overflow-hidden rounded-xl transition-all duration-300 ${
+                    milestone.featured 
+                      ? 'bg-gradient-to-br from-amber-50/80 to-yellow-50/60 backdrop-blur-xl border border-amber-200/60 shadow-lg shadow-amber-100/40' 
+                      : 'bg-white/50 backdrop-blur-lg border border-gray-200/50 hover:bg-white/70 hover:shadow-lg hover:shadow-gray-200/30'
+                  }`}
+                >
+                  {milestone.featured && (
+                    <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-400" />
+                  )}
+                  
+                  <div className="p-6">
+                    <div className="flex items-start gap-4">
+                      <div className={`flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center ${
+                        milestone.featured ? 'bg-amber-100' : 'bg-gray-100'
+                      }`}>
+                        <milestone.icon size={20} className={milestone.featured ? 'text-amber-600' : 'text-gray-700'} />
+                      </div>
+                      <div className="flex-grow">
+                        {milestone.featured && (
+                          <div className="flex items-center gap-2 mb-2">
+                            <Sparkles size={14} className="text-amber-500" />
+                            <span className="text-xs font-semibold text-amber-700 uppercase tracking-wide">
+                              Key Milestone
+                            </span>
+                          </div>
+                        )}
+                        <div className="text-xs text-gray-400 uppercase tracking-wider mb-1">
+                          {milestone.month}
+                        </div>
+                        <h3 className={`font-semibold mb-2 ${milestone.featured ? 'text-xl text-gray-900' : 'text-lg text-gray-900'}`}>
+                          {milestone.title}
+                        </h3>
+                        <p className="text-gray-600 leading-relaxed">
+                          {milestone.description}
+                        </p>
+                      </div>
                     </div>
-                  ))}
+                  </div>
                 </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Looking Ahead Section */}
+        <div className="relative max-w-4xl mx-auto px-6 py-16">
+          <div className="bg-white/60 backdrop-blur-xl border border-gray-200/50 rounded-2xl p-8 shadow-lg shadow-gray-200/30">
+            <h2 className="text-sm font-medium text-gray-400 uppercase tracking-wide mb-2">
+              Looking Ahead
+            </h2>
+            <h3 className="text-2xl font-bold text-gray-900 mb-4">
+              2025 Focus
+            </h3>
+            <p className="text-gray-600 mb-8">
+              Our vision for the upcoming year
+            </p>
+
+            <div className="grid md:grid-cols-2 gap-4">
+              <div className="bg-gray-50/80 backdrop-blur-sm rounded-xl p-5 border border-gray-200/50 hover:shadow-lg hover:shadow-gray-200/30 transition-all">
+                <div className="w-10 h-10 rounded-lg bg-lime-100 flex items-center justify-center mb-4">
+                  <Target size={20} className="text-lime-600" />
+                </div>
+                <h4 className="font-semibold text-gray-900 mb-2">Expanding Rounds</h4>
+                <p className="text-gray-600 text-sm">
+                  Growing our community-driven workouts with new features and partnerships
+                </p>
+              </div>
+
+              <div className="bg-gray-50/80 backdrop-blur-sm rounded-xl p-5 border border-gray-200/50 hover:shadow-lg hover:shadow-gray-200/30 transition-all">
+                <div className="w-10 h-10 rounded-lg bg-rose-100 flex items-center justify-center mb-4">
+                  <Users size={20} className="text-rose-600" />
+                </div>
+                <h4 className="font-semibold text-gray-900 mb-2">Creator Network</h4>
+                <p className="text-gray-600 text-sm">
+                  Building relationships with fitness creators and expanding our content offerings
+                </p>
+              </div>
+
+              <div className="bg-gray-50/80 backdrop-blur-sm rounded-xl p-5 border border-gray-200/50 hover:shadow-lg hover:shadow-gray-200/30 transition-all">
+                <div className="w-10 h-10 rounded-lg bg-cyan-100 flex items-center justify-center mb-4">
+                  <Code size={20} className="text-cyan-600" />
+                </div>
+                <h4 className="font-semibold text-gray-900 mb-2">Launch Web Application</h4>
+                <p className="text-gray-600 text-sm">
+                  Ship a fully functional web app to complement our iOS experience
+                </p>
+              </div>
+
+              <div className="bg-gray-50/80 backdrop-blur-sm rounded-xl p-5 border border-gray-200/50 hover:shadow-lg hover:shadow-gray-200/30 transition-all">
+                <div className="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center mb-4">
+                  <Rocket size={20} className="text-amber-600" />
+                </div>
+                <h4 className="font-semibold text-gray-900 mb-2">Get into Accelerator</h4>
+                <p className="text-gray-600 text-sm">
+                  Gain entry to a top-tier accelerator program for mentorship and funding
+                </p>
               </div>
             </div>
-          </motion.div>
+          </div>
+        </div>
+
+        {/* Footer CTA */}
+        <div className="relative border-t border-gray-200/60 backdrop-blur-sm bg-white/50">
+          <div className="max-w-4xl mx-auto px-6 py-12">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
+              <div>
+                <p className="text-sm text-gray-400 mb-1">Learn more about Pulse</p>
+                <a 
+                  href="https://fitwithpulse.ai" 
+                  className="text-gray-900 font-medium hover:text-gray-600 transition-colors inline-flex items-center group"
+                >
+                  fitwithpulse.ai
+                  <ArrowUpRight size={16} className="ml-1 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                </a>
+              </div>
+              <a
+                href="https://apps.apple.com/ca/app/pulse-community-workouts/id6451497729"
+                className="px-6 py-3 bg-gray-900 text-white rounded-xl font-medium hover:bg-gray-800 transition-all hover:shadow-lg hover:shadow-gray-900/20 inline-flex items-center gap-2"
+              >
+                Download Pulse
+                <ArrowRight size={16} />
+              </a>
+            </div>
+          </div>
         </div>
       </div>
-
-      {/* Looking Ahead Section */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
-        <motion.div
-          initial={{ opacity: 0 }}
-          whileInView={{ opacity: 1 }}
-          viewport={{ once: true }}
-          className="mb-12"
-        >
-          <h2 className="text-3xl sm:text-5xl font-bold font-['Thunder'] text-white mb-4">
-            Looking Ahead to <span className="text-[#E0FE10]">2025</span>
-          </h2>
-          <p className="text-zinc-400">
-            Our vision for the upcoming year
-          </p>
-        </motion.div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5, delay: 0.1 }}
-            className="bg-zinc-800 rounded-xl p-6 border border-zinc-700"
-          >
-            <div className="p-3 rounded-lg inline-flex bg-[#E0FE10] bg-opacity-20 mb-4">
-              <Target size={24} className="text-[#E0FE10]" />
-            </div>
-            <h3 className="text-xl font-bold text-white mb-2">Expanding Rounds</h3>
-            <p className="text-zinc-400">
-              Growing our community-driven workouts with new features and partnerships
-            </p>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5, delay: 0.2 }}
-            className="bg-zinc-800 rounded-xl p-6 border border-zinc-700"
-          >
-            <div className="p-3 rounded-lg inline-flex bg-[#FF6B6B] bg-opacity-20 mb-4">
-              <Users size={24} className="text-[#FF6B6B]" />
-            </div>
-            <h3 className="text-xl font-bold text-white mb-2">Creator Network</h3>
-            <p className="text-zinc-400">
-              Building relationships with fitness creators and expanding our content offerings
-            </p>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5, delay: 0.3 }}
-            className="bg-zinc-800 rounded-xl p-6 border border-zinc-700"
-          >
-            <div className="p-3 rounded-lg inline-flex bg-[#4ECDC4] bg-opacity-20 mb-4">
-              <Rocket size={24} className="text-[#4ECDC4]" />
-            </div>
-            <h3 className="text-xl font-bold text-white mb-2">Platform Growth</h3>
-            <p className="text-zinc-400">
-              Launching new features and expanding our presence in the fitness tech space
-            </p>
-          </motion.div>
-        </div>
-
-        <div className="mt-12 text-center">
-          <motion.a
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            viewport={{ once: true }}
-            href="https://apps.apple.com/app/pulse"
-            className="inline-flex items-center gap-2 bg-[#E0FE10] text-black px-8 py-4 rounded-full font-medium hover:bg-opacity-90 transition-all"
-          >
-            Download Pulse
-            <ArrowUpRight size={20} />
-          </motion.a>
-        </div>
-      </div>
-    </div>
+    </>
   );
 };
 
 export default YearInReview;
-

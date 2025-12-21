@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import Head from 'next/head';
-import { FileText, Send, Check, Clock, Download, Eye, Trash2, Plus, X, Mail, RefreshCw } from 'lucide-react';
+import { FileText, Send, Check, Clock, Download, Eye, Trash2, Plus, X, Mail, RefreshCw, History } from 'lucide-react';
 import { collection, getDocs, addDoc, deleteDoc, doc, query, orderBy, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
 
@@ -48,7 +48,7 @@ const documentTemplates: DocumentTemplate[] = [
     id: 'bobby-advisor',
     name: 'Independent Advisor Agreement',
     type: 'advisor',
-    recipientName: 'Bobby Nweke',
+    recipientName: 'Emmanuel Weke',
     description: 'Advisory / Trial Contractor Agreement for Chief of Staff role'
   },
   {
@@ -69,6 +69,7 @@ const DocumentSigningAdmin: React.FC = () => {
   const [recipientEmail, setRecipientEmail] = useState('');
   const [sending, setSending] = useState(false);
   const [sendStatus, setSendStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [historyTemplate, setHistoryTemplate] = useState<DocumentTemplate | null>(null);
 
   useEffect(() => {
     fetchSigningRequests();
@@ -152,6 +153,22 @@ const DocumentSigningAdmin: React.FC = () => {
     } catch (error) {
       console.error('Error deleting request:', error);
     }
+  };
+
+  const getRequestsForTemplate = (template: DocumentTemplate) => {
+    // Match by document name + type so older requests remain visible
+    // even when the template recipient name changes.
+    return signingRequests
+      .filter(r => r.documentType === template.type && r.documentName === template.name)
+      .sort((a, b) => {
+        const aTime = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
+        const bTime = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
+        return bTime - aTime;
+      });
+  };
+
+  const openDownloadSigned = (requestId: string) => {
+    window.open(`/sign/${requestId}?download=true`, '_blank');
   };
 
   const getStatusBadge = (status: string) => {
@@ -241,9 +258,9 @@ const DocumentSigningAdmin: React.FC = () => {
             <h2 className="text-xl font-semibold mb-4">Documents Requiring Signatures</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {documentTemplates.map((template) => {
-                const existingRequest = signingRequests.find(
-                  r => r.documentType === template.type && r.recipientName === template.recipientName
-                );
+                const requestsForTemplate = getRequestsForTemplate(template);
+                const latestRequest = requestsForTemplate[0];
+                const latestSigned = requestsForTemplate.find(r => r.status === 'signed');
                 
                 return (
                   <div
@@ -260,11 +277,11 @@ const DocumentSigningAdmin: React.FC = () => {
                           <p className="text-zinc-400 text-sm">{template.recipientName}</p>
                         </div>
                       </div>
-                      {existingRequest && getStatusBadge(existingRequest.status)}
+                      {latestRequest && getStatusBadge(latestRequest.status)}
                     </div>
                     <p className="text-zinc-500 text-sm mb-4">{template.description}</p>
                     <div className="flex items-center gap-2">
-                      {!existingRequest || existingRequest.status !== 'signed' ? (
+                      {!latestSigned ? (
                         <button
                           onClick={() => {
                             setSelectedTemplate(template);
@@ -273,24 +290,34 @@ const DocumentSigningAdmin: React.FC = () => {
                           className="flex items-center gap-2 px-4 py-2 bg-[#E0FE10] hover:bg-[#c8e60e] text-black rounded-lg text-sm font-medium transition-colors"
                         >
                           <Send className="w-4 h-4" />
-                          {existingRequest ? 'Resend' : 'Send for Signature'}
+                          {latestRequest ? 'Resend' : 'Send for Signature'}
                         </button>
                       ) : (
-                        <a
-                          href={`/api/download-signed-document?id=${existingRequest.id}`}
+                        <button
+                          onClick={() => openDownloadSigned(latestSigned.id)}
                           className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg text-sm font-medium transition-colors"
                         >
                           <Download className="w-4 h-4" />
                           Download Signed
-                        </a>
+                        </button>
                       )}
-                      {existingRequest && (
+                      {latestRequest && (
                         <button
-                          onClick={() => window.open(`/sign/${existingRequest.id}`, '_blank')}
+                          onClick={() => window.open(`/sign/${latestRequest.id}`, '_blank')}
                           className="flex items-center gap-2 px-4 py-2 bg-zinc-700 hover:bg-zinc-600 text-white rounded-lg text-sm transition-colors"
                         >
                           <Eye className="w-4 h-4" />
                           Preview
+                        </button>
+                      )}
+                      {requestsForTemplate.length > 1 && (
+                        <button
+                          onClick={() => setHistoryTemplate(template)}
+                          className="flex items-center gap-2 px-4 py-2 bg-zinc-700 hover:bg-zinc-600 text-white rounded-lg text-sm transition-colors"
+                          title="View all requests"
+                        >
+                          <History className="w-4 h-4" />
+                          History
                         </button>
                       )}
                     </div>
@@ -460,6 +487,90 @@ const DocumentSigningAdmin: React.FC = () => {
                   </>
                 )}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Template History Modal */}
+      {historyTemplate && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-3xl">
+            <div className="p-6 border-b border-zinc-800">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h3 className="text-xl font-semibold text-white">Document History</h3>
+                  <p className="text-zinc-400 text-sm mt-1">
+                    {historyTemplate.name} • Template recipient: {historyTemplate.recipientName}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setHistoryTemplate(null)}
+                  className="p-2 hover:bg-zinc-800 rounded-lg transition-colors text-zinc-400 hover:text-white"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6">
+              {(() => {
+                const requestsForTemplate = getRequestsForTemplate(historyTemplate);
+                if (requestsForTemplate.length === 0) {
+                  return <div className="text-zinc-400 text-sm">No prior requests found.</div>;
+                }
+
+                return (
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-zinc-800/50">
+                        <tr>
+                          <th className="text-left px-4 py-3 text-zinc-400 text-sm font-medium">Recipient</th>
+                          <th className="text-left px-4 py-3 text-zinc-400 text-sm font-medium">Status</th>
+                          <th className="text-left px-4 py-3 text-zinc-400 text-sm font-medium">Created</th>
+                          <th className="text-left px-4 py-3 text-zinc-400 text-sm font-medium">Signed</th>
+                          <th className="text-right px-4 py-3 text-zinc-400 text-sm font-medium">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-zinc-800">
+                        {requestsForTemplate.map((r) => (
+                          <tr key={r.id} className="hover:bg-zinc-800/30">
+                            <td className="px-4 py-3">
+                              <div>
+                                <p className="text-white">{r.recipientName}</p>
+                                <p className="text-zinc-500 text-sm">{r.recipientEmail}</p>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3">{getStatusBadge(r.status)}</td>
+                            <td className="px-4 py-3 text-zinc-400 text-sm">{formatDate(r.createdAt)}</td>
+                            <td className="px-4 py-3 text-zinc-400 text-sm">{formatDate(r.signedAt)}</td>
+                            <td className="px-4 py-3">
+                              <div className="flex items-center justify-end gap-2">
+                                {r.status === 'signed' && (
+                                  <button
+                                    onClick={() => openDownloadSigned(r.id)}
+                                    className="p-2 hover:bg-zinc-700 rounded-lg transition-colors"
+                                    title="Download signed"
+                                  >
+                                    <Download className="w-4 h-4 text-green-400" />
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => window.open(`/sign/${r.id}`, '_blank')}
+                                  className="p-2 hover:bg-zinc-700 rounded-lg transition-colors"
+                                  title="Preview"
+                                >
+                                  <Eye className="w-4 h-4 text-zinc-300" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })()}
             </div>
           </div>
         </div>

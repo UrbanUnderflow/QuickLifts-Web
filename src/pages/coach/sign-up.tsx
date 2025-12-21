@@ -10,7 +10,7 @@ import { FaGoogle, FaApple } from 'react-icons/fa';
 import { coachAuth } from '../../api/firebase/auth/coachAuth';
 import { coachService } from '../../api/firebase/coach';
 import { db } from '../../api/firebase/config';
-import { doc, getDoc, runTransaction, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, limit, query, runTransaction, serverTimestamp, where } from 'firebase/firestore';
 import { useUser } from '../../hooks/useUser';
 
 const CoachSignUpPage: React.FC = () => {
@@ -73,11 +73,25 @@ const CoachSignUpPage: React.FC = () => {
       if (typeof window === 'undefined') return;
       const code = (localStorage.getItem('pulse_onboard_invite_code') || '').trim();
       if (!code) return;
+      // Enrich with admin-configured metadata from `coach-onboard-invites` if present.
+      let inviteMeta: any = null;
+      try {
+        const invRef = collection(db, 'coach-onboard-invites');
+        const invQ = query(invRef, where('code', '==', code.toUpperCase()), limit(1));
+        const invSnap = await getDocs(invQ);
+        if (!invSnap.empty) inviteMeta = invSnap.docs[0].data();
+      } catch (_) {
+        inviteMeta = null;
+      }
+
       await userService.updateUser(uid, {
         onboardInvite: {
           source: 'coach-onboard',
-          code,
+          code: code.toUpperCase(),
           capturedAt: Math.floor(Date.now() / 1000),
+          label: inviteMeta?.label ?? null,
+          coachType: inviteMeta?.coachType ?? null,
+          earningsAccess: typeof inviteMeta?.earningsAccess === 'boolean' ? inviteMeta.earningsAccess : null,
         }
       });
       try { localStorage.removeItem('pulse_onboard_invite_code'); } catch (_) {}

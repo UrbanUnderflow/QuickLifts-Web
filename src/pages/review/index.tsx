@@ -1,10 +1,13 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { ArrowUpRight } from 'lucide-react';
+import Head from 'next/head';
+import { ArrowRight, ArrowUpRight, Edit3 } from 'lucide-react';
 import { GetStaticProps } from 'next';
 import { JSDOM } from 'jsdom';
 import fs from 'fs';
 import path from 'path';
+import { reviewContextService } from '../../api/firebase/reviewContext/service';
+import { DraftReview } from '../../api/firebase/reviewContext/types';
 
 // Types
 interface Review {
@@ -13,99 +16,246 @@ interface Review {
   description: string;
   date: string;
   reviewType: 'month' | 'year' | 'quarter';
+  isDraft?: boolean;
+  draftId?: string;
 }
 
 interface ReviewsIndexProps {
   reviews: Review[];
 }
 
-const ReviewsIndex: React.FC<ReviewsIndexProps> = ({ reviews }) => {
+const ReviewsIndex: React.FC<ReviewsIndexProps> = ({ reviews: staticReviews }) => {
+  const [drafts, setDrafts] = useState<DraftReview[]>([]);
+  const [allReviews, setAllReviews] = useState<Review[]>(staticReviews);
+
+  // Fetch drafts client-side
+  useEffect(() => {
+    const fetchDrafts = async () => {
+      try {
+        const draftData = await reviewContextService.fetchAllDrafts();
+        // Filter to only show non-published drafts
+        const unpublishedDrafts = draftData.filter(d => d.status !== 'published');
+        setDrafts(unpublishedDrafts);
+
+        // Convert drafts to Review format and merge
+        const draftReviews: Review[] = unpublishedDrafts.map(d => {
+          const [year, month] = d.monthYear.split('-');
+          return {
+            id: `draft/${d.id}`,
+            title: d.title,
+            description: d.description,
+            date: `${year}-${month}-01`,
+            reviewType: d.reviewType === 'quarter' ? 'quarter' : 'month',
+            isDraft: true,
+            draftId: d.id,
+          };
+        });
+
+        // Merge and sort by date (drafts should appear at top if recent)
+        const merged = [...draftReviews, ...staticReviews];
+        merged.sort((a, b) => b.date.localeCompare(a.date));
+        setAllReviews(merged);
+      } catch (err) {
+        console.error('Error fetching drafts:', err);
+        // Just use static reviews if drafts fail to load
+        setAllReviews(staticReviews);
+      }
+    };
+
+    fetchDrafts();
+  }, [staticReviews]);
+
+  const featuredReview = allReviews[0];
+  const otherReviews = allReviews.slice(1);
+
   return (
-    <div className="min-h-screen bg-white">
-      {/* Hero Section */}
-      <div className="bg-gradient-to-br from-zinc-900 to-zinc-800 text-white py-32">
-        <div className="max-w-6xl mx-auto px-4">
-          <h1 className="font-['Thunder'] text-8xl sm:text-[160px] leading-none">
-            Months in
-            <span className="block text-[#E0FE10]">Review</span>
-          </h1>
-          <p className="mt-8 text-xl text-zinc-400 max-w-2xl">
-            A chronological journey through our progress, achievements, and learnings 
-            as we build the future of social fitness.
-          </p>
+    <>
+      <Head>
+        <title>Reviews | Pulse</title>
+        <meta name="description" content="A chronological journey through Pulse's progress, achievements, and learnings as we build the future of social fitness." />
+      </Head>
+      
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100">
+        {/* Subtle gradient orbs for depth */}
+        <div className="fixed inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute -top-40 -right-40 w-96 h-96 bg-gradient-to-br from-gray-200/40 to-transparent rounded-full blur-3xl" />
+          <div className="absolute top-1/3 -left-40 w-80 h-80 bg-gradient-to-br from-gray-100/60 to-transparent rounded-full blur-3xl" />
+          <div className="absolute bottom-0 right-1/4 w-72 h-72 bg-gradient-to-br from-gray-200/30 to-transparent rounded-full blur-3xl" />
         </div>
-      </div>
 
-      {/* Reviews List */}
-      <div className="max-w-6xl mx-auto px-4 -mt-20">
-        <div className="grid gap-8">
-          {reviews.map((review) => (
-            <Link 
-              href={`/review/${review.id}`} 
-              key={review.id}
-              className="group bg-white rounded-xl shadow-lg p-8 relative overflow-hidden hover:shadow-xl transition-shadow"
-            >
-              <div className="absolute top-0 right-0 w-32 h-32 bg-[#E0FE10] opacity-0 group-hover:opacity-5 transition-opacity rounded-full -translate-x-16 translate-y-[-50%]" />
-              
-              <div className="flex flex-col sm:flex-row sm:items-center gap-6 relative">
-                <div className="flex-shrink-0 w-32">
-                  {review.reviewType === 'year' ? (
-                    <div className="text-3xl font-bold">
-                      {review.date.substring(0, 4)} 
+        {/* Header */}
+        <div className="relative border-b border-gray-200/60 backdrop-blur-sm bg-white/70">
+          <div className="max-w-4xl mx-auto px-6 py-16">
+            <p className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-4">
+              Reviews
+            </p>
+            <h1 className="text-4xl font-bold text-gray-900 mb-6">
+              Progress & Achievements
+            </h1>
+            <p className="text-xl text-gray-600 leading-relaxed max-w-2xl">
+              A chronological journey through our progress, achievements, and learnings 
+              as we build the future of social fitness.
+            </p>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="relative max-w-4xl mx-auto px-6 py-16 pb-24">
+          
+          {/* Featured Review (Most Recent) */}
+          {featuredReview && (
+            <div className="mb-12">
+              <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-4">
+                Latest Update
+              </p>
+              <Link 
+                href={`/review/${featuredReview.id}`}
+                className="group block"
+              >
+                <div className="relative overflow-hidden rounded-2xl bg-white/60 backdrop-blur-xl border border-gray-200/60 shadow-lg shadow-gray-200/40 hover:shadow-xl hover:shadow-gray-300/40 hover:bg-white/80 transition-all duration-300">
+                  {/* Gradient accent */}
+                  <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-gray-900 via-gray-700 to-gray-900" />
+                  
+                  <div className="p-8">
+                    <div className="flex items-start justify-between gap-6">
+                      <div className="flex-grow">
+                        <div className="flex items-center gap-3 mb-4">
+                          <span className="text-3xl font-bold text-gray-900">
+                            {featuredReview.date.substring(0, 4)}
+                          </span>
+                          {featuredReview.reviewType === 'quarter' && (
+                            <span className="px-2.5 py-1 bg-gray-100/80 backdrop-blur-sm rounded-full text-xs font-medium text-gray-600">
+                              Q{Math.ceil(parseInt(featuredReview.date.substring(5, 7)) / 3)}
+                            </span>
+                          )}
+                          {featuredReview.reviewType === 'year' && (
+                            <span className="px-2.5 py-1 bg-gray-900 text-white rounded-full text-xs font-medium">
+                              Year in Review
+                            </span>
+                          )}
+                          {featuredReview.isDraft && (
+                            <span className="flex items-center gap-1 px-2.5 py-1 bg-amber-500 text-black rounded-full text-xs font-medium">
+                              <Edit3 size={10} />
+                              Draft
+                            </span>
+                          )}
+                        </div>
+                        <h2 className="text-2xl font-semibold text-gray-900 mb-3 group-hover:text-gray-700 transition-colors">
+                          {featuredReview.title}
+                        </h2>
+                        <p className="text-gray-600 leading-relaxed line-clamp-2">
+                          {featuredReview.description}
+                        </p>
+                      </div>
+                      <div className="flex-shrink-0">
+                        <div className="w-12 h-12 rounded-full bg-gray-900 flex items-center justify-center group-hover:bg-gray-700 transition-colors">
+                          <ArrowUpRight size={20} className="text-white" />
+                        </div>
+                      </div>
                     </div>
-                  ) : review.reviewType === 'quarter' ? (
-                    <>
-                       <div className="text-sm text-zinc-500 uppercase tracking-wider">
-                         Q{Math.ceil(parseInt(review.date.substring(5, 7)) / 3)} {/* Calculate Q from month */} 
-                       </div>
-                       <div className="text-3xl font-bold">
-                         {review.date.substring(0, 4)} {/* Year */} 
-                       </div>
-                    </>
-                  ) : (
-                    // Monthly Review
-                    <>
-                      <div className="text-sm text-zinc-500 uppercase tracking-wider">
-                         {new Date(review.date).toLocaleString('default', { month: 'long' })}
-                      </div>
-                      <div className="text-3xl font-bold">
-                         {new Date(review.date).getFullYear()}
-                      </div>
-                    </>
-                  )}
+                  </div>
                 </div>
+              </Link>
+            </div>
+          )}
 
-                <div className="flex-grow">
-                  <h2 className="text-2xl font-bold mb-2 flex items-center gap-2">
-                    {review.title}
-                    <ArrowUpRight 
-                      className="opacity-0 group-hover:opacity-100 transition-opacity" 
-                      size={24} 
-                    />
-                  </h2>
-                  <p className="text-zinc-600">{review.description}</p>
-                </div>
-              </div>
-            </Link>
-          ))}
+          {/* Other Reviews */}
+          <div>
+            <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-6">
+              Previous Updates
+            </p>
+            <div className="space-y-4">
+              {otherReviews.map((review) => (
+                <Link 
+                  href={`/review/${review.id}`} 
+                  key={review.id}
+                  className="group block"
+                >
+                  <div className={`relative overflow-hidden rounded-xl backdrop-blur-lg transition-all duration-300 ${
+                    review.isDraft
+                      ? 'bg-gradient-to-br from-orange-50/60 to-amber-50/40 border border-orange-200/60 hover:from-orange-50/80 hover:to-amber-50/60 hover:border-orange-300/70 hover:shadow-lg hover:shadow-orange-100/40'
+                      : review.reviewType === 'year' 
+                        ? 'bg-gradient-to-br from-amber-50/60 to-yellow-50/40 border border-amber-200/60 hover:bg-gradient-to-br hover:from-amber-50/80 hover:to-yellow-50/60 hover:border-amber-300/70 hover:shadow-lg hover:shadow-amber-100/40' 
+                        : 'bg-white/40 border border-gray-200/50 hover:bg-white/70 hover:border-gray-300/60 hover:shadow-lg hover:shadow-gray-200/30'
+                  }`}>
+                    {review.isDraft && (
+                      <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-400 via-amber-400 to-orange-400" />
+                    )}
+                    {review.reviewType === 'year' && !review.isDraft && (
+                      <>
+                        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-400" />
+                        {/* Decorative confetti pieces */}
+                        <div className="absolute top-3 right-8 w-2 h-2 bg-amber-400 rounded-full opacity-60" />
+                        <div className="absolute top-5 right-16 w-1.5 h-1.5 bg-yellow-500 rotate-45 opacity-50" />
+                        <div className="absolute top-4 right-24 w-1 h-3 bg-amber-300 rotate-12 opacity-40" />
+                        <div className="absolute bottom-4 right-12 w-2 h-1 bg-yellow-400 -rotate-12 opacity-50" />
+                        <div className="absolute top-6 right-32 w-1.5 h-1.5 bg-amber-500 rounded-full opacity-40" />
+                        <div className="absolute bottom-3 right-20 w-1 h-2 bg-yellow-300 rotate-45 opacity-50" />
+                        <div className="absolute top-8 left-28 w-1.5 h-1.5 bg-amber-400 rotate-12 opacity-30" />
+                        <div className="absolute bottom-5 left-32 w-2 h-1 bg-yellow-500 -rotate-6 opacity-40" />
+                      </>
+                    )}
+                    <div className="p-6">
+                      <div className="flex items-start gap-6">
+                        {/* Date Column */}
+                        <div className="flex-shrink-0 w-20">
+                          {review.reviewType === 'year' ? (
+                            <div className="text-xl font-bold text-amber-700">
+                              {review.date.substring(0, 4)} 
+                            </div>
+                          ) : review.reviewType === 'quarter' ? (
+                            <>
+                              <div className="text-[10px] text-gray-400 uppercase tracking-wider mb-0.5">
+                                Q{Math.ceil(parseInt(review.date.substring(5, 7)) / 3)}
+                              </div>
+                              <div className="text-xl font-bold text-gray-900">
+                                {review.date.substring(0, 4)}
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <div className="text-[10px] text-gray-400 uppercase tracking-wider mb-0.5">
+                                {new Date(review.date + 'T12:00:00').toLocaleString('default', { month: 'short' })}
+                              </div>
+                              <div className="text-xl font-bold text-gray-900">
+                                {review.date.substring(0, 4)}
+                              </div>
+                            </>
+                          )}
+                        </div>
+
+                        {/* Content */}
+                        <div className="flex-grow min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <h3 className="text-lg font-semibold text-gray-900 group-hover:text-gray-700 transition-colors">
+                              {review.title}
+                            </h3>
+                            {review.isDraft && (
+                              <span className="flex items-center gap-1 px-2 py-0.5 bg-amber-500 text-black rounded-full text-xs font-medium">
+                                <Edit3 size={10} />
+                                Draft
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-gray-500 text-sm leading-relaxed line-clamp-2">
+                            {review.description}
+                          </p>
+                        </div>
+
+                        {/* Arrow */}
+                        <div className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <ArrowRight size={18} className="text-gray-400" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
-
-      {/* Preview of Next Month */}
-      <div className="max-w-6xl mx-auto px-4 mt-16 mb-12">
-        <div className="bg-zinc-50 rounded-xl p-8 text-center">
-          <div className="text-zinc-400 uppercase tracking-wider mb-2">Coming Soon</div>
-          <div className="text-2xl font-bold">January 2025</div>
-        </div>
-      </div>
-
-      <div className="max-w-6xl mx-auto px-4 mt-16 mb-12">
-        <div className="bg-zinc-50 rounded-xl p-8 text-center">
-          <div className="text-zinc-400 uppercase tracking-wider mb-2">Coming Soon</div>
-          <div className="text-2xl font-bold">2024 Year In Review</div>
-        </div>
-      </div>
-    </div>
+    </>
   );
 };
 
@@ -144,8 +294,12 @@ export const getStaticProps: GetStaticProps = async () => {
           let reviewType: 'month' | 'year' | 'quarter';
 
           if (id === 'yearInReview') {
-            // Handle the year in review file specifically
+            // Handle the 2024 year in review file specifically
             date = '2024-12-31'; // Assign end-of-year date for sorting
+            reviewType = 'year';
+          } else if (id === 'year2025') {
+            // Handle the 2025 year in review file specifically
+            date = '2025-12-31'; // Assign end-of-year date for sorting (will appear at top)
             reviewType = 'year';
           } else if (id.startsWith('q')) {
             // Handle quarterly reviews (e.g., q1-25)
@@ -188,14 +342,10 @@ export const getStaticProps: GetStaticProps = async () => {
             title,
             description,
             date, 
-            reviewType, // Include reviewType
+            reviewType,
           };
         })
     );
-
-    // Filter out any reviews that failed date parsing (if we assigned a default)
-    // const validReviews = reviews.filter(review => review.date !== '1970-01-01');
-    // For now, we keep them to see them, but you might want to filter later.
 
     // Sort reviews by date (YYYY-MM-DD strings sort correctly)
     reviews.sort((a, b) => b.date.localeCompare(a.date));
