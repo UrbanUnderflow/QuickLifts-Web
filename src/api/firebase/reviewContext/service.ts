@@ -458,7 +458,7 @@ class ReviewContextService {
         description,
         featuredHighlights,
         metrics,
-        metricsNote,
+        metricsNote: metricsNote ?? undefined,
         businessHighlights,
         productHighlights,
         lookingAhead,
