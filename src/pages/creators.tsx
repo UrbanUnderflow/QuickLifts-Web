@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
@@ -11,9 +11,12 @@ import {
   FaDumbbell,
   FaVideo,
   FaTrophy,
-  FaCoins
+  FaCoins,
+  FaApple,
+  FaDesktop
 } from 'react-icons/fa6';
 import Footer from '../components/Footer/Footer';
+import { platformDetection, appLinks, openIOSAppOrStore } from '../utils/platformDetection';
 
 interface FAQItemProps {
   question: string;
@@ -42,9 +45,24 @@ const FAQItem: React.FC<FAQItemProps> = ({ question, answer, isOpen, onToggle })
 const CreatorsPage: React.FC = () => {
   const router = useRouter();
   const [openFAQ, setOpenFAQ] = useState<number | null>(null);
+  const [platform, setPlatform] = useState<'ios' | 'android' | 'desktop'>('desktop');
+
+  // Detect platform on mount
+  useEffect(() => {
+    setPlatform(platformDetection.getPlatform());
+  }, []);
 
   const handleLaunchChallenge = () => {
-    router.push('/');
+    if (platform === 'ios') {
+      // On iOS: Try to open the app, fall back to App Store
+      openIOSAppOrStore(
+        appLinks.creatorOnboardingDeepLink(),
+        appLinks.appStoreUrl
+      );
+    } else {
+      // On Android/Desktop: Route to web creator onboarding
+      router.push('/creator-onboarding');
+    }
   };
 
   const scrollToHowItWorks = () => {

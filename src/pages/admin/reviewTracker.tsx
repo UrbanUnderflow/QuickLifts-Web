@@ -519,7 +519,7 @@ const ReviewTracker: React.FC = () => {
                 </div>
                 <div className="prose prose-invert max-w-none">
                   <pre className="whitespace-pre-wrap text-gray-300 text-sm font-sans bg-[#0d1117] p-4 rounded-lg">
-                    {selectedDraft.content}
+                    {selectedDraft.description}
                   </pre>
                 </div>
                 <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-700">
