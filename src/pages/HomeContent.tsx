@@ -23,6 +23,7 @@ import { db } from '../api/firebase/config';
 import { dateToUnixTimestamp } from '../utils/formatDate';
 
 import { setCurrentWorkout, setCurrentExerciseLogs, setWorkoutSummary } from '../redux/workoutSlice';
+import SmartAppBanner from '../components/SmartAppBanner';
 
 interface HomeContentProps {
   onAbout?: () => void;
@@ -483,10 +484,13 @@ const performExerciseSubmission = async (updatedLogs: ExerciseLog[]) => {
         renderWorkoutView()
       ) : (
         <>
+          {/* Smart App Banner - Top variant for iOS users */}
+          <SmartAppBanner variant="top" />
+          
           {/* Side/Bottom Navigation */}
           <SideNav selectedTab={selectedTab} onTabChange={setSelectedTab} onAbout={onAbout} />
           
-          {/* Main Content */}
+          {/* Main Content - Add top padding when banner is visible on iOS */}
           <div className="md:ml-20 lg:ml-64 pb-16 md:pb-0">
             {renderContent()}
           </div>

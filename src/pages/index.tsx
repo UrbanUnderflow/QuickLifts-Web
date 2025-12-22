@@ -6,7 +6,7 @@ import PageHead from '../components/PageHead';
 import { adminMethods } from '../api/firebase/admin/methods';
 import { PageMetaData as FirestorePageMetaData } from '../api/firebase/admin/types';
 import { FaTrophy, FaCoins, FaGamepad, FaChartLine, FaXmark, FaFire, FaStar, FaRocket, FaBolt, FaArrowRight, FaArrowsRotate } from 'react-icons/fa6';
-import { FaApple, FaUser, FaCheck} from 'react-icons/fa';
+import { FaUser, FaCheck} from 'react-icons/fa';
 import HomeContent from './HomeContent';
 import { useUser } from '../hooks/useUser';
 import SignInModal from '../components/SignInModal';
@@ -128,30 +128,44 @@ const MarketingContent: React.FC<{
               <h1 className="text-white text-5xl sm:text-7xl lg:text-8xl font-bold mb-6 animate-fade-in-up animation-delay-300">
                 Pulse
               </h1>
-              
-              <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-6 animate-fade-in-up animation-delay-600">
-                <span className="bg-gradient-to-r from-[#E0FE10] via-purple-400 to-blue-400 bg-clip-text text-transparent">
-                  Turn Your Workouts Into<br />
-                  Monthly Recurring Revenue
-                </span>
-              </h2>
 
-              {/* CTA Buttons */}
-              <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start mb-10 animate-fade-in-up animation-delay-1200">
-                <button
-                  onClick={onUseWebApp}
-                  className="inline-flex items-center justify-center gap-3 bg-gradient-to-r from-[#E0FE10] to-lime-400 text-black px-8 py-4 rounded-2xl font-bold text-lg hover:shadow-lg hover:shadow-[#E0FE10]/20 transition-all duration-300 group"
-                >
-                  Use Web App
-                  <FaArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
-                </button>
-                <a 
-                  href="https://apps.apple.com/ca/app/pulse-community-workouts/id6451497729"
-                  className="inline-flex items-center justify-center gap-3 bg-zinc-900/80 text-white border border-zinc-700 hover:border-zinc-600 px-8 py-4 rounded-2xl font-bold text-lg hover:bg-zinc-800/80 transition-all duration-300"
-                >
-                  Download iOS App
-                  <FaApple className="h-5 w-5" />
-                </a>
+              {/* Single Intent-Based CTA: Role Selector */}
+              <div className="mb-10 animate-fade-in-up animation-delay-450">
+                <p className="text-zinc-400 text-lg mb-5">I'm here to:</p>
+                <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
+                  <button
+                    onClick={onUseWebApp}
+                    className="group relative overflow-hidden px-8 py-5 rounded-2xl border-2 border-[#E0FE10]/40 hover:border-[#E0FE10] bg-gradient-to-br from-[#E0FE10]/10 to-lime-400/5 backdrop-blur-sm transition-all duration-300 hover:shadow-lg hover:shadow-[#E0FE10]/20"
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-r from-[#E0FE10]/0 to-[#E0FE10]/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                    <div className="relative flex items-center gap-4">
+                      <div className="w-12 h-12 bg-gradient-to-br from-[#E0FE10] to-lime-400 rounded-xl flex items-center justify-center shadow-lg shadow-[#E0FE10]/20">
+                        <FaUser className="h-5 w-5 text-black" />
+                      </div>
+                      <div className="text-left">
+                        <div className="text-white font-bold text-lg">Work out with others</div>
+                        <div className="text-zinc-400 text-sm">Join challenges & train together</div>
+                      </div>
+                      <FaArrowRight className="h-5 w-5 text-[#E0FE10] ml-2 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all duration-300" />
+                    </div>
+                  </button>
+                  <a
+                    href="/creators"
+                    className="group relative overflow-hidden px-8 py-5 rounded-2xl border-2 border-purple-400/40 hover:border-purple-400 bg-gradient-to-br from-purple-500/10 to-blue-500/5 backdrop-blur-sm transition-all duration-300 hover:shadow-lg hover:shadow-purple-400/20"
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-r from-purple-500/0 to-purple-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                    <div className="relative flex items-center gap-4">
+                      <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-blue-500 rounded-xl flex items-center justify-center shadow-lg shadow-purple-500/20">
+                        <FaTrophy className="h-5 w-5 text-white" />
+                      </div>
+                      <div className="text-left">
+                        <div className="text-white font-bold text-lg">Run challenges as a creator</div>
+                        <div className="text-zinc-400 text-sm">Build your community & earn</div>
+                      </div>
+                      <FaArrowRight className="h-5 w-5 text-purple-400 ml-2 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all duration-300" />
+                    </div>
+                  </a>
+                </div>
               </div>
               
               {/* Trust Bar - App Store Rating */}

@@ -78,6 +78,9 @@ const PageHead: React.FC<PageHeadProps> = ({
       <link rel="canonical" href={ogUrl} />
       <meta name="viewport" content="width=device-width, initial-scale=1" />
       <meta name="theme-color" content="#E0FE10" />
+      
+      {/* Apple Smart App Banner - prompts iOS users to open/download the app */}
+      <meta name="apple-itunes-app" content="app-id=6451497729, app-argument=pulse://home" />
     </Head>
   );
 };
