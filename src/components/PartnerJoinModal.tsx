@@ -3,12 +3,12 @@ import { useRouter } from 'next/router';
 import { loadStripe } from '@stripe/stripe-js';
 import { useUser } from '../hooks/useUser';
 import { getStripePublishableKey } from '../utils/stripeKey';
-import { STRIPE_PRICES, getPriceId } from '../utils/stripeConstants';
+// import { STRIPE_PRICES, getPriceId } from '../utils/stripeConstants';
 import { FaUser, FaCheckCircle } from 'react-icons/fa';
 import { coachService } from '../api/firebase/coach';
 
-// Initialize Stripe
-const stripePromise = loadStripe(getStripePublishableKey());
+// Initialize Stripe (for future use)
+const _stripePromise = loadStripe(getStripePublishableKey());
 
 interface Props {
   isOpen: boolean;
@@ -22,7 +22,7 @@ const PartnerJoinModal: React.FC<Props> = ({ isOpen, closeModal }) => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [step, setStep] = useState<'auth' | 'details' | 'existing'>('auth');
-  const [hasExistingPartnership, setHasExistingPartnership] = useState<boolean>(false);
+  const [_hasExistingPartnership, setHasExistingPartnership] = useState<boolean>(false);
   const [codeValidation, setCodeValidation] = useState<{
     isAvailable: boolean;
     suggestions?: string[];

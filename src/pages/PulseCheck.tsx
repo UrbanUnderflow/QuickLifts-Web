@@ -1,6 +1,6 @@
 import type { NextPage } from 'next';
 import React, { useState, useEffect, useRef } from 'react';
-import { FaApple, FaCheckCircle, FaChartLine, FaBrain, FaHeart, FaRocket, FaShieldAlt, FaBed, FaMoon, FaSun, FaLightbulb, FaUtensils, FaCamera, FaFire, FaWeight, FaExclamationTriangle, FaWrench, FaEye, FaBullseye, FaLungs, FaPlay, FaDumbbell, FaTrophy, FaCalendarAlt, FaArrowUp, FaUserTie, FaClock, FaThumbsUp, FaThumbsDown, FaComments, FaClipboardList, FaRunning, FaHandsHelping } from 'react-icons/fa';
+import { FaApple, FaCheckCircle, FaChartLine, FaBrain, FaHeart, FaRocket, FaShieldAlt, FaBed, FaMoon, FaSun, FaLightbulb, FaUtensils, FaCamera, FaFire, FaWeight, FaExclamationTriangle, FaWrench, FaEye, FaBullseye, FaLungs, FaPlay, FaDumbbell, FaTrophy, FaCalendarAlt, FaArrowUp, FaUserTie, FaClock, FaThumbsUp, FaThumbsDown, FaComments, FaClipboardList, FaRunning } from 'react-icons/fa';
 import Footer from '../components/Footer/Footer';
 import PageHead from '../components/PageHead';
 import { PulseCheckWaitlistForm } from '../components/PulseCheckWaitlistForm';
@@ -1464,7 +1464,7 @@ const PulseCheckPage: NextPage = () => {
     );
 
     // A helper function to create a consistent feature item
-    const Feature: React.FC<{ icon: React.ElementType; title: string; children: React.ReactNode }> = ({ icon: Icon, title, children }) => (
+    const _Feature: React.FC<{ icon: React.ElementType; title: string; children: React.ReactNode }> = ({ icon: Icon, title, children }) => (
         <div className="relative group">
             <div className="absolute -inset-1 bg-gradient-to-r from-[#E0FE10] to-lime-400 rounded-xl blur opacity-25 group-hover:opacity-75 transition duration-1000 group-hover:duration-200"></div>
             <div className="relative px-8 py-6 bg-zinc-900 ring-1 ring-white/10 rounded-xl leading-none flex items-top justify-start space-x-6">
@@ -1492,7 +1492,7 @@ const PulseCheckPage: NextPage = () => {
     }
 
     // A helper function for pricing cards
-    const PricingCard: React.FC<PricingCardProps> = ({ plan, price, description, features, buttonText, buttonAction, popular = false }) => (
+    const _PricingCard: React.FC<PricingCardProps> = ({ plan, price, description, features, buttonText, buttonAction, popular = false }) => (
         <div className={`relative flex flex-col justify-between rounded-3xl bg-zinc-900/80 backdrop-blur-sm p-8 ring-1 ${popular ? 'ring-2 ring-[#E0FE10] shadow-2xl shadow-[#E0FE10]/20' : 'ring-white/10'} xl:p-10 group hover:scale-105 transition-all duration-300`}>
             {popular && (
                 <>

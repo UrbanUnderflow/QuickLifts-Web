@@ -1,7 +1,7 @@
 import React from 'react';
 import { useRouter } from 'next/router';
-import { FaUsers, FaChartLine, FaBrain, FaRocket, FaCheckCircle, FaMobile, FaDesktop, FaEnvelope, FaStar } from 'react-icons/fa';
-import { MdDashboard, MdChat, MdAnalytics, MdGroup } from 'react-icons/md';
+import { FaUsers, FaCheckCircle, FaEnvelope, FaStar } from 'react-icons/fa';
+import { MdDashboard, MdChat, MdAnalytics } from 'react-icons/md';
 
 const CoachOnboardPage: React.FC = () => {
   const router = useRouter();

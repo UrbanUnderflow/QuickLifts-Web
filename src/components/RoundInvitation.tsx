@@ -270,8 +270,8 @@ const UserBadge: React.FC = () => {
 };
 
 const RoundInvitation: React.FC<ChallengeInvitationProps> = ({ challenge, ttclid }) => {
-  const router = useRouter();
-  const currentUser = useUser();
+  const _router = useRouter();
+  const _currentUser = useUser();
   const [hostId, setHostId] = useState<string>('');
 
   console.log("RoundInvitation Render:", {

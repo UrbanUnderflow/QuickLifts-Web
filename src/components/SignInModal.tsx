@@ -1,18 +1,16 @@
 import React, { useState, useEffect } from "react";
 import {
   getRedirectResult,
-  signInWithRedirect,
   signInWithPopup,
   OAuthProvider,
   UserCredential,
-  AuthError,
   createUserWithEmailAndPassword
 } from "firebase/auth";
 import { Camera, X, Eye, EyeOff } from "lucide-react";
 import { FitnessGoal, QuizData, SignUpStep } from "../types/AuthTypes";
 import { Gender, WorkoutGoal, } from "../api/firebase/user";
 import { SubscriptionType } from "../api/firebase/user";
-import authService, { SignUpData } from "../api/firebase/auth";
+import authService from "../api/firebase/auth";
 import { userService, User, UserLevel, BodyWeight } from "../api/firebase/user";
 import { auth } from "../api/firebase/config";
 import { useRouter } from 'next/router';
@@ -26,7 +24,7 @@ import { useUser } from '../hooks/useUser';
 import { clearRoundIdRedirect, clearLoginRedirectPath } from '../redux/tempRedirectSlice'; // Import clear actions
 import { showToast } from '../redux/toastSlice'; // Import showToast
 import { workoutService } from '../api/firebase/workout/service'; // Import workout service
-import { Challenge, SweatlistCollection, UserChallenge } from '../api/firebase/workout/types'; // Import workout types
+import { Challenge } from '../api/firebase/workout/types'; // Import workout types
 
 interface SignInModalProps {
   isVisible: boolean;
@@ -105,7 +103,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
   onSignUpError,
   onQuizComplete,
   onQuizSkipped,
-  onRegistrationComplete,
+  onRegistrationComplete: _onRegistrationComplete,
 }) => {
   const [email, setEmail] = useState("");
   // Removed render log to prevent infinite loop
@@ -573,7 +571,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
         const { user } = credential;
         addLog(`User info: providerId=${credential.providerId}, email=${user.email}, isNewUser=${user.metadata.creationTime === user.metadata.lastSignInTime}`);
    
-        const isAppleSignIn = credential.providerId === "apple.com" || user.providerData.some((provider) => provider.providerId === "apple.com");
+        const _isAppleSignIn = credential.providerId === "apple.com" || user.providerData.some((provider) => provider.providerId === "apple.com");
         let firestoreUser = await userService.fetchUserFromFirestore(user.uid);
    
         if (!firestoreUser && user.metadata.creationTime === user.metadata.lastSignInTime) {
@@ -1676,7 +1674,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
 
   const isLastQuizStep = () => quizStep === questions.length - 1;
 
-  const validateEmail = () => {
+  const _validateEmail = () => {
     if (!email) {
       setErrors({ email: "Email is required" });
       setShowError(true);
@@ -1689,7 +1687,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
     return true;
   };
 
-  const validatePassword = () => {
+  const _validatePassword = () => {
     if (!hasUppercase || !hasNumber || !hasMinLength || !passwordsMatch) {
       setShowError(true);
       return false;
@@ -1697,7 +1695,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
     return true;
   };
 
-  const validateUsername = () => {
+  const _validateUsername = () => {
     if (!username) {
       setErrors({ username: "Username is required" });
       setShowError(true);

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FaLock, FaEye, FaEyeSlash, FaHeart, FaComments, FaChartLine } from 'react-icons/fa';
+import { FaLock, FaEye, FaHeart, FaComments, FaChartLine } from 'react-icons/fa';
 
 interface PrivacyConsentModalProps {
   isOpen: boolean;

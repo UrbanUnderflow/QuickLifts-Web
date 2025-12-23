@@ -303,7 +303,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
                     console.log('[AuthWrapper] Active subscription via subscription record.');
                     setShowSignInModal(false);
                   }
-                } catch (e) {
+                } catch (_e) {
                   console.warn('[AuthWrapper] Subscription status check failed.');
                   if (DISABLE_SUBSCRIPTION_REDIRECT) {
                     console.log('[AuthWrapper] Redirects disabled; allowing access.');

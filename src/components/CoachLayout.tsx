@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import Header, { Section } from './Header';
-import Footer from './Footer/Footer';
 import CoachTopNav from './CoachTopNav';
 import CoachProtectedRoute from './CoachProtectedRoute';
 

@@ -11,9 +11,7 @@ import {
   FaDumbbell,
   FaVideo,
   FaTrophy,
-  FaCoins,
-  FaApple,
-  FaDesktop
+  FaCoins
 } from 'react-icons/fa6';
 import Footer from '../components/Footer/Footer';
 import { platformDetection, appLinks, openIOSAppOrStore } from '../utils/platformDetection';

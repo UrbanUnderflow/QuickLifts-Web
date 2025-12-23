@@ -25,6 +25,9 @@ const config = {
         vars: "all",
         args: "after-used",
         ignoreRestSiblings: true,
+        argsIgnorePattern: "^_",
+        varsIgnorePattern: "^_",
+        caughtErrorsIgnorePattern: "^_",
       },
     ],
     "@typescript-eslint/no-explicit-any": [

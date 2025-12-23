@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import Head from 'next/head';
-import { ChevronUp, ChevronDown, Check, Users, Target, TrendingUp, Award, Building2, Zap, Globe, Mail, Calendar, ArrowUpRight } from 'lucide-react';
+import { ChevronUp, ChevronDown, Check, Users, Target, TrendingUp, Award, Building2, Zap, Globe, Mail, Calendar } from 'lucide-react';
 import Header from '../components/Header';
 import PageHead from '../components/PageHead';
 import { GetServerSideProps } from 'next';
@@ -18,7 +17,7 @@ interface CorporatePackagesProps {
 
 const CorporatePackages = ({ metaData }: CorporatePackagesProps) => {
   const [activeSection, setActiveSection] = useState(0);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [_isMobileMenuOpen, _setIsMobileMenuOpen] = useState(false);
   const [isNavigating, setIsNavigating] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [activeTab, setActiveTab] = useState(0);
@@ -913,7 +912,7 @@ const CorporatePackages = ({ metaData }: CorporatePackagesProps) => {
   );
 };
 
-export const getServerSideProps: GetServerSideProps<CorporatePackagesProps> = async (context) => {
+export const getServerSideProps: GetServerSideProps<CorporatePackagesProps> = async (_context) => {
   let rawMetaData: FirestorePageMetaData | null = null;
   try {
     rawMetaData = await adminMethods.getPageMetaData('corporate-packages');

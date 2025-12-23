@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Check, Dumbbell, Layers, Timer, Zap, Users, MessageCircle } from 'lucide-react';
+import { Check, Dumbbell, Layers, Timer } from 'lucide-react';
 import Head from 'next/head';
 import FAQ from '../components/FAQ';
 import Meta from '../components/Meta';

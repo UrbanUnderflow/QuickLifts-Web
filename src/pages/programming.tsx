@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-// @ts-ignore - types for react-dom may not be installed
-import { createPortal } from 'react-dom';
+// createPortal removed - not used
 import { useRouter } from 'next/router';
 import type { GetServerSideProps, NextPage } from 'next'; // Added GetServerSideProps, NextPage
 import { 
@@ -18,7 +17,6 @@ import {
     Layout,
     Lightbulb,
     Video,
-    XCircle,
     Check,
     Send,
     Loader2,
@@ -378,7 +376,7 @@ class UserDataCard {
 // Landing Page Components
 const LandingPage = ({ hasAccess, setShowEarlyAccessForm, onGetStarted }: { hasAccess: boolean, setShowEarlyAccessForm: (show: boolean) => void, onGetStarted?: () => void }) => {
   const currentUser = useUser();
-  const [isLoadingAccess, setIsLoadingAccess] = useState(true);
+  const [_isLoadingAccess, setIsLoadingAccess] = useState(true);
   const [userHasAccess, setUserHasAccess] = useState(false);
 
   useEffect(() => {
@@ -1293,7 +1291,7 @@ const MobileChallengeSetupView: React.FC<MobileChallengeSetupProps> = ({
     const pinCodeRef = useRef<HTMLInputElement>(null);
   
     // Date formatter
-    const dateFormatter = new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' });
+    const _dateFormatter = new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' });
   
     // Effect to scroll when round type changes to locked
     useEffect(() => {
@@ -1365,7 +1363,7 @@ const MobileChallengeSetupView: React.FC<MobileChallengeSetupProps> = ({
       setSelectedStacks(prev => [...prev, updatedStack]);
     };
 
-    const handleRemoveStack = (stackId: string) => {
+    const _handleRemoveStack = (stackId: string) => {
       onRemoveStack(stackId);
     };
 
@@ -1804,7 +1802,7 @@ const RoundSuccessModal: React.FC<RoundSuccessModalProps> = ({
   const generateFullSchedule = () => {
     if (!roundData.scheduleInfo) return [];
     
-    const { startDate, endDate, restDays, totalDays } = roundData.scheduleInfo;
+    const { startDate, endDate: _endDate, restDays, totalDays } = roundData.scheduleInfo;
     const schedule = [];
     
     // Create a map of rest days for quick lookup
@@ -2175,7 +2173,7 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
     }));
     
     // Enhanced local function to update conversation history with better Safari support
-    const updateConversationHistory = (
+    const _updateConversationHistory = (
       newHistory: Array<{role: 'user' | 'assistant', content: string}> | 
                  ((prev: Array<{role: 'user' | 'assistant', content: string}>) => Array<{role: 'user' | 'assistant', content: string}>)
     ) => {
@@ -2231,7 +2229,7 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
     const [questionCount, setQuestionCount] = useState(0);
     const [isAwaitingConfirmation, setIsAwaitingConfirmation] = useState(false);
     const [finalPrompt, setFinalPrompt] = useState('');
-    const [suggestedDescription, setSuggestedDescription] = useState('');
+    const [_suggestedDescription, setSuggestedDescription] = useState('');
 
     // Stack detail modal state
     const [isStackModalOpen, setIsStackModalOpen] = useState(false);
@@ -2275,7 +2273,7 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
         if (collections.length > 0) {
           
           // Detailed meal tracking inspection for each collection
-          collections.forEach((collection, index) => {
+          collections.forEach((collection, _index) => {
             const challengeAny = collection.challenge as any;
             if (challengeAny?.mealTracking) {
             } else {
@@ -3632,14 +3630,14 @@ const handleSendChatMessage = async (message: string) => {
       } else if (chatMessages.length > 0) {
         // Build prompt from conversation
         comprehensivePrompt = 'CONVERSATION SUMMARY:\n';
-        chatMessages.forEach((msg, index) => {
+        chatMessages.forEach((msg) => {
           comprehensivePrompt += `${msg.role === 'user' ? 'Coach' : 'AI'}: ${msg.content}\n`;
         });
         
         // Add tagged users context
         if (taggedUsers.length > 0) {
           comprehensivePrompt += '\nCLIENT PROFILES:\n';
-          taggedUsers.forEach((user, index) => {
+          taggedUsers.forEach((user) => {
             const userDataCard = convertUserToDataCard(user);
             comprehensivePrompt += `${userDataCard.name}: ${userDataCard.toAIContext()}\n`;
           });
@@ -3651,7 +3649,7 @@ const handleSendChatMessage = async (message: string) => {
         // Add tagged users context even for direct generation
         if (taggedUsers.length > 0) {
           comprehensivePrompt += '\n\nCLIENT PROFILES:\n';
-          taggedUsers.forEach((user, index) => {
+          taggedUsers.forEach((user) => {
             const userDataCard = convertUserToDataCard(user);
             comprehensivePrompt += `${userDataCard.name}: ${userDataCard.toAIContext()}\n`;
           });
@@ -3738,7 +3736,7 @@ const handleSendChatMessage = async (message: string) => {
   
       const createdStacks = [];
       const workoutStacks = []; // Separate workout stacks from rest days
-      const restDayTemplate = {
+      const _restDayTemplate = {
         title: "Rest",
         description: "Recovery day",
         exercises: []
@@ -4223,7 +4221,7 @@ const handleSendChatMessage = async (message: string) => {
   // Initial ChallengeData for early function access
   const initialStartDate = new Date();
   const initialEndDate = new Date(initialStartDate.getTime() + 7 * 86400 * 1000);
-  const initialChallengeData: ChallengeData = {
+  const _initialChallengeData: ChallengeData = {
     startDate: initialStartDate,
     endDate: initialEndDate,
     challengeName: '',
@@ -4951,7 +4949,7 @@ const handleSendChatMessage = async (message: string) => {
   }, []); // Only run on mount
 
   // Track if user has manually scrolled up
-  const [userHasScrolledUp, setUserHasScrolledUp] = useState(false);
+  const [_userHasScrolledUp, setUserHasScrolledUp] = useState(false);
   const previousMessageCount = useRef(chatMessages.length);
   
 
@@ -5495,7 +5493,7 @@ const handleSendChatMessage = async (message: string) => {
                                 </p>
                               </div>
                               <button
-                                onClick={(e) => {
+                                onClick={(_e) => {
                                   setSelectedStacks(prev => prev.filter(s => (s.roundWorkoutId || s.id) !== (stack.roundWorkoutId || stack.id)));
                                 }}
                                 className="ml-2 text-red-400/60 hover:text-red-400 transition-colors p-1"
@@ -7240,8 +7238,8 @@ const PulseProgrammingPage: NextPage<PulseProgrammingPageProps> = ({ metaData })
   const currentUser = useUser();
   const [showEarlyAccessForm, setShowEarlyAccessForm] = useState(false);
   const [hasAccess, setHasAccess] = useState(false);
-  const [isLoadingAccess, setIsLoadingAccess] = useState(true);
-  const [showTutorial, setShowTutorial] = useState(false);
+  const [_isLoadingAccess, setIsLoadingAccess] = useState(true);
+  const [_showTutorial, _setShowTutorial] = useState(false);
   const [showApp, setShowApp] = useState(false); // New state to track when user wants to enter the app
   const [isTransitioning, setIsTransitioning] = useState(false); // New state for transition animation
 
@@ -7259,7 +7257,7 @@ const PulseProgrammingPage: NextPage<PulseProgrammingPageProps> = ({ metaData })
   // ViewModel definition - this will be constructed to match the ViewModel interface
   const constructedViewModel: ViewModel = {
     appCoordinator: {
-      showFloatingTextfield: (options: {
+      showFloatingTextfield: (_options: {
         title: string;
         theme: string;
         keyboardType: string;
@@ -7278,10 +7276,10 @@ const PulseProgrammingPage: NextPage<PulseProgrammingPageProps> = ({ metaData })
         // Web implementation - no-op for mobile-specific functionality
       },
     },
-    validateChallengeInput: (startDate: Date, endDate: Date, name: string, desc: string, type: SweatlistType, pin: string) => { 
+    validateChallengeInput: (_startDate: Date, _endDate: Date, _name: string, _desc: string, _type: SweatlistType, _pin: string) => { 
       return true; 
     },
-    setChallenge: (startDate: Date, endDate: Date, name: string, desc: string, type: SweatlistType, pin: string, restDayPreferences?: ChallengeData['restDayPreferences']) => { 
+    setChallenge: (_startDate: Date, _endDate: Date, _name: string, _desc: string, _type: SweatlistType, _pin: string, _restDayPreferences?: ChallengeData['restDayPreferences']) => { 
     },
   };
 
@@ -7975,7 +7973,7 @@ const PulseProgrammingPage: NextPage<PulseProgrammingPageProps> = ({ metaData })
   );
 };
 
-export const getServerSideProps: GetServerSideProps<PulseProgrammingPageProps> = async (context) => {
+export const getServerSideProps: GetServerSideProps<PulseProgrammingPageProps> = async (_context) => {
   let rawMetaData: FirestorePageMetaData | null = null;
   try {
     rawMetaData = await adminMethods.getPageMetaData('programming');

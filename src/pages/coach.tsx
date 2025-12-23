@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { FaUsers, FaChartLine, FaBrain, FaRocket, FaCheckCircle, FaMobile, FaDesktop, FaQuoteLeft, FaArrowUp, FaHeart, FaFire, FaBolt, FaStar } from 'react-icons/fa';
-import { MdDashboard, MdChat, MdAnalytics, MdGroup, MdTrendingUp, MdSpeed, MdInsights } from 'react-icons/md';
+import { FaUsers, FaChartLine, FaBrain, FaRocket, FaMobile, FaDesktop, FaArrowUp, FaHeart, FaFire, FaBolt, FaStar } from 'react-icons/fa';
+import { MdDashboard, MdAnalytics, MdTrendingUp, MdSpeed, MdInsights } from 'react-icons/md';
 
 const Coach: React.FC = () => {
   const router = useRouter();

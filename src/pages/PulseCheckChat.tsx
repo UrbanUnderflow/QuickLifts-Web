@@ -169,7 +169,7 @@ const PulseCheckChat: React.FC = () => {
         };
         setMessages(prev => [...prev, aiMsg]);
       }
-    } catch (e) {
+    } catch (_e) {
       const aiMsg: ChatMessage = {
         id: Math.random().toString(36).slice(2),
         content: 'Network error. Please try again.',

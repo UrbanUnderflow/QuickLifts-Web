@@ -210,7 +210,7 @@ const StacksPage: NextPage<StacksPageProps> = ({ metaData }) => {
   );
 };
 
-export const getServerSideProps: GetServerSideProps<StacksPageProps> = async (context) => {
+export const getServerSideProps: GetServerSideProps<StacksPageProps> = async (_context) => {
   let rawMetaData: FirestorePageMetaData | null = null;
   try {
     rawMetaData = await adminMethods.getPageMetaData('stacks');

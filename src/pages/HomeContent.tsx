@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import SideNav from '../components/Navigation/SideNav';
 import Discover from '../../src/components/App/RootScreens/Discover';
@@ -13,12 +13,12 @@ import { RootState } from '../redux/store';
 import { ExerciseLog } from '../api/firebase/exercise/types';
 import { Workout, WorkoutStatus, WorkoutSummary, RepsAndWeightLog } from '../api/firebase/workout/types';
 import { workoutService } from '../api/firebase/workout/service';
-import UserMenu from '../components/UserMenu'; 
+// import UserMenu from '../components/UserMenu'; 
 import { workoutSessionService } from '../api/firebase/workoutSession/service';
 import { useRouter } from 'next/router';
 import { User } from '../api/firebase/user/types';
 import { useCurrentWorkout, useCurrentExerciseLogs } from '../hooks/useWorkout';
-import { collection, doc, onSnapshot, query, orderBy, updateDoc } from 'firebase/firestore';
+import { collection, doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { db } from '../api/firebase/config';
 import { dateToUnixTimestamp } from '../utils/formatDate';
 
@@ -145,7 +145,7 @@ const HomeContent: React.FC<HomeContentProps> = ({ onAbout }) => {
   // }, [userId, dispatch]);
   
     // Function to start a workout
-    const startWorkout = (workout: Workout, logs: ExerciseLog[]) => {
+    const _startWorkout = (workout: Workout, logs: ExerciseLog[]) => {
       dispatch(setCurrentWorkout(workout.toDictionary()));
       dispatch(setCurrentExerciseLogs(logs.map(log => log.toDictionary())));
     };
@@ -265,7 +265,7 @@ const HomeContent: React.FC<HomeContentProps> = ({ onAbout }) => {
     // Dependencies for useCallback
     }, [userId, currentWorkoutSession, currentExerciseLogs, currentExerciseIndex, dispatch]); 
   
-    const performBodyWeightSubmission = (updatedLogs: ExerciseLog[]) => {
+    const _performBodyWeightSubmission = (updatedLogs: ExerciseLog[]) => {
       const updatedLogsWithBodyWeight = updatedLogs.map(log => new ExerciseLog({
         ...log,
         logs: log.logs.map(logItem => new RepsAndWeightLog({
@@ -279,13 +279,13 @@ const HomeContent: React.FC<HomeContentProps> = ({ onAbout }) => {
       return performExerciseSubmission(updatedLogsWithBodyWeight);
     };
   
-  const showZeroWeightConfirmationModal = (
+  const _showZeroWeightConfirmationModal = (
     onConfirm: () => void, 
     onCancel: () => void
   ) => {
     // Implement modal logic
     // This could use a modal library or custom modal component
-    const modalProps = {
+    const _modalProps = {
       isOpen: true,
       title: "Zero Weight Detected",
       message: "You haven't added any weight lifted to this exercise. Without this, your analytics won't include detailed tracking for this exercise, but you'll still see it marked as completed. Do you want to proceed?",

@@ -30,7 +30,7 @@ const VideoCard: React.FC<VideoCardProps> = ({
       method: 'HEAD',
       mode: 'no-cors' // Add this line to handle CORS
     })
-      .then(response => {
+      .then(_response => {
         // Since we're using no-cors, we won't get status
         // Instead, just assume it's valid if we get a response
         setIsValidGif(true);

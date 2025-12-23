@@ -13,7 +13,7 @@ declare global {
 const Custom404: React.FC = () => {
   const router = useRouter();
   const [debugInfo, setDebugInfo] = useState<any>({});
-  const [debugCode, setDebugCode] = useState<string>('');
+  const [_debugCode, setDebugCode] = useState<string>('');
 
   useEffect(() => {
     if (typeof window !== 'undefined') {

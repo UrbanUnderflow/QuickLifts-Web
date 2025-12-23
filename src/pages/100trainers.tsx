@@ -1,8 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Check, Dumbbell, Layers, Timer, Loader2, Zap, Send, ArrowRight, Users, MessageCircle, DollarSign, ExternalLink, Info, Gift, CalendarDays, Target, X } from 'lucide-react';
-import Head from 'next/head';
-import FAQ from '../components/FAQ';
-import Meta from '../components/Meta';
+import { Check, Loader2, Zap, Send, ArrowRight, Users, DollarSign, ExternalLink, Info, Gift, CalendarDays, Target, X } from 'lucide-react';
 import { userService } from '../api/firebase/user';
 import { useUser } from '../hooks/useUser';
 import { useRouter } from 'next/router';
@@ -22,7 +19,7 @@ interface HundredTrainersPageProps {
   metaData: SerializablePageMetaData | null;
 }
 
-const CREATOR_STEPS = [
+const _CREATOR_STEPS = [
   {
     title: "Account Creation",
     description: "Start your creator journey by setting up your profile. A complete profile helps build trust with your community and showcases your fitness expertise. Take time to craft a bio that highlights your unique perspective and training style.",
@@ -67,7 +64,7 @@ const CREATOR_STEPS = [
   }
 ];
 
-const FAQ_DATA = [
+const _FAQ_DATA = [
   {
     question: "How do I earn through Pulse?",
     answer: "Your earnings grow with your community impact. Get rewarded for Stack completions, Round participation, and community engagement. The more value you create, the more you earn."
@@ -94,7 +91,7 @@ type ViewState = 'landing' | 'form' | 'guide' | 'success';
 
 const CreatorChecklist = ({ metaData }: HundredTrainersPageProps) => {
   const currentUser = useUser();
-  const [completedSteps, setCompletedSteps] = useState<number[]>([]);
+  const [_completedSteps, _setCompletedSteps] = useState<number[]>([]);
   const [currentView, setCurrentView] = useState<ViewState>('landing');
   const formFilledRef = useRef(false);
   const [formData, setFormData] = useState({
@@ -671,7 +668,7 @@ const CreatorChecklist = ({ metaData }: HundredTrainersPageProps) => {
   );
 };
 
-export const getServerSideProps: GetServerSideProps<HundredTrainersPageProps> = async (context) => {
+export const getServerSideProps: GetServerSideProps<HundredTrainersPageProps> = async (_context) => {
   let rawMetaData: PageMetaData | null = null;
   try {
     // Fetch meta data for the '100trainers' page

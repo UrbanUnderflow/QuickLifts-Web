@@ -17,7 +17,7 @@ interface EmailMismatchHookResult {
 export const useEmailMismatchDetection = (
   userId: string | undefined,
   userEmail: string | undefined,
-  earningsData: any
+  _earningsData: any
 ): EmailMismatchHookResult => {
   const [hasEmailMismatch, setHasEmailMismatch] = useState(false);
   const [mismatchDetails, setMismatchDetails] = useState<EmailMismatchDetail[]>([]);

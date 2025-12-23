@@ -32,7 +32,7 @@ const initializeStorage = () => {
         size: 100 * 1024 * 1024 // Request 100MB storage capacity
       });
       console.log('[Storage] Configured localforage to use IndexedDB');
-    } catch (e) {
+    } catch (_e) {
       console.warn('[Storage] Failed to configure IndexedDB, falling back to other drivers');
       localforage.config({
         driver: [

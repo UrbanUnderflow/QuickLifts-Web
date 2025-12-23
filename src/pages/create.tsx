@@ -1,7 +1,6 @@
 import React from 'react';
 import Head from 'next/head';
 import Create from '../components/App/RootScreens/Create';
-import Footer from '../components/Footer/Footer';
 
 const CreatePage: React.FC = () => {
   return (

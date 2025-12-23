@@ -30,7 +30,7 @@ const CoachAthleteMessagingModal: React.FC<CoachAthleteMessagingModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const currentUser = useUser();
+  const _currentUser = useUser();
 
   useEffect(() => {
     if (isOpen && athleteId && coachId) {

@@ -12,15 +12,15 @@ import { trackEvent } from '../lib/analytics';
 import mixpanel from 'mixpanel-browser';
 
 // Helper stubs (replace with your actual implementations or imports)
-function getReferral(): string {
+function _getReferral(): string {
   // Example: return from query param or localStorage
   return '';
 }
-function getUTM(param: string): string {
+function _getUTM(_param: string): string {
   // Example: parse from URL
   return '';
 }
-function sha256(str: string): string {
+function _sha256(str: string): string {
   // You need to implement or import a SHA-256 hash function here
   return str;
 }
@@ -186,7 +186,7 @@ const MorningMobilityChallengePage: NextPage = () => {
                 try {
                   const user = (window.ttq as any).instance('D03A763C77UE0J0RV17G').getUser();
                   ttclid = user && user.ttclid ? user.ttclid : '';
-                } catch (e) {
+                } catch (_e) {
                   ttclid = '';
                 }
               }
@@ -653,7 +653,7 @@ const MorningMobilityChallengePage: NextPage = () => {
                   try {
                     const user = (window.ttq as any).instance('D03A763C77UE0J0RV17G').getUser();
                     ttclid = user && user.ttclid ? user.ttclid : '';
-                  } catch (e) {
+                  } catch (_e) {
                     ttclid = '';
                   }
                 }

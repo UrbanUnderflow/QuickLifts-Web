@@ -185,7 +185,7 @@ const CreatorOnboardingPage: React.FC = () => {
         <section className="px-6 py-12">
           <div className="max-w-4xl mx-auto">
             <div className="space-y-8">
-              {steps.map((step, index) => (
+              {steps.map((step) => (
                 <div 
                   key={step.number}
                   className={`bg-zinc-900/50 border rounded-2xl p-6 md:p-8 transition-all cursor-pointer ${

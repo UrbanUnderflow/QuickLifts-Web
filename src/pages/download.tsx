@@ -1,7 +1,7 @@
 import { useRouter } from 'next/router';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowRight, Download, Globe } from 'lucide-react';
+import { Download, Globe } from 'lucide-react';
 import ChallengeCTA from '../components/ChallengeCTA';
 
 const DownloadPage = () => {
@@ -47,7 +47,7 @@ const DownloadPage = () => {
     : 'https://fitwithpulse.ai';
 
   // Construct the web app URL using dynamic values from challenge
-  const webAppUrl = challengeId ? `${endpoint}/round/${challengeId}` : '';
+  const _webAppUrl = challengeId ? `${endpoint}/round/${challengeId}` : '';
 
   return (
     <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center p-6 text-white">

@@ -130,9 +130,9 @@ const Subscribe: React.FC = () => {
 
     try {
       // Open a placeholder tab synchronously to avoid mobile popup blockers
-      let pendingWindow: Window | null = null;
+      let _pendingWindow: Window | null = null;
       try {
-        pendingWindow = window.open('', '_blank');
+        _pendingWindow = window.open('', '_blank');
       } catch {}
       // 1. Call your Netlify Function to create a Checkout Session
       console.log('[Subscribe] Creating checkout session for:', { 
@@ -205,7 +205,7 @@ const Subscribe: React.FC = () => {
   };
 
   // Handle sign in success
-  const handleSignInSuccess = (user: any) => {
+  const handleSignInSuccess = (_user: any) => {
     console.log('[Subscribe] Sign in successful, closing modal');
     setIsSignInModalOpen(false);
   };

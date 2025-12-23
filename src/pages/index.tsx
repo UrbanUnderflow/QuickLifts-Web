@@ -5,7 +5,7 @@ import FAQ from '../components/FAQ';
 import PageHead from '../components/PageHead';
 import { adminMethods } from '../api/firebase/admin/methods';
 import { PageMetaData as FirestorePageMetaData } from '../api/firebase/admin/types';
-import { FaTrophy, FaCoins, FaGamepad, FaChartLine, FaXmark, FaFire, FaStar, FaRocket, FaBolt, FaArrowRight, FaArrowsRotate } from 'react-icons/fa6';
+import { FaTrophy, FaCoins, FaGamepad, FaChartLine, FaXmark, FaFire, FaStar, FaRocket, FaBolt, FaArrowRight } from 'react-icons/fa6';
 import { FaUser, FaCheck} from 'react-icons/fa';
 import HomeContent from './HomeContent';
 import { useUser } from '../hooks/useUser';

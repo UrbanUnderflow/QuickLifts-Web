@@ -19,7 +19,7 @@ const RoundsPage: NextPage<RoundsPageProps> = ({ metaData }) => {
   const [currentSection, setCurrentSection] = useState<Section>('home');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  const handleSectionChange = (section: Section) => {
+  const _handleSectionChange = (section: Section) => {
     setCurrentSection(section);
     setIsMobileMenuOpen(false);
     const params = new URLSearchParams(window.location.search);
@@ -27,11 +27,11 @@ const RoundsPage: NextPage<RoundsPageProps> = ({ metaData }) => {
     window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
   };
 
-  const toggleMobileMenu = () => {
+  const _toggleMobileMenu = () => {
     setIsMobileMenuOpen(!isMobileMenuOpen);
   };
 
-  const getMenuItemClassName = (section: Section) => {
+  const _getMenuItemClassName = (section: Section) => {
     return `text-base font-medium capitalize ${
       currentSection === section ? 'text-[#14B8A6] font-bold' : 'text-gray-700'
     }`;
@@ -153,7 +153,7 @@ const RoundsPage: NextPage<RoundsPageProps> = ({ metaData }) => {
   );
 };
 
-export const getServerSideProps: GetServerSideProps<RoundsPageProps> = async (context) => {
+export const getServerSideProps: GetServerSideProps<RoundsPageProps> = async (_context) => {
   let rawMetaData: FirestorePageMetaData | null = null;
   try {
     rawMetaData = await adminMethods.getPageMetaData('rounds');

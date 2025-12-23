@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FaUser, FaHeart, FaComments, FaCalendar, FaChartLine, FaSync } from 'react-icons/fa';
+import { FaUser, FaComments, FaCalendar, FaChartLine, FaSync } from 'react-icons/fa';
 import { coachService, DailySentimentRecord } from '../api/firebase/coach/service';
 import ConversationModal from './ConversationModal';
 import CoachAthleteMessagingModal from './CoachAthleteMessagingModal';
@@ -27,8 +27,8 @@ interface AthleteCardProps {
 
 const AthleteCard: React.FC<AthleteCardProps> = ({ 
   athlete, 
-  onViewDetails, 
-  onMessageAthlete 
+  onViewDetails: _onViewDetails, 
+  onMessageAthlete: _onMessageAthlete 
 }) => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [sentimentHistory, setSentimentHistory] = useState<DailySentimentRecord[]>([]);
@@ -76,7 +76,7 @@ const AthleteCard: React.FC<AthleteCardProps> = ({
       setIsRefreshing(false);
     }
   };
-  const getSentimentColor = (score?: number): string => {
+  const _getSentimentColor = (score?: number): string => {
     if (!score) return 'text-gray-400';
     if (score >= 0.5) return 'text-green-400';
     if (score >= 0) return 'text-yellow-400';

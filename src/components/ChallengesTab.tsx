@@ -20,7 +20,7 @@ export const ChallengesTab: React.FC<ChallengesTabProps> = ({
     // Default to Host view to match iOS pattern
     const [isAdminView, setIsAdminView] = useState(true);
     const currentUser = useUser();
-    const currentUserId = currentUser?.id || '';
+    const _currentUserId = currentUser?.id || '';
 
     const filteredChallenges = filterChallenges(activeChallenges, selectedTab);
 

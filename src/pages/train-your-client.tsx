@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Check, Users, Calendar, Target, BarChart3, MessageSquare, Dumbbell, Layers } from 'lucide-react';
+import { Check, Users, Target, BarChart3 } from 'lucide-react';
 import Head from 'next/head';
 import FAQ from '../components/FAQ';
 import Meta from '../components/Meta';

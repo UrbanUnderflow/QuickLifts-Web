@@ -9,9 +9,9 @@ type HomeProps = React.ComponentProps<typeof HomePage>;
 
 const About: NextPage<HomeProps> = (props) => {
   // Lightweight, client-side demo for the data story card
-  const [caloriesIn, setCaloriesIn] = useState<number>(2200);
-  const [caloriesOut, setCaloriesOut] = useState<number>(2600);
-  const status = useMemo(() => {
+  const [caloriesIn, _setCaloriesIn] = useState<number>(2200);
+  const [caloriesOut, _setCaloriesOut] = useState<number>(2600);
+  const _status = useMemo(() => {
     const diff = caloriesIn - caloriesOut;
     return {
       diff,

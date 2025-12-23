@@ -54,7 +54,7 @@ export const PulseCheckWaitlistForm: React.FC<WaitlistFormProps> = ({
         setSubmitStatus('error');
         setErrorMessage(data.error || 'Something went wrong. Please try again.');
       }
-    } catch (error) {
+    } catch (_error) {
       setSubmitStatus('error');
       setErrorMessage('Network error. Please check your connection and try again.');
     } finally {

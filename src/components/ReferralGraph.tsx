@@ -7,9 +7,6 @@ import dynamic from 'next/dynamic';
 
 // ❶  Load ForceGraph2D only on the client (avoids SSR blow-ups)
 const ForceGraph2D = dynamic(
-  // @ts-ignore because force-graph has no default export typings
-  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-  // @ts-ignore
   () => import('react-force-graph-2d').then(mod => mod.ForceGraph2D || mod.default),
   { ssr: false }
 );
@@ -64,7 +61,7 @@ const ReferralGraph: React.FC<ReferralGraphProps> = ({ data, className = '' }) =
           if (fgRef.current && typeof fgRef.current.zoomToFit === 'function') {
             fgRef.current.zoomToFit(400);
           }
-        } catch (error) {
+        } catch (_error) {
           console.log('zoomToFit not available, skipping auto-zoom');
         }
       }, 100);

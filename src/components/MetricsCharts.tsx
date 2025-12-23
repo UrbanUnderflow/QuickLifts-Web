@@ -2,7 +2,7 @@ import React from 'react';
 import { HeatMapGrid } from 'react-grid-heatmap';
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine,
-  AreaChart, Area, CartesianGrid, PieChart, Pie, Cell,
+  CartesianGrid, PieChart, Pie, Cell,
 } from 'recharts';
 import { retentionMatrix, kFactorSeries, unitEconomics } from '../utils/metrics';
 

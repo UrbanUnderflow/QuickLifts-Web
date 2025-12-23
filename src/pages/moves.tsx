@@ -177,7 +177,7 @@ const MovesPage: NextPage<MovesPageProps> = ({ metaData }) => {
   );
 };
 
-export const getServerSideProps: GetServerSideProps<MovesPageProps> = async (context) => {
+export const getServerSideProps: GetServerSideProps<MovesPageProps> = async (_context) => {
   let rawMetaData: FirestorePageMetaData | null = null;
   try {
     rawMetaData = await adminMethods.getPageMetaData('moves');

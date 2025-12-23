@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import Head from 'next/head';
-import { ChevronUp, ChevronDown, Check, Users, Star, Zap, Brain, Dumbbell, Utensils, Map, Award, Heart, Leaf, QrCode, Download, Gift } from 'lucide-react';
+import { ChevronUp, ChevronDown, Users, Brain, Dumbbell, Utensils, Map, Award, Heart, Leaf, QrCode, Download, Gift } from 'lucide-react';
 import Header from '../components/Header';
-import styles from '../styles/moveAndFuel.module.css';
 import PageHead from '../components/PageHead';
 import { GetServerSideProps } from 'next';
 import { adminMethods } from '../api/firebase/admin/methods';
@@ -19,7 +17,7 @@ interface MoveAndFuelATLProps {
 
 const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
   const [activeSection, setActiveSection] = useState(0);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [_isMobileMenuOpen, _setIsMobileMenuOpen] = useState(false);
   const [isNavigating, setIsNavigating] = useState(false);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -2471,7 +2469,7 @@ const MoveAndFuelATL = ({ metaData }: MoveAndFuelATLProps) => {
 
 export default MoveAndFuelATL; 
 
-export const getServerSideProps: GetServerSideProps<MoveAndFuelATLProps> = async (context) => {
+export const getServerSideProps: GetServerSideProps<MoveAndFuelATLProps> = async (_context) => {
   let rawMetaData: FirestorePageMetaData | null = null;
   try {
     rawMetaData = await adminMethods.getPageMetaData('MoveAndFuelATL');

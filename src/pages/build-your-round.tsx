@@ -147,7 +147,7 @@ const BuildYourRound: React.FC = () => {
     });
   };
 
-  const removeDay = (index: number) => {
+  const _removeDay = (index: number) => {
     setFormData(prev => {
       if (prev.days.length > 1) {
         return { ...prev, days: prev.days.filter((_, i) => i !== index) };

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Challenge, ChallengeStatus, SweatlistCollection, SweatlistType } from '../api/firebase/workout/types';
+import { Challenge, ChallengeStatus, SweatlistCollection } from '../api/firebase/workout/types';
 import { UserTogetherRoundCollection } from '../types/UserTogetherRoundCollection';
 
 // Simplified enum to match iOS structure

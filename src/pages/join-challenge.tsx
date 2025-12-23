@@ -1,14 +1,14 @@
-import React, { useEffect, useState, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { workoutService } from '../api/firebase/workout/service';
 import { userService } from '../api/firebase/user';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../api/firebase/config';
 import SignInModal from '../components/SignInModal';
-import { doc, getDoc, collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../api/firebase/config';
 import { ProfileImage } from '../api/firebase/user/types';
-import { convertFirestoreTimestamp, dateToUnixTimestamp } from '../utils/formatDate';
+import { convertFirestoreTimestamp } from '../utils/formatDate';
 
 // Define type for the challenge info
 interface ChallengeInfo {

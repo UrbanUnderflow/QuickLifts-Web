@@ -1,6 +1,5 @@
 import { useSelector } from 'react-redux';
 import { useMemo } from 'react';
-import { RootState } from '../redux/store';
 import { Workout } from '../api/firebase/workout/types';
 import { ExerciseLog } from '../api/firebase/exercise/types';
 

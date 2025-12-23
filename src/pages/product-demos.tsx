@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import Head from 'next/head';
-import { Play, Camera, Target, Users, Zap, Smartphone, Video, TrendingUp, Award, Lock } from 'lucide-react';
+import { Play, Camera, Target, Users, Zap, Smartphone, Video, Award, Lock } from 'lucide-react';
 
 const ProductDemos: React.FC = () => {
   const [activeCategory, setActiveCategory] = useState<string>('all');
@@ -168,7 +168,7 @@ const ProductDemos: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
-              {featuredDemos.map((demo, index) => (
+              {featuredDemos.map((demo) => (
                 <div
                   key={demo.id}
                   className="bg-gradient-to-br from-zinc-900 to-zinc-800 border border-zinc-700 rounded-2xl p-6 hover:border-[#E0FE10]/50 transition-all duration-300 group"

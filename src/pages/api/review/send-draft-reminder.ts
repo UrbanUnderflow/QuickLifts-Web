@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { initAdmin } from '../../../lib/firebase-admin';
+import admin from '../../../lib/firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
 
 /**
@@ -208,8 +208,7 @@ export default async function handler(
   }
 
   try {
-    // Initialize Firebase Admin
-    initAdmin();
+    // Firebase Admin is initialized on import
     const db = getFirestore();
     
     const now = new Date();

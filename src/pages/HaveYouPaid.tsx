@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Head from 'next/head';
 import { reunionPaymentsService, ReunionPaymentRecord } from '../api/firebase/reunionPayments/service';
 
@@ -79,7 +79,7 @@ const HaveYouPaidPage: React.FC = () => {
     setDepositCount(peopleWithDeposits);
   };
 
-  const handleSave = async () => {
+  const _handleSave = async () => {
     const name = (selected?.name || query).trim();
     if (!name) { setMessage('Please enter a name.'); return; }
     try {
@@ -115,7 +115,7 @@ const HaveYouPaidPage: React.FC = () => {
     }
   };
 
-  const handleAddNewPerson = async () => {
+  const _handleAddNewPerson = async () => {
     const name = query.trim();
     if (!name) { setMessage('Please enter a name.'); return; }
     try {
@@ -137,11 +137,10 @@ const HaveYouPaidPage: React.FC = () => {
     if (!name) return;
     try {
       setIsLoading(true);
-      const id = await reunionPaymentsService.upsert({ name: name.trim() });
+      await reunionPaymentsService.upsert({ name: name.trim() });
       setMessage('Person added!');
       await refreshTableAndCount();
-    } catch (e) {
-      console.error(e);
+    } catch (_e) {
       setMessage('There was an error adding the person.');
     } finally {
       setIsLoading(false);
@@ -169,7 +168,7 @@ const HaveYouPaidPage: React.FC = () => {
         setDepositCount(peopleWithDeposits);
         
         setLoadingRows(false);
-      } catch (e) {
+      } catch (_e) {
         // silent
       }
     };

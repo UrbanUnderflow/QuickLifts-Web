@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { FaTimes, FaUser, FaRobot, FaCalendar, FaComments } from 'react-icons/fa';
-import { coachService, ConversationSession, ConversationMessage } from '../api/firebase/coach/service';
+import { coachService, ConversationSession } from '../api/firebase/coach/service';
 
 interface ConversationModalProps {
   isOpen: boolean;

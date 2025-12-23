@@ -1,6 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useUser } from '../hooks/useUser';
-import { coachAthleteMessagingService } from '../api/firebase/messaging/coachAthleteService';
 import CoachAthleteMessagingModal from '../components/CoachAthleteMessagingModal';
 
 const TestMessagingPage: React.FC = () => {

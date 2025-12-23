@@ -210,7 +210,7 @@ export const ConversationProvider: React.FC<ConversationProviderProps> = ({ chil
   const [state, dispatch] = useReducer(conversationReducer, initialState);
   const { currentUser } = useSelector((state: RootState) => state.user);
   const operationQueueRef = useRef<NodeJS.Timeout | null>(null);
-  const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const _retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const initializationRef = useRef<Promise<void> | null>(null);
 
   // Network status monitoring

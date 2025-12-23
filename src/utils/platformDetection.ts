@@ -80,7 +80,7 @@ export const appLinks = {
    * Generate an App Store URL with a specific deep link parameter
    * This uses the App Store's ability to pass parameters to the app on first launch
    */
-  appStoreWithDeepLink: (deepLinkPath: string): string => {
+  appStoreWithDeepLink: (_deepLinkPath: string): string => {
     // The App Store doesn't directly support deep link parameters,
     // but we can use AppsFlyer OneLink for deferred deep linking
     // For now, just return the App Store URL

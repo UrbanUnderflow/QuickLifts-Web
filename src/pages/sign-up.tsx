@@ -9,7 +9,7 @@ import { userService } from '../api/firebase/user';
 import { firebaseStorageService } from '../api/firebase/storage/service';
 import { coachService } from '../api/firebase/coach';
 import { Camera, Eye, EyeOff, Loader2, CheckCircle, AlertTriangle } from 'lucide-react';
-import { FaGoogle, FaApple } from 'react-icons/fa';
+// import { FaGoogle, FaApple } from 'react-icons/fa';
 
 const SignUpPage: React.FC = () => {
   const router = useRouter();

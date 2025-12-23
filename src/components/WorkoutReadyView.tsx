@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Clock, Dumbbell, ChevronRight, XIcon } from 'lucide-react';
 import { Workout } from '../api/firebase/workout/types';
 import { workoutService } from '../api/firebase/workout/service';
@@ -23,7 +23,7 @@ const WorkoutReadyView: React.FC<WorkoutReadyViewProps> = ({
   onStartWorkout,
 }) => {
   const [showExercises, setShowExercises] = useState(false);
-  const router = useRouter();
+  const _router = useRouter();
   const dispatch = useDispatch();
   const userId = useSelector((state: RootState) => state.user.currentUser?.id);
   const currentWorkoutSession = useSelector((state: RootState) => state.workout.currentWorkout);

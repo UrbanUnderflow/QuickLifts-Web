@@ -27,9 +27,9 @@ interface CreateWorkoutExerciseCardViewProps {
 }
 
 const CreateWorkoutExerciseCardView: React.FC<CreateWorkoutExerciseCardViewProps> = ({
-  appCoordinator,
+  appCoordinator: _appCoordinator,
   exerciseDescription: initialExerciseDescription,
-  workoutCaregory: initialWorkoutCaregory,
+  workoutCaregory: _initialWorkoutCaregory,
   returnExerciseDescription,
 }) => {
   // Convert initial videos
@@ -40,7 +40,7 @@ const CreateWorkoutExerciseCardView: React.FC<CreateWorkoutExerciseCardViewProps
 
   // Local state management
   const [expanded, setExpanded] = useState(false);
-  const [exerciseName, setExerciseName] = useState(
+  const [exerciseName, _setExerciseName] = useState(
     initialExerciseDescription?.exerciseName || ''
   );
   const [exerciseVideos] = useState<ExerciseVideo[]>(initialVideos);

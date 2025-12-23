@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
-import { storeVideoFile, getVideoFile, removeVideoFile } from '../utils/indexedDBStorage';
+import { getVideoFile, removeVideoFile } from '../utils/indexedDBStorage';
 import { SimpleVideoTrimmer } from '../components/SimpleVideoTrimmer';
 
 // Information component to explain the trimming process

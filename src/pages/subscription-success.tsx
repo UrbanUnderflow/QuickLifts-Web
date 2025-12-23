@@ -13,7 +13,7 @@ const SubscriptionSuccessPage: React.FC = () => {
   const router = useRouter();
   const dispatch = useDispatch();
   const currentUser = useUser(); // Check user status
-  const { roundIdRedirect, loginRedirectPath } = useSelector((state: RootState) => state.tempRedirect);
+  const { roundIdRedirect: _roundIdRedirect, loginRedirectPath: _loginRedirectPath } = useSelector((state: RootState) => state.tempRedirect);
   const [countdown, setCountdown] = useState(5); // Countdown state (5 seconds)
   const [verificationStatus, setVerificationStatus] = useState<VerificationStatus>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);

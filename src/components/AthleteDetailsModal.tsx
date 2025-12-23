@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FaTimes, FaUser, FaCalendar, FaChartLine, FaHeart, FaComments, FaDumbbell, FaFire, FaClock, FaLock, FaEyeSlash } from 'react-icons/fa';
+import { FaTimes, FaUser, FaCalendar, FaChartLine, FaHeart, FaComments, FaClock, FaLock, FaEyeSlash } from 'react-icons/fa';
 import { coachService, DailySentimentRecord, ConversationSession } from '../api/firebase/coach/service';
 import { coachAthleteMessagingService, CoachAthleteMessage } from '../api/firebase/messaging/coachAthleteService';
 import { userService } from '../api/firebase/user/service';
@@ -92,7 +92,7 @@ const AthleteDetailsModal: React.FC<AthleteDetailsModalProps> = ({
           setCoachAthleteMessages(messages);
           console.log(`Loaded ${messages.length} coach-athlete messages`);
         }
-      } catch (error) {
+      } catch (_error) {
         console.log('No coach-athlete messages found (this is normal for new connections)');
         setCoachAthleteMessages([]);
       }
@@ -441,7 +441,7 @@ const AthleteDetailsModal: React.FC<AthleteDetailsModalProps> = ({
                 {conversations.length > 0 ? (
                   <>
                     <div className="space-y-3">
-                      {conversations.slice(0, 5).map((session, index) => {
+                      {conversations.slice(0, 5).map((session) => {
                         const duration = Math.floor((session.endTime.getTime() - session.startTime.getTime()) / (1000 * 60));
                         return (
                           <div key={session.id} className="flex items-center justify-between py-3 border-b border-zinc-700 last:border-b-0">

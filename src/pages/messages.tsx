@@ -4,7 +4,7 @@ import { useUser } from '../hooks/useUser';
 import SideNav from '../components/Navigation/SideNav';
 import { MessageCircle, Clock } from 'lucide-react';
 import { coachAthleteMessagingService, CoachAthleteConversation } from '../api/firebase/messaging/coachAthleteService';
-import { collection, query, where, orderBy, getDocs, limit, getDoc, doc } from 'firebase/firestore';
+import { collection, query, where, orderBy, getDocs } from 'firebase/firestore';
 import { db } from '../api/firebase/config';
 import { convertFirestoreTimestamp } from '../utils/formatDate';
 
@@ -17,7 +17,7 @@ interface ShortUser {
   };
 }
 
-interface DirectMessage {
+interface _DirectMessage {
   id: string;
   participants: ShortUser[];
   participantIds: string[];

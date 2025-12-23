@@ -135,7 +135,7 @@ const PrivacyPolicy: NextPage<PrivacyPolicyPageProps> = ({ metaData }) => {
  );
 };
 
-export const getServerSideProps: GetServerSideProps<PrivacyPolicyPageProps> = async (context) => {
+export const getServerSideProps: GetServerSideProps<PrivacyPolicyPageProps> = async (_context) => {
   let rawMetaData: FirestorePageMetaData | null = null;
   try {
     rawMetaData = await adminMethods.getPageMetaData('privacyPolicy');

@@ -18,7 +18,7 @@ const CoachProtectedRoute: React.FC<Props> = ({
   const userLoading = useUserLoading();
   const router = useRouter();
   const [loading, setLoading] = useState(true);
-  const [coachProfile, setCoachProfile] = useState<CoachModel | null>(null);
+  const [_coachProfile, setCoachProfile] = useState<CoachModel | null>(null);
 
   useEffect(() => {
     const checkCoachAccess = async () => {

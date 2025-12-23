@@ -6,8 +6,6 @@ interface SmartAppBannerProps {
 }
 
 const APP_STORE_URL = 'https://apps.apple.com/ca/app/pulse-community-workouts/id6451497729';
-const APP_SCHEME = 'pulse://'; // Your app's custom URL scheme
-const UNIVERSAL_LINK = 'https://fitwithpulse.ai/app'; // Your universal link domain
 
 const SmartAppBanner: React.FC<SmartAppBannerProps> = ({ variant = 'bottom' }) => {
   const [isVisible, setIsVisible] = useState(false);
@@ -26,7 +24,6 @@ const SmartAppBanner: React.FC<SmartAppBannerProps> = ({ variant = 'bottom' }) =
     const checkIsIOS = () => {
       const userAgent = window.navigator.userAgent.toLowerCase();
       const isIOSDevice = /iphone|ipad|ipod/.test(userAgent);
-      const isSafari = /safari/.test(userAgent) && !/chrome/.test(userAgent);
       const isInStandaloneMode = ('standalone' in window.navigator) && (window.navigator as any).standalone;
       
       // Don't show if already in the app (standalone mode)
@@ -43,9 +40,6 @@ const SmartAppBanner: React.FC<SmartAppBannerProps> = ({ variant = 'bottom' }) =
   const handleOpenApp = () => {
     // Try to open the app first using universal link
     // If app is installed, it will open; otherwise, it falls back to App Store
-    
-    // Create a hidden iframe to try opening the app
-    const now = Date.now();
     
     // Try universal link first (more reliable on iOS 9+)
     window.location.href = APP_STORE_URL;
