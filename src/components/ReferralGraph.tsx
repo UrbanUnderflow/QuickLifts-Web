@@ -7,7 +7,7 @@ import dynamic from 'next/dynamic';
 
 // ❶  Load ForceGraph2D only on the client (avoids SSR blow-ups)
 const ForceGraph2D = dynamic(
-  () => import('react-force-graph-2d').then(mod => mod.ForceGraph2D || mod.default),
+  () => import('react-force-graph-2d').then(mod => mod.default),
   { ssr: false }
 );
 
