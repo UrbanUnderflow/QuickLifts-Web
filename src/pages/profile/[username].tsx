@@ -600,7 +600,7 @@ useEffect(() => {
                   <div className="px-5">
                     <div className="flex items-center justify-between mb-4">
                       <h2 className="text-xl text-white font-semibold">
-                        {user.username}'s Stacks ({userStacks.length})
+                        {user.username}'s Movelists ({userStacks.length})
                       </h2>
                     </div>
 
@@ -609,7 +609,7 @@ useEffect(() => {
                       <div className="relative">
                         <input
                           type="text"
-                          placeholder="Search stacks..."
+                          placeholder="Search Movelists..."
                           value={stackSearchQuery}
                           onChange={(e) => setStackSearchQuery(e.target.value)}
                           className="w-full bg-zinc-800 text-white rounded-lg px-4 py-3 pl-10 focus:outline-none focus:ring-2 focus:ring-[#E0FE10] placeholder-zinc-500"
@@ -640,7 +640,7 @@ useEffect(() => {
                       </div>
                       {stackSearchQuery && (
                         <p className="text-sm text-zinc-400 mt-2">
-                          Found {filteredStacks.length} of {userStacks.length} stacks
+                          Found {filteredStacks.length} of {userStacks.length} Movelists
                         </p>
                       )}
                     </div>
@@ -649,14 +649,14 @@ useEffect(() => {
                       <div className="flex flex-col items-center justify-center p-8 bg-zinc-900 rounded-xl">
                         <div className="text-6xl mb-4">🏋️</div>
                         <p className="text-zinc-400 text-center">
-                          No workout stacks yet
+                          No Movelists yet
                         </p>
                       </div>
                     ) : filteredStacks.length === 0 ? (
                       <div className="flex flex-col items-center justify-center p-8 bg-zinc-900 rounded-xl">
                         <div className="text-6xl mb-4">🔍</div>
                         <p className="text-zinc-400 text-center">
-                          No stacks match "{stackSearchQuery}"
+                          No Movelists match "{stackSearchQuery}"
                         </p>
                         <button
                           onClick={() => setStackSearchQuery('')}

@@ -604,7 +604,7 @@ const Discover: React.FC = () => {
                 Start a workout
               </h4>
               <p className="mt-1 text-xs text-zinc-400 sm:text-sm">
-                Get a personalized AI-powered stack in seconds, using your favorite creator moves.
+                Get a personalized AI-powered Movelist in seconds, using your favorite creator moves.
               </p>
             </div>
           </div>
@@ -659,7 +659,7 @@ const Discover: React.FC = () => {
                 </div>
                 
                 <p className="text-zinc-300 text-sm mb-6 leading-relaxed">
-                  Instantly generate a custom stack with AI, blending your favorite creator moves to match your goals for today.
+                  Instantly generate a custom Movelist with AI, blending your favorite creator moves to match your goals for today.
                 </p>
                 
                 <button className="w-full bg-[#E0FE10] text-zinc-900 font-bold py-3 px-4 rounded-lg flex items-center justify-center gap-2 hover:bg-[#d0ee00] transition-colors shadow-lg shadow-[#E0FE10]/20">

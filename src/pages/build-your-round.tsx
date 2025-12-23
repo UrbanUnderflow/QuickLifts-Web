@@ -63,7 +63,7 @@ const BuildYourRound: React.FC = () => {
     step6: { reward: '', brandConnection: '', nonMonetary: '' },
     step7: { promotion: '', metrics: '' },
     days: [
-      { day: 'Stack 1', focusArea: 'Upper Body', moves: ['Barbell Flat Bench Press', 'Incline Dumbbell Press', '50 Push-Ups', 'Dumbbell Shoulder Press', 'Dumbbell Lateral Raises', 'Plank'] }
+      { day: 'Movelist 1', focusArea: 'Upper Body', moves: ['Barbell Flat Bench Press', 'Incline Dumbbell Press', '50 Push-Ups', 'Dumbbell Shoulder Press', 'Dumbbell Lateral Raises', 'Plank'] }
     ]
   });
 
@@ -109,7 +109,7 @@ const BuildYourRound: React.FC = () => {
   const addDay = () => {
     setFormData(prev => ({
       ...prev,
-      days: [...prev.days, { day: `Stack ${prev.days.length + 1}`, focusArea: '', moves: ['', '', '', '', '', ''] }]
+      days: [...prev.days, { day: `Movelist ${prev.days.length + 1}`, focusArea: '', moves: ['', '', '', '', '', ''] }]
     }));
   };
 
@@ -296,7 +296,7 @@ const BuildYourRound: React.FC = () => {
                     </span>
                     <div>
                       <h4 className="text-white font-semibold mb-1 print:text-black">Structure</h4>
-                      <p className="text-gray-300 text-sm print:text-black">A Round runs for a set duration (for example, 7 or 30 days). Each Round is built from "Moves" and "Stacks" — short video exercises and pre-built workouts — created by the community.</p>
+                      <p className="text-gray-300 text-sm print:text-black">A Round runs for a set duration (for example, 7 or 30 days). Each Round is built from "Moves" and "Movelists" — short video exercises and pre-built workouts — created by the community.</p>
                     </div>
                   </div>
 
@@ -502,7 +502,7 @@ const BuildYourRound: React.FC = () => {
                     <div className="flex items-start gap-3">
                       <div className="w-7 h-7 rounded-full bg-[#E0FE10] text-black font-bold flex items-center justify-center text-sm flex-shrink-0">5</div>
                       <div>
-                        <h4 className="text-white font-semibold mb-1 text-sm">Select Unique Stacks</h4>
+                        <h4 className="text-white font-semibold mb-1 text-sm">Select Unique Movelists</h4>
                         <p className="text-zinc-400 text-xs">Choose how many unique routines (e.g., 2-3 unique workouts that repeat through the week)</p>
                       </div>
                     </div>
@@ -513,7 +513,7 @@ const BuildYourRound: React.FC = () => {
                       <div className="w-7 h-7 rounded-full bg-[#E0FE10] text-black font-bold flex items-center justify-center text-sm flex-shrink-0">6</div>
                       <div>
                         <h4 className="text-white font-semibold mb-1 text-sm">Set Body Part Splits</h4>
-                        <p className="text-zinc-400 text-xs">Lock in muscle groups per stack (e.g., Stack 1: chest/biceps/triceps, Stack 2: back/shoulders)</p>
+                        <p className="text-zinc-400 text-xs">Lock in muscle groups per Movelist (e.g., Movelist 1: chest/biceps/triceps, Movelist 2: back/shoulders)</p>
                       </div>
                     </div>
                   </div>
@@ -690,7 +690,7 @@ const BuildYourRound: React.FC = () => {
                       </button>
                       {!isCollapsed && (
                         <div className="px-4 pb-4 pt-2">
-                          <p className="text-zinc-400 mb-4 text-sm">Choose the duration (7, 14, or 30 days) and intensity. Mix "Moves" and "Stacks".</p>
+                          <p className="text-zinc-400 mb-4 text-sm">Choose the duration (7, 14, or 30 days) and intensity. Mix "Moves" and "Movelists".</p>
                           <div className="space-y-3">
                             <div>
                               <p className="font-medium mb-2 text-gray-200 text-sm">What is the duration of this round? Why?</p>
@@ -825,12 +825,12 @@ const BuildYourRound: React.FC = () => {
             </div>
           </section>
 
-          {/* Stack Planner */}
+          {/* Movelist Planner */}
           <section className="mb-12 print:mb-8 print:page-break-before">
             <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 md:p-8">
               <div className="text-center mb-6">
-                <h2 className="text-3xl font-bold text-white mb-2">Stack Planner</h2>
-                <p className="text-zinc-400 text-sm">Build your unique workout stacks. Each stack is a routine that can repeat throughout your Round.</p>
+                <h2 className="text-3xl font-bold text-white mb-2">Movelist Planner</h2>
+                <p className="text-zinc-400 text-sm">Build your unique Movelists. Each Movelist is a routine that can repeat throughout your Round.</p>
               </div>
               
               <div className="space-y-3">
@@ -903,7 +903,7 @@ const BuildYourRound: React.FC = () => {
                 onClick={addDay}
                 className="mt-4 w-full flex items-center justify-center gap-2 px-4 py-3 bg-[#E0FE10] text-black rounded-xl hover:bg-[#d0ee00] transition-colors font-semibold"
               >
-                <Plus className="w-4 h-4" /> Add Stack
+                <Plus className="w-4 h-4" /> Add Movelist
               </button>
             </div>
           </section>

@@ -2559,7 +2559,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                         Pulse is the <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#E0FE10] to-[#a8c40a]">creator-powered fitness platform</span> that turns short workout videos into multiplayer, playlist-style training experiences.
                       </h3>
                       <p className="text-zinc-400 text-base leading-relaxed">
-                        Creators upload Moves, Pulse assembles them into Stacks, and users train together in real time with leaderboards, scoring, and social motivation.
+                        Creators upload Moves, Pulse assembles them into Movelists, and users train together in real time with leaderboards, scoring, and social motivation.
                       </p>
                     </div>
                     
@@ -2591,7 +2591,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                     <div className="relative bg-gradient-to-r from-[#E0FE10]/10 via-[#E0FE10]/5 to-transparent rounded-xl p-5 border border-[#E0FE10]/20 mb-10">
                       <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-[#E0FE10] to-[#E0FE10]/30 rounded-l-xl"></div>
                       <p className="text-zinc-200 text-sm leading-relaxed pl-2">
-                        <span className="text-[#E0FE10] font-semibold">The Model:</span> Creators upload Moves → Pulse transforms them into <span className="text-white font-medium">Stacks</span> (structured workouts) and <span className="text-white font-medium">Rounds</span> (group challenges) → Users train socially → Creators earn through custom pricing and content usage.
+                        <span className="text-[#E0FE10] font-semibold">The Model:</span> Creators upload Moves → Pulse transforms them into <span className="text-white font-medium">Movelists</span> (structured workouts) and <span className="text-white font-medium">Rounds</span> (group challenges) → Users train socially → Creators earn through custom pricing and content usage.
                       </p>
                     </div>
                     
@@ -2708,11 +2708,11 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                       <span className="text-[#E0FE10] text-2xl">↓</span>
                     </div>
                     
-                    {/* Stacks */}
+                    {/* Movelists */}
                     <div className="flex-1 bg-zinc-800/50 rounded-xl p-5 border-l-4 border-blue-400">
                       <div className="flex items-center gap-3 mb-3">
-                        <img src="/stacksIcon.png" alt="Stacks" className="w-10 h-10 object-contain" />
-                        <h4 className="text-blue-400 font-semibold">Stacks</h4>
+                        <img src="/stacksIcon.png" alt="Movelists" className="w-10 h-10 object-contain" />
+                        <h4 className="text-blue-400 font-semibold">Movelists</h4>
                       </div>
                       <p className="text-zinc-400 text-sm">Curated playlists of Moves. On-demand workout programs.</p>
                     </div>

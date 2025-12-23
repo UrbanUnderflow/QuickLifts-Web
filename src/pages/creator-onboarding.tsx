@@ -59,7 +59,7 @@ const CreatorOnboardingPage: React.FC = () => {
     },
     {
       number: 2,
-      title: 'Build a Stack',
+      title: 'Build a Movelist',
       description: 'Combine your moves into a workout routine. This becomes the foundation of your challenge.',
       icon: FaTrophy,
       tips: [
@@ -155,8 +155,8 @@ const CreatorOnboardingPage: React.FC = () => {
                     <h3 className="text-lg font-bold">Best Experience on iPhone</h3>
                   </div>
                   <p className="text-zinc-400 mb-4">
-                    Creating content is easiest on your phone. Download the Pulse app to record moves, 
-                    build stacks, and launch challenges all from your pocket.
+                  Creating content is easiest on your phone. Download the Pulse app to record moves, 
+                  build Movelists, and launch challenges all from your pocket.
                   </p>
                   <a 
                     href="https://apps.apple.com/ca/app/pulse-community-workouts/id6451497729"

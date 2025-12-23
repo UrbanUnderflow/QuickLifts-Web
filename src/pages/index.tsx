@@ -243,7 +243,7 @@ const MarketingContent: React.FC<{
                     </div>
                     <div>
                       <div className="text-white font-bold text-base leading-tight">Launch Rounds</div>
-                      <div className="text-zinc-400 text-xs leading-snug mt-0.5">Turn Stacks into challenges</div>
+                      <div className="text-zinc-400 text-xs leading-snug mt-0.5">Turn Movelists into challenges</div>
                     </div>
                   </div>
 
@@ -396,10 +396,10 @@ const MarketingContent: React.FC<{
               </div>
             </div>
             
-            {/* Stack Card */}
+            {/* Movelist Card */}
             <div className="bg-gradient-to-br from-purple-500/10 to-blue-500/10 backdrop-blur-sm rounded-3xl p-6 w-full md:w-[30%] relative z-10 border border-purple-400/30 hover:border-purple-400/50 hover:shadow-lg hover:shadow-purple-400/20 transition-all duration-300 group cursor-pointer">
               <div className="absolute -top-5 -left-5 w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center font-bold text-white">2</div>
-              <h3 className="text-purple-400 text-2xl font-bold mb-3">Stack</h3>
+              <h3 className="text-purple-400 text-2xl font-bold mb-3">Movelist</h3>
               <p className="text-zinc-400">Combine Moves to create complete workout routines that you can share or follow.</p>
               <div className="absolute right-4 bottom-4 opacity-0 group-hover:opacity-100 transition-opacity">
                 <FaArrowRight className="w-6 h-6 text-purple-400" />
@@ -457,22 +457,22 @@ const MarketingContent: React.FC<{
         </div>
       </section>
 
-      {/* Stacks Section - Enhanced */}
-      <section id="stack-section" className="min-h-screen bg-gradient-to-br from-zinc-950 via-purple-950/20 to-zinc-900 flex flex-col lg:flex-row items-center justify-center gap-20 p-8">
+      {/* Movelists Section - Enhanced */}
+      <section id="movelist-section" className="min-h-screen bg-gradient-to-br from-zinc-950 via-purple-950/20 to-zinc-900 flex flex-col lg:flex-row items-center justify-center gap-20 p-8">
         <div className="max-w-xl lg:order-1">
           <div className="inline-flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-purple-500/20 to-blue-500/20 backdrop-blur-sm border border-purple-400/30 rounded-full mb-6">
             <FaRocket className="h-4 w-4 text-purple-400" />
             <span className="text-purple-400 text-sm font-medium">Build The Blocks</span>
           </div>
           <h1 className="text-white text-5xl sm:text-6xl font-bold mb-6">
-            <span className="bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent">Stack</span> your Moves into workouts
+            Build <span className="bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent">Movelists</span> from your Moves
           </h1>
           <p className="text-zinc-400 text-lg leading-relaxed mb-8">
-            Combine your Moves into a list called a Stacks. Bring your Stack with you to the gym, and save your workout data in real-time
+            Combine your Moves into a Movelist. Bring your Movelist with you to the gym, and save your workout data in real-time
           </p>
           <div className="bg-gradient-to-br from-purple-500/10 to-blue-500/10 backdrop-blur-sm border border-purple-400/20 rounded-2xl p-4">
             <p className="text-purple-300 text-sm">
-              <strong>Creator Economy:</strong> Popular Stacks generate passive income. Build a following and monetize your expertise through Stack subscriptions.
+              <strong>Creator Economy:</strong> Popular Movelists generate passive income. Build a following and monetize your expertise through Movelist subscriptions.
             </p>
           </div>
         </div>
