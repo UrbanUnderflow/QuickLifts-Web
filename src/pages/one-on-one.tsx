@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Check, Play, BarChart3, Target } from 'lucide-react';
+import { Check, Play, BarChart3, Target, MessageSquare } from 'lucide-react';
 import Head from 'next/head';
 import FAQ from '../components/FAQ';
 import Meta from '../components/Meta';
