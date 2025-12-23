@@ -54,11 +54,12 @@ const q4OverallMetrics = [
   }
 ];
 
-const businessHighlights = [
+const businessHighlights: { title: string; description: string; signal: string; featured?: boolean }[] = [
   {
     title: "Founder University Completed",
     description: "Accepted and graduated from Jason Calacanis's Founder University program.",
-    signal: "Validation from one of the most respected startup programs in the ecosystem"
+    signal: "Validation from one of the most respected startup programs in the ecosystem",
+    featured: true
   },
   {
     title: "Pulse Intelligence Labs, Inc.",
