@@ -3,7 +3,7 @@ import Head from 'next/head';
 import React, { useState, useCallback, useEffect } from 'react';
 import { firebaseStorageService, UploadResult, UploadImageType } from '../../api/firebase/storage/service'; // Adjust path as needed
 import { doc, setDoc, getDoc } from 'firebase/firestore'; // Added Firestore imports
-import { db } from '../../api/firebase/config'; // Added db import
+import { auth, db } from '../../api/firebase/config'; // Added auth/db import
 import { ArrowUpRight, Upload, X, FileText, File, FileImage, PlusCircle, Trash2 } from 'lucide-react';
 import { useScrollFade } from '../../hooks/useScrollFade';
 // import Header from '../../components/Header'; // Assuming you might want a header
@@ -296,6 +296,13 @@ const PressUploadPage: NextPage = () => {
     assetType: AssetType
   ) => {
     setUploadError(null); // Clear previous errors
+
+    // Guard: this page requires an authenticated Firebase user.
+    // AuthWrapper should prompt via modal, but this prevents confusing console errors if the modal is closed.
+    if (!auth.currentUser) {
+      setUploadError('You must be signed in to upload press assets.');
+      return;
+    }
 
     // Determine storage path and update state function based on asset type
     let storagePath: string;

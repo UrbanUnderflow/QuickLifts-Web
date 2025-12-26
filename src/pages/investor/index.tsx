@@ -680,6 +680,35 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
               </tr>
             </tbody>
           </table>
+
+          <h2 style="font-size: 16px; margin: 10px 0 12px 0;">Convertible Notes (Unconverted)</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Holder</th>
+                <th class="right">Principal</th>
+                <th class="right">Cap</th>
+                <th class="right">Discount</th>
+                <th class="right">Interest</th>
+                <th class="right">Maturity</th>
+                <th>Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Launch (Founder University)</strong><div class="role">Convertible Note</div></td>
+                <td class="right">$25,000</td>
+                <td class="right muted">—</td>
+                <td class="right muted">—</td>
+                <td class="right muted">—</td>
+                <td class="right muted">—</td>
+                <td class="muted">Terms per Template_25k_Founder_University_Convertible_Note.pdf</td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="muted" style="font-size: 12px; margin-top: -18px; margin-bottom: 30px;">
+            We can populate cap/discount/interest/maturity once the template PDF is available in the dataroom.
+          </p>
           
           <div class="notes">
             <h3>Notes</h3>
@@ -689,6 +718,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
               <li>Founder vesting follows standard 4-year schedule with 1-year cliff per Atlas defaults.</li>
               <li>Double-trigger acceleration applies on change of control + termination.</li>
               <li>Vesting start date: Date of incorporation.</li>
+              <li>Convertible Note: Launch (Founder University) — $25,000 principal (unconverted).</li>
             </ul>
           </div>
           
@@ -3681,7 +3711,8 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
 
                     {/* Our Take - Revenue Model */}
                     <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 md:p-8 mb-8">
-                      <h3 className="text-white text-xl font-semibold mb-6">Our Take: How We Earn Per Round</h3>
+                      <h3 className="text-white text-xl font-semibold mb-2">Our Take: Annual Value Per Creator</h3>
+                      <p className="text-zinc-400 text-sm mb-6">This section shows the yearly value created per creator (built from per-round economics).</p>
                       
                       <div className="flex flex-col md:flex-row items-center justify-center gap-6 mb-8">
                         <div className="bg-zinc-800/50 rounded-xl p-6 text-center">
@@ -3827,53 +3858,85 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                       {/* Creator Economy Hero */}
                       <div className="bg-gradient-to-br from-purple-900/30 to-zinc-900 rounded-xl p-6 mb-6 border border-purple-500/20">
                         <div className="text-center mb-6">
-                          <div className="text-white text-4xl md:text-5xl font-bold mb-2">$120B+</div>
-                          <div className="text-zinc-400">Creator Economy</div>
-                          <p className="text-zinc-500 text-sm mt-2">Transforming how creators monetize their content</p>
+                          <div className="text-white text-3xl md:text-4xl font-bold mb-2">Adjacent Markets: Athletes + Universities + Insights</div>
+                          <div className="text-zinc-400">Expansion path built on the same mechanics (Rounds + community + retention)</div>
+                          <p className="text-zinc-500 text-sm mt-2">
+                            We start with fitness creators, then expand into performance & institutional channels where community-based training already exists.
+                          </p>
                         </div>
-                        
-                        {/* Platform Comparison */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                           <div className="bg-purple-900/30 border border-purple-500/30 rounded-xl p-5">
-                            <h4 className="text-purple-400 font-semibold mb-4">Twitch Streamers</h4>
-                            <div className="space-y-3">
-                              <div className="flex justify-between items-center">
-                                <span className="text-zinc-400 text-sm">Streamers</span>
-                                <span className="text-white font-medium">7M</span>
-                              </div>
-                              <div className="flex justify-between items-center">
-                                <span className="text-zinc-400 text-sm">Influencer Marketing</span>
-                                <span className="text-white font-medium">$1.9B</span>
-                              </div>
-                              <div className="flex justify-between items-center">
-                                <span className="text-zinc-400 text-sm">Ad Revenue</span>
-                                <span className="text-white font-medium">$667M</span>
-                              </div>
+                            <div className="text-purple-300 text-xs uppercase tracking-wide mb-2">Athletes</div>
+                            <div className="text-white text-3xl font-bold mb-1">554K+</div>
+                            <div className="text-zinc-400 text-sm">NCAA student-athletes (2024–25)</div>
+                            <div className="text-zinc-500 text-xs mt-2">Source: NCAA (record participation report)</div>
+                          </div>
+
+                          <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-5">
+                            <div className="text-zinc-200 text-xs uppercase tracking-wide mb-2">Universities</div>
+                            <div className="text-white text-3xl font-bold mb-1">5,819</div>
+                            <div className="text-zinc-400 text-sm">Title IV U.S. postsecondary institutions (2023–24)</div>
+                            <div className="text-zinc-500 text-xs mt-2">Source: NCES</div>
+                          </div>
+
+                          <div className="bg-emerald-900/25 border border-emerald-500/25 rounded-xl p-5">
+                            <div className="text-emerald-300 text-xs uppercase tracking-wide mb-2">Data & Insights</div>
+                            <div className="text-white text-3xl font-bold mb-1">Benchmarks</div>
+                            <div className="text-zinc-400 text-sm">Opt-in performance + engagement insights</div>
+                            <div className="text-zinc-500 text-xs mt-2">For teams, universities, and partners</div>
+                          </div>
+                        </div>
+
+                        <div className="mt-5 grid grid-cols-1 lg:grid-cols-3 gap-4">
+                          <div className="bg-zinc-900/40 border border-zinc-700 rounded-xl p-5">
+                            <h4 className="text-white font-semibold mb-2">1) Athlete subscriptions (seasonal)</h4>
+                            <p className="text-zinc-400 text-sm">
+                              Teams + creators drive adoption; athletes subscribe for multiplayer training + accountability.
+                            </p>
+                          </div>
+                          <div className="bg-zinc-900/40 border border-zinc-700 rounded-xl p-5">
+                            <h4 className="text-white font-semibold mb-2">2) University licensing (PulseCheck + admin tools)</h4>
+                            <p className="text-zinc-400 text-sm">
+                              Institutions license PulseCheck (mindset + habit support) and athlete program management.
+                            </p>
+                          </div>
+                          <div className="bg-zinc-900/40 border border-zinc-700 rounded-xl p-5">
+                            <h4 className="text-white font-semibold mb-2">3) Insights subscriptions (opt-in)</h4>
+                            <p className="text-zinc-400 text-sm">
+                              Aggregate, opt-in benchmarks on adherence, engagement, and program performance.
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="mt-6 bg-zinc-800/30 rounded-xl p-5 border border-zinc-700/60">
+                          <div className="flex items-start justify-between gap-4 flex-col lg:flex-row">
+                            <div>
+                              <h4 className="text-white font-semibold mb-1">Illustrative expansion math (not guidance / not current pricing)</h4>
+                              <p className="text-zinc-500 text-sm">
+                                Example to show the scale of institutional distribution if we win a small number of programs.
+                              </p>
+                            </div>
+                            <div className="text-zinc-500 text-xs lg:text-right">
+                              All data monetization assumes opt-in + privacy safeguards.
                             </div>
                           </div>
-                          
-                          <div className="flex items-center justify-center">
-                            <div className="text-center">
-                              <div className="text-white text-4xl font-bold">50x</div>
-                              <div className="text-zinc-500 text-sm">Difference</div>
+
+                          <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+                            <div className="bg-zinc-900/40 border border-zinc-700 rounded-xl p-4">
+                              <div className="text-zinc-400 text-xs mb-1">Athlete subscriptions</div>
+                              <div className="text-white font-semibold text-sm">25 schools × 300 athletes × $40/mo × 8 months</div>
+                              <div className="text-[#E0FE10] font-bold mt-2">$2.4M / year</div>
                             </div>
-                          </div>
-                          
-                          <div className="bg-red-900/30 border border-red-500/30 rounded-xl p-5">
-                            <h4 className="text-red-400 font-semibold mb-4">YouTubers</h4>
-                            <div className="space-y-3">
-                              <div className="flex justify-between items-center">
-                                <span className="text-zinc-400 text-sm">Active Channels</span>
-                                <span className="text-white font-medium">114M</span>
-                              </div>
-                              <div className="flex justify-between items-center">
-                                <span className="text-zinc-400 text-sm">Influencer Marketing</span>
-                                <span className="text-white font-medium">$88.9B</span>
-                              </div>
-                              <div className="flex justify-between items-center">
-                                <span className="text-zinc-400 text-sm">Ad Revenue</span>
-                                <span className="text-white font-medium">$31.5B</span>
-                              </div>
+                            <div className="bg-zinc-900/40 border border-zinc-700 rounded-xl p-4">
+                              <div className="text-zinc-400 text-xs mb-1">University license</div>
+                              <div className="text-white font-semibold text-sm">50 schools × $12K / year</div>
+                              <div className="text-[#E0FE10] font-bold mt-2">$600K / year</div>
+                            </div>
+                            <div className="bg-zinc-900/40 border border-zinc-700 rounded-xl p-4">
+                              <div className="text-zinc-400 text-xs mb-1">Insights (opt-in)</div>
+                              <div className="text-white font-semibold text-sm">100 programs × $3K / year</div>
+                              <div className="text-[#E0FE10] font-bold mt-2">$300K / year</div>
                             </div>
                           </div>
                         </div>
@@ -5877,6 +5940,46 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                             </table>
                         </div>
 
+                        {/* Convertible Notes */}
+                        <div className="mt-6 bg-zinc-800/30 rounded-xl p-5 border border-zinc-800">
+                            <div className="flex items-center justify-between mb-3">
+                                <h4 className="text-white font-semibold">Convertible Notes</h4>
+                                <span className="text-zinc-500 text-xs">Unconverted</span>
+                            </div>
+                            <div className="rounded-lg border border-zinc-800 overflow-hidden">
+                                <table className="w-full text-sm">
+                                    <thead className="bg-zinc-800/80">
+                                        <tr>
+                                            <th className="text-left px-4 py-3 text-zinc-400 font-medium">Holder</th>
+                                            <th className="text-right px-4 py-3 text-zinc-400 font-medium">Principal</th>
+                                            <th className="text-right px-4 py-3 text-zinc-400 font-medium hidden sm:table-cell">Cap</th>
+                                            <th className="text-right px-4 py-3 text-zinc-400 font-medium hidden sm:table-cell">Discount</th>
+                                            <th className="text-right px-4 py-3 text-zinc-400 font-medium hidden md:table-cell">Interest</th>
+                                            <th className="text-right px-4 py-3 text-zinc-400 font-medium hidden md:table-cell">Maturity</th>
+                                            <th className="text-left px-4 py-3 text-zinc-400 font-medium hidden lg:table-cell">Notes</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr className="border-t border-zinc-800">
+                                            <td className="px-4 py-3">
+                                                <p className="text-white font-medium">Launch (Founder University)</p>
+                                                <p className="text-zinc-500 text-xs">Convertible Note</p>
+                                            </td>
+                                            <td className="px-4 py-3 text-right text-zinc-100">$25,000</td>
+                                            <td className="px-4 py-3 text-right text-zinc-500 hidden sm:table-cell">—</td>
+                                            <td className="px-4 py-3 text-right text-zinc-500 hidden sm:table-cell">—</td>
+                                            <td className="px-4 py-3 text-right text-zinc-500 hidden md:table-cell">—</td>
+                                            <td className="px-4 py-3 text-right text-zinc-500 hidden md:table-cell">—</td>
+                                            <td className="px-4 py-3 text-zinc-500 text-xs hidden lg:table-cell">Terms per Template_25k_Founder_University_Convertible_Note.pdf</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <p className="text-zinc-500 text-xs mt-3">
+                                We can populate cap/discount/interest/maturity once the template PDF is added to the repo/public dataroom.
+                            </p>
+                        </div>
+
                         {/* Mobile-only details */}
                         <div className="mt-4 sm:hidden bg-zinc-800/40 rounded-lg p-4">
                             <p className="text-zinc-400 text-xs mb-2">Founder Vesting Details:</p>
@@ -5907,6 +6010,10 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                             <li className="flex items-start gap-2">
                                 <span className="text-[#E0FE10] mt-1">•</span>
                                 <span>Vesting start date: Date of incorporation.</span>
+                            </li>
+                            <li className="flex items-start gap-2">
+                                <span className="text-[#E0FE10] mt-1">•</span>
+                                <span>Convertible Note: Launch (Founder University) — $25,000 principal (unconverted).</span>
                             </li>
                         </ul>
                         

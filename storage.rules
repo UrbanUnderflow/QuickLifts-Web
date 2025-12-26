@@ -5,6 +5,22 @@ rules_version = '2';
 //    /databases/(default)/documents/users/$(request.auth.uid)).data.isAdmin;
 service firebase.storage {
   match /b/{bucket}/o {
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Keep parity with Firestore rules' custom claim (`request.auth.token.admin`)
+    function isAdmin() {
+      return isAuthenticated() && request.auth.token.admin == true;
+    }
+
+    // Press kit assets should be public to view/download, but uploads must be restricted.
+    match /press_assets/{allPaths=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Default deny for everything else (tight by default).
     match /{allPaths=**} {
       allow read, write: if false;
     }

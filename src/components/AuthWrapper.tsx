@@ -65,11 +65,11 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
 
   // Add subscription routes to public routes
   const publicRoutes = [
-    '/', '/about', '/creator', '/rounds', '/privacyPolicy', '/programming', '/100trainers', 
+    '/', '/about', '/creator', '/creators', '/rounds', '/privacyPolicy', '/programming', '/100trainers', 
     '/starter-pack', '/one-on-one', '/train-your-client', '/stacks', '/moves', '/terms', '/press', '/100trainers',
     '/subscribe', '/download', '/morning-mobility-challenge', '/review', '/MoveAndFuelATL', '/investor', '/invest', '/GetInTouch', '/secure', '/haveyoupaid',
     // Public onboarding/marketing entry points
-    '/sign-up', '/coach', '/coach/sign-up', '/build-your-round'
+    '/sign-up', '/coach', '/coach/sign-up', '/build-your-round', '/creator-onboarding'
   ].map(route => route?.toLowerCase());
  
   const publicPathPatterns = [
@@ -82,6 +82,12 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     // Preserve root "/" when trimming the trailing slash so home stays public
     const normalizedPath = (raw === '/' ? '/' : raw.replace(/\/$/, '')).toLowerCase();
     const segments = normalizedPath.split('/').filter(Boolean);
+
+    // IMPORTANT: press upload is an internal/admin-only tool. Treat it as protected even though
+    // other /press routes are public marketing/press-kit pages.
+    if (normalizedPath === '/press/upload' || normalizedPath.startsWith('/press/upload/')) {
+      return false;
+    }
 
     // Treat creator landing pages (/{username}/{slug}) as public,
     // as long as the first segment is not a reserved app prefix.
