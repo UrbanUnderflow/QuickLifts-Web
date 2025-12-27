@@ -137,16 +137,16 @@ const RoundsPage: NextPage<RoundsPageProps> = ({ metaData }) => {
       {/* Call to Action Section */}
       <section ref={useScrollFade()} className="min-h-[50vh] bg-black flex flex-col items-center justify-center text-center p-8">
         <h2 className="text-white text-5xl sm:text-6xl font-bold mb-6">
-          Ready to join your first Round?
+          Ready to launch your first Round?
         </h2>
         <p className="text-zinc-400 text-xl max-w-2xl mb-10">
-          Take the first step towards a more engaging fitness journey. Join a community of motivated individuals and start crushing your goals together.
+          Take the first step towards building your fitness community. Create engaging challenges, motivate your audience, and grow together.
         </p>
         <a 
-          href="https://fitwithpulse.ai/challenge/cevWHBlBk7VobANRUsmC"
+          href="/creator-onboarding"
           className="bg-[#E0FE10] text-black px-12 py-4 rounded-full text-lg font-semibold hover:bg-[#E0FE10]/90 transition-colors"
         >
-          Join Now
+          Get Started
         </a>
       </section>
     </div>

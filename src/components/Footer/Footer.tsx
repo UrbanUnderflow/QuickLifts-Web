@@ -17,31 +17,29 @@ const Footer = () => {
   ];
 
   const socialLinks = [
-    { name: 'Twitter', href: 'https://twitter.com/pulseapp', icon: (
+    { name: 'Twitter', href: 'https://twitter.com/fitwithpulse', icon: (
       <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M23 3a10.9 10.9 0 0 1-3.14 1.53 4.48 4.48 0 0 0-7.86 3v1A10.66 10.66 0 0 1 3 4s-4 9 5 13a11.64 11.64 0 0 1-7 2c9 5 20 0 20-11.5a4.5 4.5 0 0 0-.08-.83A7.72 7.72 0 0 0 23 3z"></path>
       </svg>
     )},
-    { name: 'Instagram', href: 'https://instagram.com/pulseapp', icon: (
+    { name: 'Instagram', href: 'https://instagram.com/fitwithpulse', icon: (
       <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect>
         <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path>
         <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line>
       </svg>
     )},
-    { name: 'LinkedIn', href: 'https://linkedin.com/company/pulseapp', icon: (
+    { name: 'LinkedIn', href: 'https://linkedin.com/company/fitwithpulse', icon: (
       <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"></path>
         <rect x="2" y="9" width="4" height="12"></rect>
         <circle cx="4" cy="4" r="2"></circle>
       </svg>
     )},
-    { name: 'TikTok', href: 'https://tiktok.com/@pulseapp', icon: (
+    { name: 'YouTube', href: 'https://www.youtube.com/@pulsefitnesscollective', icon: (
       <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M9 12a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"></path>
-        <path d="M20 9V4a1 1 0 0 0-1-1h-5"></path>
-        <path d="M15 12v3a4 4 0 0 1-4 4H9"></path>
-        <line x1="20" y1="9" x2="9" y2="9"></line>
+        <path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33A2.78 2.78 0 0 0 3.4 19c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2 29 29 0 0 0 .46-5.25 29 29 0 0 0-.46-5.33z"></path>
+        <polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02"></polygon>
       </svg>
     )}
   ];
@@ -52,7 +50,11 @@ const Footer = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-12 mb-16">
           {/* Logo & Company */}
           <div>
-            <h2 className="text-white text-2xl font-bold mb-4">Pulse</h2>
+            <img 
+              src="/pulse-logo-white.svg" 
+              alt="Pulse" 
+              className="h-8 w-auto mb-4" 
+            />
             <p className="text-zinc-400 mb-6">Building the future of social fitness through community, technology, and shared experiences.</p>
             <div className="flex space-x-4">
               {socialLinks.map((link) => (

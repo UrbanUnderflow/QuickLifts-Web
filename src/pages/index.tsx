@@ -98,8 +98,68 @@ const MarketingContent: React.FC<{
         pageOgUrl="https://fitwithpulse.ai"
       />
 
+      {/* Header - Sticky Navigation */}
+      <header className="fixed top-0 left-0 right-0 z-[100] bg-zinc-950 border-b border-zinc-800">
+        <div className="max-w-7xl mx-auto px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16 sm:h-20">
+            {/* Logo */}
+            <a href="/" className="flex items-center">
+              <img 
+                src="/pulse-logo-green.svg" 
+                alt="Pulse" 
+                className="h-8 sm:h-10 w-auto"
+              />
+            </a>
+
+            {/* Center Navigation - Hidden on mobile */}
+            <nav className="hidden md:flex items-center gap-8">
+              <a 
+                href="#move-section" 
+                className="text-zinc-400 hover:text-white transition-colors text-sm font-medium"
+              >
+                How it works
+              </a>
+              <a 
+                href="/creators" 
+                className="text-zinc-400 hover:text-white transition-colors text-sm font-medium"
+              >
+                For Creators
+              </a>
+              <a 
+                href="/rounds" 
+                className="text-zinc-400 hover:text-white transition-colors text-sm font-medium"
+              >
+                Rounds
+              </a>
+              <a 
+                href="/subscribe" 
+                className="text-zinc-400 hover:text-white transition-colors text-sm font-medium"
+              >
+                Pricing
+              </a>
+            </nav>
+
+            {/* Right Side - Auth Buttons */}
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setIsSignInModalOpen(true)}
+                className="hidden sm:flex items-center justify-center px-5 py-2.5 rounded-full bg-zinc-800 hover:bg-zinc-700 text-white text-sm font-medium transition-all duration-200 border border-zinc-700"
+              >
+                Log in
+              </button>
+              <button
+                onClick={onUseWebApp}
+                className="flex items-center justify-center px-5 py-2.5 rounded-full bg-[#E0FE10] hover:bg-[#d4f00f] text-black text-sm font-bold transition-all duration-200 shadow-lg shadow-[#E0FE10]/20"
+              >
+                Get started
+              </button>
+            </div>
+          </div>
+        </div>
+      </header>
+
       {/* Hero Section - Updated with Web App Button */}
-      <section className="relative min-h-screen flex items-center justify-center px-6 sm:px-8 py-20 overflow-hidden">
+      <section className="relative min-h-[calc(100vh-80px)] flex items-center justify-center px-4 sm:px-6 pt-20 sm:pt-24 pb-12 overflow-hidden">
         {/* Enhanced Background Elements */}
         <div className="absolute inset-0 bg-gradient-to-br from-zinc-950 via-green-950/30 to-zinc-900"></div>
         <div className="absolute inset-0">
@@ -116,101 +176,103 @@ const MarketingContent: React.FC<{
 
         {/* Content - Two Column Layout */}
         <div className="relative z-20 max-w-7xl mx-auto w-full">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
             
             {/* Left Column - Text Content */}
             <div className="text-center lg:text-left">
-              <div className="inline-flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-[#E0FE10]/20 to-lime-500/20 backdrop-blur-sm border border-[#E0FE10]/30 rounded-full mb-8 animate-fade-in-up">
-                <FaGamepad className="h-4 w-4 text-[#E0FE10]" />
-                <span className="text-[#E0FE10] text-sm font-medium">Gamified Fitness Platform</span>
+              <div className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#E0FE10]/20 to-lime-500/20 backdrop-blur-sm border border-[#E0FE10]/30 rounded-full mb-4 animate-fade-in-up">
+                <FaGamepad className="h-3 w-3 text-[#E0FE10]" />
+                <span className="text-[#E0FE10] text-xs font-medium">Gamified Fitness Platform</span>
               </div>
               
-              <h1 className="text-white text-5xl sm:text-7xl lg:text-8xl font-bold mb-6 animate-fade-in-up animation-delay-300">
-                Pulse
-              </h1>
+              <div className="mb-4 animate-fade-in-up animation-delay-300">
+                <img 
+                  src="/pulse-logo-white.svg" 
+                  alt="Pulse" 
+                  className="h-12 sm:h-16 lg:h-20 w-auto mx-auto lg:mx-0" 
+                />
+              </div>
 
               {/* Single Intent-Based CTA: Role Selector */}
-              <div className="mb-10 animate-fade-in-up animation-delay-450">
-                <p className="text-zinc-400 text-lg mb-5">I'm here to:</p>
-                <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
+              <div className="mb-6 animate-fade-in-up animation-delay-450">
+                <p className="text-zinc-400 text-sm mb-3">I'm here to:</p>
+                <div className="flex flex-col sm:flex-row gap-3 justify-center lg:justify-start">
                   <button
                     onClick={onUseWebApp}
-                    className="group relative overflow-hidden px-8 py-5 rounded-2xl border-2 border-[#E0FE10]/40 hover:border-[#E0FE10] bg-gradient-to-br from-[#E0FE10]/10 to-lime-400/5 backdrop-blur-sm transition-all duration-300 hover:shadow-lg hover:shadow-[#E0FE10]/20"
+                    className="group relative overflow-hidden px-5 py-3 rounded-xl border-2 border-[#E0FE10]/40 hover:border-[#E0FE10] bg-gradient-to-br from-[#E0FE10]/10 to-lime-400/5 backdrop-blur-sm transition-all duration-300 hover:shadow-lg hover:shadow-[#E0FE10]/20"
                   >
                     <div className="absolute inset-0 bg-gradient-to-r from-[#E0FE10]/0 to-[#E0FE10]/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                    <div className="relative flex items-center gap-4">
-                      <div className="w-12 h-12 bg-gradient-to-br from-[#E0FE10] to-lime-400 rounded-xl flex items-center justify-center shadow-lg shadow-[#E0FE10]/20">
-                        <FaUser className="h-5 w-5 text-black" />
+                    <div className="relative flex items-center gap-3">
+                      <div className="w-10 h-10 bg-gradient-to-br from-[#E0FE10] to-lime-400 rounded-lg flex items-center justify-center shadow-lg shadow-[#E0FE10]/20">
+                        <FaUser className="h-4 w-4 text-black" />
                       </div>
                       <div className="text-left">
-                        <div className="text-white font-bold text-lg">Work out with others</div>
-                        <div className="text-zinc-400 text-sm">Join challenges & train together</div>
+                        <div className="text-white font-bold text-sm">Work out with others</div>
+                        <div className="text-zinc-400 text-xs">Join challenges & train together</div>
                       </div>
-                      <FaArrowRight className="h-5 w-5 text-[#E0FE10] ml-2 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all duration-300" />
                     </div>
                   </button>
                   <a
                     href="/creators"
-                    className="group relative overflow-hidden px-8 py-5 rounded-2xl border-2 border-purple-400/40 hover:border-purple-400 bg-gradient-to-br from-purple-500/10 to-blue-500/5 backdrop-blur-sm transition-all duration-300 hover:shadow-lg hover:shadow-purple-400/20"
+                    className="group relative overflow-hidden px-5 py-3 rounded-xl border-2 border-purple-400/40 hover:border-purple-400 bg-gradient-to-br from-purple-500/10 to-blue-500/5 backdrop-blur-sm transition-all duration-300 hover:shadow-lg hover:shadow-purple-400/20"
                   >
                     <div className="absolute inset-0 bg-gradient-to-r from-purple-500/0 to-purple-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                    <div className="relative flex items-center gap-4">
-                      <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-blue-500 rounded-xl flex items-center justify-center shadow-lg shadow-purple-500/20">
-                        <FaTrophy className="h-5 w-5 text-white" />
+                    <div className="relative flex items-center gap-3">
+                      <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-blue-500 rounded-lg flex items-center justify-center shadow-lg shadow-purple-500/20">
+                        <FaTrophy className="h-4 w-4 text-white" />
                       </div>
                       <div className="text-left">
-                        <div className="text-white font-bold text-lg">Run challenges as a creator</div>
-                        <div className="text-zinc-400 text-sm">Build your community & earn</div>
+                        <div className="text-white font-bold text-sm">Run challenges as a creator</div>
+                        <div className="text-zinc-400 text-xs">Build your community & earn</div>
                       </div>
-                      <FaArrowRight className="h-5 w-5 text-purple-400 ml-2 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all duration-300" />
                     </div>
                   </a>
                 </div>
               </div>
               
               {/* Trust Bar - App Store Rating */}
-              <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-3 text-zinc-300 mb-8 animate-fade-in-up animation-delay-1500">
-                <div className="flex items-center gap-2 bg-zinc-900/70 border border-zinc-800 rounded-full px-4 py-2">
-                  <span className="text-white font-semibold">4.9</span>
+              <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-2 text-zinc-300 mb-4 animate-fade-in-up animation-delay-1500">
+                <div className="flex items-center gap-2 bg-zinc-900/70 border border-zinc-800 rounded-full px-3 py-1.5">
+                  <span className="text-white font-semibold text-sm">4.9</span>
                   <div className="flex items-center text-[#E0FE10]">
-                    <FaStar className="h-4 w-4" />
-                    <FaStar className="h-4 w-4" />
-                    <FaStar className="h-4 w-4" />
-                    <FaStar className="h-4 w-4" />
-                    <FaStar className="h-4 w-4" />
+                    <FaStar className="h-3 w-3" />
+                    <FaStar className="h-3 w-3" />
+                    <FaStar className="h-3 w-3" />
+                    <FaStar className="h-3 w-3" />
+                    <FaStar className="h-3 w-3" />
                   </div>
-                  <span className="text-sm text-zinc-400">on the App Store</span>
+                  <span className="text-xs text-zinc-400">on the App Store</span>
                 </div>
-                <span className="text-sm text-zinc-500">Trusted by creators and athletes</span>
+                <span className="text-xs text-zinc-500">Trusted by creators and athletes</span>
               </div>
 
               {/* Moves Carousel */}
               <div className="animate-fade-in-up animation-delay-1800">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-white text-sm font-semibold">Real Moves from Creators on Pulse</h3>
-                  <div className="flex items-center gap-1.5 text-zinc-500 text-xs">
-                    <FaUser className="h-3 w-3" />
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-white text-xs font-semibold">Real Moves from Creators on Pulse</h3>
+                  <div className="flex items-center gap-1 text-zinc-500 text-[10px]">
+                    <FaUser className="h-2.5 w-2.5" />
                     <span>Live from our community</span>
                   </div>
                 </div>
                 <Swiper
                   modules={[Autoplay]}
-                  spaceBetween={16}
-                  slidesPerView={1.2}
+                  spaceBetween={12}
+                  slidesPerView={1.5}
                   autoplay={{
                     delay: 3000,
                     disableOnInteraction: false,
                   }}
                   loop={true}
                   breakpoints={{
-                    640: { slidesPerView: 2.2 },
-                    1024: { slidesPerView: 3.2 }
+                    640: { slidesPerView: 2.5 },
+                    1024: { slidesPerView: 3.5 }
                   }}
                 >
                   {(moveVideos.length ? moveVideos : ['move.mp4','rounds.mp4','mymoves.mp4','createstack.mp4','LaunchRounds.mp4']).map((src, idx) => (
                     <SwiperSlide key={idx}>
-                      <div className="rounded-3xl overflow-hidden border border-zinc-800 bg-zinc-900/60">
-                        <video src={src.startsWith('http') ? src : `/${src}`} className="w-full h-56 object-cover" autoPlay muted loop playsInline />
+                      <div className="rounded-2xl overflow-hidden border border-zinc-800 bg-zinc-900/60">
+                        <video src={src.startsWith('http') ? src : `/${src}`} className="w-full h-36 object-cover" autoPlay muted loop playsInline />
                       </div>
                     </SwiperSlide>
                   ))}
@@ -218,48 +280,48 @@ const MarketingContent: React.FC<{
               </div>
 
               {/* Creator Flow - Compact Horizontal */}
-              <div className="mt-8 animate-fade-in-up animation-delay-2000">
-                <div className="flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-0">
+              <div className="mt-4 animate-fade-in-up animation-delay-2000">
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-1.5 sm:gap-0">
                   {/* Create Content */}
-                  <div className="flex items-center gap-3 bg-gradient-to-br from-[#E0FE10]/10 to-lime-400/10 backdrop-blur-sm border border-[#E0FE10]/30 rounded-2xl px-5 py-3.5 w-full sm:w-auto">
-                    <div className="w-12 h-12 bg-gradient-to-br from-[#E0FE10] to-lime-400 rounded-xl flex items-center justify-center flex-shrink-0">
-                      <FaBolt className="h-5 w-5 text-black" />
+                  <div className="flex items-center gap-2 bg-zinc-800/40 rounded-lg px-3 py-2 w-full sm:w-auto">
+                    <div className="w-7 h-7 bg-zinc-700 rounded-md flex items-center justify-center flex-shrink-0">
+                      <FaBolt className="h-3 w-3 text-[#E0FE10]" />
                     </div>
                     <div>
-                      <div className="text-white font-bold text-base leading-tight">Create Content</div>
-                      <div className="text-zinc-400 text-xs leading-snug mt-0.5">Record Moves</div>
+                      <div className="text-zinc-300 font-medium text-xs leading-tight">Create Content</div>
+                      <div className="text-zinc-500 text-[10px] leading-snug">Record Moves</div>
                     </div>
                   </div>
 
                   {/* Arrow */}
-                  <div className="flex items-center justify-center px-3 rotate-90 sm:rotate-0">
-                    <FaArrowRight className="h-5 w-5 text-zinc-600" />
+                  <div className="flex items-center justify-center px-2 rotate-90 sm:rotate-0">
+                    <FaArrowRight className="h-3 w-3 text-zinc-700" />
                   </div>
 
                   {/* Launch Rounds */}
-                  <div className="flex items-center gap-3 bg-gradient-to-br from-purple-500/10 to-blue-500/10 backdrop-blur-sm border border-purple-400/30 rounded-2xl px-5 py-3.5 w-full sm:w-auto">
-                    <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-blue-500 rounded-xl flex items-center justify-center flex-shrink-0">
-                      <FaGamepad className="h-5 w-5 text-white" />
+                  <div className="flex items-center gap-2 bg-zinc-800/40 rounded-lg px-3 py-2 w-full sm:w-auto">
+                    <div className="w-7 h-7 bg-zinc-700 rounded-md flex items-center justify-center flex-shrink-0">
+                      <FaGamepad className="h-3 w-3 text-purple-400" />
                     </div>
                     <div>
-                      <div className="text-white font-bold text-base leading-tight">Launch Rounds</div>
-                      <div className="text-zinc-400 text-xs leading-snug mt-0.5">Turn Movelists into challenges</div>
+                      <div className="text-zinc-300 font-medium text-xs leading-tight">Launch Rounds</div>
+                      <div className="text-zinc-500 text-[10px] leading-snug">Turn Movelists into challenges</div>
                     </div>
                   </div>
 
                   {/* Arrow */}
-                  <div className="flex items-center justify-center px-3 rotate-90 sm:rotate-0">
-                    <FaArrowRight className="h-5 w-5 text-zinc-600" />
+                  <div className="flex items-center justify-center px-2 rotate-90 sm:rotate-0">
+                    <FaArrowRight className="h-3 w-3 text-zinc-700" />
                   </div>
 
                   {/* Earn Revenue */}
-                  <div className="flex items-center gap-3 bg-gradient-to-br from-orange-500/10 to-pink-500/10 backdrop-blur-sm border border-orange-400/30 rounded-2xl px-5 py-3.5 w-full sm:w-auto">
-                    <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-pink-500 rounded-xl flex items-center justify-center flex-shrink-0">
-                      <FaCoins className="h-5 w-5 text-white" />
+                  <div className="flex items-center gap-2 bg-zinc-800/40 rounded-lg px-3 py-2 w-full sm:w-auto">
+                    <div className="w-7 h-7 bg-zinc-700 rounded-md flex items-center justify-center flex-shrink-0">
+                      <FaCoins className="h-3 w-3 text-orange-400" />
                     </div>
                     <div>
-                      <div className="text-white font-bold text-base leading-tight">Earn Revenue</div>
-                      <div className="text-zinc-400 text-xs leading-snug mt-0.5">Monetize expertise</div>
+                      <div className="text-zinc-300 font-medium text-xs leading-tight">Earn Revenue</div>
+                      <div className="text-zinc-500 text-[10px] leading-snug">Monetize expertise</div>
                     </div>
                   </div>
                 </div>
@@ -267,9 +329,9 @@ const MarketingContent: React.FC<{
             </div>
 
             {/* Right Column - Phone Screenshot */}
-            <div className="flex items-center justify-center lg:justify-end animate-fade-in-up animation-delay-1800">
+            <div className="hidden lg:flex items-center justify-center lg:justify-end py-8 animate-fade-in-up animation-delay-1800">
               <div className="relative group">
-                <div className="relative w-[300px] sm:w-[380px] lg:w-[420px]">
+                <div className="relative w-[320px] lg:w-[360px]">
                   <div className="absolute -inset-6 bg-gradient-to-r from-[#E0FE10]/30 to-lime-400/30 rounded-[3rem] blur-2xl opacity-40 group-hover:opacity-60 transition-opacity duration-500"></div>
                   <div className="relative rounded-[2.5rem] overflow-hidden border-4 border-zinc-800/50 shadow-2xl transform group-hover:scale-105 transition-transform duration-500">
                     <img 

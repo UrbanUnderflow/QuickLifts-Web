@@ -143,9 +143,15 @@ const SideNav: React.FC<SideNavProps> = ({ selectedTab, onTabChange, onAbout }) 
       <nav className="hidden md:flex fixed left-0 top-0 h-screen w-20 lg:w-64 border-r border-zinc-800 bg-black z-40 flex-col">
         {/* Logo/Brand */}
         <div className="p-6 mb-4">
-          <h1 className="hidden lg:block text-2xl font-bold text-white">
-            {isPulseCheckPage ? 'PulseCheck' : 'Pulse'}
-          </h1>
+          {/* Large screens: full logo */}
+          <div className="hidden lg:block">
+            <img 
+              src={isPulseCheckPage ? '/pulseCheckIcon.png' : '/pulse-logo-white.svg'} 
+              alt={isPulseCheckPage ? 'PulseCheck' : 'Pulse'} 
+              className="h-8 w-auto" 
+            />
+          </div>
+          {/* Small screens: icon only */}
           <div className="lg:hidden flex items-center justify-center">
             <img 
               src={isPulseCheckPage ? '/pulseCheckIcon.png' : '/pulseIcon.png'} 

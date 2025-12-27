@@ -1418,17 +1418,27 @@ const Discover: React.FC = () => {
   return (
     <div className="max-w-xl mx-auto px-4 py-6 bg-zinc-900 min-h-screen">
       <div className="mb-6 flex items-center justify-between">
-        {/* Desktop: simple Pulse title (no dropdown) */}
-        <h1 className="hidden md:block text-xl font-bold text-white">Pulse</h1>
+        {/* Desktop: Pulse logo (no dropdown) */}
+        <div className="hidden md:block">
+          <img 
+            src="/pulse-logo-white.svg" 
+            alt="Pulse" 
+            className="h-7 w-auto" 
+          />
+        </div>
 
-        {/* Mobile: Pulse with slim chevron that opens More menu */}
+        {/* Mobile: Pulse logo with slim chevron that opens More menu */}
         <div className="relative md:hidden">
           <button
             type="button"
             onClick={() => setShowMobileMoreMenu((v) => !v)}
-            className="inline-flex items-center gap-1 text-xl font-bold text-white"
+            className="inline-flex items-center gap-1"
           >
-            <span>Pulse</span>
+            <img 
+              src="/pulse-logo-white.svg" 
+              alt="Pulse" 
+              className="h-6 w-auto" 
+            />
             {showMobileMoreMenu ? (
               <ChevronUpIcon className="w-4 h-4 text-zinc-300" />
             ) : (

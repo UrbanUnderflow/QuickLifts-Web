@@ -11,7 +11,9 @@ import {
   FaDumbbell,
   FaVideo,
   FaTrophy,
-  FaCoins
+  FaCoins,
+  FaDollarSign,
+  FaPlay
 } from 'react-icons/fa6';
 import Footer from '../components/Footer/Footer';
 import { platformDetection, appLinks, openIOSAppOrStore } from '../utils/platformDetection';
@@ -106,8 +108,12 @@ const CreatorsPage: React.FC = () => {
         {/* Simple Navigation */}
         <nav className="fixed top-0 w-full bg-zinc-950/90 backdrop-blur-md z-50 border-b border-zinc-800/50">
           <div className="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
-            <Link href="/" className="text-2xl font-bold text-[#E0FE10]">
-              Pulse
+            <Link href="/" className="flex items-center">
+              <img 
+                src="/pulse-logo-green.svg" 
+                alt="Pulse" 
+                className="h-8 w-auto" 
+              />
             </Link>
             <button 
               onClick={handleLaunchChallenge}
@@ -128,9 +134,9 @@ const CreatorsPage: React.FC = () => {
               </span>
             </h1>
             
-            <p className="text-xl sm:text-2xl text-zinc-400 mb-10 max-w-3xl mx-auto leading-relaxed">
-              Pulse lets fitness creators launch short challenges using bite-sized exercise videos and earn when their community shows up.
-            </p>
+              <p className="text-xl sm:text-2xl text-zinc-400 mb-10 max-w-3xl mx-auto leading-relaxed">
+               Turn bite-sized videos into gamified group experiences.
+              </p>
             
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-12">
               <button 
@@ -161,6 +167,82 @@ const CreatorsPage: React.FC = () => {
               </div>
               <span className="hidden sm:inline text-zinc-700">|</span>
               <span>Trusted by instructors and studios</span>
+            </div>
+          </div>
+        </section>
+
+        {/* Video Walkthrough Section - nas.io style */}
+        <section className="py-20 px-6 bg-gradient-to-b from-zinc-950 to-zinc-900">
+          <div className="max-w-6xl mx-auto">
+            <div className="text-center mb-12">
+              <p className="text-[#E0FE10] text-3xl sm:text-4xl font-bold italic mb-2">2 minutes</p>
+              <h2 className="text-3xl sm:text-4xl font-bold mb-4">
+                to build your first challenge
+              </h2>
+              <p className="text-zinc-400 text-lg max-w-2xl mx-auto">
+                Create content once, turn it into recurring revenue.
+              </p>
+            </div>
+
+            <div className="grid lg:grid-cols-2 gap-8 items-center">
+              {/* Left - Feature List */}
+              <div className="space-y-3">
+                {[
+                  { icon: FaVideo, label: 'Moves', desc: 'Record bite-sized exercise clips', active: true },
+                  { icon: FaDumbbell, label: 'Movelists', desc: 'Stack moves into workout routines' },
+                  { icon: FaTrophy, label: 'Rounds', desc: 'Launch group fitness challenges' },
+                  { icon: FaUsers, label: 'Community', desc: 'Build your engaged audience' },
+                  { icon: FaDollarSign, label: 'Earnings', desc: 'Get paid when people participate' },
+                ].map((feature, idx) => (
+                  <div 
+                    key={feature.label}
+                    className={`flex items-center gap-4 p-4 rounded-xl border transition-all cursor-pointer ${
+                      feature.active 
+                        ? 'bg-[#E0FE10]/10 border-[#E0FE10]/40' 
+                        : 'bg-zinc-800/30 border-zinc-700/50 hover:bg-zinc-800/50'
+                    }`}
+                  >
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                      feature.active ? 'bg-[#E0FE10] text-black' : 'bg-zinc-700 text-zinc-300'
+                    }`}>
+                      <feature.icon className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <p className={`font-semibold ${feature.active ? 'text-[#E0FE10]' : 'text-white'}`}>
+                        {feature.label}
+                      </p>
+                      <p className="text-zinc-400 text-sm">{feature.desc}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Right - Video */}
+              <div className="flex justify-center lg:justify-end">
+                <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden w-full max-w-[380px] aspect-[9/16]">
+                  <iframe
+                    className="w-full h-full"
+                    src="https://www.youtube-nocookie.com/embed/MZ_CSr0Cyzs?rel=0&modestbranding=1&playsinline=1"
+                    title="How to Launch Your First Challenge on Pulse"
+                    frameBorder="0"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                    loading="lazy"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="text-center mt-8">
+              <a
+                href="https://www.youtube.com/watch?v=MZ_CSr0Cyzs"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 text-zinc-400 hover:text-white text-sm transition-colors"
+              >
+                <FaPlay className="h-3 w-3" />
+                Watch full video walkthrough
+              </a>
             </div>
           </div>
         </section>
@@ -389,7 +471,7 @@ const CreatorsPage: React.FC = () => {
                   <p className="text-zinc-300 text-center">
                     <strong className="text-white">Why this matters:</strong> Challenges drive new customer acquisition, 
                     re-engage lapsed members, and empower instructors to build their own following - all while 
-                    benefiting the studio.
+                    benefiting the instructor and the studio.
                   </p>
                 </div>
               </div>
