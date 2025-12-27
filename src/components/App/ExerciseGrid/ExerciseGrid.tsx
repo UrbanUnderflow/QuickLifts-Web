@@ -38,7 +38,7 @@ if (filteredVideos.length === 0) {
 }
 
 return (
-<div className="grid grid-cols-2 sm:grid-cols-3 gap-4 p-4">
+<div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
 {filteredVideos.map((exercise) => {
 const isSelected = multiSelection && selectedExercises.some((sel) => sel.id === exercise.id);
 return (
@@ -53,19 +53,19 @@ return (
   }}
   className="relative cursor-pointer group"
 >
-  <div className="relative rounded-lg overflow-hidden aspect-square">
+  <div className={`relative rounded-lg overflow-hidden aspect-square ${isSelected ? 'ring-2 ring-[#E0FE10] ring-offset-2 ring-offset-black' : ''}`}>
     <img
       src={exercise.videos[0]?.gifURL}
       alt={exercise.name}
       className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
     />
     {multiSelection && isSelected && (
-      <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-        <CheckCircle className="text-[#E0FE10]" size={32} />
+      <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+        <CheckCircle className="text-[#E0FE10]" size={24} />
       </div>
     )}
   </div>
-  <p className="mt-2 text-white text-sm font-medium truncate">{exercise.name}</p>
+  <p className="mt-1.5 text-white text-xs sm:text-sm font-medium truncate">{exercise.name}</p>
 </div>
 );
 })}

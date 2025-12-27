@@ -12,8 +12,9 @@ import { db } from '../../../api/firebase/config';
 import { doc, updateDoc } from 'firebase/firestore';
 import { SimpleVideoTrimmer } from '../../../components/SimpleVideoTrimmer';
 import { useUser } from '../../../hooks/useUser';
-import { creatorPagesService } from '../../../api/firebase/creatorPages/service';
+import { creatorPagesService, CLIENT_QUESTIONNAIRES_PAGE_SLUG, Survey, SurveyResponse } from '../../../api/firebase/creatorPages/service';
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { SurveyBuilderModal, SurveysListModal, SurveyResponsesModal } from '../../../components/Surveys';
 
 import { Exercise, ExerciseVideo, ExerciseAuthor, ExerciseCategory } from '../../../api/firebase/exercise/types';
 import { ProfileImage } from '../../../api/firebase/user/types';
@@ -91,6 +92,17 @@ const Create: React.FC = () => {
   const [lpCtaButtonColor, setLpCtaButtonColor] = useState('#E0FE10');
   const [lpCtaTextColor, setLpCtaTextColor] = useState('#000000');
   const [lpSaving, setLpSaving] = useState(false);
+
+  // Client Questionnaire (uses existing survey system under a dedicated pageSlug)
+  const [clientQuestionnaires, setClientQuestionnaires] = useState<Survey[]>([]);
+  const [clientQuestionnairesLoading, setClientQuestionnairesLoading] = useState(false);
+  const [showClientQuestionnaireBuilder, setShowClientQuestionnaireBuilder] = useState(false);
+  const [showClientQuestionnairesList, setShowClientQuestionnairesList] = useState(false);
+  const [showClientQuestionnaireResponses, setShowClientQuestionnaireResponses] = useState(false);
+  const [editingClientQuestionnaire, setEditingClientQuestionnaire] = useState<Survey | null>(null);
+  const [selectedClientQuestionnaireForResponses, setSelectedClientQuestionnaireForResponses] = useState<Survey | null>(null);
+  const [clientQuestionnaireResponses, setClientQuestionnaireResponses] = useState<SurveyResponse[]>([]);
+  const [clientQuestionnaireResponsesLoading, setClientQuestionnaireResponsesLoading] = useState(false);
 
   const categories = [
     'Weight Training', 
@@ -1102,26 +1114,218 @@ const Create: React.FC = () => {
     }
   };
 
-  return (
-    <div className="max-w-xl mx-auto px-4 py-6">
-      <div className="text-center text-white mb-6">
-        <h2 className="text-2xl font-bold">Create</h2>
-        <p className="text-zinc-400">Start building your next workout or post.</p>
+  const loadClientQuestionnaires = async () => {
+    if (!currentUser?.id) return;
+    setClientQuestionnairesLoading(true);
+    try {
+      const fetched = await creatorPagesService.getSurveys(currentUser.id, CLIENT_QUESTIONNAIRES_PAGE_SLUG);
+      setClientQuestionnaires(fetched);
+    } catch (err) {
+      console.error('[Client Questionnaires] Failed to load:', err);
+      alert('Failed to load questionnaires. Please try again.');
+    } finally {
+      setClientQuestionnairesLoading(false);
+    }
+  };
+
+  const handleOpenClientQuestionnaires = async () => {
+    if (!currentUser?.id) {
+      alert('You must be logged in to manage questionnaires.');
+      return;
+    }
+    await loadClientQuestionnaires();
+    setShowClientQuestionnairesList(true);
+  };
+
+  const handleSaveClientQuestionnaire = async (
+    surveyData: Omit<Survey, 'id' | 'userId' | 'pageSlug' | 'createdAt' | 'updatedAt'> & { id?: string }
+  ) => {
+    if (!currentUser?.id) return;
+    try {
+      await creatorPagesService.saveSurvey(currentUser.id, CLIENT_QUESTIONNAIRES_PAGE_SLUG, surveyData);
+      await loadClientQuestionnaires();
+      setShowClientQuestionnaireBuilder(false);
+      setEditingClientQuestionnaire(null);
+    } catch (err) {
+      console.error('[Client Questionnaires] Failed to save:', err);
+      alert('Failed to save questionnaire. Please try again.');
+    }
+  };
+
+  const handleDeleteClientQuestionnaire = async (surveyId: string) => {
+    if (!currentUser?.id) return;
+    try {
+      await creatorPagesService.deleteSurvey(currentUser.id, CLIENT_QUESTIONNAIRES_PAGE_SLUG, surveyId);
+      setClientQuestionnaires(prev => prev.filter(s => s.id !== surveyId));
+    } catch (err) {
+      console.error('[Client Questionnaires] Failed to delete:', err);
+      alert('Failed to delete questionnaire. Please try again.');
+    }
+  };
+
+  const handleViewClientQuestionnaireResponses = async (survey: Survey) => {
+    if (!currentUser?.id) return;
+    setSelectedClientQuestionnaireForResponses(survey);
+    setClientQuestionnaireResponsesLoading(true);
+    setShowClientQuestionnairesList(false);
+    setShowClientQuestionnaireResponses(true);
+    try {
+      const responses = await creatorPagesService.getSurveyResponses(
+        currentUser.id,
+        CLIENT_QUESTIONNAIRES_PAGE_SLUG,
+        survey.id
+      );
+      setClientQuestionnaireResponses(responses);
+    } catch (err) {
+      console.error('[Client Questionnaire Responses] Failed to load:', err);
+      alert('Failed to load responses. Please try again.');
+    } finally {
+      setClientQuestionnaireResponsesLoading(false);
+    }
+  };
+
+  const handleCopyClientQuestionnaireLink = async (survey: Survey) => {
+    if (!currentUser?.username) {
+      alert('You must have a username set to share a questionnaire link.');
+      return;
+    }
+    const baseUrl = process.env.NODE_ENV === 'development'
+      ? 'http://localhost:8888'
+      : 'https://fitwithpulse.ai';
+    const link = `${baseUrl}/${currentUser.username}/questionnaire/${survey.id}`;
+    try {
+      await navigator.clipboard.writeText(link);
+      alert('Questionnaire link copied to clipboard!');
+    } catch (err) {
+      console.error('[Client Questionnaires] Failed to copy link:', err);
+      alert('Failed to copy link. Please try again.');
+    }
+  };
+
+  // Active view state for Creator Studio
+  const [activeView, setActiveView] = useState<'studio' | 'upload'>('studio');
+
+  // Feature cards configuration
+  const studioFeatures = [
+    {
+      id: 'move',
+      title: 'Create a Move',
+      description: 'Upload an exercise video',
+      icon: (
+        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+        </svg>
+      ),
+      color: 'from-violet-500/20 to-fuchsia-500/20',
+      borderColor: 'border-violet-500/30',
+      iconBg: 'bg-violet-500/20',
+      iconColor: 'text-violet-400',
+      action: () => setActiveView('upload'),
+    },
+    {
+      id: 'movelist',
+      title: 'Create a Movelist',
+      description: 'Build a workout stack from moves',
+      icon: (
+        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+        </svg>
+      ),
+      color: 'from-orange-500/20 to-amber-500/20',
+      borderColor: 'border-orange-500/30',
+      iconBg: 'bg-orange-500/20',
+      iconColor: 'text-orange-400',
+      action: () => router.push('/createStack'),
+    },
+    {
+      id: 'round',
+      title: 'Create a Round',
+      description: 'Build a multi-day training program',
+      icon: (
+        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.879 16.121A3 3 0 1012.015 11L11 14H9c0 .768.293 1.536.879 2.121z" />
+        </svg>
+      ),
+      color: 'from-rose-500/20 to-pink-500/20',
+      borderColor: 'border-rose-500/30',
+      iconBg: 'bg-rose-500/20',
+      iconColor: 'text-rose-400',
+      action: () => router.push('/create-round'),
+    },
+    {
+      id: 'landing',
+      title: 'Landing Pages',
+      description: 'Create beautiful event & promo pages',
+      icon: (
+        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
+        </svg>
+      ),
+      color: 'from-cyan-500/20 to-blue-500/20',
+      borderColor: 'border-cyan-500/30',
+      iconBg: 'bg-cyan-500/20',
+      iconColor: 'text-cyan-400',
+      action: () => setShowPageModal(true),
+    },
+    {
+      id: 'questionnaires',
+      title: 'Client Intake Forms',
+      description: 'Collect info from new clients',
+      icon: (
+        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+        </svg>
+      ),
+      color: 'from-emerald-500/20 to-teal-500/20',
+      borderColor: 'border-emerald-500/30',
+      iconBg: 'bg-emerald-500/20',
+      iconColor: 'text-emerald-400',
+      action: handleOpenClientQuestionnaires,
+    },
+  ];
+
+  // Upload view content
+  const renderUploadView = () => (
+    <div className="max-w-2xl mx-auto">
+      {/* Back button */}
+      <button
+        onClick={() => {
+          if (videoPreview) {
+            if (confirm('You have unsaved changes. Are you sure you want to go back?')) {
+              clearVideo();
+              setActiveView('studio');
+            }
+          } else {
+            setActiveView('studio');
+          }
+        }}
+        className="flex items-center gap-2 text-zinc-400 hover:text-white mb-6 transition-colors group"
+      >
+        <svg className="w-5 h-5 group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+        </svg>
+        <span>Back to Creator Studio</span>
+      </button>
+
+      <div className="text-white mb-8">
+        <h2 className="text-3xl font-bold mb-2">Create a Move</h2>
+        <p className="text-zinc-400">Upload an exercise video to your library</p>
       </div>
 
       <div 
         className={`
-          border-2 border-dashed rounded-xl p-6 text-center transition-colors duration-300
-          ${isDragOver ? 'border-[#E0FE10] bg-[#E0FE10]/10' : 'border-zinc-700'}
+          relative border-2 border-dashed rounded-2xl p-8 text-center transition-all duration-300
+          ${isDragOver ? 'border-[#E0FE10] bg-[#E0FE10]/5 scale-[1.02]' : 'border-zinc-700 hover:border-zinc-600'}
         `}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
         {isProcessing ? (
-          <div className="flex flex-col items-center justify-center py-10">
-            <div className="w-12 h-12 border-4 border-[#E0FE10] border-t-transparent rounded-full animate-spin mb-4"></div>
-            <p className="text-zinc-300">Processing your video...</p>
+          <div className="flex flex-col items-center justify-center py-12">
+            <div className="w-16 h-16 border-4 border-[#E0FE10] border-t-transparent rounded-full animate-spin mb-6"></div>
+            <p className="text-zinc-300 text-lg">Processing your video...</p>
           </div>
         ) : videoPreview ? (
           <div className="relative">
@@ -1132,9 +1336,11 @@ const Create: React.FC = () => {
             />
             <button 
               onClick={clearVideo}
-              className="absolute top-2 right-2 bg-red-500 text-white p-2 rounded-full"
+              className="absolute top-3 right-3 bg-red-500/90 hover:bg-red-500 text-white p-2.5 rounded-full backdrop-blur-sm transition-colors"
             >
-              ✕
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
             </button>
           </div>
         ) : (
@@ -1146,12 +1352,17 @@ const Create: React.FC = () => {
               onChange={handleFileInputChange}
               className="hidden"
             />
-            <div className="text-zinc-400">
-              <p className="mb-4">Drag and drop videos here</p>
-              <p className="mb-4">or</p>
+            <div className="py-8">
+              <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 flex items-center justify-center">
+                <svg className="w-10 h-10 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                </svg>
+              </div>
+              <p className="text-zinc-300 text-lg mb-2">Drag and drop your video here</p>
+              <p className="text-zinc-500 mb-6">MP4, MOV, or AVI up to 50MB</p>
               <button 
                 onClick={() => fileInputRef.current?.click()}
-                className="bg-[#E0FE10] text-black px-4 py-2 rounded-lg"
+                className="bg-[#E0FE10] text-black px-6 py-3 rounded-xl font-semibold hover:bg-[#d0ee00] transition-colors"
               >
                 Browse Files
               </button>
@@ -1161,26 +1372,26 @@ const Create: React.FC = () => {
       </div>
 
       {videoPreview && (
-        <div className="mt-6 space-y-4">
+        <div className="mt-8 space-y-5">
           {/* Exercise Name */}
           <div>
-            <label className="block text-sm text-zinc-300 mb-2">Exercise Name</label>
+            <label className="block text-sm font-medium text-zinc-300 mb-2">Exercise Name</label>
             <input
               type="text"
               value={exerciseName}
               onChange={(e) => setExerciseName(e.target.value)}
               placeholder="Enter exercise name"
-              className="w-full bg-zinc-800 border border-zinc-600 rounded-lg p-3 text-white placeholder-zinc-400"
+              className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl p-4 text-white placeholder-zinc-500 focus:border-[#E0FE10] focus:outline-none transition-colors"
             />
           </div>
 
           {/* Exercise Category */}
           <div>
-            <label className="block text-sm text-zinc-300 mb-2">Exercise Category</label>
+            <label className="block text-sm font-medium text-zinc-300 mb-2">Category</label>
             <select
               value={exerciseCategory}
               onChange={(e) => setExerciseCategory(e.target.value)}
-              className="w-full bg-zinc-800 border border-zinc-600 rounded-lg p-3 text-white"
+              className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl p-4 text-white focus:border-[#E0FE10] focus:outline-none transition-colors"
             >
               {categories.map(category => (
                 <option key={category} value={category}>{category}</option>
@@ -1190,104 +1401,80 @@ const Create: React.FC = () => {
 
           {/* Tags */}
           <div>
-            <label className="block text-sm text-zinc-300 mb-2">Tags</label>
-            <div className="flex mb-2">
+            <label className="block text-sm font-medium text-zinc-300 mb-2">Tags</label>
+            <div className="flex gap-2 mb-3">
               <input
                 type="text"
                 value={newTag}
                 onChange={(e) => setNewTag(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && handleAddTag()}
                 placeholder="Add a tag"
-                className="flex-grow bg-zinc-800 border border-zinc-600 rounded-lg p-3 text-white placeholder-zinc-400"
+                className="flex-grow bg-zinc-800/50 border border-zinc-700 rounded-xl p-4 text-white placeholder-zinc-500 focus:border-[#E0FE10] focus:outline-none transition-colors"
               />
               <button 
                 onClick={handleAddTag}
-                className="ml-2 bg-[#E0FE10] text-black px-4 rounded-lg"
+                className="bg-zinc-700 hover:bg-zinc-600 text-white px-5 rounded-xl font-medium transition-colors"
               >
                 Add
               </button>
             </div>
-            <div className="flex flex-wrap gap-2">
-              {tags.map(tag => (
-                <div 
-                  key={tag} 
-                  className="bg-zinc-700 text-white px-3 py-1 rounded-full flex items-center"
-                >
-                  {tag}
-                  <button 
-                    onClick={() => handleRemoveTag(tag)}
-                    className="ml-2 text-red-400"
+            {tags.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {tags.map(tag => (
+                  <span 
+                    key={tag} 
+                    className="bg-zinc-800 text-zinc-300 px-4 py-2 rounded-full flex items-center gap-2 text-sm"
                   >
-                    ✕
-                  </button>
-                </div>
-              ))}
-            </div>
+                    {tag}
+                    <button 
+                      onClick={() => handleRemoveTag(tag)}
+                      className="text-zinc-500 hover:text-red-400 transition-colors"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Caption */}
           <div>
             <div className="flex justify-between items-center mb-2">
-              <label className="text-sm text-zinc-300">Caption</label>
-              {caption && (
-                <button
-                  onClick={handleGenerateCaption}
-                  disabled={isGeneratingCaption || !exerciseName.trim()}
-                  className={`bg-zinc-700 hover:bg-zinc-600 text-[#E0FE10] px-3 py-1 rounded text-sm flex items-center transition-all duration-200
-                    ${isGeneratingCaption ? 'opacity-50' : ''}`}
-                  title="Generate AI caption"
-                >
-                  {isGeneratingCaption ? (
-                    <div className="w-4 h-4 border-2 border-[#E0FE10] border-t-transparent rounded-full animate-spin mr-1"></div>
-                  ) : (
-                    <span className="mr-1">✨</span>
-                  )}
-                  {isGeneratingCaption ? 'Generating...' : 'AI Caption'}
-                </button>
-              )}
+              <label className="text-sm font-medium text-zinc-300">Caption</label>
+              <button
+                onClick={handleGenerateCaption}
+                disabled={isGeneratingCaption || !exerciseName.trim()}
+                className={`bg-gradient-to-r from-violet-500/20 to-fuchsia-500/20 border border-violet-500/30 hover:border-violet-500/50 text-violet-300 px-4 py-1.5 rounded-lg text-sm flex items-center gap-2 transition-all duration-200
+                  ${isGeneratingCaption ? 'opacity-50' : ''}`}
+              >
+                {isGeneratingCaption ? (
+                  <div className="w-4 h-4 border-2 border-violet-400 border-t-transparent rounded-full animate-spin"></div>
+                ) : (
+                  <span>✨</span>
+                )}
+                {isGeneratingCaption ? 'Generating...' : 'AI Caption'}
+              </button>
             </div>
-            <div className="relative">
-              <textarea
-                value={caption}
-                onChange={(e) => setCaption(e.target.value)}
-                placeholder="Add a caption to your exercise..."
-                className="w-full bg-zinc-800 border border-zinc-600 rounded-lg p-3 text-white placeholder-zinc-400"
-                rows={4}
-              />
-              {!caption && (
-                <button
-                  onClick={handleGenerateCaption}
-                  disabled={isGeneratingCaption || !exerciseName.trim()}
-                  className={`absolute right-2 top-2 bg-zinc-700 hover:bg-zinc-600 text-[#E0FE10] px-3 py-1 rounded text-sm flex items-center transition-all duration-200
-                    ${isGeneratingCaption ? 'opacity-50' : ''}`}
-                  title="Generate AI caption"
-                >
-                  {isGeneratingCaption ? (
-                    <div className="w-4 h-4 border-2 border-[#E0FE10] border-t-transparent rounded-full animate-spin mr-1"></div>
-                  ) : (
-                    <span className="mr-1">✨</span>
-                  )}
-                  {isGeneratingCaption ? 'Generating...' : 'AI Caption'}
-                </button>
-              )}
-            </div>
-            {isGeneratingCaption && (
-              <div className="text-xs text-zinc-400 mt-1">
-                Creating caption based on exercise details...
-              </div>
-            )}
+            <textarea
+              value={caption}
+              onChange={(e) => setCaption(e.target.value)}
+              placeholder="Add a caption to your exercise..."
+              className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl p-4 text-white placeholder-zinc-500 focus:border-[#E0FE10] focus:outline-none transition-colors resize-none"
+              rows={4}
+            />
           </div>
 
-          {/* Progress Bar (upload progress) */}
+          {/* Progress Bar */}
           {isUploading && (
-            <div className="mt-4">
+            <div className="mt-6">
               <ProgressBar 
                 progress={uploadProgress} 
                 label={
-                  uploadProgress < 0.5 ? "Uploading original video..." :
-                  uploadProgress < 0.8 ? "Creating exercise entry..." :
-                  uploadProgress < 0.87 ? "Requesting server trim..." :
-                  uploadProgress < 1.0 ? "Server processing video..." :
+                  uploadProgress < 0.5 ? "Uploading video..." :
+                  uploadProgress < 0.8 ? "Creating exercise..." :
+                  uploadProgress < 0.87 ? "Processing..." :
+                  uploadProgress < 1.0 ? "Finalizing..." :
                   "Complete!"
                 }
               />
@@ -1298,56 +1485,137 @@ const Create: React.FC = () => {
           <button 
             onClick={handleSubmit}
             disabled={!exerciseName.trim() || isUploading}
-            className="w-full bg-[#E0FE10] text-black font-semibold py-3 px-4 mb-20 rounded-lg hover:bg-[#c8e60e] transition-colors disabled:opacity-50"
+            className="w-full bg-[#E0FE10] text-black font-bold py-4 px-6 rounded-xl hover:bg-[#d0ee00] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed text-lg mt-4"
           >
             {isUploading ? 'Uploading...' : 'Post Exercise'}
           </button>
           <Spacer size={100} />
         </div>
       )}
+    </div>
+  );
 
-      {/* Storage Troubleshooting - Shown when no video is selected */}
-      {!videoPreview && (
-        <div className="mt-6 p-4 bg-zinc-800/50 rounded-lg">
-          <details>
-            <summary className="text-zinc-400 text-sm cursor-pointer">Storage troubleshooting</summary>
-            <div className="mt-2 text-zinc-500 text-xs">
-              <p className="mb-2">If you're having trouble uploading videos, clear the browser storage to resolve potential issues.</p>
-              <div className="mb-3 border-l-2 border-yellow-500 pl-2 py-1 text-yellow-200 bg-yellow-900/20">
-                <strong>Note:</strong> This app requires browser storage to work properly. If you're in private/incognito mode or have strict privacy settings, you may encounter issues. Try using a regular browser window or adjusting your privacy settings.
-              </div>
-              <button 
-                onClick={async () => {
-                  if (confirm('Clear all video storage? This may help resolve upload issues.')) {
-                    try {
-                      await clearAllStorage();
-                      alert('Storage cleared successfully.');
-                    } catch (err) {
-                      console.error('[DEBUG] Error clearing storage:', err);
-                      alert('Failed to clear storage. Please try again or reload the page.');
-                    }
-                  }
-                }}
-                className="bg-zinc-700 text-red-400 text-xs px-2 py-1 rounded-lg hover:bg-zinc-600"
-              >
-                Clear Storage
-              </button>
+  // Main Creator Studio view
+  const renderStudioView = () => (
+    <div className="max-w-4xl mx-auto">
+      {/* Hero Header */}
+      <div className="relative mb-10">
+        {/* Background gradient orbs */}
+        <div className="absolute -top-20 -left-20 w-64 h-64 bg-[#E0FE10]/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -top-10 -right-10 w-48 h-48 bg-violet-500/10 rounded-full blur-3xl pointer-events-none" />
+        
+        <div className="relative">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#E0FE10] to-[#a8c00a] flex items-center justify-center">
+              <svg className="w-6 h-6 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
             </div>
-          </details>
+            <span className="text-[#E0FE10] font-semibold tracking-wide uppercase text-sm">Creator Studio</span>
+          </div>
+          
+          <h1 className="text-4xl md:text-5xl font-bold text-white mb-3">
+            Welcome back{currentUser?.username ? `, ${currentUser.username}` : ''}
+          </h1>
+          <p className="text-xl text-zinc-400 max-w-2xl">
+            Build your fitness brand with powerful creator tools
+          </p>
         </div>
-      )}
+      </div>
 
-      {/* Create Landing Page Button */}
-      {!videoPreview && (
-        <div className="mt-6">
+      {/* Feature Cards Grid */}
+      <div className="grid md:grid-cols-3 gap-5 mb-10">
+        {studioFeatures.map((feature, index) => (
           <button
-            onClick={() => setShowPageModal(true)}
-            className="w-full bg-zinc-800 hover:bg-zinc-700 text-white px-4 py-3 rounded-lg border border-zinc-700 transition-colors"
+            key={feature.id}
+            onClick={feature.action}
+            className={`group relative bg-gradient-to-br ${feature.color} border ${feature.borderColor} rounded-2xl p-6 text-left transition-all duration-300 hover:scale-[1.02] hover:shadow-xl hover:shadow-black/20`}
+            style={{ animationDelay: `${index * 100}ms` }}
           >
-            + Create Landing Page
+            {/* Icon */}
+            <div className={`w-14 h-14 ${feature.iconBg} ${feature.iconColor} rounded-xl flex items-center justify-center mb-5 group-hover:scale-110 transition-transform duration-300`}>
+              {feature.icon}
+            </div>
+            
+            {/* Content */}
+            <h3 className="text-xl font-bold text-white mb-2 group-hover:text-[#E0FE10] transition-colors">
+              {feature.title}
+            </h3>
+            <p className="text-zinc-400 text-sm leading-relaxed">
+              {feature.description}
+            </p>
+
+            {/* Arrow indicator */}
+            <div className="absolute bottom-6 right-6 w-8 h-8 rounded-full bg-white/5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 group-hover:translate-x-1">
+              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
+          </button>
+        ))}
+      </div>
+
+      {/* Quick Tips Section */}
+      <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center">
+            <svg className="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+            </svg>
+          </div>
+          <h3 className="text-lg font-semibold text-white">Creator Tips</h3>
+        </div>
+        <ul className="space-y-3">
+          <li className="flex items-start gap-3 text-zinc-400 text-sm">
+            <span className="text-[#E0FE10] mt-0.5">•</span>
+            <span>Use <strong className="text-zinc-300">Client Intake Forms</strong> to gather important info before your first session</span>
+          </li>
+          <li className="flex items-start gap-3 text-zinc-400 text-sm">
+            <span className="text-[#E0FE10] mt-0.5">•</span>
+            <span>Create <strong className="text-zinc-300">Landing Pages</strong> for events to collect waitlist signups</span>
+          </li>
+          <li className="flex items-start gap-3 text-zinc-400 text-sm">
+            <span className="text-[#E0FE10] mt-0.5">•</span>
+            <span>Upload quality exercise videos to grow your move library and reach</span>
+          </li>
+        </ul>
+      </div>
+
+      {/* Storage Troubleshooting - Collapsed */}
+      <details className="mt-6">
+        <summary className="text-zinc-500 text-sm cursor-pointer hover:text-zinc-400 transition-colors">
+          Having issues? Click for troubleshooting options
+        </summary>
+        <div className="mt-4 p-4 bg-zinc-900/50 border border-zinc-800 rounded-xl">
+          <p className="text-zinc-500 text-sm mb-3">
+            If you're experiencing upload problems, clearing browser storage may help resolve the issue.
+          </p>
+          <button 
+            onClick={async () => {
+              if (confirm('Clear all video storage? This may help resolve upload issues.')) {
+                try {
+                  await clearAllStorage();
+                  alert('Storage cleared successfully.');
+                } catch (err) {
+                  console.error('[DEBUG] Error clearing storage:', err);
+                  alert('Failed to clear storage. Please try again or reload the page.');
+                }
+              }
+            }}
+            className="bg-zinc-800 hover:bg-zinc-700 text-red-400 text-sm px-4 py-2 rounded-lg transition-colors"
+          >
+            Clear Storage
           </button>
         </div>
-      )}
+      </details>
+
+      <Spacer size={100} />
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen px-4 py-8 md:px-8">
+      {activeView === 'studio' ? renderStudioView() : renderUploadView()}
 
       {/* Landing Page Builder Modal */}
       {showPageModal && (
@@ -1575,6 +1843,52 @@ const Create: React.FC = () => {
         file={selectedFile}
         onClose={() => setShowTrimmer(false)}
         onTrimComplete={handleTrimComplete}
+      />
+
+      {/* Client Questionnaire Builder Modal */}
+      <SurveyBuilderModal
+        isOpen={showClientQuestionnaireBuilder}
+        onClose={() => {
+          setShowClientQuestionnaireBuilder(false);
+          setEditingClientQuestionnaire(null);
+        }}
+        onSave={handleSaveClientQuestionnaire}
+        existingSurvey={editingClientQuestionnaire}
+        isClientQuestionnaire={true}
+      />
+
+      {/* Client Questionnaires List Modal */}
+      <SurveysListModal
+        isOpen={showClientQuestionnairesList}
+        onClose={() => setShowClientQuestionnairesList(false)}
+        surveys={clientQuestionnaires}
+        loading={clientQuestionnairesLoading}
+        onEdit={(survey) => {
+          setEditingClientQuestionnaire(survey);
+          setShowClientQuestionnairesList(false);
+          setShowClientQuestionnaireBuilder(true);
+        }}
+        onViewResponses={handleViewClientQuestionnaireResponses}
+        onDelete={handleDeleteClientQuestionnaire}
+        onCopySurveyLink={handleCopyClientQuestionnaireLink}
+        onCreateNew={() => {
+          setEditingClientQuestionnaire(null);
+          setShowClientQuestionnairesList(false);
+          setShowClientQuestionnaireBuilder(true);
+        }}
+      />
+
+      {/* Client Questionnaire Responses Modal */}
+      <SurveyResponsesModal
+        isOpen={showClientQuestionnaireResponses}
+        onClose={() => {
+          setShowClientQuestionnaireResponses(false);
+          setSelectedClientQuestionnaireForResponses(null);
+          setClientQuestionnaireResponses([]);
+        }}
+        survey={selectedClientQuestionnaireForResponses}
+        responses={clientQuestionnaireResponses}
+        loading={clientQuestionnaireResponsesLoading}
       />
     </div>
   );

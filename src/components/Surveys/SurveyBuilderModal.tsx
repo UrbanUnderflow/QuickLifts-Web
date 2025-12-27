@@ -7,6 +7,7 @@ interface SurveyBuilderModalProps {
   onClose: () => void;
   onSave: (survey: Omit<Survey, 'id' | 'userId' | 'pageSlug' | 'createdAt' | 'updatedAt'> & { id?: string }) => Promise<void>;
   existingSurvey?: Survey | null;
+  isClientQuestionnaire?: boolean; // When true, pre-populates with client intake questions
 }
 
 const QUESTION_TYPE_LABELS: Record<SurveyQuestionType, string> = {
@@ -16,11 +17,211 @@ const QUESTION_TYPE_LABELS: Record<SurveyQuestionType, string> = {
   yes_no: 'Yes / No',
 };
 
+// Default client intake questionnaire questions extracted from coaching interview script
+const getDefaultClientIntakeQuestions = (): SurveyQuestion[] => [
+  // Goals & Motivation
+  {
+    id: uuidv4(),
+    type: 'text',
+    question: 'If we look 90 days from now, what would success look like for you?',
+    required: true,
+  },
+  {
+    id: uuidv4(),
+    type: 'text',
+    question: "What's the ultimate vision you have for your body and fitness?",
+    required: true,
+  },
+  {
+    id: uuidv4(),
+    type: 'text',
+    question: 'What has been the hardest part for you to stay consistent with in the past?',
+    required: false,
+  },
+  {
+    id: uuidv4(),
+    type: 'multiple_choice',
+    question: 'Do you want a slower, sustainable build-up or do you like to be pushed hard?',
+    required: false,
+    options: [
+      { id: uuidv4(), text: 'Slower, sustainable approach' },
+      { id: uuidv4(), text: 'Push me hard' },
+      { id: uuidv4(), text: 'Somewhere in between' },
+    ],
+  },
+  // Training & Exercise History
+  {
+    id: uuidv4(),
+    type: 'text',
+    question: 'What does your current workout routine look like in a typical week?',
+    required: true,
+  },
+  {
+    id: uuidv4(),
+    type: 'multiple_choice',
+    question: 'Do you go in with a set program or do you just wing it?',
+    required: false,
+    options: [
+      { id: uuidv4(), text: 'I follow a structured program' },
+      { id: uuidv4(), text: 'I wing it / go with the flow' },
+      { id: uuidv4(), text: 'A mix of both' },
+    ],
+  },
+  {
+    id: uuidv4(),
+    type: 'multiple_choice',
+    question: 'How long do you usually spend in the gym?',
+    required: false,
+    options: [
+      { id: uuidv4(), text: 'Under 30 minutes' },
+      { id: uuidv4(), text: '30-45 minutes' },
+      { id: uuidv4(), text: '45 minutes - 1 hour' },
+      { id: uuidv4(), text: '1-1.5 hours' },
+      { id: uuidv4(), text: 'Over 1.5 hours' },
+    ],
+  },
+  {
+    id: uuidv4(),
+    type: 'multiple_choice',
+    question: 'Do you prefer full-body workouts, or do you break things down by muscle groups?',
+    required: false,
+    options: [
+      { id: uuidv4(), text: 'Full-body workouts' },
+      { id: uuidv4(), text: 'Split by muscle groups' },
+      { id: uuidv4(), text: 'No preference' },
+    ],
+  },
+  {
+    id: uuidv4(),
+    type: 'text',
+    question: 'Are there any exercises you feel confident with, or ones that feel challenging?',
+    required: false,
+  },
+  {
+    id: uuidv4(),
+    type: 'text',
+    question: 'Have you ever worked with a trainer before? What was that experience like?',
+    required: false,
+  },
+  {
+    id: uuidv4(),
+    type: 'yes_no',
+    question: 'Do you currently track your workouts?',
+    required: false,
+    options: [
+      { id: uuidv4(), text: 'Yes' },
+      { id: uuidv4(), text: 'No' },
+    ],
+  },
+  // Nutrition & Habits
+  {
+    id: uuidv4(),
+    type: 'text',
+    question: 'What does a typical day of eating look like for you (breakfast, lunch, and dinner)?',
+    required: true,
+  },
+  {
+    id: uuidv4(),
+    type: 'multiple_choice',
+    question: 'Do you meal prep, cook on the go, or eat out more often?',
+    required: false,
+    options: [
+      { id: uuidv4(), text: 'I meal prep regularly' },
+      { id: uuidv4(), text: 'I cook on the go' },
+      { id: uuidv4(), text: 'I eat out more often' },
+      { id: uuidv4(), text: 'A mix of all' },
+    ],
+  },
+  {
+    id: uuidv4(),
+    type: 'text',
+    question: 'Are there any foods you avoid (pork, beef, dairy, allergies, etc.)?',
+    required: false,
+  },
+  {
+    id: uuidv4(),
+    type: 'multiple_choice',
+    question: 'Do you drink alcohol? How often?',
+    required: false,
+    options: [
+      { id: uuidv4(), text: 'Never' },
+      { id: uuidv4(), text: 'Rarely (special occasions)' },
+      { id: uuidv4(), text: 'Occasionally (1-2 times per week)' },
+      { id: uuidv4(), text: 'Frequently (3+ times per week)' },
+    ],
+  },
+  {
+    id: uuidv4(),
+    type: 'multiple_choice',
+    question: 'Do you drink caffeine? How often?',
+    required: false,
+    options: [
+      { id: uuidv4(), text: 'Never' },
+      { id: uuidv4(), text: '1 cup/serving per day' },
+      { id: uuidv4(), text: '2-3 cups/servings per day' },
+      { id: uuidv4(), text: '4+ cups/servings per day' },
+    ],
+  },
+  {
+    id: uuidv4(),
+    type: 'text',
+    question: 'Are you currently taking any supplements? If so, which ones?',
+    required: false,
+  },
+  // Lifestyle & Schedule
+  {
+    id: uuidv4(),
+    type: 'text',
+    question: "What's your work schedule like? Do you feel it affects your energy levels or gym time?",
+    required: false,
+  },
+  {
+    id: uuidv4(),
+    type: 'text',
+    question: 'What time do you usually wake up and go to bed?',
+    required: false,
+  },
+  {
+    id: uuidv4(),
+    type: 'multiple_choice',
+    question: 'How much sleep are you getting on average?',
+    required: false,
+    options: [
+      { id: uuidv4(), text: 'Less than 5 hours' },
+      { id: uuidv4(), text: '5-6 hours' },
+      { id: uuidv4(), text: '6-7 hours' },
+      { id: uuidv4(), text: '7-8 hours' },
+      { id: uuidv4(), text: '8+ hours' },
+    ],
+  },
+  {
+    id: uuidv4(),
+    type: 'yes_no',
+    question: 'Do you usually feel rested when you wake up?',
+    required: false,
+    options: [
+      { id: uuidv4(), text: 'Yes' },
+      { id: uuidv4(), text: 'No' },
+    ],
+  },
+  {
+    id: uuidv4(),
+    type: 'yes_no',
+    question: 'How do you feel about tracking your workouts, meals, or progress?',
+    required: false,
+    options: [
+      { id: uuidv4(), text: "I'm open to it" },
+      { id: uuidv4(), text: "I'd rather not" },
+    ],
+  },
+];
+
 const SurveyBuilderModal: React.FC<SurveyBuilderModalProps> = ({
   isOpen,
   onClose,
   onSave,
   existingSurvey,
+  isClientQuestionnaire = false,
 }) => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -33,12 +234,17 @@ const SurveyBuilderModal: React.FC<SurveyBuilderModalProps> = ({
       setTitle(existingSurvey.title);
       setDescription(existingSurvey.description || '');
       setQuestions(existingSurvey.questions || []);
+    } else if (isClientQuestionnaire) {
+      // Pre-populate with default client intake questions
+      setTitle('');
+      setDescription('Help me understand your fitness journey so I can create the best program for you.');
+      setQuestions(getDefaultClientIntakeQuestions());
     } else {
       setTitle('');
       setDescription('');
       setQuestions([]);
     }
-  }, [existingSurvey, isOpen]);
+  }, [existingSurvey, isOpen, isClientQuestionnaire]);
 
   const addQuestion = (type: SurveyQuestionType) => {
     const newQuestion: SurveyQuestion = {
@@ -160,7 +366,10 @@ const SurveyBuilderModal: React.FC<SurveyBuilderModalProps> = ({
         {/* Header */}
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-2xl font-bold text-white">
-            {existingSurvey ? 'Edit Survey' : 'Create Survey'}
+            {existingSurvey 
+              ? (isClientQuestionnaire ? 'Edit Intake Form' : 'Edit Survey')
+              : (isClientQuestionnaire ? 'Create Client Intake Form' : 'Create Survey')
+            }
           </h2>
           <button 
             onClick={onClose}
@@ -176,12 +385,14 @@ const SurveyBuilderModal: React.FC<SurveyBuilderModalProps> = ({
           {/* Survey Info */}
           <div className="space-y-4">
             <div>
-              <label className="block text-sm text-zinc-300 mb-2">Survey Title *</label>
+              <label className="block text-sm text-zinc-300 mb-2">
+                {isClientQuestionnaire ? 'Form Title *' : 'Survey Title *'}
+              </label>
               <input
                 type="text"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="e.g., Exit Survey"
+                placeholder={isClientQuestionnaire ? "e.g., New Client Questionnaire" : "e.g., Exit Survey"}
                 className="w-full bg-zinc-800 border border-zinc-600 rounded-lg p-3 text-white placeholder-zinc-400 focus:border-[#E0FE10] focus:outline-none transition-colors"
               />
             </div>
@@ -190,7 +401,10 @@ const SurveyBuilderModal: React.FC<SurveyBuilderModalProps> = ({
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="Brief description of your survey..."
+                placeholder={isClientQuestionnaire 
+                  ? "Message to show your clients before they start..."
+                  : "Brief description of your survey..."
+                }
                 rows={2}
                 className="w-full bg-zinc-800 border border-zinc-600 rounded-lg p-3 text-white placeholder-zinc-400 focus:border-[#E0FE10] focus:outline-none transition-colors resize-none"
               />
@@ -425,7 +639,13 @@ const SurveyBuilderModal: React.FC<SurveyBuilderModalProps> = ({
             {saving && (
               <span className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
             )}
-            {saving ? 'Saving...' : (existingSurvey ? 'Save Changes' : 'Create Survey')}
+            {saving 
+              ? 'Saving...' 
+              : (existingSurvey 
+                  ? 'Save Changes' 
+                  : (isClientQuestionnaire ? 'Create Intake Form' : 'Create Survey')
+                )
+            }
           </button>
         </div>
       </div>

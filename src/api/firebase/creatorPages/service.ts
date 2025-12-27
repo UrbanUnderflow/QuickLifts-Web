@@ -11,6 +11,9 @@ export interface SponsorLogo {
   href?: string;
 }
 
+// Client Questionnaire (uses the same Survey schema under a dedicated pageSlug)
+export const CLIENT_QUESTIONNAIRES_PAGE_SLUG = 'client-questionnaires';
+
 // Survey Types
 export type SurveyQuestionType = 'text' | 'multiple_choice' | 'number' | 'yes_no';
 

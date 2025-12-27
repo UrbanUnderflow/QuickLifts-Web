@@ -104,6 +104,19 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
       }
     }
 
+    // Treat public client questionnaire pages (/{username}/questionnaire/{id}) as public.
+    // This matches pages/[username]/questionnaire/[questionnaireId].tsx routing.
+    if (segments.length === 3 && segments[1] === 'questionnaire') {
+      const reservedPrefixes = new Set([
+        'round-invitation','round','round-library','profile','challenge','review','programming','press','100trainers',
+        'moveandfuelatl','investor','invest','connect','coach-invite','coach','admin','api','payment',
+        'subscribe','download','partner','winner','secure','haveyoupaid'
+      ]);
+      if (!reservedPrefixes.has(segments[0])) {
+        return true;
+      }
+    }
+
     const isPublic = publicRoutes.includes(normalizedPath) || 
            publicPathPatterns.some(pattern => normalizedPath.startsWith(pattern));
     

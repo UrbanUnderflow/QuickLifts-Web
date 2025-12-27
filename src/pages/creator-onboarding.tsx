@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
@@ -22,9 +22,14 @@ const CreatorOnboardingPage: React.FC = () => {
   const [isSignInModalOpen, setIsSignInModalOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [isIOS, setIsIOS] = useState(false);
+  const [embedOrigin, setEmbedOrigin] = useState<string>('');
 
   useEffect(() => {
     setIsIOS(platformDetection.isIOS());
+    // Used for YouTube embed "origin" param (helps reduce embed friction on some networks)
+    if (typeof window !== 'undefined') {
+      setEmbedOrigin(window.location.origin);
+    }
   }, []);
 
   // If iOS user lands here directly, redirect them to App Store
@@ -44,6 +49,37 @@ const CreatorOnboardingPage: React.FC = () => {
   };
 
   const appStoreQRUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent('https://apps.apple.com/ca/app/pulse-community-workouts/id6451497729')}`;
+
+  const buildYouTubeEmbedSrc = (videoId: string, extraParams: Record<string, string> = {}) => {
+    const params = new URLSearchParams({
+      rel: '0',
+      modestbranding: '1',
+      playsinline: '1',
+      ...extraParams,
+    });
+    if (embedOrigin) params.set('origin', embedOrigin);
+    return `https://www.youtube-nocookie.com/embed/${videoId}?${params.toString()}`;
+  };
+
+  const tutorialVideos = useMemo(() => {
+    return [
+      {
+        id: '8Ous6Wqvn7o',
+        title: 'Product Walkthrough',
+        subtitle: 'Full platform overview',
+      },
+      {
+        id: 'FDqvrReKjyo',
+        title: 'How to Upload a Move',
+        subtitle: 'Creator tutorial',
+      },
+      {
+        id: 'MZ_CSr0Cyzs',
+        title: 'How to Create a Round',
+        subtitle: 'Build AI-powered workouts',
+      },
+    ];
+  }, []);
 
   const steps = [
     {
@@ -245,17 +281,67 @@ const CreatorOnboardingPage: React.FC = () => {
               <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden w-[380px] sm:w-[420px] h-[675px] sm:h-[747px]">
                 <iframe
                   className="w-full h-full"
-                  src="https://www.youtube.com/embed/MZ_CSr0Cyzs?rel=0&modestbranding=1"
+                  src={buildYouTubeEmbedSrc('MZ_CSr0Cyzs')}
                   title="How to Launch Your First Challenge on Pulse"
                   frameBorder="0"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                   allowFullScreen
+                  loading="lazy"
+                  referrerPolicy="strict-origin-when-cross-origin"
                 />
               </div>
             </div>
             <p className="text-zinc-500 text-sm text-center mt-4">
               Quick 60-second overview of creating your first challenge
             </p>
+            <div className="text-center mt-3">
+              <a
+                href="https://www.youtube.com/watch?v=MZ_CSr0Cyzs"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-zinc-400 hover:text-white text-sm underline underline-offset-4"
+              >
+                Having trouble playing? Open on YouTube
+              </a>
+            </div>
+          </div>
+        </section>
+
+        {/* More Tutorials */}
+        <section className="px-6 pb-6">
+          <div className="max-w-6xl mx-auto">
+            <h2 className="text-2xl font-bold mb-6 text-center">More Creator Tutorials</h2>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {tutorialVideos.map((v) => (
+                <div key={v.id} className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-4">
+                  <div className="aspect-video rounded-xl overflow-hidden bg-zinc-900 border border-zinc-800">
+                    <iframe
+                      className="w-full h-full"
+                      src={buildYouTubeEmbedSrc(v.id)}
+                      title={v.title}
+                      frameBorder="0"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                      loading="lazy"
+                      referrerPolicy="strict-origin-when-cross-origin"
+                    />
+                  </div>
+                  <div className="mt-3">
+                    <p className="text-white font-medium text-sm">{v.title}</p>
+                    <p className="text-zinc-500 text-xs">{v.subtitle}</p>
+                    <a
+                      href={`https://www.youtube.com/watch?v=${v.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-block mt-2 text-zinc-400 hover:text-white text-xs underline underline-offset-4"
+                    >
+                      Open on YouTube
+                    </a>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </section>
 

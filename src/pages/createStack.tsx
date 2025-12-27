@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/router';
 
-import { Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, Trash2, ChevronDown, ChevronUp, ArrowLeft, Layers, Search, Check, X } from 'lucide-react';
 import {
   Exercise,
   ExerciseDetail,
@@ -24,6 +24,7 @@ interface CreateWorkoutExerciseCardViewProps {
   exerciseDescription?: ExerciseDetail;
   workoutCaregory?: ExerciseDetail['category'];
   returnExerciseDescription: (exerciseDetail: ExerciseDetail) => void;
+  onRemove?: () => void;
 }
 
 const CreateWorkoutExerciseCardView: React.FC<CreateWorkoutExerciseCardViewProps> = ({
@@ -31,6 +32,7 @@ const CreateWorkoutExerciseCardView: React.FC<CreateWorkoutExerciseCardViewProps
   exerciseDescription: initialExerciseDescription,
   workoutCaregory: _initialWorkoutCaregory,
   returnExerciseDescription,
+  onRemove,
 }) => {
   // Convert initial videos
   const initialVideos =
@@ -226,36 +228,61 @@ const CreateWorkoutExerciseCardView: React.FC<CreateWorkoutExerciseCardViewProps
 
 
   return (
-    <div className="p-4 bg-zinc-900 rounded-lg border border-zinc-800 my-2">
-      <div className="flex justify-between items-center">
-        <h3 className="text-lg font-semibold text-white">{exerciseName}</h3>
-        <button
-          onClick={() => setExpanded(!expanded)}
-          className="text-zinc-400 hover:text-white transition-colors flex items-center gap-2"
-        >
-          {expanded ? (
-            <>
-              <span>Collapse</span>
-              <ChevronUp size={20} />
-            </>
-          ) : (
-            <>
-              <span>{notes ? 'Edit Details' : 'Add Details'}</span>
-              <ChevronDown size={20} />
-            </>
+    <div className="bg-zinc-800/50 rounded-xl border border-zinc-700/50 overflow-hidden">
+      <div 
+        className="flex justify-between items-center p-4 cursor-pointer hover:bg-zinc-800/80 transition-colors"
+        onClick={() => setExpanded(!expanded)}
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-lg bg-orange-500/20 flex items-center justify-center">
+            <Layers className="w-5 h-5 text-orange-400" />
+          </div>
+          <h3 className="text-base font-medium text-white">{exerciseName}</h3>
+        </div>
+        <div className="flex items-center gap-2">
+          {onRemove && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onRemove();
+              }}
+              className="p-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 hover:text-red-300 transition-colors"
+              title="Remove move"
+              aria-label="Remove move"
+            >
+              <Trash2 size={16} />
+            </button>
           )}
-        </button>
+          <button
+            type="button"
+            className="text-zinc-400 hover:text-white transition-colors flex items-center gap-2 text-sm px-2 py-1"
+            aria-label={expanded ? 'Collapse move details' : 'Configure move details'}
+          >
+            {expanded ? (
+              <>
+                <span className="hidden sm:inline">Collapse</span>
+                <ChevronUp size={18} />
+              </>
+            ) : (
+              <>
+                <span className="hidden sm:inline">{notes ? 'Edit' : 'Configure'}</span>
+                <ChevronDown size={18} />
+              </>
+            )}
+          </button>
+        </div>
       </div>
       {expanded && (
-        <form className="mt-4 space-y-6">
+        <form className="p-4 pt-0 space-y-5 border-t border-zinc-700/50">
           {/* Toggle buttons for mode */}
-          <div className="flex gap-2">
+          <div className="flex gap-2 pt-4">
             <button
               type="button"
               onClick={() => setExerciseMode('tracking')}
-              className={`px-4 py-2 rounded ${exerciseMode === 'tracking'
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${exerciseMode === 'tracking'
                   ? 'bg-[#E0FE10] text-black'
-                  : 'bg-zinc-800 text-white'
+                  : 'bg-zinc-700/50 text-zinc-300 hover:bg-zinc-700'
                 }`}
             >
               Tracking
@@ -263,9 +290,9 @@ const CreateWorkoutExerciseCardView: React.FC<CreateWorkoutExerciseCardViewProps
             <button
               type="button"
               onClick={() => setExerciseMode('screentime')}
-              className={`px-4 py-2 rounded ${exerciseMode === 'screentime'
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${exerciseMode === 'screentime'
                   ? 'bg-[#E0FE10] text-black'
-                  : 'bg-zinc-800 text-white'
+                  : 'bg-zinc-700/50 text-zinc-300 hover:bg-zinc-700'
                 }`}
             >
               Screentime
@@ -273,66 +300,62 @@ const CreateWorkoutExerciseCardView: React.FC<CreateWorkoutExerciseCardViewProps
           </div>
           {/* Conditional rendering based on exerciseMode */}
           {exerciseMode === 'tracking' && (
-            <div className="border-t border-zinc-800 pt-4">
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <label className="text-zinc-400 text-sm block mb-2">Sets</label>
-                  <input
-                    type="number"
-                    value={sets}
-                    onChange={(e) => handleSetsChange(e.target.value)}
-                    className="w-full p-2 rounded-lg bg-zinc-800 text-white border border-zinc-700 focus:border-[#E0FE10] transition-colors"
-                  />
-                </div>
-                <div>
-                  <label className="text-zinc-400 text-sm block mb-2">Reps</label>
-                  <input
-                    type="text"
-                    value={reps}
-                    onChange={(e) => handleRepsChange(e.target.value)}
-                    className="w-full p-2 rounded-lg bg-zinc-800 text-white border border-zinc-700 focus:border-[#E0FE10] transition-colors"
-                  />
-                </div>
-                <div>
-                  <label className="text-zinc-400 text-sm block mb-2">{weightLabel}</label>
-                  <input
-                    type="text"
-                    value={weight}
-                    onChange={(e) => handleWeightChange(e.target.value)}
-                    className="w-full p-2 rounded-lg bg-zinc-800 text-white border border-zinc-700 focus:border-[#E0FE10] transition-colors"
-                  />
-                </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="text-zinc-400 text-xs block mb-1.5">Sets</label>
+                <input
+                  type="number"
+                  value={sets}
+                  onChange={(e) => handleSetsChange(e.target.value)}
+                  className="w-full p-2.5 rounded-lg bg-zinc-900/50 text-white border border-zinc-700 focus:border-[#E0FE10] focus:outline-none transition-colors text-sm"
+                />
               </div>
-            </div>
-          )}
-          {exerciseMode === 'screentime' && (
-            <div className="border-t border-zinc-800 pt-4">
-              <div className="flex items-center gap-4">
-                <label className="text-zinc-400 text-sm">Screen Time (sec)</label>
+              <div>
+                <label className="text-zinc-400 text-xs block mb-1.5">Reps</label>
                 <input
                   type="text"
-                  value={screenTime}
-                  onChange={(e) => handleScreenTimeChange(e.target.value)}
-                  className="w-32 p-2 rounded-lg bg-zinc-800 text-white border border-zinc-700 focus:border-[#E0FE10] transition-colors"
-                  inputMode="numeric"
+                  value={reps}
+                  onChange={(e) => handleRepsChange(e.target.value)}
+                  className="w-full p-2.5 rounded-lg bg-zinc-900/50 text-white border border-zinc-700 focus:border-[#E0FE10] focus:outline-none transition-colors text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-zinc-400 text-xs block mb-1.5">{weightLabel}</label>
+                <input
+                  type="text"
+                  value={weight}
+                  onChange={(e) => handleWeightChange(e.target.value)}
+                  className="w-full p-2.5 rounded-lg bg-zinc-900/50 text-white border border-zinc-700 focus:border-[#E0FE10] focus:outline-none transition-colors text-sm"
                 />
               </div>
             </div>
           )}
-          <div className="border-t border-zinc-800 pt-4">
-            <label className="text-zinc-400 text-sm block mb-2">Notes</label>
+          {exerciseMode === 'screentime' && (
+            <div className="flex items-center gap-3">
+              <label className="text-zinc-400 text-sm">Screen Time (sec)</label>
+              <input
+                type="text"
+                value={screenTime}
+                onChange={(e) => handleScreenTimeChange(e.target.value)}
+                className="w-24 p-2.5 rounded-lg bg-zinc-900/50 text-white border border-zinc-700 focus:border-[#E0FE10] focus:outline-none transition-colors text-sm"
+                inputMode="numeric"
+              />
+            </div>
+          )}
+          <div>
+            <label className="text-zinc-400 text-xs block mb-1.5">Notes</label>
             <textarea
               value={notes}
               onChange={(e) => handleNotesChange(e.target.value)}
-              className="w-full p-3 rounded-lg bg-zinc-800 text-white border border-zinc-700 focus:border-[#E0FE10] transition-colors h-24 resize-none"
+              className="w-full p-3 rounded-lg bg-zinc-900/50 text-white border border-zinc-700 focus:border-[#E0FE10] focus:outline-none transition-colors h-20 resize-none text-sm"
               placeholder="Add notes for this exercise..."
             />
           </div>
           {/* Video Selection */}
           {exerciseVideos.length > 0 && (
-            <div className="border-t border-zinc-800 pt-4">
-              <label className="text-zinc-400 text-sm block mb-2">Select Video</label>
-              <div className="flex gap-4 overflow-x-auto pb-2">
+            <div>
+              <label className="text-zinc-400 text-xs block mb-2">Select Video</label>
+              <div className="flex gap-3 overflow-x-auto pb-2">
                 {exerciseVideos.map((video) => (
                   <button
                     key={video.id}
@@ -375,21 +398,21 @@ const CreateWorkoutExerciseCardView: React.FC<CreateWorkoutExerciseCardViewProps
                         }
                       }
                     }}
-                    className={`flex-shrink-0 relative rounded-lg overflow-hidden ${selectedVideo?.id === video.id ? 'ring-2 ring-[#E0FE10]' : ''
+                    className={`flex-shrink-0 relative rounded-lg overflow-hidden transition-all ${selectedVideo?.id === video.id ? 'ring-2 ring-[#E0FE10] scale-105' : 'hover:scale-105'
                       }`}
                   >
                     <img
                       src={video.gifURL || '/placeholder.gif'}
                       alt="Exercise preview"
-                      className="w-20 h-20 object-cover"
+                      className="w-16 h-16 object-cover"
                     />
                   </button>
                 ))}
               </div>
             </div>
           )}
-          <div className="border-t border-zinc-800 pt-4 flex items-center justify-between">
-            <label className="text-zinc-400 text-sm">Exercise uses dumbbells</label>
+          <div className="flex items-center justify-between py-2">
+            <label className="text-zinc-400 text-sm">Uses dumbbells (split tracking)</label>
             <input
               type="checkbox"
               checked={isDumbell}
@@ -402,7 +425,7 @@ const CreateWorkoutExerciseCardView: React.FC<CreateWorkoutExerciseCardViewProps
                   returnExerciseDescription(new ExerciseDetail(updatedDetail));
                 }
               }}
-              className="w-5 h-5 accent-[#E0FE10]"
+              className="w-5 h-5 accent-[#E0FE10] rounded"
             />
 
           </div>
@@ -449,7 +472,7 @@ const CreateWorkoutExerciseCardView: React.FC<CreateWorkoutExerciseCardViewProps
               setExpanded(false);
               returnExerciseDescription(finalExerciseDetail);
             }}
-            className="w-full py-3 bg-[#E0FE10] text-black rounded-lg font-semibold hover:opacity-90 transition-opacity"
+            className="w-full py-2.5 bg-[#E0FE10] text-black rounded-lg font-medium text-sm hover:bg-[#d4f00e] transition-colors"
           >
             Save Details
           </button>
@@ -486,91 +509,243 @@ const MobileStackView: React.FC<MobileStackViewProps> = ({
   onCreateStack,
   hideAddMoveButton = false,
 }) => {
+  const router = useRouter();
+  const [isMovePickerOpen, setIsMovePickerOpen] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [allExercises, setAllExercises] = useState<Exercise[]>([]);
+  const [selectedExercises, setSelectedExercises] = useState<Exercise[]>([]);
+  const [filteredExercises, setFilteredExercises] = useState<Exercise[]>([]);
+
+  // Fetch all exercises for move picker (mobile)
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        await exerciseService.fetchExercises();
+        setAllExercises(exerciseService.allExercises);
+      } catch (error) {
+        console.error('Error fetching exercises:', error);
+      }
+    };
+    fetchData();
+  }, []);
+
+  // Keep selection in sync with configured exerciseDetails
+  useEffect(() => {
+    setSelectedExercises(exerciseDetails.map((detail: any) => detail.exercise));
+  }, [exerciseDetails]);
+
+  // Filter exercises based on search and selected user
+  useEffect(() => {
+    const filtered = allExercises
+      .filter(exercise => (selectedUserId ? exercise.author.userId === selectedUserId : true))
+      .filter(exercise => exercise.name.toLowerCase().includes(searchTerm.toLowerCase()));
+    setFilteredExercises(filtered);
+  }, [allExercises, selectedUserId, searchTerm]);
+
+  const handleToggleSelection = useCallback((exercise: Exercise) => {
+    setSelectedExercises((prevSelected) => {
+      const alreadySelected = prevSelected.some((ex) => ex.id === exercise.id);
+
+      if (alreadySelected) {
+        const updatedSelected = prevSelected.filter((ex) => ex.id !== exercise.id);
+        const updatedExerciseDetails = exerciseDetails.filter(
+          (ex: any) => ex.exercise.id !== exercise.id
+        );
+        setExerciseDetails(updatedExerciseDetails);
+        return updatedSelected;
+      }
+
+      const updatedSelected = [...prevSelected, exercise];
+      const updatedExerciseDetails = [
+        ...exerciseDetails,
+        { exerciseName: exercise.name, notes: '', exercise },
+      ];
+      setExerciseDetails(updatedExerciseDetails);
+      return updatedSelected;
+    });
+  }, [exerciseDetails, setExerciseDetails]);
+  
   return (
-    <div className="min-h-screen bg-zinc-900">
+    <div className="min-h-screen bg-black">
       {/* Header */}
-      <div className="relative h-40 bg-zinc-800">
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent to-zinc-900"></div>
-        <div className="absolute bottom-6 left-6">
-          <h1 className="text-3xl font-bold text-white">Create Stack</h1>
+      <div className="sticky top-0 z-20 bg-black/80 backdrop-blur-xl border-b border-zinc-800/50">
+        <div className="px-6 py-4">
+          <button
+            onClick={() => router.push('/create')}
+            className="flex items-center gap-2 text-zinc-400 hover:text-white transition-colors group mb-4"
+          >
+            <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
+            <span className="text-sm">Back to Creator Studio</span>
+          </button>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500/20 to-amber-500/20 border border-orange-500/30 flex items-center justify-center">
+              <Layers className="w-5 h-5 text-orange-400" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold text-white">Create Movelist</h1>
+              <p className="text-zinc-500 text-sm">Build a workout from your moves</p>
+            </div>
+          </div>
         </div>
       </div>
 
       {/* Main Content */}
       <div className="p-6 space-y-6">
+        {/* Form Fields */}
         <div className="space-y-4">
-          <input
-            type="text"
-            value={stackName}
-            onChange={(e) => setStackName(e.target.value)}
-            placeholder="Stack Name"
-            className="w-full p-4 bg-zinc-800 text-white rounded-lg border border-zinc-700 focus:border-[#E0FE10] transition-colors"
-          />
+          <div>
+            <label className="text-zinc-400 text-sm block mb-2">Movelist Name</label>
+            <input
+              type="text"
+              value={stackName}
+              onChange={(e) => setStackName(e.target.value)}
+              placeholder="e.g., Upper Body Blast"
+              className="w-full p-4 bg-zinc-900/50 text-white rounded-xl border border-zinc-800 focus:border-orange-500/50 focus:outline-none transition-colors placeholder:text-zinc-600"
+            />
+          </div>
 
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Stack Description"
-            className="w-full p-4 bg-zinc-800 text-white rounded-lg border border-zinc-700 focus:border-[#E0FE10] transition-colors h-32 resize-none"
-          />
+          <div>
+            <label className="text-zinc-400 text-sm block mb-2">Description</label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Describe your movelist..."
+              className="w-full p-4 bg-zinc-900/50 text-white rounded-xl border border-zinc-800 focus:border-orange-500/50 focus:outline-none transition-colors h-24 resize-none placeholder:text-zinc-600"
+            />
+          </div>
 
-          <div className="flex items-center space-x-3 bg-zinc-800 p-4 rounded-lg">
+          <label className="flex items-center gap-3 p-4 bg-zinc-900/50 rounded-xl border border-zinc-800 cursor-pointer hover:border-zinc-700 transition-colors">
             <input
               type="checkbox"
               checked={useAuthorContent}
               onChange={() => setUseAuthorContent(!useAuthorContent)}
-              className="w-5 h-5 accent-[#E0FE10]"
+              className="w-5 h-5 accent-[#E0FE10] rounded"
             />
-            <span className="text-zinc-300">Use my fitness content exclusively</span>
-          </div>
+            <span className="text-zinc-300 text-sm">Use my fitness content exclusively</span>
+          </label>
         </div>
 
-        {/* Exercise List */}
-        <div className="space-y-4">
-          {exerciseDetails.map((ex, index) => (
-            <div key={ex.exercise.id} className="bg-zinc-800 rounded-lg p-4">
-              <CreateWorkoutExerciseCardView
-                appCoordinator={null}
-                exerciseDescription={ex}
-                workoutCaregory={ex.category}
-                returnExerciseDescription={(newDetail) => {
-                  const updated = [...exerciseDetails];
-                  updated[index] = newDetail;
-                  setExerciseDetails(updated);
-                }}
-              />
-              <button
-                onClick={() => {
-                  const updated = exerciseDetails.filter(detail => detail.exercise.id !== ex.exercise.id);
-                  setExerciseDetails(updated);
-                }}
-                className="mt-2 flex items-center gap-2 text-red-400 hover:text-red-300 transition-colors"
-              >
-                <Trash2 size={16} />
-                <span>Remove</span>
-              </button>
+        {/* Selected Moves */}
+        {exerciseDetails.length > 0 && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-white font-semibold">Selected Moves</h2>
+              <span className="text-zinc-500 text-sm">{exerciseDetails.length} move{exerciseDetails.length !== 1 ? 's' : ''}</span>
             </div>
-            
-          ))}
-        </div>
+            <div className="space-y-2">
+              {exerciseDetails.map((ex, index) => (
+                <div key={ex.exercise.id}>
+                  <CreateWorkoutExerciseCardView
+                    appCoordinator={null}
+                    exerciseDescription={ex}
+                    workoutCaregory={ex.category}
+                    returnExerciseDescription={(newDetail) => {
+                      const updated = [...exerciseDetails];
+                      updated[index] = newDetail;
+                      setExerciseDetails(updated);
+                    }}
+                    onRemove={() => {
+                      const updated = exerciseDetails.filter(detail => detail.exercise.id !== ex.exercise.id);
+                      setExerciseDetails(updated);
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Empty State */}
+        {exerciseDetails.length === 0 && (
+          <div className="text-center py-12 px-6">
+            <div className="w-16 h-16 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center mx-auto mb-4">
+              <Layers className="w-8 h-8 text-zinc-600" />
+            </div>
+            <h3 className="text-white font-medium mb-2">No moves selected</h3>
+            <p className="text-zinc-500 text-sm">Select moves from the library to build your movelist</p>
+          </div>
+        )}
 
         {!hideAddMoveButton && (
           <button
-            className="flex items-center justify-center gap-2 w-full py-4 bg-zinc-800 text-white rounded-lg hover:bg-zinc-700 transition-colors"
+            type="button"
+            onClick={() => setIsMovePickerOpen(true)}
+            className="flex items-center justify-center gap-2 w-full py-4 bg-zinc-900/50 text-zinc-300 rounded-xl border border-zinc-800 border-dashed hover:bg-zinc-900 hover:border-zinc-700 transition-colors"
           >
             <Plus size={20} />
             <span>Add Move</span>
           </button>
         )}
 
-        {/* Create Stack Button */}
+        {/* Create Button */}
         <button
           onClick={onCreateStack}
-          className="w-full py-4 bg-[#E0FE10] text-black rounded-lg font-semibold hover:opacity-90 transition-opacity"
+          disabled={!stackName.trim() || exerciseDetails.length === 0}
+          className="w-full py-4 bg-[#E0FE10] text-black rounded-xl font-semibold hover:bg-[#d4f00e] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          Create Stack
+          Create Movelist
         </button>
       </div>
+
+      {/* Mobile Move Picker Modal */}
+      {isMovePickerOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm">
+          <div className="absolute inset-0 flex flex-col">
+            <div className="sticky top-0 z-10 bg-black/80 backdrop-blur-xl border-b border-zinc-800/50 px-6 py-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-white font-semibold">Move Library</h2>
+                  <p className="text-zinc-500 text-xs">{filteredExercises.length} moves</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsMovePickerOpen(false)}
+                  className="p-2 rounded-lg bg-zinc-900/60 border border-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors"
+                  aria-label="Close move library"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="mt-4 space-y-3">
+                <UserFilter selectedUserId={selectedUserId} onUserSelect={setSelectedUserId} />
+                <div className="relative">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500" />
+                  <input
+                    type="text"
+                    placeholder="Search moves..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-12 pr-4 py-3 bg-zinc-900/50 text-white rounded-xl border border-zinc-800 focus:border-orange-500/50 focus:outline-none transition-colors placeholder:text-zinc-600"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6">
+              <ExerciseGrid
+                userVideos={filteredExercises}
+                multiSelection={true}
+                selectedExercises={selectedExercises}
+                onToggleSelection={handleToggleSelection}
+                onSelectVideo={handleToggleSelection}
+              />
+              <div className="h-24" />
+            </div>
+
+            <div className="sticky bottom-0 z-10 bg-black/80 backdrop-blur-xl border-t border-zinc-800/50 px-6 py-4">
+              <button
+                type="button"
+                onClick={() => setIsMovePickerOpen(false)}
+                className="w-full py-3 bg-[#E0FE10] text-black rounded-xl font-semibold hover:bg-[#d4f00e] transition-colors"
+              >
+                Done ({selectedExercises.length})
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -589,6 +764,7 @@ interface DesktopStackViewProps {
 }
 
 const DesktopStackView: React.FC<DesktopStackViewProps> = (props) => {
+  const router = useRouter();
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [allExercises, setAllExercises] = useState<Exercise[]>([]);
@@ -649,31 +825,148 @@ const DesktopStackView: React.FC<DesktopStackViewProps> = (props) => {
   }, [props.exerciseDetails, props.setExerciseDetails]);
 
   return (
-    <div className="min-h-screen flex">
-      <div className="flex-1 overflow-y-auto bg-zinc-900 border-r border-zinc-800">
-        <MobileStackView {...props} hideAddMoveButton={true} />
+    <div className="min-h-screen flex bg-black">
+      {/* Left Panel - Movelist Builder */}
+      <div className="w-[480px] flex-shrink-0 border-r border-zinc-800/50 overflow-y-auto">
+        <div className="sticky top-0 z-20 bg-black/80 backdrop-blur-xl border-b border-zinc-800/50">
+          <div className="px-6 py-4">
+            <button
+              onClick={() => router.push('/create')}
+              className="flex items-center gap-2 text-zinc-400 hover:text-white transition-colors group mb-4"
+            >
+              <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
+              <span className="text-sm">Back to Creator Studio</span>
+            </button>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500/20 to-amber-500/20 border border-orange-500/30 flex items-center justify-center">
+                <Layers className="w-5 h-5 text-orange-400" />
+              </div>
+              <div>
+                <h1 className="text-xl font-bold text-white">Create Movelist</h1>
+                <p className="text-zinc-500 text-sm">Build a workout from your moves</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="p-6 space-y-6">
+          {/* Form Fields */}
+          <div className="space-y-4">
+            <div>
+              <label className="text-zinc-400 text-sm block mb-2">Movelist Name</label>
+              <input
+                type="text"
+                value={props.stackName}
+                onChange={(e) => props.setStackName(e.target.value)}
+                placeholder="e.g., Upper Body Blast"
+                className="w-full p-4 bg-zinc-900/50 text-white rounded-xl border border-zinc-800 focus:border-orange-500/50 focus:outline-none transition-colors placeholder:text-zinc-600"
+              />
+            </div>
+
+            <div>
+              <label className="text-zinc-400 text-sm block mb-2">Description</label>
+              <textarea
+                value={props.description}
+                onChange={(e) => props.setDescription(e.target.value)}
+                placeholder="Describe your movelist..."
+                className="w-full p-4 bg-zinc-900/50 text-white rounded-xl border border-zinc-800 focus:border-orange-500/50 focus:outline-none transition-colors h-20 resize-none placeholder:text-zinc-600"
+              />
+            </div>
+
+            <label className="flex items-center gap-3 p-4 bg-zinc-900/50 rounded-xl border border-zinc-800 cursor-pointer hover:border-zinc-700 transition-colors">
+              <input
+                type="checkbox"
+                checked={props.useAuthorContent}
+                onChange={() => props.setUseAuthorContent(!props.useAuthorContent)}
+                className="w-5 h-5 accent-[#E0FE10] rounded"
+              />
+              <span className="text-zinc-300 text-sm">Use my fitness content exclusively</span>
+            </label>
+          </div>
+
+          {/* Selected Moves */}
+          {props.exerciseDetails.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h2 className="text-white font-semibold">Selected Moves</h2>
+                <span className="text-zinc-500 text-sm">{props.exerciseDetails.length} move{props.exerciseDetails.length !== 1 ? 's' : ''}</span>
+              </div>
+              <div className="space-y-2">
+                {props.exerciseDetails.map((ex, index) => (
+                  <div key={ex.exercise.id}>
+                    <CreateWorkoutExerciseCardView
+                      appCoordinator={null}
+                      exerciseDescription={ex}
+                      workoutCaregory={ex.category}
+                      returnExerciseDescription={(newDetail) => {
+                        const updated = [...props.exerciseDetails];
+                        updated[index] = newDetail;
+                        props.setExerciseDetails(updated);
+                      }}
+                      onRemove={() => {
+                        const updated = props.exerciseDetails.filter(detail => detail.exercise.id !== ex.exercise.id);
+                        props.setExerciseDetails(updated);
+                      }}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Empty State */}
+          {props.exerciseDetails.length === 0 && (
+            <div className="text-center py-8 px-6">
+              <div className="w-14 h-14 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center mx-auto mb-3">
+                <Layers className="w-7 h-7 text-zinc-600" />
+              </div>
+              <h3 className="text-white font-medium mb-1">No moves selected</h3>
+              <p className="text-zinc-500 text-sm">Click on moves from the library →</p>
+            </div>
+          )}
+
+          {/* Create Button */}
+          <button
+            onClick={props.onCreateStack}
+            disabled={!props.stackName.trim() || props.exerciseDetails.length === 0}
+            className="w-full py-4 bg-[#E0FE10] text-black rounded-xl font-semibold hover:bg-[#d4f00e] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Create Movelist
+          </button>
+        </div>
       </div>
-      <div className="flex-1 bg-zinc-900 p-6 overflow-y-auto">
-        <div className="sticky top-0 bg-zinc-900 pb-4 z-10 space-y-4">
+
+      {/* Right Panel - Move Library */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="sticky top-0 z-10 bg-black/80 backdrop-blur-xl border-b border-zinc-800/50 p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-white">Move Library</h2>
+            <span className="text-zinc-500 text-sm">{filteredExercises.length} moves</span>
+          </div>
           <UserFilter
             selectedUserId={selectedUserId}
             onUserSelect={setSelectedUserId}
           />
-          <input
-            type="text"
-            placeholder="Search moves..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full p-4 bg-zinc-800 text-white rounded-lg border border-zinc-700 focus:border-[#E0FE10] transition-colors"
+          <div className="relative">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500" />
+            <input
+              type="text"
+              placeholder="Search moves..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-12 pr-4 py-3 bg-zinc-900/50 text-white rounded-xl border border-zinc-800 focus:border-orange-500/50 focus:outline-none transition-colors placeholder:text-zinc-600"
+            />
+          </div>
+        </div>
+        <div className="p-6">
+          <ExerciseGrid
+            userVideos={filteredExercises}
+            multiSelection={true}
+            selectedExercises={selectedExercises}
+            onToggleSelection={handleToggleSelection}
+            onSelectVideo={handleToggleSelection}
           />
         </div>
-        <ExerciseGrid
-          userVideos={filteredExercises}
-          multiSelection={true}
-          selectedExercises={selectedExercises}
-          onToggleSelection={handleToggleSelection}
-          onSelectVideo={handleToggleSelection}
-        />
       </div>
     </div>
   );
@@ -763,9 +1056,10 @@ const CreateStackPage: React.FC = () => {
       </div>
 
       {isLoading && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-zinc-900 p-6 rounded-lg">
-            <p className="text-white">Creating your Stack...</p>
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-zinc-900 border border-zinc-800 p-8 rounded-2xl text-center">
+            <div className="w-12 h-12 border-4 border-[#E0FE10] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+            <p className="text-white font-medium">Creating your Movelist...</p>
           </div>
         </div>
       )}
