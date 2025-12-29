@@ -18,7 +18,7 @@ const GLOBAL_DEFAULT_DESCRIPTION = "Real workouts, Real people, move together.";
 
 // Generate dynamic OG image URL based on page title
 const generateDynamicOgImage = (title: string, subtitle?: string): string => {
-  const baseUrl = 'https://fitwithpulse.ai/.netlify/functions/og-image';
+  const baseUrl = 'https://fitwithpulse.ai/og-image.png';
   const params = new URLSearchParams({ title });
   if (subtitle) {
     params.append('subtitle', subtitle);

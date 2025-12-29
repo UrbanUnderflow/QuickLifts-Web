@@ -17,6 +17,21 @@
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
+# Branded OG images (route through a normal URL so bot user agents aren't blocked by /.netlify/functions)
+# Keeps query params (title/subtitle) intact.
+[[redirects]]
+  from = "/og-image.png"
+  to = "/.netlify/functions/og-image"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/og-image"
+  to = "/.netlify/functions/og-image"
+  status = 200
+  force = true
+
+
 # Handle specific known routes that should go to the SPA
 [[redirects]]
   from = "/profile/*"
