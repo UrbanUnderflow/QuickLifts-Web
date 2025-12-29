@@ -8,13 +8,25 @@ interface MetaProps {
   image?: string;
 }
 
+// Generate dynamic OG image URL based on page title
+const generateDynamicOgImage = (title: string, subtitle?: string): string => {
+  const baseUrl = 'https://fitwithpulse.ai/.netlify/functions/og-image';
+  const params = new URLSearchParams({ title });
+  if (subtitle) {
+    params.append('subtitle', subtitle);
+  }
+  return `${baseUrl}?${params.toString()}`;
+};
+
 const Meta: React.FC<MetaProps> = ({ title, description, url, image }) => {
-  const defaultImage = 'https://fitwithpulse.ai/GetStarted.png'; // Fallback to "GetStarted.png"
-  
   // Ensure image is always an absolute URL
-  let ogImage = image || defaultImage;
+  // If no specific image is set, generate a dynamic branded OG image
+  let ogImage = image;
   if (ogImage && !ogImage.startsWith('http')) {
     ogImage = `https://fitwithpulse.ai${ogImage}`;
+  } else if (!ogImage) {
+    // Generate dynamic OG image with page title
+    ogImage = generateDynamicOgImage(title, description);
   }
 
   return (

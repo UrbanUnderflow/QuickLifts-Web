@@ -15,7 +15,16 @@ interface PageHeadProps {
 
 const GLOBAL_DEFAULT_TITLE = "Pulse Community Fitness";
 const GLOBAL_DEFAULT_DESCRIPTION = "Real workouts, Real people, move together.";
-const GLOBAL_DEFAULT_OG_IMAGE = "https://fitwithpulse.ai/GetStarted.png"; // Use absolute URL with a proper PNG image
+
+// Generate dynamic OG image URL based on page title
+const generateDynamicOgImage = (title: string, subtitle?: string): string => {
+  const baseUrl = 'https://fitwithpulse.ai/.netlify/functions/og-image';
+  const params = new URLSearchParams({ title });
+  if (subtitle) {
+    params.append('subtitle', subtitle);
+  }
+  return `${baseUrl}?${params.toString()}`;
+};
 
 const PageHead: React.FC<PageHeadProps> = ({
   metaData,
@@ -30,9 +39,13 @@ const PageHead: React.FC<PageHeadProps> = ({
   const ogDescription = metaData?.ogDescription || description;
   
   // Ensure ogImage is always an absolute URL
-  let ogImage = metaData?.ogImage || GLOBAL_DEFAULT_OG_IMAGE;
+  // If no specific image is set, generate a dynamic branded OG image
+  let ogImage = metaData?.ogImage;
   if (ogImage && !ogImage.startsWith('http')) {
     ogImage = `https://fitwithpulse.ai${ogImage}`;
+  } else if (!ogImage) {
+    // Generate dynamic OG image with page title
+    ogImage = generateDynamicOgImage(ogTitle, ogDescription !== GLOBAL_DEFAULT_DESCRIPTION ? ogDescription : undefined);
   }
   
   const ogUrl = metaData?.ogUrl || pageOgUrl; // ogUrl from metaData takes precedence, then pageOgUrl prop
