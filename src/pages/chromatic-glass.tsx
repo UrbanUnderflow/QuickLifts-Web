@@ -220,7 +220,7 @@ const ChromaticGlassPage: NextPage = () => {
               <div className="flex items-center justify-between">
                 <a href="/" className="flex items-center gap-3">
                   <img src="/pulse-logo-green.svg" alt="Pulse" className="h-8 w-auto" />
-                  <span className="text-zinc-400 text-sm">/ Design System</span>
+                  <span className="text-zinc-400 text-sm">/ Design Language</span>
                 </a>
                 <nav className="hidden md:flex items-center gap-6">
                   <a href="#philosophy" className="text-zinc-400 hover:text-white text-sm transition-colors">Philosophy</a>
@@ -319,6 +319,199 @@ const ChromaticGlassPage: NextPage = () => {
           </div>
         </section>
 
+        {/* Editorial: What is Glassmorphism */}
+        <section className="relative py-32 px-4">
+          <div className="max-w-4xl mx-auto">
+            <motion.article
+              initial={{ opacity: 0, y: 40 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.8 }}
+              className="prose prose-invert prose-lg"
+            >
+              <span className="text-zinc-500 text-sm font-semibold tracking-widest uppercase mb-4 block">
+                The Foundation
+              </span>
+              <h2 className="text-4xl md:text-5xl font-bold text-white mb-8 leading-tight">
+                What is Glassmorphism?
+              </h2>
+              
+              <div className="space-y-6 text-zinc-300 text-lg leading-relaxed">
+                <p>
+                  Glassmorphism emerged as a design trend around 2020, drawing inspiration from the translucent, 
+                  frosted glass panels found in modern architecture and Apple's macOS Big Sur interface. At its core, 
+                  it's about creating the illusion of frosted glass — surfaces that blur what's behind them while 
+                  maintaining a sense of depth and layering.
+                </p>
+                
+                <p>
+                  The technique relies on a few key properties: <span className="text-white font-medium">background blur</span>, 
+                  <span className="text-white font-medium"> transparency</span>, and <span className="text-white font-medium">subtle borders</span>. 
+                  When combined, these create UI elements that feel like they exist in physical space — floating panels 
+                  that catch light, reveal hints of what lies beneath, and stack with natural hierarchy.
+                </p>
+
+                <div className="my-12 p-8 rounded-3xl backdrop-blur-xl bg-white/5 border border-white/10">
+                  <p className="text-zinc-400 text-base italic m-0">
+                    "Glassmorphism isn't just an aesthetic choice — it's a way of creating interfaces that feel 
+                    tangible, layered, and alive. When done right, it makes digital spaces feel physical."
+                  </p>
+                </div>
+
+                <p>
+                  But here's the thing: glassmorphism on its own can feel cold. Clinical. It needed something more — 
+                  something that would give it warmth and energy without sacrificing that premium, polished feel.
+                </p>
+              </div>
+            </motion.article>
+          </div>
+        </section>
+
+        {/* Editorial: The Chromatic Fusion */}
+        <section className="relative py-32 px-4 overflow-hidden">
+          {/* Colored glow accents */}
+          <div className="absolute top-1/2 left-0 w-[500px] h-[500px] bg-[#E0FE10]/10 rounded-full blur-3xl -translate-y-1/2 -translate-x-1/2" />
+          <div className="absolute top-1/3 right-0 w-[400px] h-[400px] bg-[#8B5CF6]/10 rounded-full blur-3xl translate-x-1/2" />
+          
+          <div className="relative max-w-4xl mx-auto">
+            <motion.article
+              initial={{ opacity: 0, y: 40 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.8 }}
+            >
+              <span className="text-[#E0FE10] text-sm font-semibold tracking-widest uppercase mb-4 block">
+                The Evolution
+              </span>
+              <h2 className="text-4xl md:text-5xl font-bold text-white mb-8 leading-tight">
+                From Glass to{' '}
+                <span className="bg-gradient-to-r from-[#E0FE10] via-[#3B82F6] to-[#8B5CF6] bg-clip-text text-transparent">
+                  Chromatic Glass
+                </span>
+              </h2>
+              
+              <div className="space-y-6 text-zinc-300 text-lg leading-relaxed">
+                <p>
+                  We looked at glassmorphism and asked: what if the glass wasn't just frosted, but{' '}
+                  <span className="text-[#E0FE10] font-medium">colored</span>? What if light didn't just blur 
+                  through it — what if it <span className="text-[#3B82F6] font-medium">refracted</span>, 
+                  casting chromatic reflections like stained glass in a cathedral?
+                </p>
+                
+                <p>
+                  That's the essence of Chromatic Glass. We took the foundational principles of glassmorphism — 
+                  the blur, the layering, the translucency — and infused them with bold, intentional color. 
+                  Every surface in Pulse doesn't just exist; it <span className="text-white font-medium">glows</span>. 
+                  It catches and reflects our signature palette.
+                </p>
+
+                <div className="grid md:grid-cols-2 gap-6 my-12">
+                  <div className="p-6 rounded-2xl backdrop-blur-xl bg-[#E0FE10]/5 border border-[#E0FE10]/20">
+                    <div className="w-3 h-3 rounded-full bg-[#E0FE10] mb-4" />
+                    <h4 className="text-white font-semibold mb-2">Gradient Borders</h4>
+                    <p className="text-zinc-400 text-base m-0">
+                      Edges that fade from vibrant to subtle, creating the illusion of light catching a glass rim.
+                    </p>
+                  </div>
+                  <div className="p-6 rounded-2xl backdrop-blur-xl bg-[#3B82F6]/5 border border-[#3B82F6]/20">
+                    <div className="w-3 h-3 rounded-full bg-[#3B82F6] mb-4" />
+                    <h4 className="text-white font-semibold mb-2">Chromatic Glows</h4>
+                    <p className="text-zinc-400 text-base m-0">
+                      Soft, colored halos that emanate from key elements, drawing focus through luminosity.
+                    </p>
+                  </div>
+                  <div className="p-6 rounded-2xl backdrop-blur-xl bg-[#8B5CF6]/5 border border-[#8B5CF6]/20">
+                    <div className="w-3 h-3 rounded-full bg-[#8B5CF6] mb-4" />
+                    <h4 className="text-white font-semibold mb-2">Color Washes</h4>
+                    <p className="text-zinc-400 text-base m-0">
+                      Subtle tinted overlays that give each surface its own chromatic character.
+                    </p>
+                  </div>
+                  <div className="p-6 rounded-2xl backdrop-blur-xl bg-[#EF4444]/5 border border-[#EF4444]/20">
+                    <div className="w-3 h-3 rounded-full bg-[#EF4444] mb-4" />
+                    <h4 className="text-white font-semibold mb-2">Tinted Shadows</h4>
+                    <p className="text-zinc-400 text-base m-0">
+                      Shadows that carry the hue of their source, as if light is passing through colored glass.
+                    </p>
+                  </div>
+                </div>
+
+                <p>
+                  The result is a design language that feels both futuristic and organic — like holding a prism up to 
+                  light and watching colors dance across surfaces. It's glass, but it's <span className="text-white font-medium">alive</span>.
+                </p>
+              </div>
+            </motion.article>
+          </div>
+        </section>
+
+        {/* Editorial: Why Dark? */}
+        <section className="relative py-32 px-4">
+          <div className="max-w-4xl mx-auto">
+            <motion.article
+              initial={{ opacity: 0, y: 40 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.8 }}
+            >
+              <span className="text-zinc-500 text-sm font-semibold tracking-widest uppercase mb-4 block">
+                The Canvas
+              </span>
+              <h2 className="text-4xl md:text-5xl font-bold text-white mb-8 leading-tight">
+                Why We Chose the Dark
+              </h2>
+              
+              <div className="space-y-6 text-zinc-300 text-lg leading-relaxed">
+                <p>
+                  Fitness apps are typically bright. White backgrounds, cheerful colors, energy-drink aesthetics. 
+                  We went the opposite direction — and it was intentional.
+                </p>
+                
+                <p>
+                  <span className="text-white font-medium">Dark interfaces reduce eye strain</span> during early 
+                  morning workouts and late-night sessions. When you're pushing through your last set at 6 AM, 
+                  the last thing you need is a screen blasting white light into your face.
+                </p>
+
+                <p>
+                  But beyond function, darkness creates <span className="text-white font-medium">atmosphere</span>. 
+                  It's the difference between a fluorescent gym and a premium fitness studio. Dark backgrounds 
+                  feel exclusive. Intentional. They say: this isn't just an app — this is an experience.
+                </p>
+
+                <div className="my-12 p-8 rounded-3xl bg-gradient-to-br from-zinc-900 to-zinc-950 border border-white/5">
+                  <div className="flex items-start gap-6">
+                    <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#E0FE10]/20 to-[#E0FE10]/5 flex items-center justify-center flex-shrink-0 border border-[#E0FE10]/20">
+                      <span className="text-2xl">🌙</span>
+                    </div>
+                    <div>
+                      <h4 className="text-white font-semibold text-xl mb-2">Dark Luxury Fitness</h4>
+                      <p className="text-zinc-400 m-0">
+                        Our dark foundation isn't just about looking cool — it's about creating a space where 
+                        colors can truly shine. Against charcoal and black, our greens glow brighter, our blues 
+                        feel deeper, and every chromatic accent commands attention.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <p>
+                  Most importantly, darkness lets our chromatic elements <span className="text-[#E0FE10] font-medium">pop</span>. 
+                  The lime green that defines Pulse? It would look washed out on white. On our deep charcoal canvas, 
+                  it practically <span className="text-white font-medium">glows</span>. Colors become luminous. 
+                  Interfaces become immersive. Every interaction feels like touching light.
+                </p>
+
+                <p>
+                  That's the Pulse philosophy: <span className="text-white font-medium">dark luxury, chromatic energy</span>. 
+                  A canvas that elevates every element placed upon it. An experience that feels premium from the 
+                  first tap to the final rep.
+                </p>
+              </div>
+            </motion.article>
+          </div>
+        </section>
+
         {/* Philosophy Section */}
         <section id="philosophy" className="relative py-32 px-4">
           <div className="max-w-6xl mx-auto">
@@ -330,14 +523,14 @@ const ChromaticGlassPage: NextPage = () => {
               className="text-center mb-20"
             >
               <span className="text-[#E0FE10] text-sm font-semibold tracking-widest uppercase mb-4 block">
-                Design Philosophy
+                Design Principles
               </span>
               <h2 className="text-4xl md:text-6xl font-bold mb-6">
-                Dark Luxury <span className="text-zinc-500">Meets</span> Chromatic Light
+                The Rules We Follow
               </h2>
               <p className="text-zinc-400 text-lg max-w-2xl mx-auto">
-                Chromatic Glass is born from the intersection of premium dark aesthetics 
-                and the vibrant energy of colored light passing through glass.
+                Every design decision in Pulse stems from these core principles — 
+                the guidelines that keep Chromatic Glass cohesive and intentional.
               </p>
             </motion.div>
 
@@ -791,16 +984,17 @@ const ChromaticGlassPage: NextPage = () => {
                 
                 <div className="relative backdrop-blur-xl bg-zinc-900/30 border border-white/10 rounded-3xl p-12 md:p-16">
                   <span className="text-[#E0FE10] text-sm font-semibold tracking-widest uppercase mb-4 block">
-                    Start Building
+                    Experience It
                   </span>
                   <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
-                    Ready to create with{' '}
+                    See{' '}
                     <span className="bg-gradient-to-r from-[#E0FE10] via-[#3B82F6] to-[#8B5CF6] bg-clip-text text-transparent">
                       Chromatic Glass
-                    </span>?
+                    </span>{' '}
+                    in action
                   </h2>
                   <p className="text-zinc-400 text-lg mb-8 max-w-xl mx-auto">
-                    Dive into the Pulse ecosystem and experience dark luxury fitness design.
+                    This is how we build. Experience dark luxury fitness design across our platform.
                   </p>
                   
                   <div className="flex flex-col sm:flex-row gap-4 justify-center">
@@ -818,7 +1012,7 @@ const ChromaticGlassPage: NextPage = () => {
                       whileTap={{ scale: 0.98 }}
                       className="px-8 py-4 rounded-xl bg-white/5 backdrop-blur-sm border border-white/10 text-white font-semibold text-lg hover:bg-white/10 transition-colors"
                     >
-                      Download App
+                      Get the App
                     </motion.a>
                   </div>
                 </div>
@@ -835,7 +1029,7 @@ const ChromaticGlassPage: NextPage = () => {
               <span className="text-zinc-500 text-sm">Chromatic Glass Design Language</span>
             </div>
             <p className="text-zinc-500 text-sm">
-              © {new Date().getFullYear()} Pulse. Dark luxury fitness.
+              © {new Date().getFullYear()} Pulse Intelligence Labs, Inc. Dark luxury fitness.
             </p>
           </div>
         </footer>
