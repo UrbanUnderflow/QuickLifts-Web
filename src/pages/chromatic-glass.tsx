@@ -187,9 +187,9 @@ const ChromaticGlassPage: NextPage = () => {
   return (
     <>
       <Head>
-        <title>Chromatic Glass | Pulse Design System</title>
+        <title>Chromatic Glass | Pulse Design Language</title>
         <meta name="description" content="Chromatic Glass - Pulse's take on glassmorphic design. Dark luxury polish with colors that pop and reflect like glass." />
-        <meta property="og:title" content="Chromatic Glass | Pulse Design System" />
+        <meta property="og:title" content="Chromatic Glass | Pulse Design Language" />
         <meta property="og:description" content="Dark luxury polish with colors that pop and reflect like glass." />
         <meta property="og:image" content="/og-image.png?title=Chromatic%20Glass&subtitle=Pulse%20Design%20System" />
       </Head>
@@ -250,7 +250,7 @@ const ChromaticGlassPage: NextPage = () => {
               className="inline-flex items-center gap-2 px-4 py-2 mb-8 rounded-full backdrop-blur-xl bg-white/5 border border-white/10"
             >
               <span className="w-2 h-2 rounded-full bg-[#E0FE10] animate-pulse" />
-              <span className="text-zinc-400 text-sm">Pulse Design System v2.0</span>
+              <span className="text-zinc-400 text-sm">Pulse Design Language v2.0</span>
             </motion.div>
 
             {/* Main Title */}
@@ -636,7 +636,7 @@ const ChromaticGlassPage: NextPage = () => {
                   <motion.button
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.98 }}
-                    className="px-6 py-3 rounded-xl bg-white text-[#E0FE10] font-semibold"
+                    className="px-6 py-3 rounded-xl bg-white text-zinc-900 font-semibold"
                   >
                     Secondary
                   </motion.button>
@@ -832,7 +832,7 @@ const ChromaticGlassPage: NextPage = () => {
           <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <img src="/pulse-logo-green.svg" alt="Pulse" className="h-6 w-auto" />
-              <span className="text-zinc-500 text-sm">Chromatic Glass Design System</span>
+              <span className="text-zinc-500 text-sm">Chromatic Glass Design Language</span>
             </div>
             <p className="text-zinc-500 text-sm">
               © {new Date().getFullYear()} Pulse. Dark luxury fitness.
