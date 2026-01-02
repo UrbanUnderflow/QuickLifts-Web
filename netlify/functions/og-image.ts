@@ -3,18 +3,14 @@ import sharp from 'sharp';
 
 const handler: Handler = async (event) => {
   try {
-    const { title = 'Pulse', subtitle = '' } = event.queryStringParameters || {};
+    const { title = 'Pulse' } = event.queryStringParameters || {};
     
     // Decode URL-encoded parameters
     const decodedTitle = decodeURIComponent(title);
-    const decodedSubtitle = decodeURIComponent(subtitle);
     
     // Calculate text positioning and sizing based on title length
     const titleFontSize = decodedTitle.length > 30 ? 52 : decodedTitle.length > 20 ? 58 : 64;
     const displayTitle = decodedTitle.length > 45 ? decodedTitle.substring(0, 42) + '...' : decodedTitle;
-    
-    // Truncate subtitle for display
-    const displaySubtitle = decodedSubtitle.length > 90 ? decodedSubtitle.substring(0, 87) + '...' : decodedSubtitle;
     
     // SVG template with Pulse branding
     // Using system fonts for better compatibility
@@ -31,23 +27,40 @@ const handler: Handler = async (event) => {
   </defs>
   <rect width="1200" height="630" fill="url(#glow)"/>
   
-  <!-- Pulse Logo Icon (simplified) -->
-  <g transform="translate(525, 100)">
-    <circle cx="75" cy="60" r="45" fill="none" stroke="white" stroke-width="3.5"/>
-    <path d="M57 45 L67 78 L82 52 L92 78" stroke="white" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-  </g>
-  
-  <!-- "pulse" text -->
-  <text x="600" y="220" font-family="Arial, Helvetica, sans-serif" font-size="42" font-weight="bold" fill="white" text-anchor="middle">pulse</text>
+  <!-- Pulse wordmark (text only; avoids using an incorrect logo) -->
+  <text x="600" y="190"
+        font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Arial, Helvetica, sans-serif"
+        font-size="54"
+        font-weight="800"
+        letter-spacing="0.5"
+        fill="white"
+        text-anchor="middle">Pulse</text>
   
   <!-- Main Title in Green -->
-  <text x="600" y="340" font-family="Arial, Helvetica, sans-serif" font-size="${titleFontSize}" font-weight="bold" fill="#E0FE10" text-anchor="middle">${escapeXml(displayTitle)}</text>
+  <!-- shadow pass for readability -->
+  <text x="602" y="338"
+        font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Arial, Helvetica, sans-serif"
+        font-size="${titleFontSize}"
+        font-weight="900"
+        fill="rgba(0,0,0,0.45)"
+        text-anchor="middle">${escapeXml(displayTitle)}</text>
+  <text x="600" y="340"
+        font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Arial, Helvetica, sans-serif"
+        font-size="${titleFontSize}"
+        font-weight="900"
+        fill="#E0FE10"
+        text-anchor="middle">${escapeXml(displayTitle)}</text>
   
-  <!-- Subtitle if provided -->
-  ${displaySubtitle ? `<text x="600" y="410" font-family="Arial, Helvetica, sans-serif" font-size="26" fill="#9CA3AF" text-anchor="middle">${escapeXml(displaySubtitle)}</text>` : ''}
-  
-  <!-- Bottom URL -->
-  <text x="600" y="560" font-family="Arial, Helvetica, sans-serif" font-size="22" fill="#6B7280" text-anchor="middle">fitwithpulse.ai</text>
+  <!-- Bottom URL (make it readable) -->
+  <g>
+    <rect x="430" y="512" rx="18" ry="18" width="340" height="60" fill="rgba(0,0,0,0.35)"/>
+    <text x="600" y="552"
+          font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Arial, Helvetica, sans-serif"
+          font-size="28"
+          font-weight="700"
+          fill="white"
+          text-anchor="middle">fitwithpulse.ai</text>
+  </g>
 </svg>`);
 
     // Convert SVG to PNG using sharp

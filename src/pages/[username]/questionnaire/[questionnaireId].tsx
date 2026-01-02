@@ -6,11 +6,9 @@ import { SurveyTakingModal } from '../../../components/Surveys';
 
 // Generate dynamic OG image URL based on page title
 const generateDynamicOgImage = (title: string, subtitle?: string): string => {
-  const baseUrl = 'https://fitwithpulse.ai/.netlify/functions/og-image';
+  const baseUrl = 'https://fitwithpulse.ai/og-image.png';
   const params = new URLSearchParams({ title });
-  if (subtitle) {
-    params.append('subtitle', subtitle);
-  }
+  // NOTE: intentionally not sending subtitle. Social previews should be title-only.
   return `${baseUrl}?${params.toString()}`;
 };
 
@@ -106,7 +104,7 @@ const ClientQuestionnairePage: React.FC<ClientQuestionnairePageProps> = ({
           onClose={() => setIsOpen(false)}
           survey={surveyForModal}
           onSubmit={async (answers, respondentName, respondentEmail) => {
-            await creatorPagesService.submitSurveyResponse(
+            const responseId = await creatorPagesService.submitSurveyResponse(
               ownerUserId,
               CLIENT_QUESTIONNAIRES_PAGE_SLUG,
               surveyForModal.id,
@@ -116,6 +114,24 @@ const ClientQuestionnairePage: React.FC<ClientQuestionnairePageProps> = ({
                 respondentEmail,
               }
             );
+
+            // Fire-and-forget: notify the host via Brevo that the intake was completed.
+            // This runs server-side (keeps Brevo keys off the client) and is idempotent.
+            try {
+              await fetch('/api/surveys/notify-completed', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  ownerUserId,
+                  pageSlug: CLIENT_QUESTIONNAIRES_PAGE_SLUG,
+                  surveyId: surveyForModal.id,
+                  responseId,
+                  username,
+                }),
+              });
+            } catch (e) {
+              console.warn('Failed to send intake completion notification:', e);
+            }
           }}
         />
       )}

@@ -59,7 +59,7 @@ const SettingsPage: NextPage = () => {
   const subscriptionLabel =
     user?.subscriptionType ? user.subscriptionType.toString().charAt(0).toUpperCase() + user.subscriptionType.toString().slice(1) : 'Trial';
 
-  const supportEmail = 'quickliftsapp@gmail.com';
+  const supportEmail = 'info@fitwithpulse.ai';
 
   const handleSubscription = () => {
     router.push('/subscribe');

@@ -31,7 +31,8 @@ const MarketingContent: React.FC<{
   metaData: SerializablePageMetaData | null;
   isSignInModalOpen: boolean;
   setIsSignInModalOpen: (open: boolean) => void;
-}> = ({ onUseWebApp, metaData, isSignInModalOpen, setIsSignInModalOpen }) => {
+  isAuthenticated: boolean;
+}> = ({ onUseWebApp, metaData, isSignInModalOpen, setIsSignInModalOpen, isAuthenticated }) => {
   const faqData = [
     {
       question: "What is the Fitness Collective?",
@@ -141,18 +142,29 @@ const MarketingContent: React.FC<{
 
             {/* Right Side - Auth Buttons */}
             <div className="flex items-center gap-3">
-              <button
-                onClick={() => setIsSignInModalOpen(true)}
-                className="hidden sm:flex items-center justify-center px-5 py-2.5 rounded-full bg-zinc-800 hover:bg-zinc-700 text-white text-sm font-medium transition-all duration-200 border border-zinc-700"
-              >
-                Log in
-              </button>
-              <button
-                onClick={onUseWebApp}
-                className="flex items-center justify-center px-5 py-2.5 rounded-full bg-[#E0FE10] hover:bg-[#d4f00f] text-black text-sm font-bold transition-all duration-200 shadow-lg shadow-[#E0FE10]/20"
-              >
-                Get started
-              </button>
+              {isAuthenticated ? (
+                <button
+                  onClick={onUseWebApp}
+                  className="flex items-center justify-center px-5 py-2.5 rounded-full bg-[#E0FE10] hover:bg-[#d4f00f] text-black text-sm font-bold transition-all duration-200 shadow-lg shadow-[#E0FE10]/20"
+                >
+                  Use Web App
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={() => setIsSignInModalOpen(true)}
+                    className="hidden sm:flex items-center justify-center px-5 py-2.5 rounded-full bg-zinc-800 hover:bg-zinc-700 text-white text-sm font-medium transition-all duration-200 border border-zinc-700"
+                  >
+                    Log in
+                  </button>
+                  <button
+                    onClick={onUseWebApp}
+                    className="flex items-center justify-center px-5 py-2.5 rounded-full bg-[#E0FE10] hover:bg-[#d4f00f] text-black text-sm font-bold transition-all duration-200 shadow-lg shadow-[#E0FE10]/20"
+                  >
+                    Get started
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -997,6 +1009,7 @@ const HomePage: NextPage<HomePageProps> = ({ metaData }) => {
       metaData={metaData} 
       isSignInModalOpen={isSignInModalOpen}
       setIsSignInModalOpen={setIsSignInModalOpen}
+      isAuthenticated={!!currentUser}
     />;
   }
 
