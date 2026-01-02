@@ -693,24 +693,24 @@ const ChromaticGlassPage: NextPage = () => {
                 delay={0.1}
               >
                 <div className="relative w-48 h-32">
-                  <div className="absolute inset-0 rounded-2xl bg-zinc-800" />
-                  <div 
-                    className="absolute inset-0 rounded-2xl"
-                    style={{
-                      background: 'linear-gradient(135deg, rgba(224,254,16,0.1) 0%, transparent 50%)'
-                    }}
-                  />
-                  <div 
-                    className="absolute inset-0 rounded-2xl border"
-                    style={{
-                      borderImage: 'linear-gradient(135deg, rgba(224,254,16,0.6), rgba(224,254,16,0.2), rgba(224,254,16,0.1)) 1'
-                    }}
-                  />
+                  {/* Outer glow */}
                   <motion.div
                     animate={{ opacity: [0.3, 0.6, 0.3] }}
                     transition={{ duration: 2, repeat: Infinity }}
                     className="absolute -inset-4 rounded-3xl blur-xl bg-[#E0FE10]/20"
                   />
+                  {/* Gradient border using pseudo-element technique */}
+                  <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-[#E0FE10]/60 via-[#E0FE10]/20 to-[#E0FE10]/10 p-[1px]">
+                    <div className="w-full h-full rounded-2xl bg-zinc-800">
+                      {/* Inner gradient wash */}
+                      <div 
+                        className="absolute inset-0 rounded-2xl"
+                        style={{
+                          background: 'linear-gradient(135deg, rgba(224,254,16,0.1) 0%, transparent 50%)'
+                        }}
+                      />
+                    </div>
+                  </div>
                 </div>
               </PatternCard>
 
@@ -804,11 +804,311 @@ const ChromaticGlassPage: NextPage = () => {
                 Component Gallery
               </span>
               <h2 className="text-4xl md:text-6xl font-bold mb-6">
-                Built With <span className="text-[#EF4444]">Purpose</span>
+                Chromatic in <span className="text-[#EF4444]">Action</span>
               </h2>
               <p className="text-zinc-400 text-lg max-w-2xl mx-auto">
-                Every component is crafted to embody the Chromatic Glass philosophy.
+                Real components from the Pulse app — each one embodying our chromatic glass philosophy.
               </p>
+            </motion.div>
+
+            {/* Workout Type Selector */}
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6 }}
+              className="mb-16"
+            >
+              <h3 className="text-xl font-bold text-white mb-2">Workout Type Selector</h3>
+              <p className="text-zinc-500 text-sm mb-6">Each category owns its chromatic identity</p>
+              
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {/* Lift */}
+                <motion.div
+                  whileHover={{ scale: 1.03, y: -4 }}
+                  className="relative group cursor-pointer"
+                >
+                  <div className="absolute inset-0 rounded-2xl bg-[#E0FE10]/20 blur-xl opacity-0 group-hover:opacity-60 transition-opacity" />
+                  <div className="relative h-40 rounded-2xl overflow-hidden bg-gradient-to-br from-[#E0FE10]/20 to-[#E0FE10]/5 border border-[#E0FE10]/30 flex flex-col items-center justify-center gap-3">
+                    <div className="w-14 h-14 rounded-full bg-[#E0FE10]/20 border border-[#E0FE10]/40 flex items-center justify-center">
+                      <svg className="w-7 h-7 text-[#E0FE10]" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M20.57 14.86L22 13.43 20.57 12 17 15.57 8.43 7 12 3.43 10.57 2 9.14 3.43 7.71 2 5.57 4.14 4.14 2.71 2.71 4.14l1.43 1.43L2 7.71l1.43 1.43L2 10.57 3.43 12 7 8.43 15.57 17 12 20.57 13.43 22l1.43-1.43L16.29 22l2.14-2.14 1.43 1.43 1.43-1.43-1.43-1.43L22 16.29z"/>
+                      </svg>
+                    </div>
+                    <span className="text-white font-semibold">Lift</span>
+                  </div>
+                </motion.div>
+
+                {/* Run */}
+                <motion.div
+                  whileHover={{ scale: 1.03, y: -4 }}
+                  className="relative group cursor-pointer"
+                >
+                  <div className="absolute inset-0 rounded-2xl bg-[#3B82F6]/20 blur-xl opacity-0 group-hover:opacity-60 transition-opacity" />
+                  <div className="relative h-40 rounded-2xl overflow-hidden bg-gradient-to-br from-[#3B82F6]/20 to-[#3B82F6]/5 border border-[#3B82F6]/30 flex flex-col items-center justify-center gap-3">
+                    <div className="w-14 h-14 rounded-full bg-[#3B82F6]/20 border border-[#3B82F6]/40 flex items-center justify-center">
+                      <svg className="w-7 h-7 text-[#3B82F6]" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M13.49 5.48c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm-3.6 13.9l1-4.4 2.1 2v6h2v-7.5l-2.1-2 .6-3c1.3 1.5 3.3 2.5 5.5 2.5v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1l-5.2 2.2v4.7h2v-3.4l1.8-.7-1.6 8.1-4.9-1-.4 2 7 1.4z"/>
+                      </svg>
+                    </div>
+                    <span className="text-white font-semibold">Run</span>
+                  </div>
+                </motion.div>
+
+                {/* Fat Burn */}
+                <motion.div
+                  whileHover={{ scale: 1.03, y: -4 }}
+                  className="relative group cursor-pointer"
+                >
+                  <div className="absolute inset-0 rounded-2xl bg-[#EF4444]/20 blur-xl opacity-0 group-hover:opacity-60 transition-opacity" />
+                  <div className="relative h-40 rounded-2xl overflow-hidden bg-gradient-to-br from-[#EF4444]/20 to-[#EF4444]/5 border border-[#EF4444]/30 flex flex-col items-center justify-center gap-3">
+                    <div className="w-14 h-14 rounded-full bg-[#EF4444]/20 border border-[#EF4444]/40 flex items-center justify-center">
+                      <svg className="w-7 h-7 text-[#EF4444]" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M13.5.67s.74 2.65.74 4.8c0 2.06-1.35 3.73-3.41 3.73-2.07 0-3.63-1.67-3.63-3.73l.03-.36C5.21 7.51 4 10.62 4 14c0 4.42 3.58 8 8 8s8-3.58 8-8C20 8.61 17.41 3.8 13.5.67zM11.71 19c-1.78 0-3.22-1.4-3.22-3.14 0-1.62 1.05-2.76 2.81-3.12 1.77-.36 3.6-1.21 4.62-2.58.39 1.29.59 2.65.59 4.04 0 2.65-2.15 4.8-4.8 4.8z"/>
+                      </svg>
+                    </div>
+                    <span className="text-white font-semibold">Fat Burn</span>
+                  </div>
+                </motion.div>
+
+                {/* Stretch */}
+                <motion.div
+                  whileHover={{ scale: 1.03, y: -4 }}
+                  className="relative group cursor-pointer"
+                >
+                  <div className="absolute inset-0 rounded-2xl bg-[#8B5CF6]/20 blur-xl opacity-0 group-hover:opacity-60 transition-opacity" />
+                  <div className="relative h-40 rounded-2xl overflow-hidden bg-gradient-to-br from-[#8B5CF6]/20 to-[#8B5CF6]/5 border border-[#8B5CF6]/30 flex flex-col items-center justify-center gap-3">
+                    <div className="w-14 h-14 rounded-full bg-[#8B5CF6]/20 border border-[#8B5CF6]/40 flex items-center justify-center">
+                      <svg className="w-7 h-7 text-[#8B5CF6]" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M6 2v6h.01L6 8.01 10 12l-4 4 .01.01H6V22h12v-5.99h-.01L18 16l-4-4 4-3.99-.01-.01H18V2H6zm10 14.5V20H8v-3.5l4-4 4 4zm-4-5l-4-4V4h8v3.5l-4 4z"/>
+                      </svg>
+                    </div>
+                    <span className="text-white font-semibold">Stretch</span>
+                  </div>
+                </motion.div>
+              </div>
+            </motion.div>
+
+            {/* Run Summary Recreation */}
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6, delay: 0.1 }}
+              className="mb-16"
+            >
+              <h3 className="text-xl font-bold text-white mb-2">Run Summary</h3>
+              <p className="text-zinc-500 text-sm mb-6">A complete page bathed in chromatic blue</p>
+              
+              <div className="relative max-w-md mx-auto">
+                {/* Blue glow background */}
+                <div className="absolute inset-0 bg-[#3B82F6]/10 blur-3xl rounded-full" />
+                
+                <div className="relative rounded-3xl overflow-hidden bg-gradient-to-b from-[#0c1929] to-[#0a0a0b] border border-[#3B82F6]/20 p-6">
+                  {/* Header */}
+                  <div className="text-center mb-6">
+                    <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-[#3B82F6]/10 flex items-center justify-center">
+                      <motion.div
+                        animate={{ y: [0, -3, 0] }}
+                        transition={{ duration: 1.5, repeat: Infinity }}
+                      >
+                        <svg className="w-8 h-8 text-[#3B82F6]" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M13.49 5.48c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm-3.6 13.9l1-4.4 2.1 2v6h2v-7.5l-2.1-2 .6-3c1.3 1.5 3.3 2.5 5.5 2.5v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1l-5.2 2.2v4.7h2v-3.4l1.8-.7-1.6 8.1-4.9-1-.4 2 7 1.4z"/>
+                        </svg>
+                      </motion.div>
+                    </div>
+                    <h4 className="text-2xl font-bold text-white mb-2">Thursday Run</h4>
+                    <div className="flex items-center justify-center gap-2 mb-2">
+                      <span className="px-3 py-1 rounded-full text-xs font-medium bg-[#3B82F6]/20 text-[#3B82F6] border border-[#3B82F6]/30">
+                        🏃 Free Run
+                      </span>
+                      <span className="px-3 py-1 rounded-full text-xs font-medium bg-zinc-800/50 text-zinc-400 border border-zinc-700/50">
+                        📍 Outdoor
+                      </span>
+                    </div>
+                    <p className="text-zinc-500 text-sm">Dec 31, 2025 at 11:30 PM</p>
+                  </div>
+
+                  {/* Map placeholder */}
+                  <div className="relative h-40 rounded-2xl overflow-hidden mb-4 bg-gradient-to-br from-[#1a2744] to-[#0f172a] border border-[#3B82F6]/20">
+                    <div className="absolute inset-0 bg-[url('/grid-pattern.svg')] opacity-10" />
+                    <div className="absolute top-3 left-3 px-2 py-1 rounded-full bg-[#E0FE10] text-black text-xs font-bold flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-black" /> Start
+                    </div>
+                    <div className="absolute top-3 right-3 px-2 py-1 rounded-full bg-[#3B82F6] text-white text-xs font-bold flex items-center gap-1">
+                      🏁 Finish
+                    </div>
+                    {/* Route line */}
+                    <svg className="absolute inset-0 w-full h-full">
+                      <motion.path
+                        d="M 60 120 Q 120 60 180 100 Q 240 140 300 80"
+                        fill="none"
+                        stroke="#3B82F6"
+                        strokeWidth="4"
+                        strokeLinecap="round"
+                        initial={{ pathLength: 0 }}
+                        whileInView={{ pathLength: 1 }}
+                        viewport={{ once: true }}
+                        transition={{ duration: 2, delay: 0.5 }}
+                      />
+                    </svg>
+                  </div>
+
+                  {/* Goal Achieved */}
+                  <div className="flex items-center gap-4 p-4 rounded-2xl bg-[#3B82F6]/10 border border-[#3B82F6]/20 mb-4">
+                    <div className="w-12 h-12 rounded-full bg-[#3B82F6] flex items-center justify-center">
+                      <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-white font-semibold">Goal Achieved!</p>
+                      <p className="text-zinc-400 text-sm">Completed</p>
+                    </div>
+                    <span className="text-2xl">🏆</span>
+                  </div>
+
+                  {/* Stats Grid */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="p-4 rounded-xl bg-[#3B82F6]/10 border border-[#3B82F6]/20 text-center">
+                      <span className="text-[#3B82F6] text-lg mb-1 block">🗺️</span>
+                      <p className="text-2xl font-bold text-white">1.4 mi</p>
+                      <p className="text-zinc-500 text-xs">Distance</p>
+                    </div>
+                    <div className="p-4 rounded-xl bg-[#3B82F6]/10 border border-[#3B82F6]/20 text-center">
+                      <span className="text-[#3B82F6] text-lg mb-1 block">⏱️</span>
+                      <p className="text-2xl font-bold text-white">14:41</p>
+                      <p className="text-zinc-500 text-xs">Time</p>
+                    </div>
+                    <div className="p-4 rounded-xl bg-[#F59E0B]/10 border border-[#F59E0B]/20 text-center">
+                      <span className="text-[#F59E0B] text-lg mb-1 block">⚡</span>
+                      <p className="text-2xl font-bold text-white">10:30</p>
+                      <p className="text-zinc-500 text-xs">Avg Pace</p>
+                    </div>
+                    <div className="p-4 rounded-xl bg-[#F97316]/10 border border-[#F97316]/20 text-center">
+                      <span className="text-[#F97316] text-lg mb-1 block">🔥</span>
+                      <p className="text-2xl font-bold text-white">137</p>
+                      <p className="text-zinc-500 text-xs">Calories</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+
+            {/* Creator Studio Cards */}
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6, delay: 0.2 }}
+              className="mb-16"
+            >
+              <h3 className="text-xl font-bold text-white mb-2">Creator Studio</h3>
+              <p className="text-zinc-500 text-sm mb-6">Multi-colored action cards with chromatic personalities</p>
+              
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                {/* Create a Move */}
+                <motion.div
+                  whileHover={{ scale: 1.02, y: -4 }}
+                  className="relative group cursor-pointer"
+                >
+                  <div className="absolute inset-0 rounded-2xl bg-[#8B5CF6]/20 blur-xl opacity-0 group-hover:opacity-60 transition-opacity" />
+                  <div className="relative p-5 rounded-2xl bg-gradient-to-br from-[#8B5CF6]/15 to-[#8B5CF6]/5 border border-[#8B5CF6]/20 h-full">
+                    <div className="w-10 h-10 rounded-xl bg-[#8B5CF6]/20 border border-[#8B5CF6]/30 flex items-center justify-center mb-4">
+                      <svg className="w-5 h-5 text-[#8B5CF6]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                      </svg>
+                    </div>
+                    <h4 className="text-white font-semibold mb-1">Create a Move</h4>
+                    <p className="text-zinc-500 text-sm">Upload an exercise video</p>
+                  </div>
+                </motion.div>
+
+                {/* Create a Movelist */}
+                <motion.div
+                  whileHover={{ scale: 1.02, y: -4 }}
+                  className="relative group cursor-pointer"
+                >
+                  <div className="absolute inset-0 rounded-2xl bg-[#F59E0B]/20 blur-xl opacity-0 group-hover:opacity-60 transition-opacity" />
+                  <div className="relative p-5 rounded-2xl bg-gradient-to-br from-[#F59E0B]/15 to-[#F59E0B]/5 border border-[#F59E0B]/20 h-full">
+                    <div className="w-10 h-10 rounded-xl bg-[#F59E0B]/20 border border-[#F59E0B]/30 flex items-center justify-center mb-4">
+                      <svg className="w-5 h-5 text-[#F59E0B]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                      </svg>
+                    </div>
+                    <h4 className="text-white font-semibold mb-1">Create a Movelist</h4>
+                    <p className="text-zinc-500 text-sm">Build a workout stack</p>
+                  </div>
+                </motion.div>
+
+                {/* Create a Round */}
+                <motion.div
+                  whileHover={{ scale: 1.02, y: -4 }}
+                  className="relative group cursor-pointer"
+                >
+                  <div className="absolute inset-0 rounded-2xl bg-[#10B981]/20 blur-xl opacity-0 group-hover:opacity-60 transition-opacity" />
+                  <div className="relative p-5 rounded-2xl bg-gradient-to-br from-[#10B981]/15 to-[#10B981]/5 border border-[#10B981]/20 h-full">
+                    <div className="w-10 h-10 rounded-xl bg-[#10B981]/20 border border-[#10B981]/30 flex items-center justify-center mb-4">
+                      <svg className="w-5 h-5 text-[#10B981]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                    </div>
+                    <h4 className="text-white font-semibold mb-1">Create a Round</h4>
+                    <p className="text-zinc-500 text-sm">Build a training program</p>
+                  </div>
+                </motion.div>
+
+                {/* Landing Pages */}
+                <motion.div
+                  whileHover={{ scale: 1.02, y: -4 }}
+                  className="relative group cursor-pointer"
+                >
+                  <div className="absolute inset-0 rounded-2xl bg-[#EC4899]/20 blur-xl opacity-0 group-hover:opacity-60 transition-opacity" />
+                  <div className="relative p-5 rounded-2xl bg-gradient-to-br from-[#EC4899]/15 to-[#EC4899]/5 border border-[#EC4899]/20 h-full">
+                    <div className="w-10 h-10 rounded-xl bg-[#EC4899]/20 border border-[#EC4899]/30 flex items-center justify-center mb-4">
+                      <svg className="w-5 h-5 text-[#EC4899]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
+                      </svg>
+                    </div>
+                    <h4 className="text-white font-semibold mb-1">Landing Pages</h4>
+                    <p className="text-zinc-500 text-sm">Create event & promo pages</p>
+                  </div>
+                </motion.div>
+
+                {/* Client Forms */}
+                <motion.div
+                  whileHover={{ scale: 1.02, y: -4 }}
+                  className="relative group cursor-pointer"
+                >
+                  <div className="absolute inset-0 rounded-2xl bg-[#06B6D4]/20 blur-xl opacity-0 group-hover:opacity-60 transition-opacity" />
+                  <div className="relative p-5 rounded-2xl bg-gradient-to-br from-[#06B6D4]/15 to-[#06B6D4]/5 border border-[#06B6D4]/20 h-full">
+                    <div className="w-10 h-10 rounded-xl bg-[#06B6D4]/20 border border-[#06B6D4]/30 flex items-center justify-center mb-4">
+                      <svg className="w-5 h-5 text-[#06B6D4]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                      </svg>
+                    </div>
+                    <h4 className="text-white font-semibold mb-1">Client Intake Forms</h4>
+                    <p className="text-zinc-500 text-sm">Collect info from clients</p>
+                  </div>
+                </motion.div>
+
+                {/* Analytics */}
+                <motion.div
+                  whileHover={{ scale: 1.02, y: -4 }}
+                  className="relative group cursor-pointer"
+                >
+                  <div className="absolute inset-0 rounded-2xl bg-[#E0FE10]/20 blur-xl opacity-0 group-hover:opacity-60 transition-opacity" />
+                  <div className="relative p-5 rounded-2xl bg-gradient-to-br from-[#E0FE10]/15 to-[#E0FE10]/5 border border-[#E0FE10]/20 h-full">
+                    <div className="w-10 h-10 rounded-xl bg-[#E0FE10]/20 border border-[#E0FE10]/30 flex items-center justify-center mb-4">
+                      <svg className="w-5 h-5 text-[#E0FE10]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                      </svg>
+                    </div>
+                    <h4 className="text-white font-semibold mb-1">Analytics</h4>
+                    <p className="text-zinc-500 text-sm">Track your growth</p>
+                  </div>
+                </motion.div>
+              </div>
             </motion.div>
 
             {/* Button Gallery */}
@@ -816,7 +1116,6 @@ const ChromaticGlassPage: NextPage = () => {
               <div className="p-8">
                 <h3 className="text-xl font-bold text-white mb-6">Buttons</h3>
                 <div className="flex flex-wrap gap-4">
-                  {/* Primary */}
                   <motion.button
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.98 }}
@@ -824,8 +1123,6 @@ const ChromaticGlassPage: NextPage = () => {
                   >
                     Primary Action
                   </motion.button>
-                  
-                  {/* Secondary */}
                   <motion.button
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.98 }}
@@ -833,8 +1130,6 @@ const ChromaticGlassPage: NextPage = () => {
                   >
                     Secondary
                   </motion.button>
-                  
-                  {/* Ghost */}
                   <motion.button
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.98 }}
@@ -842,8 +1137,6 @@ const ChromaticGlassPage: NextPage = () => {
                   >
                     Ghost
                   </motion.button>
-                  
-                  {/* Destructive */}
                   <motion.button
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.98 }}
