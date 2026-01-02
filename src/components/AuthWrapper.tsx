@@ -69,7 +69,9 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     '/starter-pack', '/one-on-one', '/train-your-client', '/stacks', '/moves', '/terms', '/press', '/100trainers',
     '/subscribe', '/download', '/morning-mobility-challenge', '/review', '/MoveAndFuelATL', '/investor', '/invest', '/GetInTouch', '/secure', '/haveyoupaid',
     // Public onboarding/marketing entry points
-    '/sign-up', '/coach', '/coach/sign-up', '/build-your-round', '/creator-onboarding'
+    '/sign-up', '/coach', '/coach/sign-up', '/build-your-round', '/creator-onboarding',
+    // Design language showcase
+    '/chromatic-glass'
   ].map(route => route?.toLowerCase());
  
   const publicPathPatterns = [

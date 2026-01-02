@@ -189,9 +189,22 @@ const ChromaticGlassPage: NextPage = () => {
       <Head>
         <title>Chromatic Glass | Pulse Design Language</title>
         <meta name="description" content="Chromatic Glass - Pulse's take on glassmorphic design. Dark luxury polish with colors that pop and reflect like glass." />
+        
+        {/* Open Graph / Facebook */}
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://fitwithpulse.ai/chromatic-glass" />
         <meta property="og:title" content="Chromatic Glass | Pulse Design Language" />
-        <meta property="og:description" content="Dark luxury polish with colors that pop and reflect like glass." />
-        <meta property="og:image" content="/og-image.png?title=Chromatic%20Glass&subtitle=Pulse%20Design%20System" />
+        <meta property="og:description" content="Our take on glassmorphic design — dark luxury polish with colors that pop and reflect like glass." />
+        <meta property="og:image" content="https://fitwithpulse.ai/og-image.png?title=Chromatic%20Glass&subtitle=Dark%20Luxury%20Meets%20Chromatic%20Light" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        
+        {/* Twitter */}
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:url" content="https://fitwithpulse.ai/chromatic-glass" />
+        <meta name="twitter:title" content="Chromatic Glass | Pulse Design Language" />
+        <meta name="twitter:description" content="Our take on glassmorphic design — dark luxury polish with colors that pop and reflect like glass." />
+        <meta name="twitter:image" content="https://fitwithpulse.ai/og-image.png?title=Chromatic%20Glass&subtitle=Dark%20Luxury%20Meets%20Chromatic%20Light" />
       </Head>
 
       <div className="min-h-screen bg-[#0a0a0b] text-white overflow-hidden">
