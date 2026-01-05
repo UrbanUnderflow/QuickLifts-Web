@@ -1848,6 +1848,35 @@ async deleteWorkoutSession(workoutId: string | null): Promise<void> {
     // 5) Store user-challenge doc
     await setDoc(doc(db, 'user-challenge', userChallengeId), userChallengeData);
     
+    // 6) Auto-join creator's club (fire-and-forget)
+    try {
+      const ownerId = challengeData?.ownerId?.[0] || challengeData?.challenge?.ownerId?.[0];
+      if (ownerId && ownerId !== userId) {
+        const { clubService } = await import('../club');
+        const { ShortUser } = await import('../user');
+        
+        // Get creator's club
+        const club = await clubService.getClubByCreatorId(ownerId);
+        if (club) {
+          const userShortUser = new ShortUser({
+            id: userId,
+            displayName: username,
+            email: userData.email || '',
+            fcmToken: userData.fcmToken || '',
+            username: username,
+            level: userData.level || 'novice',
+            profileImage: userData.profileImage || { profileImageURL: '', imageOffsetWidth: 0, imageOffsetHeight: 0 }
+          });
+          
+          await clubService.joinClub(club.id, userId, userShortUser, challengeId);
+          console.log('[joinChallenge] Auto-joined creator club:', club.id);
+        }
+      }
+    } catch (clubError) {
+      // Don't fail the join if club join fails
+      console.warn('[joinChallenge] Failed to auto-join club:', clubError);
+    }
+    
     // Return the created data for logging/debugging purposes
     return userChallengeData;
   }

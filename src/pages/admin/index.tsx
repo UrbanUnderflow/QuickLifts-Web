@@ -150,6 +150,12 @@ const adminCardsData = [
     link: "/admin/MoveManagement"
   },
   {
+    title: "Workout Category Config",
+    description: "Configure which exercise categories are used for each workout type (Lift, Stretch) during generation.",
+    icon: <Layers className="w-5 h-5" />,
+    link: "/admin/workoutCategoryConfig"
+  },
+  {
     title: "Stacks Management",
     description: "Manage workout stacks, view exercises, and track user-created vs AI-generated stacks.",
     icon: <Layers className="w-5 h-5" />,

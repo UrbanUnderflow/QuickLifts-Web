@@ -4203,6 +4203,18 @@ const handleSendChatMessage = async (message: string) => {
           console.log('📊 DEBUG: New stacks created:', selectedStacks.length);
         }
         
+        // Auto-create or link to creator's club
+        if (currentUser && !isUpdate) {
+          try {
+            const { clubService } = await import('../api/firebase/club');
+            await clubService.getOrCreateClub(currentUser, updatedCollection.id);
+            console.log('[Programming] Round linked to creator club');
+          } catch (clubError) {
+            console.error('[Programming] Failed to create/link club:', clubError);
+            // Don't fail round creation if club creation fails
+          }
+        }
+        
         handleShowSuccessModal(updatedCollection, selectedStacks, isUpdate, undefined); // No AI thinking for manual round creation
       }
     } catch (error) {

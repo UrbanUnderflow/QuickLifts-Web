@@ -2,7 +2,92 @@
 // Mirrors the iOS GPTService.generateWorkout / RemoteConfigService.defaultGenerateWorkoutPrompt
 // Takes selected body parts + candidate exercise names and returns grouped exercise names [[String]]
 
-const { headers } = require('./config/firebase');
+const { headers, db } = require('./config/firebase');
+
+// ============================================================================
+// WORKOUT CATEGORY MAPPING
+// Maps workout types to allowed exercise categories
+// ============================================================================
+
+/**
+ * Default mapping used when Firestore config is unavailable.
+ * - lift: Weight training exercises
+ * - stretch: Mobility exercises
+ */
+const DEFAULT_CATEGORY_MAPPING = {
+  lift: ['weight-training'],
+  stretch: ['mobility']
+};
+
+/**
+ * Workout types that support exercise generation
+ */
+const GENERATION_SUPPORTED_TYPES = ['lift', 'stretch'];
+
+/**
+ * Fetches workout category mapping from Firestore with fallback to defaults
+ */
+async function fetchWorkoutCategoryMapping() {
+  try {
+    const docRef = db.collection('config').doc('workoutCategoryMapping');
+    const docSnap = await docRef.get();
+
+    if (docSnap.exists) {
+      const data = docSnap.data();
+      return {
+        lift: Array.isArray(data.lift) ? data.lift : DEFAULT_CATEGORY_MAPPING.lift,
+        stretch: Array.isArray(data.stretch) ? data.stretch : DEFAULT_CATEGORY_MAPPING.stretch
+      };
+    }
+    
+    console.log('[generate-workout] No Firestore config found, using defaults');
+    return DEFAULT_CATEGORY_MAPPING;
+  } catch (error) {
+    console.error('[generate-workout] Error fetching category mapping:', error);
+    return DEFAULT_CATEGORY_MAPPING;
+  }
+}
+
+/**
+ * Gets allowed categories for a workout type
+ */
+function getAllowedCategories(mapping, workoutType) {
+  const type = String(workoutType || 'lift').toLowerCase();
+  return mapping[type] || [];
+}
+
+/**
+ * Checks if a workout type supports exercise generation
+ */
+function supportsGeneration(workoutType) {
+  return GENERATION_SUPPORTED_TYPES.includes(String(workoutType || '').toLowerCase());
+}
+
+/**
+ * Filters exercises by their category field to only include allowed categories
+ * @param {Array} exercises - Array of exercise objects with { name, category } or just names
+ * @param {Array} allowedCategories - Array of allowed category identifiers
+ * @returns {Array} Filtered exercise names
+ */
+function filterExercisesByCategory(exercises, allowedCategories) {
+  if (!exercises || !Array.isArray(exercises) || allowedCategories.length === 0) {
+    return exercises || [];
+  }
+  
+  // If exercises is an array of strings (names only), we can't filter by category
+  // In this case, the caller should pass exercises with category info
+  if (typeof exercises[0] === 'string') {
+    // Return as-is, filtering should happen on client/caller side
+    return exercises;
+  }
+  
+  // Filter exercises that have a category in the allowed list
+  return exercises.filter(exercise => {
+    const category = exercise?.category;
+    if (!category) return true; // Include if no category (backward compatibility)
+    return allowedCategories.includes(category);
+  }).map(e => e.name || e);
+}
 
 // Copied from iOS RemoteConfigService.defaultGenerateWorkoutPrompt (Swift),
 // adapted to JS template string with the same placeholders.
@@ -160,7 +245,8 @@ exports.handler = async (event, context) => {
       exerciseList = [],
       allExercises = [],
       predefinedExercises = [],
-      goal = ''
+      goal = '',
+      workoutType = 'lift' // Default to 'lift' for backward compatibility
     } = payload;
 
     if (!Array.isArray(bodyPartsInput) || !Array.isArray(exerciseList) || !Array.isArray(allExercises)) {
@@ -171,11 +257,35 @@ exports.handler = async (event, context) => {
       };
     }
 
+    // Validate workout type supports generation
+    if (!supportsGeneration(workoutType)) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ 
+          error: `Workout type "${workoutType}" does not support exercise generation. Supported types: ${GENERATION_SUPPORTED_TYPES.join(', ')}` 
+        })
+      };
+    }
+
+    // Fetch the category mapping and filter exercises
+    const categoryMapping = await fetchWorkoutCategoryMapping();
+    const allowedCategories = getAllowedCategories(categoryMapping, workoutType);
+    
+    console.log(`[generate-workout] Workout type: ${workoutType}, allowed categories: ${allowedCategories.join(', ')}`);
+    
+    // Filter exercise lists by category (if exercises have category info)
+    const filteredExerciseList = filterExercisesByCategory(exerciseList, allowedCategories);
+    const filteredAllExercises = filterExercisesByCategory(allExercises, allowedCategories);
+    
+    console.log(`[generate-workout] Filtered ${exerciseList.length} -> ${filteredExerciseList.length} exercises (exerciseList)`);
+    console.log(`[generate-workout] Filtered ${allExercises.length} -> ${filteredAllExercises.length} exercises (allExercises)`);
+
     const prompt = buildPrompt({
       bodyPartsInput,
       goal,
-      exerciseList,
-      allExercises,
+      exerciseList: filteredExerciseList,
+      allExercises: filteredAllExercises,
       predefinedExercises
     });
 

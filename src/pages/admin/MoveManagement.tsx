@@ -6,7 +6,7 @@ import { db, storage } from '../../api/firebase/config';
 import { ref as storageRef, deleteObject, getMetadata } from 'firebase/storage';
 import { getAuth, getIdToken } from 'firebase/auth';
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { Dumbbell, Video, PlayCircle, RefreshCw, AlertCircle, CheckCircle, Loader2, Eye, XCircle, ImageIcon, Check, X, Search, Filter, Trash2, Copy } from 'lucide-react';
+import { Dumbbell, Video, PlayCircle, RefreshCw, AlertCircle, CheckCircle, Loader2, Eye, XCircle, ImageIcon, Check, X, Search, Filter, Trash2, Copy, Sparkles } from 'lucide-react';
 import { Exercise, ExerciseVideo } from '../../api/firebase/exercise/types'; // Assuming types are here
 
 // Define interfaces for display (can be expanded)
@@ -80,6 +80,11 @@ const MoveManagement: React.FC = () => {
   const [videoSearchTerm, setVideoSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [bodyPartFilter, setBodyPartFilter] = useState('');
+  // Available options for dropdowns
+  const [availableCategories, setAvailableCategories] = useState<string[]>([]);
+  const [availableBodyParts, setAvailableBodyParts] = useState<string[]>([]);
+  const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
+  const [showBodyPartDropdown, setShowBodyPartDropdown] = useState(false);
   // Creator filter (multi-select)
   const [allCreators, setAllCreators] = useState<string[]>([]);
   const [selectedCreators, setSelectedCreators] = useState<string[]>([]);
@@ -98,6 +103,8 @@ const MoveManagement: React.FC = () => {
   const [deletingExercises, setDeletingExercises] = useState<{[exerciseId: string]: boolean}>({});
   const [generatingGif, setGeneratingGif] = useState<{[videoId: string]: boolean}>({});
   const [normalizingVideos, setNormalizingVideos] = useState<{[videoId: string]: boolean}>({});
+  const [inferringBodyParts, setInferringBodyParts] = useState(false);
+  const [inferredBodyParts, setInferredBodyParts] = useState<string[] | null>(null);
 
   // Show/hide toast
   useEffect(() => {
@@ -106,6 +113,37 @@ const MoveManagement: React.FC = () => {
       return () => clearTimeout(timer);
     }
   }, [toastMessage]);
+
+  // Extract unique categories and body parts from exercises
+  useEffect(() => {
+    const categories = new Set<string>();
+    const bodyParts = new Set<string>();
+
+    exercises.forEach(exercise => {
+      // Extract category
+      if (exercise.category) {
+        const category = typeof exercise.category === 'string' 
+          ? exercise.category 
+          : (exercise.category as { id?: string; type?: string })?.id || 
+            (exercise.category as { id?: string; type?: string })?.type || '';
+        if (category) {
+          categories.add(category);
+        }
+      }
+
+      // Extract body parts
+      if (exercise.primaryBodyParts && Array.isArray(exercise.primaryBodyParts)) {
+        exercise.primaryBodyParts.forEach(part => {
+          if (part && typeof part === 'string') {
+            bodyParts.add(part);
+          }
+        });
+      }
+    });
+
+    setAvailableCategories(Array.from(categories).sort());
+    setAvailableBodyParts(Array.from(bodyParts).sort());
+  }, [exercises]);
 
   // Filter exercises based on search term, category, and body part
   useEffect(() => {
@@ -820,6 +858,77 @@ const MoveManagement: React.FC = () => {
     }
   };
 
+  const handleInferBodyParts = async (exercise: ExerciseDisplay, thumbnailUrl?: string) => {
+    if (!exercise?.name) {
+      setToastMessage({ type: 'error', text: 'Exercise name is required for inference' });
+      return;
+    }
+
+    setInferringBodyParts(true);
+    setInferredBodyParts(null);
+    setToastMessage({ type: 'info', text: 'AI is analyzing exercise to infer body parts...' });
+
+    try {
+      const auth = getAuth();
+      const currentUser = auth.currentUser;
+      if (!currentUser) throw new Error('Not signed in');
+      const idToken = await getIdToken(currentUser);
+
+      const response = await fetch('/.netlify/functions/inferExerciseBodyParts', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          exerciseId: exercise.firestoreDocId,
+          exerciseName: exercise.name,
+          thumbnailUrl: thumbnailUrl || null,
+          autoUpdate: true, // Automatically update the document
+        }),
+      });
+
+      const data = await response.json();
+      console.log('[MoveManagement] inferExerciseBodyParts result:', data);
+
+      if (data.success && data.bodyParts) {
+        setInferredBodyParts(data.bodyParts);
+        
+        // Update local state to reflect the change
+        setExercises(prev => prev.map(ex => 
+          ex.firestoreDocId === exercise.firestoreDocId 
+            ? { ...ex, primaryBodyParts: data.bodyParts }
+            : ex
+        ));
+        setFilteredExercises(prev => prev.map(ex => 
+          ex.firestoreDocId === exercise.firestoreDocId 
+            ? { ...ex, primaryBodyParts: data.bodyParts }
+            : ex
+        ));
+        if (selectedExercise?.firestoreDocId === exercise.firestoreDocId) {
+          setSelectedExercise({ ...selectedExercise, primaryBodyParts: data.bodyParts });
+        }
+
+        setToastMessage({ 
+          type: 'success', 
+          text: data.updated 
+            ? `Body parts updated: ${data.bodyParts.join(', ')}`
+            : `Suggested body parts: ${data.bodyParts.join(', ')}`
+        });
+      } else {
+        setToastMessage({ 
+          type: 'error', 
+          text: data.message || 'Failed to infer body parts' 
+        });
+      }
+    } catch (error: any) {
+      console.error('[MoveManagement] Error inferring body parts:', error);
+      setToastMessage({ type: 'error', text: `Failed to infer body parts: ${error?.message || 'Unknown error'}` });
+    } finally {
+      setInferringBodyParts(false);
+    }
+  };
+
   // Format date helper (if needed for video timestamps etc.)
   const formatDate = (dateValue: any): string => {
     if (!dateValue) return 'N/A';
@@ -873,18 +982,55 @@ const MoveManagement: React.FC = () => {
                <div>
                   <h3 className="text-xl font-semibold text-white">Videos for: {selectedExercise.name}</h3>
                   <p className="text-sm text-gray-400">({filteredExerciseVideos.length} of {exerciseVideos.length} video{exerciseVideos.length !== 1 ? 's' : ''} shown)</p>
+                  {selectedExercise.primaryBodyParts && selectedExercise.primaryBodyParts.length > 0 ? (
+                    <p className="text-xs text-green-400 mt-1">
+                      Body parts: {selectedExercise.primaryBodyParts.join(', ')}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-orange-400 mt-1">No body parts assigned</p>
+                  )}
                </div>
             </div>
-            <button
-              onClick={() => {
-                setSelectedExercise(null);
-                setVideoSearchTerm(''); // Clear video search when closing modal
-              }}
-              className="p-1 text-gray-400 hover:text-white transition"
-              title="Close video view"
-            >
-              <XCircle className="h-6 w-6" />
-            </button>
+            <div className="flex items-center gap-2">
+              {/* AI Infer Body Parts Button */}
+              <button
+                onClick={() => {
+                  // Use the first video's thumbnail if available
+                  const thumbnail = exerciseVideos[0]?.thumbnail;
+                  handleInferBodyParts(selectedExercise, thumbnail);
+                }}
+                disabled={inferringBodyParts}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 ${
+                  inferringBodyParts
+                    ? 'bg-purple-900/30 text-purple-400 cursor-wait'
+                    : 'bg-purple-900/50 text-purple-200 border border-purple-700 hover:bg-purple-800/70'
+                }`}
+                title="Use AI to infer and update the primary body parts for this exercise"
+              >
+                {inferringBodyParts ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Inferring...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-3.5 w-3.5" />
+                    Infer Body Parts
+                  </>
+                )}
+              </button>
+              <button
+                onClick={() => {
+                  setSelectedExercise(null);
+                  setVideoSearchTerm(''); // Clear video search when closing modal
+                  setInferredBodyParts(null); // Clear inferred body parts
+                }}
+                className="p-1 text-gray-400 hover:text-white transition"
+                title="Close video view"
+              >
+                <XCircle className="h-6 w-6" />
+              </button>
+            </div>
           </div>
           
           {/* Video Search */}
@@ -1068,6 +1214,7 @@ const MoveManagement: React.FC = () => {
                 onClick={() => {
                   setSelectedExercise(null);
                   setVideoSearchTerm(''); // Clear video search when closing modal
+                  setInferredBodyParts(null); // Clear inferred body parts
                 }}
                 className="px-4 py-2 bg-gray-700/30 text-gray-300 rounded-lg text-sm font-medium border border-gray-700 hover:bg-gray-700/50 transition flex items-center"
               >
@@ -1176,27 +1323,91 @@ const MoveManagement: React.FC = () => {
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">Filter by Category</label>
                     <div className="relative">
-                      <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 z-10" />
                       <input
                         type="text"
                         placeholder="Enter category..."
                         value={categoryFilter}
                         onChange={(e) => setCategoryFilter(e.target.value)}
+                        onFocus={() => setShowCategoryDropdown(true)}
+                        onBlur={() => setTimeout(() => setShowCategoryDropdown(false), 200)}
                         className="w-full pl-10 pr-4 py-2 bg-[#1a1e24] border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#d7ff00] focus:border-transparent"
                       />
+                      {/* Category dropdown */}
+                      {(showCategoryDropdown || categoryFilter) && (
+                        <div className="absolute z-20 mt-1 w-full bg-[#1a1e24] border border-gray-700 rounded-lg max-h-40 overflow-y-auto shadow-lg">
+                          {availableCategories
+                            .filter(cat => 
+                              !categoryFilter || 
+                              cat.toLowerCase().includes(categoryFilter.toLowerCase())
+                            )
+                            .slice(0, 20)
+                            .map(cat => (
+                              <button
+                                key={cat}
+                                type="button"
+                                onClick={() => {
+                                  setCategoryFilter(cat);
+                                  setShowCategoryDropdown(false);
+                                }}
+                                className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#262a30] focus:bg-[#262a30] focus:outline-none"
+                              >
+                                {cat}
+                              </button>
+                            ))}
+                          {availableCategories.filter(cat => 
+                            !categoryFilter || 
+                            cat.toLowerCase().includes(categoryFilter.toLowerCase())
+                          ).length === 0 && (
+                            <div className="px-3 py-2 text-sm text-gray-500">No categories found</div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">Filter by Body Part</label>
                     <div className="relative">
-                      <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 z-10" />
                       <input
                         type="text"
                         placeholder="Enter body part..."
                         value={bodyPartFilter}
                         onChange={(e) => setBodyPartFilter(e.target.value)}
+                        onFocus={() => setShowBodyPartDropdown(true)}
+                        onBlur={() => setTimeout(() => setShowBodyPartDropdown(false), 200)}
                         className="w-full pl-10 pr-4 py-2 bg-[#1a1e24] border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#d7ff00] focus:border-transparent"
                       />
+                      {/* Body part dropdown */}
+                      {(showBodyPartDropdown || bodyPartFilter) && (
+                        <div className="absolute z-20 mt-1 w-full bg-[#1a1e24] border border-gray-700 rounded-lg max-h-40 overflow-y-auto shadow-lg">
+                          {availableBodyParts
+                            .filter(part => 
+                              !bodyPartFilter || 
+                              part.toLowerCase().includes(bodyPartFilter.toLowerCase())
+                            )
+                            .slice(0, 20)
+                            .map(part => (
+                              <button
+                                key={part}
+                                type="button"
+                                onClick={() => {
+                                  setBodyPartFilter(part);
+                                  setShowBodyPartDropdown(false);
+                                }}
+                                className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#262a30] focus:bg-[#262a30] focus:outline-none"
+                              >
+                                {part}
+                              </button>
+                            ))}
+                          {availableBodyParts.filter(part => 
+                            !bodyPartFilter || 
+                            part.toLowerCase().includes(bodyPartFilter.toLowerCase())
+                          ).length === 0 && (
+                            <div className="px-3 py-2 text-sm text-gray-500">No body parts found</div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div>

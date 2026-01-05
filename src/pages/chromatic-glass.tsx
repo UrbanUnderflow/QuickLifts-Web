@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import type { NextPage } from 'next';
+import Head from 'next/head';
 import { motion, useScroll, useTransform } from 'framer-motion';
 import PageHead from '../components/PageHead';
 
@@ -202,8 +203,11 @@ const ChromaticGlassPage: NextPage = () => {
         }}
         pageOgUrl="https://fitwithpulse.ai/chromatic-glass"
       />
+      <Head>
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+      </Head>
 
-      <div className="min-h-screen bg-[#0a0a0b] text-white overflow-hidden">
+      <div className="min-h-screen bg-[#0a0a0b] text-white overflow-hidden" style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}>
         {/* Animated Background Layer */}
         <div className="fixed inset-0 pointer-events-none">
           <motion.div style={{ y: backgroundY }} className="absolute inset-0">
@@ -218,8 +222,8 @@ const ChromaticGlassPage: NextPage = () => {
         </div>
 
         {/* Header */}
-        <header className="fixed top-0 left-0 right-0 z-50">
-          <div className="mx-4 mt-4">
+        <header className="fixed top-0 left-0 right-0 z-50" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+          <div className="mx-4 mt-4" style={{ paddingLeft: 'env(safe-area-inset-left)', paddingRight: 'env(safe-area-inset-right)' }}>
             <motion.div
               initial={{ opacity: 0, y: -20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -1324,7 +1328,7 @@ const ChromaticGlassPage: NextPage = () => {
         </section>
 
         {/* Footer */}
-        <footer className="relative py-12 px-4 border-t border-white/10">
+        <footer className="relative py-12 px-4 border-t border-white/10" style={{ paddingBottom: 'calc(3rem + env(safe-area-inset-bottom))' }}>
           <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <img src="/pulse-logo-green.svg" alt="Pulse" className="h-6 w-auto" />
