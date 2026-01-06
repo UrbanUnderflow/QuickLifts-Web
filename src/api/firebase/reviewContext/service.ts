@@ -13,7 +13,9 @@ import {
   limit,
   DocumentReference
 } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
 import { db } from '../config';
+import { adminMethods } from '../admin/methods';
 import { 
   WeeklyContext, 
   DraftReview, 
@@ -251,6 +253,21 @@ class ReviewContextService {
    */
   async fetchAllDrafts(): Promise<DraftReview[]> {
     try {
+      // IMPORTANT: Draft reviews should never be readable by unauthenticated users
+      // (or non-admins) from the client. Even though UI gates draft visibility,
+      // this prevents accidental exposure via any other callsite.
+      const auth = getAuth();
+      const email = auth.currentUser?.email;
+      if (!email) {
+        console.log('[ReviewContextService] No authenticated user; returning empty draft list');
+        return [];
+      }
+      const isAdmin = await adminMethods.isAdmin(email.toLowerCase());
+      if (!isAdmin) {
+        console.log('[ReviewContextService] Non-admin user; returning empty draft list');
+        return [];
+      }
+
       const draftRef = collection(db, this.draftReviewCollection);
       const q = query(draftRef, orderBy('createdAt', 'desc'));
       

@@ -19,7 +19,8 @@ import {
 } from '../../api/firebase/workoutCategoryMapping';
 
 // Workout types that support generation
-const CONFIGURABLE_WORKOUT_TYPES: WorkoutType[] = ['lift', 'stretch'];
+const CONFIGURABLE_WORKOUT_TYPES = ['lift', 'stretch'] as const;
+type ConfigurableWorkoutType = (typeof CONFIGURABLE_WORKOUT_TYPES)[number];
 
 const WorkoutCategoryConfigPage: React.FC = () => {
   const router = useRouter();
@@ -58,7 +59,7 @@ const WorkoutCategoryConfigPage: React.FC = () => {
     loadConfig();
   };
   
-  const handleCategoryToggle = (workoutType: WorkoutType, category: ExerciseCategoryIdentifier) => {
+  const handleCategoryToggle = (workoutType: ConfigurableWorkoutType, category: ExerciseCategoryIdentifier) => {
     if (!config) return;
     
     const currentCategories = config[workoutType] || [];
