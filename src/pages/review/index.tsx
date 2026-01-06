@@ -8,6 +8,8 @@ import fs from 'fs';
 import path from 'path';
 import { reviewContextService } from '../../api/firebase/reviewContext/service';
 import { DraftReview } from '../../api/firebase/reviewContext/types';
+import { useUser } from '../../hooks/useUser';
+import { adminMethods } from '../../api/firebase/admin/methods';
 
 // Types
 interface Review {
@@ -25,11 +27,45 @@ interface ReviewsIndexProps {
 }
 
 const ReviewsIndex: React.FC<ReviewsIndexProps> = ({ reviews: staticReviews }) => {
+  const user = useUser();
   const [drafts, setDrafts] = useState<DraftReview[]>([]);
   const [allReviews, setAllReviews] = useState<Review[]>(staticReviews);
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+  const [checkingAdmin, setCheckingAdmin] = useState(true);
 
-  // Fetch drafts client-side
+  // Check if user is admin
   useEffect(() => {
+    const checkAdminStatus = async () => {
+      if (!user || !user.email) {
+        setIsAdmin(false);
+        setCheckingAdmin(false);
+        return;
+      }
+      try {
+        const result = await adminMethods.isAdmin(user.email);
+        setIsAdmin(result);
+      } catch (err) {
+        console.error('Error checking admin status:', err);
+        setIsAdmin(false);
+      } finally {
+        setCheckingAdmin(false);
+      }
+    };
+
+    checkAdminStatus();
+  }, [user]);
+
+  // Fetch drafts client-side (only if admin)
+  useEffect(() => {
+    // Don't fetch drafts if we're still checking admin status or if user is not admin
+    if (checkingAdmin || !isAdmin) {
+      // If not admin, just use static reviews
+      if (!checkingAdmin && !isAdmin) {
+        setAllReviews(staticReviews);
+      }
+      return;
+    }
+
     const fetchDrafts = async () => {
       try {
         const draftData = await reviewContextService.fetchAllDrafts();
@@ -63,7 +99,7 @@ const ReviewsIndex: React.FC<ReviewsIndexProps> = ({ reviews: staticReviews }) =
     };
 
     fetchDrafts();
-  }, [staticReviews]);
+  }, [staticReviews, isAdmin, checkingAdmin]);
 
   const featuredReview = allReviews[0];
   const otherReviews = allReviews.slice(1);
