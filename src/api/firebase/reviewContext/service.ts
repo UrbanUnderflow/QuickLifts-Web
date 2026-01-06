@@ -34,6 +34,22 @@ class ReviewContextService {
   private readonly weeklyContextCollection = 'reviewWeeklyContext';
   private readonly draftReviewCollection = 'reviewDrafts';
 
+  /**
+   * Draft reviews are admin-only. Enforce that at the service layer so we don't
+   * accidentally expose drafts via new call sites.
+   */
+  private async assertAdminAccess(action: string): Promise<void> {
+    const auth = getAuth();
+    const email = auth.currentUser?.email;
+    if (!email) {
+      throw new Error(`[ReviewContextService] Unauthorized: must be signed in to ${action}`);
+    }
+    const isAdmin = await adminMethods.isAdmin(email.toLowerCase());
+    if (!isAdmin) {
+      throw new Error(`[ReviewContextService] Forbidden: admin access required to ${action}`);
+    }
+  }
+
   static getInstance(): ReviewContextService {
     if (!ReviewContextService.instance) {
       ReviewContextService.instance = new ReviewContextService();
@@ -253,20 +269,7 @@ class ReviewContextService {
    */
   async fetchAllDrafts(): Promise<DraftReview[]> {
     try {
-      // IMPORTANT: Draft reviews should never be readable by unauthenticated users
-      // (or non-admins) from the client. Even though UI gates draft visibility,
-      // this prevents accidental exposure via any other callsite.
-      const auth = getAuth();
-      const email = auth.currentUser?.email;
-      if (!email) {
-        console.log('[ReviewContextService] No authenticated user; returning empty draft list');
-        return [];
-      }
-      const isAdmin = await adminMethods.isAdmin(email.toLowerCase());
-      if (!isAdmin) {
-        console.log('[ReviewContextService] Non-admin user; returning empty draft list');
-        return [];
-      }
+      await this.assertAdminAccess('fetch draft reviews');
 
       const draftRef = collection(db, this.draftReviewCollection);
       const q = query(draftRef, orderBy('createdAt', 'desc'));
@@ -294,6 +297,7 @@ class ReviewContextService {
    */
   async updateDraftStatus(id: string, status: 'draft' | 'ready' | 'published'): Promise<void> {
     try {
+      await this.assertAdminAccess('update draft status');
       const draftRef = doc(db, this.draftReviewCollection, id);
       const updateData: Record<string, any> = {
         status,
@@ -318,6 +322,7 @@ class ReviewContextService {
    */
   async deleteDraft(id: string): Promise<void> {
     try {
+      await this.assertAdminAccess('delete a draft');
       const draftRef = doc(db, this.draftReviewCollection, id);
       await deleteDoc(draftRef);
       
@@ -810,6 +815,7 @@ Return ONLY valid JSON, no markdown or explanation.`;
    */
   async fetchDraftById(id: string): Promise<DraftReview | null> {
     try {
+      await this.assertAdminAccess('fetch a draft by id');
       const draftRef = doc(db, this.draftReviewCollection, id);
       const draftDoc = await getDoc(draftRef);
       

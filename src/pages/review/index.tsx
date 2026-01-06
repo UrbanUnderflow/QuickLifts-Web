@@ -148,9 +148,31 @@ const ReviewsIndex: React.FC<ReviewsIndexProps> = ({ reviews: staticReviews }) =
                 href={`/review/${featuredReview.id}`}
                 className="group block"
               >
-                <div className="relative overflow-hidden rounded-2xl bg-white/60 backdrop-blur-xl border border-gray-200/60 shadow-lg shadow-gray-200/40 hover:shadow-xl hover:shadow-gray-300/40 hover:bg-white/80 transition-all duration-300">
+                <div className={`relative overflow-hidden rounded-2xl backdrop-blur-xl transition-all duration-300 ${
+                  featuredReview.reviewType === 'year' && !featuredReview.isDraft
+                    ? 'bg-gradient-to-br from-amber-50/70 to-yellow-50/40 border border-amber-200/60 shadow-lg shadow-amber-100/40 hover:shadow-xl hover:shadow-amber-200/40 hover:border-amber-300/70'
+                    : 'bg-white/60 border border-gray-200/60 shadow-lg shadow-gray-200/40 hover:shadow-xl hover:shadow-gray-300/40 hover:bg-white/80'
+                }`}>
                   {/* Gradient accent */}
-                  <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-gray-900 via-gray-700 to-gray-900" />
+                  <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${
+                    featuredReview.reviewType === 'year' && !featuredReview.isDraft
+                      ? 'from-amber-400 via-yellow-400 to-amber-400'
+                      : 'from-gray-900 via-gray-700 to-gray-900'
+                  }`} />
+                  
+                  {/* Decorative confetti pieces for Year in Review */}
+                  {featuredReview.reviewType === 'year' && !featuredReview.isDraft && (
+                    <>
+                      <div className="absolute top-3 right-8 w-2 h-2 bg-amber-400 rounded-full opacity-60" />
+                      <div className="absolute top-5 right-16 w-1.5 h-1.5 bg-yellow-500 rotate-45 opacity-50" />
+                      <div className="absolute top-4 right-24 w-1 h-3 bg-amber-300 rotate-12 opacity-40" />
+                      <div className="absolute bottom-4 right-12 w-2 h-1 bg-yellow-400 -rotate-12 opacity-50" />
+                      <div className="absolute top-6 right-32 w-1.5 h-1.5 bg-amber-500 rounded-full opacity-40" />
+                      <div className="absolute bottom-3 right-20 w-1 h-2 bg-yellow-300 rotate-45 opacity-50" />
+                      <div className="absolute top-8 left-28 w-1.5 h-1.5 bg-amber-400 rotate-12 opacity-30" />
+                      <div className="absolute bottom-5 left-32 w-2 h-1 bg-yellow-500 -rotate-6 opacity-40" />
+                    </>
+                  )}
                   
                   <div className="p-8">
                     <div className="flex items-start justify-between gap-6">
@@ -308,7 +330,9 @@ export const getStaticProps: GetStaticProps = async () => {
 
     const reviews = await Promise.all(
       filenames
-        .filter((filename) => filename !== 'index.tsx' && filename.endsWith('.tsx'))
+        // We keep `q4-25.tsx` as a standalone page for compatibility,
+        // but it was merged into `year2025.tsx` so it should not show up in the index.
+        .filter((filename) => filename !== 'index.tsx' && filename !== 'q4-25.tsx' && filename.endsWith('.tsx'))
         .map(async (filename) => {
           const id = filename.replace(/\.tsx$/, '');
           const fullPath = path.join(reviewsDirectory, filename);

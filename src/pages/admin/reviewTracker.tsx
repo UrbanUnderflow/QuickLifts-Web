@@ -152,6 +152,20 @@ const ReviewTracker: React.FC = () => {
     }
   };
 
+  // Delete draft
+  const handleDeleteDraft = async (draftId: string) => {
+    if (!confirm('Delete this draft review? This cannot be undone.')) return;
+    try {
+      await reviewContextService.deleteDraft(draftId);
+      // Close draft modal if it's the one we deleted
+      setSelectedDraft((prev) => (prev?.id === draftId ? null : prev));
+      await loadData();
+    } catch (err) {
+      console.error('Error deleting draft:', err);
+      setError('Failed to delete draft');
+    }
+  };
+
   // Generate draft
   const handleGenerateDraft = async (monthYear: string) => {
     try {
@@ -715,6 +729,14 @@ const ReviewTracker: React.FC = () => {
                                   >
                                     <Eye size={14} />
                                     Preview
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteDraft(draft.id)}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-red-600/20 border border-red-500/30 text-red-300 rounded hover:bg-red-600/30 transition-colors"
+                                    title="Delete Draft"
+                                  >
+                                    <Trash2 size={14} />
+                                    Delete
                                   </button>
                                 </div>
                               </div>

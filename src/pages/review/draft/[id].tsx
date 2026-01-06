@@ -20,10 +20,13 @@ import {
   RefreshCw,
   Plus,
   X,
+  Trash2,
   Target
 } from 'lucide-react';
 import { reviewContextService } from '../../../api/firebase/reviewContext/service';
 import { DraftReview, ReviewMetric, ReviewHighlight } from '../../../api/firebase/reviewContext/types';
+import { useUser } from '../../../hooks/useUser';
+import { adminMethods } from '../../../api/firebase/admin/methods';
 
 // Context Type for specific sections
 type ContextSection = 'metrics' | 'looking_ahead' | 'business' | 'product' | 'highlights';
@@ -265,20 +268,45 @@ const HighlightItem: React.FC<{ highlight: ReviewHighlight }> = ({ highlight }) 
 const DraftReviewPage: React.FC = () => {
   const router = useRouter();
   const { id } = router.query;
+  const user = useUser();
   
   const [draft, setDraft] = useState<DraftReview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [contextModal, setContextModal] = useState<ContextSection | null>(null);
   const [addingContext, setAddingContext] = useState(false);
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+  const [checkingAdmin, setCheckingAdmin] = useState(true);
+
+  // Admin-only page
+  useEffect(() => {
+    const checkAdminStatus = async () => {
+      if (!user || !user.email) {
+        setIsAdmin(false);
+        setCheckingAdmin(false);
+        return;
+      }
+      try {
+        const result = await adminMethods.isAdmin(user.email);
+        setIsAdmin(result);
+      } catch (err) {
+        console.error('Error checking admin status:', err);
+        setIsAdmin(false);
+      } finally {
+        setCheckingAdmin(false);
+      }
+    };
+    checkAdminStatus();
+  }, [user]);
 
   useEffect(() => {
-    if (id && typeof id === 'string') {
+    if (!checkingAdmin && isAdmin && id && typeof id === 'string') {
       loadDraft(id);
     }
-  }, [id]);
+  }, [id, checkingAdmin, isAdmin]);
 
   const loadDraft = async (draftId: string) => {
     try {
@@ -312,6 +340,24 @@ const DraftReviewPage: React.FC = () => {
       setError('Failed to publish review');
     } finally {
       setPublishing(false);
+    }
+  };
+
+  const handleDeleteDraft = async () => {
+    if (!draft) return;
+    const confirmed = window.confirm('Delete this draft? This cannot be undone.');
+    if (!confirmed) return;
+
+    try {
+      setDeleting(true);
+      setError(null);
+      await reviewContextService.deleteDraft(draft.id);
+      router.push('/review');
+    } catch (err: any) {
+      console.error('Error deleting draft:', err);
+      setError(err?.message || 'Failed to delete draft');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -375,6 +421,28 @@ const DraftReviewPage: React.FC = () => {
   const needsHighlightsContext = (draft?.featuredHighlights.length ?? 0) === 0;
   const needsBusinessContext = (draft?.businessHighlights.length ?? 0) === 0;
   const needsProductContext = (draft?.productHighlights.length ?? 0) === 0;
+
+  if (checkingAdmin) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+      </div>
+    );
+  }
+
+  if (isAdmin === false) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 flex items-center justify-center">
+        <div className="text-center">
+          <AlertCircle size={48} className="mx-auto text-gray-400 mb-4" />
+          <p className="text-gray-600 mb-4">This draft is only available to admins.</p>
+          <Link href="/review" className="text-blue-600 hover:underline">
+            ← Back to Reviews
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -445,6 +513,24 @@ const DraftReviewPage: React.FC = () => {
               >
                 Edit in Tracker
               </Link>
+              <button
+                onClick={handleDeleteDraft}
+                disabled={deleting || regenerating || publishing}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-600/50 hover:bg-amber-700 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                title="Delete Draft"
+              >
+                {deleting ? (
+                  <>
+                    <RefreshCw size={14} className="animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 size={14} />
+                    Delete
+                  </>
+                )}
+              </button>
               <button
                 onClick={handlePublish}
                 disabled={publishing || regenerating}
