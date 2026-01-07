@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import Link from 'next/link';
 import Head from 'next/head';
 import confetti from 'canvas-confetti';
+import mixpanel from 'mixpanel-browser';
 import {
   ArrowLeft,
   CheckCircle,
@@ -190,6 +191,15 @@ const yearProductHighlights = [
 
 const Year2025Review = () => {
   useEffect(() => {
+    // Track page view in Mixpanel
+    mixpanel.track('Review Page Viewed', {
+      review_type: 'year',
+      review_period: '2025',
+      review_title: 'Q4 2025 + Year in Review',
+      page_url: window.location.href,
+    });
+    console.log('[Mixpanel] Tracked: Review Page Viewed - 2025 Year in Review');
+
     // Celebration confetti burst on page load
     const duration = 3000;
     const end = Date.now() + duration;
@@ -478,6 +488,97 @@ const Year2025Review = () => {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+
+        {/* How You Can Help */}
+        <div className="relative max-w-4xl mx-auto px-6 py-16">
+          <div className="bg-gradient-to-br from-purple-50/80 to-indigo-50/60 backdrop-blur-xl border border-purple-200/60 rounded-2xl p-8 shadow-lg shadow-purple-100/40">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-8 h-8 rounded-lg bg-purple-600 flex items-center justify-center">
+                <Users size={16} className="text-white" />
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900">
+                How You Can Help
+              </h2>
+            </div>
+            <p className="text-gray-600 mb-6 leading-relaxed">
+              As we scale in 2026, we're seeking connections that can help accelerate our growth:
+            </p>
+            
+            <div className="space-y-4">
+              <div className="bg-white/60 backdrop-blur-sm border border-purple-200/50 rounded-xl p-5">
+                <div className="flex items-start gap-3">
+                  <div className="flex-shrink-0 w-6 h-6 rounded-full bg-purple-100 flex items-center justify-center mt-0.5">
+                    <Target size={14} className="text-purple-600" />
+                  </div>
+                  <div className="w-full">
+                    <h3 className="font-semibold text-gray-900 mb-2">Investor Intros</h3>
+                    <p className="text-gray-600 text-sm leading-relaxed mb-4">
+                      Introductions to investors aligned with creator economy, fitness tech, and marketplace businesses.
+                    </p>
+                    
+                    <div className="bg-purple-50/50 border border-purple-100/60 rounded-lg p-4">
+                      <p className="text-xs font-medium text-purple-900 uppercase tracking-wider mb-3">
+                        Priority Funds (open to others aligned with our mission)
+                      </p>
+                      <ul className="space-y-2 text-sm">
+                        <li className="text-gray-700">
+                          <span className="font-semibold text-gray-900">Uncork Capital</span> — Top-tier seed fund, strong consumer + marketplace history
+                        </li>
+                        <li className="text-gray-700">
+                          <span className="font-semibold text-gray-900">True Ventures</span> — Founder-first, long-term partner, great for network-effect businesses
+                        </li>
+                        <li className="text-gray-700">
+                          <span className="font-semibold text-gray-900">Hustle Fund</span> — Fast-moving, strong distribution thesis, Launch-friendly
+                        </li>
+                        <li className="text-gray-700">
+                          <span className="font-semibold text-gray-900">NFX</span> — Network effects, marketplaces, creator platforms (very strong conceptual fit)
+                        </li>
+                        <li className="text-gray-700">
+                          <span className="font-semibold text-gray-900">Precursor Ventures</span> — Elite pre-seed/seed signal, great co-lead and momentum builder
+                        </li>
+                        <li className="text-gray-700">
+                          <span className="font-semibold text-gray-900">Soma Capital</span>
+                        </li>
+                        <li className="text-gray-700">
+                          <span className="font-semibold text-gray-900">Serena Ventures</span>
+                        </li>
+                        <li className="text-gray-700">
+                          <span className="font-semibold text-gray-900">Courtside Ventures</span>
+                        </li>
+                        <li className="text-gray-700">
+                          <span className="font-semibold text-gray-900">Forerunner Ventures</span>
+                        </li>
+                        <li className="text-gray-700">
+                          <span className="font-semibold text-gray-900">Sapphire Sport</span>
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="bg-white/60 backdrop-blur-sm border border-purple-200/50 rounded-xl p-5">
+                <div className="flex items-start gap-3">
+                  <div className="flex-shrink-0 w-6 h-6 rounded-full bg-purple-100 flex items-center justify-center mt-0.5">
+                    <Briefcase size={14} className="text-purple-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-gray-900 mb-1">Brand Partnerships</h3>
+                    <p className="text-gray-600 text-sm leading-relaxed">
+                      Connections to fitness brands, wellness companies, and athletic partners interested in reaching our engaged community.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="mt-6 pt-6 border-t border-purple-200/40">
+              <p className="text-sm text-gray-500 italic">
+                If you can make an introduction, please reach out — every connection helps us grow faster.
+              </p>
+            </div>
           </div>
         </div>
 

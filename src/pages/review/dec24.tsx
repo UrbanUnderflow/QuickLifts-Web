@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import Head from 'next/head';
+import mixpanel from 'mixpanel-browser';
 import { ArrowUpRight, ArrowLeft, Trophy, Users, Star, Activity, Calendar, CheckCircle, Sparkles, Download } from 'lucide-react';
 import MetricsGrid from '../../components/MetricsGrid';
 
@@ -52,6 +53,17 @@ const achievements = [
 
 const Dec24Review = () => {
   const [isPlaying, setIsPlaying] = useState(false);
+
+  useEffect(() => {
+    // Track page view in Mixpanel
+    mixpanel.track('Review Page Viewed', {
+      review_type: 'month',
+      review_period: 'December 2024',
+      review_title: 'December 2024: Month in Review',
+      page_url: window.location.href,
+    });
+    console.log('[Mixpanel] Tracked: Review Page Viewed - December 2024');
+  }, []);
 
   return (
     <>

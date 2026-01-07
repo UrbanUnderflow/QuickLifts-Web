@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import Head from 'next/head';
+import mixpanel from 'mixpanel-browser';
 import { ArrowLeft, CheckCircle, ArrowRight, Briefcase, Code, Users, Calendar, ArrowUpRight, Download } from 'lucide-react';
 
 const businessHighlights = [
@@ -56,6 +57,17 @@ const metrics = [
 ];
 
 const Nov24Review = () => {
+  useEffect(() => {
+    // Track page view in Mixpanel
+    mixpanel.track('Review Page Viewed', {
+      review_type: 'month',
+      review_period: 'November 2024',
+      review_title: 'November 2024: Month in Review',
+      page_url: window.location.href,
+    });
+    console.log('[Mixpanel] Tracked: Review Page Viewed - November 2024');
+  }, []);
+
   return (
     <>
       <Head>

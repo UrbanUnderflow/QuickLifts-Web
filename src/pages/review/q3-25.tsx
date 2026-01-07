@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import Link from 'next/link';
 import Head from 'next/head';
+import mixpanel from 'mixpanel-browser';
 import { 
   ArrowUpRight, 
   ArrowLeft, 
@@ -127,6 +128,17 @@ const nextQuarterPriorities = [
 ];
 
 const Q3Review2025 = () => {
+  useEffect(() => {
+    // Track page view in Mixpanel
+    mixpanel.track('Review Page Viewed', {
+      review_type: 'quarter',
+      review_period: 'Q3 2025',
+      review_title: 'Q3 2025: Lessons from the Long Round',
+      page_url: window.location.href,
+    });
+    console.log('[Mixpanel] Tracked: Review Page Viewed - Q3 2025');
+  }, []);
+
   return (
     <>
       <Head>

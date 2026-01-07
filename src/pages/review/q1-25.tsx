@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import Head from 'next/head';
+import mixpanel from 'mixpanel-browser';
 import { 
   ArrowLeft, 
   Users, 
@@ -50,6 +51,17 @@ const q1OverallMetrics = [
 ];
 
 const Q1Review2025 = () => {
+  useEffect(() => {
+    // Track page view in Mixpanel
+    mixpanel.track('Review Page Viewed', {
+      review_type: 'quarter',
+      review_period: 'Q1 2025',
+      review_title: 'Q1 2025: Launch, Learn, Iterate',
+      page_url: window.location.href,
+    });
+    console.log('[Mixpanel] Tracked: Review Page Viewed - Q1 2025');
+  }, []);
+
   return (
     <>
       <Head>

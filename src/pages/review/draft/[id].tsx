@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import Head from 'next/head';
+import mixpanel from 'mixpanel-browser';
 import { 
   ArrowLeft, 
   CheckCircle, 
@@ -305,6 +306,16 @@ const DraftReviewPage: React.FC = () => {
   useEffect(() => {
     if (!checkingAdmin && isAdmin && id && typeof id === 'string') {
       loadDraft(id);
+      
+      // Track draft review page view in Mixpanel
+      mixpanel.track('Review Page Viewed', {
+        review_type: 'draft',
+        review_period: id,
+        review_title: `Draft Review - ${id}`,
+        page_url: window.location.href,
+        is_admin: true,
+      });
+      console.log('[Mixpanel] Tracked: Draft Review Page Viewed -', id);
     }
   }, [id, checkingAdmin, isAdmin]);
 
