@@ -3,6 +3,193 @@
 ## Overview
 Mixpanel tracking has been integrated into all review pages to track when **external viewers** (investors, stakeholders, partners) view your company updates. This allows you to see who is reading your reviews and which reviews are getting the most attention.
 
+## Quick Start: Create Your Review Analytics Board
+
+### Step 1: Create a New Board
+1. Log into your Mixpanel dashboard
+2. Click **Boards** in the left sidebar
+3. Click **+ Create Board** (top right)
+4. Name it: **"Review Analytics Dashboard"**
+5. Click **Create**
+
+### Step 2: Add Key Insights
+
+Now add these 8 essential insights to your board:
+
+---
+
+#### Insight 1: Total Review Views (Overview Card)
+**What it shows**: Total number of review page views
+
+1. Click **+ Add Insight**
+2. Select **Insights**
+3. Choose **Review Page Viewed** event
+4. Metric: **Total Events**
+5. Date range: **Last 30 days**
+6. Visualization: **Number** (big number card)
+7. Click **Save** → Name it **"Total Review Views"**
+
+---
+
+#### Insight 2: Views by Review Period
+**What it shows**: Which reviews are most popular
+
+1. **+ Add Insight** → **Insights**
+2. Event: **Review Page Viewed**
+3. Click **Breakdown** → Select **review_period**
+4. Metric: **Total Events**
+5. Visualization: **Bar Chart**
+6. Sort: **Descending**
+7. **Save** as **"Most Viewed Reviews"**
+
+---
+
+#### Insight 3: Geographic Distribution (Map)
+**What it shows**: Where viewers are located
+
+1. **+ Add Insight** → **Insights**
+2. Event: **Review Page Viewed**
+3. Click **Breakdown** → Select **$country_code**
+4. Metric: **Unique Users**
+5. Visualization: **Map**
+6. Date range: **Last 30 days**
+7. **Save** as **"Review Views by Country"**
+
+---
+
+#### Insight 4: Top Cities
+**What it shows**: Which cities have the most viewers
+
+1. **+ Add Insight** → **Insights**
+2. Event: **Review Page Viewed**
+3. Click **Breakdown** → Select **$city**
+4. Metric: **Total Events**
+5. Visualization: **Table** or **Bar Chart**
+6. Limit: **Top 10**
+7. **Save** as **"Top Cities Viewing Reviews"**
+
+---
+
+#### Insight 5: Views Over Time
+**What it shows**: Daily/weekly view trends
+
+1. **+ Add Insight** → **Insights**
+2. Event: **Review Page Viewed**
+3. Metric: **Total Events**
+4. Visualization: **Line Chart**
+5. Date range: **Last 90 days**
+6. Granularity: **Day** or **Week**
+7. **Save** as **"Review Views Over Time"**
+
+---
+
+#### Insight 6: Review Type Distribution
+**What it shows**: Year vs. Quarter vs. Month review popularity
+
+1. **+ Add Insight** → **Insights**
+2. Event: **Review Page Viewed**
+3. Click **Breakdown** → Select **review_type**
+4. Metric: **Total Events**
+5. Visualization: **Pie Chart**
+6. **Save** as **"Review Types Breakdown"**
+
+---
+
+#### Insight 7: Recent Viewers Table
+**What it shows**: Most recent viewers with details
+
+1. **+ Add Insight** → **User Activity**
+2. Event: **Review Page Viewed**
+3. Show columns:
+   - **User** (email or ID)
+   - **review_period**
+   - **$city**
+   - **$country_code**
+   - **Timestamp**
+4. Sort by: **Most Recent**
+5. Limit: **Last 50 events**
+6. **Save** as **"Recent Review Views"**
+
+---
+
+#### Insight 8: Unique Viewers Per Review
+**What it shows**: How many different people viewed each review
+
+1. **+ Add Insight** → **Insights**
+2. Event: **Review Page Viewed**
+3. Click **Breakdown** → Select **review_period**
+4. Metric: **Unique Users**
+5. Visualization: **Table**
+6. Sort: **Descending**
+7. **Save** as **"Unique Viewers by Review"**
+
+---
+
+### Step 3: Organize Your Board
+
+1. **Drag and drop** insights to arrange them
+2. Suggested layout:
+   ```
+   [Total Views - Big Number]    [Views Over Time - Line Chart]
+   
+   [Most Viewed Reviews - Bar]   [Review Types - Pie Chart]
+   
+   [Country Map - Full Width]
+   
+   [Top Cities - Table]          [Unique Viewers - Table]
+   
+   [Recent Viewers - Full Width Table]
+   ```
+
+3. Click **Save** at the top
+
+---
+
+### Step 4: Share Your Board
+
+**Option 1: Share with Team**
+1. Click **Share** (top right)
+2. Enter email addresses
+3. Set permissions: **Can View** or **Can Edit**
+4. Click **Share**
+
+**Option 2: Create Public Link**
+1. Click **Share** → **Get Public Link**
+2. Copy the link
+3. Share with investors/stakeholders
+
+**Option 3: Schedule Email Reports**
+1. Click **•••** (more options) → **Schedule Email**
+2. Choose frequency: **Daily**, **Weekly**, or **Monthly**
+3. Add recipients
+4. Click **Schedule**
+
+---
+
+### Pro Tips
+
+**Filter for Specific Time Periods**
+- Use date picker at top of board
+- Common choices: Last 7 days, Last 30 days, Last quarter
+
+**Create Investor-Specific View**
+1. Add filter to entire board
+2. Filter by: **$email contains "investor-email.com"**
+3. See only that investor's activity
+
+**Set Up Alerts**
+1. Click on any insight
+2. Click **•••** → **Create Alert**
+3. Example: "Alert me when Total Review Views > 20 in a day"
+4. Get notifications when thresholds are hit
+
+**Create Multiple Boards**
+- **Executive Summary** (high-level metrics)
+- **Investor Engagement** (specific investor tracking)
+- **Geographic Analysis** (location focus)
+
+---
+
 ## What Gets Tracked
 
 When someone views a review page (whether logged in or anonymous), Mixpanel logs:
