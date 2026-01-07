@@ -194,7 +194,7 @@ const Year2025Review = () => {
     // Track page view in Mixpanel
     mixpanel.track('Review Page Viewed', {
       review_type: 'year',
-      review_period: '2025',
+      review_period: '2025 Year in Review',
       review_title: 'Q4 2025 + Year in Review',
       page_url: window.location.href,
     });

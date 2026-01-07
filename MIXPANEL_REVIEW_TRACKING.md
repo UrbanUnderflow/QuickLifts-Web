@@ -219,12 +219,20 @@ Each page view event includes:
 ```javascript
 {
   review_type: 'year' | 'quarter' | 'month' | 'draft',
-  review_period: '2025' | 'Q1 2025' | 'November 2024' | etc.,
+  review_period: 'January 2025' | 'Q1 2025' | '2025 Year in Review' | etc.,
   review_title: 'Full page title',
   page_url: window.location.href,
   is_admin: true // (only for draft reviews)
 }
 ```
+
+**Review Period Format:**
+- **Monthly reviews** (generated via Review Tracker): `January 2025`, `February 2025`, etc.
+- **Quarterly reviews**: `Q1 2025`, `Q2 2025`, etc.
+- **Year in review**: `2025 Year in Review`
+- **Draft reviews**: Uses the month name format (e.g., `January 2025`)
+
+This format makes it easy to see which specific month/quarter/year was viewed in your Mixpanel dashboard.
 
 **Automatic Properties (tracked by Mixpanel):**
 ```javascript

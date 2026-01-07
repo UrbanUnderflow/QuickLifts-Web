@@ -306,16 +306,6 @@ const DraftReviewPage: React.FC = () => {
   useEffect(() => {
     if (!checkingAdmin && isAdmin && id && typeof id === 'string') {
       loadDraft(id);
-      
-      // Track draft review page view in Mixpanel
-      mixpanel.track('Review Page Viewed', {
-        review_type: 'draft',
-        review_period: id,
-        review_title: `Draft Review - ${id}`,
-        page_url: window.location.href,
-        is_admin: true,
-      });
-      console.log('[Mixpanel] Tracked: Draft Review Page Viewed -', id);
     }
   }, [id, checkingAdmin, isAdmin]);
 
@@ -329,6 +319,16 @@ const DraftReviewPage: React.FC = () => {
         return;
       }
       setDraft(draftData);
+      
+      // Track with proper period format after draft is loaded
+      mixpanel.track('Review Page Viewed', {
+        review_type: 'draft',
+        review_period: draftData.getDisplayTitle(), // e.g., "January 2025"
+        review_title: draftData.title,
+        page_url: window.location.href,
+        is_admin: true,
+      });
+      console.log('[Mixpanel] Tracked: Draft Review Page Viewed -', draftData.getDisplayTitle());
     } catch (err) {
       console.error('Error loading draft:', err);
       setError('Failed to load draft');
