@@ -11,7 +11,8 @@ import { showToast } from '../../redux/toastSlice';
 
 interface FriendOfBusiness {
   id?: string;
-  name: string;
+  firstName: string;
+  lastName: string;
   email: string;
   titleOrCompany: string;
   notes: string;
@@ -27,7 +28,8 @@ interface FriendOfBusiness {
 }
 
 const emptyFriend: FriendOfBusiness = {
-  name: '',
+  firstName: '',
+  lastName: '',
   email: '',
   titleOrCompany: '',
   notes: ''
@@ -158,7 +160,8 @@ const FriendsOfBusinessPage: React.FC = () => {
     if (search.trim()) {
       const q = search.toLowerCase();
       rows = rows.filter(r =>
-        (r.name || '').toLowerCase().includes(q) ||
+        (r.firstName || '').toLowerCase().includes(q) ||
+        (r.lastName || '').toLowerCase().includes(q) ||
         (r.email || '').toLowerCase().includes(q) ||
         (r.titleOrCompany || '').toLowerCase().includes(q)
       );
@@ -189,9 +192,11 @@ const FriendsOfBusinessPage: React.FC = () => {
   // Replace template placeholders with actual values
   const personalizeEmail = (template: string, friend: FriendOfBusiness): string => {
     if (!template) return '';
+    const fullName = `${friend.firstName || ''} ${friend.lastName || ''}`.trim() || 'there';
     return template
-      .replace(/\{\{name\}\}/g, friend.name || 'there')
-      .replace(/\{\{firstName\}\}/g, (friend.name || 'there').split(/\s+/)[0] || 'there')
+      .replace(/\{\{name\}\}/g, fullName)
+      .replace(/\{\{firstName\}\}/g, friend.firstName || 'there')
+      .replace(/\{\{lastName\}\}/g, friend.lastName || '')
       .replace(/\{\{email\}\}/g, friend.email || '')
       .replace(/\{\{titleOrCompany\}\}/g, friend.titleOrCompany || '');
   };
@@ -250,7 +255,7 @@ const FriendsOfBusinessPage: React.FC = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          to: { email: emailFriend.email, name: emailFriend.name || emailFriend.email },
+          to: { email: emailFriend.email, name: `${emailFriend.firstName || ''} ${emailFriend.lastName || ''}`.trim() || emailFriend.email },
           subject: emailSubject,
           textContent: emailBody
         })
@@ -291,7 +296,7 @@ const FriendsOfBusinessPage: React.FC = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          to: { email: emailFriend.email, name: emailFriend.name || emailFriend.email },
+          to: { email: emailFriend.email, name: `${emailFriend.firstName || ''} ${emailFriend.lastName || ''}`.trim() || emailFriend.email },
           subject: emailSubject,
           textContent: emailBody,
           scheduledAt: when.toISOString()
@@ -372,7 +377,8 @@ const FriendsOfBusinessPage: React.FC = () => {
 
   const deleteFriend = async (friend: FriendOfBusiness) => {
     if (!friend.id) return;
-    const confirmed = window.confirm(`Are you sure you want to delete ${friend.name}?`);
+    const fullName = `${friend.firstName || ''} ${friend.lastName || ''}`.trim() || 'this friend';
+    const confirmed = window.confirm(`Are you sure you want to delete ${fullName}?`);
     if (!confirmed) return;
     try {
       await deleteDoc(doc(db, 'friends-of-business', friend.id));
@@ -402,7 +408,7 @@ const FriendsOfBusinessPage: React.FC = () => {
               <Mail className="w-5 h-5 text-[#E0FE10]" /> Email Template
             </h2>
             <p className="text-sm text-zinc-400 mb-4">
-              Create an email template that will be personalized for each friend. Use placeholders: {'{{'}name{'}}'}, {'{{'}firstName{'}}'}, {'{{'}email{'}}'}, {'{{'}titleOrCompany{'}}'}
+              Create an email template that will be personalized for each friend. Use placeholders: {'{{'}name{'}}'}, {'{{'}firstName{'}}'}, {'{{'}lastName{'}}'}, {'{{'}email{'}}'}, {'{{'}titleOrCompany{'}}'}
             </p>
             {templateLoading ? (
               <div className="text-zinc-400">Loading template...</div>
@@ -450,9 +456,15 @@ const FriendsOfBusinessPage: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <input
                 className="bg-zinc-800 rounded-lg px-3 py-2"
-                placeholder="Name"
-                value={form.name}
-                onChange={e => setForm({ ...form, name: e.target.value })}
+                placeholder="First Name"
+                value={form.firstName}
+                onChange={e => setForm({ ...form, firstName: e.target.value })}
+              />
+              <input
+                className="bg-zinc-800 rounded-lg px-3 py-2"
+                placeholder="Last Name"
+                value={form.lastName}
+                onChange={e => setForm({ ...form, lastName: e.target.value })}
               />
               <input
                 className="bg-zinc-800 rounded-lg px-3 py-2"
@@ -500,8 +512,9 @@ const FriendsOfBusinessPage: React.FC = () => {
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-zinc-400 border-b border-zinc-800">
-                  <th className="text-left p-3">Name</th>
+                  <tr className="text-zinc-400 border-b border-zinc-800">
+                  <th className="text-left p-3">First Name</th>
+                  <th className="text-left p-3">Last Name</th>
                   <th className="text-left p-3">Email</th>
                   <th className="text-left p-3">Title/Company</th>
                   <th className="text-left p-3">Notes</th>
@@ -514,14 +527,14 @@ const FriendsOfBusinessPage: React.FC = () => {
               <tbody>
                 {loading && (
                   <tr>
-                    <td className="p-4 text-zinc-400" colSpan={8}>
+                    <td className="p-4 text-zinc-400" colSpan={9}>
                       Loading…
                     </td>
                   </tr>
                 )}
                 {!loading && filtered.length === 0 && (
                   <tr>
-                    <td className="p-4 text-zinc-400" colSpan={8}>
+                    <td className="p-4 text-zinc-400" colSpan={9}>
                       No friends found.
                     </td>
                   </tr>
@@ -531,7 +544,8 @@ const FriendsOfBusinessPage: React.FC = () => {
                     const updated = convertFirestoreTimestamp(row.updatedAt as any);
                     return (
                       <tr key={row.id} className="border-b border-zinc-800 hover:bg-zinc-800/40">
-                        <td className="p-3 font-medium text-white">{row.name}</td>
+                        <td className="p-3 font-medium text-white">{row.firstName}</td>
+                        <td className="p-3 text-zinc-300">{row.lastName}</td>
                         <td className="p-3 text-zinc-300">{row.email}</td>
                         <td className="p-3 text-zinc-300">{row.titleOrCompany}</td>
                         <td className="p-3 text-zinc-300">
@@ -592,9 +606,15 @@ const FriendsOfBusinessPage: React.FC = () => {
                 <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
                   <input
                     className="bg-zinc-800 rounded-lg px-3 py-2"
-                    placeholder="Name"
-                    value={editing.name}
-                    onChange={e => setEditing({ ...editing, name: e.target.value })}
+                    placeholder="First Name"
+                    value={editing.firstName}
+                    onChange={e => setEditing({ ...editing, firstName: e.target.value })}
+                  />
+                  <input
+                    className="bg-zinc-800 rounded-lg px-3 py-2"
+                    placeholder="Last Name"
+                    value={editing.lastName}
+                    onChange={e => setEditing({ ...editing, lastName: e.target.value })}
                   />
                   <input
                     className="bg-zinc-800 rounded-lg px-3 py-2"
@@ -638,7 +658,7 @@ const FriendsOfBusinessPage: React.FC = () => {
             <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
               <div className="bg-zinc-900 border border-zinc-800 rounded-xl w-full max-w-3xl" onClick={e => e.stopPropagation()}>
                 <div className="p-4 border-b border-zinc-800 flex items-center justify-between">
-                  <h3 className="text-xl font-semibold">Email {emailFriend.name}</h3>
+                  <h3 className="text-xl font-semibold">Email {`${emailFriend.firstName || ''} ${emailFriend.lastName || ''}`.trim() || emailFriend.email}</h3>
                   <button className="text-zinc-400 hover:text-white" onClick={requestCloseEmail}>
                     ✕
                   </button>
@@ -653,7 +673,10 @@ const FriendsOfBusinessPage: React.FC = () => {
                       <label className="text-xs text-zinc-400">To</label>
                       <input
                         className="w-full bg-zinc-800 rounded-lg px-3 py-2"
-                        value={`${emailFriend.name || ''} <${emailFriend.email}>`}
+                        value={(() => {
+                          const fullName = `${emailFriend.firstName || ''} ${emailFriend.lastName || ''}`.trim() || emailFriend.email;
+                          return `${fullName} <${emailFriend.email}>`;
+                        })()}
                         readOnly
                       />
                     </div>
@@ -764,7 +787,7 @@ const FriendsOfBusinessPage: React.FC = () => {
             >
               <div className="bg-zinc-900 border border-zinc-800 rounded-xl w-full max-w-xl" onClick={e => e.stopPropagation()}>
                 <div className="p-4 border-b border-zinc-800 flex items-center justify-between">
-                  <h3 className="text-xl font-semibold">Notes for {notesEditing.name}</h3>
+                  <h3 className="text-xl font-semibold">Notes for {`${notesEditing.firstName || ''} ${notesEditing.lastName || ''}`.trim() || notesEditing.email}</h3>
                   <button className="text-zinc-400 hover:text-white" onClick={() => setNotesOpen(false)}>
                     ✕
                   </button>

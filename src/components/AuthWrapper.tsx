@@ -71,7 +71,9 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     // Public onboarding/marketing entry points
     '/sign-up', '/coach', '/coach/sign-up', '/build-your-round', '/creator-onboarding',
     // Design language showcase
-    '/chromatic-glass'
+    '/chromatic-glass',
+    // Business overview
+    '/one-pager'
   ].map(route => route?.toLowerCase());
  
   const publicPathPatterns = [
