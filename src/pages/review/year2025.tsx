@@ -524,34 +524,114 @@ const Year2025Review = () => {
                       </p>
                       <ul className="space-y-2 text-sm">
                         <li className="text-gray-700">
-                          <span className="font-semibold text-gray-900">Uncork Capital</span> — Top-tier seed fund, strong consumer + marketplace history
+                          <a 
+                            href="https://uncorkcapital.com" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="font-semibold text-gray-900 hover:text-purple-600 transition-colors"
+                          >
+                            Uncork Capital
+                          </a>
                         </li>
                         <li className="text-gray-700">
-                          <span className="font-semibold text-gray-900">True Ventures</span> — Founder-first, long-term partner, great for network-effect businesses
+                          <a 
+                            href="https://trueventures.com" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="font-semibold text-gray-900 hover:text-purple-600 transition-colors"
+                          >
+                            True Ventures
+                          </a>
                         </li>
                         <li className="text-gray-700">
-                          <span className="font-semibold text-gray-900">Hustle Fund</span> — Fast-moving, strong distribution thesis, Launch-friendly
+                          <a 
+                            href="https://hustlefund.vc" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="font-semibold text-gray-900 hover:text-purple-600 transition-colors"
+                          >
+                            Hustle Fund
+                          </a>
                         </li>
                         <li className="text-gray-700">
-                          <span className="font-semibold text-gray-900">NFX</span> — Network effects, marketplaces, creator platforms (very strong conceptual fit)
+                          <a 
+                            href="https://www.nfx.com" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="font-semibold text-gray-900 hover:text-purple-600 transition-colors"
+                          >
+                            NFX
+                          </a>
                         </li>
                         <li className="text-gray-700">
-                          <span className="font-semibold text-gray-900">Precursor Ventures</span> — Elite pre-seed/seed signal, great co-lead and momentum builder
+                          <a 
+                            href="https://www.precursorvc.com" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="font-semibold text-gray-900 hover:text-purple-600 transition-colors"
+                          >
+                            Precursor Ventures
+                          </a>
                         </li>
                         <li className="text-gray-700">
-                          <span className="font-semibold text-gray-900">Soma Capital</span>
+                          <a 
+                            href="https://somacap.com/featured" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="font-semibold text-gray-900 hover:text-purple-600 transition-colors"
+                          >
+                            Soma Capital
+                          </a>
                         </li>
                         <li className="text-gray-700">
-                          <span className="font-semibold text-gray-900">Serena Ventures</span>
+                          <a 
+                            href="https://www.serenaventures.com" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="font-semibold text-gray-900 hover:text-purple-600 transition-colors"
+                          >
+                            Serena Ventures
+                          </a>
                         </li>
                         <li className="text-gray-700">
-                          <span className="font-semibold text-gray-900">Courtside Ventures</span>
+                          <a 
+                            href="https://www.courtsidevc.com" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="font-semibold text-gray-900 hover:text-purple-600 transition-colors"
+                          >
+                            Courtside Ventures
+                          </a>
                         </li>
                         <li className="text-gray-700">
-                          <span className="font-semibold text-gray-900">Forerunner Ventures</span>
+                          <a 
+                            href="https://www.forerunnerventures.com" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="font-semibold text-gray-900 hover:text-purple-600 transition-colors"
+                          >
+                            Forerunner Ventures
+                          </a>
                         </li>
                         <li className="text-gray-700">
-                          <span className="font-semibold text-gray-900">Sapphire Sport</span>
+                          <a 
+                            href="https://sapphireventures.com/sapphire-partners/"
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="font-semibold text-gray-900 hover:text-purple-600 transition-colors"
+                          >
+                            Sapphire Sport
+                          </a>
+                        </li>
+                        <li className="text-gray-700">
+                          <a 
+                            href="https://harlem.capital" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="font-semibold text-gray-900 hover:text-purple-600 transition-colors"
+                          >
+                            Harlem Capital
+                          </a>
                         </li>
                       </ul>
                     </div>
@@ -564,11 +644,189 @@ const Year2025Review = () => {
                   <div className="flex-shrink-0 w-6 h-6 rounded-full bg-purple-100 flex items-center justify-center mt-0.5">
                     <Briefcase size={14} className="text-purple-600" />
                   </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900 mb-1">Brand Partnerships</h3>
-                    <p className="text-gray-600 text-sm leading-relaxed">
+                  <div className="w-full">
+                    <h3 className="font-semibold text-gray-900 mb-2">Brand Partnerships</h3>
+                    <p className="text-gray-600 text-sm leading-relaxed mb-4">
                       Connections to fitness brands, wellness companies, and athletic partners interested in reaching our engaged community.
                     </p>
+                    
+                    <div className="bg-purple-50/50 border border-purple-100/60 rounded-lg p-4">
+                      <p className="text-xs font-medium text-purple-900 uppercase tracking-wider mb-3">
+                        Target Brands
+                      </p>
+                      <ul className="space-y-2 text-sm">
+                        <li className="text-gray-700">
+                          <a 
+                            href="https://www.lululemon.com" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="font-semibold text-gray-900 hover:text-purple-600 transition-colors"
+                          >
+                            Lululemon
+                          </a>
+                        </li>
+                        <li className="text-gray-700">
+                          <a 
+                            href="https://classpass.com" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="font-semibold text-gray-900 hover:text-purple-600 transition-colors"
+                          >
+                            ClassPass
+                          </a>
+                        </li>
+                        <li className="text-gray-700">
+                          <a 
+                            href="https://www.wellhub.com" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="font-semibold text-gray-900 hover:text-purple-600 transition-colors"
+                          >
+                            WellHub
+                          </a>
+                        </li>
+                        <li className="text-gray-700">
+                          <a 
+                            href="https://www.gymshark.com" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="font-semibold text-gray-900 hover:text-purple-600 transition-colors"
+                          >
+                            Gymshark
+                          </a>
+                        </li>
+                        <li className="text-gray-700">
+                          <a 
+                            href="https://www.redbull.com" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="font-semibold text-gray-900 hover:text-purple-600 transition-colors"
+                          >
+                            Red Bull
+                          </a>
+                        </li>
+                        <li className="text-gray-700">
+                          <a 
+                            href="https://www.on-running.com" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="font-semibold text-gray-900 hover:text-purple-600 transition-colors"
+                          >
+                            ON
+                          </a>
+                        </li>
+                        <li className="text-gray-700">
+                          <a 
+                            href="https://www.loreal.com" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="font-semibold text-gray-900 hover:text-purple-600 transition-colors"
+                          >
+                            L'Oréal
+                          </a>
+                        </li>
+                        <li className="text-gray-700">
+                          <a 
+                            href="https://www.unilever.com" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="font-semibold text-gray-900 hover:text-purple-600 transition-colors"
+                          >
+                            Unilever
+                          </a>
+                        </li>
+                        <li className="text-gray-700">
+                          <a 
+                            href="https://www.pg.com" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="font-semibold text-gray-900 hover:text-purple-600 transition-colors"
+                          >
+                            Procter & Gamble
+                          </a>
+                        </li>
+                        <li className="text-gray-700">
+                          <a 
+                            href="https://www.jnj.com" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="font-semibold text-gray-900 hover:text-purple-600 transition-colors"
+                          >
+                            Johnson & Johnson
+                          </a>
+                        </li>
+                        <li className="text-gray-700">
+                          <a 
+                            href="https://www.therabody.com" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="font-semibold text-gray-900 hover:text-purple-600 transition-colors"
+                          >
+                            Therabody
+                          </a>
+                        </li>
+                        <li className="text-gray-700">
+                          <a 
+                            href="https://www.whoop.com" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="font-semibold text-gray-900 hover:text-purple-600 transition-colors"
+                          >
+                            Whoop
+                          </a>
+                        </li>
+                        <li className="text-gray-700">
+                          <a 
+                            href="https://ouraring.com" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="font-semibold text-gray-900 hover:text-purple-600 transition-colors"
+                          >
+                            Oura
+                          </a>
+                        </li>
+                        <li className="text-gray-700">
+                          <a 
+                            href="https://www.aloyoga.com" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="font-semibold text-gray-900 hover:text-purple-600 transition-colors"
+                          >
+                            Alo Yoga
+                          </a>
+                        </li>
+                        <li className="text-gray-700">
+                          <a 
+                            href="https://www.athleta.com" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="font-semibold text-gray-900 hover:text-purple-600 transition-colors"
+                          >
+                            Athleta
+                          </a>
+                        </li>
+                        <li className="text-gray-700">
+                          <a 
+                            href="https://www.hoka.com" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="font-semibold text-gray-900 hover:text-purple-600 transition-colors"
+                          >
+                            Hoka
+                          </a>
+                        </li>
+                        <li className="text-gray-700">
+                          <a 
+                            href="https://www.allbirds.com" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="font-semibold text-gray-900 hover:text-purple-600 transition-colors"
+                          >
+                            Allbirds
+                          </a>
+                        </li>
+                      </ul>
+                    </div>
                   </div>
                 </div>
               </div>
