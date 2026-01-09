@@ -114,14 +114,18 @@ const OnePager: NextPage = () => {
 
   // Disable scrolling on mount
   useEffect(() => {
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = 'unset';
-    };
+    if (typeof window !== 'undefined') {
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = 'unset';
+      };
+    }
   }, []);
 
   // Keyboard navigation
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
     const handleKeyPress = (e: KeyboardEvent) => {
       if (e.key === 'ArrowLeft' && currentPage > 0) {
         setCurrentPage(currentPage - 1);
