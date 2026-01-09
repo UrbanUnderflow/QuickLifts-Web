@@ -369,7 +369,7 @@ const Year2025Review = () => {
                   </div>
                 </div>
                 <p className="text-gray-700 text-sm leading-relaxed">
-                  Q3's <a href="https://aws.amazon.com/startups/lp/aws-impact-bootcamps" target="_blank" rel="noopener noreferrer" className="text-emerald-700 underline hover:text-emerald-800">Bootcamp</a> paid off. Selected for the exclusive Retreat with investor meetings, up to $50K grant, and a guaranteed Techstars interview.
+                  Q3's <a href="https://aws.amazon.com/startups/lp/aws-impact-bootcamps" target="_blank" rel="noopener noreferrer" className="text-emerald-700 underline hover:text-emerald-800">Bootcamp</a> paid off. Selected for the exclusive Retreat with investor meetings, up to $50K grant, and a Techstars interview.
                 </p>
               </div>
             </div>
@@ -520,7 +520,7 @@ const Year2025Review = () => {
                     
                     <div className="bg-purple-50/50 border border-purple-100/60 rounded-lg p-4">
                       <p className="text-xs font-medium text-purple-900 uppercase tracking-wider mb-3">
-                        Priority Funds (open to others aligned with our mission)
+                        Funds we would like introductions for
                       </p>
                       <ul className="space-y-2 text-sm">
                         <li className="text-gray-700">
@@ -652,7 +652,7 @@ const Year2025Review = () => {
                     
                     <div className="bg-purple-50/50 border border-purple-100/60 rounded-lg p-4">
                       <p className="text-xs font-medium text-purple-900 uppercase tracking-wider mb-3">
-                        Target Brands
+                        Brands We would like to work with
                       </p>
                       <ul className="space-y-2 text-sm">
                         <li className="text-gray-700">

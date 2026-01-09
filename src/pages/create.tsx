@@ -1,19 +1,24 @@
 import React from 'react';
 import Head from 'next/head';
 import Create from '../components/App/RootScreens/Create';
+import SideNav from '../components/Navigation/SideNav';
+import { SelectedRootTabs } from '../types/DashboardTypes';
 
 const CreatePage: React.FC = () => {
   return (
-    <div className="min-h-screen flex flex-col bg-zinc-900 text-white">
+    <div className="min-h-screen bg-zinc-900 text-white">
       <Head>
-        <title>Create Exercise | QuickLifts</title>
-        <meta name="description" content="Create and share your exercise videos with the QuickLifts community" />
+        <title>Creator Studio | Pulse</title>
+        <meta name="description" content="Build your fitness brand with powerful creator tools" />
       </Head>
       
-      <main className="flex-grow">
-        <Create />
-      </main>
+      {/* Side Navigation */}
+      <SideNav selectedTab={SelectedRootTabs.Create} />
       
+      {/* Main Content - Add left padding for side nav */}
+      <div className="md:ml-20 lg:ml-64 pb-16 md:pb-0">
+        <Create />
+      </div>
     </div>
   );
 };

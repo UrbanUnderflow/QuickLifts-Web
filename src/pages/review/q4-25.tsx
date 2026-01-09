@@ -178,7 +178,7 @@ const Q4Review2025 = () => {
                 </div>
                 
                 <p className="text-gray-700 text-sm leading-relaxed">
-                  Q3's <a href="https://aws.amazon.com/startups/lp/aws-impact-bootcamps" target="_blank" rel="noopener noreferrer" className="text-emerald-700 underline hover:text-emerald-800">Bootcamp</a> paid off. Selected for the exclusive Retreat with investor meetings, up to $50K grant, and a guaranteed Techstars interview.
+                  Q3's <a href="https://aws.amazon.com/startups/lp/aws-impact-bootcamps" target="_blank" rel="noopener noreferrer" className="text-emerald-700 underline hover:text-emerald-800">Bootcamp</a> paid off. Selected for the exclusive Retreat with investor meetings, up to $50K grant, and a Techstars interview.
                 </p>
               </div>
             </div>

@@ -69,6 +69,7 @@ const SideNav: React.FC<SideNavProps> = ({ selectedTab, onTabChange, onAbout }) 
 
   const isHomePage = currentPath === '/';
   const isPulseCheckPage = currentPath === '/PulseCheck';
+  const isCreatePage = currentPath === '/create';
 
   // Define navigation items dynamically based on current page
   // When on PulseCheck, show Pulse in nav; when on Pulse, show PulseCheck in nav
@@ -93,10 +94,7 @@ const SideNav: React.FC<SideNavProps> = ({ selectedTab, onTabChange, onAbout }) 
       label: 'Create',
       tab: SelectedRootTabs.Create,
       onClick: () => {
-        router.push('/');
-        setTimeout(() => {
-          if (onTabChange) onTabChange(SelectedRootTabs.Create);
-        }, 100);
+        router.push('/create');
       }
     },
   ] : [
@@ -107,7 +105,10 @@ const SideNav: React.FC<SideNavProps> = ({ selectedTab, onTabChange, onAbout }) 
       href: '/',
       tab: SelectedRootTabs.Discover,
       onClick: () => {
-        if (onTabChange) {
+        if (isCreatePage) {
+          // On /create page, route directly to home
+          router.push('/');
+        } else if (onTabChange) {
           onTabChange(SelectedRootTabs.Discover);
         } else {
           router.push('/');
@@ -118,20 +119,25 @@ const SideNav: React.FC<SideNavProps> = ({ selectedTab, onTabChange, onAbout }) 
       icon: <FaEnvelope />, 
       label: 'Messages', 
       href: '/messages',
-      tab: SelectedRootTabs.Messages
+      tab: SelectedRootTabs.Messages,
+      onClick: () => {
+        // Always route directly to messages page
+        router.push('/messages');
+      }
     },
     { 
       icon: <FaPlusSquare />, 
       label: 'Create',
       tab: SelectedRootTabs.Create,
       onClick: () => {
-        if (isHomePage && onTabChange) {
+        if (isCreatePage) {
+          // Already on create page, do nothing
+          return;
+        } else if (isHomePage && onTabChange) {
           onTabChange(SelectedRootTabs.Create);
         } else {
-          router.push('/');
-          setTimeout(() => {
-            if (onTabChange) onTabChange(SelectedRootTabs.Create);
-          }, 100);
+          // Route to /create page
+          router.push('/create');
         }
       }
     },
@@ -165,7 +171,9 @@ const SideNav: React.FC<SideNavProps> = ({ selectedTab, onTabChange, onAbout }) 
         <div className="flex-1 flex flex-col gap-1 px-3">
           {navItems.map((item, index) => {
             // Determine if this item is active
-            const isActive = isHomePage && selectedTab && item.tab
+            const isActive = isCreatePage
+              ? (item.tab === SelectedRootTabs.Create && currentPath === '/create') || currentPath === item.href
+              : isHomePage && selectedTab && item.tab
               ? selectedTab === item.tab
               : currentPath === item.href;
 
@@ -185,7 +193,13 @@ const SideNav: React.FC<SideNavProps> = ({ selectedTab, onTabChange, onAbout }) 
           {currentUser && (
             <button
               onClick={() => {
-                if (isHomePage && onTabChange) {
+                if (isCreatePage) {
+                  // On /create page, route to home and show profile
+                  router.push('/');
+                  setTimeout(() => {
+                    if (onTabChange) onTabChange(SelectedRootTabs.Profile);
+                  }, 100);
+                } else if (isHomePage && onTabChange) {
                   onTabChange(SelectedRootTabs.Profile);
                 } else {
                   // Navigate to home page and trigger profile tab
@@ -321,6 +335,9 @@ const SideNav: React.FC<SideNavProps> = ({ selectedTab, onTabChange, onAbout }) 
           onClick={() => {
             if (isPulseCheckPage) {
               router.push('/PulseCheck');
+            } else if (isCreatePage) {
+              // On /create page, route directly to home
+              router.push('/');
             } else if (onTabChange) {
               onTabChange(SelectedRootTabs.Discover);
             } else {
@@ -339,11 +356,8 @@ const SideNav: React.FC<SideNavProps> = ({ selectedTab, onTabChange, onAbout }) 
         
         <button
           onClick={() => {
-            if (isHomePage && onTabChange) {
-              onTabChange(SelectedRootTabs.Messages);
-            } else {
-              router.push('/messages');
-            }
+            // Always route directly to messages page
+            router.push('/messages');
           }}
           className={`flex flex-col items-center justify-center p-2 ${
             (isHomePage && selectedTab === SelectedRootTabs.Messages) || currentPath === '/messages'
@@ -356,23 +370,34 @@ const SideNav: React.FC<SideNavProps> = ({ selectedTab, onTabChange, onAbout }) 
         
         <button
           onClick={() => {
-            if (isHomePage && onTabChange) {
+            if (isCreatePage) {
+              // Already on create page, do nothing
+              return;
+            } else if (isHomePage && onTabChange) {
               onTabChange(SelectedRootTabs.Create);
             } else {
-              router.push('/');
-              setTimeout(() => {
-                if (onTabChange) onTabChange(SelectedRootTabs.Create);
-              }, 100);
+              // Route to /create page
+              router.push('/create');
             }
           }}
-          className="flex flex-col items-center justify-center p-2 text-zinc-400"
+          className={`flex flex-col items-center justify-center p-2 ${
+            currentPath === '/create' || (isHomePage && selectedTab === SelectedRootTabs.Create)
+              ? 'text-white' 
+              : 'text-zinc-400'
+          }`}
         >
           <FaPlusSquare className="text-2xl" />
         </button>
         
         <button
           onClick={() => {
-            if (isHomePage && onTabChange) {
+            if (isCreatePage) {
+              // On /create page, route to home and show profile
+              router.push('/');
+              setTimeout(() => {
+                if (onTabChange) onTabChange(SelectedRootTabs.Profile);
+              }, 100);
+            } else if (isHomePage && onTabChange) {
               onTabChange(SelectedRootTabs.Profile);
             } else {
               // Navigate to home page and trigger profile tab
