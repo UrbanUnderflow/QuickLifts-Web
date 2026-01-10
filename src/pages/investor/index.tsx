@@ -3,7 +3,7 @@ import Head from 'next/head';
 import { useRouter } from 'next/router';
 import dynamic from 'next/dynamic';
 import { GetServerSideProps } from 'next';
-import { ArrowUpRight, Download, ChevronRight, ArrowLeft, TrendingUp, Lock, Loader2, Mail, AlertCircle } from 'lucide-react';
+import { ArrowUpRight, Download, ChevronRight, ChevronDown, ArrowLeft, TrendingUp, Lock, Loader2, Mail, AlertCircle, X } from 'lucide-react';
 
 import Footer from '../../components/Footer/Footer';
 import PageHead from '../../components/PageHead';
@@ -147,6 +147,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
   const [activeBalanceSheetYear, setActiveBalanceSheetYear] = useState<'2025' | '2024'>('2025');
   const [isExpenseReportModalOpen, setIsExpenseReportModalOpen] = useState(false);
   const [selectedExpenseMonths, setSelectedExpenseMonths] = useState<string[]>([]);
+  const [isExtendedPLModalOpen, setIsExtendedPLModalOpen] = useState(false);
 
   const [activeSection, setActiveSection] = useState<string>('overview');
   const [financialMetrics, setFinancialMetrics] = useState<FinancialMetrics | null>(null);
@@ -399,6 +400,175 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
               </tbody>
             </table>
           ` : ''}
+          
+          <div class="footer">
+            <p>© ${new Date().getFullYear()} Pulse Intelligence Labs, Inc. All rights reserved.</p>
+            <p>This document contains confidential financial information intended for authorized investors only.</p>
+          </div>
+        </body>
+      </html>
+    `;
+
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(html);
+      printWindow.document.close();
+      printWindow.focus();
+      setTimeout(() => {
+        printWindow.print();
+      }, 250);
+    }
+  };
+
+  // Generate Extended P&L PDF - uses same categorization as standard P&L
+  const generateExtendedPLPdf = () => {
+    const fmt = (value: number) => 
+      `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+    // Calculate totals from expenseReportData
+    const totalRevenue = Object.values(expenseReportData).reduce((sum, m) => sum + m.monthlyIncome, 0);
+    const totalExpenses = Object.values(expenseReportData).reduce((sum, m) => sum + m.monthlyTotal + m.miscTotal, 0);
+    const netIncome = totalRevenue - totalExpenses;
+
+    // Generate monthly summary rows
+    const monthlyRows = Object.entries(expenseReportData).map(([, data]) => {
+      const totalExp = data.monthlyTotal + data.miscTotal;
+      const net = data.monthlyIncome - totalExp;
+      return `
+        <tr>
+          <td style="padding: 10px; border-bottom: 1px solid #e5e5e5;">${data.month}</td>
+          <td style="padding: 10px; border-bottom: 1px solid #e5e5e5; text-align: right;">${fmt(data.monthlyIncome)}</td>
+          <td style="padding: 10px; border-bottom: 1px solid #e5e5e5; text-align: right;">${fmt(data.monthlyTotal)}</td>
+          <td style="padding: 10px; border-bottom: 1px solid #e5e5e5; text-align: right;">${fmt(data.miscTotal)}</td>
+          <td style="padding: 10px; border-bottom: 1px solid #e5e5e5; text-align: right;">${fmt(totalExp)}</td>
+          <td style="padding: 10px; border-bottom: 1px solid #e5e5e5; text-align: right; color: ${net >= 0 ? '#10b981' : '#ef4444'};">${fmt(net)}</td>
+        </tr>
+      `;
+    }).join('');
+
+    // Use categoryTotals2025 for the breakdown (same as standard P&L)
+    const breakdownRows = categoryTotals2025.map(row => `
+      <tr>
+        <td style="padding: 8px; border-bottom: 1px solid #e5e5e5;">${row.month}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #e5e5e5; text-align: right;">${fmt(row.totals.software_tools)}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #e5e5e5; text-align: right;">${fmt(row.totals.contractors)}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #e5e5e5; text-align: right;">${fmt(row.totals.marketing_growth)}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #e5e5e5; text-align: right;">${fmt(row.totals.sales_fundraising)}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #e5e5e5; text-align: right;">${fmt(row.totals.legal_ip)}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #e5e5e5; text-align: right;">${fmt(row.totals.travel_events)}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #e5e5e5; text-align: right;">${fmt(row.totals.other)}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #e5e5e5; text-align: right; font-weight: 700;">${fmt(row.totalExpenses)}</td>
+      </tr>
+    `).join('');
+
+    const breakdownTotals = categoryTotals2025.reduce(
+      (acc, row) => {
+        acc.software_tools += row.totals.software_tools;
+        acc.contractors += row.totals.contractors;
+        acc.marketing_growth += row.totals.marketing_growth;
+        acc.sales_fundraising += row.totals.sales_fundraising;
+        acc.legal_ip += row.totals.legal_ip;
+        acc.travel_events += row.totals.travel_events;
+        acc.other += row.totals.other;
+        acc.total += row.totalExpenses;
+        return acc;
+      },
+      { software_tools: 0, contractors: 0, marketing_growth: 0, sales_fundraising: 0, legal_ip: 0, travel_events: 0, other: 0, total: 0 }
+    );
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Extended Profit & Loss Statement - Pulse Intelligence Labs</title>
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 40px; color: #111; }
+            h1 { font-size: 24px; margin-bottom: 5px; }
+            .subtitle { color: #666; font-size: 14px; margin-bottom: 30px; }
+            .summary { display: flex; gap: 20px; margin-bottom: 30px; }
+            .summary-box { flex: 1; padding: 20px; background: #f9fafb; border-radius: 8px; }
+            .summary-label { color: #666; font-size: 12px; margin-bottom: 5px; }
+            .summary-value { font-size: 24px; font-weight: bold; }
+            .summary-value.positive { color: #10b981; }
+            .summary-value.negative { color: #ef4444; }
+            table { width: 100%; border-collapse: collapse; font-size: 14px; }
+            th { text-align: left; padding: 12px 10px; background: #f3f4f6; font-weight: 600; }
+            th:not(:first-child) { text-align: right; }
+            .section-title { margin-top: 28px; font-size: 14px; font-weight: 700; color: #111; }
+            .note { color: #666; font-size: 12px; margin: 6px 0 12px; }
+            .small-table { font-size: 12px; }
+            .small-table th { padding: 10px 8px; }
+            .small-table td { padding: 8px; }
+            .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e5e5; font-size: 12px; color: #666; }
+            @media print { body { padding: 20px; } }
+          </style>
+        </head>
+        <body>
+          <h1>Extended Profit & Loss Statement - 2025 (Jan–Nov)</h1>
+          <p class="subtitle">Pulse Intelligence Labs, Inc. | Generated ${new Date().toLocaleDateString()}</p>
+          
+          <div class="summary">
+            <div class="summary-box">
+              <div class="summary-label">Total Revenue</div>
+              <div class="summary-value">${fmt(totalRevenue)}</div>
+            </div>
+            <div class="summary-box">
+              <div class="summary-label">Total Expenses</div>
+              <div class="summary-value">${fmt(totalExpenses)}</div>
+            </div>
+            <div class="summary-box">
+              <div class="summary-label">Net Income</div>
+              <div class="summary-value ${netIncome >= 0 ? 'positive' : 'negative'}">${fmt(netIncome)}</div>
+            </div>
+          </div>
+          
+          <table>
+            <thead>
+              <tr>
+                <th>Month</th>
+                <th>Revenue</th>
+                <th>Recurring Expenses</th>
+                <th>Non-Recurring Expenses</th>
+                <th>Total Expenses</th>
+                <th>Net Income</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${monthlyRows}
+            </tbody>
+          </table>
+
+          <div class="section-title">Expense Breakdown by Category (2025)</div>
+          <div class="note">Revenue stream: Subscriptions. Expenses categorized from line-item expense reports.</div>
+          <table class="small-table">
+            <thead>
+              <tr>
+                <th>Month</th>
+                <th>Software</th>
+                <th>Contractors</th>
+                <th>Marketing</th>
+                <th>Sales/Fundraising</th>
+                <th>Legal/IP</th>
+                <th>Travel</th>
+                <th>Other</th>
+                <th>Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${breakdownRows}
+              <tr>
+                <td style="padding: 10px; font-weight: 700; background: #f9fafb; border-top: 2px solid #d1d5db;">YTD</td>
+                <td style="padding: 10px; text-align: right; font-weight: 700; background: #f9fafb; border-top: 2px solid #d1d5db;">${fmt(breakdownTotals.software_tools)}</td>
+                <td style="padding: 10px; text-align: right; font-weight: 700; background: #f9fafb; border-top: 2px solid #d1d5db;">${fmt(breakdownTotals.contractors)}</td>
+                <td style="padding: 10px; text-align: right; font-weight: 700; background: #f9fafb; border-top: 2px solid #d1d5db;">${fmt(breakdownTotals.marketing_growth)}</td>
+                <td style="padding: 10px; text-align: right; font-weight: 700; background: #f9fafb; border-top: 2px solid #d1d5db;">${fmt(breakdownTotals.sales_fundraising)}</td>
+                <td style="padding: 10px; text-align: right; font-weight: 700; background: #f9fafb; border-top: 2px solid #d1d5db;">${fmt(breakdownTotals.legal_ip)}</td>
+                <td style="padding: 10px; text-align: right; font-weight: 700; background: #f9fafb; border-top: 2px solid #d1d5db;">${fmt(breakdownTotals.travel_events)}</td>
+                <td style="padding: 10px; text-align: right; font-weight: 700; background: #f9fafb; border-top: 2px solid #d1d5db;">${fmt(breakdownTotals.other)}</td>
+                <td style="padding: 10px; text-align: right; font-weight: 800; background: #f9fafb; border-top: 2px solid #d1d5db;">${fmt(breakdownTotals.total)}</td>
+              </tr>
+            </tbody>
+          </table>
           
           <div class="footer">
             <p>© ${new Date().getFullYear()} Pulse Intelligence Labs, Inc. All rights reserved.</p>
@@ -1451,16 +1621,24 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
         { item: 'SendInBlue', amount: 69.00 },
         { item: 'Cursor', amount: 200.00 },
         { item: 'Claude AI', amount: 20.00 },
+        { item: 'SwitchYards', amount: 100.00 },
         { item: 'Google One', amount: 20.00 },
+        { item: 'GymPass', amount: 289.00 },
         { item: 'ElevenLabs', amount: 5.00 },
-        { item: 'Capcut', amount: 9.99 },
+        { item: 'FITNESS YOUR WAY', amount: 29.99 },
       ],
-      monthlyTotal: 536.79,
+      monthlyTotal: 945.79,
       monthlyIncome: 246.00,
       miscExpenses: [
-        { item: 'WWW.PERPLEXITY.AI', amount: 200.00, paymentMethod: 'Discover' },
+        { item: 'Instantly Domains', amount: 90.00, paymentMethod: 'Discover' },
+        { item: 'STRIPE ATLAS', amount: 500.00, paymentMethod: 'Apple Card' },
+        { item: 'Carbon Gym Fitness', amount: 40.89, paymentMethod: 'Apple Card' },
+        { item: 'FIVVERR Leads', amount: 685.00, paymentMethod: 'Apple Card' },
+        { item: 'HOTEL', amount: 103.00, paymentMethod: 'Apple Card' },
+        { item: 'HOTEL', amount: 482.72, paymentMethod: 'Apple Card' },
+        { item: 'Biitly', amount: 120.00, paymentMethod: 'Apple Card' },
       ],
-      miscTotal: 200.00,
+      miscTotal: 2021.61,
     },
     'feb25': {
       month: 'February',
@@ -1473,15 +1651,19 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
         { item: 'SendInBlue', amount: 69.00 },
         { item: 'Cursor', amount: 200.00 },
         { item: 'Claude AI', amount: 20.00 },
+        { item: 'SwitchYards', amount: 100.00 },
         { item: 'Google One', amount: 20.00 },
+        { item: 'GymPass', amount: 289.00 },
         { item: 'ElevenLabs', amount: 5.00 },
+        { item: 'FITNESS YOUR WAY', amount: 29.99 },
       ],
-      monthlyTotal: 526.80,
+      monthlyTotal: 945.79,
       monthlyIncome: 633.00,
       miscExpenses: [
-        { item: 'FITWITHPULSE.AI', amount: 39.99, paymentMethod: 'Discover' },
+        { item: 'FLIGHT SF(AWS RETREAT) - BOBBY', amount: 514.22, paymentMethod: 'Apple Card' },
+        { item: 'GUITE', amount: 44.88, paymentMethod: 'Apple Card' },
       ],
-      miscTotal: 39.99,
+      miscTotal: 559.10,
     },
     'mar25': {
       month: 'March',
@@ -1494,15 +1676,24 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
         { item: 'SendInBlue', amount: 69.00 },
         { item: 'Cursor', amount: 200.00 },
         { item: 'Claude AI', amount: 20.00 },
+        { item: 'SwitchYards', amount: 100.00 },
         { item: 'Google One', amount: 20.00 },
+        { item: 'GymPass', amount: 289.00 },
         { item: 'ElevenLabs', amount: 5.00 },
+        { item: 'FITNESS YOUR WAY', amount: 29.99 },
       ],
-      monthlyTotal: 526.80,
+      monthlyTotal: 945.79,
       monthlyIncome: 268.00,
       miscExpenses: [
-        { item: 'FITWITHPULSE.AI', amount: 39.99, paymentMethod: 'Discover' },
+        { item: 'FITWITHPULSE.AI 9545484221 GA', amount: 39.99, paymentMethod: 'Discover' },
+        { item: 'FIVERR - RESOURCE HIRE', amount: 158.25, paymentMethod: 'Discover' },
+        { item: 'CHULA WEAR', amount: 81.94, paymentMethod: 'Discover' },
+        { item: 'CHULA WEAR', amount: 121.93, paymentMethod: 'Discover' },
+        { item: 'Apple Search ADS', amount: 0.54, paymentMethod: 'Apple Card' },
+        { item: 'FEDEX SHIPPING', amount: 56.65, paymentMethod: 'Apple Card' },
+        { item: 'JET BLUE CHECKIN', amount: 96.97, paymentMethod: 'Apple Card' },
       ],
-      miscTotal: 39.99,
+      miscTotal: 556.27,
     },
     'apr25': {
       month: 'April',
@@ -1515,16 +1706,23 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
         { item: 'SendInBlue', amount: 69.00 },
         { item: 'Cursor', amount: 200.00 },
         { item: 'Claude AI', amount: 20.00 },
+        { item: 'SwitchYards', amount: 100.00 },
         { item: 'Google One', amount: 20.00 },
+        { item: 'GymPass', amount: 289.00 },
         { item: 'ElevenLabs', amount: 5.00 },
+        { item: 'FITNESS YOUR WAY', amount: 29.99 },
       ],
-      monthlyTotal: 526.80,
+      monthlyTotal: 945.79,
       monthlyIncome: 220.00,
       miscExpenses: [
-        { item: 'FITWITHPULSE.AI', amount: 39.99, paymentMethod: 'Discover' },
-        { item: 'FIVERR - RESOURCE HIRE', amount: 158.25, paymentMethod: 'Discover' },
+        { item: 'HOTEL.com', amount: 82.72, paymentMethod: 'Apple Card' },
+        { item: 'CURSOR EXTRA USAGE', amount: 9.81, paymentMethod: 'Apple Card' },
+        { item: 'CURSOR EXTRA USAGE', amount: 20.05, paymentMethod: 'Apple Card' },
+        { item: 'CONFETTI SOCIAL(SOCIAL MEDIA CONSULT.)', amount: 375.00, paymentMethod: 'Chase' },
+        { item: 'Parking', amount: 20.00, paymentMethod: 'Apple Card' },
+        { item: 'DJI OSMO Camera', amount: 1003.32, paymentMethod: 'Apple Card' },
       ],
-      miscTotal: 198.24,
+      miscTotal: 1510.90,
     },
     'may25': {
       month: 'May',
@@ -1537,20 +1735,20 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
         { item: 'SendInBlue', amount: 69.00 },
         { item: 'Cursor', amount: 200.00 },
         { item: 'Claude AI', amount: 20.00 },
+        { item: 'SwitchYards', amount: 100.00 },
         { item: 'Google One', amount: 20.00 },
+        { item: 'GymPass', amount: 289.00 },
         { item: 'ElevenLabs', amount: 5.00 },
+        { item: 'FITNESS YOUR WAY', amount: 29.99 },
       ],
-      monthlyTotal: 526.80,
+      monthlyTotal: 945.79,
       monthlyIncome: 373.00,
       miscExpenses: [
-        { item: 'CURSOR USAGE MID MAY', amount: 20.00, paymentMethod: 'Discover' },
-        { item: 'REBRANDLAND.NET', amount: 25.00, paymentMethod: 'Discover' },
-        { item: 'DROPBOX DOCSEND', amount: 120.00, paymentMethod: 'None' },
-        { item: 'UNITED STATES PATENT APPLICATION', amount: 700.00, paymentMethod: 'Apple Card' },
-        { item: 'PUBLIC PARKING FOR PITCH EVENT', amount: 6.00, paymentMethod: 'Apple Card' },
-        { item: 'PRIMA FLYERS', amount: 82.24, paymentMethod: 'Apple Card' },
+        { item: 'LATAM AIRLINES', amount: 812.63, paymentMethod: 'Apple Card' },
+        { item: 'GOOGLE SUITE', amount: 52.80, paymentMethod: 'Apple Card' },
+        { item: 'MANUS', amount: 63.00, paymentMethod: 'Apple Card' },
       ],
-      miscTotal: 953.24,
+      miscTotal: 928.43,
     },
     'jun25': {
       month: 'June',
@@ -1563,16 +1761,24 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
         { item: 'SendInBlue', amount: 69.00 },
         { item: 'Cursor', amount: 200.00 },
         { item: 'Claude AI', amount: 20.00 },
+        { item: 'SwitchYards', amount: 100.00 },
         { item: 'Google One', amount: 20.00 },
+        { item: 'GymPass', amount: 289.00 },
         { item: 'ElevenLabs', amount: 5.00 },
+        { item: 'FITNESS YOUR WAY', amount: 29.99 },
       ],
-      monthlyTotal: 526.80,
+      monthlyTotal: 945.79,
       monthlyIncome: 512.00,
       miscExpenses: [
-        { item: 'PARKING', amount: 36.31, paymentMethod: 'Discover' },
-        { item: 'CURSOR EXTRA USAGE', amount: 83.61, paymentMethod: 'Discover' },
+        { item: 'WYNDAM HOTEL', amount: 1303.20, paymentMethod: 'Apple Card' },
+        { item: 'FLIX BUS', amount: 64.80, paymentMethod: 'Apple Card' },
+        { item: 'RAIL NINJA(TRAIN)', amount: 108.10, paymentMethod: 'Apple Card' },
+        { item: 'TAXI', amount: 38.90, paymentMethod: 'Apple Card' },
+        { item: 'PARKING', amount: 36.31, paymentMethod: 'Apple Card' },
+        { item: 'CURSOR EXTRA USAGE', amount: 83.61, paymentMethod: 'Apple Card' },
+        { item: 'BASIC FIT GYM', amount: 35.36, paymentMethod: 'Apple Card' },
       ],
-      miscTotal: 119.92,
+      miscTotal: 1670.28,
     },
     'jul25': {
       month: 'July',
@@ -1584,17 +1790,25 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
         { item: 'Product Design Lead', amount: 100.00 },
         { item: 'SendInBlue', amount: 69.00 },
         { item: 'Cursor', amount: 200.00 },
-        { item: 'Claude AI', amount: 45.00 },
+        { item: 'Claude AI', amount: 20.00 },
+        { item: 'SwitchYards', amount: 100.00 },
         { item: 'Google One', amount: 20.00 },
+        { item: 'GymPass', amount: 289.00 },
         { item: 'ElevenLabs', amount: 5.00 },
+        { item: 'FITNESS YOUR WAY', amount: 29.99 },
       ],
-      monthlyTotal: 551.80,
+      monthlyTotal: 945.79,
       monthlyIncome: 346.00,
       miscExpenses: [
-        { item: 'PARKING', amount: 36.31, paymentMethod: 'Discover' },
-        { item: 'CURSOR EXTRA USAGE', amount: 83.61, paymentMethod: 'Discover' },
+        { item: 'FITWITHPULSE.AI 9545484221 GA', amount: 39.99, paymentMethod: 'Discover' },
+        { item: 'FIVERR - RESOURCE HIRE', amount: 158.25, paymentMethod: 'Discover' },
+        { item: 'FLIGHT AIR EUROPA', amount: 495.00, paymentMethod: 'Apple Card' },
+        { item: 'HOTEL', amount: 409.00, paymentMethod: 'Apple Card' },
+        { item: 'Hotel', amount: 368.00, paymentMethod: 'Apple Card' },
+        { item: 'Flight SPIRIT', amount: 30.99, paymentMethod: 'Apple Card' },
+        { item: 'FLIGHT JET BLUE', amount: 176.61, paymentMethod: 'Apple Card' },
       ],
-      miscTotal: 119.92,
+      miscTotal: 1677.84,
     },
     'aug25': {
       month: 'August',
@@ -1609,20 +1823,23 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
         { item: 'Claude AI', amount: 20.00 },
         { item: 'SwitchYards', amount: 100.00 },
         { item: 'Google One', amount: 20.00 },
+        { item: 'GymPass', amount: 289.00 },
         { item: 'ElevenLabs', amount: 5.00 },
+        { item: 'FITNESS YOUR WAY', amount: 29.99 },
       ],
-      monthlyTotal: 626.80,
+      monthlyTotal: 945.79,
       monthlyIncome: 128.00,
       miscExpenses: [
         { item: 'Pulse Challenge Winner Prize', amount: 1034.00, paymentMethod: 'Apple Card' },
         { item: 'PEER POP.io', amount: 92.38, paymentMethod: 'Apple Card' },
+        { item: 'RESERVATION DAY(AUS HOTEL)', amount: 268.16, paymentMethod: 'Apple Card' },
         { item: 'CURSOR EXTRA USAGE', amount: 50.00, paymentMethod: 'Apple Card' },
         { item: 'FLIGHT DELTA(AUSTIN)TRE', amount: 89.18, paymentMethod: 'Apple Card' },
         { item: 'FLIGHT DELTA(AUSTIN)BOBBY', amount: 89.18, paymentMethod: 'Apple Card' },
         { item: 'FLIGHT DELTA(ATL-RETURN)TRE', amount: 178.49, paymentMethod: 'Apple Card' },
         { item: 'FLIGHT DELTA(ATL-RETURN)BOBBY', amount: 178.49, paymentMethod: 'Apple Card' },
       ],
-      miscTotal: 1711.72,
+      miscTotal: 1979.88,
     },
     'sep25': {
       month: 'September',
@@ -1637,16 +1854,17 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
         { item: 'Claude AI', amount: 20.00 },
         { item: 'SwitchYards', amount: 100.00 },
         { item: 'Google One', amount: 20.00 },
+        { item: 'GymPass', amount: 289.00 },
         { item: 'ElevenLabs', amount: 5.00 },
+        { item: 'FITNESS YOUR WAY', amount: 29.99 },
       ],
-      monthlyTotal: 626.80,
+      monthlyTotal: 945.79,
       monthlyIncome: 115.00,
       miscExpenses: [
-        { item: 'CURSOR EXTRA USAGE', amount: 9.81, paymentMethod: 'Apple Card' },
-        { item: 'CURSOR EXTRA USAGE', amount: 20.05, paymentMethod: 'Apple Card' },
-        { item: 'CONFETTI SOCIAL(SOCIAL MEDIA CONSULT.)', amount: 375.00, paymentMethod: 'Chase' },
+        { item: 'HEROKU', amount: 50.00, paymentMethod: 'Apple Card' },
+        { item: 'FITWITHPULSE.AI 9545484221 GA', amount: 39.99, paymentMethod: 'Discover' },
       ],
-      miscTotal: 404.86,
+      miscTotal: 89.99,
     },
     'oct25': {
       month: 'October',
@@ -1661,14 +1879,19 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
         { item: 'Claude AI', amount: 20.00 },
         { item: 'SwitchYards', amount: 100.00 },
         { item: 'Google One', amount: 20.00 },
+        { item: 'GymPass', amount: 289.00 },
         { item: 'ElevenLabs', amount: 5.00 },
+        { item: 'FITNESS YOUR WAY', amount: 29.99 },
       ],
-      monthlyTotal: 626.80,
+      monthlyTotal: 945.79,
       monthlyIncome: 173.00,
       miscExpenses: [
         { item: 'FLIGHT SF(AWS RETREAT) - BOBBY', amount: 514.22, paymentMethod: 'Apple Card' },
+        { item: 'CURSOR EXTRA USAGE', amount: 9.81, paymentMethod: 'Apple Card' },
+        { item: 'CURSOR EXTRA USAGE', amount: 20.05, paymentMethod: 'Apple Card' },
+        { item: 'CONFETTI SOCIAL(SOCIAL MEDIA CONSULT.)', amount: 375.00, paymentMethod: 'Chase' },
       ],
-      miscTotal: 514.22,
+      miscTotal: 919.08,
     },
     'nov25': {
       month: 'November',
@@ -1683,12 +1906,16 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
         { item: 'Claude AI', amount: 20.00 },
         { item: 'SwitchYards', amount: 100.00 },
         { item: 'Google One', amount: 20.00 },
+        { item: 'GymPass', amount: 289.00 },
         { item: 'ElevenLabs', amount: 5.00 },
+        { item: 'FITNESS YOUR WAY', amount: 29.99 },
       ],
-      monthlyTotal: 626.80,
+      monthlyTotal: 945.79,
       monthlyIncome: 134.00,
-      miscExpenses: [],
-      miscTotal: 0.00,
+      miscExpenses: [
+        { item: 'FOUNDER UNIVERSITY APPLICATION', amount: 99.00, paymentMethod: 'Apple Card' },
+      ],
+      miscTotal: 99.00,
     },
   };
 
@@ -5372,14 +5599,23 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                                             High-level P&amp;L for {activePLYear} subscription revenue. All amounts in USD.
                                         </p>
                                     </div>
-                                    <button
-                                        type="button"
-                                        onClick={generatePLPdf}
-                                        className="inline-flex items-center px-3 py-1.5 rounded-lg bg-[#E0FE10] text-xs font-semibold text-black hover:bg-[#d8f521] transition-colors"
-                                    >
-                                        <Download className="w-3 h-3 mr-1" />
-                                        Download PDF
-                                    </button>
+                                    <div className="flex gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsExtendedPLModalOpen(true)}
+                                            className="inline-flex items-center px-3 py-1.5 rounded-lg bg-purple-600 text-xs font-semibold text-white hover:bg-purple-700 transition-colors"
+                                        >
+                                            Extended P&L
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={generatePLPdf}
+                                            className="inline-flex items-center px-3 py-1.5 rounded-lg bg-[#E0FE10] text-xs font-semibold text-black hover:bg-[#d8f521] transition-colors"
+                                        >
+                                            <Download className="w-3 h-3 mr-1" />
+                                            Download PDF
+                                        </button>
+                                    </div>
                                 </div>
 
                                 {/* Year tabs */}
@@ -5525,6 +5761,160 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                                     <button
                                         type="button"
                                         onClick={() => setIsPLModalOpen(false)}
+                                        className="px-4 py-2 rounded-lg border border-zinc-700 text-sm text-zinc-200 hover:bg-zinc-800 transition-colors"
+                                    >
+                                        Close
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Extended P&L Modal */}
+                    {isExtendedPLModalOpen && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+                            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-5xl w-full p-6 max-h-[90vh] overflow-y-auto">
+                                <div className="flex items-center justify-between mb-6">
+                                    <div>
+                                        <h4 className="text-white text-xl font-semibold">
+                                            Extended Profit &amp; Loss (2025)
+                                        </h4>
+                                        <p className="text-zinc-400 text-xs mt-1">
+                                            Detailed monthly breakdown with all expense line items. All amounts in USD.
+                                        </p>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        <button
+                                            type="button"
+                                            onClick={generateExtendedPLPdf}
+                                            className="inline-flex items-center px-3 py-1.5 rounded-lg bg-[#E0FE10] text-xs font-semibold text-black hover:bg-[#d8f521] transition-colors"
+                                        >
+                                            <Download className="w-3 h-3 mr-1" />
+                                            Download PDF
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsExtendedPLModalOpen(false)}
+                                            className="text-zinc-400 hover:text-white transition-colors"
+                                        >
+                                            <X className="w-5 h-5" />
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Summary Cards */}
+                                <div className="grid grid-cols-3 gap-4 mb-6">
+                                    <div className="bg-zinc-800/50 rounded-xl p-4 border border-zinc-700">
+                                        <p className="text-zinc-400 text-xs mb-1">Total Revenue (Jan-Nov)</p>
+                                        <p className="text-[#E0FE10] text-xl font-bold">
+                                            {formatCurrency(Object.values(expenseReportData).reduce((sum, m) => sum + m.monthlyIncome, 0))}
+                                        </p>
+                                    </div>
+                                    <div className="bg-zinc-800/50 rounded-xl p-4 border border-zinc-700">
+                                        <p className="text-zinc-400 text-xs mb-1">Total Expenses</p>
+                                        <p className="text-zinc-100 text-xl font-bold">
+                                            {formatCurrency(Object.values(expenseReportData).reduce((sum, m) => sum + m.monthlyTotal + m.miscTotal, 0))}
+                                        </p>
+                                    </div>
+                                    <div className="bg-zinc-800/50 rounded-xl p-4 border border-zinc-700">
+                                        <p className="text-zinc-400 text-xs mb-1">Net Income</p>
+                                        <p className={`text-xl font-bold ${
+                                            Object.values(expenseReportData).reduce((sum, m) => sum + m.monthlyIncome, 0) -
+                                            Object.values(expenseReportData).reduce((sum, m) => sum + m.monthlyTotal + m.miscTotal, 0) >= 0
+                                                ? 'text-emerald-400'
+                                                : 'text-red-400'
+                                        }`}>
+                                            {formatCurrency(
+                                                Object.values(expenseReportData).reduce((sum, m) => sum + m.monthlyIncome, 0) -
+                                                Object.values(expenseReportData).reduce((sum, m) => sum + m.monthlyTotal + m.miscTotal, 0)
+                                            )}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Monthly Details */}
+                                <div className="space-y-4">
+                                    {Object.entries(expenseReportData).map(([key, data]) => {
+                                        const totalExpenses = data.monthlyTotal + data.miscTotal;
+                                        const netIncome = data.monthlyIncome - totalExpenses;
+                                        return (
+                                            <details key={key} className="group bg-zinc-800/30 rounded-xl border border-zinc-700/50">
+                                                <summary className="flex items-center justify-between p-4 cursor-pointer list-none">
+                                                    <div className="flex items-center gap-4">
+                                                        <span className="text-white font-medium">{data.month} {data.year}</span>
+                                                        <span className="text-zinc-400 text-sm">
+                                                            {data.monthlyExpenses.length} recurring + {data.miscExpenses.length} non-recurring items
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex items-center gap-6">
+                                                        <div className="text-right">
+                                                            <p className="text-xs text-zinc-400">Revenue</p>
+                                                            <p className="text-[#E0FE10] font-medium">{formatCurrency(data.monthlyIncome)}</p>
+                                                        </div>
+                                                        <div className="text-right">
+                                                            <p className="text-xs text-zinc-400">Expenses</p>
+                                                            <p className="text-zinc-100 font-medium">{formatCurrency(totalExpenses)}</p>
+                                                        </div>
+                                                        <div className="text-right">
+                                                            <p className="text-xs text-zinc-400">Net</p>
+                                                            <p className={`font-medium ${netIncome >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                                                {formatCurrency(netIncome)}
+                                                            </p>
+                                                        </div>
+                                                        <ChevronDown className="w-4 h-4 text-zinc-400 group-open:rotate-180 transition-transform" />
+                                                    </div>
+                                                </summary>
+                                                <div className="px-4 pb-4 grid md:grid-cols-2 gap-4">
+                                                    {/* Recurring Expenses */}
+                                                    <div>
+                                                        <h5 className="text-xs font-semibold text-purple-400 uppercase tracking-wider mb-2">
+                                                            Recurring Expenses ({formatCurrency(data.monthlyTotal)})
+                                                        </h5>
+                                                        <div className="bg-zinc-900/50 rounded-lg overflow-hidden">
+                                                            <table className="w-full text-xs">
+                                                                <tbody>
+                                                                    {data.monthlyExpenses.map((exp, idx) => (
+                                                                        <tr key={idx} className="border-b border-zinc-800/50 last:border-0">
+                                                                            <td className="py-1.5 px-3 text-zinc-300">{exp.item}</td>
+                                                                            <td className="py-1.5 px-3 text-right text-zinc-100">{formatCurrency(exp.amount)}</td>
+                                                                        </tr>
+                                                                    ))}
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
+                                                    </div>
+                                                    {/* Non-Recurring Expenses */}
+                                                    <div>
+                                                        <h5 className="text-xs font-semibold text-blue-400 uppercase tracking-wider mb-2">
+                                                            Non-Recurring Expenses ({formatCurrency(data.miscTotal)})
+                                                        </h5>
+                                                        <div className="bg-zinc-900/50 rounded-lg overflow-hidden">
+                                                            {data.miscExpenses.length > 0 ? (
+                                                                <table className="w-full text-xs">
+                                                                    <tbody>
+                                                                        {data.miscExpenses.map((exp, idx) => (
+                                                                            <tr key={idx} className="border-b border-zinc-800/50 last:border-0">
+                                                                                <td className="py-1.5 px-3 text-zinc-300">{exp.item}</td>
+                                                                                <td className="py-1.5 px-3 text-right text-zinc-100">{formatCurrency(exp.amount)}</td>
+                                                                            </tr>
+                                                                        ))}
+                                                                    </tbody>
+                                                                </table>
+                                                            ) : (
+                                                                <p className="py-3 px-3 text-zinc-500 text-center italic">No non-recurring expenses</p>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </details>
+                                        );
+                                    })}
+                                </div>
+
+                                <div className="flex justify-end mt-6">
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsExtendedPLModalOpen(false)}
                                         className="px-4 py-2 rounded-lg border border-zinc-700 text-sm text-zinc-200 hover:bg-zinc-800 transition-colors"
                                     >
                                         Close
