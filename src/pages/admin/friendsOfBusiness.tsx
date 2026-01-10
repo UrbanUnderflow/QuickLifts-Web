@@ -3,7 +3,7 @@ import Head from 'next/head';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import { collection, addDoc, getDocs, orderBy, query, updateDoc, doc, deleteDoc } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
-import { Check, User, Mail, Loader2, X } from 'lucide-react';
+import { Check, User, Mail, Loader2, X, Sparkles, Link } from 'lucide-react';
 import { convertFirestoreTimestamp, formatDate } from '../../utils/formatDate';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../../redux/store';
@@ -35,6 +35,44 @@ const emptyFriend: FriendOfBusiness = {
   notes: ''
 };
 
+// Review periods for investor update generator
+const reviewPeriods = [
+  {
+    id: 'year2025',
+    label: 'Year 2025 Review',
+    url: 'fitwithpulse.ai/review/year2025',
+    month: 'December',
+    highlights: [
+      'Founder University graduate',
+      'LAUNCH investment',
+      '2K users',
+      'AI Round Builder shipped'
+    ]
+  },
+  {
+    id: 'q4-25',
+    label: 'Q4 2025',
+    url: 'fitwithpulse.ai/review/q4-25',
+    month: 'December',
+    highlights: [
+      'Graduated Founder University',
+      'Incorporated as Delaware C-Corp',
+      'AI Round Builder & Templates shipped'
+    ]
+  },
+  {
+    id: 'q3-25',
+    label: 'Q3 2025',
+    url: 'fitwithpulse.ai/review/q3-25',
+    month: 'September',
+    highlights: [
+      'Product development milestone',
+      'User growth',
+      'Platform improvements'
+    ]
+  }
+];
+
 const FriendsOfBusinessPage: React.FC = () => {
   const [form, setForm] = useState<FriendOfBusiness>(emptyFriend);
   const [saving, setSaving] = useState(false);
@@ -63,6 +101,13 @@ const FriendsOfBusinessPage: React.FC = () => {
   const [emailTemplateBody, setEmailTemplateBody] = useState('');
   const [templateSaving, setTemplateSaving] = useState(false);
   const [templateLoading, setTemplateLoading] = useState(true);
+
+  // Investor update generator state
+  const [selectedReviewPeriod, setSelectedReviewPeriod] = useState<string>('');
+  const [generatingUpdate, setGeneratingUpdate] = useState(false);
+
+  // Refs for text selection
+  const templateBodyRef = React.useRef<HTMLTextAreaElement>(null);
 
   const dispatch = useDispatch();
   const [initialEmailDraft, setInitialEmailDraft] = useState<{ subject: string; body: string } | null>(null);
@@ -390,6 +435,73 @@ const FriendsOfBusinessPage: React.FC = () => {
     }
   };
 
+  const generateInvestorUpdate = () => {
+    const period = reviewPeriods.find(p => p.id === selectedReviewPeriod);
+    if (!period) return;
+
+    const subject = `Pulse ${period.month} Update – ${period.label}`;
+    const body = `Hi {{firstName}},
+
+Our ${period.label.toLowerCase()} is live with Q4 metrics, product launches, and 2026 roadmap.
+
+View here: https://${period.url}
+
+Highlights: ${period.highlights.join(', ')}.
+
+Best,
+Tremaine`;
+
+    setEmailTemplateSubject(subject);
+    setEmailTemplateBody(body);
+    setGeneratingUpdate(true);
+    
+    // Show feedback
+    dispatch(showToast({ 
+      message: `Generated investor update for ${period.label}`, 
+      type: 'success' 
+    }));
+    
+    setTimeout(() => setGeneratingUpdate(false), 2000);
+  };
+
+  const makeHyperlink = () => {
+    const textarea = templateBodyRef.current;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selectedText = emailTemplateBody.substring(start, end);
+
+    if (!selectedText) {
+      alert('Please select text first');
+      return;
+    }
+
+    const url = prompt('Enter URL (e.g., https://fitwithpulse.ai/review/year2025):');
+    if (!url) return;
+
+    // Create HTML anchor tag - text will be rendered as link in the preview
+    const htmlLink = `<a href="${url}">${selectedText}</a>`;
+    
+    // Replace selected text with link
+    const newBody = emailTemplateBody.substring(0, start) + htmlLink + emailTemplateBody.substring(end);
+    setEmailTemplateBody(newBody);
+
+    // Show feedback
+    dispatch(showToast({ 
+      message: 'Hyperlink created', 
+      type: 'success' 
+    }));
+  };
+
+  // Render HTML content with proper link styling
+  const renderEmailContent = (content: string) => {
+    return content.replace(
+      /<a href="([^"]*)"[^>]*>([^<]*)<\/a>/g,
+      '<a href="$1" style="color: #3B82F6; text-decoration: underline;">$2</a>'
+    );
+  };
+
   return (
     <AdminRouteGuard>
       <Head>
@@ -400,6 +512,75 @@ const FriendsOfBusinessPage: React.FC = () => {
           <div className="mb-8">
             <h1 className="text-3xl font-bold">Friends of the Business</h1>
             <p className="text-zinc-400">Manage friends and send personalized emails.</p>
+          </div>
+
+          {/* Investor Update Generator */}
+          <div className="bg-gradient-to-br from-purple-900/20 to-blue-900/20 border border-purple-500/30 rounded-xl p-6 mb-10">
+            <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-purple-400" /> Investor Update Generator
+            </h2>
+            <p className="text-sm text-zinc-300 mb-4">
+              Automatically generate concise investor update emails from your monthly review pages.
+            </p>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs text-zinc-400 mb-2 block">Select Review Period</label>
+                <select
+                  className="w-full md:w-96 bg-zinc-800 rounded-lg px-3 py-2 border border-zinc-700"
+                  value={selectedReviewPeriod}
+                  onChange={e => setSelectedReviewPeriod(e.target.value)}
+                >
+                  <option value="">Choose a review period...</option>
+                  {reviewPeriods.map(period => (
+                    <option key={period.id} value={period.id}>
+                      {period.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              
+              {selectedReviewPeriod && (
+                <div className="bg-zinc-900/50 rounded-lg p-4 border border-zinc-800">
+                  <h4 className="text-sm font-semibold text-white mb-2">Preview</h4>
+                  {(() => {
+                    const period = reviewPeriods.find(p => p.id === selectedReviewPeriod);
+                    if (!period) return null;
+                    return (
+                      <div className="text-sm text-zinc-300 space-y-2">
+                        <p><strong>Subject:</strong> Pulse {period.month} Update – {period.label}</p>
+                        <p className="text-xs text-zinc-400 mt-2">
+                          <strong>Body:</strong><br/>
+                          Our {period.label.toLowerCase()} is live with Q4 metrics, product launches, and 2026 roadmap.<br/>
+                          View here: {period.url}<br/>
+                          Highlights: {period.highlights.join(', ')}.
+                        </p>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+              
+              <div className="flex justify-end">
+                <button
+                  onClick={generateInvestorUpdate}
+                  disabled={!selectedReviewPeriod || generatingUpdate}
+                  className="inline-flex items-center gap-2 bg-purple-600 text-white font-semibold px-5 py-2 rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {generatingUpdate ? (
+                    <>
+                      <Check className="w-4 h-4" />
+                      Generated!
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4" />
+                      Generate Email Template
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
 
           {/* Email Template Section */}
@@ -425,13 +606,38 @@ const FriendsOfBusinessPage: React.FC = () => {
                     />
                   </div>
                   <div>
-                    <label className="text-xs text-zinc-400 mb-1 block">Body Template</label>
-                    <textarea
-                      className="w-full bg-zinc-800 rounded-lg px-3 py-3 h-48 resize-y"
-                      placeholder="Hi {{firstName}},&#10;&#10;This is a template email...&#10;&#10;Best,&#10;Tremaine"
-                      value={emailTemplateBody}
-                      onChange={e => setEmailTemplateBody(e.target.value)}
-                    />
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs text-zinc-400 block">Body Template</label>
+                      <button
+                        onClick={makeHyperlink}
+                        className="inline-flex items-center gap-1.5 text-xs bg-blue-600/20 border border-blue-500/40 text-blue-300 hover:bg-blue-600/30 px-2.5 py-1 rounded transition-colors"
+                      >
+                        <Link className="w-3.5 h-3.5" />
+                        Make Hyperlink
+                      </button>
+                    </div>
+                    <div className="relative">
+                      <textarea
+                        ref={templateBodyRef}
+                        className="w-full bg-zinc-800 rounded-lg px-3 py-3 h-48 resize-y font-mono text-sm"
+                        placeholder="Hi {{firstName}},&#10;&#10;This is a template email...&#10;&#10;Best,&#10;Tremaine"
+                        value={emailTemplateBody}
+                        onChange={e => setEmailTemplateBody(e.target.value)}
+                      />
+                    </div>
+                    {emailTemplateBody && emailTemplateBody.includes('<a href=') && (
+                      <div className="mt-3 p-3 bg-zinc-800/50 rounded-lg border border-zinc-700">
+                        <p className="text-xs text-zinc-400 mb-2 font-semibold">Preview:</p>
+                        <div 
+                          className="text-sm text-white whitespace-pre-wrap"
+                          style={{ lineHeight: '1.6' }}
+                          dangerouslySetInnerHTML={{ __html: renderEmailContent(emailTemplateBody) }}
+                        />
+                      </div>
+                    )}
+                    <p className="text-xs text-zinc-500 mt-2">
+                      Tip: Select text, then click "Make Hyperlink" to add a clickable link
+                    </p>
                   </div>
                 </div>
                 <div className="mt-4 flex justify-end">
