@@ -341,14 +341,26 @@ const LegalDocumentsAdmin: React.FC = () => {
 
       // Update document with revised content and/or new title
       const revisionHistory = editingDocument.revisionHistory || [];
-      const updateData: Record<string, unknown> = {
+      const updateData: {
+        title: string;
+        updatedAt: Timestamp;
+        content?: string;
+        revisionHistory?: Array<{ prompt: string; timestamp: Timestamp }>;
+      } = {
         title: editTitle.trim(),
         updatedAt: Timestamp.now(),
       };
       
       if (hasRevisionPrompt) {
         updateData.content = newContent;
-        updateData.revisionHistory = [...revisionHistory, { prompt: editPrompt, timestamp: Timestamp.now() }];
+        // Convert existing revision history timestamps to Timestamp if needed
+        const convertedHistory = revisionHistory.map(rev => ({
+          prompt: rev.prompt,
+          timestamp: rev.timestamp instanceof Timestamp 
+            ? rev.timestamp 
+            : Timestamp.fromDate(rev.timestamp instanceof Date ? rev.timestamp : new Date(rev.timestamp))
+        }));
+        updateData.revisionHistory = [...convertedHistory, { prompt: editPrompt, timestamp: Timestamp.now() }];
       }
 
       await updateDoc(doc(db, 'legal-documents', editingDocument.id), updateData);
