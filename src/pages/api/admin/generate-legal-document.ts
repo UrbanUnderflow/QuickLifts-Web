@@ -1,0 +1,272 @@
+import type { NextApiRequest, NextApiResponse } from 'next';
+
+// Document type templates and system prompts
+const DOCUMENT_TEMPLATES: Record<string, { systemPrompt: string; defaultTitle: string }> = {
+  'nda': {
+    systemPrompt: `You are a legal document drafting assistant specializing in Non-Disclosure Agreements. 
+Generate a comprehensive, professional NDA that includes:
+- Clear definitions of Confidential Information
+- Obligations of the receiving party
+- Exclusions from confidential information
+- Term and termination clauses
+- Return of materials clause
+- Remedies and enforcement provisions
+- Governing law clause
+Use clear, professional legal language appropriate for business contracts.`,
+    defaultTitle: 'Non-Disclosure Agreement'
+  },
+  'terms': {
+    systemPrompt: `You are a legal document drafting assistant specializing in Terms of Service agreements.
+Generate comprehensive Terms of Service that include:
+- Acceptance of terms
+- User account responsibilities
+- Prohibited activities
+- Intellectual property rights
+- Disclaimers and limitation of liability
+- Indemnification
+- Termination provisions
+- Governing law and dispute resolution
+Use clear language that is both legally sound and understandable.`,
+    defaultTitle: 'Terms of Service'
+  },
+  'privacy': {
+    systemPrompt: `You are a legal document drafting assistant specializing in Privacy Policies.
+Generate a comprehensive Privacy Policy that includes:
+- Information collection (personal data, usage data, cookies)
+- How information is used
+- Information sharing and disclosure
+- Data security measures
+- User rights (access, correction, deletion)
+- Children's privacy
+- International data transfers
+- Policy updates
+- Contact information
+Ensure compliance with GDPR, CCPA, and other major privacy regulations.`,
+    defaultTitle: 'Privacy Policy'
+  },
+  'contractor': {
+    systemPrompt: `You are a legal document drafting assistant specializing in Independent Contractor Agreements.
+Generate a comprehensive contractor agreement that includes:
+- Scope of services
+- Compensation and payment terms
+- Independent contractor status
+- Confidentiality obligations
+- Intellectual property assignment
+- Term and termination
+- Insurance requirements
+- Indemnification
+- Non-solicitation (if applicable)
+Use clear, professional legal language.`,
+    defaultTitle: 'Independent Contractor Agreement'
+  },
+  'employment': {
+    systemPrompt: `You are a legal document drafting assistant specializing in Employment Agreements.
+Generate a comprehensive employment agreement that includes:
+- Position and duties
+- Compensation and benefits
+- At-will employment status (or specified term)
+- Confidentiality obligations
+- Non-compete and non-solicitation (where enforceable)
+- Intellectual property assignment
+- Termination provisions
+- Severance (if applicable)
+Use clear, professional legal language compliant with employment law.`,
+    defaultTitle: 'Employment Agreement'
+  },
+  'ip-assignment': {
+    systemPrompt: `You are a legal document drafting assistant specializing in Intellectual Property Assignment Agreements.
+Generate a comprehensive IP assignment that includes:
+- Definition of assigned intellectual property
+- Assignment of rights (present and future)
+- Warranties of ownership
+- Further assurances clause
+- Work for hire acknowledgment
+- Compensation for assignment
+- Exclusions (if any)
+Use clear, professional legal language for technology companies.`,
+    defaultTitle: 'Intellectual Property Assignment Agreement'
+  },
+  'advisor': {
+    systemPrompt: `You are a legal document drafting assistant specializing in Advisor Agreements for startups.
+Generate a comprehensive advisor agreement that includes:
+- Advisory services description
+- Time commitment expectations
+- Equity compensation (vesting schedule)
+- Confidentiality obligations
+- IP assignment
+- No conflicts representation
+- Term and termination
+- No employee relationship disclaimer
+Use clear, professional legal language appropriate for startup advisors.`,
+    defaultTitle: 'Advisor Agreement'
+  },
+  'safe': {
+    systemPrompt: `You are a legal document drafting assistant specializing in SAFE (Simple Agreement for Future Equity) documents.
+Generate a SAFE agreement that includes:
+- Purchase amount
+- Valuation cap (if applicable)
+- Discount rate (if applicable)
+- Equity financing conversion terms
+- Liquidity event conversion
+- Dissolution provisions
+- Pro-rata rights (if applicable)
+- Most Favored Nation provision (if applicable)
+Follow Y Combinator SAFE standards where appropriate.`,
+    defaultTitle: 'Simple Agreement for Future Equity (SAFE)'
+  },
+  'partnership': {
+    systemPrompt: `You are a legal document drafting assistant specializing in Partnership Agreements.
+Generate a comprehensive partnership agreement that includes:
+- Partnership purpose and business
+- Capital contributions
+- Profit and loss allocation
+- Management and voting rights
+- Partner duties and restrictions
+- Admission of new partners
+- Withdrawal and dissolution
+- Dispute resolution
+Use clear, professional legal language.`,
+    defaultTitle: 'Partnership Agreement'
+  },
+  'license': {
+    systemPrompt: `You are a legal document drafting assistant specializing in License Agreements.
+Generate a comprehensive license agreement that includes:
+- Grant of license (scope and limitations)
+- License fees and royalties
+- Intellectual property rights
+- Restrictions on use
+- Warranties and disclaimers
+- Indemnification
+- Term and termination
+- Audit rights (if applicable)
+Use clear, professional legal language.`,
+    defaultTitle: 'License Agreement'
+  },
+  'proposal': {
+    systemPrompt: `You are a professional document drafting assistant specializing in business proposals.
+Generate a compelling, well-structured proposal document that includes:
+- Executive summary
+- Problem statement / opportunity identification
+- Proposed solution / approach
+- Scope of work and deliverables
+- Timeline and milestones
+- Pricing / investment breakdown
+- Team qualifications and relevant experience
+- Terms and conditions
+- Next steps / call to action
+Use professional business language that is persuasive yet factual.`,
+    defaultTitle: 'Business Proposal'
+  },
+  'custom': {
+    systemPrompt: `You are a legal document drafting assistant capable of creating various legal documents.
+Generate a comprehensive, professional legal document based on the user's requirements.
+Include appropriate sections, definitions, and standard legal provisions relevant to the document type.
+Use clear, professional legal language appropriate for business and legal contexts.`,
+    defaultTitle: 'Legal Document'
+  }
+};
+
+export default async function handler(
+  req: NextApiRequest,
+  res: NextApiResponse
+) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const { prompt, documentType, documentId } = req.body;
+
+  if (!prompt || !documentType) {
+    return res.status(400).json({ error: 'Missing required fields: prompt and documentType' });
+  }
+
+  const openaiApiKey = process.env.OPENAI_API_KEY;
+  
+  if (!openaiApiKey) {
+    return res.status(500).json({ error: 'OpenAI API key not configured' });
+  }
+
+  const template = DOCUMENT_TEMPLATES[documentType] || DOCUMENT_TEMPLATES['custom'];
+
+  try {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${openaiApiKey}`
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        messages: [
+          {
+            role: 'system',
+            content: `${template.systemPrompt}
+
+IMPORTANT FORMATTING INSTRUCTIONS:
+- Start with a clear document title
+- Use numbered sections (1., 2., 3., etc.) for main sections
+- Use lettered subsections (a., b., c.) where appropriate
+- Include an "EFFECTIVE DATE" placeholder at the beginning
+- Include signature blocks at the end with placeholders for:
+  - Company name and representative
+  - Counterparty name and representative
+  - Date lines
+- Use professional legal formatting throughout
+- Include a "WHEREAS" recitals section where appropriate
+- End with an "IN WITNESS WHEREOF" clause before signatures
+
+The document should be ready to print as a professional legal document.`
+          },
+          {
+            role: 'user',
+            content: `Please generate a ${template.defaultTitle} based on the following requirements and details:
+
+${prompt}
+
+Generate a complete, professionally formatted legal document.`
+          }
+        ],
+        temperature: 0.3,
+        max_tokens: 4000
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error('OpenAI API error:', errorData);
+      return res.status(500).json({ error: 'Failed to generate document from AI' });
+    }
+
+    const data = await response.json();
+    const generatedContent = data.choices[0]?.message?.content;
+
+    if (!generatedContent) {
+      return res.status(500).json({ error: 'No content generated' });
+    }
+
+    // Extract title from the generated content (first line or use default)
+    const lines = generatedContent.split('\n').filter((line: string) => line.trim());
+    let title = template.defaultTitle;
+    
+    // Try to extract title from first line if it looks like a title
+    if (lines[0] && !lines[0].includes('EFFECTIVE DATE') && !lines[0].toLowerCase().startsWith('this')) {
+      const potentialTitle = lines[0].replace(/^#+\s*/, '').replace(/\*+/g, '').trim();
+      if (potentialTitle.length < 100) {
+        title = potentialTitle;
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      content: generatedContent,
+      title: title,
+      documentId: documentId
+    });
+
+  } catch (error) {
+    console.error('Error generating legal document:', error);
+    return res.status(500).json({ 
+      error: error instanceof Error ? error.message : 'Failed to generate document' 
+    });
+  }
+}
