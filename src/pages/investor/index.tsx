@@ -425,8 +425,8 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
     const fmt = (value: number) => 
       `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-    // Calculate totals from expenseReportData
-    const totalRevenue = Object.values(expenseReportData).reduce((sum, m) => sum + m.monthlyIncome, 0);
+    // Total revenue for Extended P&L (actual 2025 income)
+    const totalRevenue = 2810.00;
     const totalExpenses = Object.values(expenseReportData).reduce((sum, m) => sum + m.monthlyTotal + m.miscTotal, 0);
     const netIncome = totalRevenue - totalExpenses;
 
@@ -5802,12 +5802,12 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                                     </div>
                                 </div>
 
-                                {/* Summary Cards */}
+                                {/* Summary Cards - Using actual 2025 income of $2,810 */}
                                 <div className="grid grid-cols-3 gap-4 mb-6">
                                     <div className="bg-zinc-800/50 rounded-xl p-4 border border-zinc-700">
                                         <p className="text-zinc-400 text-xs mb-1">Total Revenue (Jan-Nov)</p>
                                         <p className="text-[#E0FE10] text-xl font-bold">
-                                            {formatCurrency(Object.values(expenseReportData).reduce((sum, m) => sum + m.monthlyIncome, 0))}
+                                            {formatCurrency(2810.00)}
                                         </p>
                                     </div>
                                     <div className="bg-zinc-800/50 rounded-xl p-4 border border-zinc-700">
@@ -5819,14 +5819,12 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                                     <div className="bg-zinc-800/50 rounded-xl p-4 border border-zinc-700">
                                         <p className="text-zinc-400 text-xs mb-1">Net Income</p>
                                         <p className={`text-xl font-bold ${
-                                            Object.values(expenseReportData).reduce((sum, m) => sum + m.monthlyIncome, 0) -
-                                            Object.values(expenseReportData).reduce((sum, m) => sum + m.monthlyTotal + m.miscTotal, 0) >= 0
+                                            2810.00 - Object.values(expenseReportData).reduce((sum, m) => sum + m.monthlyTotal + m.miscTotal, 0) >= 0
                                                 ? 'text-emerald-400'
                                                 : 'text-red-400'
                                         }`}>
                                             {formatCurrency(
-                                                Object.values(expenseReportData).reduce((sum, m) => sum + m.monthlyIncome, 0) -
-                                                Object.values(expenseReportData).reduce((sum, m) => sum + m.monthlyTotal + m.miscTotal, 0)
+                                                2810.00 - Object.values(expenseReportData).reduce((sum, m) => sum + m.monthlyTotal + m.miscTotal, 0)
                                             )}
                                         </p>
                                     </div>

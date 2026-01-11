@@ -6,7 +6,8 @@ import { db, storage } from '../../api/firebase/config';
 import { ref as storageRef, deleteObject, getMetadata } from 'firebase/storage';
 import { getAuth, getIdToken } from 'firebase/auth';
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { Dumbbell, Video, PlayCircle, RefreshCw, AlertCircle, CheckCircle, Loader2, Eye, XCircle, ImageIcon, Check, X, Search, Filter, Trash2, Copy, Sparkles } from 'lucide-react';
+import { Dumbbell, Video, PlayCircle, RefreshCw, AlertCircle, CheckCircle, Loader2, Eye, XCircle, ImageIcon, Check, X, Search, Filter, Trash2, Copy, Sparkles, ArrowUpDown, ChevronDown } from 'lucide-react';
+import { convertFirestoreTimestamp } from '../../utils/formatDate';
 import { Exercise, ExerciseVideo } from '../../api/firebase/exercise/types'; // Assuming types are here
 
 // Define interfaces for display (can be expanded)
@@ -18,6 +19,7 @@ interface ExerciseDisplay {
   // Add other fields from your Exercise class as needed
   category?: string | { type: string; details?: any };
   primaryBodyParts?: string[];
+  createdAt?: any; // Firestore Timestamp or Date for sorting
 }
 
 interface ExerciseVideoDisplay {
@@ -80,6 +82,9 @@ const MoveManagement: React.FC = () => {
   const [videoSearchTerm, setVideoSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [bodyPartFilter, setBodyPartFilter] = useState('');
+  // Sort state
+  const [sortOption, setSortOption] = useState<'name-asc' | 'name-desc' | 'date-newest' | 'date-oldest'>('name-asc');
+  const [showSortDropdown, setShowSortDropdown] = useState(false);
   // Available options for dropdowns
   const [availableCategories, setAvailableCategories] = useState<string[]>([]);
   const [availableBodyParts, setAvailableBodyParts] = useState<string[]>([]);
@@ -145,7 +150,7 @@ const MoveManagement: React.FC = () => {
     setAvailableBodyParts(Array.from(bodyParts).sort());
   }, [exercises]);
 
-  // Filter exercises based on search term, category, and body part
+  // Filter and sort exercises based on search term, category, body part, and sort option
   useEffect(() => {
     let filtered = exercises;
 
@@ -187,8 +192,53 @@ const MoveManagement: React.FC = () => {
       });
     }
 
-    setFilteredExercises(filtered);
-  }, [exercises, exerciseSearchTerm, categoryFilter, bodyPartFilter, selectedCreators, exerciseCreatorsMap]);
+    // Helper function to get valid date timestamp (returns 0 for invalid/missing dates)
+    const getValidDateTimestamp = (createdAt: any): number => {
+      if (!createdAt || createdAt === 0 || createdAt === '0') return 0;
+      try {
+        const date = convertFirestoreTimestamp(createdAt);
+        // Check if date is valid and not suspiciously old (before 2000 = likely invalid)
+        if (date instanceof Date && !isNaN(date.getTime()) && date.getFullYear() >= 2000) {
+          return date.getTime();
+        }
+        return 0;
+      } catch {
+        return 0;
+      }
+    };
+
+    // Sort exercises based on sort option
+    const sorted = [...filtered].sort((a, b) => {
+      switch (sortOption) {
+        case 'name-asc':
+          return a.name.localeCompare(b.name);
+        case 'name-desc':
+          return b.name.localeCompare(a.name);
+        case 'date-newest': {
+          const dateA = getValidDateTimestamp(a.createdAt);
+          const dateB = getValidDateTimestamp(b.createdAt);
+          // Push exercises without valid dates to the end
+          if (dateA === 0 && dateB === 0) return 0;
+          if (dateA === 0) return 1;
+          if (dateB === 0) return -1;
+          return dateB - dateA; // Newest first
+        }
+        case 'date-oldest': {
+          const dateA = getValidDateTimestamp(a.createdAt);
+          const dateB = getValidDateTimestamp(b.createdAt);
+          // Push exercises without valid dates to the end
+          if (dateA === 0 && dateB === 0) return 0;
+          if (dateA === 0) return 1;
+          if (dateB === 0) return -1;
+          return dateA - dateB; // Oldest first
+        }
+        default:
+          return 0;
+      }
+    });
+
+    setFilteredExercises(sorted);
+  }, [exercises, exerciseSearchTerm, categoryFilter, bodyPartFilter, selectedCreators, exerciseCreatorsMap, sortOption]);
 
   // Filter reported items based on search term
   useEffect(() => {
@@ -261,6 +311,7 @@ const MoveManagement: React.FC = () => {
           name: data.name || 'Unnamed Exercise',
           category: data.category, // Keep original category structure
           primaryBodyParts: data.primaryBodyParts || [],
+          createdAt: data.createdAt, // Store createdAt for sorting
           // videoCount will be fetched on demand or pre-calculated if needed
         } as ExerciseDisplay;
       });
@@ -929,12 +980,26 @@ const MoveManagement: React.FC = () => {
     }
   };
 
-  // Format date helper (if needed for video timestamps etc.)
+  // Format date helper - uses convertFirestoreTimestamp to handle seconds vs milliseconds
   const formatDate = (dateValue: any): string => {
     if (!dateValue) return 'N/A';
+    
+    // Handle explicit 0 values (iOS defaults missing createdAt to 0.0, which results in 1970 dates)
+    if (dateValue === 0 || dateValue === '0' || dateValue === 0.0) return 'N/A';
+    
     try {
-        const date = dateValue.toDate ? dateValue.toDate() : new Date(dateValue);
+        // Use the utility function that properly handles:
+        // - Firestore Timestamp objects (with .toDate())
+        // - Unix timestamps in seconds (< 10 billion)
+        // - Unix timestamps in milliseconds
+        // - Already converted Date objects
+        const date = convertFirestoreTimestamp(dateValue);
         if (date instanceof Date && !isNaN(date.getTime())) {
+            // Check if the date is suspiciously old (before year 2000)
+            // This catches cases where iOS defaulted to 0.0 (Jan 1, 1970)
+            if (date.getFullYear() < 2000) {
+                return 'N/A';
+            }
             return date.toLocaleString();
         }
         return 'Invalid Date';
@@ -1192,7 +1257,33 @@ const MoveManagement: React.FC = () => {
                         </div>
                       </div>
                       {/* Add date if available: <p className="text-xs text-gray-500 mt-1">Date: {formatDate(video.createdAt)}</p> */} 
-                      {!video.thumbnail && <p className="text-xs text-orange-400 mt-1 italic">Thumbnail pending</p>}
+                      {!video.thumbnail && (
+                        <div className="mt-2 flex items-center gap-2">
+                          <p className="text-xs text-orange-400 italic">Thumbnail pending</p>
+                          <button
+                            onClick={() => handleGenerateGifForVideo(video.id)}
+                            disabled={!!generatingGif[video.id]}
+                            className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
+                              generatingGif[video.id]
+                                ? 'bg-gray-700/50 text-gray-400 cursor-wait'
+                                : 'bg-orange-900/40 text-orange-300 border border-orange-800 hover:bg-orange-800/60'
+                            }`}
+                            title="Generate thumbnail and GIF for this video"
+                          >
+                            {generatingGif[video.id] ? (
+                              <>
+                                <Loader2 className="h-3 w-3 inline mr-1 animate-spin" />
+                                Generating...
+                              </>
+                            ) : (
+                              <>
+                                <Sparkles className="h-3 w-3 inline mr-1" />
+                                Generate Thumbnail
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      )}
                       <div className="mt-3">
                         <button
                           onClick={() => handleSetMoveOfTheDayForVideo(video.exerciseId, video.id)}
@@ -1465,6 +1556,57 @@ const MoveManagement: React.FC = () => {
                     )}
                   </div>
                 </div>
+                {/* Sort Dropdown */}
+                <div className="mt-4 pt-4 border-t border-gray-600">
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2">
+                      <ArrowUpDown className="h-4 w-4 text-[#d7ff00]" />
+                      <span className="text-sm font-medium text-gray-300">Sort by:</span>
+                    </div>
+                    <div className="relative">
+                      <button
+                        onClick={() => setShowSortDropdown(!showSortDropdown)}
+                        className="flex items-center gap-2 px-4 py-2 bg-[#1a1e24] border border-gray-600 rounded-lg text-white hover:border-[#d7ff00] transition-colors focus:outline-none focus:ring-2 focus:ring-[#d7ff00] focus:border-transparent"
+                      >
+                        <span>
+                          {sortOption === 'name-asc' && 'Name (A-Z)'}
+                          {sortOption === 'name-desc' && 'Name (Z-A)'}
+                          {sortOption === 'date-newest' && 'Date (Newest)'}
+                          {sortOption === 'date-oldest' && 'Date (Oldest)'}
+                        </span>
+                        <ChevronDown className={`h-4 w-4 transition-transform ${showSortDropdown ? 'rotate-180' : ''}`} />
+                      </button>
+                      {showSortDropdown && (
+                        <div className="absolute z-20 mt-1 w-48 bg-[#1a1e24] border border-gray-700 rounded-lg overflow-hidden shadow-lg">
+                          <button
+                            onClick={() => { setSortOption('name-asc'); setShowSortDropdown(false); }}
+                            className={`w-full text-left px-4 py-2 text-sm hover:bg-[#262a30] transition-colors ${sortOption === 'name-asc' ? 'text-[#d7ff00] bg-[#262a30]' : 'text-gray-200'}`}
+                          >
+                            Name (A-Z)
+                          </button>
+                          <button
+                            onClick={() => { setSortOption('name-desc'); setShowSortDropdown(false); }}
+                            className={`w-full text-left px-4 py-2 text-sm hover:bg-[#262a30] transition-colors ${sortOption === 'name-desc' ? 'text-[#d7ff00] bg-[#262a30]' : 'text-gray-200'}`}
+                          >
+                            Name (Z-A)
+                          </button>
+                          <button
+                            onClick={() => { setSortOption('date-newest'); setShowSortDropdown(false); }}
+                            className={`w-full text-left px-4 py-2 text-sm hover:bg-[#262a30] transition-colors ${sortOption === 'date-newest' ? 'text-[#d7ff00] bg-[#262a30]' : 'text-gray-200'}`}
+                          >
+                            Date (Newest)
+                          </button>
+                          <button
+                            onClick={() => { setSortOption('date-oldest'); setShowSortDropdown(false); }}
+                            className={`w-full text-left px-4 py-2 text-sm hover:bg-[#262a30] transition-colors ${sortOption === 'date-oldest' ? 'text-[#d7ff00] bg-[#262a30]' : 'text-gray-200'}`}
+                          >
+                            Date (Oldest)
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
                 {(exerciseSearchTerm || categoryFilter || bodyPartFilter || selectedCreators.length > 0) && (
                   <div className="flex items-center justify-between pt-2 border-t border-gray-600">
                     <p className="text-sm text-gray-400">
@@ -1671,6 +1813,7 @@ const MoveManagement: React.FC = () => {
                       <th className="py-3 px-5 text-left text-xs text-gray-400 font-semibold uppercase tracking-wider">Name</th>
                       <th className="py-3 px-5 text-left text-xs text-gray-400 font-semibold uppercase tracking-wider">Category</th>
                       <th className="py-3 px-5 text-left text-xs text-gray-400 font-semibold uppercase tracking-wider">Primary Body Parts</th>
+                      <th className="py-3 px-5 text-left text-xs text-gray-400 font-semibold uppercase tracking-wider">Created At</th>
                       <th className="py-3 px-5 text-center text-xs text-gray-400 font-semibold uppercase tracking-wider">Videos</th>
                       <th className="py-3 px-5 text-left text-xs text-gray-400 font-semibold uppercase tracking-wider">Exercise ID</th>
                     </tr>
@@ -1688,6 +1831,9 @@ const MoveManagement: React.FC = () => {
                           {exercise.primaryBodyParts && exercise.primaryBodyParts.length > 0 
                             ? exercise.primaryBodyParts.join(', ')
                             : 'N/A'}
+                        </td>
+                        <td className="py-4 px-5 text-sm text-gray-400">
+                          {exercise.createdAt ? formatDate(exercise.createdAt) : 'N/A'}
                         </td>
                         <td className="py-4 px-5 text-center">
                           <div className="flex items-center justify-center gap-2">

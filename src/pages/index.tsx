@@ -121,16 +121,22 @@ const MarketingContent: React.FC<{
                 How it works
               </a>
               <a 
-                href="/creators" 
+                href="/moves" 
                 className="text-zinc-400 hover:text-white transition-colors text-sm font-medium"
               >
-                For Creators
+                Moves
               </a>
               <a 
                 href="/rounds" 
                 className="text-zinc-400 hover:text-white transition-colors text-sm font-medium"
               >
                 Rounds
+              </a>
+              <a 
+                href="/creators" 
+                className="text-zinc-400 hover:text-white transition-colors text-sm font-medium"
+              >
+                Creators
               </a>
               <a 
                 href="/subscribe" 
