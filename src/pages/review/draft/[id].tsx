@@ -448,7 +448,7 @@ const DraftReviewPage: React.FC = () => {
           <AlertCircle size={48} className="mx-auto text-gray-400 mb-4" />
           <p className="text-gray-600 mb-4">This draft is only available to admins.</p>
           <Link href="/review" className="text-blue-600 hover:underline">
-            ← Back to Reviews
+            ← Back to Investor Updates
           </Link>
         </div>
       </div>
@@ -470,7 +470,7 @@ const DraftReviewPage: React.FC = () => {
           <AlertCircle size={48} className="mx-auto text-red-400 mb-4" />
           <p className="text-gray-600 mb-4">{error || 'Draft not found'}</p>
           <Link href="/review" className="text-blue-600 hover:underline">
-            ← Back to Reviews
+            ← Back to Investor Updates
           </Link>
         </div>
       </div>
@@ -563,7 +563,7 @@ const DraftReviewPage: React.FC = () => {
           <div className="max-w-4xl mx-auto px-6 py-4">
             <Link href="/review" className="inline-flex items-center text-sm text-gray-600 hover:text-black transition-colors">
               <ArrowLeft size={16} className="mr-2" />
-              All Reviews
+              All Investor Updates
             </Link>
           </div>
         </div>

@@ -107,7 +107,7 @@ const ReviewsIndex: React.FC<ReviewsIndexProps> = ({ reviews: staticReviews }) =
   return (
     <>
       <Head>
-        <title>Reviews | Pulse</title>
+        <title>Investor Updates | Pulse</title>
         <meta name="description" content="A chronological journey through Pulse's progress, achievements, and learnings as we build the future of social fitness." />
       </Head>
       
@@ -123,7 +123,7 @@ const ReviewsIndex: React.FC<ReviewsIndexProps> = ({ reviews: staticReviews }) =
         <div className="relative border-b border-gray-200/60 backdrop-blur-sm bg-white/70">
           <div className="max-w-4xl mx-auto px-6 py-16">
             <p className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-4">
-              Reviews
+              Investor Updates
             </p>
             <h1 className="text-4xl font-bold text-gray-900 mb-6">
               Progress & Achievements
@@ -217,7 +217,7 @@ const ReviewsIndex: React.FC<ReviewsIndexProps> = ({ reviews: staticReviews }) =
             </div>
           )}
 
-          {/* Other Reviews */}
+          {/* Other Investor Updates */}
           <div>
             <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-6">
               Previous Updates

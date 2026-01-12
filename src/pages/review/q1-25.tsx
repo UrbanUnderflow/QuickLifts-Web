@@ -82,7 +82,7 @@ const Q1Review2025 = () => {
           <div className="max-w-4xl mx-auto px-6 py-4">
             <Link href="/review" className="inline-flex items-center text-sm text-gray-600 hover:text-black transition-colors">
               <ArrowLeft size={16} className="mr-2" />
-              All Reviews
+              All Investor Updates
             </Link>
           </div>
         </div>
