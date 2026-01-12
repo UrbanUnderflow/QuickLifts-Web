@@ -3,7 +3,7 @@ import Head from 'next/head';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import { collection, getDocs, query, orderBy, addDoc, deleteDoc, doc, Timestamp, updateDoc, where, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
-import { FileText, Download, Trash2, Loader2, Sparkles, Clock, AlertCircle, CheckCircle, RefreshCw, Eye, ChevronUp, Edit3, ClipboardCheck, X, AlertTriangle, CheckCircle2, Send, Mail, Check, PenTool, Share2, Copy } from 'lucide-react';
+import { FileText, Download, Trash2, Loader2, Sparkles, Clock, AlertCircle, CheckCircle, RefreshCw, Eye, ChevronUp, Edit3, ClipboardCheck, X, AlertTriangle, CheckCircle2, Send, Mail, Check, PenTool, Share2, Copy, Paperclip, Link2 } from 'lucide-react';
 
 // Types
 interface LegalDocument {
@@ -19,7 +19,10 @@ interface LegalDocument {
   revisionHistory?: { prompt: string; timestamp: Timestamp | Date }[];
   // Signing-related fields
   signingRequestId?: string;
+  signingRequestIds?: string[];
   requiresSignature?: boolean;
+  // Exhibits - other documents attached as exhibits
+  exhibits?: string[];
 }
 
 interface SigningRequest {
@@ -35,6 +38,10 @@ interface SigningRequest {
   signedAt?: Timestamp;
   legalDocumentId?: string; // Link back to the legal document
   documentContent?: string; // Store the document content for signing
+  signerRole?: string;
+  stakeholderId?: string;
+  signingGroupId?: string;
+  signingOrder?: number;
   signatureData?: {
     typedName: string;
     signatureFont: string;
@@ -43,6 +50,15 @@ interface SigningRequest {
     timestamp: Timestamp;
   };
 }
+
+type SignerRow = {
+  id: string;
+  role: string;
+  stakeholderId?: string;
+  name: string;
+  email: string;
+  signingRequestId?: string;
+};
 
 interface AuditResult {
   overallStatus: 'ready' | 'needs-work' | 'critical-issues';
@@ -70,6 +86,7 @@ const DOCUMENT_TYPES = [
   { id: 'partnership', label: 'Partnership Agreement', icon: '🤝' },
   { id: 'license', label: 'License Agreement', icon: '📄' },
   { id: 'proposal', label: 'Proposal Document', icon: '📋' },
+  { id: 'system-design', label: 'System Design', icon: '🏗️' },
   { id: 'custom', label: 'Custom Document', icon: '✏️' },
 ];
 
@@ -138,6 +155,7 @@ const LegalDocumentsAdmin: React.FC = () => {
   const [generating, setGenerating] = useState(false);
   const [prompt, setPrompt] = useState('');
   const [selectedType, setSelectedType] = useState('nda');
+  const [requiresSignatureChecked, setRequiresSignatureChecked] = useState<boolean>(SIGNATURE_REQUIRED_TYPES.includes('nda'));
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
   const [expandedDoc, setExpandedDoc] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -147,7 +165,9 @@ const LegalDocumentsAdmin: React.FC = () => {
   const [editingDocument, setEditingDocument] = useState<LegalDocument | null>(null);
   const [editPrompt, setEditPrompt] = useState('');
   const [editTitle, setEditTitle] = useState('');
+  const [editRequiresSignature, setEditRequiresSignature] = useState<boolean>(false);
   const [isRevising, setIsRevising] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
 
   // Audit Modal State
   const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
@@ -158,11 +178,19 @@ const LegalDocumentsAdmin: React.FC = () => {
   // Signing Modal State
   const [isSigningModalOpen, setIsSigningModalOpen] = useState(false);
   const [signingDocument, setSigningDocument] = useState<LegalDocument | null>(null);
-  const [recipientName, setRecipientName] = useState('');
-  const [recipientEmail, setRecipientEmail] = useState('');
+  const [signers, setSigners] = useState<SignerRow[]>([]);
   const [isSending, setIsSending] = useState(false);
   const [signingRequests, setSigningRequests] = useState<SigningRequest[]>([]);
   const [copiedLinkId, setCopiedLinkId] = useState<string | null>(null);
+
+  // Stakeholders for signer prefill (equity stakeholders are a good global address book)
+  const [stakeholderDirectory, setStakeholderDirectory] = useState<{ id: string; name: string; email: string }[]>([]);
+
+  // Exhibits Modal State
+  const [isExhibitsModalOpen, setIsExhibitsModalOpen] = useState(false);
+  const [exhibitsDocument, setExhibitsDocument] = useState<LegalDocument | null>(null);
+  const [selectedExhibits, setSelectedExhibits] = useState<string[]>([]);
+  const [isSavingExhibits, setIsSavingExhibits] = useState(false);
 
   // Load documents from Firestore
   const loadDocuments = useCallback(async () => {
@@ -178,6 +206,20 @@ const LegalDocumentsAdmin: React.FC = () => {
         ...doc.data()
       })) as LegalDocument[];
       setDocuments(docs);
+
+      // Load stakeholder directory for signer prefill (best-effort)
+      try {
+        const stakeQ = query(collection(db, 'equity-stakeholders'), orderBy('createdAt', 'desc'));
+        const stakeSnap = await getDocs(stakeQ);
+        const directory = stakeSnap.docs
+          .map(d => ({ id: d.id, ...(d.data() as any) }))
+          .filter((s: any) => typeof s.email === 'string' && s.email.length > 0)
+          .map((s: any) => ({ id: s.id, name: s.name || s.email, email: s.email }))
+          .slice(0, 200);
+        setStakeholderDirectory(directory);
+      } catch {
+        // ignore
+      }
     } catch (error) {
       console.error('Error loading documents:', error);
       setMessage({ type: 'error', text: 'Failed to load documents' });
@@ -220,15 +262,46 @@ const LegalDocumentsAdmin: React.FC = () => {
     }
   }, []);
 
-  // Get signing request for a document
-  const getSigningRequestForDocument = (documentId: string): SigningRequest | undefined => {
-    return signingRequests.find(r => r.legalDocumentId === documentId);
+  // Get signing requests for a document
+  const getSigningRequestsForDocument = (documentId: string): SigningRequest[] => {
+    return signingRequests.filter(r => r.legalDocumentId === documentId);
+  };
+
+  const buildDefaultSignersForLegalDoc = (doc: LegalDocument): SignerRow[] => {
+    const existing = getSigningRequestsForDocument(doc.id);
+
+    const makeRow = (row: Omit<SignerRow, 'id'>): SignerRow => {
+      const existingReq = existing.find(r => r.recipientEmail?.toLowerCase() === row.email?.toLowerCase() && r.signerRole === row.role);
+      return {
+        id: `${row.role}-${row.email || Math.random().toString(36).slice(2)}`,
+        ...row,
+        signingRequestId: existingReq?.id,
+      };
+    };
+
+    // Start with a single signer by default (user can add more)
+    if (existing.length > 0) {
+      return existing.map((r, idx) => makeRow({
+        role: r.signerRole || `Signer ${idx + 1}`,
+        stakeholderId: r.stakeholderId,
+        name: r.recipientName,
+        email: r.recipientEmail,
+        signingRequestId: r.id,
+      } as any));
+    }
+
+    return [makeRow({ role: 'Recipient', name: '', email: '' })];
   };
 
   useEffect(() => {
     loadDocuments();
     loadSigningRequests();
   }, [loadDocuments, loadSigningRequests]);
+
+  // Default signature checkbox based on document type (user can override)
+  useEffect(() => {
+    setRequiresSignatureChecked(SIGNATURE_REQUIRED_TYPES.includes(selectedType));
+  }, [selectedType]);
 
   // Generate document using AI
   const handleGenerate = async () => {
@@ -248,6 +321,7 @@ const LegalDocumentsAdmin: React.FC = () => {
         prompt: prompt,
         content: '',
         documentType: selectedType,
+        requiresSignature: requiresSignatureChecked,
         createdAt: Timestamp.now(),
         status: 'generating'
       });
@@ -259,7 +333,8 @@ const LegalDocumentsAdmin: React.FC = () => {
         body: JSON.stringify({
           prompt,
           documentType: selectedType,
-          documentId: docRef.id
+          documentId: docRef.id,
+          requiresSignature: requiresSignatureChecked
         })
       });
 
@@ -273,6 +348,7 @@ const LegalDocumentsAdmin: React.FC = () => {
       await updateDoc(doc(db, 'legal-documents', docRef.id), {
         title: result.title || `${docType?.label || 'Legal Document'} - ${new Date().toLocaleDateString()}`,
         content: result.content,
+        requiresSignature: requiresSignatureChecked,
         status: 'completed'
       });
 
@@ -292,6 +368,8 @@ const LegalDocumentsAdmin: React.FC = () => {
     setEditingDocument(document);
     setEditPrompt('');
     setEditTitle(document.title);
+    setEditRequiresSignature(Boolean(document.requiresSignature ?? SIGNATURE_REQUIRED_TYPES.includes(document.documentType)));
+    setEditError(null);
     setIsEditModalOpen(true);
   };
 
@@ -305,13 +383,16 @@ const LegalDocumentsAdmin: React.FC = () => {
     // Allow saving if either title changed OR revision prompt provided
     const titleChanged = editTitle.trim() !== editingDocument.title;
     const hasRevisionPrompt = editPrompt.trim().length > 0;
+    const signatureChanged =
+      Boolean(editRequiresSignature) !== Boolean(editingDocument.requiresSignature ?? SIGNATURE_REQUIRED_TYPES.includes(editingDocument.documentType));
 
-    if (!titleChanged && !hasRevisionPrompt) {
-      setMessage({ type: 'error', text: 'Please enter a new title or revision instructions' });
+    if (!titleChanged && !hasRevisionPrompt && !signatureChanged) {
+      setMessage({ type: 'error', text: 'Please enter a new title, revision instructions, or change signature requirement' });
       return;
     }
 
     setIsRevising(true);
+    setEditError(null);
 
     try {
       let newContent = editingDocument.content;
@@ -326,14 +407,15 @@ const LegalDocumentsAdmin: React.FC = () => {
             currentContent: editingDocument.content,
             revisionPrompt: editPrompt,
             documentType: editingDocument.documentType,
-            originalPrompt: editingDocument.prompt
+            originalPrompt: editingDocument.prompt,
+            requiresSignature: editRequiresSignature
           })
         });
 
         const result = await response.json();
 
         if (!response.ok) {
-          throw new Error(result.error || 'Failed to revise document');
+          throw new Error(result.error || `Failed to revise document (HTTP ${response.status})`);
         }
         
         newContent = result.content;
@@ -346,10 +428,12 @@ const LegalDocumentsAdmin: React.FC = () => {
         updatedAt: Timestamp;
         content?: string;
         revisionHistory?: Array<{ prompt: string; timestamp: Timestamp }>;
+        requiresSignature?: boolean;
       } = {
         title: editTitle.trim(),
         updatedAt: Timestamp.now(),
       };
+      updateData.requiresSignature = Boolean(editRequiresSignature);
       
       if (hasRevisionPrompt) {
         updateData.content = newContent;
@@ -365,15 +449,17 @@ const LegalDocumentsAdmin: React.FC = () => {
 
       await updateDoc(doc(db, 'legal-documents', editingDocument.id), updateData);
 
-      setMessage({ type: 'success', text: hasRevisionPrompt ? 'Document revised successfully!' : 'Title updated successfully!' });
+      setMessage({ type: 'success', text: hasRevisionPrompt ? 'Document revised successfully!' : 'Saved successfully!' });
       setIsEditModalOpen(false);
       setEditingDocument(null);
       setEditPrompt('');
       setEditTitle('');
+      setEditRequiresSignature(false);
       loadDocuments();
     } catch (error) {
       console.error('Error revising document:', error);
       setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Failed to revise document' });
+      setEditError(error instanceof Error ? error.message : 'Failed to apply changes');
     } finally {
       setIsRevising(false);
     }
@@ -434,63 +520,85 @@ const LegalDocumentsAdmin: React.FC = () => {
   // Open Signing Modal
   const openSigningModal = (document: LegalDocument) => {
     setSigningDocument(document);
-    setRecipientName('');
-    setRecipientEmail('');
+    setSigners(buildDefaultSignersForLegalDoc(document));
     setIsSigningModalOpen(true);
   };
 
   // Send document for signature
   const handleSendForSignature = async () => {
-    if (!signingDocument || !recipientEmail.trim() || !recipientName.trim()) {
-      setMessage({ type: 'error', text: 'Please enter recipient name and email' });
+    if (!signingDocument) return;
+
+    const normalized = signers.map(s => ({
+      ...s,
+      name: (s.name || '').trim(),
+      email: (s.email || '').trim().toLowerCase(),
+    }));
+
+    if (normalized.length === 0 || normalized.some(s => !s.name || !s.email)) {
+      setMessage({ type: 'error', text: 'Please fill in name and email for all signers' });
       return;
     }
 
     setIsSending(true);
 
     try {
-      // Create signing request in Firestore
-      const requestData = {
-        documentType: signingDocument.documentType,
-        documentName: signingDocument.title,
-        recipientName: recipientName.trim(),
-        recipientEmail: recipientEmail.toLowerCase().trim(),
-        status: 'pending',
-        createdAt: serverTimestamp(),
-        legalDocumentId: signingDocument.id,
-        documentContent: signingDocument.content,
-      };
+      const signingGroupId = `${signingDocument.id}-${Date.now()}`;
+      const signingRequestIds: string[] = [];
 
-      const docRef = await addDoc(collection(db, 'signingRequests'), requestData);
+      for (let i = 0; i < normalized.length; i++) {
+        const signer = normalized[i];
 
-      // Update the legal document with the signing request ID
-      await updateDoc(doc(db, 'legal-documents', signingDocument.id), {
-        signingRequestId: docRef.id,
-        requiresSignature: true,
-      });
+        let requestId = signer.signingRequestId;
+        if (!requestId) {
+          const requestData: any = {
+            documentType: signingDocument.documentType,
+            documentName: signingDocument.title,
+            recipientName: signer.name,
+            recipientEmail: signer.email,
+            status: 'pending',
+            createdAt: serverTimestamp(),
+            legalDocumentId: signingDocument.id,
+            documentContent: signingDocument.content,
+            signerRole: signer.role,
+            stakeholderId: signer.stakeholderId || null,
+            signingGroupId,
+            signingOrder: i + 1,
+          };
 
-      // Send email via Netlify function
-      const response = await fetch('/.netlify/functions/send-signing-request', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          documentId: docRef.id,
-          documentName: signingDocument.title,
-          documentType: signingDocument.documentType,
-          recipientName: recipientName.trim(),
-          recipientEmail: recipientEmail.toLowerCase().trim(),
-        }),
-      });
+          const docRef = await addDoc(collection(db, 'signingRequests'), requestData);
+          requestId = docRef.id;
+        }
 
-      if (!response.ok) {
-        throw new Error('Failed to send email');
+        signingRequestIds.push(requestId);
+
+        const response = await fetch('/.netlify/functions/send-signing-request', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            documentId: requestId,
+            documentName: signingDocument.title,
+            documentType: signingDocument.documentType,
+            recipientName: signer.name,
+            recipientEmail: signer.email,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to send email to ${signer.email}`);
+        }
       }
 
-      setMessage({ type: 'success', text: 'Document sent for signature!' });
+      // Update the legal document with signing request IDs
+      await updateDoc(doc(db, 'legal-documents', signingDocument.id), {
+        signingRequestId: signingRequestIds[0],
+        signingRequestIds,
+        updatedAt: Timestamp.now(),
+      });
+
+      setMessage({ type: 'success', text: `Document sent to ${signingRequestIds.length} signer(s)!` });
       setIsSigningModalOpen(false);
       setSigningDocument(null);
-      setRecipientName('');
-      setRecipientEmail('');
+      setSigners([]);
       loadDocuments();
       loadSigningRequests();
     } catch (error) {
@@ -520,9 +628,9 @@ const LegalDocumentsAdmin: React.FC = () => {
     );
   };
 
-  // Check if document type requires signature
-  const requiresSignature = (documentType: string): boolean => {
-    return SIGNATURE_REQUIRED_TYPES.includes(documentType);
+  // Check if a document requires signature (explicit flag preferred; fallback for legacy docs)
+  const requiresSignature = (document: LegalDocument): boolean => {
+    return Boolean(document.requiresSignature ?? SIGNATURE_REQUIRED_TYPES.includes(document.documentType));
   };
 
   // Copy shareable link to clipboard
@@ -544,9 +652,408 @@ const LegalDocumentsAdmin: React.FC = () => {
     }
   };
 
+  // Open Exhibits Modal
+  const openExhibitsModal = (document: LegalDocument) => {
+    setExhibitsDocument(document);
+    setSelectedExhibits(document.exhibits || []);
+    setIsExhibitsModalOpen(true);
+  };
+
+  // Toggle exhibit selection
+  const toggleExhibit = (exhibitId: string) => {
+    setSelectedExhibits(prev => 
+      prev.includes(exhibitId) 
+        ? prev.filter(id => id !== exhibitId)
+        : [...prev, exhibitId]
+    );
+  };
+
+  // Save exhibits to document
+  const handleSaveExhibits = async () => {
+    if (!exhibitsDocument) return;
+
+    setIsSavingExhibits(true);
+    try {
+      await updateDoc(doc(db, 'legal-documents', exhibitsDocument.id), {
+        exhibits: selectedExhibits,
+        updatedAt: Timestamp.now()
+      });
+
+      setMessage({ type: 'success', text: `${selectedExhibits.length} exhibit(s) attached successfully!` });
+      setIsExhibitsModalOpen(false);
+      setExhibitsDocument(null);
+      loadDocuments();
+    } catch (error) {
+      console.error('Error saving exhibits:', error);
+      setMessage({ type: 'error', text: 'Failed to save exhibits' });
+    } finally {
+      setIsSavingExhibits(false);
+    }
+  };
+
+  // Get exhibit documents for a document
+  const getExhibitDocuments = (documentId: string): LegalDocument[] => {
+    const document = documents.find(d => d.id === documentId);
+    if (!document?.exhibits?.length) return [];
+    return documents.filter(d => document.exhibits?.includes(d.id));
+  };
+
+  // Check if document is a project/planning type (not legal)
+  const isProjectDocument = (docType: string): boolean => {
+    return ['custom', 'proposal', 'system-design'].includes(docType);
+  };
+
+  // Improved content formatter that properly handles markdown
+  const formatContentForPdf = (content: string, isProject: boolean = false): string => {
+    // Normalize line endings
+    let result = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    
+    // Convert **bold** to <strong>
+    result = result.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    
+    // Convert *italic* to <em>
+    result = result.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+    
+    // Convert headers (must be done before other processing)
+    result = result.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
+    result = result.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+    result = result.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+    result = result.replace(/^# (.+)$/gm, '<h2>$1</h2>');
+    
+    // Convert horizontal rules
+    result = result.replace(/^---+$/gm, '<hr>');
+    
+    // Process the content line by line for better list handling
+    const lines = result.split('\n');
+    const processedLines: string[] = [];
+    let inList = false;
+    let listType: 'ul' | 'ol' | null = null;
+    
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const trimmedLine = line.trim();
+      
+      // Skip empty lines but close lists
+      if (!trimmedLine) {
+        if (inList) {
+          processedLines.push(listType === 'ol' ? '</ol>' : '</ul>');
+          inList = false;
+          listType = null;
+        }
+        processedLines.push('');
+        continue;
+      }
+      
+      // Check for bullet points (-, •, *)
+      const bulletMatch = trimmedLine.match(/^[-•*]\s+(.+)$/);
+      if (bulletMatch) {
+        if (!inList || listType !== 'ul') {
+          if (inList) processedLines.push(listType === 'ol' ? '</ol>' : '</ul>');
+          processedLines.push('<ul>');
+          inList = true;
+          listType = 'ul';
+        }
+        processedLines.push(`<li>${bulletMatch[1]}</li>`);
+        continue;
+      }
+      
+      // Check for numbered lists (1., 2., a., b., i., ii., etc.)
+      const numberedMatch = trimmedLine.match(/^([0-9]+|[a-z]|[ivxlc]+)\.\s+(.+)$/i);
+      if (numberedMatch) {
+        if (!inList || listType !== 'ol') {
+          if (inList) processedLines.push(listType === 'ol' ? '</ol>' : '</ul>');
+          processedLines.push('<ol>');
+          inList = true;
+          listType = 'ol';
+        }
+        processedLines.push(`<li>${numberedMatch[2]}</li>`);
+        continue;
+      }
+      
+      // Close list if we hit non-list content
+      if (inList) {
+        processedLines.push(listType === 'ol' ? '</ol>' : '</ul>');
+        inList = false;
+        listType = null;
+      }
+      
+      // Pass through headers and hr unchanged
+      if (trimmedLine.startsWith('<h') || trimmedLine === '<hr>') {
+        processedLines.push(trimmedLine);
+        continue;
+      }
+      
+      // Regular text becomes a paragraph
+      processedLines.push(`<p>${trimmedLine}</p>`);
+    }
+    
+    // Close any open list
+    if (inList) {
+      processedLines.push(listType === 'ol' ? '</ol>' : '</ul>');
+    }
+    
+    // Join and clean up
+    result = processedLines.join('\n');
+    
+    // Remove empty paragraphs
+    result = result.replace(/<p><\/p>/g, '');
+    
+    // Merge consecutive empty lines
+    result = result.replace(/\n{3,}/g, '\n\n');
+    
+    return result;
+  };
+
   // Generate PDF from document content
   const generatePdf = (document: LegalDocument) => {
-    const html = `
+    const includeSignature = requiresSignature(document);
+    const isProject = isProjectDocument(document.documentType);
+    const exhibitDocs = getExhibitDocuments(document.id);
+    
+    // Use different styling based on document type
+    const html = isProject 
+      ? generateProjectStylePdf(document, includeSignature, exhibitDocs)
+      : generateLegalStylePdf(document, includeSignature, exhibitDocs);
+
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(html);
+      printWindow.document.close();
+      printWindow.focus();
+      setTimeout(() => {
+        printWindow.print();
+      }, 250);
+    }
+  };
+
+  // Generate exhibits HTML for PDF
+  const generateExhibitsHtml = (exhibits: LegalDocument[]): string => {
+    if (!exhibits.length) return '';
+    
+    return exhibits.map((exhibit, index) => `
+      <div class="exhibit" style="page-break-before: always;">
+        <div class="exhibit-header" style="text-align: center; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 2px solid #333;">
+          <h2 style="font-size: 18pt; margin: 0;">EXHIBIT ${String.fromCharCode(65 + index)}</h2>
+          <p style="font-size: 12pt; color: #666; margin-top: 8px;">${exhibit.title}</p>
+        </div>
+        <div class="exhibit-content">
+          ${formatContentForPdf(exhibit.content, false)}
+        </div>
+      </div>
+    `).join('\n');
+  };
+
+  // Project/Planning style PDF (modern, readable)
+  const generateProjectStylePdf = (document: LegalDocument, includeSignature: boolean, exhibits: LegalDocument[] = []): string => {
+    const exhibitsHtml = generateExhibitsHtml(exhibits);
+    const hasExhibits = exhibits.length > 0;
+    
+    return `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>${document.title} - Pulse Intelligence Labs</title>
+          <style>
+            @page {
+              margin: 0.75in 1in;
+            }
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+              font-size: 11pt;
+              line-height: 1.7;
+              color: #1a1a1a;
+              max-width: 8.5in;
+              margin: 0 auto;
+              padding: 40px;
+            }
+            h1 {
+              font-size: 24pt;
+              font-weight: 700;
+              margin-bottom: 8px;
+              color: #111;
+              border-bottom: 3px solid #333;
+              padding-bottom: 12px;
+            }
+            h2 {
+              font-size: 16pt;
+              font-weight: 600;
+              margin-top: 28px;
+              margin-bottom: 12px;
+              color: #222;
+              border-bottom: 1px solid #ddd;
+              padding-bottom: 6px;
+            }
+            h3 {
+              font-size: 13pt;
+              font-weight: 600;
+              margin-top: 20px;
+              margin-bottom: 8px;
+              color: #333;
+            }
+            h4 {
+              font-size: 11pt;
+              font-weight: 600;
+              margin-top: 16px;
+              margin-bottom: 6px;
+              color: #444;
+            }
+            p {
+              margin-bottom: 12px;
+              text-align: left;
+            }
+            .header {
+              margin-bottom: 30px;
+              border-bottom: 1px solid #eee;
+              padding-bottom: 16px;
+            }
+            .company-name {
+              font-size: 11pt;
+              font-weight: 600;
+              color: #666;
+              text-transform: uppercase;
+              letter-spacing: 1px;
+              margin-bottom: 4px;
+            }
+            .document-date {
+              font-size: 10pt;
+              color: #888;
+            }
+            .content {
+              margin-top: 20px;
+            }
+            ul, ol {
+              margin: 12px 0;
+              padding-left: 28px;
+            }
+            ul {
+              list-style-type: disc;
+            }
+            ol {
+              list-style-type: decimal;
+            }
+            li {
+              margin-bottom: 8px;
+              line-height: 1.6;
+            }
+            li > ul, li > ol {
+              margin-top: 8px;
+              margin-bottom: 8px;
+            }
+            hr {
+              border: none;
+              border-top: 1px solid #ddd;
+              margin: 24px 0;
+            }
+            strong {
+              font-weight: 600;
+              color: #111;
+            }
+            em {
+              font-style: italic;
+            }
+            .signature-block {
+              margin-top: 60px;
+              padding-top: 20px;
+              border-top: 1px solid #ddd;
+              page-break-inside: avoid;
+            }
+            .signature-line {
+              border-bottom: 1px solid #333;
+              width: 250px;
+              margin: 40px 0 8px 0;
+            }
+            .signature-label {
+              font-size: 10pt;
+              color: #666;
+            }
+            .exhibits-reference {
+              margin-top: 40px;
+              padding: 16px;
+              background: #f5f5f5;
+              border-radius: 8px;
+            }
+            .exhibits-reference h3 {
+              margin-top: 0;
+              color: #333;
+            }
+            .exhibits-reference ul {
+              margin-bottom: 0;
+            }
+            .footer {
+              margin-top: 60px;
+              padding-top: 20px;
+              border-top: 1px solid #eee;
+              font-size: 9pt;
+              color: #888;
+              text-align: center;
+            }
+            @media print {
+              body {
+                padding: 0;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="company-name">Pulse Intelligence Labs, Inc.</div>
+            <div class="document-date">Created: ${formatDate(document.createdAt)}</div>
+          </div>
+          
+          <h1>${document.title}</h1>
+          
+          <div class="content">
+            ${formatContentForPdf(document.content, true)}
+          </div>
+        
+        ${hasExhibits ? `
+          <div class="exhibits-reference">
+            <h3>Exhibits</h3>
+            <ul>
+              ${exhibits.map((ex, i) => `<li><strong>Exhibit ${String.fromCharCode(65 + i)}:</strong> ${ex.title}</li>`).join('')}
+            </ul>
+          </div>
+        ` : ''}
+        
+        ${includeSignature ? `
+          <div class="signature-block">
+            <div style="display: flex; justify-content: space-between; flex-wrap: wrap;">
+              <div style="width: 45%;">
+                <div class="signature-line"></div>
+                <div class="signature-label">Signature</div>
+                <div class="signature-line" style="margin-top: 20px;"></div>
+                <div class="signature-label">Printed Name</div>
+                <div class="signature-line" style="margin-top: 20px;"></div>
+                <div class="signature-label">Date</div>
+              </div>
+              <div style="width: 45%;">
+                <div class="signature-line"></div>
+                <div class="signature-label">Signature</div>
+                <div class="signature-line" style="margin-top: 20px;"></div>
+                <div class="signature-label">Printed Name</div>
+                <div class="signature-line" style="margin-top: 20px;"></div>
+                <div class="signature-label">Date</div>
+              </div>
+            </div>
+          </div>
+        ` : ''}
+          
+          <div class="footer">
+            <p>© ${new Date().getFullYear()} Pulse Intelligence Labs, Inc. All rights reserved.</p>
+          </div>
+          
+          ${exhibitsHtml}
+        </body>
+      </html>
+    `;
+  };
+
+  // Legal style PDF (formal, contract-style)
+  const generateLegalStylePdf = (document: LegalDocument, includeSignature: boolean, exhibits: LegalDocument[] = []): string => {
+    const exhibitsHtml = generateExhibitsHtml(exhibits);
+    const hasExhibits = exhibits.length > 0;
+    
+    return `
       <!DOCTYPE html>
       <html>
         <head>
@@ -584,6 +1091,12 @@ const LegalDocumentsAdmin: React.FC = () => {
               font-weight: bold;
               margin-top: 18px;
               margin-bottom: 8px;
+            }
+            h4 {
+              font-size: 12pt;
+              font-weight: bold;
+              margin-top: 14px;
+              margin-bottom: 6px;
             }
             p {
               margin-bottom: 12px;
@@ -626,6 +1139,21 @@ const LegalDocumentsAdmin: React.FC = () => {
             li {
               margin-bottom: 8px;
             }
+            hr {
+              border: none;
+              border-top: 1px solid #999;
+              margin: 20px 0;
+            }
+            .exhibits-reference {
+              margin-top: 40px;
+              padding: 16px;
+              border: 1px solid #ccc;
+            }
+            .exhibits-reference h3 {
+              margin-top: 0;
+              text-transform: uppercase;
+              font-size: 12pt;
+            }
             .footer {
               margin-top: 60px;
               padding-top: 20px;
@@ -656,9 +1184,20 @@ const LegalDocumentsAdmin: React.FC = () => {
           <h1>${document.title}</h1>
           
           <div class="content">
-            ${formatContentForPdf(document.content)}
+            ${formatContentForPdf(document.content, false)}
           </div>
-          
+        
+        ${hasExhibits ? `
+          <div class="exhibits-reference">
+            <h3>Exhibits</h3>
+            <p>The following exhibits are attached hereto and incorporated herein by reference:</p>
+            <ul>
+              ${exhibits.map((ex, i) => `<li><strong>Exhibit ${String.fromCharCode(65 + i)}:</strong> ${ex.title}</li>`).join('')}
+            </ul>
+          </div>
+        ` : ''}
+        
+        ${includeSignature ? `
           <div class="signature-block">
             <div style="display: flex; justify-content: space-between; flex-wrap: wrap;">
               <div style="width: 45%;">
@@ -679,6 +1218,7 @@ const LegalDocumentsAdmin: React.FC = () => {
               </div>
             </div>
           </div>
+        ` : ''}
           
           <div class="footer">
             <p>© ${new Date().getFullYear()} Pulse Intelligence Labs, Inc. All rights reserved.</p>
@@ -687,45 +1227,11 @@ const LegalDocumentsAdmin: React.FC = () => {
           <div class="confidential">
             CONFIDENTIAL - This document contains proprietary information.
           </div>
+          
+          ${exhibitsHtml}
         </body>
       </html>
     `;
-
-    const printWindow = window.open('', '_blank');
-    if (printWindow) {
-      printWindow.document.write(html);
-      printWindow.document.close();
-      printWindow.focus();
-      setTimeout(() => {
-        printWindow.print();
-      }, 250);
-    }
-  };
-
-  // Format content for PDF display (convert markdown-like syntax to HTML)
-  const formatContentForPdf = (content: string): string => {
-    return content
-      // Convert **bold** to <strong>
-      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-      // Convert headers
-      .replace(/^### (.+)$/gm, '<h3>$1</h3>')
-      .replace(/^## (.+)$/gm, '<h2>$1</h2>')
-      .replace(/^# (.+)$/gm, '<h2>$1</h2>')
-      // Convert numbered lists
-      .replace(/^\d+\.\s+(.+)$/gm, '<li>$1</li>')
-      // Convert bullet points
-      .replace(/^[-•]\s+(.+)$/gm, '<li>$1</li>')
-      // Wrap consecutive list items in <ol> or <ul>
-      .replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>')
-      // Convert double newlines to paragraphs
-      .split('\n\n')
-      .map(para => {
-        if (para.startsWith('<h') || para.startsWith('<ul') || para.startsWith('<ol')) {
-          return para;
-        }
-        return `<p>${para.replace(/\n/g, '<br>')}</p>`;
-      })
-      .join('\n');
   };
 
   // Preview document in modal
@@ -810,6 +1316,27 @@ const LegalDocumentsAdmin: React.FC = () => {
               </div>
             </div>
 
+            {/* Signature Requirement Toggle */}
+            <div className="mb-4 flex items-center justify-between gap-4 p-4 bg-zinc-900/50 rounded-xl border border-zinc-700">
+              <div>
+                <p className="text-sm font-medium text-white">Requires signature</p>
+                <p className="text-xs text-zinc-500 mt-0.5">
+                  When enabled, the PDF includes signature lines and e-signing tools are available.
+                </p>
+              </div>
+              <label className="inline-flex items-center cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={requiresSignatureChecked}
+                  onChange={(e) => setRequiresSignatureChecked(e.target.checked)}
+                  className="sr-only"
+                />
+                <div className={`w-12 h-7 rounded-full transition-colors ${requiresSignatureChecked ? 'bg-orange-600' : 'bg-zinc-700'}`}>
+                  <div className={`w-5 h-5 bg-white rounded-full shadow transform transition-transform mt-1 ${requiresSignatureChecked ? 'translate-x-6' : 'translate-x-1'}`} />
+                </div>
+              </label>
+            </div>
+
             {/* Prompt Input */}
             <div className="mb-4">
               <label className="block text-sm font-medium text-zinc-400 mb-2">
@@ -875,8 +1402,9 @@ const LegalDocumentsAdmin: React.FC = () => {
             ) : (
               <div className="divide-y divide-zinc-800">
                 {documents.map((document) => {
-                  const signingRequest = getSigningRequestForDocument(document.id);
-                  const needsSignature = requiresSignature(document.documentType);
+                  const signingRequestsForDoc = getSigningRequestsForDocument(document.id);
+                  const signingRequest = signingRequestsForDoc[0];
+                  const needsSignature = requiresSignature(document);
                   
                   return (
                   <div key={document.id} className="p-4 hover:bg-zinc-900/50 transition-colors">
@@ -910,7 +1438,9 @@ const LegalDocumentsAdmin: React.FC = () => {
                           </span>
                           {signingRequest && (
                             <span className="text-xs text-zinc-500">
-                              Sent to: {signingRequest.recipientEmail}
+                              {signingRequestsForDoc.length > 1
+                                ? `Sent to: ${signingRequestsForDoc.length} signers`
+                                : `Sent to: ${signingRequest.recipientEmail}`}
                             </span>
                           )}
                         </div>
@@ -991,6 +1521,17 @@ const LegalDocumentsAdmin: React.FC = () => {
                                   Share
                                 </>
                               )}
+                            </button>
+                            <button
+                              onClick={() => openExhibitsModal(document)}
+                              className={`flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                                document.exhibits?.length
+                                  ? 'bg-cyan-600 hover:bg-cyan-500 text-white'
+                                  : 'bg-zinc-700 hover:bg-zinc-600 text-white'
+                              }`}
+                            >
+                              <Paperclip className="w-4 h-4" />
+                              Exhibits {document.exhibits?.length ? `(${document.exhibits.length})` : ''}
                             </button>
                             <button
                               onClick={() => generatePdf(document)}
@@ -1090,6 +1631,12 @@ const LegalDocumentsAdmin: React.FC = () => {
 
             {/* Modal Content */}
             <div className="p-6 overflow-y-auto max-h-[60vh]">
+              {editError && (
+                <div className="mb-4 p-3 bg-red-900/20 border border-red-800 rounded-xl text-sm text-red-300">
+                  {editError}
+                </div>
+              )}
+
               {/* Document Title */}
               <div className="mb-4">
                 <label className="block text-sm font-medium text-zinc-400 mb-2">
@@ -1102,6 +1649,27 @@ const LegalDocumentsAdmin: React.FC = () => {
                   placeholder="Enter document title"
                   className="w-full px-4 py-3 bg-zinc-900 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500 transition-colors"
                 />
+              </div>
+
+              {/* Requires Signature */}
+              <div className="mb-4 flex items-center justify-between gap-4 p-4 bg-zinc-900/50 rounded-xl border border-zinc-700">
+                <div>
+                  <p className="text-sm font-medium text-white">Requires signature</p>
+                  <p className="text-xs text-zinc-500 mt-0.5">
+                    Controls whether the PDF includes signature lines and whether e-signing tools are enabled.
+                  </p>
+                </div>
+                <label className="inline-flex items-center cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={editRequiresSignature}
+                    onChange={(e) => setEditRequiresSignature(e.target.checked)}
+                    className="sr-only"
+                  />
+                  <div className={`w-12 h-7 rounded-full transition-colors ${editRequiresSignature ? 'bg-orange-600' : 'bg-zinc-700'}`}>
+                    <div className={`w-5 h-5 bg-white rounded-full shadow transform transition-transform mt-1 ${editRequiresSignature ? 'translate-x-6' : 'translate-x-1'}`} />
+                  </div>
+                </label>
               </div>
 
               <div className="mb-4">
@@ -1141,9 +1709,17 @@ const LegalDocumentsAdmin: React.FC = () => {
               </button>
               <button
                 onClick={handleRevise}
-                disabled={isRevising || (!editPrompt.trim() && editTitle.trim() === editingDocument?.title)}
+                disabled={
+                  isRevising ||
+                  (!editPrompt.trim() &&
+                    editTitle.trim() === editingDocument?.title &&
+                    editRequiresSignature === Boolean(editingDocument?.requiresSignature ?? SIGNATURE_REQUIRED_TYPES.includes(editingDocument?.documentType || '')))
+                }
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                  isRevising || (!editPrompt.trim() && editTitle.trim() === editingDocument?.title)
+                  isRevising ||
+                  (!editPrompt.trim() &&
+                    editTitle.trim() === editingDocument?.title &&
+                    editRequiresSignature === Boolean(editingDocument?.requiresSignature ?? SIGNATURE_REQUIRED_TYPES.includes(editingDocument?.documentType || '')))
                     ? 'bg-zinc-700 text-zinc-400 cursor-not-allowed'
                     : 'bg-blue-600 text-white hover:bg-blue-500'
                 }`}
@@ -1156,7 +1732,7 @@ const LegalDocumentsAdmin: React.FC = () => {
                 ) : (
                   <>
                     <Sparkles className="w-4 h-4" />
-                    {editPrompt.trim() ? 'Apply Changes' : 'Save Title'}
+                    {editPrompt.trim() ? 'Apply Changes' : 'Save'}
                   </>
                 )}
               </button>
@@ -1329,8 +1905,7 @@ const LegalDocumentsAdmin: React.FC = () => {
                 onClick={() => {
                   setIsSigningModalOpen(false);
                   setSigningDocument(null);
-                  setRecipientName('');
-                  setRecipientEmail('');
+                  setSigners([]);
                 }}
                 className="p-2 hover:bg-zinc-800 rounded-lg transition-colors"
               >
@@ -1352,39 +1927,100 @@ const LegalDocumentsAdmin: React.FC = () => {
                 </div>
               </div>
 
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-zinc-400 mb-2">
-                    Recipient Name
-                  </label>
-                  <input
-                    type="text"
-                    value={recipientName}
-                    onChange={(e) => setRecipientName(e.target.value)}
-                    placeholder="Enter the signer's full name"
-                    className="w-full px-4 py-3 bg-zinc-900 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-orange-500 transition-colors"
-                  />
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium text-zinc-300">Signers</p>
+                  <button
+                    onClick={() => {
+                      setSigners(prev => [
+                        ...prev,
+                        { id: `manual-${Date.now()}`, role: 'Signer', name: '', email: '' }
+                      ]);
+                    }}
+                    className="text-xs px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 transition-colors"
+                  >
+                    + Add Signer
+                  </button>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-zinc-400 mb-2">
-                    Recipient Email
-                  </label>
-                  <input
-                    type="email"
-                    value={recipientEmail}
-                    onChange={(e) => setRecipientEmail(e.target.value)}
-                    placeholder="Enter email address"
-                    className="w-full px-4 py-3 bg-zinc-900 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-orange-500 transition-colors"
-                  />
-                </div>
+                {signers.map((s, idx) => (
+                  <div key={s.id} className="p-4 rounded-xl bg-zinc-900/50 border border-zinc-700 space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-0.5 rounded-full text-xs bg-zinc-800 text-zinc-300 border border-zinc-700">
+                          {s.role || `Signer ${idx + 1}`}
+                        </span>
+                        {s.signingRequestId ? (
+                          <span className="px-2 py-0.5 rounded-full text-xs bg-blue-900/30 text-blue-300 border border-blue-800">
+                            Existing link
+                          </span>
+                        ) : null}
+                      </div>
+                      <button
+                        onClick={() => setSigners(prev => prev.filter(x => x.id !== s.id))}
+                        className="p-2 rounded-lg hover:bg-zinc-800 transition-colors"
+                        title="Remove signer"
+                      >
+                        <Trash2 className="w-4 h-4 text-red-400" />
+                      </button>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs text-zinc-400 mb-1">Stakeholder (optional)</label>
+                      <select
+                        value={s.stakeholderId || ''}
+                        onChange={(e) => {
+                          const stakeholderId = e.target.value || undefined;
+                          const sh = stakeholderDirectory.find(st => st.id === stakeholderId);
+                          setSigners(prev => prev.map(x => x.id === s.id ? {
+                            ...x,
+                            stakeholderId,
+                            name: sh?.name || x.name,
+                            email: sh?.email || x.email,
+                          } : (x)));
+                        }}
+                        className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500"
+                      >
+                        <option value="">Manual entry</option>
+                        {stakeholderDirectory.map(st => (
+                          <option key={st.id} value={st.id}>
+                            {st.name} ({st.email})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-3">
+                      <div>
+                        <label className="block text-xs text-zinc-400 mb-1">Name</label>
+                        <input
+                          type="text"
+                          value={s.name}
+                          onChange={(e) => setSigners(prev => prev.map(x => x.id === s.id ? { ...x, name: e.target.value } : x))}
+                          placeholder="Enter the signer's full name"
+                          className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-orange-500 transition-colors"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-zinc-400 mb-1">Email</label>
+                        <input
+                          type="email"
+                          value={s.email}
+                          onChange={(e) => setSigners(prev => prev.map(x => x.id === s.id ? { ...x, email: e.target.value } : x))}
+                          placeholder="Enter email address"
+                          className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-orange-500 transition-colors"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
 
               <div className="mt-6 p-4 bg-blue-900/20 border border-blue-800 rounded-xl">
                 <p className="text-blue-400 text-sm flex items-start gap-2">
                   <Mail className="w-4 h-4 mt-0.5 flex-shrink-0" />
                   <span>
-                    An email will be sent to the recipient with a link to review and sign the document electronically.
+                    Each signer will receive an email with a secure signing link. Existing links will be re-sent.
                   </span>
                 </p>
               </div>
@@ -1396,8 +2032,7 @@ const LegalDocumentsAdmin: React.FC = () => {
                 onClick={() => {
                   setIsSigningModalOpen(false);
                   setSigningDocument(null);
-                  setRecipientName('');
-                  setRecipientEmail('');
+                  setSigners([]);
                 }}
                 className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm transition-colors"
               >
@@ -1405,9 +2040,9 @@ const LegalDocumentsAdmin: React.FC = () => {
               </button>
               <button
                 onClick={handleSendForSignature}
-                disabled={isSending || !recipientEmail.trim() || !recipientName.trim()}
+                disabled={isSending || signers.length === 0 || signers.some(s => !s.name.trim() || !s.email.trim())}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                  isSending || !recipientEmail.trim() || !recipientName.trim()
+                  isSending || signers.length === 0 || signers.some(s => !s.name.trim() || !s.email.trim())
                     ? 'bg-zinc-700 text-zinc-400 cursor-not-allowed'
                     : 'bg-orange-600 text-white hover:bg-orange-500'
                 }`}
@@ -1420,7 +2055,140 @@ const LegalDocumentsAdmin: React.FC = () => {
                 ) : (
                   <>
                     <Send className="w-4 h-4" />
-                    Send Document
+                    Send to {signers.length} signer{signers.length !== 1 ? 's' : ''}
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Exhibits Modal */}
+      {isExhibitsModalOpen && exhibitsDocument && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#1a1e24] rounded-2xl border border-zinc-700 w-full max-w-2xl max-h-[90vh] overflow-hidden">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-6 border-b border-zinc-700">
+              <div>
+                <h2 className="text-xl font-semibold text-white flex items-center gap-2">
+                  <Paperclip className="w-5 h-5 text-cyan-400" />
+                  Attach Exhibits
+                </h2>
+                <p className="text-sm text-zinc-400 mt-1">{exhibitsDocument.title}</p>
+              </div>
+              <button
+                onClick={() => {
+                  setIsExhibitsModalOpen(false);
+                  setExhibitsDocument(null);
+                  setSelectedExhibits([]);
+                }}
+                className="p-2 hover:bg-zinc-800 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-zinc-400" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 overflow-y-auto max-h-[60vh]">
+              <p className="text-sm text-zinc-400 mb-4">
+                Select documents to attach as exhibits. When you download the PDF, these will be included as Exhibit A, B, C, etc.
+              </p>
+
+              {documents.filter(d => d.id !== exhibitsDocument.id && d.status === 'completed').length === 0 ? (
+                <div className="text-center py-8 text-zinc-500">
+                  <FileText className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                  <p>No other documents available to attach as exhibits.</p>
+                  <p className="text-sm mt-1">Generate more documents first.</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {documents
+                    .filter(d => d.id !== exhibitsDocument.id && d.status === 'completed')
+                    .map((doc, index) => {
+                      const isSelected = selectedExhibits.includes(doc.id);
+                      const exhibitIndex = selectedExhibits.indexOf(doc.id);
+                      
+                      return (
+                        <button
+                          key={doc.id}
+                          onClick={() => toggleExhibit(doc.id)}
+                          className={`w-full flex items-center gap-4 p-4 rounded-xl border transition-all text-left ${
+                            isSelected
+                              ? 'bg-cyan-900/30 border-cyan-600'
+                              : 'bg-zinc-900/50 border-zinc-700 hover:border-zinc-600'
+                          }`}
+                        >
+                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold text-sm ${
+                            isSelected
+                              ? 'bg-cyan-600 text-white'
+                              : 'bg-zinc-800 text-zinc-400'
+                          }`}>
+                            {isSelected ? String.fromCharCode(65 + exhibitIndex) : (index + 1)}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className={`font-medium truncate ${isSelected ? 'text-white' : 'text-zinc-300'}`}>
+                              {doc.title}
+                            </p>
+                            <p className="text-xs text-zinc-500 mt-0.5">
+                              {DOCUMENT_TYPES.find(t => t.id === doc.documentType)?.label || doc.documentType} • {formatDate(doc.createdAt)}
+                            </p>
+                          </div>
+                          <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${
+                            isSelected
+                              ? 'bg-cyan-600 border-cyan-600'
+                              : 'border-zinc-600'
+                          }`}>
+                            {isSelected && <Check className="w-4 h-4 text-white" />}
+                          </div>
+                        </button>
+                      );
+                    })}
+                </div>
+              )}
+
+              {selectedExhibits.length > 0 && (
+                <div className="mt-6 p-4 bg-cyan-900/20 border border-cyan-800 rounded-xl">
+                  <p className="text-cyan-400 text-sm flex items-center gap-2">
+                    <Link2 className="w-4 h-4" />
+                    <span>
+                      <strong>{selectedExhibits.length}</strong> exhibit{selectedExhibits.length !== 1 ? 's' : ''} will be attached to this document.
+                    </span>
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-end gap-3 p-6 border-t border-zinc-700">
+              <button
+                onClick={() => {
+                  setIsExhibitsModalOpen(false);
+                  setExhibitsDocument(null);
+                  setSelectedExhibits([]);
+                }}
+                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveExhibits}
+                disabled={isSavingExhibits}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                  isSavingExhibits
+                    ? 'bg-zinc-700 text-zinc-400 cursor-not-allowed'
+                    : 'bg-cyan-600 text-white hover:bg-cyan-500'
+                }`}
+              >
+                {isSavingExhibits ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Paperclip className="w-4 h-4" />
+                    Save Exhibits
                   </>
                 )}
               </button>

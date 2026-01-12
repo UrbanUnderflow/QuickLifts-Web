@@ -8,7 +8,7 @@ export default async function handler(
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { documentId, currentContent, revisionPrompt, documentType, originalPrompt } = req.body;
+  const { documentId, currentContent, revisionPrompt, documentType, originalPrompt, requiresSignature } = req.body;
 
   if (!currentContent || !revisionPrompt) {
     return res.status(400).json({ error: 'Missing required fields: currentContent and revisionPrompt' });
@@ -32,21 +32,33 @@ export default async function handler(
         messages: [
           {
             role: 'system',
-            content: `You are a legal document revision assistant. You will receive an existing legal document and specific revision instructions. Your job is to:
+            content: `You are a document revision assistant for professional business/legal/technical documents. You will receive:
+1) an existing document
+2) the original context/prompt
+3) revision instructions
 
-1. Carefully read the existing document
-2. Apply the requested changes precisely as instructed
-3. Maintain the overall structure and formatting of the document
-4. Keep all unchanged sections exactly as they were
-5. Ensure legal language consistency throughout
+Your job is to produce a CLEAN, final, fully revised document that INTEGRATES the requested changes into the existing structure.
 
-IMPORTANT RULES:
-- Only modify the sections specified in the revision instructions
-- Preserve all signature blocks and formal elements
-- Maintain professional legal language
-- If asked to fill in placeholders like [Company Name], replace them with the provided values
-- Keep section numbering consistent
-- Return the COMPLETE revised document, not just the changed parts`
+CORE BEHAVIOR (CRITICAL):
+- Do NOT append new sections like "ADDITIONAL CONTENT FROM ORIGINAL PROMPT" or "NOTES" that dump instructions verbatim.
+- If the revision says content is missing, you MUST weave that content into the appropriate existing sections (or create properly numbered sections and include them in the Table of Contents if truly new).
+- Do NOT paste the user's prompt as a block. Convert it into prose/bullets in the correct places.
+- Preserve existing intent and keep unchanged sections as-is unless the revision requires edits.
+- Keep numbering consistent. If you add a section, update the TOC and renumber accordingly.
+- Preserve signature blocks and formal elements if present.
+- Replace placeholder tokens like [Company Name], [Insert Date], [Amount] when the revision provides the real values. If not provided, leave placeholders but DO NOT introduce new placeholders.
+
+SIGNATURE RULE (STRICT):
+- requiresSignature is ${Boolean(requiresSignature) ? 'TRUE' : 'FALSE'}.
+- If requiresSignature is FALSE: remove/avoid signature blocks, signature lines, and "IN WITNESS WHEREOF" sections. Do not add signature placeholders.
+- If requiresSignature is TRUE: keep signature sections if present; if missing and appropriate, add a standard signature section at the end.
+
+OUTPUT FORMAT (STRICT):
+- Return ONLY the revised document text.
+- No preamble, no explanation, no analysis.
+
+QUALITY BAR:
+- The result should read as if a human authored a single cohesive document, not a stitched-together paste.`
           },
           {
             role: 'user',

@@ -72,6 +72,22 @@ const AUDIT_CRITERIA: Record<string, string[]> = {
     'Clear next steps or call to action',
     'Contact information provided'
   ],
+  'system-design': [
+    'System overview and purpose clearly stated',
+    'Problem statement or requirements defined',
+    'Architecture overview provided',
+    'System components identified with responsibilities',
+    'Data models or schemas described',
+    'API specifications included (if applicable)',
+    'Database design documented (if applicable)',
+    'User flows or interactions outlined',
+    'Technology stack specified',
+    'Scalability considerations addressed',
+    'Security considerations included',
+    'Error handling approach defined',
+    'Deployment strategy outlined',
+    'Testing strategy described'
+  ],
   'default': [
     'All parties clearly identified',
     'Purpose and scope clearly stated',

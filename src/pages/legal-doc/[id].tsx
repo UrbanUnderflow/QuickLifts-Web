@@ -12,6 +12,7 @@ interface LegalDocument {
   content: string;
   documentType: string;
   createdAt: Timestamp | Date;
+  requiresSignature?: boolean;
 }
 
 // Utility function to format Firestore Timestamps or Dates
@@ -34,35 +35,314 @@ const formatDate = (date: Timestamp | Date | undefined): string => {
   });
 };
 
-// Format content for PDF display (convert markdown-like syntax to HTML)
+// Check if document is a project/planning type (not legal)
+const isProjectDocument = (docType: string): boolean => {
+  return ['custom', 'proposal', 'system-design'].includes(docType);
+};
+
+// Improved content formatter that properly handles markdown
 const formatContentForPdf = (content: string): string => {
-  return content
+  // Normalize line endings
+  let result = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  
     // Convert **bold** to <strong>
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    // Convert headers
-    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
-    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
-    .replace(/^# (.+)$/gm, '<h2>$1</h2>')
-    // Convert numbered lists
-    .replace(/^\d+\.\s+(.+)$/gm, '<li>$1</li>')
-    // Convert bullet points
-    .replace(/^[-•]\s+(.+)$/gm, '<li>$1</li>')
-    // Wrap consecutive list items in <ol> or <ul>
-    .replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>')
-    // Convert double newlines to paragraphs
-    .split('\n\n')
-    .map(para => {
-      if (para.startsWith('<h') || para.startsWith('<ul') || para.startsWith('<ol')) {
-        return para;
+  result = result.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  
+  // Convert *italic* to <em>
+  result = result.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+  
+  // Convert headers (must be done before other processing)
+  result = result.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
+  result = result.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+  result = result.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+  result = result.replace(/^# (.+)$/gm, '<h2>$1</h2>');
+  
+  // Convert horizontal rules
+  result = result.replace(/^---+$/gm, '<hr>');
+  
+  // Process the content line by line for better list handling
+  const lines = result.split('\n');
+  const processedLines: string[] = [];
+  let inList = false;
+  let listType: 'ul' | 'ol' | null = null;
+  
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmedLine = line.trim();
+    
+    // Skip empty lines but close lists
+    if (!trimmedLine) {
+      if (inList) {
+        processedLines.push(listType === 'ol' ? '</ol>' : '</ul>');
+        inList = false;
+        listType = null;
       }
-      return `<p>${para.replace(/\n/g, '<br>')}</p>`;
-    })
-    .join('\n');
+      processedLines.push('');
+      continue;
+    }
+    
+    // Check for bullet points (-, •, *)
+    const bulletMatch = trimmedLine.match(/^[-•*]\s+(.+)$/);
+    if (bulletMatch) {
+      if (!inList || listType !== 'ul') {
+        if (inList) processedLines.push(listType === 'ol' ? '</ol>' : '</ul>');
+        processedLines.push('<ul>');
+        inList = true;
+        listType = 'ul';
+      }
+      processedLines.push(`<li>${bulletMatch[1]}</li>`);
+      continue;
+    }
+    
+    // Check for numbered lists (1., 2., a., b., i., ii., etc.)
+    const numberedMatch = trimmedLine.match(/^([0-9]+|[a-z]|[ivxlc]+)\.\s+(.+)$/i);
+    if (numberedMatch) {
+      if (!inList || listType !== 'ol') {
+        if (inList) processedLines.push(listType === 'ol' ? '</ol>' : '</ul>');
+        processedLines.push('<ol>');
+        inList = true;
+        listType = 'ol';
+      }
+      processedLines.push(`<li>${numberedMatch[2]}</li>`);
+      continue;
+    }
+    
+    // Close list if we hit non-list content
+    if (inList) {
+      processedLines.push(listType === 'ol' ? '</ol>' : '</ul>');
+      inList = false;
+      listType = null;
+    }
+    
+    // Pass through headers and hr unchanged
+    if (trimmedLine.startsWith('<h') || trimmedLine === '<hr>') {
+      processedLines.push(trimmedLine);
+      continue;
+    }
+    
+    // Regular text becomes a paragraph
+    processedLines.push(`<p>${trimmedLine}</p>`);
+  }
+  
+  // Close any open list
+  if (inList) {
+    processedLines.push(listType === 'ol' ? '</ol>' : '</ul>');
+  }
+  
+  // Join and clean up
+  result = processedLines.join('\n');
+  
+  // Remove empty paragraphs
+  result = result.replace(/<p><\/p>/g, '');
+  
+  // Merge consecutive empty lines
+  result = result.replace(/\n{3,}/g, '\n\n');
+  
+  return result;
 };
 
 // Generate PDF from document content
 const generatePdf = (document: LegalDocument) => {
-  const html = `
+  const includeSignature = Boolean(document.requiresSignature);
+  const isProject = isProjectDocument(document.documentType);
+  
+  // Use different styling based on document type
+  const html = isProject 
+    ? generateProjectStylePdf(document, includeSignature)
+    : generateLegalStylePdf(document, includeSignature);
+
+  const printWindow = window.open('', '_blank');
+  if (printWindow) {
+    printWindow.document.write(html);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => {
+      printWindow.print();
+    }, 250);
+  }
+};
+
+// Project/Planning style PDF (modern, readable)
+const generateProjectStylePdf = (document: LegalDocument, includeSignature: boolean): string => {
+  return `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>${document.title} - Pulse Intelligence Labs</title>
+        <style>
+          @page {
+            margin: 0.75in 1in;
+          }
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            font-size: 11pt;
+            line-height: 1.7;
+            color: #1a1a1a;
+            max-width: 8.5in;
+            margin: 0 auto;
+            padding: 40px;
+          }
+          h1 {
+            font-size: 24pt;
+            font-weight: 700;
+            margin-bottom: 8px;
+            color: #111;
+            border-bottom: 3px solid #333;
+            padding-bottom: 12px;
+          }
+          h2 {
+            font-size: 16pt;
+            font-weight: 600;
+            margin-top: 28px;
+            margin-bottom: 12px;
+            color: #222;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 6px;
+          }
+          h3 {
+            font-size: 13pt;
+            font-weight: 600;
+            margin-top: 20px;
+            margin-bottom: 8px;
+            color: #333;
+          }
+          h4 {
+            font-size: 11pt;
+            font-weight: 600;
+            margin-top: 16px;
+            margin-bottom: 6px;
+            color: #444;
+          }
+          p {
+            margin-bottom: 12px;
+            text-align: left;
+          }
+          .header {
+            margin-bottom: 30px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 16px;
+          }
+          .company-name {
+            font-size: 11pt;
+            font-weight: 600;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 4px;
+          }
+          .document-date {
+            font-size: 10pt;
+            color: #888;
+          }
+          .content {
+            margin-top: 20px;
+          }
+          ul, ol {
+            margin: 12px 0;
+            padding-left: 28px;
+          }
+          ul {
+            list-style-type: disc;
+          }
+          ol {
+            list-style-type: decimal;
+          }
+          li {
+            margin-bottom: 8px;
+            line-height: 1.6;
+          }
+          li > ul, li > ol {
+            margin-top: 8px;
+            margin-bottom: 8px;
+          }
+          hr {
+            border: none;
+            border-top: 1px solid #ddd;
+            margin: 24px 0;
+          }
+          strong {
+            font-weight: 600;
+            color: #111;
+          }
+          em {
+            font-style: italic;
+          }
+          .signature-block {
+            margin-top: 60px;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+            page-break-inside: avoid;
+          }
+          .signature-line {
+            border-bottom: 1px solid #333;
+            width: 250px;
+            margin: 40px 0 8px 0;
+          }
+          .signature-label {
+            font-size: 10pt;
+            color: #666;
+          }
+          .footer {
+            margin-top: 60px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+            font-size: 9pt;
+            color: #888;
+            text-align: center;
+          }
+          @media print {
+            body {
+              padding: 0;
+            }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div class="company-name">Pulse Intelligence Labs, Inc.</div>
+          <div class="document-date">Created: ${formatDate(document.createdAt)}</div>
+        </div>
+        
+        <h1>${document.title}</h1>
+        
+        <div class="content">
+          ${formatContentForPdf(document.content)}
+        </div>
+      
+      ${includeSignature ? `
+        <div class="signature-block">
+          <div style="display: flex; justify-content: space-between; flex-wrap: wrap;">
+            <div style="width: 45%;">
+              <div class="signature-line"></div>
+              <div class="signature-label">Signature</div>
+              <div class="signature-line" style="margin-top: 20px;"></div>
+              <div class="signature-label">Printed Name</div>
+              <div class="signature-line" style="margin-top: 20px;"></div>
+              <div class="signature-label">Date</div>
+            </div>
+            <div style="width: 45%;">
+              <div class="signature-line"></div>
+              <div class="signature-label">Signature</div>
+              <div class="signature-line" style="margin-top: 20px;"></div>
+              <div class="signature-label">Printed Name</div>
+              <div class="signature-line" style="margin-top: 20px;"></div>
+              <div class="signature-label">Date</div>
+            </div>
+          </div>
+        </div>
+      ` : ''}
+        
+        <div class="footer">
+          <p>© ${new Date().getFullYear()} Pulse Intelligence Labs, Inc. All rights reserved.</p>
+        </div>
+      </body>
+    </html>
+  `;
+};
+
+// Legal style PDF (formal, contract-style)
+const generateLegalStylePdf = (document: LegalDocument, includeSignature: boolean): string => {
+  return `
     <!DOCTYPE html>
     <html>
       <head>
@@ -100,6 +380,12 @@ const generatePdf = (document: LegalDocument) => {
             font-weight: bold;
             margin-top: 18px;
             margin-bottom: 8px;
+          }
+          h4 {
+            font-size: 12pt;
+            font-weight: bold;
+            margin-top: 14px;
+            margin-bottom: 6px;
           }
           p {
             margin-bottom: 12px;
@@ -142,6 +428,11 @@ const generatePdf = (document: LegalDocument) => {
           li {
             margin-bottom: 8px;
           }
+          hr {
+            border: none;
+            border-top: 1px solid #999;
+            margin: 20px 0;
+          }
           .footer {
             margin-top: 60px;
             padding-top: 20px;
@@ -175,26 +466,28 @@ const generatePdf = (document: LegalDocument) => {
           ${formatContentForPdf(document.content)}
         </div>
         
-        <div class="signature-block">
-          <div style="display: flex; justify-content: space-between; flex-wrap: wrap;">
-            <div style="width: 45%;">
-              <div class="signature-line"></div>
-              <div class="signature-label">Signature</div>
-              <div class="signature-line" style="margin-top: 20px;"></div>
-              <div class="signature-label">Printed Name</div>
-              <div class="signature-line" style="margin-top: 20px;"></div>
-              <div class="signature-label">Date</div>
-            </div>
-            <div style="width: 45%;">
-              <div class="signature-line"></div>
-              <div class="signature-label">Signature</div>
-              <div class="signature-line" style="margin-top: 20px;"></div>
-              <div class="signature-label">Printed Name</div>
-              <div class="signature-line" style="margin-top: 20px;"></div>
-              <div class="signature-label">Date</div>
+        ${includeSignature ? `
+          <div class="signature-block">
+            <div style="display: flex; justify-content: space-between; flex-wrap: wrap;">
+              <div style="width: 45%;">
+                <div class="signature-line"></div>
+                <div class="signature-label">Signature</div>
+                <div class="signature-line" style="margin-top: 20px;"></div>
+                <div class="signature-label">Printed Name</div>
+                <div class="signature-line" style="margin-top: 20px;"></div>
+                <div class="signature-label">Date</div>
+              </div>
+              <div style="width: 45%;">
+                <div class="signature-line"></div>
+                <div class="signature-label">Signature</div>
+                <div class="signature-line" style="margin-top: 20px;"></div>
+                <div class="signature-label">Printed Name</div>
+                <div class="signature-line" style="margin-top: 20px;"></div>
+                <div class="signature-label">Date</div>
+              </div>
             </div>
           </div>
-        </div>
+        ` : ''}
         
         <div class="footer">
           <p>© ${new Date().getFullYear()} Pulse Intelligence Labs, Inc. All rights reserved.</p>
@@ -206,16 +499,6 @@ const generatePdf = (document: LegalDocument) => {
       </body>
     </html>
   `;
-
-  const printWindow = window.open('', '_blank');
-  if (printWindow) {
-    printWindow.document.write(html);
-    printWindow.document.close();
-    printWindow.focus();
-    setTimeout(() => {
-      printWindow.print();
-    }, 250);
-  }
 };
 
 const LegalDocumentSharePage: React.FC = () => {
@@ -313,11 +596,75 @@ const LegalDocumentSharePage: React.FC = () => {
 
           {/* Document Content */}
           <div className="bg-[#1a1e24] rounded-xl border border-zinc-800 p-8">
-            <div className="prose prose-invert prose-lg max-w-none">
-              <div className="text-zinc-300 whitespace-pre-wrap leading-relaxed">
-                {document.content}
-              </div>
-            </div>
+            <div 
+              className="document-content"
+              dangerouslySetInnerHTML={{ __html: formatContentForPdf(document.content) }}
+            />
+            <style jsx global>{`
+              .document-content {
+                color: #e4e4e7;
+                font-size: 16px;
+                line-height: 1.8;
+              }
+              .document-content h2 {
+                font-size: 1.5rem;
+                font-weight: 700;
+                color: #ffffff;
+                margin-top: 2rem;
+                margin-bottom: 1rem;
+                padding-bottom: 0.5rem;
+                border-bottom: 1px solid #3f3f46;
+              }
+              .document-content h3 {
+                font-size: 1.25rem;
+                font-weight: 600;
+                color: #ffffff;
+                margin-top: 1.5rem;
+                margin-bottom: 0.75rem;
+              }
+              .document-content h4 {
+                font-size: 1.1rem;
+                font-weight: 600;
+                color: #fafafa;
+                margin-top: 1.25rem;
+                margin-bottom: 0.5rem;
+              }
+              .document-content p {
+                margin-bottom: 1rem;
+                color: #d4d4d8;
+              }
+              .document-content strong {
+                font-weight: 600;
+                color: #ffffff;
+              }
+              .document-content em {
+                font-style: italic;
+                color: #a1a1aa;
+              }
+              .document-content ul,
+              .document-content ol {
+                margin: 1rem 0;
+                padding-left: 1.75rem;
+              }
+              .document-content ul {
+                list-style-type: disc;
+              }
+              .document-content ol {
+                list-style-type: decimal;
+              }
+              .document-content li {
+                margin-bottom: 0.5rem;
+                color: #d4d4d8;
+              }
+              .document-content li::marker {
+                color: #d7ff00;
+              }
+              .document-content hr {
+                border: none;
+                border-top: 1px solid #3f3f46;
+                margin: 1.5rem 0;
+              }
+            `}</style>
           </div>
 
           {/* Footer */}

@@ -7,7 +7,9 @@ import { db } from '../../api/firebase/config';
 
 interface SigningRequest {
   id: string;
-  documentType: 'advisor' | 'contractor';
+  // NOTE: historically this page supported template-based types ('advisor' | 'contractor').
+  // We now also support generic, stored-document signing via `documentContent`.
+  documentType: string;
   documentName: string;
   recipientName: string;
   // Optional: legal name to use in the agreement body (without altering signature)
@@ -25,6 +27,8 @@ interface SigningRequest {
     userAgent: string;
     timestamp: Timestamp;
   };
+  // For generic documents (e.g. Equity/Legal docs) we store the actual doc body here.
+  documentContent?: string;
 }
 
 // Signature fonts available
@@ -178,9 +182,11 @@ const SignDocument: React.FC = () => {
     const signatureName = (request.signatureData?.typedName || typedName || request.recipientName).trim();
     // Agreement party name should be the legal name (if provided), otherwise fall back to signature name
     const agreementName = (request.recipientLegalName || '').trim() || signatureName || request.recipientName.trim();
-    const documentContent = request.documentType === 'advisor' 
-      ? generateAdvisorAgreementHtml(agreementName, currentDate, signatureName, signatureStyle)
-      : generateContractorAgreementHtml(agreementName, currentDate, signatureName, signatureStyle);
+    const documentContent = request.documentContent
+      ? generateGenericSignedHtml(request.documentName, request.documentContent, currentDate, signatureName, signatureStyle)
+      : request.documentType === 'advisor'
+        ? generateAdvisorAgreementHtml(agreementName, currentDate, signatureName, signatureStyle)
+        : generateContractorAgreementHtml(agreementName, currentDate, signatureName, signatureStyle);
     
     const printWindow = window.open('', '_blank');
     if (printWindow) {
@@ -192,6 +198,82 @@ const SignDocument: React.FC = () => {
       }, 250);
     }
   };
+
+  const formatTextToHtml = (text: string) => {
+    return text
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+      .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+      .replace(/^# (.+)$/gm, '<h2>$1</h2>')
+      .replace(/^\d+\.\s+(.+)$/gm, '<li>$1</li>')
+      .replace(/^[-•]\s+(.+)$/gm, '<li>$1</li>')
+      .replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>')
+      .split('\n\n')
+      .map(para => {
+        if (para.startsWith('<h') || para.startsWith('<ul') || para.startsWith('<ol')) return para;
+        return `<p>${para.replace(/\n/g, '<br>')}</p>`;
+      })
+      .join('\n');
+  };
+
+  const generateGenericSignedHtml = (title: string, content: string, date: string, signature: string, signatureStyle: string) => `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>Signed - ${title}</title>
+        <style>
+          @page { margin: 1in; }
+          body { font-family: 'Times New Roman', Times, serif; font-size: 12pt; line-height: 1.6; color: #111; max-width: 8.5in; margin: 0 auto; padding: 40px; }
+          h1 { font-size: 18pt; font-weight: bold; text-align: center; margin-bottom: 24px; text-transform: uppercase; border-bottom: 2px solid #333; padding-bottom: 12px; }
+          h2 { font-size: 14pt; font-weight: bold; margin-top: 24px; margin-bottom: 12px; }
+          h3 { font-size: 12pt; font-weight: bold; margin-top: 18px; margin-bottom: 8px; }
+          p { margin-bottom: 12px; text-align: justify; }
+          ul, ol { margin: 12px 0; padding-left: 24px; }
+          li { margin-bottom: 8px; }
+          .header { text-align: center; margin-bottom: 30px; }
+          .company-name { font-size: 14pt; font-weight: bold; margin-bottom: 4px; }
+          .document-date { font-size: 10pt; color: #666; margin-bottom: 20px; }
+          .signature-block { margin-top: 60px; page-break-inside: avoid; }
+          .signature-line { border-bottom: 1px solid #333; width: 250px; margin: 40px 0 8px 0; min-height: 35px; display: flex; align-items: flex-end; }
+          .signature-label { font-size: 10pt; color: #666; }
+          .signed-badge { display: inline-block; background: #10b981; color: white; padding: 4px 12px; border-radius: 4px; font-size: 11px; margin-left: 10px; }
+          @media print { body { padding: 0; } }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div class="company-name">PULSE INTELLIGENCE LABS, INC.</div>
+          <div class="document-date">Signed: ${date}</div>
+        </div>
+        <h1>${title} <span class="signed-badge">✓ SIGNED</span></h1>
+        <div class="content">
+          ${formatTextToHtml(content)}
+        </div>
+
+        <div class="signature-block">
+          <p>IN WITNESS WHEREOF, the undersigned have executed this document as of the date first written above.</p>
+          <div style="display: flex; justify-content: space-between; flex-wrap: wrap;">
+            <div style="width: 45%;">
+              <div class="signature-line" style="${signatureStyle}">Tremaine Grant</div>
+              <div class="signature-label">Signature (Company)</div>
+              <div class="signature-line" style="margin-top: 20px;"></div>
+              <div class="signature-label">Printed Name</div>
+              <div class="signature-line" style="margin-top: 20px;"></div>
+              <div class="signature-label">Date</div>
+            </div>
+            <div style="width: 45%;">
+              <div class="signature-line" style="${signatureStyle}">${signature}</div>
+              <div class="signature-label">Signature (Recipient)</div>
+              <div class="signature-line" style="margin-top: 20px;"></div>
+              <div class="signature-label">Printed Name</div>
+              <div class="signature-line" style="margin-top: 20px;"></div>
+              <div class="signature-label">Date</div>
+            </div>
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
 
   const generateAdvisorAgreementHtml = (name: string, date: string, signature: string, signatureStyle: string) => `
     <!DOCTYPE html>

@@ -157,6 +157,28 @@ Generate a compelling, well-structured proposal document that includes:
 Use professional business language that is persuasive yet factual.`,
     defaultTitle: 'Business Proposal'
   },
+  'system-design': {
+    systemPrompt: `You are a technical documentation specialist specializing in system design documents.
+Generate a comprehensive, well-structured system design document that includes:
+- System Overview and Purpose
+- Problem Statement / Requirements
+- Architecture Overview (high-level)
+- System Components and their responsibilities
+- Data Models and Schemas
+- API Specifications (if applicable)
+- Database Design (if applicable)
+- User Flows and Interactions
+- Technology Stack
+- Scalability and Performance Considerations
+- Security Considerations
+- Error Handling and Edge Cases
+- Deployment Strategy
+- Testing Strategy
+- Future Enhancements / Roadmap
+Use clear, technical language appropriate for engineering teams. Include diagrams descriptions where helpful (describe what diagrams would show).
+Structure the document so it can serve as both a design spec and implementation guide.`,
+    defaultTitle: 'System Design Document'
+  },
   'custom': {
     systemPrompt: `You are a legal document drafting assistant capable of creating various legal documents.
 Generate a comprehensive, professional legal document based on the user's requirements.
@@ -174,7 +196,7 @@ export default async function handler(
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { prompt, documentType, documentId } = req.body;
+  const { prompt, documentType, documentId, requiresSignature } = req.body;
 
   if (!prompt || !documentType) {
     return res.status(400).json({ error: 'Missing required fields: prompt and documentType' });
@@ -189,6 +211,32 @@ export default async function handler(
   const template = DOCUMENT_TEMPLATES[documentType] || DOCUMENT_TEMPLATES['custom'];
 
   try {
+    const wantsSignature = Boolean(requiresSignature);
+    const formattingInstructions = wantsSignature
+      ? `IMPORTANT FORMATTING INSTRUCTIONS:
+- Start with a clear document title
+- Use numbered sections (1., 2., 3., etc.) for main sections
+- Use lettered subsections (a., b., c.) where appropriate
+- Include an "EFFECTIVE DATE" placeholder at the beginning (if applicable)
+- Include signature blocks at the end with placeholders for:
+  - Company name and representative
+  - Counterparty name and representative
+  - Date lines
+- Use professional formatting throughout
+- Include a "WHEREAS" recitals section where appropriate
+- End with an "IN WITNESS WHEREOF" clause before signatures
+
+The document should be ready to print as a professional document.`
+      : `IMPORTANT FORMATTING INSTRUCTIONS:
+- Start with a clear document title
+- Use numbered sections (1., 2., 3., etc.) for main sections
+- Use lettered subsections (a., b., c.) where appropriate
+- If you include dates, use placeholders like "Effective Date: [Insert Date]" (optional)
+- DO NOT include signature blocks, signature lines, or "IN WITNESS WHEREOF" sections
+- Use professional formatting throughout
+
+The document should be ready to print as a professional document.`;
+
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -200,22 +248,7 @@ export default async function handler(
         messages: [
           {
             role: 'system',
-            content: `${template.systemPrompt}
-
-IMPORTANT FORMATTING INSTRUCTIONS:
-- Start with a clear document title
-- Use numbered sections (1., 2., 3., etc.) for main sections
-- Use lettered subsections (a., b., c.) where appropriate
-- Include an "EFFECTIVE DATE" placeholder at the beginning
-- Include signature blocks at the end with placeholders for:
-  - Company name and representative
-  - Counterparty name and representative
-  - Date lines
-- Use professional legal formatting throughout
-- Include a "WHEREAS" recitals section where appropriate
-- End with an "IN WITNESS WHEREOF" clause before signatures
-
-The document should be ready to print as a professional legal document.`
+            content: `${template.systemPrompt}\n\n${formattingInstructions}`
           },
           {
             role: 'user',
