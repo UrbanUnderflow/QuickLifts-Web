@@ -78,7 +78,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const isValid = Boolean(parsed.isValid);
     const approvalDate = typeof parsed.approvalDate === 'string' ? parsed.approvalDate : null;
-    const issues = Array.isArray(parsed.issues) ? parsed.issues.filter((x) => typeof x === 'string') : [];
+    const issues = Array.isArray(parsed.issues) ? parsed.issues.filter((x: unknown) => typeof x === 'string') : [];
 
     return res.status(200).json({ success: true, isValid, approvalDate, issues });
   } catch (error) {

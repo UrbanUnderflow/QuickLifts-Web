@@ -2050,8 +2050,8 @@ const EquityAdminPage: React.FC = () => {
                           <span className="text-white font-semibold">{formatNumber(stakeholder.totalShares || 0)}</span>
                         </td>
                         <td className="py-4 px-4 text-right">
-                          <span className={`font-semibold ${stakeholder.ownershipPercentage >= 50 ? 'text-[#E0FE10]' : 'text-white'}`}>
-                            {stakeholder.ownershipPercentage}%
+                          <span className={`font-semibold ${(stakeholder.ownershipPercentage ?? 0) >= 50 ? 'text-[#E0FE10]' : 'text-white'}`}>
+                            {stakeholder.ownershipPercentage ?? 0}%
                           </span>
                         </td>
                         <td className="py-4 px-4 text-center">
@@ -2965,8 +2965,9 @@ const EquityAdminPage: React.FC = () => {
           <div className="space-y-4">
             {equityDocuments.map((edoc) => {
               const isExpanded = expandedEquityDoc === edoc.id;
-                      const signingRequest = getSigningRequestForEquityDoc(edoc.id);
-                      const needsSignature = Boolean(edoc.requiresSignature);
+              const signingRequestsForDoc = getSigningRequestsForEquityDoc(edoc.id);
+              const signingRequest = signingRequestsForDoc[0]; // For backwards-compatible UI
+              const needsSignature = Boolean(edoc.requiresSignature);
               return (
                 <GlassCard key={edoc.id} accentColor="#3B82F6">
                   <div className="p-5">
