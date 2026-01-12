@@ -212,6 +212,22 @@ export default async function handler(
 
   try {
     const wantsSignature = Boolean(requiresSignature);
+    
+    // Universal formatting rules for proper markdown rendering
+    const bulletFormattingRules = `
+BULLET & LIST FORMATTING (CRITICAL - follow exactly):
+- For bullet lists, ALWAYS start each item with "- " (dash + space). Example:
+  - First item
+  - Second item
+  - Third item
+- For numbered lists, use "1. ", "2. ", "3. " (number + period + space)
+- For nested/sub-bullets, use two spaces then "- " (e.g., "  - sub-item")
+- DO NOT use plain text lists without bullet markers
+- DO NOT use "•" Unicode bullets - use "-" or "*" instead
+- Each list item should be on its own line
+- Use "## " for section headers, "### " for subsections
+- Use "**text**" for bold emphasis`;
+
     const formattingInstructions = wantsSignature
       ? `IMPORTANT FORMATTING INSTRUCTIONS:
 - Start with a clear document title
@@ -225,6 +241,7 @@ export default async function handler(
 - Use professional formatting throughout
 - Include a "WHEREAS" recitals section where appropriate
 - End with an "IN WITNESS WHEREOF" clause before signatures
+${bulletFormattingRules}
 
 The document should be ready to print as a professional document.`
       : `IMPORTANT FORMATTING INSTRUCTIONS:
@@ -234,6 +251,7 @@ The document should be ready to print as a professional document.`
 - If you include dates, use placeholders like "Effective Date: [Insert Date]" (optional)
 - DO NOT include signature blocks, signature lines, or "IN WITNESS WHEREOF" sections
 - Use professional formatting throughout
+${bulletFormattingRules}
 
 The document should be ready to print as a professional document.`;
 

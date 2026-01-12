@@ -326,8 +326,8 @@ const formatContentForPdf = (content: string): string => {
       continue;
     }
     
-    // Check for bullet points (-, •, *)
-    const bulletMatch = trimmedLine.match(/^[-•*]\s+(.+)$/);
+    // Check for bullet points (-, •, *, en-dash, em-dash). Allow missing space after marker.
+    const bulletMatch = trimmedLine.match(/^([-•*]|–|—)\s*(.+)$/);
     if (bulletMatch) {
       if (!inList || listType !== 'ul') {
         if (inList) processedLines.push(listType === 'ol' ? '</ol>' : '</ul>');
@@ -335,12 +335,12 @@ const formatContentForPdf = (content: string): string => {
         inList = true;
         listType = 'ul';
       }
-      processedLines.push(`<li>${bulletMatch[1]}</li>`);
+      processedLines.push(`<li>${bulletMatch[2]}</li>`);
       continue;
     }
     
-    // Check for numbered lists (1., 2., a., b., i., ii., etc.)
-    const numberedMatch = trimmedLine.match(/^([0-9]+|[a-z]|[ivxlc]+)\.\s+(.+)$/i);
+    // Check for numbered lists (supports 1. and 1) formats)
+    const numberedMatch = trimmedLine.match(/^([0-9]+|[a-z]|[ivxlc]+)[\.\)]\s+(.+)$/i);
     if (numberedMatch) {
       if (!inList || listType !== 'ol') {
         if (inList) processedLines.push(listType === 'ol' ? '</ol>' : '</ul>');
@@ -2652,7 +2652,12 @@ const EquityAdminPage: React.FC = () => {
                                         {/* Preview content */}
                                         {expandedEquityDoc === edoc.id && (
                                           <div className="mt-4 p-4 bg-zinc-900 rounded-lg border border-zinc-700 max-h-64 overflow-y-auto">
-                                            <pre className="text-zinc-300 text-xs whitespace-pre-wrap font-mono">{edoc.content}</pre>
+                                            <div className="prose prose-invert prose-sm max-w-none">
+                                              <div
+                                                className="text-zinc-200 leading-relaxed"
+                                                dangerouslySetInnerHTML={{ __html: formatContentForPdf(edoc.content) }}
+                                              />
+                                            </div>
                                           </div>
                                         )}
                                       </div>

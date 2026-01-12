@@ -39,6 +39,20 @@ export default async function handler(
 
 Your job is to produce a CLEAN, final, fully revised document that INTEGRATES the requested changes into the existing structure.
 
+FORMATTING RULES (CRITICAL FOR RENDERING):
+- For bullet lists, ALWAYS use "- " (dash followed by space) at the start of each item. Example:
+  - First item
+  - Second item
+  - Third item
+- For numbered lists, use "1. ", "2. ", etc. (number, period, space). Example:
+  1. First step
+  2. Second step
+- For sub-bullets/nested items, use "  - " (two spaces, dash, space)
+- DO NOT use plain text lists without bullet markers
+- DO NOT use "•" Unicode bullets - use "-" or "*" instead
+- Use "## " for section headers, "### " for subsections
+- Use "**text**" for bold emphasis
+
 CORE BEHAVIOR (CRITICAL):
 - Do NOT append new sections like "ADDITIONAL CONTENT FROM ORIGINAL PROMPT" or "NOTES" that dump instructions verbatim.
 - If the revision says content is missing, you MUST weave that content into the appropriate existing sections (or create properly numbered sections and include them in the Table of Contents if truly new).

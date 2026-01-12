@@ -68,6 +68,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       .filter(Boolean)
       .join('\n');
 
+    const bulletFormattingRules = `
+BULLET & LIST FORMATTING (CRITICAL - follow exactly):
+- For bullet lists, ALWAYS start each item with "- " (dash + space). Example:
+  - First item
+  - Second item
+- For numbered lists, use "1. ", "2. ", "3. " (number + period + space)
+- For nested/sub-bullets, use two spaces then "- " (e.g., "  - sub-item")
+- DO NOT use plain text lists without bullet markers
+- DO NOT use "•" Unicode bullets - use "-" or "*" instead
+- Each list item should be on its own line
+- Use "## " for section headers, "### " for subsections
+- Use "**text**" for bold emphasis`;
+
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o',
       messages: [
@@ -78,11 +91,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             `IMPORTANT:\n` +
             `- Return ONLY the revised document text.\n` +
             `- Preserve the overall structure unless the revision explicitly changes it.\n` +
-            `- Keep formatting as plain text with clear section headers (no markdown).\n` +
             `- If the revision asks to add/remove sections, do so cleanly.\n` +
             (body.requiresSignature
               ? `- Ensure a signature section exists at the end with signature blocks for BOTH parties (Company and Recipient), including printed name + title + date lines.\n`
-              : `- Remove signature lines/blocks if present unless they are strictly required.\n`),
+              : `- Remove signature lines/blocks if present unless they are strictly required.\n`) +
+            `\n${bulletFormattingRules}`,
         },
         {
           role: 'user',

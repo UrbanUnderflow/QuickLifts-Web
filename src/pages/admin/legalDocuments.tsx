@@ -551,39 +551,39 @@ const LegalDocumentsAdmin: React.FC = () => {
         let requestId = signer.signingRequestId;
         if (!requestId) {
           const requestData: any = {
-            documentType: signingDocument.documentType,
-            documentName: signingDocument.title,
+        documentType: signingDocument.documentType,
+        documentName: signingDocument.title,
             recipientName: signer.name,
             recipientEmail: signer.email,
-            status: 'pending',
-            createdAt: serverTimestamp(),
-            legalDocumentId: signingDocument.id,
-            documentContent: signingDocument.content,
+        status: 'pending',
+        createdAt: serverTimestamp(),
+        legalDocumentId: signingDocument.id,
+        documentContent: signingDocument.content,
             signerRole: signer.role,
             stakeholderId: signer.stakeholderId || null,
             signingGroupId,
             signingOrder: i + 1,
-          };
+      };
 
-          const docRef = await addDoc(collection(db, 'signingRequests'), requestData);
+      const docRef = await addDoc(collection(db, 'signingRequests'), requestData);
           requestId = docRef.id;
         }
 
         signingRequestIds.push(requestId);
 
-        const response = await fetch('/.netlify/functions/send-signing-request', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+      const response = await fetch('/.netlify/functions/send-signing-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
             documentId: requestId,
-            documentName: signingDocument.title,
-            documentType: signingDocument.documentType,
+          documentName: signingDocument.title,
+          documentType: signingDocument.documentType,
             recipientName: signer.name,
             recipientEmail: signer.email,
-          }),
-        });
+        }),
+      });
 
-        if (!response.ok) {
+      if (!response.ok) {
           throw new Error(`Failed to send email to ${signer.email}`);
         }
       }
@@ -744,8 +744,14 @@ const LegalDocumentsAdmin: React.FC = () => {
         continue;
       }
       
-      // Check for bullet points (-, •, *)
-      const bulletMatch = trimmedLine.match(/^[-•*]\s+(.+)$/);
+      // Check for bullet points (-, •, *, en-dash, em-dash). Allow missing space after marker.
+      // Examples:
+      // - Item
+      // •Item
+      // * Item
+      // – Item
+      // — Item
+      const bulletMatch = trimmedLine.match(/^([-•*]|–|—)\s*(.+)$/);
       if (bulletMatch) {
         if (!inList || listType !== 'ul') {
           if (inList) processedLines.push(listType === 'ol' ? '</ol>' : '</ul>');
@@ -753,12 +759,16 @@ const LegalDocumentsAdmin: React.FC = () => {
           inList = true;
           listType = 'ul';
         }
-        processedLines.push(`<li>${bulletMatch[1]}</li>`);
+        processedLines.push(`<li>${bulletMatch[2]}</li>`);
         continue;
       }
       
-      // Check for numbered lists (1., 2., a., b., i., ii., etc.)
-      const numberedMatch = trimmedLine.match(/^([0-9]+|[a-z]|[ivxlc]+)\.\s+(.+)$/i);
+      // Check for numbered lists:
+      // 1. Item
+      // 1) Item
+      // a. Item
+      // i. Item
+      const numberedMatch = trimmedLine.match(/^([0-9]+|[a-z]|[ivxlc]+)[\.\)]\s+(.+)$/i);
       if (numberedMatch) {
         if (!inList || listType !== 'ol') {
           if (inList) processedLines.push(listType === 'ol' ? '</ol>' : '</ul>');
@@ -1559,10 +1569,11 @@ const LegalDocumentsAdmin: React.FC = () => {
                     {/* Expanded Preview */}
                     {expandedDoc === document.id && document.status === 'completed' && (
                       <div className="mt-4 p-4 bg-zinc-900 rounded-xl border border-zinc-700">
-                        <div className="prose prose-invert prose-sm max-w-none">
-                          <div className="text-zinc-300 whitespace-pre-wrap text-sm leading-relaxed max-h-96 overflow-y-auto">
-                            {document.content}
-                          </div>
+                        <div className="prose prose-invert prose-sm max-w-none max-h-96 overflow-y-auto">
+                          <div
+                            className="text-zinc-200 leading-relaxed"
+                            dangerouslySetInnerHTML={{ __html: formatContentForPdf(document.content, true) }}
+                          />
                         </div>
                         <div className="mt-4 pt-4 border-t border-zinc-700">
                           <p className="text-xs text-zinc-500">
@@ -1965,7 +1976,7 @@ const LegalDocumentsAdmin: React.FC = () => {
                       </button>
                     </div>
 
-                    <div>
+                <div>
                       <label className="block text-xs text-zinc-400 mb-1">Stakeholder (optional)</label>
                       <select
                         value={s.stakeholderId || ''}
@@ -1993,24 +2004,24 @@ const LegalDocumentsAdmin: React.FC = () => {
                     <div className="grid grid-cols-1 gap-3">
                       <div>
                         <label className="block text-xs text-zinc-400 mb-1">Name</label>
-                        <input
-                          type="text"
+                  <input
+                    type="text"
                           value={s.name}
                           onChange={(e) => setSigners(prev => prev.map(x => x.id === s.id ? { ...x, name: e.target.value } : x))}
-                          placeholder="Enter the signer's full name"
+                    placeholder="Enter the signer's full name"
                           className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-orange-500 transition-colors"
-                        />
-                      </div>
-                      <div>
+                  />
+                </div>
+                <div>
                         <label className="block text-xs text-zinc-400 mb-1">Email</label>
-                        <input
-                          type="email"
+                  <input
+                    type="email"
                           value={s.email}
                           onChange={(e) => setSigners(prev => prev.map(x => x.id === s.id ? { ...x, email: e.target.value } : x))}
-                          placeholder="Enter email address"
+                    placeholder="Enter email address"
                           className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-orange-500 transition-colors"
-                        />
-                      </div>
+                  />
+                </div>
                     </div>
                   </div>
                 ))}
