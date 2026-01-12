@@ -10,8 +10,12 @@ export default async function handler(
 
   const { documentId, currentContent, revisionPrompt, documentType, originalPrompt, requiresSignature } = req.body;
 
-  if (!currentContent || !revisionPrompt) {
-    return res.status(400).json({ error: 'Missing required fields: currentContent and revisionPrompt' });
+  if (!currentContent) {
+    return res.status(400).json({ error: 'Missing required field: currentContent' });
+  }
+
+  if (!revisionPrompt || !revisionPrompt.trim()) {
+    return res.status(400).json({ error: 'Missing or empty revisionPrompt. Please provide revision instructions or update only the title without calling this API.' });
   }
 
   const openaiApiKey = process.env.OPENAI_API_KEY;

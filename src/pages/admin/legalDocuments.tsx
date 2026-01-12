@@ -458,8 +458,17 @@ const LegalDocumentsAdmin: React.FC = () => {
       loadDocuments();
     } catch (error) {
       console.error('Error revising document:', error);
-      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Failed to revise document' });
-      setEditError(error instanceof Error ? error.message : 'Failed to apply changes');
+      let errorMessage = 'Failed to revise document';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+        // Check for Firestore-specific errors
+        if (error.message.includes('pattern') || error.message.includes('invalid') || error.message.includes('permission')) {
+          console.error('Firestore error details:', error);
+          errorMessage = `Firestore error: ${error.message}. Please check that all fields are valid.`;
+        }
+      }
+      setMessage({ type: 'error', text: errorMessage });
+      setEditError(errorMessage);
     } finally {
       setIsRevising(false);
     }
@@ -1460,14 +1469,10 @@ const LegalDocumentsAdmin: React.FC = () => {
                         {document.status === 'completed' && (
                           <>
                             <button
-                              onClick={() => togglePreview(document.id)}
+                              onClick={() => window.open(`/legal-doc/${document.id}`, '_blank')}
                               className="flex items-center gap-1 px-3 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm transition-colors"
                             >
-                              {expandedDoc === document.id ? (
-                                <ChevronUp className="w-4 h-4" />
-                              ) : (
-                                <Eye className="w-4 h-4" />
-                              )}
+                              <Eye className="w-4 h-4" />
                               Preview
                             </button>
                             <button

@@ -3031,10 +3031,10 @@ const EquityAdminPage: React.FC = () => {
                         {edoc.status === 'completed' && (
                           <>
                             <button
-                              onClick={() => setExpandedEquityDoc(isExpanded ? null : edoc.id)}
+                              onClick={() => window.open(`/equity-doc/${edoc.id}`, '_blank')}
                               className="flex items-center gap-1 px-3 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm transition-colors"
                             >
-                              {isExpanded ? <ChevronUp className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                              <Eye className="w-4 h-4" />
                               Preview
                             </button>
                             <button

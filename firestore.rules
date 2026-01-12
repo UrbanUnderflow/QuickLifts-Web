@@ -252,6 +252,33 @@ service cloud.firestore {
       allow write: if false; // Only server-side functions can write logs
     }
     
+    // Legal documents - admin only
+    match /legal-documents/{documentId} {
+      allow read, write: if isAdmin();
+    }
+    
+    // Equity documents - admin only
+    match /equity-documents/{documentId} {
+      allow read, write: if isAdmin();
+    }
+    
+    // Equity stakeholders - admin only
+    match /equity-stakeholders/{stakeholderId} {
+      allow read, write: if isAdmin();
+    }
+    
+    // Equity pool - admin only
+    match /equity-pool/{poolId} {
+      allow read, write: if isAdmin();
+    }
+    
+    // Signing requests - admin only
+    match /signing-requests/{requestId} {
+      allow read, write: if isAdmin();
+      // Allow public read for signing pages (they'll use the request ID as auth)
+      allow read: if true;
+    }
+    
     // Creator Pages (Landing Pages)
     match /creator-pages/{userId} {
       // Allow owner to read/write their creator pages root
