@@ -2,7 +2,7 @@ import React from 'react';
 import { useRouter } from 'next/router';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import Head from 'next/head';
-import { Users, Settings, BarChart2, Bell, FileText, CheckSquare, PlusSquare, Image as ImageIcon, Zap, TrendingUp, Dumbbell, Tag, Users2, Activity, Award, Clock, Gift, Edit3, Send, Server, ChevronDown, MessageCircle, Utensils, Code, Building2, Kanban, Layers, Bug, FolderTree, PenTool, Link as LinkIcon, Scale } from 'lucide-react';
+import { Users, Settings, BarChart2, Bell, FileText, CheckSquare, PlusSquare, Image as ImageIcon, Zap, TrendingUp, Dumbbell, Tag, Users2, Activity, Award, Clock, Gift, Edit3, Send, Server, ChevronDown, MessageCircle, Utensils, Code, Building2, Kanban, Layers, Bug, FolderTree, PenTool, Link as LinkIcon, Scale, Handshake, PieChart } from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '../../redux/store';
 import { toggleDevMode } from '../../redux/devModeSlice';
@@ -232,6 +232,18 @@ const adminCardsData = [
     description: "Manage venture capital prospects and investor relationships for fundraising.",
     icon: <Building2 className="w-5 h-5" />,
     link: "/admin/vcDatabase"
+  },
+  {
+    title: "Friends of the Business",
+    description: "Manage relationships with advisors, mentors, and key business contacts. Track outreach and communications.",
+    icon: <Handshake className="w-5 h-5" />,
+    link: "/admin/friendsOfBusiness"
+  },
+  {
+    title: "Equity",
+    description: "Manage cap table, stakeholders, option grants, and equity documents. Generate agreements and track ownership.",
+    icon: <PieChart className="w-5 h-5" />,
+    link: "/admin/equity"
   },
   {
     title: "Investor Dataroom Access",
