@@ -296,7 +296,7 @@ const FriendsOfBusinessPage: React.FC = () => {
     if (!emailFriend?.email) return;
     setEmailSending(true);
     try {
-      const res = await fetch('/api/admin/send-friend-email', {
+      const res = await fetch('/.netlify/functions/send-friend-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -305,7 +305,15 @@ const FriendsOfBusinessPage: React.FC = () => {
           textContent: emailBody
         })
       });
-      const json = await res.json();
+      const raw = await res.text();
+      const json = (() => {
+        try {
+          return JSON.parse(raw);
+        } catch {
+          return null;
+        }
+      })();
+      if (!json) throw new Error('Failed to send (invalid server response)');
       if (!res.ok || !json.success) throw new Error(json.error || 'Failed to send');
       if (emailFriend.id) {
         const actor = (currentUser?.username || currentUser?.displayName || currentUser?.email || 'admin') as string;
@@ -337,7 +345,7 @@ const FriendsOfBusinessPage: React.FC = () => {
     if (isNaN(when.getTime())) { alert('Invalid schedule time'); return; }
     setEmailSending(true);
     try {
-      const res = await fetch('/api/admin/send-friend-email', {
+      const res = await fetch('/.netlify/functions/send-friend-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -347,7 +355,15 @@ const FriendsOfBusinessPage: React.FC = () => {
           scheduledAt: when.toISOString()
         })
       });
-      const json = await res.json();
+      const raw = await res.text();
+      const json = (() => {
+        try {
+          return JSON.parse(raw);
+        } catch {
+          return null;
+        }
+      })();
+      if (!json) throw new Error('Failed to schedule (invalid server response)');
       if (!res.ok || !json.success) throw new Error(json.error || 'Failed to schedule');
       dispatch(showToast({ message: 'Email scheduled successfully', type: 'success' }));
       setEmailOpen(false);
