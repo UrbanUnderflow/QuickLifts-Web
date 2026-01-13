@@ -1183,7 +1183,7 @@ const EquityAdminPage: React.FC = () => {
         
         // Call API to generate document
         try {
-          const response = await fetch('/api/admin/generate-equity-document', {
+          const response = await fetch('/.netlify/functions/generate-equity-document', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -1317,7 +1317,7 @@ const EquityAdminPage: React.FC = () => {
       setMessage({ type: 'info', text: 'Generating Advisor Agreement + NSO Grant...' });
 
       // Call API to generate document
-      const response = await fetch('/api/admin/generate-equity-document', {
+      const response = await fetch('/.netlify/functions/generate-equity-document', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1388,7 +1388,7 @@ const EquityAdminPage: React.FC = () => {
       });
       
       // Call API to generate document
-      const response = await fetch('/api/admin/generate-equity-document', {
+      const response = await fetch('/.netlify/functions/generate-equity-document', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1468,7 +1468,7 @@ const EquityAdminPage: React.FC = () => {
           : '';
 
       if (effectiveRevisionPrompt.trim()) {
-        const response = await fetch('/api/admin/revise-equity-document', {
+        const response = await fetch('/.netlify/functions/revise-equity-document', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1749,7 +1749,7 @@ const EquityAdminPage: React.FC = () => {
     try {
       const expectedOptions = stakeholder.optionsGranted || stakeholder.totalShares || stakeholder.grants?.[0]?.numberOfShares;
 
-      const resp = await fetch('/api/admin/verify-board-consent', {
+      const resp = await fetch('/.netlify/functions/verify-board-consent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1825,7 +1825,7 @@ const EquityAdminPage: React.FC = () => {
     setIsAuditModalOpen(true);
     setIsAuditing(true);
     try {
-      const response = await fetch('/api/admin/audit-equity-document', {
+      const response = await fetch('/.netlify/functions/audit-equity-document', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
