@@ -27,7 +27,7 @@ interface FriendOfBusiness {
   lastEmailSentAt?: any;
   lastEmailMessageId?: string;
   // Email tracking fields (updated via Brevo webhook)
-  emailStatus?: 'sent' | 'delivered' | 'opened' | 'clicked' | 'bounced' | 'spam' | 'unsubscribed';
+  emailStatus?: 'sent' | 'delivered' | 'opened' | 'clicked' | 'soft_bounce' | 'hard_bounce' | 'spam' | 'unsubscribed' | 'blocked' | 'deferred' | 'error';
   lastEmailEvent?: string;
   lastEmailEventAt?: any;
   lastEmailDeliveredAt?: any;
@@ -90,10 +90,18 @@ const EmailStatusBadge: React.FC<{ friend: FriendOfBusiness; filterPeriod?: stri
           textColor: 'text-blue-400',
           borderColor: 'border-blue-500/30',
         };
-      case 'bounced':
+      case 'soft_bounce':
         return {
           icon: <AlertTriangle className="w-3 h-3" />,
-          label: 'Bounced',
+          label: 'Soft Bounce',
+          bgColor: 'bg-yellow-500/20',
+          textColor: 'text-yellow-400',
+          borderColor: 'border-yellow-500/30',
+        };
+      case 'hard_bounce':
+        return {
+          icon: <AlertTriangle className="w-3 h-3" />,
+          label: 'Hard Bounce',
           bgColor: 'bg-red-500/20',
           textColor: 'text-red-400',
           borderColor: 'border-red-500/30',
@@ -105,6 +113,38 @@ const EmailStatusBadge: React.FC<{ friend: FriendOfBusiness; filterPeriod?: stri
           bgColor: 'bg-orange-500/20',
           textColor: 'text-orange-400',
           borderColor: 'border-orange-500/30',
+        };
+      case 'unsubscribed':
+        return {
+          icon: <AlertTriangle className="w-3 h-3" />,
+          label: 'Unsubscribed',
+          bgColor: 'bg-gray-500/20',
+          textColor: 'text-gray-400',
+          borderColor: 'border-gray-500/30',
+        };
+      case 'blocked':
+        return {
+          icon: <AlertTriangle className="w-3 h-3" />,
+          label: 'Blocked',
+          bgColor: 'bg-orange-500/20',
+          textColor: 'text-orange-400',
+          borderColor: 'border-orange-500/30',
+        };
+      case 'deferred':
+        return {
+          icon: <Clock className="w-3 h-3" />,
+          label: 'Deferred',
+          bgColor: 'bg-yellow-500/20',
+          textColor: 'text-yellow-400',
+          borderColor: 'border-yellow-500/30',
+        };
+      case 'error':
+        return {
+          icon: <AlertTriangle className="w-3 h-3" />,
+          label: 'Error',
+          bgColor: 'bg-red-500/20',
+          textColor: 'text-red-400',
+          borderColor: 'border-red-500/30',
         };
       case 'sent':
       default:
