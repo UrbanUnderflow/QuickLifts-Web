@@ -3,7 +3,7 @@ import Head from 'next/head';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import { collection, addDoc, getDocs, orderBy, query, updateDoc, doc, deleteDoc } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
-import { Check, User, Mail, Loader2, X, Sparkles, Link } from 'lucide-react';
+import { Check, User, Mail, Loader2, X, Sparkles, Link, Eye, MousePointer, AlertTriangle, Clock, Send } from 'lucide-react';
 import { convertFirestoreTimestamp, formatDate } from '../../utils/formatDate';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../../redux/store';
@@ -25,6 +25,17 @@ interface FriendOfBusiness {
   lastEmailSubject?: string;
   lastEmailBody?: string;
   lastEmailSentAt?: any;
+  lastEmailMessageId?: string;
+  // Email tracking fields (updated via Brevo webhook)
+  emailStatus?: 'sent' | 'delivered' | 'opened' | 'clicked' | 'bounced' | 'spam' | 'unsubscribed';
+  lastEmailEvent?: string;
+  lastEmailEventAt?: any;
+  lastEmailDeliveredAt?: any;
+  lastEmailOpenedAt?: any;
+  lastEmailClickedAt?: any;
+  lastEmailClickedLink?: string;
+  emailOpenCount?: number;
+  emailClickCount?: number;
 }
 
 const emptyFriend: FriendOfBusiness = {
@@ -33,6 +44,89 @@ const emptyFriend: FriendOfBusiness = {
   email: '',
   titleOrCompany: '',
   notes: ''
+};
+
+// Email status display component
+const EmailStatusBadge: React.FC<{ friend: FriendOfBusiness }> = ({ friend }) => {
+  const { emailStatus, lastEmailSentAt, lastEmailOpenedAt, lastEmailClickedAt, emailOpenCount, emailClickCount } = friend;
+  
+  // If no email has been sent
+  if (!lastEmailSentAt && !emailStatus) {
+    return <span className="text-zinc-500 text-xs">—</span>;
+  }
+
+  const getStatusConfig = () => {
+    switch (emailStatus) {
+      case 'clicked':
+        return {
+          icon: <MousePointer className="w-3 h-3" />,
+          label: 'Clicked',
+          bgColor: 'bg-purple-500/20',
+          textColor: 'text-purple-400',
+          borderColor: 'border-purple-500/30',
+        };
+      case 'opened':
+        return {
+          icon: <Eye className="w-3 h-3" />,
+          label: 'Opened',
+          bgColor: 'bg-green-500/20',
+          textColor: 'text-green-400',
+          borderColor: 'border-green-500/30',
+        };
+      case 'delivered':
+        return {
+          icon: <Check className="w-3 h-3" />,
+          label: 'Delivered',
+          bgColor: 'bg-blue-500/20',
+          textColor: 'text-blue-400',
+          borderColor: 'border-blue-500/30',
+        };
+      case 'bounced':
+        return {
+          icon: <AlertTriangle className="w-3 h-3" />,
+          label: 'Bounced',
+          bgColor: 'bg-red-500/20',
+          textColor: 'text-red-400',
+          borderColor: 'border-red-500/30',
+        };
+      case 'spam':
+        return {
+          icon: <AlertTriangle className="w-3 h-3" />,
+          label: 'Spam',
+          bgColor: 'bg-orange-500/20',
+          textColor: 'text-orange-400',
+          borderColor: 'border-orange-500/30',
+        };
+      case 'sent':
+      default:
+        return {
+          icon: <Send className="w-3 h-3" />,
+          label: 'Sent',
+          bgColor: 'bg-zinc-500/20',
+          textColor: 'text-zinc-400',
+          borderColor: 'border-zinc-500/30',
+        };
+    }
+  };
+
+  const config = getStatusConfig();
+  const openTime = lastEmailOpenedAt ? convertFirestoreTimestamp(lastEmailOpenedAt) : null;
+  const clickTime = lastEmailClickedAt ? convertFirestoreTimestamp(lastEmailClickedAt) : null;
+
+  return (
+    <div className="flex flex-col gap-1">
+      <span className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full ${config.bgColor} ${config.textColor} border ${config.borderColor}`}>
+        {config.icon}
+        {config.label}
+      </span>
+      {(emailOpenCount && emailOpenCount > 0) && (
+        <span className="text-[10px] text-zinc-500">
+          {emailOpenCount} open{emailOpenCount > 1 ? 's' : ''}
+          {emailClickCount && emailClickCount > 0 ? `, ${emailClickCount} click${emailClickCount > 1 ? 's' : ''}` : ''}
+        </span>
+      )}
+    </div>
+  );
 };
 
 // Review periods for investor update generator
@@ -302,7 +396,8 @@ const FriendsOfBusinessPage: React.FC = () => {
         body: JSON.stringify({
           to: { email: emailFriend.email, name: `${emailFriend.firstName || ''} ${emailFriend.lastName || ''}`.trim() || emailFriend.email },
           subject: emailSubject,
-          textContent: emailBody
+          textContent: emailBody,
+          friendId: emailFriend.id // Pass friendId for tracking
         })
       });
       const raw = await res.text();
@@ -317,15 +412,27 @@ const FriendsOfBusinessPage: React.FC = () => {
       if (!res.ok || !json.success) throw new Error(json.error || 'Failed to send');
       if (emailFriend.id) {
         const actor = (currentUser?.username || currentUser?.displayName || currentUser?.email || 'admin') as string;
+        const now = new Date();
         await updateDoc(doc(db, 'friends-of-business', emailFriend.id), {
           lastEmailSubject: emailSubject,
           lastEmailBody: emailBody,
-          lastEmailSentAt: new Date(),
+          lastEmailSentAt: now,
           lastEmailMessageId: json.messageId || null,
-          updatedAt: new Date(),
+          emailStatus: 'sent', // Set initial status
+          emailOpenCount: 0, // Reset counts for new email
+          emailClickCount: 0,
+          updatedAt: now,
           lastUpdatedBy: actor
         } as any);
-        setFriends(prev => prev.map(p => p.id === emailFriend.id ? { ...p, updatedAt: new Date(), lastUpdatedBy: actor } : p));
+        setFriends(prev => prev.map(p => p.id === emailFriend.id ? { 
+          ...p, 
+          updatedAt: now, 
+          lastUpdatedBy: actor,
+          emailStatus: 'sent' as const,
+          lastEmailSentAt: now,
+          emailOpenCount: 0,
+          emailClickCount: 0
+        } : p));
       }
       dispatch(showToast({ message: 'Email sent successfully', type: 'success' }));
       setEmailOpen(false);
@@ -352,7 +459,8 @@ const FriendsOfBusinessPage: React.FC = () => {
           to: { email: emailFriend.email, name: `${emailFriend.firstName || ''} ${emailFriend.lastName || ''}`.trim() || emailFriend.email },
           subject: emailSubject,
           textContent: emailBody,
-          scheduledAt: when.toISOString()
+          scheduledAt: when.toISOString(),
+          friendId: emailFriend.id // Pass friendId for tracking
         })
       });
       const raw = await res.text();
@@ -740,6 +848,7 @@ Tremaine`;
                   <th className="text-left p-3">Email</th>
                   <th className="text-left p-3">Title/Company</th>
                   <th className="text-left p-3">Notes</th>
+                  <th className="text-left p-3">Email Status</th>
                   <th className="text-left p-3">Created By</th>
                   <th className="text-left p-3">Updated By</th>
                   <th className="text-left p-3">Updated</th>
@@ -749,14 +858,14 @@ Tremaine`;
               <tbody>
                 {loading && (
                   <tr>
-                    <td className="p-4 text-zinc-400" colSpan={9}>
+                    <td className="p-4 text-zinc-400" colSpan={10}>
                       Loading…
                     </td>
                   </tr>
                 )}
                 {!loading && filtered.length === 0 && (
                   <tr>
-                    <td className="p-4 text-zinc-400" colSpan={9}>
+                    <td className="p-4 text-zinc-400" colSpan={10}>
                       No friends found.
                     </td>
                   </tr>
@@ -781,6 +890,9 @@ Tremaine`;
                           ) : (
                             <span className="text-zinc-500 text-xs">—</span>
                           )}
+                        </td>
+                        <td className="p-3">
+                          <EmailStatusBadge friend={row} />
                         </td>
                         <td className="p-3 text-zinc-300">{row.createdBy || '—'}</td>
                         <td className="p-3 text-zinc-300">{row.lastUpdatedBy || '—'}</td>

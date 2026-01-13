@@ -1,6 +1,11 @@
 import type { Handler } from '@netlify/functions';
 
-type SendResponse = { success: boolean; messageId?: string; error?: string };
+type SendResponse = { 
+  success: boolean; 
+  messageId?: string; 
+  emailRecordId?: string;
+  error?: string;
+};
 
 export const handler: Handler = async (event) => {
   if (event.httpMethod !== 'POST') {
@@ -25,7 +30,7 @@ export const handler: Handler = async (event) => {
     }
 
     const body = event.body ? JSON.parse(event.body) : {};
-    const { to, subject, textContent, htmlContent, scheduledAt } = body || {};
+    const { to, subject, textContent, htmlContent, scheduledAt, friendId } = body || {};
 
     if (!to?.email || !subject || (!textContent && !htmlContent)) {
       return {
@@ -35,16 +40,31 @@ export const handler: Handler = async (event) => {
       };
     }
 
+    // Generate a unique email record ID for tracking
+    const emailRecordId = `email_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+    // Build HTML content with proper styling
+    const finalHtmlContent = htmlContent ||
+      `<pre style="white-space:pre-wrap;font:14px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">${escapeHtml(
+        textContent
+      )}</pre>`;
+
     const payload: any = {
       sender: { name: senderName, email: senderEmail },
       to: [{ email: to.email, name: to.name || to.email }],
       subject,
-      htmlContent:
-        htmlContent ||
-        `<pre style="white-space:pre-wrap;font:14px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">${escapeHtml(
-          textContent
-        )}</pre>`,
+      htmlContent: finalHtmlContent,
       replyTo: { email: senderEmail, name: senderName },
+      // Enable Brevo tracking - this is safe for domain reputation
+      // Brevo handles tracking via their own infrastructure
+      headers: {
+        'X-Mailin-custom': JSON.stringify({
+          friendId: friendId || null,
+          emailRecordId: emailRecordId
+        })
+      },
+      // Tags help organize emails and enable filtering in Brevo dashboard
+      tags: ['friends-of-business', friendId ? `friend:${friendId}` : 'no-friend-id'].filter(Boolean),
     };
 
     // Optional scheduling per Brevo API (ISO8601 with timezone)
@@ -78,7 +98,11 @@ export const handler: Handler = async (event) => {
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ success: true, messageId: data?.messageId } satisfies SendResponse),
+      body: JSON.stringify({ 
+        success: true, 
+        messageId: data?.messageId,
+        emailRecordId: emailRecordId
+      } satisfies SendResponse),
     };
   } catch (e: any) {
     return {
