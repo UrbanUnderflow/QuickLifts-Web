@@ -73,12 +73,6 @@
   to = "/"
   status = 200
 
-# Explicit redirect for subscribe page to ensure it works
-[[redirects]]
-  from = "/subscribe"
-  to = "/"
-  status = 200
-
 # Catch-all for SPA routes - this should be last and more specific
 [[redirects]]
   from = "/*"
