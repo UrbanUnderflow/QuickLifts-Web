@@ -3142,6 +3142,21 @@ const EquityAdminPage: React.FC = () => {
                             </button>
                           </>
                         )}
+                        {/* Delete button for error/generating states */}
+                        {edoc.status !== 'completed' && (
+                          <button
+                            onClick={() => handleDeleteEquityDoc(edoc.id)}
+                            disabled={deletingEquityDocId === edoc.id}
+                            className="flex items-center gap-1 px-3 py-2 bg-red-900/30 hover:bg-red-900/50 text-red-400 rounded-lg text-sm transition-colors"
+                          >
+                            {deletingEquityDocId === edoc.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="w-4 h-4" />
+                            )}
+                            Delete
+                          </button>
+                        )}
                       </div>
                     </div>
 
