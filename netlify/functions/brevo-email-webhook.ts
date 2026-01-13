@@ -94,15 +94,17 @@ export const handler: Handler = async (event) => {
       
       console.log(`[brevo-webhook] Processing event: ${eventType} for ${email}`);
 
-      // Parse custom headers to get friendId
+      // Parse custom headers to get friendId and updatePeriodId
       let friendId: string | null = null;
       let emailRecordId: string | null = null;
+      let updatePeriodId: string | null = null;
       
       if (webhookEvent['X-Mailin-custom']) {
         try {
           const custom = JSON.parse(webhookEvent['X-Mailin-custom']);
           friendId = custom.friendId || null;
           emailRecordId = custom.emailRecordId || null;
+          updatePeriodId = custom.updatePeriodId || null;
         } catch (e) {
           console.warn('[brevo-webhook] Failed to parse X-Mailin-custom:', e);
         }
@@ -150,8 +152,36 @@ export const handler: Handler = async (event) => {
               break;
           }
 
+          // Also update the per-update period tracking if we have an updatePeriodId
+          if (updatePeriodId) {
+            const periodKey = `emailUpdates.${updatePeriodId}`;
+            switch (eventType) {
+              case 'delivered':
+                updateData[`${periodKey}.status`] = 'delivered';
+                updateData[`${periodKey}.deliveredAt`] = now;
+                break;
+              case 'opened':
+                updateData[`${periodKey}.status`] = 'opened';
+                updateData[`${periodKey}.openedAt`] = now;
+                updateData[`${periodKey}.openCount`] = admin.firestore.FieldValue.increment(1);
+                break;
+              case 'click':
+                updateData[`${periodKey}.status`] = 'clicked';
+                updateData[`${periodKey}.clickedAt`] = now;
+                updateData[`${periodKey}.clickCount`] = admin.firestore.FieldValue.increment(1);
+                break;
+              case 'soft_bounce':
+              case 'hard_bounce':
+                updateData[`${periodKey}.status`] = 'bounced';
+                break;
+              case 'spam':
+                updateData[`${periodKey}.status`] = 'spam';
+                break;
+            }
+          }
+
           await friendRef.update(updateData);
-          console.log(`[brevo-webhook] Updated friend ${friendId} with event ${eventType}`);
+          console.log(`[brevo-webhook] Updated friend ${friendId} with event ${eventType}${updatePeriodId ? ` for period ${updatePeriodId}` : ''}`);
 
           // Also store in email history subcollection for detailed tracking
           const historyRef = friendRef.collection('emailHistory').doc(emailRecordId || messageId || `${Date.now()}`);

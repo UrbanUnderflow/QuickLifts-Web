@@ -30,7 +30,7 @@ export const handler: Handler = async (event) => {
     }
 
     const body = event.body ? JSON.parse(event.body) : {};
-    const { to, subject, textContent, htmlContent, scheduledAt, friendId } = body || {};
+    const { to, subject, textContent, htmlContent, scheduledAt, friendId, updatePeriodId } = body || {};
 
     if (!to?.email || !subject || (!textContent && !htmlContent)) {
       return {
@@ -60,11 +60,16 @@ export const handler: Handler = async (event) => {
       headers: {
         'X-Mailin-custom': JSON.stringify({
           friendId: friendId || null,
-          emailRecordId: emailRecordId
+          emailRecordId: emailRecordId,
+          updatePeriodId: updatePeriodId || null
         })
       },
       // Tags help organize emails and enable filtering in Brevo dashboard
-      tags: ['friends-of-business', friendId ? `friend:${friendId}` : 'no-friend-id'].filter(Boolean),
+      tags: [
+        'friends-of-business', 
+        friendId ? `friend:${friendId}` : null,
+        updatePeriodId ? `update:${updatePeriodId}` : null
+      ].filter(Boolean),
     };
 
     // Optional scheduling per Brevo API (ISO8601 with timezone)

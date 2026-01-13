@@ -36,6 +36,9 @@ interface FriendOfBusiness {
   lastEmailClickedLink?: string;
   emailOpenCount?: number;
   emailClickCount?: number;
+  // Per-update tracking
+  lastEmailUpdatePeriodId?: string; // Which update this email was for
+  emailUpdates?: Record<string, EmailUpdateRecord>; // History by update period ID
 }
 
 const emptyFriend: FriendOfBusiness = {
@@ -47,10 +50,16 @@ const emptyFriend: FriendOfBusiness = {
 };
 
 // Email status display component
-const EmailStatusBadge: React.FC<{ friend: FriendOfBusiness }> = ({ friend }) => {
-  const { emailStatus, lastEmailSentAt, lastEmailOpenedAt, lastEmailClickedAt, emailOpenCount, emailClickCount } = friend;
+const EmailStatusBadge: React.FC<{ friend: FriendOfBusiness; filterPeriod?: string }> = ({ friend, filterPeriod }) => {
+  // If filtering by a specific update period, show that period's status
+  const updateRecord = filterPeriod && friend.emailUpdates?.[filterPeriod];
   
-  // If no email has been sent
+  const emailStatus = updateRecord ? updateRecord.status : friend.emailStatus;
+  const lastEmailSentAt = updateRecord ? updateRecord.sentAt : friend.lastEmailSentAt;
+  const emailOpenCount = updateRecord ? updateRecord.openCount : friend.emailOpenCount;
+  const emailClickCount = updateRecord ? updateRecord.clickCount : friend.emailClickCount;
+  
+  // If no email has been sent (for this period if filtering)
   if (!lastEmailSentAt && !emailStatus) {
     return <span className="text-zinc-500 text-xs">—</span>;
   }
@@ -110,8 +119,6 @@ const EmailStatusBadge: React.FC<{ friend: FriendOfBusiness }> = ({ friend }) =>
   };
 
   const config = getStatusConfig();
-  const openTime = lastEmailOpenedAt ? convertFirestoreTimestamp(lastEmailOpenedAt) : null;
-  const clickTime = lastEmailClickedAt ? convertFirestoreTimestamp(lastEmailClickedAt) : null;
 
   return (
     <div className="flex flex-col gap-1">
@@ -131,6 +138,17 @@ const EmailStatusBadge: React.FC<{ friend: FriendOfBusiness }> = ({ friend }) =>
 
 // Review periods for investor update generator
 const reviewPeriods = [
+  {
+    id: 'jan-26',
+    label: 'January 2026 Update',
+    url: 'fitwithpulse.ai/review/jan-26',
+    month: 'January',
+    highlights: [
+      'New year kickoff',
+      'Q1 goals',
+      'Product roadmap'
+    ]
+  },
   {
     id: 'year2025',
     label: 'Year 2025 Review',
@@ -167,6 +185,18 @@ const reviewPeriods = [
   }
 ];
 
+// Email update history type - tracks status per update period
+interface EmailUpdateRecord {
+  updatePeriodId: string;
+  sentAt: any;
+  status: 'sent' | 'delivered' | 'opened' | 'clicked' | 'bounced' | 'spam';
+  openedAt?: any;
+  clickedAt?: any;
+  openCount?: number;
+  clickCount?: number;
+  messageId?: string;
+}
+
 const FriendsOfBusinessPage: React.FC = () => {
   const [form, setForm] = useState<FriendOfBusiness>(emptyFriend);
   const [saving, setSaving] = useState(false);
@@ -199,6 +229,12 @@ const FriendsOfBusinessPage: React.FC = () => {
   // Investor update generator state
   const [selectedReviewPeriod, setSelectedReviewPeriod] = useState<string>('');
   const [generatingUpdate, setGeneratingUpdate] = useState(false);
+  
+  // Email update period selection (for tagging emails)
+  const [emailUpdatePeriod, setEmailUpdatePeriod] = useState<string>('');
+  
+  // Table filter by update period
+  const [filterUpdatePeriod, setFilterUpdatePeriod] = useState<string>('');
 
   // Refs for text selection
   const templateBodyRef = React.useRef<HTMLTextAreaElement>(null);
@@ -359,6 +395,8 @@ const FriendsOfBusinessPage: React.FC = () => {
       setEmailSubject(subject);
       setEmailBody(body);
     }
+    // Auto-select the update period if one was selected in the generator
+    setEmailUpdatePeriod(selectedReviewPeriod || '');
     setEmailOpen(true);
   };
 
@@ -397,7 +435,8 @@ const FriendsOfBusinessPage: React.FC = () => {
           to: { email: emailFriend.email, name: `${emailFriend.firstName || ''} ${emailFriend.lastName || ''}`.trim() || emailFriend.email },
           subject: emailSubject,
           textContent: emailBody,
-          friendId: emailFriend.id // Pass friendId for tracking
+          friendId: emailFriend.id, // Pass friendId for tracking
+          updatePeriodId: emailUpdatePeriod || null // Pass update period for filtering
         })
       });
       const raw = await res.text();
@@ -413,28 +452,66 @@ const FriendsOfBusinessPage: React.FC = () => {
       if (emailFriend.id) {
         const actor = (currentUser?.username || currentUser?.displayName || currentUser?.email || 'admin') as string;
         const now = new Date();
-        await updateDoc(doc(db, 'friends-of-business', emailFriend.id), {
+        
+        // Build update data
+        const updateData: any = {
           lastEmailSubject: emailSubject,
           lastEmailBody: emailBody,
           lastEmailSentAt: now,
           lastEmailMessageId: json.messageId || null,
-          emailStatus: 'sent', // Set initial status
-          emailOpenCount: 0, // Reset counts for new email
+          emailStatus: 'sent',
+          emailOpenCount: 0,
           emailClickCount: 0,
           updatedAt: now,
           lastUpdatedBy: actor
-        } as any);
-        setFriends(prev => prev.map(p => p.id === emailFriend.id ? { 
-          ...p, 
-          updatedAt: now, 
-          lastUpdatedBy: actor,
-          emailStatus: 'sent' as const,
-          lastEmailSentAt: now,
-          emailOpenCount: 0,
-          emailClickCount: 0
-        } : p));
+        };
+        
+        // If tagged with an update period, also save to emailUpdates map
+        if (emailUpdatePeriod) {
+          updateData.lastEmailUpdatePeriodId = emailUpdatePeriod;
+          updateData[`emailUpdates.${emailUpdatePeriod}`] = {
+            updatePeriodId: emailUpdatePeriod,
+            sentAt: now,
+            status: 'sent',
+            openCount: 0,
+            clickCount: 0,
+            messageId: json.messageId || null
+          };
+        }
+        
+        await updateDoc(doc(db, 'friends-of-business', emailFriend.id), updateData);
+        
+        // Update local state
+        setFriends(prev => prev.map(p => {
+          if (p.id !== emailFriend.id) return p;
+          const updated = { 
+            ...p, 
+            updatedAt: now, 
+            lastUpdatedBy: actor,
+            emailStatus: 'sent' as const,
+            lastEmailSentAt: now,
+            emailOpenCount: 0,
+            emailClickCount: 0,
+            lastEmailUpdatePeriodId: emailUpdatePeriod || p.lastEmailUpdatePeriodId
+          };
+          if (emailUpdatePeriod) {
+            updated.emailUpdates = {
+              ...p.emailUpdates,
+              [emailUpdatePeriod]: {
+                updatePeriodId: emailUpdatePeriod,
+                sentAt: now,
+                status: 'sent',
+                openCount: 0,
+                clickCount: 0,
+                messageId: json.messageId || null
+              }
+            };
+          }
+          return updated;
+        }));
       }
-      dispatch(showToast({ message: 'Email sent successfully', type: 'success' }));
+      const periodLabel = emailUpdatePeriod ? ` (${reviewPeriods.find(p => p.id === emailUpdatePeriod)?.label})` : '';
+      dispatch(showToast({ message: `Email sent successfully${periodLabel}`, type: 'success' }));
       setEmailOpen(false);
     } catch (e) {
       console.error('Send email failed', e);
@@ -828,15 +905,48 @@ Tremaine`;
             </div>
           </div>
 
-          {/* Search */}
-          <div className="mb-4">
+          {/* Search and Filter */}
+          <div className="mb-4 flex flex-col sm:flex-row gap-3">
             <input
               placeholder="Search name, email, title..."
               className="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 w-full max-w-md"
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-zinc-400 whitespace-nowrap">Filter by Update:</label>
+              <select
+                className="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm min-w-[200px]"
+                value={filterUpdatePeriod}
+                onChange={e => setFilterUpdatePeriod(e.target.value)}
+              >
+                <option value="">All emails (latest status)</option>
+                {reviewPeriods.map(period => (
+                  <option key={period.id} value={period.id}>
+                    {period.label}
+                  </option>
+                ))}
+              </select>
+              {filterUpdatePeriod && (
+                <button
+                  onClick={() => setFilterUpdatePeriod('')}
+                  className="text-xs text-zinc-400 hover:text-white px-2 py-1 rounded bg-zinc-800 border border-zinc-700"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
           </div>
+          
+          {/* Filter indicator */}
+          {filterUpdatePeriod && (
+            <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg flex items-center gap-2">
+              <Eye className="w-4 h-4 text-blue-400" />
+              <span className="text-sm text-blue-300">
+                Showing email status for: <strong>{reviewPeriods.find(p => p.id === filterUpdatePeriod)?.label}</strong>
+              </span>
+            </div>
+          )}
 
           {/* Table */}
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-x-auto">
@@ -892,7 +1002,7 @@ Tremaine`;
                           )}
                         </td>
                         <td className="p-3">
-                          <EmailStatusBadge friend={row} />
+                          <EmailStatusBadge friend={row} filterPeriod={filterUpdatePeriod} />
                         </td>
                         <td className="p-3 text-zinc-300">{row.createdBy || '—'}</td>
                         <td className="p-3 text-zinc-300">{row.lastUpdatedBy || '—'}</td>
@@ -1015,6 +1125,29 @@ Tremaine`;
                       />
                     </div>
                   </div>
+                  
+                  {/* Update Period Tag */}
+                  <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-3">
+                    <label className="text-xs text-zinc-400 mb-2 block">Tag this email with an update period (for tracking)</label>
+                    <select
+                      className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm"
+                      value={emailUpdatePeriod}
+                      onChange={e => setEmailUpdatePeriod(e.target.value)}
+                    >
+                      <option value="">No tag (general email)</option>
+                      {reviewPeriods.map(period => (
+                        <option key={period.id} value={period.id}>
+                          📊 {period.label}
+                        </option>
+                      ))}
+                    </select>
+                    {emailUpdatePeriod && (
+                      <p className="text-xs text-green-400 mt-2">
+                        ✓ This email will be tracked under "{reviewPeriods.find(p => p.id === emailUpdatePeriod)?.label}"
+                      </p>
+                    )}
+                  </div>
+                  
                   <div>
                     <label className="text-xs text-zinc-400">Subject</label>
                     <input
