@@ -93,18 +93,80 @@
     X-Frame-Options = "DENY"
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
+    # Enable compression negotiation
+    Vary = "Accept-Encoding"
 
-# Specific headers for static assets
+# Specific headers for static assets with compression
 [[headers]]
   for = "/static/*"
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
+    Vary = "Accept-Encoding"
+
+# Headers for JavaScript bundles
+[[headers]]
+  for = "/*.js"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+    Vary = "Accept-Encoding"
+    Content-Type = "application/javascript; charset=utf-8"
+
+# Headers for CSS files
+[[headers]]
+  for = "/*.css"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+    Vary = "Accept-Encoding"
+    Content-Type = "text/css; charset=utf-8"
+
+# Headers for JSON files
+[[headers]]
+  for = "/*.json"
+  [headers.values]
+    Vary = "Accept-Encoding"
+    Content-Type = "application/json; charset=utf-8"
+
+# Headers for HTML files
+[[headers]]
+  for = "/*.html"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+    Vary = "Accept-Encoding"
+    Content-Type = "text/html; charset=utf-8"
+
+# Headers for SVG files
+[[headers]]
+  for = "/*.svg"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+    Vary = "Accept-Encoding"
+    Content-Type = "image/svg+xml"
+
+# Headers for font files (WOFF2 is already compressed)
+[[headers]]
+  for = "/*.woff2"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/*.woff"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+    Vary = "Accept-Encoding"
+
+# Headers for _next directory (Next.js build output)
+[[headers]]
+  for = "/_next/static/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+    Vary = "Accept-Encoding"
 
 # Headers for API routes
 [[headers]]
   for = "/api/*"
   [headers.values]
     Cache-Control = "no-cache, no-store, must-revalidate"
+    Vary = "Accept-Encoding"
 
 [functions]
   directory = "netlify/functions"

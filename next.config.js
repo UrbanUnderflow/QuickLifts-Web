@@ -1,5 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Enable gzip compression for responses
+  compress: true,
+  // Enable SWC minification for smaller bundles
+  swcMinify: true,
   webpack: (config, { isServer }) => {
     config.experiments = {
       ...config.experiments,

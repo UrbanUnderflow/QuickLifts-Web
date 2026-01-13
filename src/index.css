@@ -21,13 +21,15 @@ code {
   src: url('../public/fonts/Thunder-LC.ttf') format('truetype');
   font-weight: normal;
   font-style: normal;
+  font-display: swap; /* Prevents font loading from blocking render */
 }
 
 @font-face {
   font-family: 'HK Grotesk';
-  src: url('../public/fonts/HKGrotesk-Regular.otf') format('truetype');
+  src: url('../public/fonts/HKGrotesk-Regular.otf') format('opentype');
   font-weight: normal;
   font-style: normal;
+  font-display: swap; /* Prevents font loading from blocking render */
 }
 
 /* And add this CSS utility class */
