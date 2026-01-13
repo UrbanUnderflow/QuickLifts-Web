@@ -139,7 +139,7 @@ const MarketingContent: React.FC<{
                 Creators
               </a>
               <a 
-                href="/subscribe" 
+                href="/pricing" 
                 className="text-zinc-400 hover:text-white transition-colors text-sm font-medium"
               >
                 Pricing

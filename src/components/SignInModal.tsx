@@ -234,7 +234,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
 
   // --- NEW: Subscription check function ---
   // After sign in/up, call this to fetch subscription data from Stripe (via your endpoint)
-  // and update the user document. If the user is unsubscribed, redirect to /subscribe.
+  // and update the user document. If the user is unsubscribed, redirect to /pricing.
   const checkSubscriptionAndProceed = async (user: any) => {
     try {
       console.log('[SignInModal] Checking subscription:', {
@@ -283,7 +283,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
         if (firestoreUser.subscriptionType === SubscriptionType.unsubscribed && !isOnCoachPage) {
           console.log('[SignInModal] Unsubscribed user, closing modal and redirecting');
           onClose?.();
-          router.push('/subscribe');
+          router.push('/pricing');
           return;
         } else if (isOnCoachPage) {
           console.log('[SignInModal] User on coach page, skipping subscription requirement');
@@ -766,7 +766,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
           if (userDoc.subscriptionType === SubscriptionType.unsubscribed && !isOnCoachPage) {
             console.log('[SignInModal] Unsubscribed user, redirecting');
             onClose?.();
-            router.push('/subscribe');
+            router.push('/pricing');
             return;
           } else if (isOnCoachPage) {
             console.log('[SignInModal] User on coach page, skipping subscription requirement');
@@ -1030,8 +1030,8 @@ const SignInModal: React.FC<SignInModalProps> = ({
       // Determine next step *after* potential auto-join attempt or deferral
       const isOnCoachPage = router.pathname.startsWith('/coach/') || router.asPath.startsWith('/coach/');
       if (refreshedUser.subscriptionType === SubscriptionType.unsubscribed && !isOnCoachPage) {
-        console.log('[SignInModal] Quiz complete. Unsubscribed. Redirecting to /subscribe');
-        router.push('/subscribe'); // Navigate directly if unsubscribed
+        console.log('[SignInModal] Quiz complete. Unsubscribed. Redirecting to /pricing');
+        router.push('/pricing'); // Navigate directly if unsubscribed
       } else {
         console.log('[SignInModal] Quiz complete. Closing modal.');
         onClose?.(); // Close modal for subscribed users (no redirect needed)
@@ -1178,8 +1178,8 @@ const SignInModal: React.FC<SignInModalProps> = ({
               // Handle next step based on subscription status
               const isOnCoachPage = router.pathname.startsWith('/coach/') || router.asPath.startsWith('/coach/');
               if (refreshedUser.subscriptionType === SubscriptionType.unsubscribed && !isOnCoachPage) {
-                console.log('[SignInModal] Quiz skipped. Unsubscribed. Redirecting to /subscribe');
-                router.push('/subscribe');
+                console.log('[SignInModal] Quiz skipped. Unsubscribed. Redirecting to /pricing');
+                router.push('/pricing');
               } else {
                 console.log('[SignInModal] Quiz skipped. Closing modal.');
                 onClose?.();
@@ -2348,12 +2348,12 @@ const SignInModal: React.FC<SignInModalProps> = ({
       const isOnCoachPage = router.pathname.startsWith('/coach/') || router.asPath.startsWith('/coach/');
       
       if (userDoc.subscriptionType === SubscriptionType.unsubscribed && !isOnPaymentPage && !isOnConnectPage && !isOnCoachInvitePage && !isOnCoachPage) {
-        console.log('[SignInModal] handleSignInSuccess: User is unsubscribed. Redirecting to /subscribe.');
+        console.log('[SignInModal] handleSignInSuccess: User is unsubscribed. Redirecting to /pricing.');
         // Preserve roundIdRedirect if it exists for post-subscription flow
         if (roundIdRedirect) {
              console.log(`[SignInModal] handleSignInSuccess: Unsubscribed user came from round invite (${roundIdRedirect}). Redirecting to subscribe, state preserved.`);
         }
-        router.push('/subscribe');
+        router.push('/pricing');
         // Return EARLY to prevent other redirect/close logic
         return; 
       } else if (isOnPaymentPage || isOnConnectPage || isOnCoachInvitePage || isOnCoachPage) {

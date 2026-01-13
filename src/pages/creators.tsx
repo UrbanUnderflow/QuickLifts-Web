@@ -187,7 +187,7 @@ const CreatorsPage: NextPage<CreatorsPageProps> = ({ metaData }) => {
               <a href="/creators" className="text-[#E0FE10] hover:text-[#d4f00f] transition-colors text-sm font-medium font-semibold">
                 Creators
               </a>
-              <a href="/subscribe" className="text-zinc-400 hover:text-white transition-colors text-sm font-medium">
+              <a href="/pricing" className="text-zinc-400 hover:text-white transition-colors text-sm font-medium">
                 Pricing
               </a>
         </nav>

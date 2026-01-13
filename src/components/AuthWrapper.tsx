@@ -67,7 +67,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
   const publicRoutes = [
     '/', '/about', '/creator', '/creators', '/rounds', '/privacyPolicy', '/programming', '/100trainers', 
     '/starter-pack', '/one-on-one', '/train-your-client', '/stacks', '/moves', '/terms', '/press', '/100trainers',
-    '/subscribe', '/download', '/morning-mobility-challenge', '/review', '/MoveAndFuelATL', '/investor', '/invest', '/GetInTouch', '/secure', '/haveyoupaid',
+    '/subscribe', '/pricing', '/download', '/morning-mobility-challenge', '/review', '/MoveAndFuelATL', '/investor', '/invest', '/GetInTouch', '/secure', '/haveyoupaid',
     // Public onboarding/marketing entry points
     '/sign-up', '/coach', '/coach/sign-up', '/build-your-round', '/creator-onboarding',
     // Design language showcase
@@ -316,9 +316,9 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
                       console.log(`[AuthWrapper] Subscription inactive but redirects disabled. Allowing access to ${router.pathname}.`);
                       setShowSignInModal(false);
                     } else {
-                      console.log(`[AuthWrapper] Expired or no active subscription on protected route (${router.pathname}). Redirecting to /subscribe.`);
-                      if (router.pathname.toLowerCase() !== '/subscribe') {
-                        router.push('/subscribe');
+                      console.log(`[AuthWrapper] Expired or no active subscription on protected route (${router.pathname}). Redirecting to /pricing.`);
+                      if (router.pathname.toLowerCase() !== '/pricing' && router.pathname.toLowerCase() !== '/subscribe') {
+                        router.push('/pricing');
                       }
                       setShowSignInModal(false);
                     }
@@ -332,8 +332,8 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
                     console.log('[AuthWrapper] Redirects disabled; allowing access.');
                     setShowSignInModal(false);
                   } else {
-                    if (!router.pathname.startsWith('/payment/') && router.pathname.toLowerCase() !== '/subscribe') {
-                      router.push('/subscribe');
+                    if (!router.pathname.startsWith('/payment/') && router.pathname.toLowerCase() !== '/pricing' && router.pathname.toLowerCase() !== '/subscribe') {
+                      router.push('/pricing');
                     }
                     setShowSignInModal(false);
                   }

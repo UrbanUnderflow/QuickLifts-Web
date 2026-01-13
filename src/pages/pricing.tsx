@@ -58,7 +58,7 @@ const FAQItem: React.FC<{
   </motion.div>
 );
 
-const Subscribe: React.FC = () => {
+const Pricing: React.FC = () => {
   const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'yearly'>('yearly');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -513,4 +513,4 @@ const Subscribe: React.FC = () => {
   );
 };
 
-export default Subscribe;
+export default Pricing;
