@@ -1,3 +1,4 @@
+# Netlify configuration for Pulse Web App
 [dev]
   command = "next dev"
   framework = "next"
