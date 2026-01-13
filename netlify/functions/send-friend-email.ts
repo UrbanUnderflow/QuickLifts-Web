@@ -44,10 +44,36 @@ export const handler: Handler = async (event) => {
     const emailRecordId = `email_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
     // Build HTML content with proper styling
-    const finalHtmlContent = htmlContent ||
-      `<pre style="white-space:pre-wrap;font:14px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">${escapeHtml(
-        textContent
-      )}</pre>`;
+    // Check if content contains HTML tags (like <a href=) - if so, preserve them
+    const containsHtml = textContent && /<[a-z][\s\S]*>/i.test(textContent);
+    
+    let finalHtmlContent: string;
+    if (htmlContent) {
+      finalHtmlContent = htmlContent;
+    } else if (containsHtml) {
+      // Content has HTML - convert newlines to <br> but preserve HTML tags
+      finalHtmlContent = `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 14px; line-height: 1.6; color: #333;">
+          ${textContent
+            .replace(/\n\n/g, '</p><p style="margin: 16px 0;">')
+            .replace(/\n/g, '<br>')
+            .replace(/^/, '<p style="margin: 16px 0;">')
+            .replace(/$/, '</p>')}
+        </div>
+      `;
+      // Style any links in the content
+      finalHtmlContent = finalHtmlContent.replace(
+        /<a href="([^"]*)">/g, 
+        '<a href="$1" style="color: #2563eb; text-decoration: underline;">'
+      );
+    } else {
+      // Plain text - escape and wrap in pre
+      finalHtmlContent = `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 14px; line-height: 1.6; color: #333; white-space: pre-wrap;">
+          ${escapeHtml(textContent)}
+        </div>
+      `;
+    }
 
     const payload: any = {
       sender: { name: senderName, email: senderEmail },
