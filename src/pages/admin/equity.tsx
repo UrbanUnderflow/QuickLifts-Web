@@ -780,6 +780,11 @@ const EquityAdminPage: React.FC = () => {
   // Board Consent verification state (per stakeholder)
   const [boardConsentSelection, setBoardConsentSelection] = useState<Record<string, string>>({});
   const [boardConsentVerification, setBoardConsentVerification] = useState<Record<string, { status: 'idle' | 'verifying' | 'verified' | 'failed'; approvalDate?: string; issues?: string[] }>>({});
+
+  // Edit Grant Options state
+  const [editingGrantStakeholderId, setEditingGrantStakeholderId] = useState<string | null>(null);
+  const [editGrantOptionsValue, setEditGrantOptionsValue] = useState<number>(0);
+  const [isSavingGrantOptions, setIsSavingGrantOptions] = useState(false);
   
   // Form States
   const [newStakeholder, setNewStakeholder] = useState({
@@ -2220,6 +2225,104 @@ const EquityAdminPage: React.FC = () => {
     };
   };
 
+  // Check if a stakeholder has any documents that have been sent for signature
+  const hasDocumentsSent = (stakeholder: Stakeholder): boolean => {
+    // Get all equity documents for this stakeholder
+    const stakeholderDocs = equityDocuments.filter(d => d.stakeholderId === stakeholder.id);
+    
+    // Check if any document has a signing request that's been sent or signed
+    for (const doc of stakeholderDocs) {
+      const signingRequest = signingRequests.find(r => r.equityDocumentId === doc.id);
+      if (signingRequest && ['sent', 'viewed', 'signed'].includes(signingRequest.status)) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  // Start editing grant options for a stakeholder
+  const startEditingGrantOptions = (stakeholder: Stakeholder) => {
+    const currentOptions = stakeholder.optionsGranted || 
+      stakeholder.grants?.[0]?.numberOfShares || 
+      stakeholder.totalShares || 0;
+    setEditGrantOptionsValue(currentOptions);
+    setEditingGrantStakeholderId(stakeholder.id);
+  };
+
+  // Save updated grant options
+  const saveGrantOptions = async (stakeholder: Stakeholder) => {
+    if (editGrantOptionsValue <= 0) {
+      setMessage({ type: 'error', text: 'Options granted must be greater than 0' });
+      return;
+    }
+
+    setIsSavingGrantOptions(true);
+    try {
+      const oldOptions = stakeholder.optionsGranted || stakeholder.grants?.[0]?.numberOfShares || 0;
+      const difference = editGrantOptionsValue - oldOptions;
+
+      // Update stakeholder
+      await updateDoc(doc(db, 'equity-stakeholders', stakeholder.id), {
+        optionsGranted: editGrantOptionsValue,
+        optionsUnvested: editGrantOptionsValue - (stakeholder.optionsVested || 0),
+        updatedAt: serverTimestamp(),
+      });
+
+      // If stakeholder has grants, update the first grant's numberOfShares
+      if (stakeholder.grants && stakeholder.grants.length > 0) {
+        const grantId = stakeholder.grants[0].id;
+        await updateDoc(doc(db, 'equity-grants', grantId), {
+          numberOfShares: editGrantOptionsValue,
+          unvestedShares: editGrantOptionsValue - (stakeholder.grants[0].vestedShares || 0),
+          updatedAt: serverTimestamp(),
+        });
+      }
+
+      // Update equity pool
+      if (equityPool.id) {
+        const newGranted = equityPool.granted + difference;
+        const newAvailable = equityPool.totalReserved - newGranted - equityPool.exercised;
+        await updateDoc(doc(db, 'equity-pool', equityPool.id), {
+          granted: newGranted,
+          available: newAvailable,
+          updatedAt: serverTimestamp(),
+        });
+      }
+
+      // Update local state
+      setStakeholders(prev => prev.map(s => 
+        s.id === stakeholder.id 
+          ? { 
+              ...s, 
+              optionsGranted: editGrantOptionsValue,
+              optionsUnvested: editGrantOptionsValue - (s.optionsVested || 0),
+              grants: s.grants?.map((g, idx) => 
+                idx === 0 
+                  ? { ...g, numberOfShares: editGrantOptionsValue, unvestedShares: editGrantOptionsValue - (g.vestedShares || 0) }
+                  : g
+              )
+            }
+          : s
+      ));
+
+      if (equityPool.id) {
+        setEquityPool(prev => ({
+          ...prev,
+          granted: prev.granted + difference,
+          available: prev.totalReserved - (prev.granted + difference) - prev.exercised,
+        }));
+      }
+
+      setMessage({ type: 'success', text: `Options updated to ${formatNumber(editGrantOptionsValue)}` });
+      setEditingGrantStakeholderId(null);
+    } catch (error) {
+      console.error('Error updating grant options:', error);
+      setMessage({ type: 'error', text: 'Failed to update options. Please try again.' });
+    } finally {
+      setIsSavingGrantOptions(false);
+    }
+  };
+
   // Render Stakeholders Tab
   const renderStakeholders = () => (
     <div className="space-y-6">
@@ -2452,6 +2555,75 @@ const EquityAdminPage: React.FC = () => {
                               </>
                             )}
                           </div>
+
+                          {/* Edit Options Granted (only for option holders, and only if documents haven't been sent) */}
+                          {['advisor', 'employee', 'contractor'].includes(stakeholder.type) && (
+                            <div className="mb-6 p-4 rounded-xl bg-zinc-800/50 border border-zinc-700">
+                              <div className="flex items-center justify-between gap-4">
+                                <div>
+                                  <h5 className="text-sm font-semibold text-white flex items-center gap-2">
+                                    <TrendingUp className="w-4 h-4 text-blue-400" />
+                                    Options Granted
+                                  </h5>
+                                  <p className="text-xs text-zinc-500 mt-1">
+                                    {hasDocumentsSent(stakeholder) 
+                                      ? 'Cannot modify - documents have been sent for signature'
+                                      : 'Adjust the number of options before sending documents'}
+                                  </p>
+                                </div>
+                                
+                                {editingGrantStakeholderId === stakeholder.id ? (
+                                  <div className="flex items-center gap-2">
+                                    <input
+                                      type="number"
+                                      value={editGrantOptionsValue}
+                                      onChange={(e) => setEditGrantOptionsValue(parseInt(e.target.value) || 0)}
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="w-32 px-3 py-2 bg-zinc-900 border border-zinc-600 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
+                                      min={1}
+                                    />
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); saveGrantOptions(stakeholder); }}
+                                      disabled={isSavingGrantOptions}
+                                      className="flex items-center gap-1 px-3 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg text-sm transition-colors disabled:opacity-50"
+                                    >
+                                      {isSavingGrantOptions ? (
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                      ) : (
+                                        <Check className="w-4 h-4" />
+                                      )}
+                                    </button>
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); setEditingGrantStakeholderId(null); }}
+                                      className="flex items-center gap-1 px-3 py-2 bg-zinc-700 hover:bg-zinc-600 text-white rounded-lg text-sm transition-colors"
+                                    >
+                                      <X className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-3">
+                                    <span className="text-white font-semibold text-lg">
+                                      {formatNumber(stakeholder.optionsGranted || stakeholder.grants?.[0]?.numberOfShares || stakeholder.totalShares || 0)}
+                                    </span>
+                                    {!hasDocumentsSent(stakeholder) && (
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); startEditingGrantOptions(stakeholder); }}
+                                        className="flex items-center gap-1 px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 border border-blue-500/40 rounded-lg text-xs transition-colors"
+                                      >
+                                        <Edit3 className="w-3 h-3" />
+                                        Edit
+                                      </button>
+                                    )}
+                                    {hasDocumentsSent(stakeholder) && (
+                                      <span className="px-2 py-1 rounded-full text-xs bg-zinc-700 text-zinc-400 border border-zinc-600">
+                                        🔒 Locked
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
 
                           {/* Board Consent Link + Verify (Advisors) */}
                           {stakeholder.type === 'advisor' && (
