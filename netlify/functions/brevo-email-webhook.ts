@@ -1,21 +1,6 @@
 import type { Handler } from '@netlify/functions';
 import * as admin from 'firebase-admin';
-
-// Initialize Firebase Admin if not already initialized
-if (!admin.apps.length) {
-  const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT;
-  if (serviceAccount) {
-    try {
-      admin.initializeApp({
-        credential: admin.credential.cert(JSON.parse(serviceAccount)),
-      });
-    } catch (e) {
-      console.error('[brevo-webhook] Firebase init error:', e);
-    }
-  }
-}
-
-const db = admin.apps.length ? admin.firestore() : null;
+import { getFirebaseAdmin, getFirestore } from './utils/getServiceAccount';
 
 /**
  * Brevo Webhook Event Types:
@@ -81,13 +66,8 @@ export const handler: Handler = async (event) => {
     
     console.log(`[brevo-webhook] Received ${events.length} event(s)`);
 
-    if (!db) {
-      console.error('[brevo-webhook] Firebase not initialized');
-      return {
-        statusCode: 500,
-        body: JSON.stringify({ error: 'Database not available' }),
-      };
-    }
+    // Initialize Firebase and get Firestore
+    const db = await getFirestore();
 
     for (const webhookEvent of events) {
       const { event: eventType, email, 'message-id': messageId, date, link } = webhookEvent;

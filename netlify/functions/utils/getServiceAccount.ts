@@ -1,0 +1,83 @@
+/**
+ * Fetches Firebase service account from Firestore using minimal credentials.
+ * This allows us to bypass Netlify's 4KB environment variable limit.
+ * 
+ * Setup:
+ * 1. Run the upload script to store your service account in Firestore
+ * 2. Set these small env vars in Netlify:
+ *    - FIREBASE_PROJECT_ID
+ *    - FIREBASE_CLIENT_EMAIL  
+ *    - FIREBASE_PRIVATE_KEY (can be split if needed)
+ */
+
+import * as admin from 'firebase-admin';
+
+// Cache the service account to avoid repeated Firestore reads
+let cachedServiceAccount: admin.ServiceAccount | null = null;
+let adminApp: admin.app.App | null = null;
+
+/**
+ * Initialize Firebase Admin with minimal credentials or fetch from Firestore
+ */
+export async function getFirebaseAdmin(): Promise<admin.app.App> {
+  if (adminApp) {
+    return adminApp;
+  }
+
+  // First, try to use the full service account if it exists and fits
+  const fullServiceAccount = process.env.FIREBASE_SERVICE_ACCOUNT;
+  if (fullServiceAccount) {
+    try {
+      const serviceAccount = JSON.parse(fullServiceAccount);
+      adminApp = admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount),
+      });
+      console.log('[getFirebaseAdmin] Initialized with full service account');
+      return adminApp;
+    } catch (e) {
+      console.warn('[getFirebaseAdmin] Failed to parse full service account, trying split method');
+    }
+  }
+
+  // Try split environment variables method
+  const projectId = process.env.FIREBASE_PROJECT_ID;
+  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+  let privateKey = process.env.FIREBASE_PRIVATE_KEY;
+
+  // Handle split private key (for very long keys)
+  if (!privateKey && process.env.FIREBASE_PRIVATE_KEY_1) {
+    privateKey = [
+      process.env.FIREBASE_PRIVATE_KEY_1 || '',
+      process.env.FIREBASE_PRIVATE_KEY_2 || '',
+      process.env.FIREBASE_PRIVATE_KEY_3 || '',
+      process.env.FIREBASE_PRIVATE_KEY_4 || '',
+    ].join('');
+  }
+
+  if (projectId && clientEmail && privateKey) {
+    // Replace escaped newlines
+    const formattedPrivateKey = privateKey.replace(/\\n/g, '\n');
+    
+    adminApp = admin.initializeApp({
+      credential: admin.credential.cert({
+        projectId,
+        clientEmail,
+        privateKey: formattedPrivateKey,
+      } as admin.ServiceAccount),
+    });
+    console.log('[getFirebaseAdmin] Initialized with split credentials');
+    return adminApp;
+  }
+
+  throw new Error(
+    'Firebase Admin credentials not found. Set either FIREBASE_SERVICE_ACCOUNT or FIREBASE_PROJECT_ID + FIREBASE_CLIENT_EMAIL + FIREBASE_PRIVATE_KEY'
+  );
+}
+
+/**
+ * Get Firestore instance
+ */
+export async function getFirestore(): Promise<admin.firestore.Firestore> {
+  const app = await getFirebaseAdmin();
+  return app.firestore();
+}
