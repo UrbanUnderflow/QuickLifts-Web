@@ -55,18 +55,40 @@ export async function getFirebaseAdmin(): Promise<admin.app.App> {
   }
 
   if (projectId && clientEmail && privateKey) {
-    // Replace escaped newlines
-    const formattedPrivateKey = privateKey.replace(/\\n/g, '\n');
+    // Handle various formats of the private key
+    let formattedPrivateKey = privateKey;
     
-    adminApp = admin.initializeApp({
-      credential: admin.credential.cert({
-        projectId,
-        clientEmail,
-        privateKey: formattedPrivateKey,
-      } as admin.ServiceAccount),
-    });
-    console.log('[getFirebaseAdmin] Initialized with split credentials');
-    return adminApp;
+    // If the key contains literal \n strings, replace them with actual newlines
+    if (formattedPrivateKey.includes('\\n')) {
+      formattedPrivateKey = formattedPrivateKey.replace(/\\n/g, '\n');
+    }
+    
+    // If it's been double-escaped (\\\\n), handle that too
+    if (formattedPrivateKey.includes('\\\\n')) {
+      formattedPrivateKey = formattedPrivateKey.replace(/\\\\n/g, '\n');
+    }
+    
+    // If the key is missing proper PEM headers/footers, it might be base64 encoded
+    // Ensure proper PEM format
+    if (!formattedPrivateKey.includes('-----BEGIN')) {
+      console.error('[getFirebaseAdmin] Private key missing PEM headers');
+      throw new Error('Invalid private key format - missing PEM headers');
+    }
+    
+    try {
+      adminApp = admin.initializeApp({
+        credential: admin.credential.cert({
+          projectId,
+          clientEmail,
+          privateKey: formattedPrivateKey,
+        } as admin.ServiceAccount),
+      });
+      console.log('[getFirebaseAdmin] Initialized with split credentials');
+      return adminApp;
+    } catch (e: any) {
+      console.error('[getFirebaseAdmin] Failed to initialize with split credentials:', e.message);
+      throw new Error(`Failed to parse private key: ${e.message}`);
+    }
   }
 
   throw new Error(
