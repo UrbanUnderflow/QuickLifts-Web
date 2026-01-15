@@ -27,24 +27,15 @@ const handler: Handler = async (event) => {
   </defs>
   <rect width="1200" height="630" fill="url(#glow)"/>
   
-  <!-- Pulse wordmark (text only; avoids using an incorrect logo) -->
-  <text x="600" y="190"
-        font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Arial, Helvetica, sans-serif"
-        font-size="54"
-        font-weight="800"
-        letter-spacing="0.5"
-        fill="white"
-        text-anchor="middle">Pulse</text>
-  
-  <!-- Main Title in Green -->
+  <!-- Main Title in Green (centered) -->
   <!-- shadow pass for readability -->
-  <text x="602" y="338"
+  <text x="602" y="282"
         font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Arial, Helvetica, sans-serif"
         font-size="${titleFontSize}"
         font-weight="900"
         fill="rgba(0,0,0,0.45)"
         text-anchor="middle">${escapeXml(displayTitle)}</text>
-  <text x="600" y="340"
+  <text x="600" y="280"
         font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Arial, Helvetica, sans-serif"
         font-size="${titleFontSize}"
         font-weight="900"

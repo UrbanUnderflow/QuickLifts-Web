@@ -72,7 +72,13 @@ Use formal legal language but keep it readable. Include standard Delaware corpor
 
   board_consent: {
     title: 'Board Consent - Equity Grant Approval',
-    systemPrompt: `You are an expert corporate attorney. Generate a formal Board Consent document for approving equity grants at a Delaware corporation.`,
+    systemPrompt: `You are an expert corporate attorney. Generate a formal Board Consent document (Written Consent of the Board of Directors in Lieu of Meeting) for approving equity grants at a Delaware corporation. 
+
+CRITICAL REQUIREMENTS:
+1. This is for a SOLE DIRECTOR company - Tremaine Grant is the SOLE member of the Board of Directors. Do NOT create signature blocks for multiple directors.
+2. Reference DGCL §141(f) for written consent authority.
+3. Include explicit Plan incorporation language.
+4. Do NOT include a separate "FURTHER RESOLVED" for fair market value determination - establish FMV in the recitals only, not as a redundant resolution.`,
     userPrompt: (data: RequestBody) => `Generate a Board Consent document (Written Consent of the Board of Directors in Lieu of Meeting) for:
 
 COMPANY: Pulse Intelligence Labs, Inc., a Delaware corporation
@@ -82,21 +88,46 @@ ${data.grantDetails ? `
 GRANT TO APPROVE:
 - Type: ${data.grantDetails.equityType === 'iso' ? 'Incentive Stock Option' : data.grantDetails.equityType === 'nso' ? 'Non-Qualified Stock Option' : data.grantDetails.equityType}
 - Number of Shares: ${data.grantDetails.numberOfShares.toLocaleString()}
-- Exercise Price: $${data.grantDetails.strikePrice.toFixed(4)}
+- Exercise Price (Fair Market Value per 409A): $${data.grantDetails.strikePrice.toFixed(4)}
 - Vesting: ${data.grantDetails.vestingSchedule}
+- Cliff: ${data.grantDetails.cliffMonths} months
+- Total Vesting Period: ${data.grantDetails.vestingMonths} months
 ` : ''}
 ${formatAdditionalContext(data.prompt)}
 
-Please include:
-1. Recitals (WHEREAS clauses establishing context)
-2. Resolution approving the grant
-3. Authorization for officers to execute documents
-4. Determination of Fair Market Value (409A context)
-5. Confirmation grant is under the Company's Equity Incentive Plan
-6. Standard effectiveness language
-7. Signature block for Directors
+DOCUMENT STRUCTURE REQUIREMENTS:
 
-Make it formal and suitable for corporate records.`,
+1. OPENING: Title as "WRITTEN CONSENT OF THE SOLE DIRECTOR OF PULSE INTELLIGENCE LABS, INC. IN LIEU OF MEETING"
+
+2. AUTHORITY STATEMENT: "The undersigned, being the sole member of the Board of Directors of Pulse Intelligence Labs, Inc., a Delaware corporation (the "Company"), acting pursuant to Section 141(f) of the Delaware General Corporation Law, hereby adopts the following resolutions by written consent without a meeting:"
+
+3. RECITALS (WHEREAS clauses):
+   - Establish that the Company has adopted the Pulse Intelligence Labs, Inc. Equity Incentive Plan (the "Plan")
+   - Identify the grantee and their role as ${data.stakeholderType}
+   - State the Board has determined the fair market value of the Company's common stock to be $${data.grantDetails?.strikePrice?.toFixed(4) || '0.0010'} per share, determined in accordance with Section 409A of the Internal Revenue Code
+   - Note that granting equity to ${data.stakeholderName} is in the best interest of the Company
+
+4. RESOLUTIONS ("NOW, THEREFORE, BE IT RESOLVED"):
+   - Resolution approving the grant of the ${data.grantDetails?.equityType === 'nso' ? 'Non-Qualified Stock Option' : data.grantDetails?.equityType === 'iso' ? 'Incentive Stock Option' : 'equity award'} to ${data.stakeholderName}
+   - CRITICAL: Include this exact sentence in the grant resolution: "The Option is granted pursuant to, and subject in all respects to, the terms and conditions of the Pulse Intelligence Labs, Inc. Equity Incentive Plan (the 'Plan')."
+   - Resolution authorizing officers to execute the Option Agreement and any related documents
+   - Resolution ratifying prior actions taken in connection with this grant
+   - Do NOT include a separate FMV resolution - the FMV is already established in the recitals
+
+5. EFFECTIVENESS: "This Written Consent shall be effective as of the date first written below and may be executed in counterparts."
+
+6. SIGNATURE BLOCK - CRITICAL FORMAT (SOLE DIRECTOR ONLY):
+   Use this EXACT format - do NOT add multiple director signature lines:
+
+   IN WITNESS WHEREOF, the undersigned, being the sole member of the Board of Directors of Pulse Intelligence Labs, Inc., has executed this Written Consent as of the date set forth below.
+
+   ______________________________
+   Tremaine Grant
+   Sole Director
+
+   Date: ______________________________
+
+Make it formal and suitable for corporate records. This document will be investor-diligence ready.`,
   },
 
   stockholder_consent: {
