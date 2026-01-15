@@ -399,7 +399,7 @@ const LegalDocumentsAdmin: React.FC = () => {
       
       // Only call API if there's a revision prompt
       if (hasRevisionPrompt) {
-        const response = await fetch('/api/admin/revise-legal-document', {
+        const response = await fetch('/.netlify/functions/revise-legal-document', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

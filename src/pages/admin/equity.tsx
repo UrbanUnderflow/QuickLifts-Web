@@ -2251,6 +2251,8 @@ const EquityAdminPage: React.FC = () => {
 
   // Save updated grant options
   const saveGrantOptions = async (stakeholder: Stakeholder) => {
+    console.log('[saveGrantOptions] Function called with:', { stakeholderId: stakeholder.id, value: editGrantOptionsValue });
+    
     if (editGrantOptionsValue <= 0) {
       setMessage({ type: 'error', text: 'Options granted must be greater than 0' });
       return;
@@ -2258,35 +2260,364 @@ const EquityAdminPage: React.FC = () => {
 
     setIsSavingGrantOptions(true);
     try {
-      const oldOptions = stakeholder.optionsGranted || stakeholder.grants?.[0]?.numberOfShares || 0;
+      const oldOptions = stakeholder.optionsGranted || stakeholder.grants?.[0]?.numberOfShares || stakeholder.totalShares || 0;
       const difference = editGrantOptionsValue - oldOptions;
 
+      console.log('[saveGrantOptions] Starting update:', {
+        stakeholderId: stakeholder.id,
+        oldOptions,
+        newOptions: editGrantOptionsValue,
+        difference,
+      });
+
       // Update stakeholder
-      await updateDoc(doc(db, 'equity-stakeholders', stakeholder.id), {
+      const stakeholderUpdate: Record<string, any> = {
         optionsGranted: editGrantOptionsValue,
         optionsUnvested: editGrantOptionsValue - (stakeholder.optionsVested || 0),
         updatedAt: serverTimestamp(),
-      });
+      };
+
+      // Also update totalShares for backward compatibility
+      if (!stakeholder.optionsGranted && stakeholder.totalShares) {
+        stakeholderUpdate.totalShares = editGrantOptionsValue;
+        stakeholderUpdate.totalUnvested = editGrantOptionsValue - (stakeholder.totalVested || 0);
+      }
+
+      try {
+        await updateDoc(doc(db, 'equity-stakeholders', stakeholder.id), stakeholderUpdate);
+        console.log('[saveGrantOptions] Stakeholder updated successfully');
+      } catch (stakeholderError: any) {
+        console.error('[saveGrantOptions] Failed to update stakeholder:', stakeholderError);
+        throw new Error(`Failed to update stakeholder: ${stakeholderError.message}`);
+      }
 
       // If stakeholder has grants, update the first grant's numberOfShares
       if (stakeholder.grants && stakeholder.grants.length > 0) {
         const grantId = stakeholder.grants[0].id;
-        await updateDoc(doc(db, 'equity-grants', grantId), {
-          numberOfShares: editGrantOptionsValue,
-          unvestedShares: editGrantOptionsValue - (stakeholder.grants[0].vestedShares || 0),
-          updatedAt: serverTimestamp(),
-        });
+        try {
+          await updateDoc(doc(db, 'equity-grants', grantId), {
+            numberOfShares: editGrantOptionsValue,
+            unvestedShares: editGrantOptionsValue - (stakeholder.grants[0].vestedShares || 0),
+            updatedAt: serverTimestamp(),
+          });
+          console.log('[saveGrantOptions] Grant updated:', grantId);
+        } catch (grantError) {
+          console.warn('[saveGrantOptions] Failed to update grant (may not exist):', grantError);
+          // Continue even if grant update fails
+        }
       }
 
-      // Update equity pool
+      // Build grant details for document generation
+      const grant = stakeholder.grants?.[0];
+      const grantDetails = grant ? {
+        equityType: grant.equityType || 'nso',
+        numberOfShares: editGrantOptionsValue,
+        strikePrice: grant.strikePrice || 0.001,
+        vestingSchedule: grant.vestingSchedule || 'monthly',
+        vestingStartDate: grant.vestingStartDate || stakeholder.startDate,
+        cliffMonths: grant.cliffMonths || 3,
+        vestingMonths: grant.vestingMonths || 24,
+      } : {
+        equityType: 'nso',
+        numberOfShares: editGrantOptionsValue,
+        strikePrice: 0.001,
+        vestingSchedule: 'monthly',
+        vestingStartDate: stakeholder.startDate,
+        cliffMonths: 3,
+        vestingMonths: 24,
+      };
+
+      // Get board approval date if available
+      const boardApprovalDate = stakeholder.boardApprovalDate || 
+        (boardConsentVerification[stakeholder.id]?.approvalDate);
+
+      let regeneratedDocCount = 0;
+      let newDocsCreated = 0;
+
+      // ============================================
+      // 1. Handle Board Consent Document
+      // ============================================
+      const boardConsentDoc = equityDocuments.find(d => 
+        d.id === stakeholder.boardConsentDocId ||
+        (d.stakeholderId === stakeholder.id && d.documentType === 'board_consent' && d.status === 'completed')
+      );
+
+      if (boardConsentDoc) {
+        const boardSigningRequest = signingRequests.find(r => r.equityDocumentId === boardConsentDoc.id);
+        const boardDocSigned = boardSigningRequest?.status === 'signed';
+        const boardDocSent = boardSigningRequest && ['sent', 'viewed', 'signed'].includes(boardSigningRequest.status);
+
+        if (boardDocSigned) {
+          // Document is SIGNED - create a NEW amendment document
+          console.log('[saveGrantOptions] Board Consent is signed, creating amendment');
+          setMessage({ type: 'info', text: 'Creating Board Consent Amendment for new options amount...' });
+
+          try {
+            const amendmentTitle = `Board Consent Amendment - ${stakeholder.name} (Options: ${formatNumber(editGrantOptionsValue)})`;
+            const placeholder = await addDoc(collection(db, 'equity-documents'), {
+              title: amendmentTitle,
+              prompt: `Generate a Board Consent Amendment to update the previously approved equity grant for ${stakeholder.name} from ${formatNumber(oldOptions)} options to ${formatNumber(editGrantOptionsValue)} options.`,
+              content: '',
+              documentType: 'board_consent',
+              requiresSignature: true,
+              stakeholderId: stakeholder.id,
+              stakeholderName: stakeholder.name,
+              stakeholderEmail: stakeholder.email,
+              stakeholderType: stakeholder.type,
+              grantDetails,
+              isAmendment: true,
+              originalDocumentId: boardConsentDoc.id,
+              createdAt: Timestamp.now(),
+              status: 'generating',
+            });
+
+            const response = await fetch('/.netlify/functions/generate-equity-document', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                stakeholderId: stakeholder.id,
+                stakeholderName: stakeholder.name,
+                stakeholderEmail: stakeholder.email,
+                stakeholderType: stakeholder.type,
+                documentType: 'board_consent',
+                requiresSignature: true,
+                isAmendment: true,
+                previousOptionsAmount: oldOptions,
+                newOptionsAmount: editGrantOptionsValue,
+                prompt: `Generate a Board Consent Amendment to update the previously approved equity grant for ${stakeholder.name}. The original grant was for ${formatNumber(oldOptions)} Non-Qualified Stock Options. This amendment approves increasing the grant to ${formatNumber(editGrantOptionsValue)} Non-Qualified Stock Options. Include all standard board consent language and signature lines.`,
+                grantDetails,
+              }),
+            });
+
+            const result = await response.json();
+
+            if (result.success && result.content) {
+              await updateDoc(doc(db, 'equity-documents', placeholder.id), {
+                content: result.content,
+                title: result.title || amendmentTitle,
+                status: 'completed',
+                updatedAt: serverTimestamp(),
+              });
+              console.log('[saveGrantOptions] Board Consent Amendment created:', placeholder.id);
+              newDocsCreated++;
+            } else {
+              await updateDoc(doc(db, 'equity-documents', placeholder.id), {
+                status: 'error',
+                errorMessage: result.error || 'Failed to generate amendment',
+              });
+              console.error('[saveGrantOptions] Failed to create Board Consent Amendment');
+            }
+          } catch (amendError) {
+            console.error('[saveGrantOptions] Error creating Board Consent Amendment:', amendError);
+          }
+        } else if (!boardDocSent) {
+          // Document NOT sent - regenerate the existing document
+          console.log('[saveGrantOptions] Regenerating Board Consent with new options');
+          setMessage({ type: 'info', text: 'Updating Board Consent with new options amount...' });
+
+          try {
+            await updateDoc(doc(db, 'equity-documents', boardConsentDoc.id), {
+              grantDetails,
+              status: 'generating',
+              updatedAt: serverTimestamp(),
+            });
+
+            const response = await fetch('/.netlify/functions/generate-equity-document', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                stakeholderId: stakeholder.id,
+                stakeholderName: stakeholder.name,
+                stakeholderEmail: stakeholder.email,
+                stakeholderType: stakeholder.type,
+                documentType: 'board_consent',
+                requiresSignature: boardConsentDoc.requiresSignature || true,
+                prompt: `Generate a Board Consent approving equity grants. For ${stakeholder.name}: ${formatNumber(editGrantOptionsValue)} Non-Qualified Stock Options with ${grantDetails.vestingMonths} month vesting and ${grantDetails.cliffMonths} month cliff.`,
+                grantDetails,
+              }),
+            });
+
+            const result = await response.json();
+
+            if (result.success && result.content) {
+              await updateDoc(doc(db, 'equity-documents', boardConsentDoc.id), {
+                content: result.content,
+                title: result.title || boardConsentDoc.title,
+                status: 'completed',
+                grantDetails,
+                updatedAt: serverTimestamp(),
+              });
+              console.log('[saveGrantOptions] Board Consent regenerated:', boardConsentDoc.id);
+              regeneratedDocCount++;
+            } else {
+              await updateDoc(doc(db, 'equity-documents', boardConsentDoc.id), {
+                status: 'error',
+                errorMessage: result.error || 'Failed to regenerate',
+              });
+            }
+          } catch (docError) {
+            console.error('[saveGrantOptions] Error regenerating Board Consent:', docError);
+          }
+        } else {
+          console.log('[saveGrantOptions] Board Consent sent but not signed, skipping');
+        }
+      }
+
+      // ============================================
+      // 2. Handle Advisor Agreement / NSO Grant Document
+      // ============================================
+      const stakeholderDocs = equityDocuments.filter(d => 
+        d.stakeholderId === stakeholder.id && 
+        d.documentType === 'advisor_nso_agreement' &&
+        d.status === 'completed'
+      );
+
+      for (const equityDoc of stakeholderDocs) {
+        const signingRequest = signingRequests.find(r => r.equityDocumentId === equityDoc.id);
+        const isSigned = signingRequest?.status === 'signed';
+        const hasBeenSent = signingRequest && ['sent', 'viewed', 'signed'].includes(signingRequest.status);
+
+        if (isSigned) {
+          // Document is SIGNED - create a NEW amendment document
+          console.log('[saveGrantOptions] Advisor Agreement is signed, creating amendment');
+          setMessage({ type: 'info', text: 'Creating Advisor Agreement Amendment...' });
+
+          try {
+            const amendmentTitle = `Advisor Agreement Amendment - ${stakeholder.name} (Options: ${formatNumber(editGrantOptionsValue)})`;
+            const placeholder = await addDoc(collection(db, 'equity-documents'), {
+              title: amendmentTitle,
+              prompt: `Generate an amendment to the Advisor Agreement for ${stakeholder.name} updating the options granted from ${formatNumber(oldOptions)} to ${formatNumber(editGrantOptionsValue)}.`,
+              content: '',
+              documentType: 'advisor_nso_agreement',
+              requiresSignature: true,
+              stakeholderId: stakeholder.id,
+              stakeholderName: stakeholder.name,
+              stakeholderEmail: stakeholder.email,
+              stakeholderType: stakeholder.type,
+              grantDetails,
+              isAmendment: true,
+              originalDocumentId: equityDoc.id,
+              createdAt: Timestamp.now(),
+              status: 'generating',
+            });
+
+            const response = await fetch('/.netlify/functions/generate-equity-document', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                stakeholderId: stakeholder.id,
+                stakeholderName: stakeholder.name,
+                stakeholderEmail: stakeholder.email,
+                stakeholderType: stakeholder.type,
+                documentType: 'advisor_nso_agreement',
+                requiresSignature: true,
+                isAmendment: true,
+                previousOptionsAmount: oldOptions,
+                newOptionsAmount: editGrantOptionsValue,
+                boardApprovalDate: boardApprovalDate || undefined,
+                prompt: `Generate an Amendment to the Advisor Services Agreement and Non-Qualified Stock Option Grant for ${stakeholder.name}. The original grant was for ${formatNumber(oldOptions)} options. This amendment increases the grant to ${formatNumber(editGrantOptionsValue)} Non-Qualified Stock Options. All other terms remain unchanged. Include signature lines for both the Company and the Advisor.`,
+                grantDetails,
+              }),
+            });
+
+            const result = await response.json();
+
+            if (result.success && result.content) {
+              await updateDoc(doc(db, 'equity-documents', placeholder.id), {
+                content: result.content,
+                title: result.title || amendmentTitle,
+                status: 'completed',
+                updatedAt: serverTimestamp(),
+              });
+              console.log('[saveGrantOptions] Advisor Agreement Amendment created:', placeholder.id);
+              newDocsCreated++;
+            } else {
+              await updateDoc(doc(db, 'equity-documents', placeholder.id), {
+                status: 'error',
+                errorMessage: result.error || 'Failed to generate amendment',
+              });
+            }
+          } catch (amendError) {
+            console.error('[saveGrantOptions] Error creating Advisor Agreement Amendment:', amendError);
+          }
+        } else if (!hasBeenSent) {
+          // Document NOT sent - regenerate the existing document
+          console.log('[saveGrantOptions] Regenerating Advisor Agreement');
+          setMessage({ type: 'info', text: 'Regenerating Advisor Agreement with updated options...' });
+
+          try {
+            const updatedGrantDetails = {
+              ...(equityDoc.grantDetails || {}),
+              numberOfShares: editGrantOptionsValue,
+            };
+
+            await updateDoc(doc(db, 'equity-documents', equityDoc.id), {
+              grantDetails: updatedGrantDetails,
+              status: 'generating',
+              updatedAt: serverTimestamp(),
+            });
+
+            const response = await fetch('/.netlify/functions/generate-equity-document', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                stakeholderId: stakeholder.id,
+                stakeholderName: stakeholder.name,
+                stakeholderEmail: stakeholder.email,
+                stakeholderType: stakeholder.type,
+                documentType: 'advisor_nso_agreement',
+                requiresSignature: equityDoc.requiresSignature || true,
+                boardApprovalDate: boardApprovalDate || undefined,
+                prompt: `Generate a combined Advisor Services Agreement and Non-Qualified Stock Option Grant for ${stakeholder.name}. The grant is for ${formatNumber(editGrantOptionsValue)} Non-Qualified Stock Options.`,
+                grantDetails,
+              }),
+            });
+
+            const result = await response.json();
+
+            if (result.success && result.content) {
+              await updateDoc(doc(db, 'equity-documents', equityDoc.id), {
+                content: result.content,
+                title: result.title || equityDoc.title,
+                status: 'completed',
+                grantDetails: updatedGrantDetails,
+                updatedAt: serverTimestamp(),
+              });
+              console.log('[saveGrantOptions] Advisor Agreement regenerated:', equityDoc.id);
+              regeneratedDocCount++;
+            } else {
+              await updateDoc(doc(db, 'equity-documents', equityDoc.id), {
+                status: 'error',
+                errorMessage: result.error || 'Failed to regenerate document',
+                updatedAt: serverTimestamp(),
+              });
+              console.error('[saveGrantOptions] Failed to regenerate document:', result.error);
+            }
+          } catch (docError: any) {
+            console.error('[saveGrantOptions] Error regenerating document:', docError);
+          }
+        } else {
+          console.log('[saveGrantOptions] Document sent but not signed, skipping:', equityDoc.id);
+        }
+      }
+
+      // Update equity pool (only if pool exists and we have an ID)
       if (equityPool.id) {
-        const newGranted = equityPool.granted + difference;
-        const newAvailable = equityPool.totalReserved - newGranted - equityPool.exercised;
-        await updateDoc(doc(db, 'equity-pool', equityPool.id), {
-          granted: newGranted,
-          available: newAvailable,
-          updatedAt: serverTimestamp(),
-        });
+        const newGranted = (equityPool.granted || 0) + difference;
+        const newAvailable = equityPool.totalReserved - newGranted - (equityPool.exercised || 0);
+        try {
+          await updateDoc(doc(db, 'equity-pool', equityPool.id), {
+            granted: newGranted,
+            available: newAvailable,
+            updatedAt: serverTimestamp(),
+          });
+          console.log('[saveGrantOptions] Equity pool updated');
+        } catch (poolError) {
+          console.warn('[saveGrantOptions] Failed to update equity pool:', poolError);
+          // Continue even if pool update fails
+        }
+      } else {
+        console.warn('[saveGrantOptions] No equity pool ID found, skipping pool update');
       }
 
       // Update local state
@@ -2296,6 +2627,8 @@ const EquityAdminPage: React.FC = () => {
               ...s, 
               optionsGranted: editGrantOptionsValue,
               optionsUnvested: editGrantOptionsValue - (s.optionsVested || 0),
+              totalShares: s.totalShares ? editGrantOptionsValue : s.totalShares,
+              totalUnvested: s.totalShares ? editGrantOptionsValue - (s.totalVested || 0) : s.totalUnvested,
               grants: s.grants?.map((g, idx) => 
                 idx === 0 
                   ? { ...g, numberOfShares: editGrantOptionsValue, unvestedShares: editGrantOptionsValue - (g.vestedShares || 0) }
@@ -2308,16 +2641,41 @@ const EquityAdminPage: React.FC = () => {
       if (equityPool.id) {
         setEquityPool(prev => ({
           ...prev,
-          granted: prev.granted + difference,
-          available: prev.totalReserved - (prev.granted + difference) - prev.exercised,
+          granted: (prev.granted || 0) + difference,
+          available: prev.totalReserved - ((prev.granted || 0) + difference) - (prev.exercised || 0),
         }));
       }
 
-      setMessage({ type: 'success', text: `Options updated to ${formatNumber(editGrantOptionsValue)}` });
+      // Build success message based on what was done
+      let successMessage = `Options updated to ${formatNumber(editGrantOptionsValue)}`;
+      const docActions: string[] = [];
+      
+      if (regeneratedDocCount > 0) {
+        docActions.push(`${regeneratedDocCount} document${regeneratedDocCount > 1 ? 's' : ''} updated`);
+      }
+      if (newDocsCreated > 0) {
+        docActions.push(`${newDocsCreated} amendment${newDocsCreated > 1 ? 's' : ''} created (requires new signature)`);
+      }
+      
+      if (docActions.length > 0) {
+        successMessage += ` — ${docActions.join(', ')}`;
+      }
+      
+      setMessage({ type: 'success', text: successMessage });
       setEditingGrantStakeholderId(null);
-    } catch (error) {
-      console.error('Error updating grant options:', error);
-      setMessage({ type: 'error', text: 'Failed to update options. Please try again.' });
+      console.log('[saveGrantOptions] Update completed successfully');
+      
+      // Auto-dismiss success message after 3 seconds
+      setTimeout(() => setMessage(null), 3000);
+      
+      // Reload data to ensure UI is in sync
+      setTimeout(() => loadData(), 500);
+    } catch (error: any) {
+      console.error('[saveGrantOptions] Error updating grant options:', error);
+      const errorMessage = error?.message || 'Failed to update options. Please try again.';
+      setMessage({ type: 'error', text: `Error: ${errorMessage}` });
+      // Auto-dismiss error message after 5 seconds
+      setTimeout(() => setMessage(null), 5000);
     } finally {
       setIsSavingGrantOptions(false);
     }
