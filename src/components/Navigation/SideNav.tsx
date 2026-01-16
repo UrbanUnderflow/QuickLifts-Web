@@ -194,19 +194,13 @@ const SideNav: React.FC<SideNavProps> = ({ selectedTab, onTabChange, onAbout }) 
             <button
               onClick={() => {
                 if (isCreatePage) {
-                  // On /create page, route to home and show profile
-                  router.push('/');
-                  setTimeout(() => {
-                    if (onTabChange) onTabChange(SelectedRootTabs.Profile);
-                  }, 100);
+                  // On /create page, deep-link to home with Profile selected (since onTabChange isn't available here)
+                  router.push('/?tab=profile');
                 } else if (isHomePage && onTabChange) {
                   onTabChange(SelectedRootTabs.Profile);
                 } else {
-                  // Navigate to home page and trigger profile tab
-                  router.push('/');
-                  setTimeout(() => {
-                    if (onTabChange) onTabChange(SelectedRootTabs.Profile);
-                  }, 100);
+                  // Navigate to home page and select Profile (query-based deep link works even without onTabChange)
+                  router.push('/?tab=profile');
                 }
               }}
               className={`
@@ -392,19 +386,13 @@ const SideNav: React.FC<SideNavProps> = ({ selectedTab, onTabChange, onAbout }) 
         <button
           onClick={() => {
             if (isCreatePage) {
-              // On /create page, route to home and show profile
-              router.push('/');
-              setTimeout(() => {
-                if (onTabChange) onTabChange(SelectedRootTabs.Profile);
-              }, 100);
+              // On /create page, deep-link to home with Profile selected
+              router.push('/?tab=profile');
             } else if (isHomePage && onTabChange) {
               onTabChange(SelectedRootTabs.Profile);
             } else {
-              // Navigate to home page and trigger profile tab
-              router.push('/');
-              setTimeout(() => {
-                if (onTabChange) onTabChange(SelectedRootTabs.Profile);
-              }, 100);
+              // Navigate to home page and select Profile (query-based deep link works even without onTabChange)
+              router.push('/?tab=profile');
             }
           }}
           className="flex flex-col items-center justify-center p-2"

@@ -42,6 +42,37 @@ const HomeContent: React.FC<HomeContentProps> = ({ onAbout }) => {
 
   const dispatch = useDispatch();
 
+  // Deep-link support: allow routes like /?tab=profile (and optionally profileTab=...)
+  // This is intentionally additive and only reacts when query is present.
+  useEffect(() => {
+    if (!router.isReady) return;
+    const raw = router.query?.tab;
+    const tab = Array.isArray(raw) ? raw[0] : raw;
+    if (!tab) return;
+
+    const normalized = String(tab).toLowerCase();
+    switch (normalized) {
+      case 'discover':
+      case 'home':
+        setSelectedTab(SelectedRootTabs.Discover);
+        break;
+      case 'search':
+        setSelectedTab(SelectedRootTabs.Search);
+        break;
+      case 'create':
+        setSelectedTab(SelectedRootTabs.Create);
+        break;
+      case 'messages':
+        setSelectedTab(SelectedRootTabs.Messages);
+        break;
+      case 'profile':
+        setSelectedTab(SelectedRootTabs.Profile);
+        break;
+      default:
+        break;
+    }
+  }, [router.isReady, router.query?.tab]);
+
   // *** START: New useEffect for Log Listener ***
   useEffect(() => {
     console.log('[HomeContent Log Listener Effect] Running effect...');

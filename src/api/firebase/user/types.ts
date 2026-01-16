@@ -78,6 +78,9 @@ export class User {
   videoCount: number;
   role: 'athlete' | 'coach';
   linkedCoachId?: string;
+  featuredRoundIds: string[];
+  checkinsPrivacy: CheckinsPrivacy;
+  checkinsAccessList: string[];
   createdAt: Date;
   updatedAt: Date;
 
@@ -131,6 +134,9 @@ export class User {
     this.videoCount = data.videoCount || 0;
     this.role = data.role || 'athlete';
     this.linkedCoachId = data.linkedCoachId || undefined;
+    this.featuredRoundIds = data.featuredRoundIds || [];
+    this.checkinsPrivacy = data.checkinsPrivacy || CheckinsPrivacy.privateOnly;
+    this.checkinsAccessList = data.checkinsAccessList || [];
 
     this.createdAt = convertFirestoreTimestamp(data.createdAt) || null;
 
@@ -190,6 +196,9 @@ export class User {
       videoCount: this.videoCount,
       role: this.role,
       linkedCoachId: this.linkedCoachId ?? null,
+      featuredRoundIds: this.featuredRoundIds,
+      checkinsPrivacy: this.checkinsPrivacy,
+      checkinsAccessList: this.checkinsAccessList,
       createdAt: dateToUnixTimestamp(this.createdAt),
       updatedAt: dateToUnixTimestamp(this.updatedAt),
     };
@@ -227,11 +236,17 @@ export class User {
    executivePartner = "Executive Partner",
  }
  
- export enum UserLevel {
-   Novice = "novice",
-   Intermediate = "intermediate",
-   Expert = "expert",
- }
+export enum UserLevel {
+  Novice = "novice",
+  Intermediate = "intermediate",
+  Expert = "expert",
+}
+
+export enum CheckinsPrivacy {
+  privateOnly = "privateOnly",
+  followersOnly = "followersOnly",
+  publicAccess = "publicAccess",
+}
  
  export enum WorkoutGoal {
    LoseWeight = "Lose weight",
