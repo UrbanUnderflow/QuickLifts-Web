@@ -182,6 +182,33 @@ const Profile: React.FC = () => {
 
   console.log('[Profile Component Render] Rendering component. Current User ID:', hookCurrentUser?.id);
 
+  // Deep-link support from Creator Studio:
+  // /?tab=profile&profileTab=moves|stacks|rounds|activity
+  useEffect(() => {
+    const raw = router.query?.profileTab;
+    const profileTab = Array.isArray(raw) ? raw[0] : raw;
+    if (!profileTab) return;
+
+    const normalized = String(profileTab).toLowerCase();
+    switch (normalized) {
+      case 'activity':
+        setSelectedTab(TABS.ACTIVITY);
+        break;
+      case 'moves':
+        setSelectedTab(TABS.EXERCISES);
+        break;
+      case 'stacks':
+      case 'movelists':
+        setSelectedTab(TABS.STACKS);
+        break;
+      case 'rounds':
+        setSelectedTab(TABS.CHALLENGES);
+        break;
+      default:
+        break;
+    }
+  }, [router.query?.profileTab]);
+
   // ... Event handlers (handleProfileImageUpload, handleToggleSelection, handleDelete, etc.) ...
   const handleProfileImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

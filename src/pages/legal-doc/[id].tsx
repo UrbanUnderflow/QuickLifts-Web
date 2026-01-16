@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
-import { doc, getDoc, collection, addDoc, query, where, onSnapshot, Timestamp, orderBy } from 'firebase/firestore';
+import { doc, getDoc, collection, addDoc, query, where, onSnapshot, Timestamp, deleteDoc } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
-import { Download, Loader2, FileText, AlertCircle, StickyNote, X } from 'lucide-react';
+import { Download, Loader2, FileText, AlertCircle, StickyNote, X, Trash2 } from 'lucide-react';
+import { useSelector } from 'react-redux';
+import { RootState } from '../../redux/store';
 
 interface LegalDocument {
   id: string;
@@ -22,7 +24,20 @@ interface DocumentNote {
   xPercent: number; // Position as percentage of container width
   yOffset: number; // Position as pixels from top of content
   createdAt: Timestamp | Date;
+  authorKey?: string; // Local key to identify the author for deletion
 }
+
+// Get or generate a unique author key stored in localStorage
+const getAuthorKey = (): string => {
+  if (typeof window === 'undefined') return '';
+  const STORAGE_KEY = 'document-notes-author-key';
+  let key = localStorage.getItem(STORAGE_KEY);
+  if (!key) {
+    key = `author_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+    localStorage.setItem(STORAGE_KEY, key);
+  }
+  return key;
+};
 
 // Utility function to format Firestore Timestamps or Dates
 const formatDate = (date: Timestamp | Date | undefined): string => {
@@ -517,6 +532,10 @@ const LegalDocumentSharePage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
+  // Check if current user is admin
+  const currentUser = useSelector((state: RootState) => state.user.user);
+  const isAdmin = currentUser?.role === 'admin';
+  
   // Notes state
   const [notes, setNotes] = useState<DocumentNote[]>([]);
   const [showNoteForm, setShowNoteForm] = useState(false);
@@ -524,8 +543,15 @@ const LegalDocumentSharePage: React.FC = () => {
   const [newNoteName, setNewNoteName] = useState('');
   const [newNoteContent, setNewNoteContent] = useState('');
   const [savingNote, setSavingNote] = useState(false);
+  const [deletingNoteId, setDeletingNoteId] = useState<string | null>(null);
   const [hoveredNoteId, setHoveredNoteId] = useState<string | null>(null);
+  const [localAuthorKey, setLocalAuthorKey] = useState<string>('');
   const contentRef = useRef<HTMLDivElement>(null);
+  
+  // Get the local author key on mount
+  useEffect(() => {
+    setLocalAuthorKey(getAuthorKey());
+  }, []);
 
   useEffect(() => {
     const fetchDocument = async () => {
@@ -562,20 +588,32 @@ const LegalDocumentSharePage: React.FC = () => {
   useEffect(() => {
     if (!id || typeof id !== 'string') return;
 
+    console.log('[DocumentNotes] Setting up subscription for document:', id);
+
+    // Query without orderBy to avoid composite index requirement
+    // We'll sort client-side instead
     const notesQuery = query(
       collection(db, 'document-notes'),
-      where('documentId', '==', id),
-      orderBy('createdAt', 'asc')
+      where('documentId', '==', id)
     );
 
     const unsubscribe = onSnapshot(notesQuery, (snapshot) => {
+      console.log('[DocumentNotes] Received snapshot with', snapshot.docs.length, 'notes');
       const notesData: DocumentNote[] = [];
       snapshot.forEach((doc) => {
-        notesData.push({ id: doc.id, ...doc.data() } as DocumentNote);
+        const data = doc.data();
+        console.log('[DocumentNotes] Note data:', { id: doc.id, xPercent: data.xPercent, yOffset: data.yOffset });
+        notesData.push({ id: doc.id, ...data } as DocumentNote);
+      });
+      // Sort client-side by createdAt
+      notesData.sort((a, b) => {
+        const aTime = a.createdAt instanceof Date ? a.createdAt.getTime() : (a.createdAt as any)?.toDate?.()?.getTime() || 0;
+        const bTime = b.createdAt instanceof Date ? b.createdAt.getTime() : (b.createdAt as any)?.toDate?.()?.getTime() || 0;
+        return aTime - bTime;
       });
       setNotes(notesData);
     }, (err) => {
-      console.error('Error fetching notes:', err);
+      console.error('[DocumentNotes] Error fetching notes:', err);
     });
 
     return () => unsubscribe();
@@ -603,22 +641,48 @@ const LegalDocumentSharePage: React.FC = () => {
     
     setSavingNote(true);
     try {
-      await addDoc(collection(db, 'document-notes'), {
+      const noteData = {
         documentId: id,
         authorName: newNoteName.trim(),
         content: newNoteContent.trim(),
         xPercent: noteFormPosition.xPercent,
         yOffset: noteFormPosition.yOffset,
-        createdAt: new Date()
-      });
+        createdAt: new Date(),
+        authorKey: localAuthorKey // Store the author key so they can delete their own notes
+      };
+      console.log('[DocumentNotes] Saving note:', noteData);
+      const docRef = await addDoc(collection(db, 'document-notes'), noteData);
+      console.log('[DocumentNotes] Note saved with ID:', docRef.id);
       setShowNoteForm(false);
       setNewNoteName('');
       setNewNoteContent('');
     } catch (err) {
-      console.error('Error saving note:', err);
+      console.error('[DocumentNotes] Error saving note:', err);
     } finally {
       setSavingNote(false);
     }
+  };
+
+  // Delete a note (only if author or admin)
+  const handleDeleteNote = async (noteId: string) => {
+    setDeletingNoteId(noteId);
+    try {
+      await deleteDoc(doc(db, 'document-notes', noteId));
+      console.log('[DocumentNotes] Note deleted:', noteId);
+    } catch (err) {
+      console.error('[DocumentNotes] Error deleting note:', err);
+    } finally {
+      setDeletingNoteId(null);
+    }
+  };
+
+  // Check if current user can delete a note
+  const canDeleteNote = (note: DocumentNote): boolean => {
+    // Admins can always delete
+    if (isAdmin) return true;
+    // Author can delete their own notes (matching authorKey)
+    if (note.authorKey && note.authorKey === localAuthorKey) return true;
+    return false;
   };
 
   if (loading) {
@@ -679,11 +743,16 @@ const LegalDocumentSharePage: React.FC = () => {
           {/* Document Content */}
           <div className="bg-[#1a1e24] rounded-xl border border-zinc-800 p-8 relative">
             {/* Hint for adding notes */}
-            <div className="mb-4 pb-4 border-b border-zinc-700/50">
+            <div className="mb-4 pb-4 border-b border-zinc-700/50 flex items-center justify-between">
               <p className="text-xs text-zinc-500 flex items-center gap-2">
                 <StickyNote className="w-4 h-4 text-yellow-500" />
                 Double-click anywhere on the document to add a note
               </p>
+              {notes.length > 0 && (
+                <span className="text-xs text-yellow-500 bg-yellow-500/10 px-2 py-1 rounded-full">
+                  {notes.length} note{notes.length !== 1 ? 's' : ''}
+                </span>
+              )}
             </div>
             
             <div 
@@ -708,7 +777,7 @@ const LegalDocumentSharePage: React.FC = () => {
                   onMouseLeave={() => setHoveredNoteId(null)}
                 >
                   {/* Sticky note icon */}
-                  <div className="w-8 h-8 bg-yellow-400 rounded shadow-lg cursor-pointer flex items-center justify-center transform hover:scale-110 transition-transform">
+                  <div className={`w-8 h-8 bg-yellow-400 rounded shadow-lg cursor-pointer flex items-center justify-center transform transition-all duration-200 ${hoveredNoteId === note.id ? 'opacity-100 scale-110' : 'opacity-25 hover:opacity-100 hover:scale-110'}`}>
                     <StickyNote className="w-5 h-5 text-yellow-800" />
                   </div>
                   
@@ -725,7 +794,26 @@ const LegalDocumentSharePage: React.FC = () => {
                         marginRight: note.xPercent > 70 ? '8px' : 0
                       }}
                     >
-                      <div className="font-semibold text-sm mb-1">{note.authorName}</div>
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <div className="font-semibold text-sm">{note.authorName}</div>
+                        {canDeleteNote(note) && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteNote(note.id);
+                            }}
+                            disabled={deletingNoteId === note.id}
+                            className="p-1 hover:bg-red-200 rounded transition-colors text-red-600 hover:text-red-700"
+                            title="Delete note"
+                          >
+                            {deletingNoteId === note.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="w-4 h-4" />
+                            )}
+                          </button>
+                        )}
+                      </div>
                       <div className="text-sm whitespace-pre-wrap">{note.content}</div>
                       <div className="text-xs text-yellow-700 mt-2">
                         {note.createdAt instanceof Date 

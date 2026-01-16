@@ -257,6 +257,11 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
     
+    // Document notes - for shared legal doc annotations
+    match /document-notes/{noteId} {
+      allow read, write: if true; // Public access for shared documents
+    }
+    
     // Equity documents - admin only
     match /equity-documents/{documentId} {
       allow read, write: if isAdmin();

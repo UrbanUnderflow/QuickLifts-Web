@@ -3,14 +3,15 @@ import { GetServerSideProps } from 'next';
 import { useRouter } from 'next/router';
 import { useSelector } from 'react-redux';
 import { RootState } from '../../redux/store';
-import { FollowRequest } from '../../api/firebase/user';
+import { FollowRequest, CheckinsPrivacy } from '../../api/firebase/user';
 import { User, userService } from '../../api/firebase/user';
 import ExerciseGrid from '../../components/ExerciseGrid';
 import { Exercise } from '../../api/firebase/exercise/types'; 
-import { Challenge, Workout } from '../../api/firebase/workout/types';
+import { Challenge, Workout, SweatlistCollection, ChallengeType } from '../../api/firebase/workout/types';
+import { workoutService } from '../../api/firebase/workout/service';
 import { ChallengesTab } from '../../components/ChallengesTab';
 import { WorkoutSummary } from '../../api/firebase/workout';
-import { StarIcon } from '@heroicons/react/24/outline';
+import { StarIcon, EllipsisHorizontalIcon, ShareIcon, FlagIcon, NoSymbolIcon, ScaleIcon, FireIcon, TrophyIcon } from '@heroicons/react/24/outline';
 import { ActivityTab } from '../../components/ActivityTab';
 import { parseActivityType } from '../../utils/activityParser';
 import { UserActivity } from '../../types/Activity';
@@ -18,10 +19,22 @@ import FullScreenExerciseView from '../FullscreenExerciseView';
 import UserProfileMeta from '../../components/UserProfileMeta';
 import Link from 'next/link';
 import { db } from '../../api/firebase/config';
-import { collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore';
 import FollowButton from '../../components/FollowButton';
 import SideNav from '../../components/Navigation/SideNav';
 import { StackCard } from '../../components/Rounds/StackCard';
+
+// Body weight check-in type
+interface BodyWeightCheckin {
+  id: string;
+  oldWeight: number;
+  newWeight: number;
+  frontUrl?: string;
+  backUrl?: string;
+  sideUrl?: string;
+  createdAt: number;
+  updatedAt: number;
+}
 
 interface ProfileViewProps {
   initialUserData: User | null;
@@ -35,15 +48,31 @@ interface ProfileViewProps {
 //   date: number;
 // }
 
+// Tabs matching iOS: Moves, Timeline, Rounds, Weigh-ins
 const TABS = {
-  // STATS: 'stats',
-  ACTIVITY: 'activity',
-  EXERICSES: 'moves',
-  STACKS: 'stacks',
-  CHALLENGES: 'rounds',
+  MOVES: 'moves',
+  TIMELINE: 'timeline',
+  ROUNDS: 'rounds',
+  WEIGHINS: 'weigh-ins',
 } as const;
 
 type TabType = typeof TABS[keyof typeof TABS];
+
+// Round status helper
+const getRoundStatus = (round: SweatlistCollection): 'upcoming' | 'active' | 'completed' => {
+  const challenge = round.challenge;
+  if (!challenge) return 'completed';
+  
+  const now = new Date();
+  const startDate = challenge.startDate ? new Date(challenge.startDate) : null;
+  const endDate = challenge.endDate ? new Date(challenge.endDate) : null;
+
+  if (startDate && endDate) {
+    if (now >= startDate && now <= endDate) return 'active';
+    if (now > endDate) return 'completed';
+  }
+  return 'upcoming';
+};
 
 export default function ProfileView({ initialUserData, error: serverError }: ProfileViewProps) {
   const router = useRouter();
@@ -56,7 +85,7 @@ export default function ProfileView({ initialUserData, error: serverError }: Pro
   // Determine if current user is viewing their own profile
   const isOwnProfile = currentUser && initialUserData && currentUser.id === initialUserData.id;
 
-  const [selectedTab, setSelectedTab] = useState<TabType>(TABS.EXERICSES);
+  const [selectedTab, setSelectedTab] = useState<TabType>(TABS.MOVES);
   const [user, setUser] = useState<User | null>(initialUserData);
   const [userVideos, setUserVideos] = useState<Exercise[]>([]);
   const [userStacks, setUserStacks] = useState<Workout[]>([]);
@@ -71,6 +100,16 @@ export default function ProfileView({ initialUserData, error: serverError }: Pro
   const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
   const [showProfileImageModal, setShowProfileImageModal] = useState(false);
   const [resolvedUsername, setResolvedUsername] = useState<string | null>(null);
+  
+  // New state for iOS-matching features
+  const [userRounds, setUserRounds] = useState<SweatlistCollection[]>([]);
+  const [roundsView, setRoundsView] = useState<'host' | 'participant'>('host');
+  const [checkins, setCheckins] = useState<BodyWeightCheckin[]>([]);
+  const [canViewCheckins, setCanViewCheckins] = useState(false);
+  const [checkinsLoading, setCheckinsLoading] = useState(false);
+  const [showOptionsMenu, setShowOptionsMenu] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportReason, setReportReason] = useState('');
 
 
   const API_BASE_URL = process.env.NODE_ENV === 'development' 
@@ -181,25 +220,106 @@ useEffect(() => {
   fetchBodyWeight();
 }, [user?.id, API_BASE_URL]);
 
+  // Fetch user's rounds (SweatlistCollections) - matching iOS
   useEffect(() => {
-    const fetchChallenges = async () => {
+    const fetchUserRounds = async () => {
       if (!user?.id) return;
       
       try {
-        const response = await fetch(`${API_BASE_URL}/get-challenges?userId=${user.id}`);
-        if (!response.ok) throw new Error('Failed to fetch challenges');
+        const collections = await workoutService.fetchCollections(user.id);
+        // Filter to rounds where user is owner or cohort author (like iOS)
+        const userCreatedRounds = collections.filter(collection => {
+          const isOwner = collection.ownerId?.includes(user.id);
+          const isCohortAuthor = collection.challenge?.cohortAuthor?.includes(user.id);
+          return (isOwner || isCohortAuthor) && collection.challenge;
+        });
+        setUserRounds(userCreatedRounds);
+        
+        // Also set activeChallenges for backward compatibility
+        const challenges = userCreatedRounds.map(c => c.challenge).filter((c): c is Challenge => !!c);
+        setActiveChallenges(challenges);
+      } catch (error) {
+        console.error('Error fetching user rounds:', error);
+      }
+    };
+
+    fetchUserRounds();
+  }, [user?.id]);
+
+  // Check if viewer can see check-ins (privacy check like iOS)
+  useEffect(() => {
+    const checkCheckinAccess = () => {
+      if (!user) return;
+      
+      // If viewing own profile, always allow
+      if (isOwnProfile) {
+        setCanViewCheckins(true);
+        return;
+      }
+      
+      const privacy = user.checkinsPrivacy || CheckinsPrivacy.privateOnly;
+      
+      switch (privacy) {
+        case CheckinsPrivacy.publicAccess:
+          setCanViewCheckins(true);
+          break;
+        case CheckinsPrivacy.followersOnly:
+          // Check if current user follows this profile
+          if (currentUser?.id) {
+            const isFollowing = followers.some(f => 
+              f.fromUser?.id === currentUser.id && f.status === 'accepted'
+            ) || following.some(f => 
+              f.toUser?.id === user.id && f.status === 'accepted'
+            );
+            // Also check explicit access list
+            const hasExplicitAccess = user.checkinsAccessList?.includes(currentUser.id);
+            setCanViewCheckins(isFollowing || hasExplicitAccess);
+          } else {
+            setCanViewCheckins(false);
+          }
+          break;
+        case CheckinsPrivacy.privateOnly:
+        default:
+          // Check explicit access list
+          if (currentUser?.id && user.checkinsAccessList?.includes(currentUser.id)) {
+            setCanViewCheckins(true);
+          } else {
+            setCanViewCheckins(false);
+          }
+          break;
+      }
+    };
+
+    checkCheckinAccess();
+  }, [user, currentUser, isOwnProfile, followers, following]);
+
+  // Fetch check-ins if allowed
+  useEffect(() => {
+    const fetchCheckins = async () => {
+      if (!user?.id || !canViewCheckins) return;
+      
+      setCheckinsLoading(true);
+      try {
+        const response = await fetch(`${API_BASE_URL}/get-body-weight?userId=${user.id}&limit=50`);
+        if (!response.ok) throw new Error('Failed to fetch check-ins');
         
         const data = await response.json();
         if (data.success) {
-          setActiveChallenges(data.challenges);
+          // Sort by date, newest first
+          const sortedCheckins = (data.bodyWeight || []).sort(
+            (a: BodyWeightCheckin, b: BodyWeightCheckin) => b.createdAt - a.createdAt
+          );
+          setCheckins(sortedCheckins);
         }
       } catch (error) {
-        console.error('Error fetching challenges:', error);
+        console.error('Error fetching check-ins:', error);
+      } finally {
+        setCheckinsLoading(false);
       }
     };
-  
-    fetchChallenges();
-  }, [user?.id, API_BASE_URL]);
+
+    fetchCheckins();
+  }, [user?.id, canViewCheckins, API_BASE_URL]);
 
   useEffect(() => {
     const fetchUserVideos = async () => {
@@ -353,17 +473,308 @@ useEffect(() => {
     youtube: user.creator?.youtubeUrl
   };
 
+  // Get featured rounds (filtered by featuredRoundIds like iOS)
+  const featuredRounds = React.useMemo(() => {
+    if (!user?.featuredRoundIds?.length) {
+      // If no featured rounds set, show nothing (matches iOS behavior)
+      return [];
+    }
+    return userRounds.filter(round => user.featuredRoundIds?.includes(round.id));
+  }, [userRounds, user?.featuredRoundIds]);
+
+  // Get visible tabs based on check-in access
+  const visibleTabs = React.useMemo(() => {
+    const tabs = [TABS.MOVES, TABS.TIMELINE, TABS.ROUNDS];
+    if (canViewCheckins) {
+      tabs.push(TABS.WEIGHINS);
+    }
+    return tabs;
+  }, [canViewCheckins]);
+
   // Update the jsx for the exercises tab to include the delete functionality
   const renderExercisesTab = () => {
     return (
       <div className="px-5">
         <h2 className="text-xl text-white font-semibold mb-4">
-          {user.username}'s Videos ({userVideos.length})
+          {user.username}'s Moves ({userVideos.length})
         </h2>
         <ExerciseGrid
           userVideos={userVideos}
           onSelectVideo={(exercise) => setSelectedExercise(exercise)}
         />
+      </div>
+    );
+  };
+
+  // Render rounds tab with featured rounds (matching iOS)
+  const renderRoundsTab = () => {
+    // Type config for round cards (matching Create.tsx styling)
+    const typeConfig: Record<string, { gradient: string; iconBg: string; iconColor: string; label: string }> = {
+      workout: { gradient: 'from-rose-500/20 via-pink-500/20 to-orange-500/20', iconBg: 'bg-rose-500/30', iconColor: 'text-rose-300', label: 'Workout' },
+      steps: { gradient: 'from-blue-500/20 via-cyan-500/20 to-teal-500/20', iconBg: 'bg-blue-500/30', iconColor: 'text-blue-300', label: 'Steps' },
+      calories: { gradient: 'from-orange-500/20 via-amber-500/20 to-yellow-500/20', iconBg: 'bg-orange-500/30', iconColor: 'text-orange-300', label: 'Calories' },
+      hybrid: { gradient: 'from-purple-500/20 via-violet-500/20 to-indigo-500/20', iconBg: 'bg-purple-500/30', iconColor: 'text-purple-300', label: 'Hybrid' },
+    };
+
+    const getTypeIcon = (type: string) => {
+      switch (type) {
+        case 'steps': return <TrophyIcon className="w-4 h-4" />;
+        case 'calories': return <FireIcon className="w-4 h-4" />;
+        case 'hybrid': return (
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
+        );
+        default: return (
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6h4v12H4zM16 6h4v12h-4zM8 10h8v4H8z" />
+          </svg>
+        );
+      }
+    };
+
+    return (
+      <div className="px-5">
+        {/* Host/Participant Toggle */}
+        <div className="flex items-center justify-center gap-2 mb-6">
+          <button
+            onClick={() => setRoundsView('host')}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              roundsView === 'host' ? 'bg-[#E0FE10] text-black' : 'bg-zinc-800 text-zinc-400 hover:text-white'
+            }`}
+          >
+            Host
+          </button>
+          <span className="text-zinc-600">•</span>
+          <button
+            onClick={() => setRoundsView('participant')}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              roundsView === 'participant' ? 'bg-[#E0FE10] text-black' : 'bg-zinc-800 text-zinc-400 hover:text-white'
+            }`}
+          >
+            Participant
+          </button>
+        </div>
+
+        {roundsView === 'host' ? (
+          <>
+            {featuredRounds.length === 0 ? (
+              <div className="flex flex-col items-center justify-center p-12 bg-zinc-800/50 rounded-xl">
+                <StarIcon className="w-16 h-16 text-zinc-600 mb-4" />
+                <h3 className="text-lg font-semibold text-white mb-2">
+                  {userRounds.length > 0 ? 'No Featured Rounds' : 'No Rounds Yet'}
+                </h3>
+                <p className="text-zinc-400 text-center text-sm">
+                  {userRounds.length > 0 
+                    ? `${user.username} hasn't featured any rounds on their profile`
+                    : `${user.username} hasn't created any rounds yet`}
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-white mb-4">Featured Rounds</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {featuredRounds.map((round) => {
+                    const status = getRoundStatus(round);
+                    const challengeType = (round.challenge as any)?.challengeType?.toLowerCase() || 'workout';
+                    const config = typeConfig[challengeType] || typeConfig.workout;
+                    
+                    return (
+                      <button
+                        key={round.id}
+                        onClick={() => router.push(`/round/${round.id}`)}
+                        className={`group relative overflow-hidden rounded-xl border border-zinc-700/50 hover:border-zinc-600 transition-all duration-300 text-left bg-gradient-to-br ${config.gradient}`}
+                      >
+                        <div className="p-4">
+                          {/* Type Badge & Status */}
+                          <div className="flex items-center justify-between mb-3">
+                            <div className={`flex items-center gap-2 ${config.iconBg} px-3 py-1.5 rounded-lg`}>
+                              <span className={config.iconColor}>{getTypeIcon(challengeType)}</span>
+                              <span className={`text-xs font-medium ${config.iconColor}`}>{config.label}</span>
+                            </div>
+                            <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
+                              status === 'active' ? 'bg-green-500/20 text-green-400' :
+                              status === 'upcoming' ? 'bg-blue-500/20 text-blue-400' :
+                              'bg-zinc-500/20 text-zinc-400'
+                            }`}>
+                              {status.charAt(0).toUpperCase() + status.slice(1)}
+                            </span>
+                          </div>
+                          
+                          {/* Title & Description */}
+                          <h4 className="text-white font-semibold mb-1 line-clamp-1">
+                            {round.challenge?.title || 'Untitled Round'}
+                          </h4>
+                          <p className="text-zinc-400 text-sm line-clamp-2 mb-3">
+                            {round.challenge?.description || ''}
+                          </p>
+                          
+                          {/* Date Range */}
+                          <div className="flex items-center gap-2 text-xs text-zinc-500">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            <span>
+                              {round.challenge?.startDate 
+                                ? new Date(round.challenge.startDate).toLocaleDateString() 
+                                : 'TBD'}
+                              {' → '}
+                              {round.challenge?.endDate 
+                                ? new Date(round.challenge.endDate).toLocaleDateString() 
+                                : 'TBD'}
+                            </span>
+                          </div>
+                          
+                          {/* Participants */}
+                          {round.challenge?.participants && round.challenge.participants.length > 0 && (
+                            <div className="mt-3 flex items-center gap-2">
+                              <div className="flex -space-x-2">
+                                {round.challenge.participants.slice(0, 3).map((p: any, i: number) => (
+                                  <div key={i} className="w-6 h-6 rounded-full bg-zinc-700 border-2 border-zinc-800 overflow-hidden">
+                                    {p.profileImage?.profileImageURL ? (
+                                      <img src={p.profileImage.profileImageURL} alt="" className="w-full h-full object-cover" />
+                                    ) : (
+                                      <div className="w-full h-full flex items-center justify-center text-xs text-zinc-400">
+                                        {p.username?.[0]?.toUpperCase() || '?'}
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                              <span className="text-xs text-zinc-500">
+                                {round.challenge.participants.length} participant{round.challenge.participants.length !== 1 ? 's' : ''}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="flex flex-col items-center justify-center p-12 bg-zinc-800/50 rounded-xl">
+            <TrophyIcon className="w-16 h-16 text-zinc-600 mb-4" />
+            <h3 className="text-lg font-semibold text-white mb-2">Participant View</h3>
+            <p className="text-zinc-400 text-center text-sm">
+              Rounds {user.username} is participating in
+            </p>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Render weigh-ins/check-ins tab (matching iOS)
+  const renderWeighinsTab = () => {
+    if (checkinsLoading) {
+      return (
+        <div className="flex items-center justify-center p-12">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#E0FE10]"></div>
+        </div>
+      );
+    }
+
+    if (checkins.length === 0) {
+      return (
+        <div className="flex flex-col items-center justify-center p-12 bg-zinc-800/50 rounded-xl mx-5">
+          <ScaleIcon className="w-16 h-16 text-zinc-600 mb-4" />
+          <h3 className="text-lg font-semibold text-white mb-2">No Weigh-ins Yet</h3>
+          <p className="text-zinc-400 text-center text-sm">
+            Weigh-ins will appear here when {user.username} shares their progress
+          </p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="px-5 space-y-4">
+        {checkins.map((checkin) => {
+          const change = checkin.newWeight - checkin.oldWeight;
+          const hasPhotos = checkin.frontUrl || checkin.backUrl || checkin.sideUrl;
+          
+          return (
+            <div 
+              key={checkin.id}
+              className="bg-zinc-800/50 rounded-xl p-4 border border-zinc-700/50"
+            >
+              {/* Header */}
+              <div className="flex items-start justify-between mb-3">
+                <div>
+                  <p className="text-zinc-500 text-sm">
+                    {new Date(checkin.createdAt * 1000).toLocaleDateString('en-US', { 
+                      month: 'short', day: 'numeric', year: 'numeric' 
+                    })}
+                  </p>
+                  <div className="flex items-center gap-3 mt-1">
+                    <span className="text-2xl font-bold text-white">
+                      {checkin.newWeight.toFixed(1)} lbs
+                    </span>
+                    {Math.abs(change) > 0.1 && (
+                      <span className={`flex items-center gap-1 text-sm px-2 py-0.5 rounded-full ${
+                        change > 0 
+                          ? 'bg-orange-500/20 text-orange-400' 
+                          : 'bg-green-500/20 text-green-400'
+                      }`}>
+                        <svg className={`w-3 h-3 ${change > 0 ? '' : 'rotate-180'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 17l5-5 5 5" />
+                        </svg>
+                        {Math.abs(change).toFixed(1)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                
+                {hasPhotos && (
+                  <span className="flex items-center gap-1 text-xs text-[#E0FE10] bg-[#E0FE10]/10 px-2 py-1 rounded-lg">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    Photos
+                  </span>
+                )}
+              </div>
+              
+              {/* Progress Photos */}
+              {hasPhotos && (
+                <div className="flex gap-2 mt-3 overflow-x-auto">
+                  {checkin.frontUrl && (
+                    <div className="flex-shrink-0 w-20">
+                      <img 
+                        src={checkin.frontUrl} 
+                        alt="Front" 
+                        className="w-20 h-24 object-cover rounded-lg"
+                      />
+                      <p className="text-xs text-zinc-500 text-center mt-1">Front</p>
+                    </div>
+                  )}
+                  {checkin.sideUrl && (
+                    <div className="flex-shrink-0 w-20">
+                      <img 
+                        src={checkin.sideUrl} 
+                        alt="Side" 
+                        className="w-20 h-24 object-cover rounded-lg"
+                      />
+                      <p className="text-xs text-zinc-500 text-center mt-1">Side</p>
+                    </div>
+                  )}
+                  {checkin.backUrl && (
+                    <div className="flex-shrink-0 w-20">
+                      <img 
+                        src={checkin.backUrl} 
+                        alt="Back" 
+                        className="w-20 h-24 object-cover rounded-lg"
+                      />
+                      <p className="text-xs text-zinc-500 text-center mt-1">Back</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     );
   };
