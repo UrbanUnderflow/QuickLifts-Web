@@ -639,6 +639,44 @@
           "order": "DESCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "document-notes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "documentId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "lead-lists",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "lead-list-items",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "listId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": [

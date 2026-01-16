@@ -163,6 +163,25 @@ const CoachSignUpPage: React.FC = () => {
     });
     await userService.updateUser(uid, u);
     await maybePersistOnboardInvite(uid);
+
+    // Send welcome email (best-effort; non-blocking)
+    try {
+      const scheduledAt = new Date(Date.now() + 2 * 60 * 1000).toISOString(); // delay 2 minutes
+      await fetch('/.netlify/functions/send-welcome-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: uid,
+          toEmail: userEmail,
+          firstName: display,
+          username: display,
+          role: 'coach',
+          scheduledAt,
+        }),
+      });
+    } catch (e) {
+      console.warn('[coach/sign-up] Failed to send welcome email (non-blocking):', e);
+    }
   };
 
   // If already signed-in with a complete user profile, auto-create coach profile and skip the form
