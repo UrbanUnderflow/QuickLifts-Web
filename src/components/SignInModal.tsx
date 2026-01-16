@@ -873,6 +873,10 @@ const SignInModal: React.FC<SignInModalProps> = ({
               }
               // *** --- ***
 
+              // Intentionally do NOT send the welcome email here.
+              // For iOS + web parity, we only send the welcome email AFTER username selection,
+              // and we delay it ~2 minutes after completion. (See `/sign-up` and iOS Registration flow.)
+
               // Update local/Redux state - AuthWrapper will pick this up via onAuthStateChanged
               userService.nonUICurrentUser = newUser;
               console.log('[SignInModal] New user state set locally. AuthWrapper should take over.');

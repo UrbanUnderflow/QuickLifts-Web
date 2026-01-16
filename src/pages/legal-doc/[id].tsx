@@ -1,10 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, addDoc, query, where, onSnapshot, Timestamp, orderBy } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
-import { Timestamp } from 'firebase/firestore';
-import { Download, Loader2, FileText, AlertCircle } from 'lucide-react';
+import { Download, Loader2, FileText, AlertCircle, StickyNote, X } from 'lucide-react';
 
 interface LegalDocument {
   id: string;
@@ -13,6 +12,16 @@ interface LegalDocument {
   documentType: string;
   createdAt: Timestamp | Date;
   requiresSignature?: boolean;
+}
+
+interface DocumentNote {
+  id: string;
+  documentId: string;
+  authorName: string;
+  content: string;
+  xPercent: number; // Position as percentage of container width
+  yOffset: number; // Position as pixels from top of content
+  createdAt: Timestamp | Date;
 }
 
 // Utility function to format Firestore Timestamps or Dates
@@ -507,6 +516,16 @@ const LegalDocumentSharePage: React.FC = () => {
   const [document, setDocument] = useState<LegalDocument | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // Notes state
+  const [notes, setNotes] = useState<DocumentNote[]>([]);
+  const [showNoteForm, setShowNoteForm] = useState(false);
+  const [noteFormPosition, setNoteFormPosition] = useState({ x: 0, y: 0, xPercent: 0, yOffset: 0 });
+  const [newNoteName, setNewNoteName] = useState('');
+  const [newNoteContent, setNewNoteContent] = useState('');
+  const [savingNote, setSavingNote] = useState(false);
+  const [hoveredNoteId, setHoveredNoteId] = useState<string | null>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const fetchDocument = async () => {
@@ -538,6 +557,69 @@ const LegalDocumentSharePage: React.FC = () => {
 
     fetchDocument();
   }, [id]);
+
+  // Subscribe to notes for this document
+  useEffect(() => {
+    if (!id || typeof id !== 'string') return;
+
+    const notesQuery = query(
+      collection(db, 'document-notes'),
+      where('documentId', '==', id),
+      orderBy('createdAt', 'asc')
+    );
+
+    const unsubscribe = onSnapshot(notesQuery, (snapshot) => {
+      const notesData: DocumentNote[] = [];
+      snapshot.forEach((doc) => {
+        notesData.push({ id: doc.id, ...doc.data() } as DocumentNote);
+      });
+      setNotes(notesData);
+    }, (err) => {
+      console.error('Error fetching notes:', err);
+    });
+
+    return () => unsubscribe();
+  }, [id]);
+
+  // Handle double-click to add note
+  const handleDoubleClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!contentRef.current) return;
+    
+    const rect = contentRef.current.getBoundingClientRect();
+    const x = e.clientX;
+    const y = e.clientY;
+    const xPercent = ((e.clientX - rect.left) / rect.width) * 100;
+    const yOffset = e.clientY - rect.top + contentRef.current.scrollTop;
+    
+    setNoteFormPosition({ x, y, xPercent, yOffset });
+    setShowNoteForm(true);
+    setNewNoteName('');
+    setNewNoteContent('');
+  };
+
+  // Save new note
+  const handleSaveNote = async () => {
+    if (!id || typeof id !== 'string' || !newNoteName.trim() || !newNoteContent.trim()) return;
+    
+    setSavingNote(true);
+    try {
+      await addDoc(collection(db, 'document-notes'), {
+        documentId: id,
+        authorName: newNoteName.trim(),
+        content: newNoteContent.trim(),
+        xPercent: noteFormPosition.xPercent,
+        yOffset: noteFormPosition.yOffset,
+        createdAt: new Date()
+      });
+      setShowNoteForm(false);
+      setNewNoteName('');
+      setNewNoteContent('');
+    } catch (err) {
+      console.error('Error saving note:', err);
+    } finally {
+      setSavingNote(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -595,11 +677,149 @@ const LegalDocumentSharePage: React.FC = () => {
           </div>
 
           {/* Document Content */}
-          <div className="bg-[#1a1e24] rounded-xl border border-zinc-800 p-8">
+          <div className="bg-[#1a1e24] rounded-xl border border-zinc-800 p-8 relative">
+            {/* Hint for adding notes */}
+            <div className="mb-4 pb-4 border-b border-zinc-700/50">
+              <p className="text-xs text-zinc-500 flex items-center gap-2">
+                <StickyNote className="w-4 h-4 text-yellow-500" />
+                Double-click anywhere on the document to add a note
+              </p>
+            </div>
+            
             <div 
-              className="document-content"
-              dangerouslySetInnerHTML={{ __html: formatContentForPdf(document.content) }}
-            />
+              ref={contentRef}
+              className="document-content relative"
+              onDoubleClick={handleDoubleClick}
+              style={{ cursor: 'text' }}
+            >
+              <div dangerouslySetInnerHTML={{ __html: formatContentForPdf(document.content) }} />
+              
+              {/* Render sticky note icons */}
+              {notes.map((note) => (
+                <div
+                  key={note.id}
+                  className="absolute z-10"
+                  style={{
+                    left: `${Math.min(Math.max(note.xPercent, 2), 95)}%`,
+                    top: `${note.yOffset}px`,
+                    transform: 'translate(-50%, -50%)'
+                  }}
+                  onMouseEnter={() => setHoveredNoteId(note.id)}
+                  onMouseLeave={() => setHoveredNoteId(null)}
+                >
+                  {/* Sticky note icon */}
+                  <div className="w-8 h-8 bg-yellow-400 rounded shadow-lg cursor-pointer flex items-center justify-center transform hover:scale-110 transition-transform">
+                    <StickyNote className="w-5 h-5 text-yellow-800" />
+                  </div>
+                  
+                  {/* Tooltip on hover */}
+                  {hoveredNoteId === note.id && (
+                    <div 
+                      className="absolute z-20 bg-yellow-100 text-yellow-900 rounded-lg shadow-xl p-3 min-w-[200px] max-w-[300px]"
+                      style={{
+                        left: note.xPercent > 70 ? 'auto' : '100%',
+                        right: note.xPercent > 70 ? '100%' : 'auto',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        marginLeft: note.xPercent > 70 ? 0 : '8px',
+                        marginRight: note.xPercent > 70 ? '8px' : 0
+                      }}
+                    >
+                      <div className="font-semibold text-sm mb-1">{note.authorName}</div>
+                      <div className="text-sm whitespace-pre-wrap">{note.content}</div>
+                      <div className="text-xs text-yellow-700 mt-2">
+                        {note.createdAt instanceof Date 
+                          ? note.createdAt.toLocaleDateString() 
+                          : (note.createdAt as Timestamp).toDate().toLocaleDateString()}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+            
+            {/* Note Form Modal */}
+            {showNoteForm && (
+              <div 
+                className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+                onClick={(e) => {
+                  if (e.target === e.currentTarget) setShowNoteForm(false);
+                }}
+              >
+                <div 
+                  className="bg-[#1a1e24] rounded-xl border border-zinc-700 shadow-2xl p-6 w-full max-w-md mx-4"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 bg-yellow-400 rounded flex items-center justify-center">
+                        <StickyNote className="w-5 h-5 text-yellow-800" />
+                      </div>
+                      <h3 className="text-lg font-semibold text-white">Add Note</h3>
+                    </div>
+                    <button
+                      onClick={() => setShowNoteForm(false)}
+                      className="p-1 hover:bg-zinc-700 rounded-lg transition-colors"
+                    >
+                      <X className="w-5 h-5 text-zinc-400" />
+                    </button>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-300 mb-1.5">
+                        Your Name
+                      </label>
+                      <input
+                        type="text"
+                        value={newNoteName}
+                        onChange={(e) => setNewNoteName(e.target.value)}
+                        placeholder="Enter your name"
+                        className="w-full px-4 py-2.5 bg-zinc-800 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500"
+                        autoFocus
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-300 mb-1.5">
+                        Note
+                      </label>
+                      <textarea
+                        value={newNoteContent}
+                        onChange={(e) => setNewNoteContent(e.target.value)}
+                        placeholder="Enter your note or comment..."
+                        rows={4}
+                        className="w-full px-4 py-2.5 bg-zinc-800 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-yellow-500/50 focus:border-yellow-500 resize-none"
+                      />
+                    </div>
+                    
+                    <div className="flex gap-3 pt-2">
+                      <button
+                        onClick={() => setShowNoteForm(false)}
+                        className="flex-1 px-4 py-2.5 bg-zinc-700 hover:bg-zinc-600 text-white rounded-lg font-medium transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleSaveNote}
+                        disabled={!newNoteName.trim() || !newNoteContent.trim() || savingNote}
+                        className="flex-1 px-4 py-2.5 bg-yellow-500 hover:bg-yellow-400 disabled:bg-zinc-600 disabled:cursor-not-allowed text-black disabled:text-zinc-400 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                      >
+                        {savingNote ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            Saving...
+                          </>
+                        ) : (
+                          'Add Note'
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+            
             <style jsx global>{`
               .document-content {
                 color: #e4e4e7;

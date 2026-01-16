@@ -244,5 +244,11 @@
   # Check every Saturday at 9am EST if it's time to send draft reminder
   schedule = "0 14 * * 6"
 
+# Schedule: username reminder email for users who started signup but never selected a username
+[functions.schedule-username-reminder-email]
+  # Runs on a lightweight cadence and checks Firestore for the admin-configured daily send time.
+  # The function itself enforces "only once per day" at the chosen time.
+  schedule = "*/30 * * * *"
+
 [functions.trigger-review-checkin]
   # Manual trigger for weekly check-in email (no schedule)

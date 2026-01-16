@@ -1,0 +1,1163 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import Head from 'next/head';
+import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
+import { collection, getDocs, query, orderBy, addDoc, deleteDoc, doc, Timestamp, updateDoc, writeBatch, where, limit, startAfter, getDoc } from 'firebase/firestore';
+import { db } from '../../api/firebase/config';
+import { 
+  Database, Upload, Trash2, Loader2, Sparkles, Clock, AlertCircle, CheckCircle, 
+  RefreshCw, Eye, ChevronLeft, ChevronRight, X, Columns, Send, Download,
+  Plus, List, FileSpreadsheet, Wand2
+} from 'lucide-react';
+
+// Types
+interface LeadList {
+  id: string;
+  name: string;
+  columns: string[];
+  rowCount: number;
+  createdAt: Timestamp | Date;
+  updatedAt?: Timestamp | Date;
+}
+
+interface LeadItem {
+  id: string;
+  listId: string;
+  data: Record<string, string>;
+  createdAt: Timestamp | Date;
+}
+
+// Utility function to format Firestore Timestamps or Dates
+const formatDate = (date: Timestamp | Date | undefined): string => {
+  if (!date) return 'N/A';
+  let dateObject: Date;
+  if (date instanceof Timestamp) {
+    dateObject = date.toDate();
+  } else if (date instanceof Date) {
+    dateObject = date;
+  } else {
+    return 'Invalid Date';
+  }
+  return dateObject.toLocaleDateString('en-US', { 
+    year: 'numeric', 
+    month: 'short', 
+    day: 'numeric', 
+    hour: '2-digit', 
+    minute: '2-digit' 
+  });
+};
+
+// Simple CSV parser (handles quoted fields with commas)
+const parseCSV = (csvText: string): { headers: string[]; rows: Record<string, string>[] } => {
+  const lines = csvText.trim().split('\n');
+  if (lines.length === 0) return { headers: [], rows: [] };
+
+  // Parse a single line respecting quoted fields
+  const parseLine = (line: string): string[] => {
+    const result: string[] = [];
+    let current = '';
+    let inQuotes = false;
+    
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      
+      if (char === '"') {
+        if (inQuotes && line[i + 1] === '"') {
+          current += '"';
+          i++;
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (char === ',' && !inQuotes) {
+        result.push(current.trim());
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    result.push(current.trim());
+    return result;
+  };
+
+  const headers = parseLine(lines[0]);
+  const rows: Record<string, string>[] = [];
+
+  for (let i = 1; i < lines.length; i++) {
+    const values = parseLine(lines[i]);
+    if (values.length === headers.length) {
+      const row: Record<string, string> = {};
+      headers.forEach((header, index) => {
+        row[header] = values[index] || '';
+      });
+      rows.push(row);
+    }
+  }
+
+  return { headers, rows };
+};
+
+const ROWS_PER_PAGE = 100;
+
+const LeadMassagingAdmin: React.FC = () => {
+  // Lead Lists State
+  const [leadLists, setLeadLists] = useState<LeadList[]>([]);
+  const [selectedListId, setSelectedListId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
+
+  // Create List Modal State
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [newListName, setNewListName] = useState('');
+  const [csvInput, setCsvInput] = useState('');
+  const [isImporting, setIsImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState<{ current: number; total: number } | null>(null);
+
+  // Lead Items State
+  const [leadItems, setLeadItems] = useState<LeadItem[]>([]);
+  const [loadingItems, setLoadingItems] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+
+  // Transform Modal State
+  const [isTransformModalOpen, setIsTransformModalOpen] = useState(false);
+  const [sourceColumn, setSourceColumn] = useState('');
+  const [transformPrompt, setTransformPrompt] = useState('');
+  const [newColumnName, setNewColumnName] = useState('');
+  const [isTransforming, setIsTransforming] = useState(false);
+  const [transformProgress, setTransformProgress] = useState<{ current: number; total: number } | null>(null);
+
+  // Push to Instantly Modal State
+  const [isPushModalOpen, setIsPushModalOpen] = useState(false);
+  const [campaignId, setCampaignId] = useState('');
+  const [emailColumn, setEmailColumn] = useState('');
+  const [firstNameColumn, setFirstNameColumn] = useState('');
+  const [lastNameColumn, setLastNameColumn] = useState('');
+  const [companyColumn, setCompanyColumn] = useState('');
+  const [customVariableColumns, setCustomVariableColumns] = useState<string[]>([]);
+  const [isPushing, setIsPushing] = useState(false);
+  const [pushProgress, setPushProgress] = useState<{ current: number; total: number; success: number; failed: number } | null>(null);
+
+  // Deleting state
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // Get selected list
+  const selectedList = leadLists.find(l => l.id === selectedListId);
+
+  // Load lead lists
+  const loadLeadLists = useCallback(async () => {
+    setLoading(true);
+    try {
+      const q = query(
+        collection(db, 'lead-lists'),
+        orderBy('createdAt', 'desc')
+      );
+      const snapshot = await getDocs(q);
+      const lists = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as LeadList[];
+      setLeadLists(lists);
+    } catch (error) {
+      console.error('Error loading lead lists:', error);
+      setMessage({ type: 'error', text: 'Failed to load lead lists' });
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Load lead items for selected list
+  const loadLeadItems = useCallback(async (listId: string, page: number = 1) => {
+    setLoadingItems(true);
+    try {
+      // Get total count from the list document
+      const listDoc = await getDoc(doc(db, 'lead-lists', listId));
+      const listData = listDoc.data() as LeadList | undefined;
+      const totalRows = listData?.rowCount || 0;
+      setTotalPages(Math.ceil(totalRows / ROWS_PER_PAGE));
+
+      // Query items with pagination
+      const q = query(
+        collection(db, 'lead-list-items'),
+        where('listId', '==', listId),
+        orderBy('createdAt', 'asc'),
+        limit(ROWS_PER_PAGE)
+      );
+
+      // For pages > 1, we need to get the last doc from previous page
+      // For simplicity, we'll fetch all and slice (can optimize later with cursors)
+      const allItemsQuery = query(
+        collection(db, 'lead-list-items'),
+        where('listId', '==', listId),
+        orderBy('createdAt', 'asc')
+      );
+      
+      const snapshot = await getDocs(allItemsQuery);
+      const allItems = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as LeadItem[];
+
+      // Slice for pagination
+      const startIndex = (page - 1) * ROWS_PER_PAGE;
+      const endIndex = startIndex + ROWS_PER_PAGE;
+      setLeadItems(allItems.slice(startIndex, endIndex));
+      setCurrentPage(page);
+    } catch (error) {
+      console.error('Error loading lead items:', error);
+      setMessage({ type: 'error', text: 'Failed to load lead data' });
+    } finally {
+      setLoadingItems(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadLeadLists();
+  }, [loadLeadLists]);
+
+  useEffect(() => {
+    if (selectedListId) {
+      loadLeadItems(selectedListId, 1);
+    } else {
+      setLeadItems([]);
+    }
+  }, [selectedListId, loadLeadItems]);
+
+  // Auto-dismiss messages
+  useEffect(() => {
+    if (message) {
+      const timer = setTimeout(() => setMessage(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [message]);
+
+  // Import CSV data
+  const handleImportCSV = async () => {
+    if (!newListName.trim()) {
+      setMessage({ type: 'error', text: 'Please enter a list name' });
+      return;
+    }
+    if (!csvInput.trim()) {
+      setMessage({ type: 'error', text: 'Please paste CSV data' });
+      return;
+    }
+
+    setIsImporting(true);
+    setImportProgress(null);
+
+    try {
+      const { headers, rows } = parseCSV(csvInput);
+      
+      if (headers.length === 0) {
+        throw new Error('No headers found in CSV');
+      }
+      if (rows.length === 0) {
+        throw new Error('No data rows found in CSV');
+      }
+
+      // Create the lead list document
+      const listRef = await addDoc(collection(db, 'lead-lists'), {
+        name: newListName.trim(),
+        columns: headers,
+        rowCount: rows.length,
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now()
+      });
+
+      // Batch write the items (500 per batch - Firestore limit)
+      const BATCH_SIZE = 500;
+      let processed = 0;
+      
+      for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+        const batch = writeBatch(db);
+        const batchRows = rows.slice(i, i + BATCH_SIZE);
+        
+        batchRows.forEach((row) => {
+          const itemRef = doc(collection(db, 'lead-list-items'));
+          batch.set(itemRef, {
+            listId: listRef.id,
+            data: row,
+            createdAt: Timestamp.now()
+          });
+        });
+        
+        await batch.commit();
+        processed += batchRows.length;
+        setImportProgress({ current: processed, total: rows.length });
+      }
+
+      setMessage({ type: 'success', text: `Successfully imported ${rows.length} leads into "${newListName}"` });
+      setIsCreateModalOpen(false);
+      setNewListName('');
+      setCsvInput('');
+      loadLeadLists();
+      setSelectedListId(listRef.id);
+    } catch (error) {
+      console.error('Error importing CSV:', error);
+      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Failed to import CSV' });
+    } finally {
+      setIsImporting(false);
+      setImportProgress(null);
+    }
+  };
+
+  // Delete lead list
+  const handleDeleteList = async (listId: string) => {
+    if (!confirm('Are you sure you want to delete this lead list? This will delete all leads in the list.')) return;
+
+    setDeletingId(listId);
+    try {
+      // Delete all items in the list
+      const itemsQuery = query(
+        collection(db, 'lead-list-items'),
+        where('listId', '==', listId)
+      );
+      const itemsSnapshot = await getDocs(itemsQuery);
+      
+      // Batch delete items
+      const BATCH_SIZE = 500;
+      const items = itemsSnapshot.docs;
+      
+      for (let i = 0; i < items.length; i += BATCH_SIZE) {
+        const batch = writeBatch(db);
+        const batchItems = items.slice(i, i + BATCH_SIZE);
+        batchItems.forEach((item) => {
+          batch.delete(item.ref);
+        });
+        await batch.commit();
+      }
+
+      // Delete the list document
+      await deleteDoc(doc(db, 'lead-lists', listId));
+
+      if (selectedListId === listId) {
+        setSelectedListId(null);
+      }
+      
+      setMessage({ type: 'success', text: 'Lead list deleted successfully' });
+      loadLeadLists();
+    } catch (error) {
+      console.error('Error deleting lead list:', error);
+      setMessage({ type: 'error', text: 'Failed to delete lead list' });
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  // Transform column with AI
+  const handleTransformColumn = async () => {
+    if (!selectedListId || !sourceColumn || !newColumnName.trim() || !transformPrompt.trim()) {
+      setMessage({ type: 'error', text: 'Please fill in all fields' });
+      return;
+    }
+
+    // Check if new column name already exists
+    if (selectedList?.columns.includes(newColumnName.trim())) {
+      setMessage({ type: 'error', text: 'Column name already exists. Please choose a different name.' });
+      return;
+    }
+
+    setIsTransforming(true);
+    setTransformProgress(null);
+
+    try {
+      const response = await fetch('/.netlify/functions/massage-lead-column', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          listId: selectedListId,
+          sourceColumn,
+          newColumnName: newColumnName.trim(),
+          prompt: transformPrompt.trim()
+        })
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to transform column');
+      }
+
+      setMessage({ type: 'success', text: `Successfully transformed ${result.processedCount} rows into "${newColumnName}"` });
+      setIsTransformModalOpen(false);
+      setSourceColumn('');
+      setNewColumnName('');
+      setTransformPrompt('');
+      
+      // Reload data
+      loadLeadLists();
+      loadLeadItems(selectedListId, currentPage);
+    } catch (error) {
+      console.error('Error transforming column:', error);
+      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Failed to transform column' });
+    } finally {
+      setIsTransforming(false);
+      setTransformProgress(null);
+    }
+  };
+
+  // Push to Instantly
+  const handlePushToInstantly = async () => {
+    if (!selectedListId || !campaignId.trim() || !emailColumn) {
+      setMessage({ type: 'error', text: 'Please enter Campaign ID and select the email column' });
+      return;
+    }
+
+    setIsPushing(true);
+    setPushProgress(null);
+
+    try {
+      const response = await fetch('/.netlify/functions/push-leads-to-instantly', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          listId: selectedListId,
+          campaignId: campaignId.trim(),
+          columnMapping: {
+            email: emailColumn,
+            firstName: firstNameColumn || undefined,
+            lastName: lastNameColumn || undefined,
+            companyName: companyColumn || undefined
+          },
+          customVariables: customVariableColumns
+        })
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to push leads to Instantly');
+      }
+
+      setMessage({ 
+        type: 'success', 
+        text: `Successfully pushed ${result.successCount} leads to Instantly${result.failedCount > 0 ? ` (${result.failedCount} failed)` : ''}` 
+      });
+      setIsPushModalOpen(false);
+    } catch (error) {
+      console.error('Error pushing to Instantly:', error);
+      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Failed to push leads' });
+    } finally {
+      setIsPushing(false);
+      setPushProgress(null);
+    }
+  };
+
+  // Toggle custom variable column selection
+  const toggleCustomVariable = (column: string) => {
+    setCustomVariableColumns(prev => 
+      prev.includes(column) 
+        ? prev.filter(c => c !== column)
+        : [...prev, column]
+    );
+  };
+
+  return (
+    <AdminRouteGuard>
+      <Head>
+        <title>Lead Massaging Tool | Pulse Admin</title>
+      </Head>
+      
+      <div className="min-h-screen bg-[#111417] text-white py-10 px-4">
+        <div className="max-w-7xl mx-auto">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <h1 className="text-2xl font-bold flex items-center gap-2">
+                <Database className="w-7 h-7 text-[#d7ff00]" />
+                Lead Massaging Tool
+              </h1>
+              <p className="text-zinc-400 mt-1">
+                Import, transform, and push leads to Instantly
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={loadLeadLists}
+                disabled={loading}
+                className="flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg transition-colors"
+              >
+                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                Refresh
+              </button>
+              <button
+                onClick={() => setIsCreateModalOpen(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-[#d7ff00] text-black hover:bg-[#c5eb00] rounded-lg font-semibold transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                New Lead List
+              </button>
+            </div>
+          </div>
+
+          {/* Message Banner */}
+          {message && (
+            <div className={`mb-6 p-4 rounded-xl border ${
+              message.type === 'success' 
+                ? 'bg-green-900/20 border-green-800 text-green-400'
+                : message.type === 'error'
+                ? 'bg-red-900/20 border-red-800 text-red-400'
+                : 'bg-blue-900/20 border-blue-800 text-blue-400'
+            }`}>
+              <div className="flex items-center gap-2">
+                {message.type === 'success' ? <CheckCircle className="w-5 h-5" /> : 
+                 message.type === 'error' ? <AlertCircle className="w-5 h-5" /> : 
+                 <AlertCircle className="w-5 h-5" />}
+                {message.text}
+              </div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            {/* Lead Lists Sidebar */}
+            <div className="lg:col-span-1">
+              <div className="bg-[#1a1e24] rounded-xl border border-zinc-800 overflow-hidden">
+                <div className="p-4 border-b border-zinc-800">
+                  <h2 className="text-lg font-semibold flex items-center gap-2">
+                    <List className="w-5 h-5 text-zinc-400" />
+                    Lead Lists
+                    <span className="ml-auto px-2 py-0.5 bg-zinc-800 rounded-full text-xs text-zinc-400">
+                      {leadLists.length}
+                    </span>
+                  </h2>
+                </div>
+
+                {loading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 className="w-6 h-6 animate-spin text-[#d7ff00]" />
+                  </div>
+                ) : leadLists.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-zinc-500 px-4">
+                    <FileSpreadsheet className="w-10 h-10 mb-3 opacity-50" />
+                    <p className="text-sm text-center">No lead lists yet</p>
+                    <p className="text-xs text-center mt-1">Create one to get started</p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-zinc-800 max-h-[500px] overflow-y-auto">
+                    {leadLists.map((list) => (
+                      <div
+                        key={list.id}
+                        className={`p-4 cursor-pointer transition-colors ${
+                          selectedListId === list.id 
+                            ? 'bg-[#d7ff00]/10 border-l-2 border-l-[#d7ff00]' 
+                            : 'hover:bg-zinc-900/50'
+                        }`}
+                        onClick={() => setSelectedListId(list.id)}
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="min-w-0 flex-1">
+                            <h3 className="font-medium text-white truncate">{list.name}</h3>
+                            <p className="text-xs text-zinc-500 mt-1">
+                              {list.rowCount.toLocaleString()} leads • {list.columns.length} columns
+                            </p>
+                            <p className="text-xs text-zinc-600 mt-0.5">
+                              {formatDate(list.createdAt)}
+                            </p>
+                          </div>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteList(list.id);
+                            }}
+                            disabled={deletingId === list.id}
+                            className="p-1.5 hover:bg-red-900/30 rounded-lg transition-colors"
+                          >
+                            {deletingId === list.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin text-red-400" />
+                            ) : (
+                              <Trash2 className="w-4 h-4 text-red-400" />
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Main Content Area */}
+            <div className="lg:col-span-3">
+              {!selectedListId ? (
+                <div className="bg-[#1a1e24] rounded-xl border border-zinc-800 flex flex-col items-center justify-center py-20 text-zinc-500">
+                  <Database className="w-16 h-16 mb-4 opacity-30" />
+                  <p className="text-lg">Select a lead list to view data</p>
+                  <p className="text-sm mt-1">or create a new one to get started</p>
+                </div>
+              ) : (
+                <div className="bg-[#1a1e24] rounded-xl border border-zinc-800 overflow-hidden">
+                  {/* Actions Bar */}
+                  <div className="p-4 border-b border-zinc-800 flex items-center justify-between flex-wrap gap-4">
+                    <div>
+                      <h2 className="text-lg font-semibold text-white">{selectedList?.name}</h2>
+                      <p className="text-sm text-zinc-500">
+                        {selectedList?.rowCount.toLocaleString()} leads • {selectedList?.columns.length} columns
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => {
+                          setSourceColumn('');
+                          setNewColumnName('');
+                          setTransformPrompt('');
+                          setIsTransformModalOpen(true);
+                        }}
+                        className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-medium transition-colors"
+                      >
+                        <Wand2 className="w-4 h-4" />
+                        Transform Column
+                      </button>
+                      <button
+                        onClick={() => {
+                          setEmailColumn('');
+                          setFirstNameColumn('');
+                          setLastNameColumn('');
+                          setCompanyColumn('');
+                          setCustomVariableColumns([]);
+                          setCampaignId('');
+                          setIsPushModalOpen(true);
+                        }}
+                        className="flex items-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded-lg font-medium transition-colors"
+                      >
+                        <Send className="w-4 h-4" />
+                        Push to Instantly
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Column Headers Display */}
+                  {selectedList && (
+                    <div className="px-4 py-2 bg-zinc-900/50 border-b border-zinc-800">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs text-zinc-500">Columns:</span>
+                        {selectedList.columns.map((col) => (
+                          <span key={col} className="px-2 py-0.5 bg-zinc-800 rounded text-xs text-zinc-300">
+                            {col}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Data Table */}
+                  {loadingItems ? (
+                    <div className="flex items-center justify-center py-20">
+                      <Loader2 className="w-8 h-8 animate-spin text-[#d7ff00]" />
+                    </div>
+                  ) : leadItems.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-20 text-zinc-500">
+                      <FileSpreadsheet className="w-12 h-12 mb-4 opacity-50" />
+                      <p>No data in this list</p>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead className="bg-zinc-900/70">
+                            <tr>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider whitespace-nowrap">
+                                #
+                              </th>
+                              {selectedList?.columns.map((col) => (
+                                <th key={col} className="px-4 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider whitespace-nowrap">
+                                  {col}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-zinc-800">
+                            {leadItems.map((item, index) => (
+                              <tr key={item.id} className="hover:bg-zinc-900/30">
+                                <td className="px-4 py-3 text-zinc-500 whitespace-nowrap">
+                                  {(currentPage - 1) * ROWS_PER_PAGE + index + 1}
+                                </td>
+                                {selectedList?.columns.map((col) => (
+                                  <td key={col} className="px-4 py-3 text-zinc-300 max-w-xs truncate" title={item.data[col] || ''}>
+                                    {item.data[col] || '-'}
+                                  </td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* Pagination */}
+                      <div className="p-4 border-t border-zinc-800 flex items-center justify-between">
+                        <p className="text-sm text-zinc-500">
+                          Showing {(currentPage - 1) * ROWS_PER_PAGE + 1} - {Math.min(currentPage * ROWS_PER_PAGE, selectedList?.rowCount || 0)} of {selectedList?.rowCount.toLocaleString()} leads
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => loadLeadItems(selectedListId!, currentPage - 1)}
+                            disabled={currentPage === 1 || loadingItems}
+                            className="p-2 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors"
+                          >
+                            <ChevronLeft className="w-4 h-4" />
+                          </button>
+                          <span className="text-sm text-zinc-400">
+                            Page {currentPage} of {totalPages}
+                          </span>
+                          <button
+                            onClick={() => loadLeadItems(selectedListId!, currentPage + 1)}
+                            disabled={currentPage === totalPages || loadingItems}
+                            className="p-2 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors"
+                          >
+                            <ChevronRight className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Tips Card */}
+          <div className="mt-8 p-6 bg-zinc-900/50 rounded-xl border border-zinc-800">
+            <h3 className="text-sm font-semibold text-zinc-300 mb-2">💡 How to Use</h3>
+            <ul className="text-sm text-zinc-500 space-y-1">
+              <li>• <strong>Import</strong> - Paste CSV data (first row should be headers) to create a new lead list</li>
+              <li>• <strong>Transform</strong> - Use AI to create new columns from existing data (e.g., summarize company descriptions into personalization hooks)</li>
+              <li>• <strong>Push</strong> - Send your enriched leads directly to an Instantly campaign</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      {/* Create Lead List Modal */}
+      {isCreateModalOpen && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#1a1e24] rounded-2xl border border-zinc-700 w-full max-w-3xl max-h-[90vh] overflow-hidden">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-6 border-b border-zinc-700">
+              <div>
+                <h2 className="text-xl font-semibold text-white flex items-center gap-2">
+                  <Upload className="w-5 h-5 text-[#d7ff00]" />
+                  Create New Lead List
+                </h2>
+                <p className="text-sm text-zinc-400 mt-1">Import leads from CSV data</p>
+              </div>
+              <button
+                onClick={() => setIsCreateModalOpen(false)}
+                disabled={isImporting}
+                className="p-2 hover:bg-zinc-800 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-zinc-400" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 overflow-y-auto max-h-[60vh]">
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-zinc-400 mb-2">
+                  List Name
+                </label>
+                <input
+                  type="text"
+                  value={newListName}
+                  onChange={(e) => setNewListName(e.target.value)}
+                  placeholder="e.g., Fitness Studios - January 2026"
+                  className="w-full px-4 py-3 bg-zinc-900 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-[#d7ff00] transition-colors"
+                  disabled={isImporting}
+                />
+              </div>
+
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-zinc-400 mb-2">
+                  CSV Data
+                </label>
+                <textarea
+                  value={csvInput}
+                  onChange={(e) => setCsvInput(e.target.value)}
+                  placeholder={`Paste your CSV data here. First row should be column headers.\n\nExample:\nemail,first_name,company_name,company_description\njohn@example.com,John,Acme Fitness,"A boutique fitness studio focusing on HIIT and strength training"`}
+                  className="w-full h-64 px-4 py-3 bg-zinc-900 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-[#d7ff00] transition-colors resize-none font-mono text-sm"
+                  disabled={isImporting}
+                />
+                <p className="text-xs text-zinc-500 mt-2">
+                  Tip: Copy directly from Google Sheets - it will paste as CSV format
+                </p>
+              </div>
+
+              {importProgress && (
+                <div className="mb-4 p-4 bg-blue-900/20 border border-blue-800 rounded-xl">
+                  <div className="flex items-center gap-3">
+                    <Loader2 className="w-5 h-5 animate-spin text-blue-400" />
+                    <div className="flex-1">
+                      <p className="text-sm text-blue-400">
+                        Importing leads... {importProgress.current.toLocaleString()} / {importProgress.total.toLocaleString()}
+                      </p>
+                      <div className="mt-2 h-2 bg-blue-900/50 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-blue-500 transition-all"
+                          style={{ width: `${(importProgress.current / importProgress.total) * 100}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-end gap-3 p-6 border-t border-zinc-700">
+              <button
+                onClick={() => setIsCreateModalOpen(false)}
+                disabled={isImporting}
+                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleImportCSV}
+                disabled={isImporting || !newListName.trim() || !csvInput.trim()}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                  isImporting || !newListName.trim() || !csvInput.trim()
+                    ? 'bg-zinc-700 text-zinc-400 cursor-not-allowed'
+                    : 'bg-[#d7ff00] text-black hover:bg-[#c5eb00]'
+                }`}
+              >
+                {isImporting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Importing...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="w-4 h-4" />
+                    Import CSV
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Transform Column Modal */}
+      {isTransformModalOpen && selectedList && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#1a1e24] rounded-2xl border border-zinc-700 w-full max-w-lg overflow-hidden">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-6 border-b border-zinc-700">
+              <div>
+                <h2 className="text-xl font-semibold text-white flex items-center gap-2">
+                  <Wand2 className="w-5 h-5 text-purple-400" />
+                  Transform Column with AI
+                </h2>
+                <p className="text-sm text-zinc-400 mt-1">Create a new column using AI</p>
+              </div>
+              <button
+                onClick={() => setIsTransformModalOpen(false)}
+                disabled={isTransforming}
+                className="p-2 hover:bg-zinc-800 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-zinc-400" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-zinc-400 mb-2">
+                  Source Column
+                </label>
+                <select
+                  value={sourceColumn}
+                  onChange={(e) => setSourceColumn(e.target.value)}
+                  className="w-full px-4 py-3 bg-zinc-900 border border-zinc-700 rounded-xl text-white focus:outline-none focus:border-purple-500 transition-colors"
+                  disabled={isTransforming}
+                >
+                  <option value="">Select a column...</option>
+                  {selectedList.columns.map((col) => (
+                    <option key={col} value={col}>{col}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-zinc-400 mb-2">
+                  Transformation Prompt
+                </label>
+                <textarea
+                  value={transformPrompt}
+                  onChange={(e) => setTransformPrompt(e.target.value)}
+                  placeholder="e.g., Summarize this company description into 6-10 words that could be used as an email personalization hook. Keep it conversational and relevant."
+                  className="w-full h-32 px-4 py-3 bg-zinc-900 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-purple-500 transition-colors resize-none"
+                  disabled={isTransforming}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-zinc-400 mb-2">
+                  New Column Name
+                </label>
+                <input
+                  type="text"
+                  value={newColumnName}
+                  onChange={(e) => setNewColumnName(e.target.value)}
+                  placeholder="e.g., personalization_hook"
+                  className="w-full px-4 py-3 bg-zinc-900 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-purple-500 transition-colors"
+                  disabled={isTransforming}
+                />
+                <p className="text-xs text-zinc-500 mt-1">
+                  Use snake_case for Instantly compatibility (e.g., personalization_hook)
+                </p>
+              </div>
+
+              {transformProgress && (
+                <div className="p-4 bg-purple-900/20 border border-purple-800 rounded-xl">
+                  <div className="flex items-center gap-3">
+                    <Loader2 className="w-5 h-5 animate-spin text-purple-400" />
+                    <div className="flex-1">
+                      <p className="text-sm text-purple-400">
+                        Processing... {transformProgress.current.toLocaleString()} / {transformProgress.total.toLocaleString()}
+                      </p>
+                      <div className="mt-2 h-2 bg-purple-900/50 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-purple-500 transition-all"
+                          style={{ width: `${(transformProgress.current / transformProgress.total) * 100}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-end gap-3 p-6 border-t border-zinc-700">
+              <button
+                onClick={() => setIsTransformModalOpen(false)}
+                disabled={isTransforming}
+                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleTransformColumn}
+                disabled={isTransforming || !sourceColumn || !newColumnName.trim() || !transformPrompt.trim()}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                  isTransforming || !sourceColumn || !newColumnName.trim() || !transformPrompt.trim()
+                    ? 'bg-zinc-700 text-zinc-400 cursor-not-allowed'
+                    : 'bg-purple-600 text-white hover:bg-purple-500'
+                }`}
+              >
+                {isTransforming ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Transforming...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4" />
+                    Transform Column
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Push to Instantly Modal */}
+      {isPushModalOpen && selectedList && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#1a1e24] rounded-2xl border border-zinc-700 w-full max-w-lg max-h-[90vh] overflow-hidden">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-6 border-b border-zinc-700">
+              <div>
+                <h2 className="text-xl font-semibold text-white flex items-center gap-2">
+                  <Send className="w-5 h-5 text-orange-400" />
+                  Push to Instantly
+                </h2>
+                <p className="text-sm text-zinc-400 mt-1">Send {selectedList.rowCount.toLocaleString()} leads to a campaign</p>
+              </div>
+              <button
+                onClick={() => setIsPushModalOpen(false)}
+                disabled={isPushing}
+                className="p-2 hover:bg-zinc-800 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-zinc-400" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 overflow-y-auto max-h-[60vh] space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-zinc-400 mb-2">
+                  Campaign ID <span className="text-red-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={campaignId}
+                  onChange={(e) => setCampaignId(e.target.value)}
+                  placeholder="Paste your Instantly campaign ID"
+                  className="w-full px-4 py-3 bg-zinc-900 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-orange-500 transition-colors"
+                  disabled={isPushing}
+                />
+                <p className="text-xs text-zinc-500 mt-1">
+                  Find this in your Instantly campaign settings
+                </p>
+              </div>
+
+              <div className="border-t border-zinc-700 pt-4">
+                <h3 className="text-sm font-medium text-white mb-3">Column Mapping</h3>
+                
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs text-zinc-400 mb-1">
+                      Email Column <span className="text-red-400">*</span>
+                    </label>
+                    <select
+                      value={emailColumn}
+                      onChange={(e) => setEmailColumn(e.target.value)}
+                      className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500"
+                      disabled={isPushing}
+                    >
+                      <option value="">Select email column...</option>
+                      {selectedList.columns.map((col) => (
+                        <option key={col} value={col}>{col}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs text-zinc-400 mb-1">First Name</label>
+                      <select
+                        value={firstNameColumn}
+                        onChange={(e) => setFirstNameColumn(e.target.value)}
+                        className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500"
+                        disabled={isPushing}
+                      >
+                        <option value="">None</option>
+                        {selectedList.columns.map((col) => (
+                          <option key={col} value={col}>{col}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-zinc-400 mb-1">Last Name</label>
+                      <select
+                        value={lastNameColumn}
+                        onChange={(e) => setLastNameColumn(e.target.value)}
+                        className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500"
+                        disabled={isPushing}
+                      >
+                        <option value="">None</option>
+                        {selectedList.columns.map((col) => (
+                          <option key={col} value={col}>{col}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs text-zinc-400 mb-1">Company Name</label>
+                    <select
+                      value={companyColumn}
+                      onChange={(e) => setCompanyColumn(e.target.value)}
+                      className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-white text-sm focus:outline-none focus:border-orange-500"
+                      disabled={isPushing}
+                    >
+                      <option value="">None</option>
+                      {selectedList.columns.map((col) => (
+                        <option key={col} value={col}>{col}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <div className="border-t border-zinc-700 pt-4">
+                <h3 className="text-sm font-medium text-white mb-2">Custom Variables</h3>
+                <p className="text-xs text-zinc-500 mb-3">
+                  Select columns to include as custom variables (use in emails as {"{{column_name}}"})
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {selectedList.columns
+                    .filter(col => col !== emailColumn && col !== firstNameColumn && col !== lastNameColumn && col !== companyColumn)
+                    .map((col) => (
+                      <button
+                        key={col}
+                        onClick={() => toggleCustomVariable(col)}
+                        disabled={isPushing}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                          customVariableColumns.includes(col)
+                            ? 'bg-orange-600 text-white'
+                            : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+                        }`}
+                      >
+                        {col}
+                      </button>
+                    ))}
+                </div>
+                {customVariableColumns.length > 0 && (
+                  <p className="text-xs text-orange-400 mt-2">
+                    {customVariableColumns.length} custom variable(s) selected
+                  </p>
+                )}
+              </div>
+
+              {pushProgress && (
+                <div className="p-4 bg-orange-900/20 border border-orange-800 rounded-xl">
+                  <div className="flex items-center gap-3">
+                    <Loader2 className="w-5 h-5 animate-spin text-orange-400" />
+                    <div className="flex-1">
+                      <p className="text-sm text-orange-400">
+                        Pushing leads... {pushProgress.current.toLocaleString()} / {pushProgress.total.toLocaleString()}
+                      </p>
+                      <p className="text-xs text-zinc-500 mt-1">
+                        ✓ {pushProgress.success} successful • ✗ {pushProgress.failed} failed
+                      </p>
+                      <div className="mt-2 h-2 bg-orange-900/50 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-orange-500 transition-all"
+                          style={{ width: `${(pushProgress.current / pushProgress.total) * 100}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-end gap-3 p-6 border-t border-zinc-700">
+              <button
+                onClick={() => setIsPushModalOpen(false)}
+                disabled={isPushing}
+                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handlePushToInstantly}
+                disabled={isPushing || !campaignId.trim() || !emailColumn}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                  isPushing || !campaignId.trim() || !emailColumn
+                    ? 'bg-zinc-700 text-zinc-400 cursor-not-allowed'
+                    : 'bg-orange-600 text-white hover:bg-orange-500'
+                }`}
+              >
+                {isPushing ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Pushing...
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-4 h-4" />
+                    Push {selectedList.rowCount.toLocaleString()} Leads
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </AdminRouteGuard>
+  );
+};
+
+export default LeadMassagingAdmin;

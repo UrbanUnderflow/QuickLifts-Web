@@ -252,6 +252,25 @@ const SignUpPage: React.FC = () => {
       const user = new User(firebaseUser.uid, userData);
       await userService.updateUser(firebaseUser.uid, user);
 
+      // Send welcome email (best-effort; does not block signup)
+      try {
+        const scheduledAt = new Date(Date.now() + 2 * 60 * 1000).toISOString(); // delay 2 minutes
+        await fetch('/.netlify/functions/send-welcome-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: firebaseUser.uid,
+            toEmail: formData.email,
+            firstName: formData.username,
+            username: uname,
+            role: isCoachSignUp ? 'coach' : 'athlete',
+            scheduledAt,
+          }),
+        });
+      } catch (e) {
+        console.warn('[SignUp] Failed to send welcome email (non-blocking):', e);
+      }
+
       // If coach signup came from the team-owned /coach-onboard invite link, persist attribution for monitoring.
       // NOTE: We intentionally use a separate param name (`invite`) to avoid colliding with coach-to-coach referral kickback logic.
       if (isCoachSignUp && invite && typeof invite === 'string') {
