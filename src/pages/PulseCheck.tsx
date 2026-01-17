@@ -1561,110 +1561,142 @@ const PulseCheckPage: NextPage = () => {
                 <SideNav onAbout={handleBackToMarketing} />
                 
                 {/* Main Content Area */}
-                <div className="md:ml-20 lg:ml-64">
-                    <div className="fixed top-0 left-0 md:left-20 lg:left-64 right-0 z-10 flex items-center justify-between px-6 py-3 bg-black border-b border-zinc-800">
-                        <div className="flex items-center gap-2">
-                            {/* Desktop: text-only PulseCheck label */}
-                            <h1 className="hidden md:block text-xl font-bold text-white">PulseCheck</h1>
-
-                            {/* Mobile: PulseCheck with slim chevron and More menu */}
-                            <div className="relative md:hidden">
-                                <button
-                                    type="button"
-                                    onClick={() => setShowMobileMoreMenu(v => !v)}
-                                    className="inline-flex items-center gap-1 text-xl font-bold text-white"
-                                >
-                                    <span>PulseCheck</span>
-                                    {showMobileMoreMenu ? (
-                                        <ChevronUpIcon className="w-4 h-4 text-zinc-300" />
-                                    ) : (
-                                        <ChevronDownIcon className="w-4 h-4 text-zinc-300" />
-                                    )}
-                                </button>
-
-                                {showMobileMoreMenu && (
-                                    <>
-                                        {/* Backdrop */}
-                                        <div
-                                            className="fixed inset-0 z-40"
-                                            onClick={() => setShowMobileMoreMenu(false)}
-                                        />
-
-                                        {/* Menu card */}
-                                        <div className="absolute mt-3 w-56 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl z-50 overflow-hidden">
-                                            {/* App Switcher – go back to Pulse home */}
-                                            <button
-                                                onClick={() => {
-                                                    window.location.href = '/';
-                                                    setShowMobileMoreMenu(false);
-                                                }}
-                                                className="w-full flex items-center gap-3 px-4 py-3 text-white hover:bg-zinc-800 transition-colors"
-                                            >
-                                                <img
-                                                    src="/pulseIcon.png"
-                                                    alt="Pulse"
-                                                    className="w-5 h-5"
-                                                />
-                                                <span>Pulse</span>
-                                            </button>
-
-                                            <div className="border-t border-zinc-800" />
-
-                                            {/* About */}
-                                            <button
-                                                onClick={() => {
-                                                    window.location.href = '/about';
-                                                    setShowMobileMoreMenu(false);
-                                                }}
-                                                className="w-full flex items-center gap-3 px-4 py-3 text-white hover:bg-zinc-800 transition-colors"
-                                            >
-                                                <span className="text-xl">i</span>
-                                                <span>About</span>
-                                            </button>
-
-                                            <div className="border-t border-zinc-800" />
-
-                                            {/* Settings */}
-                                            <button
-                                                onClick={() => {
-                                                    window.location.href = '/settings';
-                                                    setShowMobileMoreMenu(false);
-                                                }}
-                                                className="w-full flex items-center gap-3 px-4 py-3 text-white hover:bg-zinc-800 transition-colors"
-                                            >
-                                                <span className="text-xl">⚙️</span>
-                                                <span>Settings</span>
-                                            </button>
-
-                                            <div className="border-t border-zinc-800" />
-
-                                            {/* Sign Out */}
-                                            <button
-                                                onClick={async () => {
-                                                    try {
-                                                        const { signOut } = await import('../api/firebase/auth/methods');
-                                                        await signOut();
-                                                        window.location.href = '/';
-                                                    } catch (error) {
-                                                        console.error('Error signing out:', error);
-                                                    } finally {
-                                                        setShowMobileMoreMenu(false);
-                                                    }
-                                                }}
-                                                className="w-full flex items-center gap-3 px-4 py-3 text-white hover:bg-zinc-800 transition-colors"
-                                            >
-                                                <span className="text-xl">↩︎</span>
-                                                <span>Sign Out</span>
-                                            </button>
+                <div className="md:ml-20 lg:ml-64 bg-[#0a0a0b] min-h-screen">
+                    {/* Glassmorphic Header */}
+                    <div className="fixed top-0 left-0 md:left-20 lg:left-64 right-0 z-10">
+                        {/* Glass background */}
+                        <div className="backdrop-blur-xl bg-zinc-900/60 border-b border-white/10">
+                            {/* Chromatic reflection line */}
+                            <div 
+                                className="absolute top-0 left-0 right-0 h-[1px] opacity-40"
+                                style={{ background: 'linear-gradient(90deg, transparent, rgba(224,254,16,0.4), rgba(59,130,246,0.3), transparent)' }}
+                            />
+                            
+                            <div className="flex items-center justify-between px-6 py-3">
+                                <div className="flex items-center gap-3">
+                                    {/* Desktop: PulseCheck with glow */}
+                                    <div className="hidden md:flex items-center gap-2">
+                                        <div className="relative">
+                                            <div className="absolute -inset-2 bg-[#E0FE10]/10 rounded-lg blur-lg" />
+                                            <h1 className="relative text-xl font-bold text-white tracking-tight">
+                                                PulseCheck
+                                            </h1>
                                         </div>
-                                    </>
-                                )}
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-3">
-                            <ConnectedCoachesBadge />
-                            <div className="hidden md:block">
-                                <ProfilePhoto />
+                                    </div>
+
+                                    {/* Mobile: PulseCheck with premium dropdown */}
+                                    <div className="relative md:hidden">
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowMobileMoreMenu(v => !v)}
+                                            className="group inline-flex items-center gap-1.5"
+                                        >
+                                            <span className="text-xl font-bold text-white">PulseCheck</span>
+                                            <div className={`w-5 h-5 rounded-full bg-white/5 border border-white/10 flex items-center justify-center transition-transform ${showMobileMoreMenu ? 'rotate-180' : ''}`}>
+                                                <ChevronDownIcon className="w-3 h-3 text-zinc-400 group-hover:text-white transition-colors" />
+                                            </div>
+                                        </button>
+
+                                        {showMobileMoreMenu && (
+                                            <>
+                                                {/* Backdrop */}
+                                                <div
+                                                    className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
+                                                    onClick={() => setShowMobileMoreMenu(false)}
+                                                />
+
+                                                {/* Premium glassmorphic menu card */}
+                                                <div className="absolute mt-3 w-60 z-50">
+                                                    {/* Glow effect */}
+                                                    <div className="absolute -inset-1 bg-[#E0FE10]/10 rounded-2xl blur-xl" />
+                                                    
+                                                    {/* Glass card */}
+                                                    <div className="relative rounded-xl backdrop-blur-xl bg-zinc-900/90 border border-white/10 overflow-hidden">
+                                                        {/* Chromatic top line */}
+                                                        <div 
+                                                            className="absolute top-0 left-0 right-0 h-[1px] opacity-60"
+                                                            style={{ background: 'linear-gradient(90deg, transparent, rgba(224,254,16,0.5), transparent)' }}
+                                                        />
+                                                        
+                                                        {/* App Switcher – go back to Pulse home */}
+                                                        <button
+                                                            onClick={() => {
+                                                                window.location.href = '/';
+                                                                setShowMobileMoreMenu(false);
+                                                            }}
+                                                            className="w-full flex items-center gap-3 px-4 py-3 text-white hover:bg-white/5 transition-colors"
+                                                        >
+                                                            <div className="relative">
+                                                                <div className="absolute -inset-1 bg-[#E0FE10]/20 rounded-lg blur opacity-50" />
+                                                                <img
+                                                                    src="/pulseIcon.png"
+                                                                    alt="Pulse"
+                                                                    className="relative w-5 h-5"
+                                                                />
+                                                            </div>
+                                                            <span className="font-medium">Pulse</span>
+                                                        </button>
+
+                                                        <div className="border-t border-white/5" />
+
+                                                        {/* About */}
+                                                        <button
+                                                            onClick={() => {
+                                                                window.location.href = '/about';
+                                                                setShowMobileMoreMenu(false);
+                                                            }}
+                                                            className="w-full flex items-center gap-3 px-4 py-3 text-white hover:bg-white/5 transition-colors"
+                                                        >
+                                                            <span className="text-lg text-zinc-400">ℹ️</span>
+                                                            <span>About</span>
+                                                        </button>
+
+                                                        <div className="border-t border-white/5" />
+
+                                                        {/* Settings */}
+                                                        <button
+                                                            onClick={() => {
+                                                                window.location.href = '/settings';
+                                                                setShowMobileMoreMenu(false);
+                                                            }}
+                                                            className="w-full flex items-center gap-3 px-4 py-3 text-white hover:bg-white/5 transition-colors"
+                                                        >
+                                                            <span className="text-lg text-zinc-400">⚙️</span>
+                                                            <span>Settings</span>
+                                                        </button>
+
+                                                        <div className="border-t border-white/5" />
+
+                                                        {/* Sign Out */}
+                                                        <button
+                                                            onClick={async () => {
+                                                                try {
+                                                                    const { signOut } = await import('../api/firebase/auth/methods');
+                                                                    await signOut();
+                                                                    window.location.href = '/';
+                                                                } catch (error) {
+                                                                    console.error('Error signing out:', error);
+                                                                } finally {
+                                                                    setShowMobileMoreMenu(false);
+                                                                }
+                                                            }}
+                                                            className="w-full flex items-center gap-3 px-4 py-3 text-white hover:bg-red-500/10 transition-colors"
+                                                        >
+                                                            <span className="text-lg text-zinc-400">↩️</span>
+                                                            <span>Sign Out</span>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <ConnectedCoachesBadge />
+                                    <div className="hidden md:block">
+                                        <ProfilePhoto />
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>

@@ -886,9 +886,8 @@ const CreateRoundPage: React.FC = () => {
             };
 
             // Save to Firestore
-            await workoutService.saveCollectionChallenge(
-              currentUser.id,
-              collectionData as SweatlistCollection
+            await workoutService.updateCollection(
+              new SweatlistCollection(collectionData)
             );
 
             // Redirect to the new round

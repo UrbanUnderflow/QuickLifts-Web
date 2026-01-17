@@ -1217,9 +1217,10 @@ const ChallengeStatusPage: React.FC = () => {
                                                 autoFocus
                                               >
                                                 <option value="" disabled>Select Challenge Type</option>
-                                                <option value={ChallengeType.Workout}>Workout</option>
-                                                <option value={ChallengeType.Steps}>Steps</option>
-                                                <option value={ChallengeType.Calories}>Calories</option>
+                                                <option value={ChallengeType.Lift}>Lift</option>
+                                                <option value={ChallengeType.Run}>Run</option>
+                                                <option value={ChallengeType.Burn}>Burn</option>
+                                                <option value={ChallengeType.Stretch}>Stretch</option>
                                                 <option value={ChallengeType.Hybrid}>Hybrid</option>
                                               </select>
                                               <div className="flex gap-1 mt-1">

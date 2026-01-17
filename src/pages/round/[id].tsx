@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Calendar, ChevronDown, Users, Clock, Flag, Share2, Map, Flame, Target, TrendingUp } from 'lucide-react';
+import { Calendar, ChevronDown, Users, Clock, Flag, Share2, Map as MapIcon, Flame, Target, TrendingUp } from 'lucide-react';
 import { SweatlistCollection, SweatlistIdentifiers } from '../../api/firebase/workout/types';
 import { 
   ChallengeStatus, 
@@ -259,7 +259,7 @@ const ChallengeDetailView = () => {
     }
 
     // 4. Instantiate Initial Workouts
-    const fetchedWorkoutsMap = new Map<string, Workout>();
+    const fetchedWorkoutsMap: Map<string, Workout> = new Map();
     fetchedDocsData.forEach(data => {
         try {
             const workoutInstance = new Workout(data);

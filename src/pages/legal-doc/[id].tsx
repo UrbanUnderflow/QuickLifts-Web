@@ -533,8 +533,8 @@ const LegalDocumentSharePage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   
   // Check if current user is admin
-  const currentUser = useSelector((state: RootState) => state.user.user);
-  const isAdmin = currentUser?.role === 'admin';
+  const currentUserDict = useSelector((state: RootState) => state.user.currentUser);
+  const isAdmin = currentUserDict?.role === 'admin';
   
   // Notes state
   const [notes, setNotes] = useState<DocumentNote[]>([]);

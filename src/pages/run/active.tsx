@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/router';
 import { Pause, Play, Square, X, ChevronDown } from 'lucide-react';
 import { 
@@ -13,6 +13,7 @@ import {
 } from '../../api/firebase/workout/types';
 import { useUser } from '../../hooks/useUser';
 import { v4 as uuidv4 } from 'uuid';
+import WorkoutProofPhotoUploader, { ExtractedWorkoutMetrics } from '../../components/Workouts/WorkoutProofPhotoUploader';
 
 // Run State
 enum RunState {
@@ -41,6 +42,12 @@ const ActiveRunPage: React.FC = () => {
   const [distance, setDistance] = useState(0); // miles (manual entry for web)
   const [manualDistanceInput, setManualDistanceInput] = useState('');
   const [calories, setCalories] = useState(0);
+
+  // Persisted timer start time (so timer survives refresh/reopen)
+  const [startTimeMs, setStartTimeMs] = useState<number | null>(null);
+  const [treadmillPhotoURL, setTreadmillPhotoURL] = useState<string | null>(null);
+  const [extractedMetrics, setExtractedMetrics] = useState<ExtractedWorkoutMetrics | null>(null);
+  const [useExtractedDuration, setUseExtractedDuration] = useState(false);
   
   // Interval tracking
   const [currentPhase, setCurrentPhase] = useState<IntervalPhase>(IntervalPhase.Run);
@@ -48,7 +55,7 @@ const ActiveRunPage: React.FC = () => {
   const [currentRound, setCurrentRound] = useState(1);
   
   // Countdown
-  const [showCountdown, setShowCountdown] = useState(true);
+  const [showCountdown, setShowCountdown] = useState(false);
   const [countdownValue, setCountdownValue] = useState(3);
   
   // Modals
@@ -62,12 +69,48 @@ const ActiveRunPage: React.FC = () => {
   // Run category color (Blue)
   const runColor = '#3B82F6';
 
+  const runSessionStorageKey = useMemo(() => {
+    const uid = currentUser?.id || 'anon';
+    return `pulse:webRunActiveSession:${uid}`;
+  }, [currentUser?.id]);
+
+  const persistRunSession = useCallback((payload: any) => {
+    try {
+      localStorage.setItem(runSessionStorageKey, JSON.stringify(payload));
+    } catch (e) {
+      // ignore
+    }
+  }, [runSessionStorageKey]);
+
+  const clearRunSession = useCallback(() => {
+    try {
+      localStorage.removeItem(runSessionStorageKey);
+    } catch (e) {
+      // ignore
+    }
+  }, [runSessionStorageKey]);
+
   // Parse config on mount
   useEffect(() => {
     if (router.query.config) {
       try {
         const parsed = JSON.parse(router.query.config as string);
         setConfig(parsed);
+
+        // Persist config so we can resume even if the user refreshes without query params later
+        try {
+          const raw = localStorage.getItem(runSessionStorageKey);
+          const existing = raw ? JSON.parse(raw) : {};
+          localStorage.setItem(
+            runSessionStorageKey,
+            JSON.stringify({
+              ...(existing || {}),
+              config: parsed,
+            })
+          );
+        } catch (e) {
+          // ignore
+        }
         
         // Initialize interval tracking if intervals mode
         if (parsed.runType === RunType.Intervals && parsed.intervalConfig) {
@@ -80,30 +123,68 @@ const ActiveRunPage: React.FC = () => {
     }
   }, [router.query.config, router]);
 
-  // Countdown effect
+  // Restore persisted timer state on mount (if any)
   useEffect(() => {
-    if (showCountdown && countdownValue > 0) {
-      const timeout = setTimeout(() => {
-        setCountdownValue(prev => prev - 1);
-      }, 1000);
-      return () => clearTimeout(timeout);
-    } else if (showCountdown && countdownValue === 0) {
-      setShowCountdown(false);
-      startRun();
+    try {
+      const raw = localStorage.getItem(runSessionStorageKey);
+      if (!raw) return;
+      const saved = JSON.parse(raw);
+      if (!saved?.startTimeMs) return;
+
+      const savedStatus = saved?.status;
+      const savedStart = Number(saved.startTimeMs);
+      const savedElapsed = typeof saved.elapsedSeconds === 'number'
+        ? Math.max(0, Math.floor(saved.elapsedSeconds))
+        : null;
+
+      // Restore config if user reloaded without query params
+      if (!config && saved?.config) {
+        setConfig(saved.config);
+        if (saved.config.runType === RunType.Intervals && saved.config.intervalConfig) {
+          setPhaseTimeRemaining(saved.config.intervalConfig.runDurationSeconds);
+        }
+      }
+
+      if (savedStatus === 'running') {
+        startTimeRef.current = new Date(savedStart);
+        setStartTimeMs(savedStart);
+        setRunState(RunState.Running);
+      } else if (savedStatus === 'paused') {
+        startTimeRef.current = new Date(savedStart);
+        setStartTimeMs(savedStart);
+        setRunState(RunState.Paused);
+        if (savedElapsed !== null) setElapsedTime(savedElapsed);
+      } else if (savedStatus === 'stopped') {
+        startTimeRef.current = new Date(savedStart);
+        setStartTimeMs(savedStart);
+        setRunState(RunState.Completed);
+        if (savedElapsed !== null) setElapsedTime(savedElapsed);
+      }
+    } catch (e) {
+      // ignore
     }
-  }, [showCountdown, countdownValue]);
+  }, [runSessionStorageKey, config]);
+
+  // Complete run handler - defined before timer effect that uses it
+  const completeRun = useCallback(() => {
+    setRunState(RunState.Completed);
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+    }
+    if (startTimeMs) {
+      persistRunSession({ status: 'stopped', startTimeMs, elapsedSeconds: elapsedTime, config });
+    }
+  }, [elapsedTime, persistRunSession, startTimeMs, config]);
 
   // Timer effect
   useEffect(() => {
-    if (runState === RunState.Running) {
+    if (runState === RunState.Running && startTimeMs) {
       timerRef.current = setInterval(() => {
-        setElapsedTime(prev => prev + 1);
+        const newElapsed = Math.max(0, Math.floor((Date.now() - startTimeMs) / 1000));
+        setElapsedTime(newElapsed);
         
         // Update calories estimate (rough: ~100 cal per 10 min running)
-        setCalories(prev => {
-          const newElapsed = elapsedTime + 1;
-          return Math.round(newElapsed / 60 * 10); // ~10 cal/min
-        });
+        setCalories(() => Math.round(newElapsed / 60 * 10)); // ~10 cal/min
         
         // Handle interval phase transitions
         if (config?.runType === RunType.Intervals && config.intervalConfig) {
@@ -134,7 +215,7 @@ const ActiveRunPage: React.FC = () => {
         if (config?.runType === RunType.Time) {
           const targetSeconds = config.customDurationSeconds || 
             (config.timePreset ? TimePresetSeconds[config.timePreset] : null);
-          if (targetSeconds && elapsedTime + 1 >= targetSeconds) {
+          if (targetSeconds && newElapsed >= targetSeconds) {
             completeRun();
           }
         }
@@ -146,39 +227,51 @@ const ActiveRunPage: React.FC = () => {
         clearInterval(timerRef.current);
       }
     };
-  }, [runState, elapsedTime, currentPhase, currentRound, config]);
+  }, [runState, startTimeMs, currentPhase, currentRound, config, completeRun]);
 
   const startRun = () => {
+    const startedAt = Date.now();
     setRunState(RunState.Running);
-    startTimeRef.current = new Date();
+    setStartTimeMs(startedAt);
+    startTimeRef.current = new Date(startedAt);
+    persistRunSession({ status: 'running', startTimeMs: startedAt, config });
   };
 
   const pauseRun = () => {
     setRunState(RunState.Paused);
+    // Persist paused state with frozen elapsed seconds
+    if (startTimeMs) {
+      persistRunSession({ status: 'paused', startTimeMs, elapsedSeconds: elapsedTime, config });
+    }
   };
 
   const resumeRun = () => {
     setRunState(RunState.Running);
+    // Re-anchor startTime to preserve elapsed time after resume
+    const resumedAt = Date.now();
+    const newStart = resumedAt - elapsedTime * 1000;
+    setStartTimeMs(newStart);
+    persistRunSession({ status: 'running', startTimeMs: newStart, config });
   };
 
-  const completeRun = useCallback(() => {
-    setRunState(RunState.Completed);
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-    }
-    
-    // Build run summary
-    const summary: RunSummary = new RunSummary({
+  const buildSummary = useCallback((overrides?: Partial<any>) => {
+    const durationToUse =
+      useExtractedDuration && extractedMetrics?.duration
+        ? Number(extractedMetrics.duration) || elapsedTime
+        : elapsedTime;
+
+    return new RunSummary({
       id: uuidv4(),
       userId: currentUser?.id || '',
       runType: config?.runType || RunType.FreeRun,
       location: config?.location || RunLocation.Outdoor,
       title: `${config?.runType || 'Free'} Run`,
       distance: distance,
-      duration: elapsedTime,
-      averagePace: distance > 0 ? elapsedTime / 60 / distance : 0,
+      duration: durationToUse,
+      averagePace: distance > 0 ? durationToUse / 60 / distance : 0,
       caloriesBurned: calories,
       calorieSource: CalorieDataSource.Algorithm,
+      treadmillPhotoURL: treadmillPhotoURL || undefined,
       targetDistance: config?.customDistanceMiles || 
         (config?.distancePreset ? DistancePresetMiles[config.distancePreset] : undefined),
       targetDuration: config?.customDurationSeconds ||
@@ -190,20 +283,16 @@ const ActiveRunPage: React.FC = () => {
       createdAt: new Date(),
       updatedAt: new Date(),
       pulsePoints: new PulsePoints({}),
-      isCompleted: true
+      isCompleted: true,
+      ...(overrides || {})
     });
-
-    // Navigate to summary page with data
-    router.push({
-      pathname: '/run/summary',
-      query: { summary: JSON.stringify(summary.toDictionary()) }
-    });
-  }, [config, currentUser, distance, elapsedTime, calories, currentRound, router]);
+  }, [useExtractedDuration, extractedMetrics?.duration, elapsedTime, currentUser?.id, config, distance, calories, treadmillPhotoURL, currentRound]);
 
   const cancelRun = () => {
     if (timerRef.current) {
       clearInterval(timerRef.current);
     }
+    clearRunSession();
     router.back();
   };
 
@@ -245,18 +334,35 @@ const ActiveRunPage: React.FC = () => {
     }
   };
 
-  // Countdown overlay
-  if (showCountdown) {
+  // Pre-start instruction screen
+  if (runState === RunState.NotStarted) {
     return (
-      <div className="min-h-screen bg-zinc-900 flex items-center justify-center">
-        <div className="text-center">
-          <div 
-            className="text-9xl font-bold mb-4 animate-pulse"
-            style={{ color: runColor }}
-          >
-            {countdownValue || 'GO!'}
+      <div className="min-h-screen bg-zinc-900 flex items-center justify-center px-6">
+        <div className="max-w-lg w-full">
+          <div className="bg-zinc-800/50 border border-zinc-700 rounded-3xl p-6">
+            <div className="text-white text-2xl font-bold mb-2">Start your run</div>
+            <div className="text-zinc-400 space-y-2">
+              <p>1) Start your run on your tracker or machine (Pulse iOS, treadmill, watch, etc.).</p>
+              <p>2) When it’s actually started, press the button below to start the web timer.</p>
+              <p className="text-zinc-500 text-sm">You can close this tab and come back later—your timer will resume.</p>
+            </div>
+            <button
+              onClick={() => {
+                setShowCountdown(false);
+                startRun();
+              }}
+              className="mt-6 w-full py-4 rounded-2xl font-bold text-lg text-white"
+              style={{ backgroundColor: runColor }}
+            >
+              I started my run
+            </button>
+            <button
+              onClick={() => router.back()}
+              className="mt-3 w-full py-3 rounded-2xl font-semibold text-zinc-300 border border-zinc-700 hover:border-zinc-500"
+            >
+              Back
+            </button>
           </div>
-          <p className="text-zinc-400 text-xl">Get ready to run!</p>
         </div>
       </div>
     );
@@ -310,7 +416,7 @@ const ActiveRunPage: React.FC = () => {
               style={{ backgroundColor: runState === RunState.Running ? runColor : '#f97316' }}
             />
             <span className="text-zinc-400 font-medium">
-              {runState === RunState.Running ? 'Running' : 'Paused'}
+              {runState === RunState.Running ? 'Running' : runState === RunState.Paused ? 'Paused' : 'Stopped'}
             </span>
           </div>
         </div>
@@ -347,6 +453,59 @@ const ActiveRunPage: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {/* After stop: upload proof photo + extract stats */}
+        {runState === RunState.Completed && (
+          <div className="w-full max-w-md mb-8">
+            <WorkoutProofPhotoUploader
+              equipmentTypeLabel={config?.location === RunLocation.Treadmill ? "treadmill run" : "run summary"}
+              onApplied={({ photoUrl, metrics }) => {
+                setTreadmillPhotoURL(photoUrl);
+                setExtractedMetrics(metrics);
+                if (typeof metrics.distance === 'number' && isFinite(metrics.distance)) {
+                  setDistance(metrics.distance);
+                  setManualDistanceInput(String(metrics.distance));
+                }
+                if (typeof metrics.calories === 'number' && isFinite(metrics.calories)) {
+                  setCalories(Math.round(metrics.calories));
+                }
+              }}
+            />
+
+            {extractedMetrics?.duration && (
+              <div className="mt-3 flex items-center justify-between bg-zinc-800/50 border border-zinc-700 rounded-2xl p-4">
+                <div>
+                  <div className="text-white font-semibold">Use extracted time?</div>
+                  <div className="text-zinc-400 text-sm">
+                    Extracted duration: {Math.round(Number(extractedMetrics.duration))} sec
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setUseExtractedDuration((v) => !v)}
+                  className={`w-12 h-7 rounded-full transition-colors relative ${useExtractedDuration ? 'bg-green-500' : 'bg-zinc-600'}`}
+                >
+                  <div className={`w-5 h-5 bg-white rounded-full absolute top-1 transition-transform ${useExtractedDuration ? 'translate-x-6' : 'translate-x-1'}`} />
+                </button>
+              </div>
+            )}
+
+            <button
+              onClick={() => {
+                const summary = buildSummary();
+                clearRunSession();
+                router.push({
+                  pathname: '/run/summary',
+                  query: { summary: JSON.stringify(summary.toDictionary()) }
+                });
+              }}
+              className="mt-4 w-full py-4 rounded-2xl font-bold text-lg text-black"
+              style={{ backgroundColor: '#E0FE10' }}
+            >
+              Continue to Summary
+            </button>
+          </div>
+        )}
 
         {/* Progress Bar (for goal-based runs) */}
         {config?.runType !== RunType.FreeRun && (
@@ -397,6 +556,7 @@ const ActiveRunPage: React.FC = () => {
           {/* Play/Pause button */}
           <button
             onClick={runState === RunState.Running ? pauseRun : resumeRun}
+            disabled={runState === RunState.Completed}
             className="w-20 h-20 rounded-full flex items-center justify-center transition-transform hover:scale-105 active:scale-95"
             style={{ backgroundColor: runColor }}
           >
@@ -410,6 +570,7 @@ const ActiveRunPage: React.FC = () => {
           {/* End button */}
           <button
             onClick={() => setShowEndConfirmation(true)}
+            disabled={runState === RunState.Completed}
             className="w-16 h-16 rounded-full bg-red-500/20 flex items-center justify-center hover:bg-red-500/30"
           >
             <Square className="w-7 h-7 text-red-400" fill="currentColor" />
@@ -421,10 +582,13 @@ const ActiveRunPage: React.FC = () => {
       {showEndConfirmation && (
         <ConfirmationModal
           title="End Run?"
-          message="Are you sure you want to end this run? Your progress will be saved."
+          message="Are you sure you want to end this run? Next you’ll upload a results photo to extract your stats."
           confirmText="End Run"
           confirmColor="#3B82F6"
-          onConfirm={completeRun}
+          onConfirm={() => {
+            setShowEndConfirmation(false);
+            completeRun();
+          }}
           onCancel={() => setShowEndConfirmation(false)}
         />
       )}
