@@ -39,9 +39,10 @@ exports.handler = async (event) => {
 
     // Get user's body weight subcollection
     const bodyWeightRef = db.collection('users').doc(userId).collection('bodyWeight');
+    const limit = event.queryStringParameters.limit ? parseInt(event.queryStringParameters.limit) : 1;
     const snapshot = await bodyWeightRef
       .orderBy('createdAt', 'desc')
-      .limit(1)  // We only need the latest entry
+      .limit(limit)  // Support fetching multiple entries for profile view
       .get();
 
     if (snapshot.empty) {

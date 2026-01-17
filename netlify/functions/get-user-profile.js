@@ -112,7 +112,11 @@ async function getUserByUsername(username) {
       workoutCount: userData.workoutCount || 0,
       bodyWeight: userData.bodyWeight || [],
       following: userData.following || [],
-      followers: userData.followers || []
+      followers: userData.followers || [],
+      // New fields for public profile features
+      featuredRoundIds: userData.featuredRoundIds || [],
+      checkinsPrivacy: userData.checkinsPrivacy || 'privateOnly',
+      checkinsAccessList: userData.checkinsAccessList || []
     };
   } catch (error) {
     console.error('Error getting user:', error);

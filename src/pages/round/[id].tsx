@@ -1,7 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { Calendar, ChevronDown, Users, Clock, Flag, Share2 } from 'lucide-react';
+import { Calendar, ChevronDown, Users, Clock, Flag, Share2, Map, Flame, Target, TrendingUp } from 'lucide-react';
 import { SweatlistCollection, SweatlistIdentifiers } from '../../api/firebase/workout/types';
-import { ChallengeStatus, UserChallenge, Challenge } from '../../api/firebase/workout/types';
+import { 
+  ChallengeStatus, 
+  UserChallenge, 
+  Challenge, 
+  ChallengeType,
+  RunRoundTypeInfo,
+  RunLeaderboardMetricInfo
+} from '../../api/firebase/workout/types';
 import { StackCard, RestDayCard } from '../../components/Rounds/StackCard';
 import { Workout, WorkoutStatus, BodyZone } from '../../api/firebase/workout/types';
 import { Exercise, ExerciseReference } from '../../api/firebase/exercise/types';
@@ -583,6 +590,11 @@ const ChallengeDetailView = () => {
       : undefined;
   };
 
+  // Helper to check if this is a run round
+  const isRunRound = (): boolean => {
+    return collection?.challenge?.challengeType === ChallengeType.Run && !!collection?.runRoundConfig;
+  };
+
   // Helper functions for progress card stats
   const getCompletedStacksCount = (): number => {
     const userChallenge = getUserChallenge();
@@ -951,14 +963,24 @@ const ChallengeDetailView = () => {
                 
                 {/* Stats section */}
                 <div className="ml-6 flex flex-col justify-center">
-                  {/* Stacks completed */}
-                  <div className="flex items-center mb-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-500" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                    </svg>
-                    <span className="ml-2 text-white font-semibold">{getCompletedStacksCount()}/{workouts.length}</span>
-                    <span className="ml-1 text-zinc-400">Stacks</span>
-                  </div>
+                  {/* Progress counter - different for Run vs Lift rounds */}
+                  {isRunRound() ? (
+                    <div className="flex items-center mb-2">
+                      <svg className="h-5 w-5 text-blue-500" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M13.49 5.48c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm-3.6 13.9l1-4.4 2.1 2v6h2v-7.5l-2.1-2 .6-3c1.3 1.5 3.3 2.5 5.5 2.5v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1l-5.2 2.2v4.7h2v-3.4l1.8-.7-1.6 8.1-4.9-1-.4 2 7 1.4z"/>
+                      </svg>
+                      <span className="ml-2 text-white font-semibold">{getCompletedStacksCount()}</span>
+                      <span className="ml-1 text-zinc-400">Runs</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center mb-2">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-500" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                      </svg>
+                      <span className="ml-2 text-white font-semibold">{getCompletedStacksCount()}/{workouts.length}</span>
+                      <span className="ml-1 text-zinc-400">Stacks</span>
+                    </div>
+                  )}
                 </div>
               </div>
               
@@ -1089,7 +1111,102 @@ const ChallengeDetailView = () => {
               </div>
             )}
 
-            {/* Stacks Section */}
+            {/* Run Round Info Section (for Run rounds only) */}
+            {isRunRound() && collection?.runRoundConfig && (
+              <div className="mt-8">
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="text-lg font-semibold flex items-center gap-2">
+                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor" style={{ color: '#3B82F6' }}>
+                      <path d="M13.49 5.48c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm-3.6 13.9l1-4.4 2.1 2v6h2v-7.5l-2.1-2 .6-3c1.3 1.5 3.3 2.5 5.5 2.5v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1l-5.2 2.2v4.7h2v-3.4l1.8-.7-1.6 8.1-4.9-1-.4 2 7 1.4z"/>
+                    </svg>
+                    Run Round Details
+                  </h2>
+                </div>
+
+                {/* Run Round Type Info */}
+                <div className="bg-zinc-800 rounded-xl p-6 mb-4">
+                  <div className="flex items-center gap-4 mb-4">
+                    <div 
+                      className="w-14 h-14 rounded-xl flex items-center justify-center"
+                      style={{ 
+                        background: `linear-gradient(135deg, ${RunRoundTypeInfo[collection.runRoundConfig.roundType]?.colors[0] || '#3B82F6'}, ${RunRoundTypeInfo[collection.runRoundConfig.roundType]?.colors[1] || '#2563EB'})`
+                      }}
+                    >
+                      <svg className="w-8 h-8 text-white" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M13.49 5.48c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm-3.6 13.9l1-4.4 2.1 2v6h2v-7.5l-2.1-2 .6-3c1.3 1.5 3.3 2.5 5.5 2.5v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1l-5.2 2.2v4.7h2v-3.4l1.8-.7-1.6 8.1-4.9-1-.4 2 7 1.4z"/>
+                      </svg>
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold text-white">
+                        {RunRoundTypeInfo[collection.runRoundConfig.roundType]?.displayName || 'Run Round'}
+                      </h3>
+                      <p className="text-zinc-400 text-sm">
+                        {RunRoundTypeInfo[collection.runRoundConfig.roundType]?.description}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Run Round Settings */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-zinc-700/50 rounded-lg p-3">
+                      <div className="text-zinc-400 text-xs uppercase tracking-wider mb-1">Leaderboard</div>
+                      <div className="text-white font-semibold">
+                        {RunLeaderboardMetricInfo[collection.runRoundConfig.leaderboardMetric]?.displayName}
+                      </div>
+                    </div>
+                    <div className="bg-zinc-700/50 rounded-lg p-3">
+                      <div className="text-zinc-400 text-xs uppercase tracking-wider mb-1">Treadmill Runs</div>
+                      <div className="text-white font-semibold">
+                        {collection.runRoundConfig.allowTreadmill ? 'Allowed' : 'Not Allowed'}
+                      </div>
+                    </div>
+                    {collection.runRoundConfig.targetGoal && (
+                      <div className="bg-zinc-700/50 rounded-lg p-3">
+                        <div className="text-zinc-400 text-xs uppercase tracking-wider mb-1">Group Goal</div>
+                        <div className="text-white font-semibold">
+                          {collection.runRoundConfig.targetGoal} miles
+                        </div>
+                      </div>
+                    )}
+                    {collection.runRoundConfig.minimumRunForStreak && (
+                      <div className="bg-zinc-700/50 rounded-lg p-3">
+                        <div className="text-zinc-400 text-xs uppercase tracking-wider mb-1">Min for Streak</div>
+                        <div className="text-white font-semibold">
+                          {collection.runRoundConfig.minimumRunForStreak} miles
+                        </div>
+                      </div>
+                    )}
+                    {collection.runRoundConfig.raceDistanceMiles && (
+                      <div className="bg-zinc-700/50 rounded-lg p-3 col-span-2">
+                        <div className="text-zinc-400 text-xs uppercase tracking-wider mb-1">Race Distance</div>
+                        <div className="text-white font-semibold">
+                          {collection.runRoundConfig.raceDistanceMiles} miles
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Log a Run CTA */}
+                <div className="bg-gradient-to-r from-blue-500/20 to-cyan-500/20 border border-blue-500/30 rounded-xl p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-white font-semibold">Ready to Run?</h4>
+                      <p className="text-zinc-400 text-sm">Complete a run to earn points in this round</p>
+                    </div>
+                    <button 
+                      onClick={() => router.push('/run')}
+                      className="px-4 py-2 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 transition-colors"
+                    >
+                      Log a Run
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Stacks Section (for non-Run rounds) */}
+            {!isRunRound() && (
             <div className="mt-8">
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-lg font-semibold">Stacks in this Round ({collection?.sweatlistIds.length})</h2>
@@ -1233,6 +1350,7 @@ const ChallengeDetailView = () => {
                 })}
               </div>
             </div>
+            )}
           </div>
         </div>
       </div>

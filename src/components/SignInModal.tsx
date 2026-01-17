@@ -6,13 +6,14 @@ import {
   UserCredential,
   createUserWithEmailAndPassword
 } from "firebase/auth";
+import { doc, runTransaction, serverTimestamp } from "firebase/firestore";
 import { Camera, X, Eye, EyeOff } from "lucide-react";
 import { FitnessGoal, QuizData, SignUpStep } from "../types/AuthTypes";
 import { Gender, WorkoutGoal, } from "../api/firebase/user";
 import { SubscriptionType } from "../api/firebase/user";
 import authService from "../api/firebase/auth";
 import { userService, User, UserLevel, BodyWeight } from "../api/firebase/user";
-import { auth } from "../api/firebase/config";
+import { auth, db } from "../api/firebase/config";
 import { useRouter } from 'next/router';
 import { firebaseStorageService, UploadImageType } from '../api/firebase/storage/service';
 
@@ -678,16 +679,43 @@ const SignInModal: React.FC<SignInModalProps> = ({
           throw new Error("Email is missing, cannot complete registration.");
         }
 
+        // Normalize the username before saving (removes spaces, special chars, lowercases)
+        const normalizedUsername = normalizeUsername(username);
+        
+        // Validate the normalized username
+        if (!isValidUsernameFormat(normalizedUsername)) {
+          setError("Invalid username format. Please use 3-20 characters with only letters, numbers, and underscores.");
+          setIsLoading(false);
+          return;
+        }
+
         // Prepare the updated user data, merging with fetched data
         const updatedUser = new User(userId, {
           ...currentUserData.toDictionary(), // Base on fetched data
-          username: username,                // Add new username
+          username: normalizedUsername,      // Add normalized username
           email: currentEmail,               // Ensure email is present
           registrationComplete: true,      // Mark registration complete
           updatedAt: new Date()              // Update timestamp
         });
 
         console.log('[SignInModal Profile Step] Attempting to update user with:', JSON.parse(JSON.stringify(updatedUser.toDictionary())));
+        
+        // CRITICAL: Claim the username in the usernames collection BEFORE updating the user
+        // This prevents duplicate usernames and maintains the username-user mapping
+        try {
+          await claimUsername(userId, normalizedUsername);
+          console.log('[SignInModal Profile Step] Username claimed in usernames collection');
+        } catch (claimError) {
+          console.error('[SignInModal Profile Step] Failed to claim username:', claimError);
+          if (claimError instanceof Error && claimError.message === 'Username already taken') {
+            setError('This username is already taken. Please choose a different one.');
+            setIsLoading(false);
+            return;
+          }
+          // For other errors, log but don't block the update (the user doc is still valid)
+          console.warn('[SignInModal Profile Step] Username claim failed, but continuing with user update');
+        }
+        
         await userService.updateUser(userId, updatedUser);
         console.log('[SignInModal Profile Step] User update successful. Moving to quiz prompt.');
         
@@ -1699,9 +1727,63 @@ const SignInModal: React.FC<SignInModalProps> = ({
     return true;
   };
 
+  // Normalizes username: removes invalid characters, spaces, special chars, and lowercases
+  const normalizeUsername = (value: string): string => {
+    // Remove all characters except alphanumeric, underscore, period, hyphen
+    return value
+      .toLowerCase()
+      .replace(/[^a-z0-9_.-]/g, '')
+      .trim();
+  };
+
+  // Validates username format
+  const isValidUsernameFormat = (value: string): boolean => {
+    // Must be 3-20 characters, only lowercase letters, numbers, underscore, period, hyphen
+    return /^[a-z0-9_.-]{3,20}$/.test(value);
+  };
+
+  // Claims a username in the usernames collection (creates the doc if it doesn't exist)
+  // This is critical for preventing duplicate usernames and maintaining username-user mapping
+  const claimUsername = async (userId: string, username: string): Promise<void> => {
+    const normalizedName = normalizeUsername(username);
+    if (!isValidUsernameFormat(normalizedName)) {
+      throw new Error('Invalid username format');
+    }
+    
+    await runTransaction(db, async (transaction) => {
+      const usernameRef = doc(db, 'usernames', normalizedName);
+      const usernameDoc = await transaction.get(usernameRef);
+      
+      // If doc exists and belongs to a different user, throw error
+      if (usernameDoc.exists()) {
+        const existingUserId = usernameDoc.data()?.userId;
+        if (existingUserId && existingUserId !== userId) {
+          throw new Error('Username already taken');
+        }
+        // If it belongs to this user, we're good (just updating)
+        console.log('[SignInModal] Username doc already exists for this user');
+      }
+      
+      // Create or update the username document
+      transaction.set(usernameRef, { 
+        userId: userId, 
+        username: normalizedName, 
+        createdAt: serverTimestamp() 
+      });
+      
+      console.log('[SignInModal] Username claimed successfully:', normalizedName);
+    });
+  };
+
   const _validateUsername = () => {
     if (!username) {
       setErrors({ username: "Username is required" });
+      setShowError(true);
+      return false;
+    }
+    const normalized = normalizeUsername(username);
+    if (!isValidUsernameFormat(normalized)) {
+      setErrors({ username: "Username must be 3-20 characters (letters, numbers, underscore)" });
       setShowError(true);
       return false;
     }
@@ -1710,8 +1792,9 @@ const SignInModal: React.FC<SignInModalProps> = ({
 
   const handleUsernameChange = (value: string) => {
     setUsername(value);
-    // Simulated username availability check
-    setIsUsernameAvailable(/^[a-zA-Z0-9_]{3,}$/.test(value));
+    // Check if the normalized version is valid
+    const normalized = normalizeUsername(value);
+    setIsUsernameAvailable(isValidUsernameFormat(normalized) && normalized.length >= 3);
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {

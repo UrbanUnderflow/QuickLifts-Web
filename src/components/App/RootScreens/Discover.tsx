@@ -31,6 +31,8 @@ import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../../api/firebase/config';
 import { ExerciseVideo } from '../../../api/firebase/exercise/types';
 import WorkoutTypeSelector from '../../App/Dashboard/WorkoutTypeSelector';
+import ContentCategorySelector from '../../App/Dashboard/ContentCategorySelector';
+import { ContentCategoryType } from '../../../api/firebase/workout/types';
 
 // Enum for category tabs
 const CategoryTab = {
@@ -74,7 +76,9 @@ const Discover: React.FC = () => {
 
   // For ongoing workout
   const [currentWorkout, setCurrentWorkout] = useState<Workout | null>(null);
+  const [showContentCategorySelector, setShowContentCategorySelector] = useState(false);
   const [showWorkoutTypeSelector, setShowWorkoutTypeSelector] = useState(false);
+  const [selectedContentCategory, setSelectedContentCategory] = useState<ContentCategoryType | null>(null);
   
   // Time-based greeting
   const getTimeBasedGreeting = () => {
@@ -513,7 +517,7 @@ const Discover: React.FC = () => {
 
             <button
               type="button"
-              onClick={() => setShowWorkoutTypeSelector(true)}
+              onClick={() => setShowContentCategorySelector(true)}
               className="relative inline-flex shrink-0 items-center justify-center rounded-full bg-[#E0FE10] px-4 py-2 text-xs font-semibold text-zinc-900 shadow-lg shadow-lime-400/30 transition hover:bg-lime-300 sm:px-5 sm:py-2.5 sm:text-sm"
             >
               <SparklesIcon className="mr-1.5 h-4 w-4 sm:h-5 sm:w-5" />
@@ -612,7 +616,7 @@ const Discover: React.FC = () => {
           <div className="flex items-center gap-3 sm:flex-col sm:items-end sm:gap-2">
             <button
               type="button"
-              onClick={() => setShowWorkoutTypeSelector(true)}
+              onClick={() => setShowContentCategorySelector(true)}
               className="inline-flex items-center justify-center rounded-full bg-[#E0FE10] px-4 py-2 text-xs font-semibold text-zinc-900 shadow-md shadow-lime-400/40 transition hover:bg-lime-300 sm:px-5 sm:text-sm"
             >
               <SparklesIcon className="mr-1.5 h-4 w-4" />
@@ -1406,8 +1410,28 @@ const Discover: React.FC = () => {
     );
   };
 
+  // Handle content category selection
+  const handleCategorySelect = (category: ContentCategoryType) => {
+    setSelectedContentCategory(category);
+    setShowContentCategorySelector(false);
+    
+    if (category === ContentCategoryType.Lift) {
+      // For Lift, show body part selection
+      setShowWorkoutTypeSelector(true);
+    } else if (category === ContentCategoryType.Stretch) {
+      // For Stretch, navigate to stretch flow (will be implemented)
+      router.push('/stretch');
+    } else if (category === ContentCategoryType.Run) {
+      // For Run, navigate to run configuration
+      router.push('/run');
+    } else if (category === ContentCategoryType.FatBurn) {
+      // For Fat Burn, navigate to fat burn flow
+      router.push('/fat-burn');
+    }
+  };
+
   // Main render method
-  if (loading && !trendingExercises.length && !showWorkoutTypeSelector) {
+  if (loading && !trendingExercises.length && !showWorkoutTypeSelector && !showContentCategorySelector) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-zinc-900">
         <div className="w-12 h-12 border-t-2 border-[#E0FE10] rounded-full animate-spin"></div>
@@ -1545,13 +1569,21 @@ const Discover: React.FC = () => {
         </button>
       </div>
 
-      {showWorkoutTypeSelector ? (
+      {showContentCategorySelector ? (
+        <ContentCategorySelector
+          onClose={() => setShowContentCategorySelector(false)}
+          onSelectCategory={handleCategorySelect}
+        />
+      ) : showWorkoutTypeSelector ? (
         <WorkoutTypeSelector
-          onClose={() => setShowWorkoutTypeSelector(false)}
+          onClose={() => {
+            setShowWorkoutTypeSelector(false);
+            setSelectedContentCategory(null);
+          }}
           onCreateWorkout={(selectedParts) => {
             console.log('Selected body parts:', selectedParts);
-            // TODO: Implement workout generation flow using selectedParts
             setShowWorkoutTypeSelector(false);
+            setSelectedContentCategory(null);
           }}
         />
       ) : isSearching ? (
