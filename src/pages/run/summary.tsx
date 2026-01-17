@@ -161,6 +161,23 @@ const RunSummaryPage: React.FC = () => {
           <p className="text-zinc-400">{summary.title}</p>
         </div>
 
+        {/* Proof photo (optional) */}
+        {summary.treadmillPhotoURL && (
+          <div className="bg-zinc-800/50 rounded-2xl p-4 mb-6 border border-zinc-700/50">
+            <div className="text-white font-semibold mb-2">Results Photo</div>
+            <div className="rounded-xl overflow-hidden border border-zinc-700 bg-black">
+              <img
+                src={summary.treadmillPhotoURL}
+                alt="Run results"
+                className="w-full object-contain max-h-[420px]"
+              />
+            </div>
+            <p className="text-zinc-400 text-xs mt-2">
+              This photo is used to verify and extract your run stats.
+            </p>
+          </div>
+        )}
+
         {/* Main Stats */}
         <div className="bg-zinc-800/50 rounded-3xl p-6 mb-6">
           {/* Primary stat - Distance or Time based on run type */}

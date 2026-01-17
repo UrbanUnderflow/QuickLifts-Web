@@ -3,9 +3,18 @@
 // - Loads minimal user context
 // - Loads recent conversation messages
 // - Calls OpenAI Chat Completions (requires OPENAI_API_KEY)
+// - Includes escalation classification for safety monitoring
 // - Saves/updates conversation document in Firestore (conversations)
 
 const { initializeFirebaseAdmin, db, headers } = require('./config/firebase');
+
+// Escalation Tier enum values
+const EscalationTier = {
+  None: 0,
+  MonitorOnly: 1,
+  ElevatedRisk: 2,
+  CriticalRisk: 3
+};
 
 exports.handler = async (event, context) => {
   if (event.httpMethod === 'OPTIONS') {
@@ -20,7 +29,7 @@ exports.handler = async (event, context) => {
     }
 
     const body = JSON.parse(event.body || '{}');
-    const { userId, message, conversationId } = body;
+    const { userId, message, conversationId, skipEscalation = false } = body;
 
     if (!userId || !message) {
       return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing userId or message' }) };
@@ -152,12 +161,50 @@ exports.handler = async (event, context) => {
       newConvoId = convoRef.id;
     }
 
+    // === ESCALATION CLASSIFICATION ===
+    // Run classification in parallel with response (don't block)
+    let escalation = null;
+    
+    if (!skipEscalation) {
+      try {
+        escalation = await classifyEscalation(
+          userId,
+          message,
+          recentMessages,
+          newConvoId
+        );
+        
+        console.log('[pulsecheck-chat] Escalation check:', {
+          userId: userId.slice(0, 8) + '...',
+          tier: escalation?.tier,
+          shouldEscalate: escalation?.shouldEscalate
+        });
+
+        // If critical (Tier 3), we need to notify immediately
+        if (escalation && escalation.tier === EscalationTier.CriticalRisk) {
+          // Trigger escalation record creation asynchronously
+          createEscalationRecord(userId, newConvoId, aiMsg.id, message, escalation)
+            .catch(err => console.error('[pulsecheck-chat] Escalation record error:', err));
+        }
+      } catch (escErr) {
+        console.error('[pulsecheck-chat] Escalation classification error:', escErr);
+        // Don't fail the chat if classification fails
+      }
+    }
+
     return {
       statusCode: 200,
       headers,
       body: JSON.stringify({
         conversationId: newConvoId,
-        assistantMessage
+        assistantMessage,
+        escalation: escalation ? {
+          tier: escalation.tier,
+          category: escalation.category,
+          reason: escalation.reason,
+          confidence: escalation.confidence,
+          shouldEscalate: escalation.shouldEscalate
+        } : null
       })
     };
   } catch (error) {
@@ -169,6 +216,143 @@ exports.handler = async (event, context) => {
 function cryptoRandomId() {
   // simple random id; not cryptographically secure but fine for UI ids
   return Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+}
+
+/**
+ * Classify message for escalation
+ */
+async function classifyEscalation(userId, message, recentMessages, conversationId) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) return null;
+
+  // Load escalation conditions from Firestore
+  const conditionsSnap = await db
+    .collection('escalation-conditions')
+    .where('isActive', '==', true)
+    .orderBy('tier', 'asc')
+    .orderBy('priority', 'desc')
+    .get();
+
+  const conditions = conditionsSnap.docs.map(doc => ({
+    id: doc.id,
+    ...doc.data()
+  }));
+
+  // Build training context
+  const trainingContext = buildEscalationTrainingContext(conditions);
+
+  // Build classification prompt
+  const systemPrompt = `You are a clinical safety classifier for PulseCheck.
+
+ESCALATION TIERS:
+- Tier 0 (None): Normal conversation
+- Tier 1 (Monitor-Only): Low-risk concerns, notify coach
+- Tier 2 (Elevated Risk): Consent-based clinical escalation
+- Tier 3 (Critical Risk): MANDATORY immediate escalation
+
+${trainingContext}
+
+Respond with JSON only:
+{"tier":0-3,"category":"string","reason":"brief reason","confidence":0.0-1.0,"shouldEscalate":boolean}
+
+CRITICAL: Err on side of caution. Tier 3 has ZERO threshold for safety concerns.`;
+
+  const conversationContext = recentMessages.length > 0
+    ? '\nRecent messages:\n' + recentMessages.slice(-5).map(m => 
+        `${m.isFromUser ? 'User' : 'AI'}: ${m.content}`
+      ).join('\n')
+    : '';
+
+  try {
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: `Classify this message:\n\n"${message}"${conversationContext}` }
+        ],
+        temperature: 0.1,
+        max_tokens: 200,
+        response_format: { type: 'json_object' }
+      })
+    });
+
+    if (!res.ok) {
+      console.error('[pulsecheck-chat] Classification API error');
+      return null;
+    }
+
+    const data = await res.json();
+    const content = data.choices?.[0]?.message?.content;
+    
+    if (!content) return null;
+    
+    return JSON.parse(content);
+  } catch (err) {
+    console.error('[pulsecheck-chat] Classification parse error:', err);
+    return null;
+  }
+}
+
+/**
+ * Build training context from conditions
+ */
+function buildEscalationTrainingContext(conditions) {
+  const tier1 = conditions.filter(c => c.tier === 1);
+  const tier2 = conditions.filter(c => c.tier === 2);
+  const tier3 = conditions.filter(c => c.tier === 3);
+
+  const fmt = (c) => `- ${c.title}: ${c.description}${c.examplePhrases?.length ? ` (e.g. "${c.examplePhrases[0]}")` : ''}`;
+
+  let ctx = '';
+  if (tier1.length) ctx += '\nTier 1 conditions:\n' + tier1.map(fmt).join('\n');
+  if (tier2.length) ctx += '\nTier 2 conditions:\n' + tier2.map(fmt).join('\n');
+  if (tier3.length) ctx += '\nTier 3 conditions:\n' + tier3.map(fmt).join('\n');
+  
+  return ctx || 'Use clinical judgment for escalation.';
+}
+
+/**
+ * Create escalation record for Tier 2/3
+ */
+async function createEscalationRecord(userId, conversationId, messageId, triggerContent, classification) {
+  const nowSec = Math.floor(Date.now() / 1000);
+  
+  const data = {
+    userId,
+    conversationId,
+    tier: classification.tier,
+    category: classification.category || 'general',
+    triggerMessageId: messageId,
+    triggerContent: triggerContent,
+    classificationReason: classification.reason || '',
+    classificationConfidence: classification.confidence || 0,
+    consentStatus: classification.tier === EscalationTier.CriticalRisk ? 'not-required' : 'pending',
+    handoffStatus: 'pending',
+    coachNotified: false,
+    createdAt: nowSec,
+    status: 'active'
+  };
+
+  const docRef = await db.collection('escalation-records').add(data);
+  await docRef.update({ id: docRef.id });
+
+  // Update conversation state
+  await db.collection('conversations').doc(conversationId).set({
+    escalationTier: classification.tier,
+    escalationStatus: 'active',
+    escalationRecordId: docRef.id,
+    isInSafetyMode: classification.tier === EscalationTier.CriticalRisk,
+    lastEscalationAt: nowSec
+  }, { merge: true });
+
+  console.log('[pulsecheck-chat] Escalation record created:', docRef.id);
+  return docRef.id;
 }
 
 

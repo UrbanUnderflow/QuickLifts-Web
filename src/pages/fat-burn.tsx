@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/router';
 import { ArrowLeft, Play, Pause, Square, ChevronRight, Target, Clock, Flame, TrendingUp, CheckCircle, Camera } from 'lucide-react';
 import { 
@@ -19,6 +19,7 @@ import {
 } from '../api/firebase/workout/types';
 import { useUser } from '../hooks/useUser';
 import { v4 as uuidv4 } from 'uuid';
+import WorkoutProofPhotoUploader, { ExtractedWorkoutMetrics } from '../components/Workouts/WorkoutProofPhotoUploader';
 
 // Configuration step enum
 enum FatBurnStep {
@@ -26,6 +27,7 @@ enum FatBurnStep {
   TreadmillMode = 'treadmillMode',
   GoalType = 'goalType',
   GoalValue = 'goalValue',
+  PreStart = 'preStart',
   Active = 'active',
   Entry = 'entry',
   Complete = 'complete'
@@ -48,6 +50,10 @@ const FatBurnPage: React.FC = () => {
   // Active session state
   const [elapsedTime, setElapsedTime] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
+  const [startTimeMs, setStartTimeMs] = useState<number | null>(null);
+  const [machinePhotoURL, setMachinePhotoURL] = useState<string | null>(null);
+  const [extractedMetrics, setExtractedMetrics] = useState<ExtractedWorkoutMetrics | null>(null);
+  const [useExtractedDuration, setUseExtractedDuration] = useState(false);
   
   // Manual entry state (after session)
   const [entryCalories, setEntryCalories] = useState<string>('');
@@ -62,6 +68,48 @@ const FatBurnPage: React.FC = () => {
 
   // Fat Burn category color (Orange)
   const fatBurnColor = '#F97316';
+
+  const fatBurnSessionStorageKey = useMemo(() => {
+    const uid = currentUser?.id || 'anon';
+    return `pulse:webFatBurnActiveSession:${uid}`;
+  }, [currentUser?.id]);
+
+  const persistFatBurnSession = useCallback((payload: any) => {
+    try {
+      localStorage.setItem(fatBurnSessionStorageKey, JSON.stringify(payload));
+    } catch (e) {
+      // ignore
+    }
+  }, [fatBurnSessionStorageKey]);
+
+  const clearFatBurnSession = useCallback(() => {
+    try {
+      localStorage.removeItem(fatBurnSessionStorageKey);
+    } catch (e) {
+      // ignore
+    }
+  }, [fatBurnSessionStorageKey]);
+
+  const resetSessionAndStartOver = useCallback(() => {
+    clearFatBurnSession();
+    setStartTimeMs(null);
+    startTimeRef.current = null;
+    setElapsedTime(0);
+    setIsPaused(false);
+    setMachinePhotoURL(null);
+    setExtractedMetrics(null);
+    setUseExtractedDuration(false);
+    setEntryCalories('');
+    setEntryDistance('');
+    setEntryFloors('');
+    setEntrySteps('');
+    setMachineLevel('');
+    // Keep equipment selection screen as the clean restart point
+    setCurrentStep(FatBurnStep.Equipment);
+    setEquipment(null);
+    setGoalType(null);
+    setTreadmillMode(null);
+  }, [clearFatBurnSession]);
 
   const handleBack = () => {
     switch (currentStep) {
@@ -79,6 +127,9 @@ const FatBurnPage: React.FC = () => {
         }
         break;
       case FatBurnStep.GoalValue:
+        setCurrentStep(FatBurnStep.GoalType);
+        break;
+      case FatBurnStep.PreStart:
         setCurrentStep(FatBurnStep.GoalType);
         break;
       case FatBurnStep.Active:
@@ -101,6 +152,45 @@ const FatBurnPage: React.FC = () => {
       setCurrentStep(FatBurnStep.GoalType);
     }
   };
+
+  // Restore persisted timer state on mount (if any)
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(fatBurnSessionStorageKey);
+      if (!raw) return;
+      const saved = JSON.parse(raw);
+      if (!saved?.startTimeMs) return;
+
+      const savedStatus = saved?.status;
+      const savedStart = Number(saved.startTimeMs);
+      const savedElapsed = typeof saved.elapsedSeconds === 'number'
+        ? Math.max(0, Math.floor(saved.elapsedSeconds))
+        : null;
+
+      // Restore minimal context so the UI can render correctly
+      if (saved?.equipment && !equipment) setEquipment(saved.equipment);
+      if (saved?.goalType && !goalType) setGoalType(saved.goalType);
+      if (saved?.treadmillMode && !treadmillMode) setTreadmillMode(saved.treadmillMode);
+
+      startTimeRef.current = new Date(savedStart);
+      setStartTimeMs(savedStart);
+
+      if (savedStatus === 'running') {
+        setIsPaused(false);
+        setCurrentStep(FatBurnStep.Active);
+      } else if (savedStatus === 'paused') {
+        setIsPaused(true);
+        setCurrentStep(FatBurnStep.Active);
+        if (savedElapsed !== null) setElapsedTime(savedElapsed);
+      } else if (savedStatus === 'stopped') {
+        setIsPaused(false);
+        setCurrentStep(FatBurnStep.Entry);
+        if (savedElapsed !== null) setElapsedTime(savedElapsed);
+      }
+    } catch (e) {
+      // ignore
+    }
+  }, [fatBurnSessionStorageKey, equipment, goalType, treadmillMode]);
 
   const handleTreadmillModeSelect = (mode: TreadmillMode) => {
     setTreadmillMode(mode);
@@ -133,16 +223,27 @@ const FatBurnPage: React.FC = () => {
   };
 
   const startSession = () => {
-    startTimeRef.current = new Date();
+    // Don’t start timer yet — user must start on their machine first
     setElapsedTime(0);
+    setIsPaused(false);
+    setCurrentStep(FatBurnStep.PreStart);
+  };
+
+  const confirmStartedOnMachine = () => {
+    const startedAt = Date.now();
+    startTimeRef.current = new Date(startedAt);
+    setStartTimeMs(startedAt);
+    setIsPaused(false);
     setCurrentStep(FatBurnStep.Active);
+    persistFatBurnSession({ status: 'running', startTimeMs: startedAt, equipment, goalType, treadmillMode });
   };
 
   // Timer effect
   useEffect(() => {
-    if (currentStep === FatBurnStep.Active && !isPaused) {
+    if (currentStep === FatBurnStep.Active && !isPaused && startTimeMs) {
       timerRef.current = setInterval(() => {
-        setElapsedTime(prev => prev + 1);
+        const newElapsed = Math.max(0, Math.floor((Date.now() - startTimeMs) / 1000));
+        setElapsedTime(newElapsed);
         
         // Check time goal
         if (goalType === FatBurnGoalType.TimeGoal) {
@@ -150,7 +251,7 @@ const FatBurnPage: React.FC = () => {
             ? parseInt(customValue) * 60 
             : FatBurnTimePresetSeconds[timePreset!];
           
-          if (targetSeconds && elapsedTime + 1 >= targetSeconds) {
+          if (targetSeconds && newElapsed >= targetSeconds) {
             endSession();
           }
         }
@@ -162,13 +263,16 @@ const FatBurnPage: React.FC = () => {
         clearInterval(timerRef.current);
       }
     };
-  }, [currentStep, isPaused, elapsedTime, goalType, timePreset, customValue]);
+  }, [currentStep, isPaused, startTimeMs, goalType, timePreset, customValue]);
 
   const endSession = () => {
     if (timerRef.current) {
       clearInterval(timerRef.current);
     }
     setCurrentStep(FatBurnStep.Entry);
+    if (startTimeMs) {
+      persistFatBurnSession({ status: 'stopped', startTimeMs, elapsedSeconds: elapsedTime, equipment, goalType, treadmillMode });
+    }
   };
 
   const handleSaveSummary = async () => {
@@ -177,6 +281,11 @@ const FatBurnPage: React.FC = () => {
       return;
     }
 
+    const durationToUse =
+      useExtractedDuration && extractedMetrics?.duration
+        ? Number(extractedMetrics.duration) || elapsedTime
+        : elapsedTime;
+
     const summary: FatBurnSummary = new FatBurnSummary({
       id: uuidv4(),
       userId: currentUser.id,
@@ -184,12 +293,13 @@ const FatBurnPage: React.FC = () => {
       goalType: goalType || FatBurnGoalType.FreeSession,
       title: `${equipment} Session`,
       machineLevel: machineLevel ? parseInt(machineLevel) : undefined,
-      duration: elapsedTime,
-      caloriesBurned: entryCalories ? parseInt(entryCalories) : Math.round(elapsedTime / 60 * 8),
+      duration: durationToUse,
+      caloriesBurned: entryCalories ? parseInt(entryCalories) : Math.round(durationToUse / 60 * 8),
       calorieSource: entryCalories ? CalorieDataSource.Manual : CalorieDataSource.Algorithm,
       distance: entryDistance ? parseFloat(entryDistance) : undefined,
       floorsClimbed: entryFloors ? parseInt(entryFloors) : undefined,
       totalSteps: entrySteps ? parseInt(entrySteps) : undefined,
+      machinePhotoURL: machinePhotoURL || undefined,
       targetDuration: goalType === FatBurnGoalType.TimeGoal 
         ? (timePreset === FatBurnTimePreset.Custom ? parseInt(customValue) * 60 : FatBurnTimePresetSeconds[timePreset!] || undefined)
         : undefined,
@@ -217,6 +327,8 @@ const FatBurnPage: React.FC = () => {
     } catch (e) {
       console.error('Failed to save fat burn summary:', e);
     }
+
+    clearFatBurnSession();
 
     setCurrentStep(FatBurnStep.Complete);
   };
@@ -424,6 +536,37 @@ const FatBurnPage: React.FC = () => {
           </div>
         );
 
+      case FatBurnStep.PreStart:
+        return (
+          <div className="max-w-xl mx-auto">
+            <div className="bg-zinc-800/50 border border-zinc-700 rounded-3xl p-6">
+              <div className="text-center">
+                <div className="text-5xl mb-4">{equipment ? getEquipmentEmoji(equipment) : '🔥'}</div>
+                <h2 className="text-2xl font-bold text-white mb-2">Start your session</h2>
+                <div className="text-zinc-400 space-y-2">
+                  <p>1) Start your workout on the machine.</p>
+                  <p>2) When it’s actually started, press the button below to start the web timer.</p>
+                  <p className="text-zinc-500 text-sm">You can close this tab and come back later—your timer will resume.</p>
+                </div>
+              </div>
+
+              <button
+                onClick={confirmStartedOnMachine}
+                className="mt-6 w-full py-4 rounded-2xl font-bold text-lg text-white"
+                style={{ backgroundColor: fatBurnColor }}
+              >
+                I started my session
+              </button>
+              <button
+                onClick={() => setCurrentStep(FatBurnStep.GoalType)}
+                className="mt-3 w-full py-3 rounded-2xl font-semibold text-zinc-300 border border-zinc-700 hover:border-zinc-500"
+              >
+                Back
+              </button>
+            </div>
+          </div>
+        );
+
       case FatBurnStep.Active:
         return (
           <div className="flex flex-col items-center justify-center min-h-[60vh]">
@@ -450,7 +593,21 @@ const FatBurnPage: React.FC = () => {
             {/* Controls */}
             <div className="flex items-center gap-6">
               <button
-                onClick={() => setIsPaused(!isPaused)}
+                onClick={() => {
+                  if (!startTimeMs) return;
+                  if (isPaused) {
+                    // Resume: re-anchor startTime so elapsed continues correctly
+                    const resumedAt = Date.now();
+                    const newStart = resumedAt - elapsedTime * 1000;
+                    setStartTimeMs(newStart);
+                    setIsPaused(false);
+                    persistFatBurnSession({ status: 'running', startTimeMs: newStart });
+                  } else {
+                    // Pause: persist frozen elapsed seconds
+                    setIsPaused(true);
+                    persistFatBurnSession({ status: 'paused', startTimeMs, elapsedSeconds: elapsedTime });
+                  }
+                }}
                 className="w-20 h-20 rounded-full flex items-center justify-center"
                 style={{ backgroundColor: fatBurnColor }}
               >
@@ -478,6 +635,52 @@ const FatBurnPage: React.FC = () => {
               <h2 className="text-2xl font-bold text-white">Session Complete!</h2>
               <p className="text-zinc-400">Duration: {formatTime(elapsedTime)}</p>
             </div>
+
+            <WorkoutProofPhotoUploader
+              equipmentTypeLabel={equipment ? `${equipment} machine` : 'workout machine'}
+              onApplied={({ photoUrl, metrics }) => {
+                setMachinePhotoURL(photoUrl);
+                setExtractedMetrics(metrics);
+
+                if (typeof metrics.calories === 'number' && isFinite(metrics.calories)) {
+                  setEntryCalories(String(Math.round(metrics.calories)));
+                }
+
+                if (typeof metrics.distance === 'number' && isFinite(metrics.distance)) {
+                  setEntryDistance(String(metrics.distance));
+                }
+
+                if (typeof metrics.floors === 'number' && isFinite(metrics.floors)) {
+                  setEntryFloors(String(Math.round(metrics.floors)));
+                }
+
+                if (typeof metrics.steps === 'number' && isFinite(metrics.steps)) {
+                  setEntrySteps(String(Math.round(metrics.steps)));
+                }
+
+                if (typeof metrics.level === 'number' && isFinite(metrics.level)) {
+                  setMachineLevel(String(Math.round(metrics.level)));
+                }
+              }}
+            />
+
+            {extractedMetrics?.duration && (
+              <div className="flex items-center justify-between bg-zinc-800/50 border border-zinc-700 rounded-2xl p-4">
+                <div>
+                  <div className="text-white font-semibold">Use extracted time?</div>
+                  <div className="text-zinc-400 text-sm">
+                    Extracted duration: {Math.round(Number(extractedMetrics.duration))} sec
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setUseExtractedDuration((v) => !v)}
+                  className={`w-12 h-7 rounded-full transition-colors relative ${useExtractedDuration ? 'bg-green-500' : 'bg-zinc-600'}`}
+                >
+                  <div className={`w-5 h-5 bg-white rounded-full absolute top-1 transition-transform ${useExtractedDuration ? 'translate-x-6' : 'translate-x-1'}`} />
+                </button>
+              </div>
+            )}
 
             <div className="bg-zinc-800/50 rounded-2xl p-6 space-y-4">
               <h3 className="text-white font-semibold mb-4">Enter your results from the machine</h3>
@@ -591,6 +794,7 @@ const FatBurnPage: React.FC = () => {
       case FatBurnStep.TreadmillMode: return 'Treadmill Mode';
       case FatBurnStep.GoalType: return 'Set Your Goal';
       case FatBurnStep.GoalValue: return 'Goal Target';
+      case FatBurnStep.PreStart: return 'Start Session';
       case FatBurnStep.Active: return equipment || 'Fat Burn';
       case FatBurnStep.Entry: return 'Log Results';
       case FatBurnStep.Complete: return 'Complete!';
@@ -609,6 +813,38 @@ const FatBurnPage: React.FC = () => {
 
       {/* Content */}
       <div className="relative max-w-2xl mx-auto px-4 py-6">
+        {/* Resume banner (when a persisted session exists) */}
+        {startTimeMs && (currentStep === FatBurnStep.Equipment || currentStep === FatBurnStep.GoalType || currentStep === FatBurnStep.GoalValue) && (
+          <div className="mb-6 bg-orange-500/10 border border-orange-500/20 rounded-2xl p-4 flex items-start justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 w-9 h-9 rounded-xl bg-orange-500/20 flex items-center justify-center">
+                <Clock className="w-5 h-5 text-orange-300" />
+              </div>
+              <div>
+                <div className="text-white font-semibold">Resume your session</div>
+                <div className="text-zinc-400 text-sm">
+                  We found an active timer from a previous session. You can resume or reset and start over.
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={resetSessionAndStartOver}
+                className="px-3 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-200 text-sm font-semibold"
+              >
+                Reset
+              </button>
+              <button
+                onClick={() => setCurrentStep(FatBurnStep.Active)}
+                className="px-4 py-2 rounded-xl font-bold text-black"
+                style={{ backgroundColor: '#E0FE10' }}
+              >
+                Resume
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Header */}
         {currentStep !== FatBurnStep.Active && (
           <div className="flex items-center gap-4 mb-8">

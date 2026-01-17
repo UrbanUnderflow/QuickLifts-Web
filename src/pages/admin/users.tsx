@@ -653,7 +653,7 @@ const UsersManagement: React.FC = () => {
       if (totalIssues === 0) {
         setToastMessage({ type: 'success', text: 'No username issues found!' });
       } else {
-        setToastMessage({ type: 'warning', text: `Found ${totalIssues} username issues. Review in modal.` });
+        setToastMessage({ type: 'info', text: `Found ${totalIssues} username issues. Review in modal.` });
       }
     } catch (error) {
       console.error('Error running username diagnostics:', error);

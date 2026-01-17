@@ -290,7 +290,7 @@ const StretchPage: React.FC = () => {
               {Object.values(StretchDurationPreset).map(duration => (
                 <button
                   key={duration}
-                  onClick={() => setSelectedDuration(duration)}
+                  onClick={() => setSelectedDuration(duration as StretchDurationPreset)}
                   className={`
                     p-6 rounded-2xl text-center transition-all
                     ${selectedDuration === duration 

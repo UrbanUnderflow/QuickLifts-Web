@@ -582,7 +582,7 @@ useEffect(() => {
                         {round.challenge?.title || 'Untitled Round'}
                       </h4>
                       <p className="text-zinc-400 text-sm line-clamp-2 mb-3">
-                        {round.challenge?.description || ''}
+                        {round.challenge?.subtitle || ''}
                       </p>
                       
                       {/* Date Range */}
@@ -1070,7 +1070,7 @@ useEffect(() => {
                   <div className="px-5">
                     <div className="flex items-center justify-between mb-4">
                       <h2 className="text-xl text-white font-semibold">
-                        {user.username}'s Movelists ({userStacks.length})
+                        {user?.username}'s Movelists ({userStacks.length})
                       </h2>
                     </div>
 

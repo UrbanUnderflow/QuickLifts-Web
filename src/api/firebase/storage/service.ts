@@ -9,7 +9,8 @@ export enum UploadImageType {
   Feedback = "feedback",
   CheckIn = "checkin",
   Meal = "meal",
-  GroupChat = "group_chat"
+  GroupChat = "group_chat",
+  WorkoutProof = "workout_proof"
 }
 
 export interface UploadResult {

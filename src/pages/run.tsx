@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
 import { ArrowLeft, MapPin, Building2, Timer, Target, Repeat, Play, ChevronRight } from 'lucide-react';
 import { 
@@ -13,6 +13,7 @@ import {
   IntervalConfiguration,
   IntervalConfigurationPresets
 } from '../api/firebase/workout/types';
+import { useUser } from '../hooks/useUser';
 
 // Configuration step enum
 enum ConfigStep {
@@ -27,6 +28,7 @@ enum ConfigStep {
 
 const RunPage: React.FC = () => {
   const router = useRouter();
+  const currentUser = useUser();
   
   // Configuration state
   const [currentStep, setCurrentStep] = useState<ConfigStep>(ConfigStep.Location);
@@ -41,6 +43,54 @@ const RunPage: React.FC = () => {
 
   // Run category color (Blue)
   const runColor = '#3B82F6';
+
+  const runSessionStorageKey = useMemo(() => {
+    const uid = currentUser?.id || 'anon';
+    return `pulse:webRunActiveSession:${uid}`;
+  }, [currentUser?.id]);
+
+  const [resumeSession, setResumeSession] = useState<{
+    status: 'running' | 'paused' | 'stopped';
+    startTimeMs: number;
+    elapsedSeconds?: number;
+    config?: any;
+  } | null>(null);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(runSessionStorageKey);
+      if (!raw) return;
+      const saved = JSON.parse(raw);
+      if (!saved?.startTimeMs || !saved?.status) return;
+      if (saved.status === 'running' || saved.status === 'paused') {
+        setResumeSession(saved);
+      }
+    } catch (e) {
+      // ignore
+    }
+  }, [runSessionStorageKey]);
+
+  const handleResume = () => {
+    if (!resumeSession) return;
+    if (resumeSession.config) {
+      router.push({
+        pathname: '/run/active',
+        query: { config: JSON.stringify(resumeSession.config) }
+      });
+      return;
+    }
+    // If config is missing, just send them into the normal run setup flow.
+    setResumeSession(null);
+  };
+
+  const handleResetResume = () => {
+    try {
+      localStorage.removeItem(runSessionStorageKey);
+    } catch (e) {
+      // ignore
+    }
+    setResumeSession(null);
+  };
 
   const handleBack = () => {
     switch (currentStep) {
@@ -479,6 +529,38 @@ const RunPage: React.FC = () => {
 
       {/* Content */}
       <div className="relative max-w-2xl mx-auto px-4 py-6">
+        {/* Resume banner */}
+        {resumeSession && (
+          <div className="mb-6 bg-blue-500/10 border border-blue-500/20 rounded-2xl p-4 flex items-start justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 w-9 h-9 rounded-xl bg-blue-500/20 flex items-center justify-center">
+                <Timer className="w-5 h-5 text-blue-300" />
+              </div>
+              <div>
+                <div className="text-white font-semibold">Resume your run</div>
+                <div className="text-zinc-400 text-sm">
+                  We found an active run timer. Pick up where you left off.
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleResetResume}
+                className="px-3 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-200 text-sm font-semibold"
+              >
+                Reset
+              </button>
+              <button
+                onClick={handleResume}
+                className="px-4 py-2 rounded-xl font-bold text-black"
+                style={{ backgroundColor: '#E0FE10' }}
+              >
+                Resume
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Header */}
         <div className="flex items-center gap-4 mb-8">
           <button
