@@ -9,19 +9,56 @@ import {
   sendPasswordResetEmail,
   signOut as firebaseSignOut,
 } from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc, runTransaction, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../config';
 import { SignUpData, AuthService } from './types';
 import { User } from '../../firebase/user';
+
+  // Helper function to normalize username
+  const normalizeUsername = (username: string): string => {
+    return username.toLowerCase().replace(/[^a-z0-9_.-]/g, '').trim();
+  };
+
+  // Helper function to claim username in the usernames collection
+  const claimUsername = async (userId: string, username: string): Promise<void> => {
+    const normalizedName = normalizeUsername(username);
+    if (normalizedName.length < 3) {
+      throw new Error('Username too short');
+    }
+    
+    await runTransaction(db, async (transaction) => {
+      const usernameRef = doc(db, 'usernames', normalizedName);
+      const usernameDoc = await transaction.get(usernameRef);
+      
+      if (usernameDoc.exists()) {
+        const existingUserId = usernameDoc.data()?.userId;
+        if (existingUserId && existingUserId !== userId) {
+          throw new Error('Username already taken');
+        }
+      }
+      
+      transaction.set(usernameRef, { 
+        userId: userId, 
+        username: normalizedName, 
+        createdAt: serverTimestamp() 
+      });
+    });
+  };
   
   export const authMethods: AuthService = {
     async signUpWithEmail({ email, password, username, profileImage, quizData }: SignUpData) {
       try {
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        const normalizedName = normalizeUsername(username);
+        
+        // Claim the username first (will throw if taken)
+        if (normalizedName.length >= 3) {
+          await claimUsername(userCredential.user.uid, normalizedName);
+        }
         
         await setDoc(doc(db, 'users', userCredential.user.uid), {
           email,
-          username,
+          username: normalizedName,
           createdAt: new Date(),
           quizData: quizData || null
         });

@@ -21,19 +21,37 @@ import { UserFilter } from '../components/App/UserFilter/UserFilter';
 import { workoutService } from '../api/firebase/workout/service';
 import { userService } from '../api/firebase/user';
 import { generateId } from '../utils/generateId';
-import { Challenge, ChallengeStatus, SweatlistCollection, SweatlistIdentifiers, SweatlistType as SweatlistTypeEnum } from '../api/firebase/workout/types';
+import { 
+  Challenge, 
+  ChallengeStatus, 
+  ChallengeType,
+  SweatlistCollection, 
+  SweatlistIdentifiers, 
+  SweatlistType as SweatlistTypeEnum,
+  RoundType,
+  RunRoundType,
+  RunRoundConfiguration
+} from '../api/firebase/workout/types';
+import { 
+  RoundTypeSelector, 
+  RunRoundTemplateSelector, 
+  RunRoundConfigurationView 
+} from '../components/App/RoundCreation';
 
 // Keep this page intentionally focused: this is the iOS-mirroring wizard entrypoint.
 // This file wires iOS-style generation + persistence (no /programming redirect).
 
 type WizardStep =
+  | 'roundType'  // NEW: First step - select Lift/Run/Stretch/FatBurn
   | 'mode'
   | 'templateLibrary'
   | 'templatePreview'
   | 'templateFillMoves'
   | 'custom'
   | 'generating'
-  | 'finalize';
+  | 'finalize'
+  | 'runTemplateSelect'  // NEW: Run round template selection
+  | 'runConfig';          // NEW: Run round configuration
 
 type SweatlistType = 'together' | 'locked';
 
@@ -126,7 +144,13 @@ const CreateRoundPage: React.FC = () => {
   const router = useRouter();
   const currentUser = useUser();
 
-  const [step, setStep] = useState<WizardStep>('mode');
+  const [step, setStep] = useState<WizardStep>('roundType');
+  
+  // Round type selection (Lift/Run/Stretch/FatBurn)
+  const [selectedRoundType, setSelectedRoundType] = useState<RoundType | null>(null);
+  
+  // Run round specific state
+  const [selectedRunRoundType, setSelectedRunRoundType] = useState<RunRoundType | null>(null);
 
   // Templates
   const [templatesLoading, setTemplatesLoading] = useState(false);
@@ -301,6 +325,12 @@ const CreateRoundPage: React.FC = () => {
 
   const goBack = useCallback(() => {
     switch (step) {
+      case 'roundType':
+        router.push('/create');
+        return;
+      case 'mode':
+        setStep('roundType');
+        return;
       case 'templateLibrary':
         setStep('mode');
         return;
@@ -310,6 +340,12 @@ const CreateRoundPage: React.FC = () => {
       case 'templateFillMoves':
         setStep('templatePreview');
         return;
+      case 'runTemplateSelect':
+        setStep('roundType');
+        return;
+      case 'runConfig':
+        setStep('runTemplateSelect');
+        return;
       case 'custom':
         setStep('mode');
         return;
@@ -318,20 +354,28 @@ const CreateRoundPage: React.FC = () => {
         setStep('mode');
         return;
       default:
-        setStep('mode');
+        setStep('roundType');
     }
-  }, [step]);
+  }, [step, router]);
 
   const headerTitle = useMemo(() => {
     switch (step) {
-      case 'mode':
+      case 'roundType':
         return 'Create a Round';
+      case 'mode':
+        return selectedRoundType === RoundType.Lift ? 'Lift Round' : 
+               selectedRoundType === RoundType.Stretch ? 'Stretch Round' : 
+               'Create a Round';
       case 'templateLibrary':
         return 'Template Library';
       case 'templatePreview':
         return 'Template Preview';
       case 'templateFillMoves':
         return 'Select Moves';
+      case 'runTemplateSelect':
+        return 'Run Round';
+      case 'runConfig':
+        return 'Configure Run Round';
       case 'custom':
         return 'Custom Round';
       case 'generating':
@@ -698,13 +742,13 @@ const CreateRoundPage: React.FC = () => {
           <button
             type="button"
             onClick={() => {
-              if (step === 'mode') router.push('/create');
+              if (step === 'roundType') router.push('/create');
               else goBack();
             }}
             className="flex items-center gap-2 text-zinc-400 hover:text-white transition-colors"
           >
             <ArrowLeft className="w-5 h-5" />
-            <span className="text-sm">{step === 'mode' ? 'Back to Creator Studio' : 'Back'}</span>
+            <span className="text-sm">{step === 'roundType' ? 'Back to Creator Studio' : 'Back'}</span>
           </button>
           <div className="text-center flex-1">
             <div className="text-sm text-zinc-500">Pulse</div>
@@ -737,6 +781,130 @@ const CreateRoundPage: React.FC = () => {
     );
   }
 
+  // ========================================
+  // ROUND TYPE SELECTION (First step)
+  // ========================================
+  if (step === 'roundType') {
+    return (
+      <RoundTypeSelector
+        onClose={() => router.push('/create')}
+        onSelectType={(roundType) => {
+          setSelectedRoundType(roundType);
+          
+          if (roundType === RoundType.Lift || roundType === RoundType.Stretch) {
+            // Go to traditional template/custom mode selection
+            setStep('mode');
+          } else if (roundType === RoundType.Run) {
+            // Go to run round template selection
+            setStep('runTemplateSelect');
+          } else if (roundType === RoundType.FatBurn) {
+            // Fat Burn coming soon - handled in the selector component
+          }
+        }}
+      />
+    );
+  }
+
+  // ========================================
+  // RUN ROUND TEMPLATE SELECTION
+  // ========================================
+  if (step === 'runTemplateSelect') {
+    return (
+      <RunRoundTemplateSelector
+        onClose={() => router.push('/create')}
+        onBack={() => setStep('roundType')}
+        onSelectTemplate={(template) => {
+          setSelectedRunRoundType(template);
+          setStep('runConfig');
+        }}
+      />
+    );
+  }
+
+  // ========================================
+  // RUN ROUND CONFIGURATION
+  // ========================================
+  if (step === 'runConfig' && selectedRunRoundType) {
+    return (
+      <RunRoundConfigurationView
+        selectedTemplate={selectedRunRoundType}
+        onClose={() => router.push('/create')}
+        onBack={() => setStep('runTemplateSelect')}
+        onComplete={async (config) => {
+          if (!currentUser?.id) {
+            alert('You must be signed in to create a round.');
+            return;
+          }
+
+          setIsSubmitting(true);
+          setStep('generating');
+
+          try {
+            // Create the run round
+            const collectionId = generateId();
+            const challengeId = generateId();
+            
+            const now = new Date();
+            const challengeData: Partial<Challenge> = {
+              id: challengeId,
+              title: config.title,
+              subtitle: config.subtitle,
+              participants: [],
+              status: ChallengeStatus.Draft,
+              introVideos: [],
+              privacy: config.privacy,
+              pin: config.pin,
+              startDate: config.startDate,
+              endDate: config.endDate,
+              ownerId: [currentUser.id],
+              createdAt: now,
+              updatedAt: now,
+              originalId: collectionId,
+              joinWindowEnds: config.startDate,
+              minParticipants: 1,
+              maxParticipants: 100,
+              allowLateJoins: true,
+              cohortAuthor: [currentUser.id],
+              challengeType: ChallengeType.Run,
+              dailyStepGoal: 0,
+              totalStepGoal: 0,
+              allowedMissedDays: 0,
+            };
+
+            const collectionData: Partial<SweatlistCollection> = {
+              id: collectionId,
+              title: config.title,
+              subtitle: config.subtitle,
+              pin: config.pin || null,
+              challenge: challengeData as Challenge,
+              sweatlistIds: [], // Run rounds don't have workout stacks
+              ownerId: [currentUser.id],
+              privacy: config.privacy,
+              createdAt: now,
+              updatedAt: now,
+              runRoundConfig: config.runRoundConfig,
+            };
+
+            // Save to Firestore
+            await workoutService.saveCollectionChallenge(
+              currentUser.id,
+              collectionData as SweatlistCollection
+            );
+
+            // Redirect to the new round
+            router.push(`/round/${collectionId}`);
+          } catch (error) {
+            console.error('Failed to create run round:', error);
+            alert('Failed to create run round. Please try again.');
+            setStep('runConfig');
+          } finally {
+            setIsSubmitting(false);
+          }
+        }}
+      />
+    );
+  }
+
   if (step === 'generating') {
     return shell(
       <div className="max-w-xl mx-auto text-center">
@@ -755,8 +923,8 @@ const CreateRoundPage: React.FC = () => {
           <button
             type="button"
             onClick={() => {
-              // Don’t allow cancel mid-request; just return to mode once finished.
-              if (!isSubmitting) setStep('mode');
+              // Don't allow cancel mid-request; just return to roundType once finished.
+              if (!isSubmitting) setStep('roundType');
             }}
             disabled={isSubmitting}
             className="px-4 py-2 rounded-lg border border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-white transition-colors"
@@ -769,10 +937,12 @@ const CreateRoundPage: React.FC = () => {
   }
 
   if (step === 'mode') {
+    const roundTypeName = selectedRoundType === RoundType.Lift ? 'Lift' : 
+                          selectedRoundType === RoundType.Stretch ? 'Stretch' : 'Workout';
     return shell(
       <div className="max-w-3xl mx-auto">
         <div className="text-center mb-10">
-          <h1 className="text-4xl font-bold mb-3">Create a Round</h1>
+          <h1 className="text-4xl font-bold mb-3">Create a {roundTypeName} Round</h1>
           <p className="text-zinc-400">Choose how you want to create your round</p>
         </div>
 

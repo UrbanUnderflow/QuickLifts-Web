@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Head from 'next/head';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
-import { collection, getDocs, query, orderBy, doc, getDoc, setDoc, deleteDoc, writeBatch } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, doc, getDoc, setDoc, deleteDoc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '../../api/firebase/config';
 import debounce from 'lodash.debounce';
-import { Trash2 as TrashIcon, AlertCircle, CheckCircle, Activity, Clock, Calendar, Dumbbell, Eye, XCircle, ArrowRight, ChevronRight, Code, Users, Shield, LogIn } from 'lucide-react';
+import { Trash2 as TrashIcon, Trash2, AlertCircle, CheckCircle, Activity, Clock, Calendar, Dumbbell, Eye, XCircle, ArrowRight, ChevronRight, Code, Users, Shield, LogIn, Search } from 'lucide-react';
 import { workoutService } from '../../api/firebase/workout/service';
 import { Workout, WorkoutStatus, WorkoutSummary, RepsAndWeightLog } from '../../api/firebase/workout/types';
 import { ExerciseLog } from '../../api/firebase/exercise/types';
@@ -99,6 +99,15 @@ const UsersManagement: React.FC = () => {
 
   // State for remote login functionality
   const [processingRemoteLogin, setProcessingRemoteLogin] = useState<string | null>(null);
+
+  // *** START: State for Username Migration ***
+  const [showUsernameMigrationModal, setShowUsernameMigrationModal] = useState(false);
+  const [usersWithBadUsernames, setUsersWithBadUsernames] = useState<User[]>([]);
+  const [loadingBadUsernames, setLoadingBadUsernames] = useState(false);
+  const [migratingUsernames, setMigratingUsernames] = useState(false);
+  const [migrationProgress, setMigrationProgress] = useState(0);
+  const [migrationResults, setMigrationResults] = useState<{ success: number; failed: number; skipped: number }>({ success: 0, failed: 0, skipped: 0 });
+  // *** END: State for Username Migration ***
 
   // Copy ID to clipboard and show toast
   const copyToClipboard = (id: string) => {
@@ -541,6 +550,440 @@ const UsersManagement: React.FC = () => {
       
     return new Date(date).toLocaleString();
   };
+
+  // *** START: Username Migration Functions ***
+  
+  // Normalizes a username by removing invalid characters
+  const normalizeUsername = (username: string): string => {
+    return username
+      .toLowerCase()
+      .replace(/[^a-z0-9_.-]/g, '')
+      .trim();
+  };
+
+  // Check if a username is valid (only contains allowed characters)
+  const isValidUsername = (username: string): boolean => {
+    if (!username) return true; // Empty usernames are handled separately
+    return /^[a-z0-9_.-]+$/.test(username);
+  };
+
+  // *** USERNAME DIAGNOSTIC FUNCTIONS ***
+  
+  // State for username diagnostics
+  const [diagnosticResults, setDiagnosticResults] = useState<{
+    duplicateUsernames: Array<{ username: string; users: Array<{ id: string; email: string; displayName: string }> }>;
+    orphanedUsernamesDocs: Array<{ username: string; userId: string }>;
+    usersWithoutUsernameDoc: Array<{ id: string; username: string; email: string }>;
+    mismatchedUserIds: Array<{ username: string; usernameDocUserId: string; actualUserId: string; email: string }>;
+  } | null>(null);
+  const [runningDiagnostics, setRunningDiagnostics] = useState(false);
+  const [showDiagnosticsModal, setShowDiagnosticsModal] = useState(false);
+
+  // Run comprehensive username diagnostics
+  const runUsernameDiagnostics = async () => {
+    setRunningDiagnostics(true);
+    setDiagnosticResults(null);
+    
+    try {
+      // 1. Find duplicate usernames in users collection
+      const usernameMap = new Map<string, Array<{ id: string; email: string; displayName: string }>>();
+      users.forEach(user => {
+        if (user.username) {
+          const existing = usernameMap.get(user.username) || [];
+          existing.push({ id: user.id, email: user.email, displayName: user.displayName });
+          usernameMap.set(user.username, existing);
+        }
+      });
+      const duplicateUsernames = Array.from(usernameMap.entries())
+        .filter(([_, users]) => users.length > 1)
+        .map(([username, users]) => ({ username, users }));
+
+      // 2. Get all documents from usernames collection
+      const usernamesSnapshot = await getDocs(collection(db, 'usernames'));
+      const usernamesDocs = new Map<string, { userId: string; username?: string }>();
+      usernamesSnapshot.forEach(docSnap => {
+        const data = docSnap.data();
+        usernamesDocs.set(docSnap.id, { userId: data.userId, username: data.username });
+      });
+
+      // 3. Find orphaned username documents (userId doesn't exist in users)
+      const userIds = new Set(users.map(u => u.id));
+      const orphanedUsernamesDocs: Array<{ username: string; userId: string }> = [];
+      usernamesDocs.forEach((data, username) => {
+        if (data.userId && !userIds.has(data.userId)) {
+          orphanedUsernamesDocs.push({ username, userId: data.userId });
+        }
+      });
+
+      // 4. Find users without corresponding username document
+      const usersWithoutUsernameDoc: Array<{ id: string; username: string; email: string }> = [];
+      users.forEach(user => {
+        if (user.username && !usernamesDocs.has(user.username)) {
+          usersWithoutUsernameDoc.push({ id: user.id, username: user.username, email: user.email });
+        }
+      });
+
+      // 5. Find mismatched userIds (username doc points to different user than expected)
+      const mismatchedUserIds: Array<{ username: string; usernameDocUserId: string; actualUserId: string; email: string }> = [];
+      users.forEach(user => {
+        if (user.username) {
+          const usernameDoc = usernamesDocs.get(user.username);
+          if (usernameDoc && usernameDoc.userId && usernameDoc.userId !== user.id) {
+            mismatchedUserIds.push({
+              username: user.username,
+              usernameDocUserId: usernameDoc.userId,
+              actualUserId: user.id,
+              email: user.email
+            });
+          }
+        }
+      });
+
+      setDiagnosticResults({
+        duplicateUsernames,
+        orphanedUsernamesDocs,
+        usersWithoutUsernameDoc,
+        mismatchedUserIds
+      });
+      setShowDiagnosticsModal(true);
+      
+      const totalIssues = duplicateUsernames.length + orphanedUsernamesDocs.length + 
+                         usersWithoutUsernameDoc.length + mismatchedUserIds.length;
+      
+      if (totalIssues === 0) {
+        setToastMessage({ type: 'success', text: 'No username issues found!' });
+      } else {
+        setToastMessage({ type: 'warning', text: `Found ${totalIssues} username issues. Review in modal.` });
+      }
+    } catch (error) {
+      console.error('Error running username diagnostics:', error);
+      setToastMessage({ type: 'error', text: 'Error running diagnostics' });
+    } finally {
+      setRunningDiagnostics(false);
+    }
+  };
+
+  // Repair a specific username connection
+  const repairUsernameConnection = async (userId: string, username: string) => {
+    try {
+      // Update the usernames collection to point to the correct user
+      const usernameRef = doc(db, 'usernames', username);
+      await setDoc(usernameRef, { 
+        userId: userId, 
+        username: username,
+        createdAt: serverTimestamp(),
+        repairedAt: serverTimestamp()
+      });
+      
+      setToastMessage({ type: 'success', text: `Fixed username connection for ${username}` });
+      
+      // Re-run diagnostics
+      await runUsernameDiagnostics();
+    } catch (error) {
+      console.error('Error repairing username:', error);
+      setToastMessage({ type: 'error', text: 'Error repairing username connection' });
+    }
+  };
+
+  // State for batch repair
+  const [batchRepairing, setBatchRepairing] = useState(false);
+  const [batchRepairProgress, setBatchRepairProgress] = useState(0);
+  const [resolvingDuplicate, setResolvingDuplicate] = useState<string | null>(null);
+
+  // Generate a unique username by appending numbers
+  const generateUniqueUsername = async (baseUsername: string): Promise<string> => {
+    let suffix = 1;
+    let candidate = `${baseUsername}${suffix}`;
+    
+    while (suffix < 1000) {
+      // Check if candidate exists in users collection
+      const usersWithCandidate = users.filter(u => u.username === candidate);
+      if (usersWithCandidate.length === 0) {
+        // Also check usernames collection
+        const usernameDoc = await getDoc(doc(db, 'usernames', candidate));
+        if (!usernameDoc.exists()) {
+          return candidate;
+        }
+      }
+      suffix++;
+      candidate = `${baseUsername}${suffix}`;
+    }
+    
+    // Fallback: use timestamp
+    return `${baseUsername}_${Date.now()}`;
+  };
+
+  // Resolve duplicate username - keep for one user, generate new for others
+  const resolveDuplicateUsername = async (
+    username: string, 
+    keepUserId: string, 
+    otherUserIds: string[]
+  ) => {
+    setResolvingDuplicate(username);
+    
+    try {
+      const batch = writeBatch(db);
+      
+      // 1. Update usernames collection to point to the keeper
+      const usernameRef = doc(db, 'usernames', username);
+      batch.set(usernameRef, {
+        userId: keepUserId,
+        username: username,
+        createdAt: serverTimestamp(),
+        resolvedAt: serverTimestamp()
+      });
+      
+      // 2. Generate new usernames for other users
+      for (const otherId of otherUserIds) {
+        const newUsername = await generateUniqueUsername(username);
+        
+        // Update the user's username field
+        const userRef = doc(db, 'users', otherId);
+        batch.update(userRef, { 
+          username: newUsername,
+          updatedAt: serverTimestamp()
+        });
+        
+        // Create new username doc for the other user
+        const newUsernameRef = doc(db, 'usernames', newUsername);
+        batch.set(newUsernameRef, {
+          userId: otherId,
+          username: newUsername,
+          createdAt: serverTimestamp(),
+          generatedFrom: username
+        });
+        
+        console.log(`[ResolveDuplicate] Assigned ${newUsername} to user ${otherId}`);
+      }
+      
+      await batch.commit();
+      
+      setToastMessage({ 
+        type: 'success', 
+        text: `Resolved duplicate: ${username} kept for selected user, ${otherUserIds.length} user(s) assigned new usernames` 
+      });
+      
+      // Refresh users list and re-run diagnostics
+      await loadAllUsers();
+      await runUsernameDiagnostics();
+      
+    } catch (error) {
+      console.error('Error resolving duplicate username:', error);
+      setToastMessage({ type: 'error', text: 'Error resolving duplicate username' });
+    } finally {
+      setResolvingDuplicate(null);
+    }
+  };
+
+  // Batch fix all missing username docs
+  const batchFixMissingUsernameDocs = async () => {
+    if (!diagnosticResults?.usersWithoutUsernameDoc.length) return;
+    
+    setBatchRepairing(true);
+    setBatchRepairProgress(0);
+    
+    const total = diagnosticResults.usersWithoutUsernameDoc.length;
+    let success = 0;
+    let failed = 0;
+    
+    try {
+      // Process in batches of 50 to avoid overwhelming Firestore
+      const batchSize = 50;
+      const items = diagnosticResults.usersWithoutUsernameDoc;
+      
+      for (let i = 0; i < items.length; i += batchSize) {
+        const batch = writeBatch(db);
+        const batchItems = items.slice(i, Math.min(i + batchSize, items.length));
+        
+        for (const item of batchItems) {
+          const usernameRef = doc(db, 'usernames', item.username);
+          batch.set(usernameRef, {
+            userId: item.id,
+            username: item.username,
+            createdAt: serverTimestamp(),
+            repairedAt: serverTimestamp()
+          });
+        }
+        
+        await batch.commit();
+        success += batchItems.length;
+        setBatchRepairProgress(Math.round((success / total) * 100));
+      }
+      
+      setToastMessage({ 
+        type: 'success', 
+        text: `Created ${success} username documents successfully!` 
+      });
+      
+      // Re-run diagnostics
+      await runUsernameDiagnostics();
+      
+    } catch (error) {
+      console.error('Error in batch repair:', error);
+      setToastMessage({ 
+        type: 'error', 
+        text: `Batch repair failed. ${success} succeeded, ${total - success} remaining.` 
+      });
+    } finally {
+      setBatchRepairing(false);
+      setBatchRepairProgress(0);
+    }
+  };
+
+  // *** END USERNAME DIAGNOSTIC FUNCTIONS ***
+
+  // Find users with invalid usernames (contains spaces, special chars, or uppercase)
+  const findUsersWithBadUsernames = async () => {
+    setLoadingBadUsernames(true);
+    setMigrationResults({ success: 0, failed: 0, skipped: 0 });
+    
+    try {
+      const badUsers = users.filter(user => {
+        if (!user.username) return false;
+        // Check if username has invalid characters (spaces, special chars, uppercase)
+        const hasInvalidChars = !isValidUsername(user.username);
+        const hasUppercase = user.username !== user.username.toLowerCase();
+        return hasInvalidChars || hasUppercase;
+      });
+      
+      setUsersWithBadUsernames(badUsers);
+      setShowUsernameMigrationModal(true);
+      
+      if (badUsers.length === 0) {
+        setToastMessage({ type: 'success', text: 'No users with invalid usernames found!' });
+      }
+    } catch (error) {
+      console.error('Error finding bad usernames:', error);
+      setToastMessage({ type: 'error', text: 'Error scanning for invalid usernames' });
+    } finally {
+      setLoadingBadUsernames(false);
+    }
+  };
+
+  // Migrate/fix all bad usernames (IMPROVED with collision detection)
+  const migrateUsernames = async () => {
+    if (usersWithBadUsernames.length === 0) return;
+    
+    setMigratingUsernames(true);
+    setMigrationProgress(0);
+    const results = { success: 0, failed: 0, skipped: 0, collisions: 0 };
+    
+    try {
+      // First pass: detect collisions
+      const normalizedToUsers = new Map<string, Array<User>>();
+      usersWithBadUsernames.forEach(user => {
+        const normalized = normalizeUsername(user.username);
+        if (normalized && normalized !== user.username) {
+          const existing = normalizedToUsers.get(normalized) || [];
+          existing.push(user);
+          normalizedToUsers.set(normalized, existing);
+        }
+      });
+      
+      // Also check against existing usernames in the database
+      const existingUsernamesSnapshot = await getDocs(collection(db, 'usernames'));
+      const existingUsernames = new Set<string>();
+      existingUsernamesSnapshot.forEach(docSnap => existingUsernames.add(docSnap.id));
+      
+      const batch = writeBatch(db);
+      
+      for (let i = 0; i < usersWithBadUsernames.length; i++) {
+        const user = usersWithBadUsernames[i];
+        const oldUsername = user.username;
+        let newUsername = normalizeUsername(oldUsername);
+        
+        // Update progress
+        setMigrationProgress(Math.round(((i + 1) / usersWithBadUsernames.length) * 100));
+        
+        // Skip if normalized username is empty or same as original
+        if (!newUsername || newUsername === oldUsername) {
+          results.skipped++;
+          continue;
+        }
+        
+        // Skip if normalized username is too short
+        if (newUsername.length < 3) {
+          console.warn(`Skipping user ${user.id}: normalized username "${newUsername}" is too short`);
+          results.skipped++;
+          continue;
+        }
+        
+        // Check for collisions
+        const usersWithSameNormalized = normalizedToUsers.get(newUsername) || [];
+        const hasCollisionWithOtherMigrating = usersWithSameNormalized.length > 1;
+        const hasCollisionWithExisting = existingUsernames.has(newUsername) && 
+          !usersWithBadUsernames.some(u => u.username === newUsername);
+        
+        if (hasCollisionWithOtherMigrating || hasCollisionWithExisting) {
+          // Add a numeric suffix to make it unique
+          let suffix = 1;
+          let uniqueUsername = `${newUsername}${suffix}`;
+          while (existingUsernames.has(uniqueUsername) || 
+                 usersWithBadUsernames.some(u => normalizeUsername(u.username) === uniqueUsername)) {
+            suffix++;
+            uniqueUsername = `${newUsername}${suffix}`;
+          }
+          console.warn(`Collision detected for "${newUsername}". Using "${uniqueUsername}" for user ${user.id}`);
+          newUsername = uniqueUsername;
+          results.collisions++;
+        }
+        
+        try {
+          // Update user document with new username
+          const userRef = doc(db, 'users', user.id);
+          batch.update(userRef, { username: newUsername });
+          
+          // Update usernames collection (delete old, add new)
+          if (oldUsername) {
+            const oldUsernameRef = doc(db, 'usernames', oldUsername);
+            batch.delete(oldUsernameRef);
+          }
+          const newUsernameRef = doc(db, 'usernames', newUsername);
+          batch.set(newUsernameRef, { 
+            userId: user.id, 
+            username: newUsername,
+            createdAt: serverTimestamp() 
+          });
+          
+          // Track this new username as existing to prevent future collisions in this batch
+          existingUsernames.add(newUsername);
+          
+          results.success++;
+        } catch (error) {
+          console.error(`Error migrating username for user ${user.id}:`, error);
+          results.failed++;
+        }
+      }
+      
+      // Commit the batch
+      await batch.commit();
+      
+      setMigrationResults(results);
+      setToastMessage({ 
+        type: 'success', 
+        text: `Migration complete! ${results.success} fixed, ${results.failed} failed, ${results.skipped} skipped${results.collisions > 0 ? `, ${results.collisions} collisions resolved` : ''}` 
+      });
+      
+      // Refresh users list
+      await loadAllUsers();
+      
+      // Clear bad usernames list
+      setUsersWithBadUsernames([]);
+      
+    } catch (error) {
+      console.error('Error during username migration:', error);
+      setToastMessage({ type: 'error', text: 'Error during username migration' });
+    } finally {
+      setMigratingUsernames(false);
+    }
+  };
+
+  // Get the corrected version of a username for preview
+  const getCorrectedUsername = (username: string): string => {
+    return normalizeUsername(username);
+  };
+  
+  // *** END: Username Migration Functions ***
 
   // Format duration in minutes to hours and minutes
   const formatDuration = (durationInMinutes: number): string => {
@@ -1801,6 +2244,26 @@ const UsersManagement: React.FC = () => {
                  >
                    {isSelectingForDelete ? 'Cancel Selection' : 'Select Users'}
                  </button>
+                {/* Username Migration Button */}
+                <button
+                   onClick={findUsersWithBadUsernames}
+                   className={`bg-amber-700/80 text-white px-4 py-3 rounded-lg font-medium hover:bg-amber-600/80 transition flex items-center text-sm
+                     ${(loadingBadUsernames || isBatchDeleting) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                   disabled={loadingBadUsernames || isBatchDeleting}
+                 >
+                   <AlertCircle className="h-4 w-4 mr-2" />
+                   {loadingBadUsernames ? 'Scanning...' : 'Fix Invalid Usernames'}
+                 </button>
+                 {/* Username Diagnostics Button */}
+                 <button
+                   onClick={runUsernameDiagnostics}
+                   className={`bg-cyan-700/80 text-white px-4 py-3 rounded-lg font-medium hover:bg-cyan-600/80 transition flex items-center text-sm
+                     ${(runningDiagnostics || isBatchDeleting) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                   disabled={runningDiagnostics || isBatchDeleting}
+                 >
+                   <Search className="h-4 w-4 mr-2" />
+                   {runningDiagnostics ? 'Running...' : 'Diagnose Usernames'}
+                 </button>
                  {/* Refresh Button */}
                  <button
                    onClick={handleRefresh}
@@ -2736,6 +3199,479 @@ const UsersManagement: React.FC = () => {
             </svg>
           )}
           <span>{toastMessage.text}</span>
+        </div>
+      )}
+
+      {/* Username Migration Modal */}
+      {showUsernameMigrationModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="bg-[#1d2b3a] rounded-xl p-6 max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col border border-gray-700">
+            {/* Modal Header */}
+            <div className="flex justify-between items-center mb-4 pb-4 border-b border-gray-700">
+              <div>
+                <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                  <AlertCircle className="h-6 w-6 text-amber-500" />
+                  Username Migration Tool
+                </h2>
+                <p className="text-gray-400 text-sm mt-1">
+                  Found {usersWithBadUsernames.length} user{usersWithBadUsernames.length !== 1 ? 's' : ''} with invalid usernames
+                </p>
+              </div>
+              <button 
+                onClick={() => setShowUsernameMigrationModal(false)}
+                className="text-gray-400 hover:text-white text-2xl"
+                disabled={migratingUsernames}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Migration Progress */}
+            {migratingUsernames && (
+              <div className="mb-4 p-4 bg-amber-900/20 rounded-lg border border-amber-800">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-amber-300 font-medium">Migration in progress...</span>
+                  <span className="text-amber-300">{migrationProgress}%</span>
+                </div>
+                <div className="w-full bg-gray-700 rounded-full h-2">
+                  <div 
+                    className="bg-amber-500 h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${migrationProgress}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Results Summary */}
+            {migrationResults.success > 0 || migrationResults.failed > 0 || migrationResults.skipped > 0 ? (
+              <div className="mb-4 p-4 bg-gray-800/50 rounded-lg flex gap-4">
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-green-400">{migrationResults.success}</div>
+                  <div className="text-xs text-gray-400">Fixed</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-red-400">{migrationResults.failed}</div>
+                  <div className="text-xs text-gray-400">Failed</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-gray-400">{migrationResults.skipped}</div>
+                  <div className="text-xs text-gray-400">Skipped</div>
+                </div>
+              </div>
+            ) : null}
+
+            {/* Users List */}
+            <div className="flex-1 overflow-y-auto mb-4">
+              {usersWithBadUsernames.length === 0 ? (
+                <div className="text-center py-12">
+                  <CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-4" />
+                  <p className="text-green-400 font-medium">All usernames are valid!</p>
+                  <p className="text-gray-400 text-sm mt-2">No migration needed.</p>
+                </div>
+              ) : (
+                <table className="w-full">
+                  <thead className="sticky top-0 bg-[#1d2b3a]">
+                    <tr className="border-b border-gray-700">
+                      <th className="text-left py-3 px-4 text-gray-400 text-sm font-medium">User</th>
+                      <th className="text-left py-3 px-4 text-gray-400 text-sm font-medium">Current Username</th>
+                      <th className="text-left py-3 px-4 text-gray-400 text-sm font-medium">→</th>
+                      <th className="text-left py-3 px-4 text-gray-400 text-sm font-medium">Corrected Username</th>
+                      <th className="text-left py-3 px-4 text-gray-400 text-sm font-medium">Issues</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {usersWithBadUsernames.map((user) => {
+                      const corrected = getCorrectedUsername(user.username);
+                      const hasSpaces = user.username.includes(' ');
+                      const hasSpecialChars = /[^a-zA-Z0-9_.-]/.test(user.username.replace(/ /g, ''));
+                      const hasUppercase = user.username !== user.username.toLowerCase();
+                      const tooShort = corrected.length < 3;
+                      
+                      return (
+                        <tr key={user.id} className="border-b border-gray-800 hover:bg-gray-800/30">
+                          <td className="py-3 px-4">
+                            <div>
+                              <div className="text-white font-medium">{user.displayName || 'No display name'}</div>
+                              <div className="text-gray-500 text-xs">{user.email}</div>
+                            </div>
+                          </td>
+                          <td className="py-3 px-4">
+                            <code className="bg-red-900/30 text-red-300 px-2 py-1 rounded text-sm border border-red-800">
+                              {user.username}
+                            </code>
+                          </td>
+                          <td className="py-3 px-4 text-gray-500">→</td>
+                          <td className="py-3 px-4">
+                            {tooShort ? (
+                              <span className="text-yellow-400 text-sm">⚠️ Too short after fix</span>
+                            ) : (
+                              <code className="bg-green-900/30 text-green-300 px-2 py-1 rounded text-sm border border-green-800">
+                                {corrected}
+                              </code>
+                            )}
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="flex flex-wrap gap-1">
+                              {hasSpaces && (
+                                <span className="px-2 py-0.5 bg-amber-900/30 text-amber-400 rounded text-xs">spaces</span>
+                              )}
+                              {hasSpecialChars && (
+                                <span className="px-2 py-0.5 bg-purple-900/30 text-purple-400 rounded text-xs">special chars</span>
+                              )}
+                              {hasUppercase && (
+                                <span className="px-2 py-0.5 bg-blue-900/30 text-blue-400 rounded text-xs">uppercase</span>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex justify-between items-center pt-4 border-t border-gray-700">
+              <p className="text-gray-400 text-sm">
+                This will update usernames in the database and usernames collection.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowUsernameMigrationModal(false)}
+                  className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition"
+                  disabled={migratingUsernames}
+                >
+                  Cancel
+                </button>
+                {usersWithBadUsernames.length > 0 && (
+                  <button
+                    onClick={migrateUsernames}
+                    disabled={migratingUsernames}
+                    className={`px-4 py-2 bg-amber-600 text-white rounded-lg font-medium transition flex items-center gap-2
+                      ${migratingUsernames ? 'opacity-50 cursor-not-allowed' : 'hover:bg-amber-500'}`}
+                  >
+                    {migratingUsernames ? (
+                      <>
+                        <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Migrating...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle className="h-4 w-4" />
+                        Correct {usersWithBadUsernames.length} Username{usersWithBadUsernames.length !== 1 ? 's' : ''}
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Username Diagnostics Modal */}
+      {showDiagnosticsModal && diagnosticResults && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="bg-[#1d2b3a] rounded-xl p-6 max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col border border-gray-700">
+            {/* Modal Header */}
+            <div className="flex justify-between items-center mb-4 pb-4 border-b border-gray-700">
+              <div>
+                <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                  <Search className="h-6 w-6 text-cyan-500" />
+                  Username Diagnostics Results
+                </h2>
+                <p className="text-gray-400 text-sm mt-1">
+                  Found {diagnosticResults.duplicateUsernames.length + diagnosticResults.orphanedUsernamesDocs.length + 
+                         diagnosticResults.usersWithoutUsernameDoc.length + diagnosticResults.mismatchedUserIds.length} issues
+                </p>
+              </div>
+              <button 
+                onClick={() => setShowDiagnosticsModal(false)}
+                className="text-gray-400 hover:text-white text-2xl"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Results Summary */}
+            <div className="mb-4 p-4 bg-gray-800/50 rounded-lg flex gap-6 flex-wrap">
+              <div className="text-center min-w-[100px]">
+                <div className={`text-2xl font-bold ${diagnosticResults.duplicateUsernames.length > 0 ? 'text-red-400' : 'text-green-400'}`}>
+                  {diagnosticResults.duplicateUsernames.length}
+                </div>
+                <div className="text-xs text-gray-400">Duplicate Usernames</div>
+              </div>
+              <div className="text-center min-w-[100px]">
+                <div className={`text-2xl font-bold ${diagnosticResults.mismatchedUserIds.length > 0 ? 'text-red-400' : 'text-green-400'}`}>
+                  {diagnosticResults.mismatchedUserIds.length}
+                </div>
+                <div className="text-xs text-gray-400">Mismatched IDs</div>
+              </div>
+              <div className="text-center min-w-[100px]">
+                <div className={`text-2xl font-bold ${diagnosticResults.usersWithoutUsernameDoc.length > 0 ? 'text-amber-400' : 'text-green-400'}`}>
+                  {diagnosticResults.usersWithoutUsernameDoc.length}
+                </div>
+                <div className="text-xs text-gray-400">Missing Username Docs</div>
+              </div>
+              <div className="text-center min-w-[100px]">
+                <div className={`text-2xl font-bold ${diagnosticResults.orphanedUsernamesDocs.length > 0 ? 'text-amber-400' : 'text-green-400'}`}>
+                  {diagnosticResults.orphanedUsernamesDocs.length}
+                </div>
+                <div className="text-xs text-gray-400">Orphaned Docs</div>
+              </div>
+            </div>
+
+            {/* Results Details */}
+            <div className="flex-1 overflow-y-auto space-y-6">
+              {/* Mismatched User IDs - Most Critical */}
+              {diagnosticResults.mismatchedUserIds.length > 0 && (
+                <div className="bg-red-900/20 rounded-lg p-4 border border-red-800">
+                  <h3 className="text-red-400 font-bold mb-3 flex items-center gap-2">
+                    <AlertCircle className="h-5 w-5" />
+                    Mismatched User IDs (CRITICAL)
+                  </h3>
+                  <p className="text-gray-400 text-sm mb-3">
+                    These usernames have documents pointing to different users than expected. This causes profile lookup issues!
+                  </p>
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-red-800">
+                        <th className="text-left py-2 px-2 text-gray-400">Username</th>
+                        <th className="text-left py-2 px-2 text-gray-400">Username Doc Points To</th>
+                        <th className="text-left py-2 px-2 text-gray-400">Actual User ID</th>
+                        <th className="text-left py-2 px-2 text-gray-400">Email</th>
+                        <th className="text-left py-2 px-2 text-gray-400">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {diagnosticResults.mismatchedUserIds.map((item, idx) => (
+                        <tr key={idx} className="border-b border-red-900/30">
+                          <td className="py-2 px-2">
+                            <code className="bg-red-900/30 px-2 py-0.5 rounded text-red-300">{item.username}</code>
+                          </td>
+                          <td className="py-2 px-2 text-red-400 font-mono text-xs">{item.usernameDocUserId.slice(0, 12)}...</td>
+                          <td className="py-2 px-2 text-green-400 font-mono text-xs">{item.actualUserId.slice(0, 12)}...</td>
+                          <td className="py-2 px-2 text-gray-300">{item.email}</td>
+                          <td className="py-2 px-2">
+                            <button
+                              onClick={() => repairUsernameConnection(item.actualUserId, item.username)}
+                              className="px-2 py-1 bg-green-700 text-white rounded text-xs hover:bg-green-600 transition"
+                            >
+                              Fix Connection
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Duplicate Usernames */}
+              {diagnosticResults.duplicateUsernames.length > 0 && (
+                <div className="bg-purple-900/20 rounded-lg p-4 border border-purple-800">
+                  <h3 className="text-purple-400 font-bold mb-3 flex items-center gap-2">
+                    <Users className="h-5 w-5" />
+                    Duplicate Usernames ({diagnosticResults.duplicateUsernames.length})
+                  </h3>
+                  <p className="text-gray-400 text-sm mb-3">
+                    Multiple users have the same username. Click "Keep" on the user who should keep this username. Others will get a new unique username.
+                  </p>
+                  {diagnosticResults.duplicateUsernames.map((dup, idx) => (
+                    <div key={idx} className="mb-4 p-4 bg-gray-800/50 rounded border border-purple-900/30">
+                      <div className="flex items-center justify-between mb-3">
+                        <div>
+                          <code className="text-purple-300 font-bold text-lg">{dup.username}</code>
+                          <span className="text-gray-400 ml-2">({dup.users.length} users claiming this)</span>
+                        </div>
+                        {resolvingDuplicate === dup.username && (
+                          <div className="flex items-center gap-2 text-purple-400">
+                            <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Resolving...
+                          </div>
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        {dup.users.map((u, uidx) => (
+                          <div key={uidx} className="flex items-center justify-between p-3 bg-gray-900/50 rounded-lg border border-gray-700">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono text-xs text-gray-500 bg-gray-800 px-2 py-0.5 rounded">{u.id.slice(0, 12)}...</span>
+                                <span className={`font-medium ${u.displayName ? 'text-white' : 'text-gray-500 italic'}`}>
+                                  {u.displayName || 'No display name'}
+                                </span>
+                              </div>
+                              <div className="text-gray-400 text-sm mt-1">{u.email}</div>
+                            </div>
+                            <button
+                              onClick={() => {
+                                const otherIds = dup.users.filter(other => other.id !== u.id).map(other => other.id);
+                                resolveDuplicateUsername(dup.username, u.id, otherIds);
+                              }}
+                              disabled={resolvingDuplicate !== null}
+                              className={`px-4 py-2 bg-purple-600 text-white rounded-lg font-medium transition flex items-center gap-2
+                                ${resolvingDuplicate !== null ? 'opacity-50 cursor-not-allowed' : 'hover:bg-purple-500'}`}
+                            >
+                              <CheckCircle className="h-4 w-4" />
+                              Keep This User
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-gray-500 text-xs mt-2 italic">
+                        The user you select will keep "{dup.username}". Others will be assigned "{dup.username}1", "{dup.username}2", etc.
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Users Without Username Document */}
+              {diagnosticResults.usersWithoutUsernameDoc.length > 0 && (
+                <div className="bg-amber-900/20 rounded-lg p-4 border border-amber-800">
+                  <div className="flex justify-between items-start mb-3">
+                    <div>
+                      <h3 className="text-amber-400 font-bold flex items-center gap-2">
+                        <AlertCircle className="h-5 w-5" />
+                        Users Without Username Document ({diagnosticResults.usersWithoutUsernameDoc.length})
+                      </h3>
+                      <p className="text-gray-400 text-sm mt-1">
+                        These users have usernames but no corresponding document in the usernames collection.
+                      </p>
+                    </div>
+                    <button
+                      onClick={batchFixMissingUsernameDocs}
+                      disabled={batchRepairing}
+                      className={`px-4 py-2 bg-amber-600 text-white rounded-lg font-medium transition flex items-center gap-2
+                        ${batchRepairing ? 'opacity-50 cursor-not-allowed' : 'hover:bg-amber-500'}`}
+                    >
+                      {batchRepairing ? (
+                        <>
+                          <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Fixing... {batchRepairProgress}%
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle className="h-4 w-4" />
+                          Fix All ({diagnosticResults.usersWithoutUsernameDoc.length})
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  {batchRepairing && (
+                    <div className="mb-3">
+                      <div className="w-full bg-gray-700 rounded-full h-2">
+                        <div 
+                          className="bg-amber-500 h-2 rounded-full transition-all duration-300"
+                          style={{ width: `${batchRepairProgress}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-amber-800">
+                        <th className="text-left py-2 px-2 text-gray-400">Username</th>
+                        <th className="text-left py-2 px-2 text-gray-400">User ID</th>
+                        <th className="text-left py-2 px-2 text-gray-400">Email</th>
+                        <th className="text-left py-2 px-2 text-gray-400">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {diagnosticResults.usersWithoutUsernameDoc.map((item, idx) => (
+                        <tr key={idx} className="border-b border-amber-900/30">
+                          <td className="py-2 px-2">
+                            <code className="bg-amber-900/30 px-2 py-0.5 rounded text-amber-300">{item.username}</code>
+                          </td>
+                          <td className="py-2 px-2 font-mono text-xs text-gray-400">{item.id.slice(0, 12)}...</td>
+                          <td className="py-2 px-2 text-gray-300">{item.email}</td>
+                          <td className="py-2 px-2">
+                            <button
+                              onClick={() => repairUsernameConnection(item.id, item.username)}
+                              className="px-2 py-1 bg-amber-700 text-white rounded text-xs hover:bg-amber-600 transition"
+                            >
+                              Create Doc
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Orphaned Username Documents */}
+              {diagnosticResults.orphanedUsernamesDocs.length > 0 && (
+                <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700">
+                  <h3 className="text-gray-400 font-bold mb-3 flex items-center gap-2">
+                    <Trash2 className="h-5 w-5" />
+                    Orphaned Username Documents
+                  </h3>
+                  <p className="text-gray-400 text-sm mb-3">
+                    These username documents point to user IDs that no longer exist.
+                  </p>
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-700">
+                        <th className="text-left py-2 px-2 text-gray-400">Username Doc</th>
+                        <th className="text-left py-2 px-2 text-gray-400">Points To (Non-existent)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {diagnosticResults.orphanedUsernamesDocs.map((item, idx) => (
+                        <tr key={idx} className="border-b border-gray-800">
+                          <td className="py-2 px-2">
+                            <code className="bg-gray-700 px-2 py-0.5 rounded text-gray-300">{item.username}</code>
+                          </td>
+                          <td className="py-2 px-2 font-mono text-xs text-red-400">{item.userId}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* No Issues Found */}
+              {diagnosticResults.duplicateUsernames.length === 0 && 
+               diagnosticResults.mismatchedUserIds.length === 0 &&
+               diagnosticResults.usersWithoutUsernameDoc.length === 0 &&
+               diagnosticResults.orphanedUsernamesDocs.length === 0 && (
+                <div className="text-center py-12">
+                  <CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-4" />
+                  <p className="text-green-400 font-medium">All username connections are healthy!</p>
+                  <p className="text-gray-400 text-sm mt-2">No issues found in the username system.</p>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex justify-between items-center pt-4 border-t border-gray-700 mt-4">
+              <button
+                onClick={runUsernameDiagnostics}
+                className="px-4 py-2 bg-cyan-700 text-white rounded-lg hover:bg-cyan-600 transition flex items-center gap-2"
+                disabled={runningDiagnostics}
+              >
+                <Search className="h-4 w-4" />
+                Re-run Diagnostics
+              </button>
+              <button
+                onClick={() => setShowDiagnosticsModal(false)}
+                className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition"
+              >
+                Close
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </AdminRouteGuard>

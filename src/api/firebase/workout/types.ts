@@ -720,6 +720,7 @@ export class SweatlistCollection {
   createdAt: Date;
   updatedAt: Date;
   trending?: boolean; // Add trending property
+  runRoundConfig?: RunRoundConfiguration; // Run round specific configuration
 
   constructor(data: any) {
     this.id = data.id;
@@ -751,10 +752,15 @@ export class SweatlistCollection {
     this.createdAt = convertFirestoreTimestamp(data.createdAt);
     this.updatedAt = convertFirestoreTimestamp(data.updatedAt);
     this.trending = data.trending || this.challenge?.trending || false;
+    
+    // Parse run round config if present
+    this.runRoundConfig = data.runRoundConfig 
+      ? new RunRoundConfiguration(data.runRoundConfig)
+      : undefined;
   }
 
   toDictionary(): any {
-    return {
+    const dict: any = {
       id: this.id,
       title: this.title,
       subtitle: this.subtitle,
@@ -767,11 +773,23 @@ export class SweatlistCollection {
       updatedAt: dateToUnixTimestamp(this.updatedAt),
       trending: this.trending
     };
+    
+    // Include run round config if present
+    if (this.runRoundConfig) {
+      dict.runRoundConfig = this.runRoundConfig.toDictionary();
+    }
+    
+    return dict;
   }
 
   isPublished(): boolean {
     if (!this.challenge) return false;
     return this.challenge.status === ChallengeStatus.Published;
+  }
+  
+  // Helper to check if this is a run round
+  isRunRound(): boolean {
+    return this.challenge?.challengeType === ChallengeType.Run && !!this.runRoundConfig;
   }
 }
 
@@ -1114,12 +1132,396 @@ enum ChallengeStatus {
 }
 
 // Challenge type enum to match iOS version
-enum ChallengeType {
-  Workout = 'workout',      // Existing workout-based challenges
-  Steps = 'steps',          // New step-based challenges
-  Calories = 'calories',    // Future calorie-based challenges
-  Hybrid = 'hybrid'         // Combination of workouts + steps/calories
+export enum ChallengeType {
+  Lift = 'lift',            // Weight training, strength workouts
+  Run = 'run',              // Running, cardio
+  Burn = 'burn',            // Fat burn, HIIT
+  Stretch = 'stretch',      // Flexibility, yoga, recovery
+  Hybrid = 'hybrid'         // Mixed cardio + strength
 }
+
+// Parse ChallengeType from raw string with backward compatibility
+export function parseChallengeType(rawValue: string | undefined | null): ChallengeType {
+  if (!rawValue) return ChallengeType.Lift;
+  
+  switch (rawValue) {
+    // New values
+    case 'lift':
+      return ChallengeType.Lift;
+    case 'run':
+      return ChallengeType.Run;
+    case 'burn':
+      return ChallengeType.Burn;
+    case 'stretch':
+      return ChallengeType.Stretch;
+    case 'hybrid':
+      return ChallengeType.Hybrid;
+    // Legacy values - map to appropriate new types
+    case 'workout':
+    case 'steps':
+    case 'calories':
+      return ChallengeType.Lift;
+    default:
+      return ChallengeType.Lift;
+  }
+}
+
+// Round type enum for UI selection (determines creation flow)
+export enum RoundType {
+  Lift = 'lift',
+  Run = 'run',
+  Stretch = 'stretch',
+  FatBurn = 'fatBurn'
+}
+
+export const RoundTypeInfo: Record<RoundType, {
+  displayName: string;
+  description: string;
+  icon: string;
+  color: string;
+  isAvailable: boolean;
+}> = {
+  [RoundType.Lift]: {
+    displayName: 'Lift',
+    description: 'Build strength with weight training rounds',
+    icon: 'dumbbell',
+    color: '#22C55E', // Green
+    isAvailable: true
+  },
+  [RoundType.Run]: {
+    displayName: 'Run',
+    description: 'Create run challenges for your club',
+    icon: 'running',
+    color: '#3B82F6', // Blue
+    isAvailable: true
+  },
+  [RoundType.Stretch]: {
+    displayName: 'Stretch',
+    description: 'Mobility and flexibility focused rounds',
+    icon: 'yoga',
+    color: '#A855F7', // Purple
+    isAvailable: true
+  },
+  [RoundType.FatBurn]: {
+    displayName: 'Fat Burn',
+    description: 'High intensity cardio rounds',
+    icon: 'flame',
+    color: '#F97316', // Orange
+    isAvailable: false // Coming soon
+  }
+};
+
+// ============================================
+// RUN ROUND TYPES AND CONFIGURATION
+// ============================================
+
+// Defines the type of Run Round challenge
+export enum RunRoundType {
+  DistanceChallenge = 'distanceChallenge',
+  VirtualRace = 'virtualRace',
+  StreakChallenge = 'streakChallenge',
+  IntervalProgram = 'intervalProgram',
+  PaceImprovement = 'paceImprovement',
+  TrainingProgram = 'trainingProgram',
+  Freeform = 'freeform'
+}
+
+export const RunRoundTypeInfo: Record<RunRoundType, {
+  displayName: string;
+  description: string;
+  icon: string;
+  colors: string[];
+  isAvailable: boolean;
+}> = {
+  [RunRoundType.DistanceChallenge]: {
+    displayName: 'Distance Challenge',
+    description: 'Compete for most miles',
+    icon: 'map',
+    colors: ['#22C55E', '#16A34A'],
+    isAvailable: true
+  },
+  [RunRoundType.VirtualRace]: {
+    displayName: 'Virtual Race',
+    description: 'Race the same distance, compare times',
+    icon: 'flag',
+    colors: ['#3B82F6', '#2563EB'],
+    isAvailable: true
+  },
+  [RunRoundType.StreakChallenge]: {
+    displayName: 'Streak Challenge',
+    description: 'Run every day, build your streak',
+    icon: 'flame',
+    colors: ['#F97316', '#EA580C'],
+    isAvailable: true
+  },
+  [RunRoundType.IntervalProgram]: {
+    displayName: 'Interval Program',
+    description: 'Follow structured interval workouts',
+    icon: 'repeat',
+    colors: ['#A855F7', '#9333EA'],
+    isAvailable: false
+  },
+  [RunRoundType.PaceImprovement]: {
+    displayName: 'Pace Improvement',
+    description: 'Improve your pace over time',
+    icon: 'gauge',
+    colors: ['#06B6D4', '#0891B2'],
+    isAvailable: false
+  },
+  [RunRoundType.TrainingProgram]: {
+    displayName: 'Training Program',
+    description: 'Complete a guided training plan',
+    icon: 'calendar',
+    colors: ['#EAB308', '#CA8A04'],
+    isAvailable: false
+  },
+  [RunRoundType.Freeform]: {
+    displayName: 'Freeform',
+    description: 'Any run counts, compete on points',
+    icon: 'running',
+    colors: ['#6B7280', '#4B5563'],
+    isAvailable: false
+  }
+};
+
+// Defines how participants are ranked in a Run Round
+export enum RunLeaderboardMetric {
+  TotalDistance = 'totalDistance',
+  TotalTime = 'totalTime',
+  FastestTime = 'fastestTime',
+  AveragePace = 'averagePace',
+  PaceImprovement = 'paceImprovement',
+  StreakDays = 'streakDays',
+  RunsCompleted = 'runsCompleted',
+  PulsePoints = 'pulsePoints'
+}
+
+export const RunLeaderboardMetricInfo: Record<RunLeaderboardMetric, {
+  displayName: string;
+  description: string;
+  icon: string;
+  unitLabel: string;
+  lowerIsBetter: boolean;
+}> = {
+  [RunLeaderboardMetric.TotalDistance]: {
+    displayName: 'Total Distance',
+    description: 'Most miles wins',
+    icon: 'ruler',
+    unitLabel: 'mi',
+    lowerIsBetter: false
+  },
+  [RunLeaderboardMetric.TotalTime]: {
+    displayName: 'Total Time',
+    description: 'Most time running wins',
+    icon: 'clock',
+    unitLabel: 'min',
+    lowerIsBetter: false
+  },
+  [RunLeaderboardMetric.FastestTime]: {
+    displayName: 'Fastest Time',
+    description: 'Fastest completion wins',
+    icon: 'timer',
+    unitLabel: '',
+    lowerIsBetter: true
+  },
+  [RunLeaderboardMetric.AveragePace]: {
+    displayName: 'Average Pace',
+    description: 'Best average pace wins',
+    icon: 'speedometer',
+    unitLabel: '/mi',
+    lowerIsBetter: true
+  },
+  [RunLeaderboardMetric.PaceImprovement]: {
+    displayName: 'Pace Improvement',
+    description: 'Greatest improvement wins',
+    icon: 'trending-up',
+    unitLabel: '%',
+    lowerIsBetter: false
+  },
+  [RunLeaderboardMetric.StreakDays]: {
+    displayName: 'Streak Days',
+    description: 'Longest streak wins',
+    icon: 'flame',
+    unitLabel: 'days',
+    lowerIsBetter: false
+  },
+  [RunLeaderboardMetric.RunsCompleted]: {
+    displayName: 'Runs Completed',
+    description: 'Most runs completed wins',
+    icon: 'check-circle',
+    unitLabel: 'runs',
+    lowerIsBetter: false
+  },
+  [RunLeaderboardMetric.PulsePoints]: {
+    displayName: 'Pulse Points',
+    description: 'Most points wins',
+    icon: 'star',
+    unitLabel: 'pts',
+    lowerIsBetter: false
+  }
+};
+
+// Get default leaderboard metric for a run round type
+export function getDefaultLeaderboardMetric(roundType: RunRoundType): RunLeaderboardMetric {
+  switch (roundType) {
+    case RunRoundType.DistanceChallenge:
+      return RunLeaderboardMetric.TotalDistance;
+    case RunRoundType.VirtualRace:
+      return RunLeaderboardMetric.FastestTime;
+    case RunRoundType.StreakChallenge:
+      return RunLeaderboardMetric.StreakDays;
+    case RunRoundType.IntervalProgram:
+      return RunLeaderboardMetric.RunsCompleted;
+    case RunRoundType.PaceImprovement:
+      return RunLeaderboardMetric.PaceImprovement;
+    case RunRoundType.TrainingProgram:
+      return RunLeaderboardMetric.RunsCompleted;
+    case RunRoundType.Freeform:
+      return RunLeaderboardMetric.PulsePoints;
+    default:
+      return RunLeaderboardMetric.PulsePoints;
+  }
+}
+
+// Preset distances for Virtual Race rounds
+export enum RaceDistancePreset {
+  OneMile = 'oneMile',
+  FiveK = 'fiveK',
+  TenK = 'tenK',
+  HalfMarathon = 'halfMarathon',
+  Marathon = 'marathon',
+  Custom = 'custom'
+}
+
+export const RaceDistancePresetInfo: Record<RaceDistancePreset, {
+  displayName: string;
+  distanceInMiles: number | null;
+}> = {
+  [RaceDistancePreset.OneMile]: { displayName: '1 Mile', distanceInMiles: 1.0 },
+  [RaceDistancePreset.FiveK]: { displayName: '5K', distanceInMiles: 3.1 },
+  [RaceDistancePreset.TenK]: { displayName: '10K', distanceInMiles: 6.2 },
+  [RaceDistancePreset.HalfMarathon]: { displayName: 'Half Marathon', distanceInMiles: 13.1 },
+  [RaceDistancePreset.Marathon]: { displayName: 'Marathon', distanceInMiles: 26.2 },
+  [RaceDistancePreset.Custom]: { displayName: 'Custom', distanceInMiles: null }
+};
+
+// Complete configuration for a Run Round
+export class RunRoundConfiguration {
+  roundType: RunRoundType;
+  leaderboardMetric: RunLeaderboardMetric;
+  minimumRunDistance?: number;      // Min miles to count (e.g., 0.5)
+  minimumRunDuration?: number;      // Min seconds to count (e.g., 600 = 10 min)
+  targetGoal?: number;              // Group or individual target (miles)
+  allowTreadmill: boolean;          // Include treadmill runs?
+  
+  // Virtual Race specific
+  raceDistancePreset?: RaceDistancePreset;
+  customRaceDistance?: number;      // If preset is custom (miles)
+  
+  // Streak Challenge specific
+  minimumRunForStreak?: number;     // Min distance to count for streak
+
+  constructor(data: any = {}) {
+    this.roundType = data.roundType || RunRoundType.Freeform;
+    this.leaderboardMetric = data.leaderboardMetric || getDefaultLeaderboardMetric(this.roundType);
+    this.minimumRunDistance = data.minimumRunDistance;
+    this.minimumRunDuration = data.minimumRunDuration;
+    this.targetGoal = data.targetGoal;
+    this.allowTreadmill = data.allowTreadmill ?? true;
+    this.raceDistancePreset = data.raceDistancePreset;
+    this.customRaceDistance = data.customRaceDistance;
+    this.minimumRunForStreak = data.minimumRunForStreak;
+  }
+
+  // Actual race distance in miles (for Virtual Race)
+  get raceDistanceMiles(): number | null {
+    if (this.raceDistancePreset) {
+      return RaceDistancePresetInfo[this.raceDistancePreset].distanceInMiles ?? this.customRaceDistance ?? null;
+    }
+    return null;
+  }
+
+  toDictionary(): { [key: string]: any } {
+    const dict: { [key: string]: any } = {
+      roundType: this.roundType,
+      leaderboardMetric: this.leaderboardMetric,
+      allowTreadmill: this.allowTreadmill
+    };
+
+    if (this.minimumRunDistance !== undefined) dict.minimumRunDistance = this.minimumRunDistance;
+    if (this.minimumRunDuration !== undefined) dict.minimumRunDuration = this.minimumRunDuration;
+    if (this.targetGoal !== undefined) dict.targetGoal = this.targetGoal;
+    if (this.raceDistancePreset) dict.raceDistancePreset = this.raceDistancePreset;
+    if (this.customRaceDistance !== undefined) dict.customRaceDistance = this.customRaceDistance;
+    if (this.minimumRunForStreak !== undefined) dict.minimumRunForStreak = this.minimumRunForStreak;
+
+    return dict;
+  }
+
+  // Static factory methods for common configurations
+  static distanceChallenge(options: { targetGoal?: number; allowTreadmill?: boolean } = {}): RunRoundConfiguration {
+    return new RunRoundConfiguration({
+      roundType: RunRoundType.DistanceChallenge,
+      leaderboardMetric: RunLeaderboardMetric.TotalDistance,
+      minimumRunDistance: 0.5,
+      targetGoal: options.targetGoal,
+      allowTreadmill: options.allowTreadmill ?? true
+    });
+  }
+
+  static streakChallenge(options: { minimumRunForStreak?: number; allowTreadmill?: boolean } = {}): RunRoundConfiguration {
+    const minDistance = options.minimumRunForStreak ?? 1.0;
+    return new RunRoundConfiguration({
+      roundType: RunRoundType.StreakChallenge,
+      leaderboardMetric: RunLeaderboardMetric.StreakDays,
+      minimumRunDistance: minDistance,
+      minimumRunForStreak: minDistance,
+      allowTreadmill: options.allowTreadmill ?? true
+    });
+  }
+
+  static virtualRace(options: { 
+    raceDistancePreset: RaceDistancePreset; 
+    customRaceDistance?: number;
+    allowTreadmill?: boolean 
+  }): RunRoundConfiguration {
+    return new RunRoundConfiguration({
+      roundType: RunRoundType.VirtualRace,
+      leaderboardMetric: RunLeaderboardMetric.FastestTime,
+      raceDistancePreset: options.raceDistancePreset,
+      customRaceDistance: options.customRaceDistance,
+      allowTreadmill: options.allowTreadmill ?? false // GPS required for accuracy
+    });
+  }
+
+  static freeform(options: { allowTreadmill?: boolean } = {}): RunRoundConfiguration {
+    return new RunRoundConfiguration({
+      roundType: RunRoundType.Freeform,
+      leaderboardMetric: RunLeaderboardMetric.PulsePoints,
+      allowTreadmill: options.allowTreadmill ?? true
+    });
+  }
+}
+
+// Run Round Scoring Constants
+export const RunRoundScoringConstants = {
+  // Base completion points
+  baseCompletion: 100,
+  firstCompletionBonus: 50,
+  firstRunOfDayBonus: 25,
+  
+  // Performance points
+  distanceBonusPerMile: 10,
+  goalAchievedBonus: 75,
+  streakBonusPerDay: 25,
+  pacePersonalRecordBonus: 50,
+  
+  // Engagement points
+  checkInBonus: 25,
+  shareBonus: 25,
+  effortRatingBonus: 10,
+  invitationBonus: 25
+};
 export interface IntroVideo {
   id: string;
   userId: string;
@@ -1261,7 +1663,8 @@ class Challenge {
     this.pricingInfo = new PricingInfo(data.pricingInfo);
     
     // Initialize new challenge type and step-related properties
-    this.challengeType = data.challengeType || ChallengeType.Workout; // Default to workout for backward compatibility
+    // Handle backward compatibility: old values (workout, steps, calories) map to new values
+    this.challengeType = parseChallengeType(data.challengeType);
     this.dailyStepGoal = data.dailyStepGoal || 10000; // Default daily step goal
     this.totalStepGoal = data.totalStepGoal || 0; // Default total step goal
     this.allowedMissedDays = data.allowedMissedDays || 0; // Default allowed missed days
@@ -1484,7 +1887,7 @@ export type {
   ChallengeInvitationProps
 };
 
-export { ChallengeStatus, ChallengeType, Challenge, UserChallenge };
+export { ChallengeStatus, Challenge, UserChallenge };
 
 // MARK: - Prize Money Configuration
 
@@ -1671,4 +2074,666 @@ export interface WeeklyWorkoutData {
    */
   weekLabel?: string;
 }
+// ----------------------------------------------------------------------
+
+// =====================================================================
+// CONTENT CATEGORY TYPES (Run, Fat Burn, Stretch)
+// Matching iOS implementations for cross-platform consistency
+// =====================================================================
+
+// MARK: - Calorie Data Source
+export enum CalorieDataSource {
+  Algorithm = 'algorithm',
+  AppleWatch = 'appleWatch',
+  Manual = 'manual'
+}
+
+// MARK: - Run Types
+export enum RunType {
+  FreeRun = 'Free Run',
+  Distance = 'Distance Goal',
+  Time = 'Time Goal',
+  Intervals = 'Intervals'
+}
+
+export enum RunLocation {
+  Outdoor = 'Outdoor',
+  Treadmill = 'Treadmill'
+}
+
+export enum TreadmillMode {
+  Run = 'Run',
+  Walk = 'Walk'
+}
+
+export enum DistancePreset {
+  OneMile = '1 Mile',
+  ThreeMiles = '3 Miles',
+  FiveK = '5K',
+  TenK = '10K',
+  HalfMarathon = 'Half Marathon',
+  Custom = 'Custom'
+}
+
+export enum TimePreset {
+  FifteenMin = '15 min',
+  TwentyMin = '20 min',
+  ThirtyMin = '30 min',
+  FortyFiveMin = '45 min',
+  SixtyMin = '60 min',
+  Custom = 'Custom'
+}
+
+// Distance preset to miles mapping
+export const DistancePresetMiles: Record<DistancePreset, number | null> = {
+  [DistancePreset.OneMile]: 1.0,
+  [DistancePreset.ThreeMiles]: 3.0,
+  [DistancePreset.FiveK]: 3.1,
+  [DistancePreset.TenK]: 6.2,
+  [DistancePreset.HalfMarathon]: 13.1,
+  [DistancePreset.Custom]: null
+};
+
+// Time preset to seconds mapping
+export const TimePresetSeconds: Record<TimePreset, number | null> = {
+  [TimePreset.FifteenMin]: 15 * 60,
+  [TimePreset.TwentyMin]: 20 * 60,
+  [TimePreset.ThirtyMin]: 30 * 60,
+  [TimePreset.FortyFiveMin]: 45 * 60,
+  [TimePreset.SixtyMin]: 60 * 60,
+  [TimePreset.Custom]: null
+};
+
+// MARK: - Interval Configuration
+export interface IntervalConfiguration {
+  runDurationSeconds: number;
+  walkDurationSeconds: number;
+  numberOfRounds: number;
+}
+
+export const IntervalConfigurationPresets = {
+  beginner: { runDurationSeconds: 60, walkDurationSeconds: 60, numberOfRounds: 6 },
+  intermediate: { runDurationSeconds: 120, walkDurationSeconds: 30, numberOfRounds: 8 },
+  advanced: { runDurationSeconds: 180, walkDurationSeconds: 30, numberOfRounds: 10 }
+};
+
+// MARK: - Run Configuration
+export interface RunConfiguration {
+  runType: RunType;
+  location: RunLocation;
+  treadmillMode?: TreadmillMode;
+  distancePreset?: DistancePreset;
+  customDistanceMiles?: number;
+  timePreset?: TimePreset;
+  customDurationSeconds?: number;
+  intervalConfig?: IntervalConfiguration;
+}
+
+// MARK: - Route Coordinate
+export interface RouteCoordinate {
+  latitude: number;
+  longitude: number;
+  timestamp: Date;
+  altitude?: number;
+}
+
+// MARK: - Run Summary
+export class RunSummary {
+  id: string;
+  userId: string;
+  runType: RunType;
+  location: RunLocation;
+  title: string;
+  distance: number; // miles
+  duration: number; // seconds
+  averagePace: number; // minutes per mile
+  caloriesBurned: number;
+  calorieSource?: CalorieDataSource;
+  routeCoordinates?: RouteCoordinate[];
+  treadmillPhotoURL?: string;
+  targetDistance?: number;
+  targetDuration?: number;
+  intervalConfig?: IntervalConfiguration;
+  completedIntervals?: number;
+  startTime: Date;
+  completedAt?: Date;
+  createdAt: Date;
+  updatedAt: Date;
+  pulsePoints: PulsePoints;
+  workoutRating?: WorkoutRating;
+  aiInsight: string;
+  recommendations: string[];
+  isCompleted: boolean;
+  roundId?: string;
+  roundDayIndex?: number;
+  roundPulsePoints?: number;
+
+  constructor(data: any) {
+    this.id = data.id || '';
+    this.userId = data.userId || '';
+    this.runType = data.runType || RunType.FreeRun;
+    this.location = data.location || RunLocation.Outdoor;
+    this.title = data.title || 'Run';
+    this.distance = data.distance || 0;
+    this.duration = data.duration || 0;
+    this.averagePace = data.averagePace || 0;
+    this.caloriesBurned = data.caloriesBurned || 0;
+    this.calorieSource = data.calorieSource;
+    this.routeCoordinates = data.routeCoordinates;
+    this.treadmillPhotoURL = data.treadmillPhotoURL;
+    this.targetDistance = data.targetDistance;
+    this.targetDuration = data.targetDuration;
+    this.intervalConfig = data.intervalConfig;
+    this.completedIntervals = data.completedIntervals;
+    this.startTime = convertFirestoreTimestamp(data.startTime);
+    this.completedAt = data.completedAt ? convertFirestoreTimestamp(data.completedAt) : undefined;
+    this.createdAt = convertFirestoreTimestamp(data.createdAt);
+    this.updatedAt = convertFirestoreTimestamp(data.updatedAt);
+    this.pulsePoints = data.pulsePoints ? new PulsePoints(data.pulsePoints) : new PulsePoints({});
+    this.workoutRating = data.workoutRating;
+    this.aiInsight = data.aiInsight || '';
+    this.recommendations = data.recommendations || [];
+    this.isCompleted = data.isCompleted || false;
+    this.roundId = data.roundId;
+    this.roundDayIndex = data.roundDayIndex;
+    this.roundPulsePoints = data.roundPulsePoints;
+  }
+
+  // Computed properties
+  get goalAchieved(): boolean {
+    switch (this.runType) {
+      case RunType.FreeRun:
+        return true;
+      case RunType.Distance:
+        return this.targetDistance ? this.distance >= this.targetDistance : false;
+      case RunType.Time:
+        return this.targetDuration ? this.duration >= this.targetDuration : false;
+      case RunType.Intervals:
+        return this.intervalConfig && this.completedIntervals 
+          ? this.completedIntervals >= this.intervalConfig.numberOfRounds 
+          : false;
+      default:
+        return false;
+    }
+  }
+
+  get formattedPace(): string {
+    const minutes = Math.floor(this.averagePace);
+    const seconds = Math.round((this.averagePace - minutes) * 60);
+    return `${minutes}:${seconds.toString().padStart(2, '0')} /mi`;
+  }
+
+  get formattedDuration(): string {
+    const hours = Math.floor(this.duration / 3600);
+    const minutes = Math.floor((this.duration % 3600) / 60);
+    const seconds = this.duration % 60;
+    
+    if (hours > 0) {
+      return seconds > 0 
+        ? `${hours}h ${minutes}m ${seconds}s`
+        : `${hours}h ${minutes}m`;
+    }
+    return `${minutes}m ${seconds.toString().padStart(2, '0')}s`;
+  }
+
+  get formattedDistance(): string {
+    return `${this.distance.toFixed(1)} mi`;
+  }
+
+  toDictionary(): Record<string, any> {
+    const dict: Record<string, any> = {
+      id: this.id,
+      userId: this.userId,
+      runType: this.runType,
+      location: this.location,
+      title: this.title,
+      distance: this.distance,
+      duration: this.duration,
+      averagePace: this.averagePace,
+      caloriesBurned: this.caloriesBurned,
+      startTime: dateToUnixTimestamp(this.startTime),
+      createdAt: dateToUnixTimestamp(this.createdAt),
+      updatedAt: dateToUnixTimestamp(this.updatedAt),
+      aiInsight: this.aiInsight,
+      recommendations: this.recommendations,
+      isCompleted: this.isCompleted,
+      pulsePoints: this.pulsePoints.toDictionary()
+    };
+
+    if (this.calorieSource) dict.calorieSource = this.calorieSource;
+    if (this.routeCoordinates) dict.routeCoordinates = this.routeCoordinates;
+    if (this.treadmillPhotoURL) dict.treadmillPhotoURL = this.treadmillPhotoURL;
+    if (this.targetDistance) dict.targetDistance = this.targetDistance;
+    if (this.targetDuration) dict.targetDuration = this.targetDuration;
+    if (this.intervalConfig) dict.intervalConfig = this.intervalConfig;
+    if (this.completedIntervals) dict.completedIntervals = this.completedIntervals;
+    if (this.completedAt) dict.completedAt = dateToUnixTimestamp(this.completedAt);
+    if (this.workoutRating) dict.workoutRating = this.workoutRating;
+    if (this.roundId) dict.roundId = this.roundId;
+    if (this.roundDayIndex) dict.roundDayIndex = this.roundDayIndex;
+    if (this.roundPulsePoints) dict.roundPulsePoints = this.roundPulsePoints;
+
+    return dict;
+  }
+}
+
+// MARK: - Fat Burn Types
+export enum FatBurnEquipment {
+  Stairmaster = 'Stairmaster',
+  Elliptical = 'Elliptical',
+  Treadmill = 'Treadmill',
+  StationaryBike = 'Stationary Bike'
+}
+
+export enum FatBurnGoalType {
+  FreeSession = 'Free Session',
+  TimeGoal = 'Time Goal',
+  DistanceGoal = 'Distance Goal',
+  FloorsGoal = 'Floors Goal'
+}
+
+export enum FatBurnTimePreset {
+  TenMin = '10 min',
+  FifteenMin = '15 min',
+  TwentyMin = '20 min',
+  ThirtyMin = '30 min',
+  FortyFiveMin = '45 min',
+  SixtyMin = '60 min',
+  Custom = 'Custom'
+}
+
+export enum FatBurnDistancePreset {
+  OneMile = '1 Mile',
+  TwoMiles = '2 Miles',
+  ThreeMiles = '3 Miles',
+  FiveMiles = '5 Miles',
+  Custom = 'Custom'
+}
+
+export enum FatBurnFloorsPreset {
+  TenFloors = '10 Floors',
+  TwentyFloors = '20 Floors',
+  ThirtyFloors = '30 Floors',
+  FiftyFloors = '50 Floors',
+  HundredFloors = '100 Floors',
+  Custom = 'Custom'
+}
+
+// Fat Burn Time Preset to seconds mapping
+export const FatBurnTimePresetSeconds: Record<FatBurnTimePreset, number | null> = {
+  [FatBurnTimePreset.TenMin]: 10 * 60,
+  [FatBurnTimePreset.FifteenMin]: 15 * 60,
+  [FatBurnTimePreset.TwentyMin]: 20 * 60,
+  [FatBurnTimePreset.ThirtyMin]: 30 * 60,
+  [FatBurnTimePreset.FortyFiveMin]: 45 * 60,
+  [FatBurnTimePreset.SixtyMin]: 60 * 60,
+  [FatBurnTimePreset.Custom]: null
+};
+
+// Fat Burn Distance Preset to miles mapping
+export const FatBurnDistancePresetMiles: Record<FatBurnDistancePreset, number | null> = {
+  [FatBurnDistancePreset.OneMile]: 1.0,
+  [FatBurnDistancePreset.TwoMiles]: 2.0,
+  [FatBurnDistancePreset.ThreeMiles]: 3.0,
+  [FatBurnDistancePreset.FiveMiles]: 5.0,
+  [FatBurnDistancePreset.Custom]: null
+};
+
+// Fat Burn Floors Preset to count mapping
+export const FatBurnFloorsPresetCount: Record<FatBurnFloorsPreset, number | null> = {
+  [FatBurnFloorsPreset.TenFloors]: 10,
+  [FatBurnFloorsPreset.TwentyFloors]: 20,
+  [FatBurnFloorsPreset.ThirtyFloors]: 30,
+  [FatBurnFloorsPreset.FiftyFloors]: 50,
+  [FatBurnFloorsPreset.HundredFloors]: 100,
+  [FatBurnFloorsPreset.Custom]: null
+};
+
+// Equipment info with icons and colors
+export const FatBurnEquipmentInfo: Record<FatBurnEquipment, { icon: string; description: string; color: string }> = {
+  [FatBurnEquipment.Stairmaster]: { 
+    icon: 'stairs', 
+    description: 'Powerful lower body cardio',
+    color: '#EF4444' // Red
+  },
+  [FatBurnEquipment.Elliptical]: { 
+    icon: 'accessibility', 
+    description: 'Low-impact full body cardio',
+    color: '#F97316' // Orange
+  },
+  [FatBurnEquipment.Treadmill]: { 
+    icon: 'directions_run', 
+    description: 'Indoor running or walking',
+    color: '#F59E0B' // Amber
+  },
+  [FatBurnEquipment.StationaryBike]: { 
+    icon: 'pedal_bike', 
+    description: 'Seated cardio cycling',
+    color: '#FBBF24' // Yellow
+  }
+};
+
+// MARK: - Fat Burn Configuration
+export interface FatBurnConfiguration {
+  equipment: FatBurnEquipment;
+  treadmillMode?: TreadmillMode;
+  goalType: FatBurnGoalType;
+  timePreset?: FatBurnTimePreset;
+  customDurationSeconds?: number;
+  distancePreset?: FatBurnDistancePreset;
+  customDistanceMiles?: number;
+  floorsPreset?: FatBurnFloorsPreset;
+  customFloors?: number;
+}
+
+// MARK: - Fat Burn Summary
+export class FatBurnSummary {
+  id: string;
+  userId: string;
+  equipment: FatBurnEquipment;
+  goalType: FatBurnGoalType;
+  title: string;
+  machineLevel?: number;
+  duration: number; // seconds
+  caloriesBurned: number;
+  calorieSource?: CalorieDataSource;
+  distance?: number; // miles
+  averagePace?: number; // minutes per mile
+  averageSpeed?: number; // mph
+  floorsClimbed?: number;
+  totalSteps?: number;
+  stepsPerMinute?: number;
+  totalStrides?: number;
+  machinePhotoURL?: string;
+  targetDuration?: number;
+  targetDistance?: number;
+  targetFloors?: number;
+  startTime: Date;
+  completedAt?: Date;
+  createdAt: Date;
+  updatedAt: Date;
+  pulsePoints: PulsePoints;
+  workoutRating?: WorkoutRating;
+  aiInsight: string;
+  recommendations: string[];
+  isCompleted: boolean;
+  syncedToHealthKit: boolean;
+
+  constructor(data: any) {
+    this.id = data.id || '';
+    this.userId = data.userId || '';
+    this.equipment = data.equipment || FatBurnEquipment.Stairmaster;
+    this.goalType = data.goalType || FatBurnGoalType.FreeSession;
+    this.title = data.title || 'Fat Burn Session';
+    this.machineLevel = data.machineLevel;
+    this.duration = data.duration || 0;
+    this.caloriesBurned = data.caloriesBurned || 0;
+    this.calorieSource = data.calorieSource;
+    this.distance = data.distance;
+    this.averagePace = data.averagePace;
+    this.averageSpeed = data.averageSpeed;
+    this.floorsClimbed = data.floorsClimbed;
+    this.totalSteps = data.totalSteps;
+    this.stepsPerMinute = data.stepsPerMinute;
+    this.totalStrides = data.totalStrides;
+    this.machinePhotoURL = data.machinePhotoURL;
+    this.targetDuration = data.targetDuration;
+    this.targetDistance = data.targetDistance;
+    this.targetFloors = data.targetFloors;
+    this.startTime = convertFirestoreTimestamp(data.startTime);
+    this.completedAt = data.completedAt ? convertFirestoreTimestamp(data.completedAt) : undefined;
+    this.createdAt = convertFirestoreTimestamp(data.createdAt);
+    this.updatedAt = convertFirestoreTimestamp(data.updatedAt);
+    this.pulsePoints = data.pulsePoints ? new PulsePoints(data.pulsePoints) : new PulsePoints({});
+    this.workoutRating = data.workoutRating;
+    this.aiInsight = data.aiInsight || '';
+    this.recommendations = data.recommendations || [];
+    this.isCompleted = data.isCompleted || false;
+    this.syncedToHealthKit = data.syncedToHealthKit || false;
+  }
+
+  // Computed properties
+  get goalAchieved(): boolean {
+    switch (this.goalType) {
+      case FatBurnGoalType.FreeSession:
+        return true;
+      case FatBurnGoalType.TimeGoal:
+        return this.targetDuration ? this.duration >= this.targetDuration : false;
+      case FatBurnGoalType.DistanceGoal:
+        return this.targetDistance && this.distance ? this.distance >= this.targetDistance : false;
+      case FatBurnGoalType.FloorsGoal:
+        return this.targetFloors && this.floorsClimbed ? this.floorsClimbed >= this.targetFloors : false;
+      default:
+        return false;
+    }
+  }
+
+  get formattedDuration(): string {
+    const hours = Math.floor(this.duration / 3600);
+    const minutes = Math.floor((this.duration % 3600) / 60);
+    const seconds = this.duration % 60;
+    
+    if (hours > 0) {
+      return seconds > 0 
+        ? `${hours}h ${minutes}m ${seconds}s`
+        : `${hours}h ${minutes}m`;
+    }
+    return `${minutes}m ${seconds.toString().padStart(2, '0')}s`;
+  }
+
+  get formattedDistance(): string | undefined {
+    return this.distance ? `${this.distance.toFixed(1)} mi` : undefined;
+  }
+
+  get formattedPace(): string | undefined {
+    if (!this.averagePace) return undefined;
+    const minutes = Math.floor(this.averagePace);
+    const seconds = Math.round((this.averagePace - minutes) * 60);
+    return `${minutes}:${seconds.toString().padStart(2, '0')} /mi`;
+  }
+
+  get formattedSpeed(): string | undefined {
+    return this.averageSpeed ? `${this.averageSpeed.toFixed(1)} mph` : undefined;
+  }
+
+  get formattedFloors(): string | undefined {
+    return this.floorsClimbed ? `${this.floorsClimbed} floors` : undefined;
+  }
+
+  toDictionary(): Record<string, any> {
+    const dict: Record<string, any> = {
+      id: this.id,
+      userId: this.userId,
+      equipment: this.equipment,
+      goalType: this.goalType,
+      title: this.title,
+      duration: this.duration,
+      caloriesBurned: this.caloriesBurned,
+      startTime: dateToUnixTimestamp(this.startTime),
+      createdAt: dateToUnixTimestamp(this.createdAt),
+      updatedAt: dateToUnixTimestamp(this.updatedAt),
+      aiInsight: this.aiInsight,
+      recommendations: this.recommendations,
+      isCompleted: this.isCompleted,
+      syncedToHealthKit: this.syncedToHealthKit,
+      pulsePoints: this.pulsePoints.toDictionary()
+    };
+
+    if (this.machineLevel !== undefined) dict.machineLevel = this.machineLevel;
+    if (this.calorieSource) dict.calorieSource = this.calorieSource;
+    if (this.distance !== undefined) dict.distance = this.distance;
+    if (this.averagePace !== undefined) dict.averagePace = this.averagePace;
+    if (this.averageSpeed !== undefined) dict.averageSpeed = this.averageSpeed;
+    if (this.floorsClimbed !== undefined) dict.floorsClimbed = this.floorsClimbed;
+    if (this.totalSteps !== undefined) dict.totalSteps = this.totalSteps;
+    if (this.stepsPerMinute !== undefined) dict.stepsPerMinute = this.stepsPerMinute;
+    if (this.totalStrides !== undefined) dict.totalStrides = this.totalStrides;
+    if (this.machinePhotoURL) dict.machinePhotoURL = this.machinePhotoURL;
+    if (this.targetDuration !== undefined) dict.targetDuration = this.targetDuration;
+    if (this.targetDistance !== undefined) dict.targetDistance = this.targetDistance;
+    if (this.targetFloors !== undefined) dict.targetFloors = this.targetFloors;
+    if (this.completedAt) dict.completedAt = dateToUnixTimestamp(this.completedAt);
+    if (this.workoutRating) dict.workoutRating = this.workoutRating;
+
+    return dict;
+  }
+}
+
+// MARK: - Stretch Types
+export enum StretchBodyArea {
+  Neck = 'Neck',
+  Shoulders = 'Shoulders',
+  Arms = 'Arms',
+  Chest = 'Chest',
+  UpperBack = 'Upper Back',
+  LowerBack = 'Lower Back',
+  Hips = 'Hips',
+  Legs = 'Legs',
+  FullBody = 'Full Body'
+}
+
+export enum StretchDurationPreset {
+  FiveMin = 5,
+  TenMin = 10,
+  FifteenMin = 15,
+  TwentyMin = 20,
+  ThirtyMin = 30
+}
+
+// Stretch body area info with icons
+export const StretchBodyAreaInfo: Record<StretchBodyArea, { icon: string; bodyParts: string[] }> = {
+  [StretchBodyArea.Neck]: { icon: 'accessibility', bodyParts: ['neck'] },
+  [StretchBodyArea.Shoulders]: { icon: 'fitness_center', bodyParts: ['shoulders', 'deltoids'] },
+  [StretchBodyArea.Arms]: { icon: 'front_hand', bodyParts: ['biceps', 'triceps', 'forearms'] },
+  [StretchBodyArea.Chest]: { icon: 'accessibility', bodyParts: ['chest'] },
+  [StretchBodyArea.UpperBack]: { icon: 'accessibility', bodyParts: ['traps', 'lats', 'rhomboids'] },
+  [StretchBodyArea.LowerBack]: { icon: 'accessibility', bodyParts: ['lowerback'] },
+  [StretchBodyArea.Hips]: { icon: 'accessibility', bodyParts: ['glutes', 'hip flexors'] },
+  [StretchBodyArea.Legs]: { icon: 'directions_walk', bodyParts: ['quadriceps', 'hamstrings', 'calves'] },
+  [StretchBodyArea.FullBody]: { icon: 'self_improvement', bodyParts: ['fullbody'] }
+};
+
+// MARK: - Stretch Summary
+export class StretchSummary {
+  id: string;
+  userId: string;
+  title: string;
+  routineId?: string;
+  bodyAreas: string[];
+  stretchCount: number;
+  duration: number; // seconds
+  caloriesBurned: number;
+  startTime: Date;
+  completedAt?: Date;
+  createdAt: Date;
+  updatedAt: Date;
+  pulsePoints: PulsePoints;
+  workoutRating?: WorkoutRating;
+  isCompleted: boolean;
+
+  constructor(data: any) {
+    this.id = data.id || '';
+    this.userId = data.userId || '';
+    this.title = data.title || 'Stretch Session';
+    this.routineId = data.routineId;
+    this.bodyAreas = data.bodyAreas || [];
+    this.stretchCount = data.stretchCount || 0;
+    this.duration = data.duration || 0;
+    this.caloriesBurned = data.caloriesBurned || 0;
+    this.startTime = convertFirestoreTimestamp(data.startTime);
+    this.completedAt = data.completedAt ? convertFirestoreTimestamp(data.completedAt) : undefined;
+    this.createdAt = convertFirestoreTimestamp(data.createdAt);
+    this.updatedAt = convertFirestoreTimestamp(data.updatedAt);
+    this.pulsePoints = data.pulsePoints ? new PulsePoints(data.pulsePoints) : new PulsePoints({});
+    this.workoutRating = data.workoutRating;
+    this.isCompleted = data.isCompleted || false;
+  }
+
+  // Computed properties
+  get formattedDuration(): string {
+    const hours = Math.floor(this.duration / 3600);
+    const minutes = Math.floor((this.duration % 3600) / 60);
+    const seconds = this.duration % 60;
+    
+    if (hours > 0) {
+      return seconds > 0 
+        ? `${hours}h ${minutes}m ${seconds}s`
+        : `${hours}h ${minutes}m`;
+    }
+    return `${minutes}m ${seconds.toString().padStart(2, '0')}s`;
+  }
+
+  get formattedBodyAreas(): string {
+    return this.bodyAreas.join(', ');
+  }
+
+  toDictionary(): Record<string, any> {
+    const dict: Record<string, any> = {
+      id: this.id,
+      userId: this.userId,
+      title: this.title,
+      bodyAreas: this.bodyAreas,
+      stretchCount: this.stretchCount,
+      duration: this.duration,
+      caloriesBurned: this.caloriesBurned,
+      startTime: dateToUnixTimestamp(this.startTime),
+      createdAt: dateToUnixTimestamp(this.createdAt),
+      updatedAt: dateToUnixTimestamp(this.updatedAt),
+      pulsePoints: this.pulsePoints.toDictionary(),
+      isCompleted: this.isCompleted
+    };
+
+    if (this.routineId) dict.routineId = this.routineId;
+    if (this.completedAt) dict.completedAt = dateToUnixTimestamp(this.completedAt);
+    if (this.workoutRating) dict.workoutRating = this.workoutRating;
+
+    return dict;
+  }
+}
+
+// MARK: - Content Category Type (for routing)
+export enum ContentCategoryType {
+  Lift = 'lift',
+  Run = 'run',
+  Stretch = 'stretch',
+  FatBurn = 'fatBurn'
+}
+
+// Content category display info
+export const ContentCategoryInfo: Record<ContentCategoryType, {
+  displayName: string;
+  description: string;
+  icon: string;
+  color: string;
+  isAvailable: boolean;
+}> = {
+  [ContentCategoryType.Lift]: {
+    displayName: 'Lift',
+    description: 'Weights, Machines & Bodyweight',
+    icon: 'fitness_center',
+    color: '#E0FE10', // Primary Green
+    isAvailable: true
+  },
+  [ContentCategoryType.Run]: {
+    displayName: 'Run',
+    description: 'Outdoor & Treadmill Runs',
+    icon: 'directions_run',
+    color: '#3B82F6', // Primary Blue
+    isAvailable: true
+  },
+  [ContentCategoryType.Stretch]: {
+    displayName: 'Stretch',
+    description: 'Mobility & Flexibility',
+    icon: 'self_improvement',
+    color: '#A855F7', // Primary Purple
+    isAvailable: true
+  },
+  [ContentCategoryType.FatBurn]: {
+    displayName: 'Fat Burn',
+    description: 'Treadmill, Stair Climber & more',
+    icon: 'local_fire_department',
+    color: '#F97316', // Orange
+    isAvailable: true // Set to true - we're implementing it
+  }
+};
 // ----------------------------------------------------------------------

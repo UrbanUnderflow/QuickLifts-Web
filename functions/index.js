@@ -77,6 +77,9 @@ exports.sendRoundTableNotificationAlt = require("./chatNotifications").sendRound
 // We just need to re-export it here for Firebase to discover.
 exports.getWorkoutsBatch = require("./getWorkoutsBatch").getWorkoutsBatch; 
 
+// Export the new batch participants fetch function (used by iOS Run Rounds push fan-out)
+exports.getParticipantsBatch = require("./getParticipantsBatch").getParticipantsBatch;
+
 // Export notification logger functions for debugging and monitoring
 exports.logNotification = require("./notificationLogger").logNotification;
 exports.logMulticastNotification = require("./notificationLogger").logMulticastNotification; 

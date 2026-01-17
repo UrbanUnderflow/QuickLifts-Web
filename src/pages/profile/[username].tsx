@@ -103,7 +103,6 @@ export default function ProfileView({ initialUserData, error: serverError }: Pro
   
   // New state for iOS-matching features
   const [userRounds, setUserRounds] = useState<SweatlistCollection[]>([]);
-  const [roundsView, setRoundsView] = useState<'host' | 'participant'>('host');
   const [checkins, setCheckins] = useState<BodyWeightCheckin[]>([]);
   const [canViewCheckins, setCanViewCheckins] = useState(false);
   const [checkinsLoading, setCheckinsLoading] = useState(false);
@@ -483,8 +482,8 @@ useEffect(() => {
   }, [userRounds, user?.featuredRoundIds]);
 
   // Get visible tabs based on check-in access
-  const visibleTabs = React.useMemo(() => {
-    const tabs = [TABS.MOVES, TABS.TIMELINE, TABS.ROUNDS];
+  const visibleTabs = React.useMemo((): TabType[] => {
+    const tabs: TabType[] = [TABS.MOVES, TABS.TIMELINE, TABS.ROUNDS];
     if (canViewCheckins) {
       tabs.push(TABS.WEIGHINS);
     }
@@ -506,7 +505,7 @@ useEffect(() => {
     );
   };
 
-  // Render rounds tab with featured rounds (matching iOS)
+  // Render rounds tab with featured rounds (matching iOS - no Host/Participant toggle)
   const renderRoundsTab = () => {
     // Type config for round cards (matching Create.tsx styling)
     const typeConfig: Record<string, { gradient: string; iconBg: string; iconColor: string; label: string }> = {
@@ -535,132 +534,99 @@ useEffect(() => {
 
     return (
       <div className="px-5">
-        {/* Host/Participant Toggle */}
-        <div className="flex items-center justify-center gap-2 mb-6">
-          <button
-            onClick={() => setRoundsView('host')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              roundsView === 'host' ? 'bg-[#E0FE10] text-black' : 'bg-zinc-800 text-zinc-400 hover:text-white'
-            }`}
-          >
-            Host
-          </button>
-          <span className="text-zinc-600">•</span>
-          <button
-            onClick={() => setRoundsView('participant')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              roundsView === 'participant' ? 'bg-[#E0FE10] text-black' : 'bg-zinc-800 text-zinc-400 hover:text-white'
-            }`}
-          >
-            Participant
-          </button>
-        </div>
-
-        {roundsView === 'host' ? (
-          <>
-            {featuredRounds.length === 0 ? (
-              <div className="flex flex-col items-center justify-center p-12 bg-zinc-800/50 rounded-xl">
-                <StarIcon className="w-16 h-16 text-zinc-600 mb-4" />
-                <h3 className="text-lg font-semibold text-white mb-2">
-                  {userRounds.length > 0 ? 'No Featured Rounds' : 'No Rounds Yet'}
-                </h3>
-                <p className="text-zinc-400 text-center text-sm">
-                  {userRounds.length > 0 
-                    ? `${user.username} hasn't featured any rounds on their profile`
-                    : `${user.username} hasn't created any rounds yet`}
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-white mb-4">Featured Rounds</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {featuredRounds.map((round) => {
-                    const status = getRoundStatus(round);
-                    const challengeType = (round.challenge as any)?.challengeType?.toLowerCase() || 'workout';
-                    const config = typeConfig[challengeType] || typeConfig.workout;
-                    
-                    return (
-                      <button
-                        key={round.id}
-                        onClick={() => router.push(`/round/${round.id}`)}
-                        className={`group relative overflow-hidden rounded-xl border border-zinc-700/50 hover:border-zinc-600 transition-all duration-300 text-left bg-gradient-to-br ${config.gradient}`}
-                      >
-                        <div className="p-4">
-                          {/* Type Badge & Status */}
-                          <div className="flex items-center justify-between mb-3">
-                            <div className={`flex items-center gap-2 ${config.iconBg} px-3 py-1.5 rounded-lg`}>
-                              <span className={config.iconColor}>{getTypeIcon(challengeType)}</span>
-                              <span className={`text-xs font-medium ${config.iconColor}`}>{config.label}</span>
-                            </div>
-                            <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
-                              status === 'active' ? 'bg-green-500/20 text-green-400' :
-                              status === 'upcoming' ? 'bg-blue-500/20 text-blue-400' :
-                              'bg-zinc-500/20 text-zinc-400'
-                            }`}>
-                              {status.charAt(0).toUpperCase() + status.slice(1)}
-                            </span>
-                          </div>
-                          
-                          {/* Title & Description */}
-                          <h4 className="text-white font-semibold mb-1 line-clamp-1">
-                            {round.challenge?.title || 'Untitled Round'}
-                          </h4>
-                          <p className="text-zinc-400 text-sm line-clamp-2 mb-3">
-                            {round.challenge?.description || ''}
-                          </p>
-                          
-                          {/* Date Range */}
-                          <div className="flex items-center gap-2 text-xs text-zinc-500">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                            </svg>
-                            <span>
-                              {round.challenge?.startDate 
-                                ? new Date(round.challenge.startDate).toLocaleDateString() 
-                                : 'TBD'}
-                              {' → '}
-                              {round.challenge?.endDate 
-                                ? new Date(round.challenge.endDate).toLocaleDateString() 
-                                : 'TBD'}
-                            </span>
-                          </div>
-                          
-                          {/* Participants */}
-                          {round.challenge?.participants && round.challenge.participants.length > 0 && (
-                            <div className="mt-3 flex items-center gap-2">
-                              <div className="flex -space-x-2">
-                                {round.challenge.participants.slice(0, 3).map((p: any, i: number) => (
-                                  <div key={i} className="w-6 h-6 rounded-full bg-zinc-700 border-2 border-zinc-800 overflow-hidden">
-                                    {p.profileImage?.profileImageURL ? (
-                                      <img src={p.profileImage.profileImageURL} alt="" className="w-full h-full object-cover" />
-                                    ) : (
-                                      <div className="w-full h-full flex items-center justify-center text-xs text-zinc-400">
-                                        {p.username?.[0]?.toUpperCase() || '?'}
-                                      </div>
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                              <span className="text-xs text-zinc-500">
-                                {round.challenge.participants.length} participant{round.challenge.participants.length !== 1 ? 's' : ''}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </>
-        ) : (
+        {featuredRounds.length === 0 ? (
           <div className="flex flex-col items-center justify-center p-12 bg-zinc-800/50 rounded-xl">
-            <TrophyIcon className="w-16 h-16 text-zinc-600 mb-4" />
-            <h3 className="text-lg font-semibold text-white mb-2">Participant View</h3>
+            <StarIcon className="w-16 h-16 text-zinc-600 mb-4" />
+            <h3 className="text-lg font-semibold text-white mb-2">
+              {userRounds.length > 0 ? 'No Featured Rounds' : 'No Rounds Yet'}
+            </h3>
             <p className="text-zinc-400 text-center text-sm">
-              Rounds {user.username} is participating in
+              {userRounds.length > 0 
+                ? `${user.username} hasn't featured any rounds on their profile`
+                : `${user.username} hasn't created any rounds yet`}
             </p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-white mb-4">Featured Rounds</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {featuredRounds.map((round) => {
+                const status = getRoundStatus(round);
+                const challengeType = (round.challenge as any)?.challengeType?.toLowerCase() || 'workout';
+                const config = typeConfig[challengeType] || typeConfig.workout;
+                
+                return (
+                  <button
+                    key={round.id}
+                    onClick={() => router.push(`/round/${round.id}`)}
+                    className={`group relative overflow-hidden rounded-xl border border-zinc-700/50 hover:border-zinc-600 transition-all duration-300 text-left bg-gradient-to-br ${config.gradient}`}
+                  >
+                    <div className="p-4">
+                      {/* Type Badge & Status */}
+                      <div className="flex items-center justify-between mb-3">
+                        <div className={`flex items-center gap-2 ${config.iconBg} px-3 py-1.5 rounded-lg`}>
+                          <span className={config.iconColor}>{getTypeIcon(challengeType)}</span>
+                          <span className={`text-xs font-medium ${config.iconColor}`}>{config.label}</span>
+                        </div>
+                        <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
+                          status === 'active' ? 'bg-green-500/20 text-green-400' :
+                          status === 'upcoming' ? 'bg-blue-500/20 text-blue-400' :
+                          'bg-zinc-500/20 text-zinc-400'
+                        }`}>
+                          {status.charAt(0).toUpperCase() + status.slice(1)}
+                        </span>
+                      </div>
+                      
+                      {/* Title & Description */}
+                      <h4 className="text-white font-semibold mb-1 line-clamp-1">
+                        {round.challenge?.title || 'Untitled Round'}
+                      </h4>
+                      <p className="text-zinc-400 text-sm line-clamp-2 mb-3">
+                        {round.challenge?.description || ''}
+                      </p>
+                      
+                      {/* Date Range */}
+                      <div className="flex items-center gap-2 text-xs text-zinc-500">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        <span>
+                          {round.challenge?.startDate 
+                            ? new Date(round.challenge.startDate).toLocaleDateString() 
+                            : 'TBD'}
+                          {' → '}
+                          {round.challenge?.endDate 
+                            ? new Date(round.challenge.endDate).toLocaleDateString() 
+                            : 'TBD'}
+                        </span>
+                      </div>
+                      
+                      {/* Participants */}
+                      {round.challenge?.participants && round.challenge.participants.length > 0 && (
+                        <div className="mt-3 flex items-center gap-2">
+                          <div className="flex -space-x-2">
+                            {round.challenge.participants.slice(0, 3).map((p: any, i: number) => (
+                              <div key={i} className="w-6 h-6 rounded-full bg-zinc-700 border-2 border-zinc-800 overflow-hidden">
+                                {p.profileImage?.profileImageURL ? (
+                                  <img src={p.profileImage.profileImageURL} alt="" className="w-full h-full object-cover" />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center text-xs text-zinc-400">
+                                    {p.username?.[0]?.toUpperCase() || '?'}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                          <span className="text-xs text-zinc-500">
+                            {round.challenge.participants.length} participant{round.challenge.participants.length !== 1 ? 's' : ''}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         )}
       </div>
@@ -822,7 +788,7 @@ useEffect(() => {
                   </div>
                 </div>
                 
-                {/* Follow / Message Actions */}
+                {/* Follow / Message / Options Actions */}
                 <div className="mt-2 flex items-center gap-2">
                   <FollowButton 
                     targetUser={user}
@@ -836,49 +802,150 @@ useEffect(() => {
                     }}
                   />
                   {!isOwnProfile && (
-                    <button
-                      onClick={async () => {
-                        try {
-                          if (!currentUser?.id) {
-                            router.push('/messages');
-                            return;
-                          }
-                          // 1) Find existing chat between current user and profile user
-                          const chatsRef = collection(db, 'chats');
-                          const q = query(chatsRef, where('participantIds', 'array-contains', currentUser.id));
-                          const snap = await getDocs(q);
-                          let chatId: string | null = null;
-                          for (const d of snap.docs) {
-                            const data: any = d.data();
-                            if (Array.isArray(data.participantIds) && data.participantIds.includes(user.id)) {
-                              chatId = d.id; break;
+                    <>
+                      <button
+                        onClick={async () => {
+                          try {
+                            if (!currentUser?.id) {
+                              router.push('/messages');
+                              return;
                             }
+                            // 1) Find existing chat between current user and profile user
+                            const chatsRef = collection(db, 'chats');
+                            const q = query(chatsRef, where('participantIds', 'array-contains', currentUser.id));
+                            const snap = await getDocs(q);
+                            let chatId: string | null = null;
+                            for (const d of snap.docs) {
+                              const data: any = d.data();
+                              if (Array.isArray(data.participantIds) && data.participantIds.includes(user.id)) {
+                                chatId = d.id; break;
+                              }
+                            }
+                            // 2) If none, create
+                            if (!chatId) {
+                              const participants = [
+                                { id: currentUser.id, username: currentUser.username || '', profileImage: currentUser.profileImage || null },
+                                { id: user.id, username: user.username || '', profileImage: user.profileImage || null },
+                              ];
+                              const newChat = await addDoc(chatsRef, {
+                                participantIds: [currentUser.id, user.id],
+                                participants,
+                                lastMessage: 'New conversation',
+                                lastMessageTimestamp: serverTimestamp(),
+                                lastMessageSenderId: currentUser.id,
+                              });
+                              chatId = newChat.id;
+                            }
+                            if (chatId) router.push(`/messages/dm/${chatId}`);
+                          } catch (err) {
+                            console.warn('[Profile] Failed to open DM, routing to messages list', err);
+                            router.push('/messages');
                           }
-                          // 2) If none, create
-                          if (!chatId) {
-                            const participants = [
-                              { id: currentUser.id, username: currentUser.username || '', profileImage: currentUser.profileImage || null },
-                              { id: user.id, username: user.username || '', profileImage: user.profileImage || null },
-                            ];
-                            const newChat = await addDoc(chatsRef, {
-                              participantIds: [currentUser.id, user.id],
-                              participants,
-                              lastMessage: 'New conversation',
-                              lastMessageTimestamp: serverTimestamp(),
-                              lastMessageSenderId: currentUser.id,
-                            });
-                            chatId = newChat.id;
-                          }
-                          if (chatId) router.push(`/messages/dm/${chatId}`);
-                        } catch (err) {
-                          console.warn('[Profile] Failed to open DM, routing to messages list', err);
-                          router.push('/messages');
-                        }
-                      }}
-                      className="px-3 py-1.5 rounded-md bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-700 text-sm"
-                    >
-                      Send Message
-                    </button>
+                        }}
+                        className="p-2 rounded-full bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-700"
+                        title="Send Message"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                        </svg>
+                      </button>
+                      
+                      {/* Options Menu Button */}
+                      <div className="relative">
+                        <button
+                          onClick={() => setShowOptionsMenu(!showOptionsMenu)}
+                          className="p-2 rounded-full bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-700"
+                          title="Options"
+                        >
+                          <EllipsisHorizontalIcon className="w-5 h-5" />
+                        </button>
+                        
+                        {/* Options Dropdown */}
+                        {showOptionsMenu && (
+                          <>
+                            <div 
+                              className="fixed inset-0 z-40" 
+                              onClick={() => setShowOptionsMenu(false)}
+                            />
+                            <div className="absolute right-0 top-full mt-2 w-56 bg-zinc-800 rounded-xl border border-zinc-700 shadow-xl z-50 overflow-hidden">
+                              <button
+                                onClick={() => {
+                                  // Share contact card
+                                  const profileUrl = `https://fitwithpulse.ai/profile/${user.username}`;
+                                  if (navigator.share) {
+                                    navigator.share({
+                                      title: `${user.displayName || user.username}'s Profile`,
+                                      text: `Check out ${user.username}'s profile on Pulse`,
+                                      url: profileUrl,
+                                    });
+                                  } else {
+                                    navigator.clipboard.writeText(profileUrl);
+                                    alert('Profile link copied to clipboard!');
+                                  }
+                                  setShowOptionsMenu(false);
+                                }}
+                                className="w-full px-4 py-3 flex items-center gap-3 text-left text-white hover:bg-zinc-700 transition-colors"
+                              >
+                                <ShareIcon className="w-5 h-5 text-zinc-400" />
+                                <div>
+                                  <p className="font-medium">Share Profile</p>
+                                  <p className="text-xs text-zinc-500">Share {user.username}'s profile</p>
+                                </div>
+                              </button>
+                              
+                              <button
+                                onClick={() => {
+                                  setShowReportModal(true);
+                                  setShowOptionsMenu(false);
+                                }}
+                                className="w-full px-4 py-3 flex items-center gap-3 text-left text-white hover:bg-zinc-700 transition-colors border-t border-zinc-700"
+                              >
+                                <FlagIcon className="w-5 h-5 text-zinc-400" />
+                                <div>
+                                  <p className="font-medium">Report User</p>
+                                  <p className="text-xs text-zinc-500">Report inappropriate behavior</p>
+                                </div>
+                              </button>
+                              
+                              <button
+                                onClick={async () => {
+                                  if (!currentUser?.id) return;
+                                  if (window.confirm(`Are you sure you want to block ${user.username}? You won't see their content and they won't be able to message you.`)) {
+                                    try {
+                                      // Add to blocked users
+                                      const userRef = doc(db, 'users', currentUser.id);
+                                      const userDoc = await getDoc(userRef);
+                                      if (userDoc.exists()) {
+                                        const blockedUsers = userDoc.data().blockedUsers || [];
+                                        if (!blockedUsers.includes(user.id)) {
+                                          await userService.updateUser(currentUser.id, {
+                                            ...currentUser,
+                                            blockedUsers: [...blockedUsers, user.id],
+                                          } as User);
+                                          alert(`${user.username} has been blocked.`);
+                                          router.push('/');
+                                        }
+                                      }
+                                    } catch (err) {
+                                      console.error('Error blocking user:', err);
+                                      alert('Failed to block user. Please try again.');
+                                    }
+                                  }
+                                  setShowOptionsMenu(false);
+                                }}
+                                className="w-full px-4 py-3 flex items-center gap-3 text-left text-red-400 hover:bg-zinc-700 transition-colors border-t border-zinc-700"
+                              >
+                                <NoSymbolIcon className="w-5 h-5" />
+                                <div>
+                                  <p className="font-medium">Block User</p>
+                                  <p className="text-xs text-zinc-500">Hide their content</p>
+                                </div>
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </>
                   )}
                 </div>
               </div>
@@ -911,14 +978,14 @@ useEffect(() => {
             <div className="mt-8 border-b border-zinc-700 overflow-x-auto">
               <nav className="flex whitespace-nowrap min-w-full sm:min-w-0 px-4 sm:px-0">
                 <div className="flex gap-8 pb-2 sm:pb-0">
-                  {Object.values(TABS).map((tab) => (
+                  {visibleTabs.map((tab) => (
                     <button
                       key={tab}
                       onClick={() => setSelectedTab(tab)}
                       className={`pb-4 px-2 text-sm font-medium transition-colors relative flex-shrink-0
                         ${selectedTab === tab ? 'text-white' : 'text-zinc-400 hover:text-zinc-300'}`}
                     >
-                      {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                      {tab === 'weigh-ins' ? 'Weigh-ins' : tab.charAt(0).toUpperCase() + tab.slice(1)}
                       {selectedTab === tab && (
                         <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-white" />
                       )}
@@ -929,36 +996,21 @@ useEffect(() => {
             </div>
 
             <div className="mt-8">
-              {/* {selectedTab === TABS.STATS && (
-              <div className="grid grid-cols-2 gap-4 text-white">
-                <div className="p-4 bg-zinc-800 rounded-lg">
-                  <div className="text-2xl font-bold">
-                    {`${stats.bodyWeight || 0} lbs`}
-                  </div>
-                  <div className="text-zinc-400">Body Weight</div>
-                  <div className="text-sm text-zinc-500 mt-1">
-                    Last updated: {new Date(stats.date * 1000).toLocaleDateString()}
-                  </div>
-                </div>
-                <div className="p-4 bg-zinc-800 rounded-lg">
-                  <div className="text-2xl font-bold">{stats.workoutCount}</div>
-                  <div className="text-zinc-400">Workouts</div>
-                  {workoutSummaries.length > 0 && (
-                    <div className="text-sm text-zinc-500 mt-1">
-                      Last workout: {new Date(workoutSummaries[0].completedAt ?? 0).toLocaleDateString()}
-                    </div>
-                  )}
-                </div>
-              </div>
-              )} */}
-              {selectedTab === TABS.ACTIVITY && (
+              {/* Moves Tab */}
+              {selectedTab === TABS.MOVES && renderExercisesTab()}
+              
+              {/* Timeline/Activity Tab */}
+              {selectedTab === TABS.TIMELINE && (
                 <div className="px-5">
                   {activities.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center p-8">
-                      <StarIcon className="w-12 h-12 text-white/20" />
-                      <h3 className="mt-4 text-white font-medium">
-                        {user.username} has no activities yet
+                    <div className="flex flex-col items-center justify-center p-12 bg-zinc-800/50 rounded-xl">
+                      <StarIcon className="w-16 h-16 text-zinc-600 mb-4" />
+                      <h3 className="text-lg font-semibold text-white mb-2">
+                        No Activity Yet
                       </h3>
+                      <p className="text-zinc-400 text-center text-sm">
+                        {user.username} hasn't logged any activity yet
+                      </p>
                     </div>
                   ) : (
                     <ActivityTab
@@ -971,7 +1023,7 @@ useEffect(() => {
                         console.log('Selected workout summary:', summary);
                       }}
                       onVideoSelect={(exercise) => {
-                        console.log('Selected exercise:', exercise);
+                        setSelectedExercise(exercise);
                       }}
                       onProfileSelect={(userId) => {
                         console.log('Selected user profile:', userId);
@@ -980,8 +1032,15 @@ useEffect(() => {
                   )}
                 </div>
               )}
-              {selectedTab === TABS.EXERICSES && renderExercisesTab()}
-              {selectedTab === TABS.STACKS && (() => {
+              
+              {/* Rounds Tab */}
+              {selectedTab === TABS.ROUNDS && renderRoundsTab()}
+              
+              {/* Weigh-ins Tab */}
+              {selectedTab === TABS.WEIGHINS && renderWeighinsTab()}
+              
+              {/* Legacy Stacks Tab - keeping for backward compatibility but hidden */}
+              {false && (() => {
                 console.log('[Stacks Tab] Current username from router.query:', username);
                 console.log('[Stacks Tab] Resolved username:', resolvedUsername);
                 console.log('[Stacks Tab] User object:', user);
@@ -1102,14 +1161,6 @@ useEffect(() => {
                   </div>
                 );
               })()}
-              {selectedTab === TABS.CHALLENGES && (
-                <ChallengesTab
-                  activeChallenges={activeChallenges}
-                  onSelectChallenge={(challenge) => {
-                    console.log(challenge);
-                  }}
-                />
-              )}
             </div>
           </div>
         </div>
@@ -1139,6 +1190,85 @@ useEffect(() => {
                 alt={user.displayName}
                 className="max-w-full max-h-[80vh] object-contain mx-auto"
               />
+            </div>
+          </div>
+        )}
+
+        {/* Report User Modal */}
+        {showReportModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+            <div className="bg-zinc-900 rounded-2xl max-w-md w-full border border-zinc-700 shadow-xl">
+              <div className="p-6 border-b border-zinc-700">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xl font-semibold text-white">Report User</h3>
+                  <button
+                    onClick={() => {
+                      setShowReportModal(false);
+                      setReportReason('');
+                    }}
+                    className="text-zinc-400 hover:text-white"
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+              
+              <div className="p-6">
+                <p className="text-zinc-400 mb-4">
+                  Why are you reporting {user.username}?
+                </p>
+                <textarea
+                  value={reportReason}
+                  onChange={(e) => setReportReason(e.target.value)}
+                  placeholder="Describe the issue..."
+                  className="w-full h-32 bg-zinc-800 text-white rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#E0FE10] placeholder-zinc-500 resize-none"
+                />
+                
+                <div className="flex gap-3 mt-6">
+                  <button
+                    onClick={() => {
+                      setShowReportModal(false);
+                      setReportReason('');
+                    }}
+                    className="flex-1 px-4 py-3 bg-zinc-800 text-white rounded-xl hover:bg-zinc-700 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (!currentUser?.id || !reportReason.trim()) return;
+                      
+                      try {
+                        // Create report in Firestore
+                        const reportsRef = collection(db, 'user-reports');
+                        await addDoc(reportsRef, {
+                          reportedUserId: user.id,
+                          reportedUsername: user.username,
+                          reportedBy: currentUser.id,
+                          reporterUsername: currentUser.username,
+                          message: reportReason.trim(),
+                          status: 'pending',
+                          createdAt: serverTimestamp(),
+                          updatedAt: serverTimestamp(),
+                        });
+                        
+                        alert('Report submitted. Thank you for helping keep our community safe.');
+                        setShowReportModal(false);
+                        setReportReason('');
+                      } catch (err) {
+                        console.error('Error submitting report:', err);
+                        alert('Failed to submit report. Please try again.');
+                      }
+                    }}
+                    disabled={!reportReason.trim()}
+                    className="flex-1 px-4 py-3 bg-[#E0FE10] text-black font-semibold rounded-xl hover:bg-[#c8e60e] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Submit Report
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}

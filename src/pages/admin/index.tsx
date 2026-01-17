@@ -2,7 +2,7 @@ import React from 'react';
 import { useRouter } from 'next/router';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import Head from 'next/head';
-import { Users, Settings, BarChart2, Bell, FileText, CheckSquare, PlusSquare, Image as ImageIcon, Zap, TrendingUp, Dumbbell, Tag, Users2, Activity, Award, Clock, Gift, Edit3, Send, Server, ChevronDown, MessageCircle, Utensils, Code, Building2, Kanban, Layers, Bug, FolderTree, PenTool, Link as LinkIcon, Scale, Handshake, PieChart } from 'lucide-react';
+import { Users, Settings, BarChart2, Bell, FileText, CheckSquare, PlusSquare, Image as ImageIcon, Zap, TrendingUp, Dumbbell, Tag, Users2, Activity, Award, Clock, Gift, Edit3, Send, Server, ChevronDown, MessageCircle, Utensils, Code, Building2, Kanban, Layers, Bug, FolderTree, PenTool, Link as LinkIcon, Scale, Handshake, PieChart, Search, X } from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '../../redux/store';
 import { toggleDevMode } from '../../redux/devModeSlice';
@@ -406,6 +406,20 @@ const EnvironmentSwitcher: React.FC = () => {
 };
 
 const AdminHome: React.FC = () => {
+  const [cardSearch, setCardSearch] = React.useState('');
+
+  const filteredAdminCards = React.useMemo(() => {
+    const q = cardSearch.trim().toLowerCase();
+    if (!q) return adminCardsData;
+
+    return adminCardsData.filter((card) => {
+      const title = card.title?.toLowerCase?.() ?? '';
+      const description = card.description?.toLowerCase?.() ?? '';
+
+      return title.includes(q) || description.includes(q);
+    });
+  }, [cardSearch]);
+
   return (
     <AdminRouteGuard>
       <Head>
@@ -425,9 +439,38 @@ const AdminHome: React.FC = () => {
             
             <EnvironmentSwitcher />
           </div>
+
+          <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between mb-6">
+            <div className="relative w-full sm:max-w-md">
+              <Search className="w-4 h-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                value={cardSearch}
+                onChange={(e) => setCardSearch(e.target.value)}
+                placeholder="Search admin tools…"
+                className="w-full pl-9 pr-9 py-2 rounded-lg border border-zinc-700 bg-[#1a1e24] text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-[#d7ff00]/30 focus:border-[#d7ff00]/40"
+                aria-label="Search admin dashboard cards"
+              />
+              {cardSearch.trim().length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setCardSearch('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md text-zinc-400 hover:text-white hover:bg-[#262a30] transition-colors"
+                  aria-label="Clear search"
+                  title="Clear search"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+
+            <div className="text-sm text-zinc-400">
+              Showing <span className="text-white font-medium">{filteredAdminCards.length}</span> of{' '}
+              <span className="text-white font-medium">{adminCardsData.length}</span>
+            </div>
+          </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {adminCardsData.map((func, index) => (
+            {filteredAdminCards.map((func, index) => (
               <AdminCard
                 key={index}
                 title={func.title}
@@ -437,6 +480,12 @@ const AdminHome: React.FC = () => {
               />
             ))}
           </div>
+
+          {filteredAdminCards.length === 0 && (
+            <div className="mt-8 text-center text-zinc-400">
+              No admin tools match <span className="text-white font-medium">“{cardSearch.trim()}”</span>.
+            </div>
+          )}
         </div>
       </div>
     </AdminRouteGuard>

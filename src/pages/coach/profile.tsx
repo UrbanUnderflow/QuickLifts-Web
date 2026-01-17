@@ -140,13 +140,34 @@ const CoachProfilePage: React.FC = () => {
     }
   };
 
+  // Normalizes username: removes invalid characters, spaces, special chars, and lowercases
+  const normalizeUsername = (value: string): string => {
+    return value
+      .toLowerCase()
+      .replace(/[^a-z0-9_.-]/g, '')
+      .trim();
+  };
+
+  // Validates username format
+  const isValidUsernameFormat = (value: string): boolean => {
+    return /^[a-z0-9_.-]{3,20}$/.test(value);
+  };
+
   const onSave = async () => {
     if (!currentUser) return;
+    
+    // Normalize and validate username before saving
+    const normalizedUsername = normalizeUsername(username || '');
+    if (normalizedUsername && !isValidUsernameFormat(normalizedUsername)) {
+      dispatch(showToast({ message: 'Invalid username format. Use 3-20 characters with only letters, numbers, and underscores.', type: 'error' }));
+      return;
+    }
+    
     setSaving(true);
     try {
       const payload = {
         bio,
-        username: username || '',
+        username: normalizedUsername || currentUser.username || '', // Use normalized username
         email: email || '',
         profileImage: { ...(currentUser.profileImage || {}), profileImageURL: imageUrl },
         links: {
@@ -157,10 +178,13 @@ const CoachProfilePage: React.FC = () => {
         }
       } as any;
       await setDoc(doc(db, 'users', currentUser.id), payload, { merge: true });
+      // Update local state with normalized username
+      setUsername(normalizedUsername || currentUser.username || '');
       // Persist services alongside user doc (keep immediate writes but ensure merged here too)
       if (services) {
         await setDoc(doc(db, 'users', currentUser.id), { services }, { merge: true });
       }
+      dispatch(showToast({ message: 'Profile saved successfully!', type: 'success' }));
     } finally {
       setSaving(false);
     }
