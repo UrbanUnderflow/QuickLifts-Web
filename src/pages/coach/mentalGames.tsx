@@ -42,7 +42,7 @@ import {
 } from '../../api/firebase/mentaltraining';
 import CoachLayout from '../../components/CoachLayout';
 import Head from 'next/head';
-import { ExerciseCard, AssignExerciseModal, MentalProgressCard, ExercisePlayer } from '../../components/mentaltraining';
+import { ExerciseCard, AssignExerciseModal, MentalProgressCard, ExercisePlayer, exerciseRequiresWriting } from '../../components/mentaltraining';
 
 interface AthleteWithProgress {
   id: string;
@@ -516,6 +516,11 @@ const CoachMentalTraining: React.FC = () => {
           onComplete={(data) => {
             console.log('Exercise preview completed:', data);
             setPlayingExercise(null);
+          }}
+          onStartInChat={(exercise) => {
+            // For coaches previewing, redirect to PulseCheck chat with exercise
+            localStorage.setItem('pulsecheck_active_exercise', JSON.stringify(exercise));
+            router.push(`/PulseCheck?exercise=${encodeURIComponent(JSON.stringify(exercise))}`);
           }}
         />
       )}

@@ -7,8 +7,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import EscalationModal from './EscalationModal';
 import NoraIntroCard from './NoraIntroCard';
 import { EscalationTier, EscalationCategory } from '../../api/firebase/escalation/types';
+import { MentalExercise } from '../../api/firebase/mentaltraining/types';
+import { ExerciseInstructionCard } from '../mentaltraining';
 
 const STORAGE_KEY_NORA_INTRO = 'pulsecheck_has_seen_nora_intro_card';
+const STORAGE_KEY_ACTIVE_EXERCISE = 'pulsecheck_active_exercise';
 
 interface ChatMessage {
   id: string;
@@ -17,6 +20,7 @@ interface ChatMessage {
   timestamp: number;
   messageType?: string;
   mentalNote?: MentalNote; // For mental note action cards
+  exercise?: MentalExercise; // For exercise instruction cards
 }
 
 interface MentalNote {
@@ -153,11 +157,80 @@ const Chat: React.FC = () => {
     if (typeof window === 'undefined') return false;
     return localStorage.getItem(STORAGE_KEY_NORA_INTRO) !== 'true';
   });
+  
+  // Active exercise state (for writing exercises that redirect here)
+  const [activeExercise, setActiveExercise] = useState<MentalExercise | null>(() => {
+    if (typeof window === 'undefined') return null;
+    const stored = localStorage.getItem(STORAGE_KEY_ACTIVE_EXERCISE);
+    if (stored) {
+      try {
+        return JSON.parse(stored);
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  });
 
   const handleDismissNoraIntro = () => {
     localStorage.setItem(STORAGE_KEY_NORA_INTRO, 'true');
     setShowNoraIntro(false);
   };
+  
+  // Handle starting an exercise from external source (e.g., mental training page)
+  const handleStartExerciseInChat = useCallback((exercise: MentalExercise) => {
+    // Store in localStorage so it persists across page navigation
+    localStorage.setItem(STORAGE_KEY_ACTIVE_EXERCISE, JSON.stringify(exercise));
+    setActiveExercise(exercise);
+    
+    // Add the exercise instruction card to chat
+    const exerciseMsg: ChatMessage = {
+      id: `exercise-${Date.now()}`,
+      content: '',
+      isFromUser: false,
+      timestamp: Math.floor(Date.now() / 1000),
+      messageType: 'exerciseInstruction',
+      exercise: exercise,
+    };
+    setMessages(prev => [...prev, exerciseMsg]);
+    
+    // Prompt the user to begin
+    setTimeout(() => {
+      const promptMsg: ChatMessage = {
+        id: Math.random().toString(36).slice(2),
+        content: `Let's work through "${exercise.name}" together. Take your time with each prompt above, then write your thoughts to me. I'll give you feedback as you go. Ready when you are! 🧠`,
+        isFromUser: false,
+        timestamp: Math.floor(Date.now() / 1000),
+      };
+      setMessages(prev => [...prev, promptMsg]);
+    }, 500);
+  }, []);
+  
+  // Check for pending exercise on mount (from navigation)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
+    // Check URL params for exercise data
+    const urlParams = new URLSearchParams(window.location.search);
+    const exerciseParam = urlParams.get('exercise');
+    
+    if (exerciseParam && !activeExercise) {
+      try {
+        const exercise = JSON.parse(decodeURIComponent(exerciseParam));
+        handleStartExerciseInChat(exercise);
+        // Clean up URL
+        window.history.replaceState({}, '', window.location.pathname);
+      } catch (e) {
+        console.error('[PulseCheck] Failed to parse exercise from URL', e);
+      }
+    }
+  }, [activeExercise, handleStartExerciseInChat]);
+  
+  // Clear exercise when complete
+  const handleExerciseComplete = useCallback(() => {
+    localStorage.removeItem(STORAGE_KEY_ACTIVE_EXERCISE);
+    setActiveExercise(null);
+  }, []);
 
   useEffect(() => {
     scrollerRef.current?.scrollTo({ top: scrollerRef.current.scrollHeight, behavior: 'smooth' });
@@ -634,7 +707,12 @@ const Chat: React.FC = () => {
                       
                       {/* Message Content */}
                       <div className={`flex-1 ${m.isFromUser ? 'ml-12' : ''}`}>
-                        {m.messageType === 'mentalNoteActionCard' && m.mentalNote ? (
+                        {m.messageType === 'exerciseInstruction' && m.exercise ? (
+                          // Exercise Instruction Card
+                          <ExerciseInstructionCard 
+                            exercise={m.exercise}
+                          />
+                        ) : m.messageType === 'mentalNoteActionCard' && m.mentalNote ? (
                           // Mental Note Action Card - Premium Glassmorphic
                           <motion.div 
                             initial={{ opacity: 0, scale: 0.95 }}
