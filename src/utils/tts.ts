@@ -26,11 +26,22 @@ export const OPENAI_VOICES: VoiceChoice[] = [
 
 let cachedOpenAiVoiceId: string | null = null;
 let voiceFetchInFlight: Promise<void> | null = null;
+let lastFetchAttempt = 0;
+const REFETCH_INTERVAL_MS = 5000; // Retry every 5 seconds if no voice was cached
 
 async function fetchGlobalVoiceIfNeeded() {
   if (typeof window === 'undefined') return;
+  
+  // If we already have a cached voice, use it
   if (cachedOpenAiVoiceId) return;
+  
+  // If a fetch is in progress, wait for it
   if (voiceFetchInFlight) return voiceFetchInFlight;
+  
+  // Rate limit fetch attempts (prevents spamming if auth isn't ready)
+  const now = Date.now();
+  if (now - lastFetchAttempt < REFETCH_INTERVAL_MS) return;
+  lastFetchAttempt = now;
 
   voiceFetchInFlight = (async () => {
     try {
@@ -44,10 +55,17 @@ async function fetchGlobalVoiceIfNeeded() {
         const data = snap.data() as any;
         if (typeof data?.voiceId === 'string' && data.voiceId.trim()) {
           cachedOpenAiVoiceId = data.voiceId.trim();
+          console.log('[TTS] Loaded admin voice config:', cachedOpenAiVoiceId);
+        } else {
+          console.warn('[TTS] ai-voice doc exists but voiceId is missing or empty');
         }
+      } else {
+        console.warn('[TTS] ai-voice config doc not found - using default voice');
       }
-    } catch {
-      // If read fails (rules/env), just fall back to default
+    } catch (err) {
+      // If read fails (rules/env/auth not ready), allow retry on next call
+      console.warn('[TTS] Failed to fetch voice config (will retry):', err);
+      lastFetchAttempt = 0; // Allow immediate retry on next call
     } finally {
       voiceFetchInFlight = null;
     }
@@ -170,6 +188,15 @@ function speakViaBrowserTTS(text: string, opts: SpeakOptions, voiceName?: string
 }
 
 /**
+ * Clear the cached voice ID (useful for testing or when admin updates the voice).
+ */
+export function clearVoiceCache() {
+  cachedOpenAiVoiceId = null;
+  lastFetchAttempt = 0;
+  console.log('[TTS] Voice cache cleared');
+}
+
+/**
  * Narrate a step. Prefers server TTS (OpenAI) when configured, falls back to browser speech synthesis.
  */
 export async function speakStep(
@@ -188,6 +215,9 @@ export async function speakStep(
     await fetchGlobalVoiceIfNeeded();
     if (cachedOpenAiVoiceId) {
       voiceChoice = { provider: 'openai', id: cachedOpenAiVoiceId, label: cachedOpenAiVoiceId };
+      console.log('[TTS] Using admin-configured voice:', cachedOpenAiVoiceId);
+    } else {
+      console.log('[TTS] No admin voice configured, using default');
     }
   }
 

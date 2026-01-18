@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import { Mic2, Play, Square, Save, Info, RefreshCw } from 'lucide-react';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
-import { OPENAI_VOICES, speakStep, stopNarration, VoiceChoice } from '../../utils/tts';
+import { OPENAI_VOICES, speakStep, stopNarration, VoiceChoice, clearVoiceCache } from '../../utils/tts';
 
 type AiVoiceConfig = {
   provider: 'openai';
@@ -95,6 +95,8 @@ const AdminAiVoice: React.FC = () => {
         updatedAt: Date.now(),
       };
       await setDoc(ref, payload, { merge: true });
+      // Clear the cached voice so all components pick up the new setting
+      clearVoiceCache();
     } catch (e: any) {
       console.error('Save failed', e);
       setError(e?.message || 'Failed to save config');
