@@ -1128,7 +1128,7 @@ const AutoNarrator: React.FC<{
   onDone: () => void;
   runIdRef: React.MutableRefObject<number>;
   voiceChoice?: VoiceChoice | null;
-}> = ({ enabled, text, onDone, runIdRef }) => {
+}> = ({ enabled, text, onDone, runIdRef, voiceChoice = null }) => {
   useEffect(() => {
     if (!enabled) return;
     const runId = (runIdRef.current += 1);

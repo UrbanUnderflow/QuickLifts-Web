@@ -1,5 +1,5 @@
 import React from 'react';
-import { useRouter } from 'next/router';
+import Link from 'next/link';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import Head from 'next/head';
 import { Users, Settings, BarChart2, Bell, FileText, CheckSquare, PlusSquare, Image as ImageIcon, Zap, TrendingUp, Dumbbell, Tag, Users2, Activity, Award, Clock, Gift, Edit3, Send, Server, ChevronDown, MessageCircle, Utensils, Code, Building2, Kanban, Layers, Bug, FolderTree, PenTool, Link as LinkIcon, Scale, Handshake, PieChart, Search, X, AlertTriangle, Brain, Mic2 } from 'lucide-react';
@@ -16,12 +16,11 @@ interface AdminCardProps {
 }
 
 const AdminCard: React.FC<AdminCardProps> = ({ title, description, icon, link }) => {
-  const router = useRouter();
-  
   return (
-    <div 
+    <Link
+      href={link}
       className="relative bg-[#1a1e24] rounded-xl p-6 shadow-xl overflow-hidden group cursor-pointer h-full flex flex-col"
-      onClick={() => router.push(link)}
+      prefetch
     >
       {/* Top gradient border */}
       <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-blue-500 via-purple-500 to-[#d7ff00]"></div>
@@ -42,7 +41,7 @@ const AdminCard: React.FC<AdminCardProps> = ({ title, description, icon, link })
       
       {/* Bottom gradient animation on hover */}
       <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-[#40c9ff] to-[#d7ff00] transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left"></div>
-    </div>
+    </Link>
   );
 };
 
