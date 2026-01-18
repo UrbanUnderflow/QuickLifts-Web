@@ -5,7 +5,10 @@ import { db } from '../../api/firebase/config';
 import { collection, getDocs, deleteDoc, doc, orderBy, query } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'framer-motion';
 import EscalationModal from './EscalationModal';
+import NoraIntroCard from './NoraIntroCard';
 import { EscalationTier, EscalationCategory } from '../../api/firebase/escalation/types';
+
+const STORAGE_KEY_NORA_INTRO = 'pulsecheck_has_seen_nora_intro_card';
 
 interface ChatMessage {
   id: string;
@@ -144,6 +147,17 @@ const Chat: React.FC = () => {
   });
   const [escalationProcessing, setEscalationProcessing] = useState(false);
   const [currentEscalationId, setCurrentEscalationId] = useState<string | null>(null);
+  
+  // Nora intro card state
+  const [showNoraIntro, setShowNoraIntro] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem(STORAGE_KEY_NORA_INTRO) !== 'true';
+  });
+
+  const handleDismissNoraIntro = () => {
+    localStorage.setItem(STORAGE_KEY_NORA_INTRO, 'true');
+    setShowNoraIntro(false);
+  };
 
   useEffect(() => {
     scrollerRef.current?.scrollTo({ top: scrollerRef.current.scrollHeight, behavior: 'smooth' });
@@ -154,7 +168,7 @@ const Chat: React.FC = () => {
     if (!currentUser) return;
     if (messages.length > 0) return;
     const name = (currentUser as any).preferredName || currentUser.displayName || currentUser.username || 'athlete';
-    const greeting = `Hey ${name} — I'm your mental mindset coach. What's one focus for today?`;
+    const greeting = `Hey ${name} — I'm Nora, your AI mental performance coach. What's one focus for today?`;
     setMessages([{ id: Math.random().toString(36).slice(2), content: greeting, isFromUser: false, timestamp: Math.floor(Date.now() / 1000), messageType: 'greeting' }]);
   }, [currentUser]);
 
@@ -581,6 +595,15 @@ const Chat: React.FC = () => {
             </div>
           )}
 
+          {/* Nora Intro Card - shown for new users */}
+          <AnimatePresence>
+            {showNoraIntro && (
+              <div className="max-w-3xl mx-auto pt-6">
+                <NoraIntroCard onDismiss={handleDismissNoraIntro} />
+              </div>
+            )}
+          </AnimatePresence>
+
           {/* Messages */}
           {messages.length > 0 && (
             <div className="max-w-3xl mx-auto px-4 py-8">
@@ -800,7 +823,7 @@ const Chat: React.FC = () => {
                       send();
                     }
                   }}
-                  placeholder="Message PulseCheck..."
+                  placeholder="Message Nora..."
                   rows={1}
                   className="w-full bg-zinc-900/60 backdrop-blur-sm border border-white/10 rounded-xl px-4 py-3 pr-12 outline-none focus:border-[#E0FE10]/30 focus:bg-zinc-900/80 resize-none text-white placeholder:text-zinc-500 transition-all"
                   style={{

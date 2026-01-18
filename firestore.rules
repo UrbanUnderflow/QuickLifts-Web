@@ -77,6 +77,35 @@ service cloud.firestore {
       // Admin can do everything
       allow read, write: if isAdmin();
     }
+
+    // =========================================================================
+    // PulseCheck Escalation System (Admin + limited coach/athlete visibility)
+    // =========================================================================
+
+    // Admin-managed escalation conditions used for AI classification fine-tuning
+    match /escalation-conditions/{conditionId} {
+      // Only admins can manage/read conditions
+      allow read, write: if isAdmin();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Escalation records (audit log). Created/updated by backend using Admin SDK.
+    // Client-side access is limited:
+    // - Admins: full access
+    // - Athlete: read their own records
+    // - Coach: read records where they are the coach
+    match /escalation-records/{recordId} {
+      allow read: if isAdmin()
+                  || (isAuthenticated() && resource.data.userId == request.auth.uid)
+                  || (isAuthenticated() && resource.data.coachId == request.auth.uid);
+      // Keep writes admin-only from client. Backend uses Admin SDK.
+      allow write: if isAdmin();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
     
     // Existing collections - preserve current functionality
     // Note: Add your existing rules here for other collections
@@ -328,6 +357,65 @@ service cloud.firestore {
         // Anyone can create waitlist entries (signing up)
         allow create: if true;
       }
+    }
+    
+    // ============================================================================
+    // MENTAL TRAINING COLLECTIONS
+    // ============================================================================
+    
+    // Mental Exercise Library (admin-managed templates)
+    match /mental-exercises/{exerciseId} {
+      // Anyone authenticated can read exercises
+      allow read: if isAuthenticated();
+      // Only admins can write (seed/update/delete)
+      allow write: if isAdmin();
+    }
+    
+    // Mental Exercise Assignments
+    match /mental-exercise-assignments/{assignmentId} {
+      // Athletes can read their own assignments, coaches can read assignments they created
+      allow read: if isAuthenticated() && 
+        (resource.data.athleteUserId == request.auth.uid || 
+         resource.data.assignedBy == request.auth.uid);
+      // Coaches can create assignments for their athletes
+      allow create: if isAuthenticated();
+      // Athletes can update their assignment status, coaches can update assignments they created
+      allow update: if isAuthenticated() && 
+        (resource.data.athleteUserId == request.auth.uid || 
+         resource.data.assignedBy == request.auth.uid);
+      allow delete: if isAdmin();
+    }
+    
+    // Mental Exercise Completions (user-specific subcollection)
+    match /mental-exercise-completions/{userId}/completions/{completionId} {
+      allow read, write: if isOwner(userId) || isAdmin();
+    }
+    
+    // Mental Training Streaks
+    match /mental-training-streaks/{userId} {
+      allow read, write: if isOwner(userId) || isAdmin();
+    }
+    
+    // Mental Check-ins
+    match /mental-check-ins/{userId}/check-ins/{checkInId} {
+      allow read, write: if isOwner(userId) || isAdmin();
+    }
+    
+    // Mental Training Programs (admin-managed)
+    match /mental-training-programs/{programId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // App Config (admin-managed global settings)
+    match /app-config/{docId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+    
+    // User Program Enrollments
+    match /mental-program-enrollments/{userId}/enrollments/{enrollmentId} {
+      allow read, write: if isOwner(userId) || isAdmin();
     }
     
     // Default deny rule for any unmatched documents

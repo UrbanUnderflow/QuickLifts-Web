@@ -54,32 +54,9 @@
   to = "/"
   status = 200
 
-[[redirects]]
-  from = "/admin/*"
-  to = "/"
-  status = 200
-
-[[redirects]]
-  from = "/coach/*"
-  to = "/"
-  status = 200
-
-[[redirects]]
-  from = "/partner/*"
-  to = "/"
-  status = 200
-
-[[redirects]]
-  from = "/PulseCheck/*"
-  to = "/"
-  status = 200
-
-# Catch-all for SPA routes - this should be last and more specific
-[[redirects]]
-  from = "/*"
-  to = "/"
-  status = 200
-  force = false
+# NOTE: Removed /admin/*, /coach/*, /partner/*, /PulseCheck/* and catch-all redirects
+# These were interfering with Next.js routing. Next.js handles these routes directly.
+# The @netlify/plugin-nextjs plugin handles SPA routing automatically.
 
 [[headers]]
   for = "/*"
@@ -252,3 +229,9 @@
 
 [functions.trigger-review-checkin]
   # Manual trigger for weekly check-in email (no schedule)
+
+# Mental Training: Daily check-in notifications
+[functions.scheduled-mental-checkin]
+  # Runs every 30 minutes and checks Firestore config for the admin-configured send times.
+  # The function itself enforces "only once per day" at the chosen morning and evening times.
+  schedule = "*/30 * * * *"

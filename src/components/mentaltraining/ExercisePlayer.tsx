@@ -1,0 +1,1246 @@
+/**
+ * Exercise Player Component
+ * 
+ * A universal exercise player that handles different exercise types:
+ * - Breathing exercises with animated visuals
+ * - Visualization with prompts
+ * - Focus exercises with timers
+ * - Mindset exercises with journal prompts
+ * - Confidence exercises with guided steps
+ */
+
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  X,
+  Play,
+  Pause,
+  SkipForward,
+  CheckCircle,
+  Wind,
+  Eye,
+  Target,
+  Brain,
+  Star,
+  ChevronRight,
+  Volume2,
+  VolumeX,
+} from 'lucide-react';
+import { speakStep, stopNarration, VoiceChoice } from '../../utils/tts';
+import {
+  MentalExercise,
+  ExerciseCategory,
+  BreathingPhase,
+  ExerciseCompletion,
+} from '../../api/firebase/mentaltraining/types';
+
+// ============================================================================
+// TYPES
+// ============================================================================
+
+interface ExercisePlayerProps {
+  exercise: MentalExercise;
+  onComplete: (data: {
+    durationSeconds: number;
+    preExerciseMood?: number;
+    postExerciseMood?: number;
+    difficultyRating?: number;
+    helpfulnessRating?: number;
+    notes?: string;
+  }) => void;
+  onClose: () => void;
+  assignmentId?: string;
+}
+
+type PlayerState = 'intro' | 'pre-mood' | 'active' | 'post-mood' | 'complete';
+
+// ============================================================================
+// MAIN COMPONENT
+// ============================================================================
+
+export const ExercisePlayer: React.FC<ExercisePlayerProps> = ({
+  exercise,
+  onComplete,
+  onClose,
+  assignmentId,
+}) => {
+  const [state, setState] = useState<PlayerState>('intro');
+  const [isPaused, setIsPaused] = useState(false);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [preExerciseMood, setPreExerciseMood] = useState<number | undefined>();
+  const [postExerciseMood, setPostExerciseMood] = useState<number | undefined>();
+  const [helpfulnessRating, setHelpfulnessRating] = useState<number | undefined>();
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  
+  const startTimeRef = useRef<number>(0);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Voice selection is admin-configured globally (see /admin/ai-voice).
+
+  // Start timer when active
+  useEffect(() => {
+    if (state === 'active' && !isPaused) {
+      startTimeRef.current = Date.now() - elapsedSeconds * 1000;
+      timerRef.current = setInterval(() => {
+        setElapsedSeconds(Math.floor((Date.now() - startTimeRef.current) / 1000));
+      }, 100);
+    }
+
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+    };
+  }, [state, isPaused]);
+
+  const handleStart = () => {
+    setState('pre-mood');
+  };
+
+  const handlePreMoodSelect = (mood: number) => {
+    setPreExerciseMood(mood);
+    setState('active');
+  };
+
+  const handleExerciseComplete = () => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+    }
+    stopNarration();
+    setState('post-mood');
+  };
+
+  const handlePostMoodSelect = (mood: number) => {
+    setPostExerciseMood(mood);
+    setState('complete');
+  };
+
+  const handleFinalComplete = (rating: number) => {
+    setHelpfulnessRating(rating);
+    onComplete({
+      durationSeconds: elapsedSeconds,
+      preExerciseMood,
+      postExerciseMood,
+      helpfulnessRating: rating,
+    });
+  };
+
+  const getCategoryIcon = () => {
+    switch (exercise.category) {
+      case ExerciseCategory.Breathing:
+        return <Wind className="w-8 h-8" />;
+      case ExerciseCategory.Visualization:
+        return <Eye className="w-8 h-8" />;
+      case ExerciseCategory.Focus:
+        return <Target className="w-8 h-8" />;
+      case ExerciseCategory.Mindset:
+        return <Brain className="w-8 h-8" />;
+      case ExerciseCategory.Confidence:
+        return <Star className="w-8 h-8" />;
+      default:
+        return <Brain className="w-8 h-8" />;
+    }
+  };
+
+  const getCategoryColor = () => {
+    switch (exercise.category) {
+      case ExerciseCategory.Breathing:
+        return 'from-cyan-500 to-blue-600';
+      case ExerciseCategory.Visualization:
+        return 'from-purple-500 to-indigo-600';
+      case ExerciseCategory.Focus:
+        return 'from-amber-500 to-orange-600';
+      case ExerciseCategory.Mindset:
+        return 'from-emerald-500 to-green-600';
+      case ExerciseCategory.Confidence:
+        return 'from-yellow-500 to-amber-600';
+      default:
+        return 'from-zinc-500 to-zinc-600';
+    }
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-xl"
+    >
+      {/* Ambient background */}
+      <div className="absolute inset-0 overflow-hidden">
+        <div className={`absolute top-1/4 left-1/4 w-96 h-96 bg-gradient-to-br ${getCategoryColor()} rounded-full blur-[120px] opacity-20`} />
+        <div className={`absolute bottom-1/4 right-1/4 w-96 h-96 bg-gradient-to-br ${getCategoryColor()} rounded-full blur-[120px] opacity-20`} />
+      </div>
+
+      {/* Close button */}
+      <button
+        onClick={() => {
+          stopNarration();
+          onClose();
+        }}
+        className="absolute top-6 right-6 p-2 rounded-full bg-white/5 hover:bg-white/10 transition-colors z-10"
+      >
+        <X className="w-6 h-6 text-white/70" />
+      </button>
+
+      {/* Sound toggle */}
+      <button
+        onClick={() => {
+          const next = !soundEnabled;
+          setSoundEnabled(next);
+          if (!next) stopNarration();
+        }}
+        className="absolute top-6 left-6 p-2 rounded-full bg-white/5 hover:bg-white/10 transition-colors z-10"
+      >
+        {soundEnabled ? (
+          <Volume2 className="w-6 h-6 text-white/70" />
+        ) : (
+          <VolumeX className="w-6 h-6 text-white/70" />
+        )}
+      </button>
+
+      {/* Voice selection is controlled by admins */}
+
+      {/* Content */}
+      <div className="relative w-full max-w-2xl mx-4">
+        <AnimatePresence mode="wait">
+          {state === 'intro' && (
+            <IntroScreen
+              key="intro"
+              exercise={exercise}
+              categoryIcon={getCategoryIcon()}
+              categoryColor={getCategoryColor()}
+              onStart={handleStart}
+            />
+          )}
+
+          {state === 'pre-mood' && (
+            <MoodSelector
+              key="pre-mood"
+              title="Before we begin..."
+              subtitle="How are you feeling right now?"
+              onSelect={handlePreMoodSelect}
+            />
+          )}
+
+          {state === 'active' && (
+            <ActiveExercise
+              key="active"
+              exercise={exercise}
+              isPaused={isPaused}
+              elapsedSeconds={elapsedSeconds}
+              categoryColor={getCategoryColor()}
+              onPause={() => setIsPaused(true)}
+              onResume={() => setIsPaused(false)}
+              onComplete={handleExerciseComplete}
+              soundEnabled={soundEnabled}
+            />
+          )}
+
+          {state === 'post-mood' && (
+            <MoodSelector
+              key="post-mood"
+              title="Exercise complete!"
+              subtitle="How do you feel now?"
+              onSelect={handlePostMoodSelect}
+            />
+          )}
+
+          {state === 'complete' && (
+            <CompletionScreen
+              key="complete"
+              exercise={exercise}
+              elapsedSeconds={elapsedSeconds}
+              preExerciseMood={preExerciseMood}
+              postExerciseMood={postExerciseMood}
+              categoryColor={getCategoryColor()}
+              onRate={handleFinalComplete}
+            />
+          )}
+        </AnimatePresence>
+      </div>
+    </motion.div>
+  );
+};
+
+// ============================================================================
+// INTRO SCREEN
+// ============================================================================
+
+interface IntroScreenProps {
+  exercise: MentalExercise;
+  categoryIcon: React.ReactNode;
+  categoryColor: string;
+  onStart: () => void;
+}
+
+const IntroScreen: React.FC<IntroScreenProps> = ({
+  exercise,
+  categoryIcon,
+  categoryColor,
+  onStart,
+}) => (
+  <motion.div
+    initial={{ opacity: 0, y: 20 }}
+    animate={{ opacity: 1, y: 0 }}
+    exit={{ opacity: 0, y: -20 }}
+    className="text-center"
+  >
+    {/* Icon */}
+    <motion.div
+      initial={{ scale: 0.8 }}
+      animate={{ scale: 1 }}
+      transition={{ type: 'spring', delay: 0.1 }}
+      className={`mx-auto w-24 h-24 rounded-3xl bg-gradient-to-br ${categoryColor} flex items-center justify-center mb-8`}
+    >
+      <div className="text-white">{categoryIcon}</div>
+    </motion.div>
+
+    {/* Title */}
+    <h1 className="text-3xl font-bold text-white mb-4">{exercise.name}</h1>
+    
+    {/* Description */}
+    <p className="text-lg text-white/70 mb-8 max-w-md mx-auto">
+      {exercise.description}
+    </p>
+
+    {/* Duration */}
+    <div className="flex items-center justify-center gap-6 mb-10 text-white/60">
+      <span>{exercise.durationMinutes} min</span>
+      <span>•</span>
+      <span className="capitalize">{exercise.difficulty}</span>
+    </div>
+
+    {/* Benefits */}
+    <div className="flex flex-wrap justify-center gap-2 mb-10">
+      {exercise.benefits.slice(0, 3).map((benefit, i) => (
+        <span
+          key={i}
+          className="px-3 py-1 rounded-full bg-white/10 text-white/80 text-sm"
+        >
+          {benefit}
+        </span>
+      ))}
+    </div>
+
+    {/* Start button */}
+    <motion.button
+      whileHover={{ scale: 1.05 }}
+      whileTap={{ scale: 0.95 }}
+      onClick={onStart}
+      className={`px-10 py-4 rounded-2xl bg-gradient-to-r ${categoryColor} text-white font-semibold text-lg shadow-lg`}
+    >
+      Begin Exercise
+    </motion.button>
+  </motion.div>
+);
+
+// ============================================================================
+// MOOD SELECTOR
+// ============================================================================
+
+interface MoodSelectorProps {
+  title: string;
+  subtitle: string;
+  onSelect: (mood: number) => void;
+}
+
+const MoodSelector: React.FC<MoodSelectorProps> = ({ title, subtitle, onSelect }) => {
+  const moods = [
+    { value: 1, emoji: '😰', label: 'Stressed' },
+    { value: 2, emoji: '😔', label: 'Low' },
+    { value: 3, emoji: '😐', label: 'Neutral' },
+    { value: 4, emoji: '😊', label: 'Good' },
+    { value: 5, emoji: '🔥', label: 'Great' },
+  ];
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      className="text-center"
+    >
+      <h2 className="text-2xl font-bold text-white mb-2">{title}</h2>
+      <p className="text-white/60 mb-10">{subtitle}</p>
+
+      <div className="flex justify-center gap-4">
+        {moods.map((mood) => (
+          <motion.button
+            key={mood.value}
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => onSelect(mood.value)}
+            className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-white/5 hover:bg-white/10 transition-colors"
+          >
+            <span className="text-4xl">{mood.emoji}</span>
+            <span className="text-sm text-white/60">{mood.label}</span>
+          </motion.button>
+        ))}
+      </div>
+    </motion.div>
+  );
+};
+
+// ============================================================================
+// ACTIVE EXERCISE
+// ============================================================================
+
+interface ActiveExerciseProps {
+  exercise: MentalExercise;
+  isPaused: boolean;
+  elapsedSeconds: number;
+  categoryColor: string;
+  onPause: () => void;
+  onResume: () => void;
+  onComplete: () => void;
+  soundEnabled: boolean;
+}
+
+const ActiveExercise: React.FC<ActiveExerciseProps> = ({
+  exercise,
+  isPaused,
+  elapsedSeconds,
+  categoryColor,
+  onPause,
+  onResume,
+  onComplete,
+  soundEnabled,
+}) => {
+  if (exercise.exerciseConfig.type === 'breathing') {
+    return (
+      <BreathingExercise
+        config={exercise.exerciseConfig.config}
+        isPaused={isPaused}
+        categoryColor={categoryColor}
+        onPause={onPause}
+        onResume={onResume}
+        onComplete={onComplete}
+        soundEnabled={soundEnabled}
+      />
+    );
+  }
+
+  if (exercise.exerciseConfig.type === 'focus') {
+    return (
+      <FocusExercise
+        config={exercise.exerciseConfig.config}
+        isPaused={isPaused}
+        elapsedSeconds={elapsedSeconds}
+        categoryColor={categoryColor}
+        onPause={onPause}
+        onResume={onResume}
+        onComplete={onComplete}
+      />
+    );
+  }
+
+  // Generic prompt-based exercise for visualization, mindset, confidence
+  return (
+    <PromptExercise
+      exercise={exercise}
+      isPaused={isPaused}
+      elapsedSeconds={elapsedSeconds}
+      categoryColor={categoryColor}
+      onPause={onPause}
+      onResume={onResume}
+      onComplete={onComplete}
+      soundEnabled={soundEnabled}
+    />
+  );
+};
+
+// ============================================================================
+// FOCUS EXERCISE (game-like module)
+// ============================================================================
+
+interface FocusExerciseProps {
+  config: any;
+  isPaused: boolean;
+  elapsedSeconds: number;
+  categoryColor: string;
+  onPause: () => void;
+  onResume: () => void;
+  onComplete: () => void;
+}
+
+const FocusExercise: React.FC<FocusExerciseProps> = ({
+  config,
+  isPaused,
+  elapsedSeconds,
+  categoryColor,
+  onPause,
+  onResume,
+  onComplete,
+}) => {
+  const duration = typeof config?.duration === 'number' ? config.duration : 180;
+  const remaining = Math.max(0, duration - elapsedSeconds);
+
+  const instructions: string[] = Array.isArray(config?.instructions) ? config.instructions.filter(Boolean) : [];
+  const [step, setStep] = useState(0);
+  const safeTotalSteps = Math.max(1, instructions.length);
+  const currentInstruction = instructions[step] || 'Keep your attention on the target.';
+  const narrationRunIdRef = useRef(0);
+
+  // Auto-complete when timer ends (unless paused)
+  useEffect(() => {
+    if (isPaused) return;
+    if (remaining <= 0) onComplete();
+  }, [isPaused, remaining, onComplete]);
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const mode = config?.type || 'single_point';
+
+  // “Something moving” for all focus modes: at minimum pulse + subtle drift.
+  const shouldMove = !isPaused;
+  const moveTransition = { duration: 6, repeat: Infinity, ease: 'easeInOut' as const };
+
+  const movingDotAnimate =
+    mode === 'distraction'
+      ? { x: [0, 120, -80, 140, 0], y: [0, -90, 110, 40, 0] }
+      : { x: [0, 10, -8, 6, 0], y: [0, -6, 8, -4, 0], scale: [1, 1.08, 1] };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      className="text-center"
+    >
+      {/* Top status */}
+      <div className="flex items-center justify-between mb-8 text-white/60 text-sm">
+        <span>
+          Step {step + 1} of {safeTotalSteps}
+        </span>
+        <span className="font-mono">{formatTime(remaining)}</span>
+      </div>
+
+      {/* Progress bar */}
+      <div className="h-1 bg-white/10 rounded-full mb-10 overflow-hidden">
+        <motion.div
+          initial={{ width: 0 }}
+          animate={{ width: `${Math.min(100, (elapsedSeconds / duration) * 100)}%` }}
+          className={`h-full bg-gradient-to-r ${categoryColor}`}
+        />
+      </div>
+
+      {/* Focus “game” area */}
+      <div className="relative mx-auto w-full max-w-xl h-[320px] rounded-3xl bg-white/5 border border-white/10 overflow-hidden mb-10">
+        {/* Soft glow */}
+        <div className={`absolute -top-24 -left-24 w-72 h-72 bg-gradient-to-br ${categoryColor} opacity-15 blur-[80px]`} />
+        <div className={`absolute -bottom-24 -right-24 w-72 h-72 bg-gradient-to-br ${categoryColor} opacity-15 blur-[80px]`} />
+
+        {/* Target / dot */}
+        <div className="absolute inset-0 flex items-center justify-center">
+          <motion.div
+            animate={shouldMove ? movingDotAnimate : { x: 0, y: 0, scale: 1 }}
+            transition={moveTransition}
+            className="relative"
+          >
+            {/* Outer rings */}
+            <motion.div
+              animate={shouldMove ? { scale: [1, 1.35, 1], opacity: [0.4, 0.12, 0.4] } : { scale: 1, opacity: 0.25 }}
+              transition={{ duration: 2.6, repeat: Infinity, ease: 'easeInOut' }}
+              className={`absolute -inset-10 rounded-full bg-gradient-to-br ${categoryColor} blur-xl`}
+            />
+            <div className="w-4 h-4 rounded-full bg-white shadow-[0_0_0_8px_rgba(255,255,255,0.06)]" />
+          </motion.div>
+        </div>
+
+        {/* Instruction */}
+        <div className="absolute bottom-5 left-5 right-5">
+          <div className="px-4 py-3 rounded-2xl bg-black/35 border border-white/10 backdrop-blur-xl">
+            <p className="text-white text-sm leading-snug">{currentInstruction}</p>
+            {mode === 'distraction' && (
+              <p className="text-white/60 text-xs mt-1">
+                Distraction mode: keep your eyes on the moving target. If your mind wanders, gently return.
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Auto-read instruction + advance when narration ends */}
+      <AutoNarrator
+        enabled={!isPaused}
+        text={currentInstruction}
+        onDone={() => {
+          if (instructions.length <= 1) return;
+          if (step < safeTotalSteps - 1) setStep((prev) => prev + 1);
+        }}
+        runIdRef={narrationRunIdRef}
+        voiceChoice={null}
+      />
+
+      {/* Controls */}
+      <div className="flex justify-center gap-4">
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={isPaused ? onResume : onPause}
+          className="p-4 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+        >
+          {isPaused ? <Play className="w-6 h-6 text-white" /> : <Pause className="w-6 h-6 text-white" />}
+        </motion.button>
+
+        <motion.button
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.97 }}
+          onClick={() => {
+            stopNarration();
+            if (instructions.length <= 1) {
+              onComplete();
+              return;
+            }
+            setStep((prev) => Math.min(prev + 1, safeTotalSteps - 1));
+          }}
+          className={`flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r ${categoryColor} text-white font-semibold`}
+        >
+          {instructions.length > 1 && step < safeTotalSteps - 1 ? 'Next' : 'Complete'}
+          <ChevronRight className="w-5 h-5" />
+        </motion.button>
+      </div>
+    </motion.div>
+  );
+};
+
+// ============================================================================
+// BREATHING EXERCISE
+// ============================================================================
+
+interface BreathingExerciseProps {
+  config: any;
+  isPaused: boolean;
+  categoryColor: string;
+  onPause: () => void;
+  onResume: () => void;
+  onComplete: () => void;
+  soundEnabled: boolean;
+}
+
+const BreathingExercise: React.FC<BreathingExerciseProps> = ({
+  config,
+  isPaused,
+  categoryColor,
+  onPause,
+  onResume,
+  onComplete,
+  soundEnabled,
+}) => {
+  const DEBUG_BREATHING = true;
+  // Stable-ish id per mount to correlate logs (not cryptographically random)
+  const debugIdRef = useRef(`breath-${Date.now().toString(16)}-${Math.random().toString(16).slice(2, 8)}`);
+
+  // IMPORTANT: onComplete identity changes every render in parent (it’s an inline function),
+  // which was causing this component’s timer effect to teardown/restart every second.
+  // We store it in a ref to keep the interval stable.
+  const onCompleteRef = useRef(onComplete);
+  useEffect(() => {
+    onCompleteRef.current = onComplete;
+  }, [onComplete]);
+
+  // Use refs for values that need to be accessed in interval without causing re-renders
+  const phaseIndexRef = useRef(0);
+  const cycleRef = useRef(1);
+  const countdownRef = useRef(config.phases[0]?.duration || 4);
+  const completedRef = useRef(false);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // State for UI rendering only
+  const [displayState, setDisplayState] = useState({
+    phaseIndex: 0,
+    cycle: 1,
+    countdown: config.phases[0]?.duration || 4,
+  });
+
+  const currentPhase = config.phases[displayState.phaseIndex];
+  const totalCycles = config.cycles || 6;
+
+  useEffect(() => {
+    if (!DEBUG_BREATHING) return;
+    console.log(`[BreathingExercise:${debugIdRef.current}] MOUNT`, {
+      visibility: typeof document !== 'undefined' ? document.visibilityState : 'unknown',
+      phases: config?.phases?.map((p: any) => ({ name: p?.name, duration: p?.duration, instruction: p?.instruction })),
+      cycles: config?.cycles,
+      initial: {
+        phaseIndexRef: phaseIndexRef.current,
+        cycleRef: cycleRef.current,
+        countdownRef: countdownRef.current,
+        displayState,
+        isPaused,
+        completed: completedRef.current,
+      },
+    });
+    return () => {
+      console.log(`[BreathingExercise:${debugIdRef.current}] UNMOUNT`, {
+        phaseIndexRef: phaseIndexRef.current,
+        cycleRef: cycleRef.current,
+        countdownRef: countdownRef.current,
+        displayState,
+        isPaused,
+        completed: completedRef.current,
+        hadInterval: !!intervalRef.current,
+      });
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!DEBUG_BREATHING) return;
+    console.log(`[BreathingExercise:${debugIdRef.current}] isPaused changed`, { isPaused });
+  }, [isPaused]);
+
+  useEffect(() => {
+    if (!DEBUG_BREATHING) return;
+    console.log(`[BreathingExercise:${debugIdRef.current}] displayState`, displayState);
+  }, [displayState]);
+
+  // Main timer effect
+  useEffect(() => {
+    if (isPaused || completedRef.current) {
+      if (intervalRef.current) {
+        if (DEBUG_BREATHING) {
+          console.log(`[BreathingExercise:${debugIdRef.current}] STOP interval (paused/completed)`, {
+            isPaused,
+            completed: completedRef.current,
+            phaseIndexRef: phaseIndexRef.current,
+            cycleRef: cycleRef.current,
+            countdownRef: countdownRef.current,
+          });
+        }
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      return;
+    }
+
+    if (intervalRef.current) {
+      if (DEBUG_BREATHING) {
+        console.log(`[BreathingExercise:${debugIdRef.current}] interval already running; skipping start`, {
+          phaseIndexRef: phaseIndexRef.current,
+          cycleRef: cycleRef.current,
+          countdownRef: countdownRef.current,
+        });
+      }
+      return;
+    }
+
+    if (DEBUG_BREATHING) {
+      console.log(`[BreathingExercise:${debugIdRef.current}] START interval`, {
+        visibility: typeof document !== 'undefined' ? document.visibilityState : 'unknown',
+        now: Date.now(),
+        phaseIndexRef: phaseIndexRef.current,
+        cycleRef: cycleRef.current,
+        countdownRef: countdownRef.current,
+        totalCycles,
+      });
+    }
+
+    intervalRef.current = setInterval(() => {
+      if (DEBUG_BREATHING) {
+        console.log(`[BreathingExercise:${debugIdRef.current}] TICK (before)`, {
+          t: Date.now(),
+          visibility: typeof document !== 'undefined' ? document.visibilityState : 'unknown',
+          phaseIndexRef: phaseIndexRef.current,
+          cycleRef: cycleRef.current,
+          countdownRef: countdownRef.current,
+          currentPhase: config?.phases?.[phaseIndexRef.current]?.name,
+        });
+      }
+
+      // Decrement countdown
+      countdownRef.current -= 1;
+
+      if (countdownRef.current <= 0) {
+        // Move to next phase
+        const nextIndex = phaseIndexRef.current + 1;
+
+        if (nextIndex >= config.phases.length) {
+          // End of cycle - check if we're done
+          if (cycleRef.current >= totalCycles) {
+            // Exercise complete!
+            completedRef.current = true;
+            if (intervalRef.current) {
+              clearInterval(intervalRef.current);
+              intervalRef.current = null;
+            }
+            if (DEBUG_BREATHING) {
+              console.log(`[BreathingExercise:${debugIdRef.current}] COMPLETE`, {
+                t: Date.now(),
+                finalCycle: cycleRef.current,
+                finalPhaseIndex: phaseIndexRef.current,
+              });
+            }
+            onCompleteRef.current();
+            return;
+          }
+          // Start new cycle
+          cycleRef.current += 1;
+          phaseIndexRef.current = 0;
+          countdownRef.current = config.phases[0]?.duration || 4;
+          if (DEBUG_BREATHING) {
+            console.log(`[BreathingExercise:${debugIdRef.current}] NEW CYCLE`, {
+              t: Date.now(),
+              cycle: cycleRef.current,
+              phaseIndex: phaseIndexRef.current,
+              countdown: countdownRef.current,
+              phase: config?.phases?.[0]?.name,
+            });
+          }
+        } else {
+          // Move to next phase in current cycle
+          phaseIndexRef.current = nextIndex;
+          countdownRef.current = config.phases[nextIndex]?.duration || 4;
+          if (DEBUG_BREATHING) {
+            console.log(`[BreathingExercise:${debugIdRef.current}] NEXT PHASE`, {
+              t: Date.now(),
+              cycle: cycleRef.current,
+              phaseIndex: phaseIndexRef.current,
+              countdown: countdownRef.current,
+              phase: config?.phases?.[phaseIndexRef.current]?.name,
+            });
+          }
+        }
+      }
+
+      // Update display state
+      setDisplayState({
+        phaseIndex: phaseIndexRef.current,
+        cycle: cycleRef.current,
+        countdown: countdownRef.current,
+      });
+
+      if (DEBUG_BREATHING) {
+        console.log(`[BreathingExercise:${debugIdRef.current}] TICK (after)`, {
+          t: Date.now(),
+          phaseIndexRef: phaseIndexRef.current,
+          cycleRef: cycleRef.current,
+          countdownRef: countdownRef.current,
+          currentPhase: config?.phases?.[phaseIndexRef.current]?.name,
+        });
+      }
+    }, 1000);
+
+    if (DEBUG_BREATHING) {
+      // Sanity check: if we don't see a tick within ~1.3s, something is wrong.
+      const sanity = setTimeout(() => {
+        console.log(`[BreathingExercise:${debugIdRef.current}] SANITY (1.3s after start)`, {
+          intervalStillPresent: !!intervalRef.current,
+          isPaused,
+          completed: completedRef.current,
+          phaseIndexRef: phaseIndexRef.current,
+          cycleRef: cycleRef.current,
+          countdownRef: countdownRef.current,
+          visibility: typeof document !== 'undefined' ? document.visibilityState : 'unknown',
+        });
+      }, 1300);
+      // Clear sanity timeout on cleanup
+      // eslint-disable-next-line consistent-return
+      return () => {
+        clearTimeout(sanity);
+        if (intervalRef.current) {
+          console.log(`[BreathingExercise:${debugIdRef.current}] CLEANUP interval`, {
+            t: Date.now(),
+            phaseIndexRef: phaseIndexRef.current,
+            cycleRef: cycleRef.current,
+            countdownRef: countdownRef.current,
+          });
+          clearInterval(intervalRef.current);
+          intervalRef.current = null;
+        } else {
+          console.log(`[BreathingExercise:${debugIdRef.current}] CLEANUP (no interval)`, { t: Date.now() });
+        }
+      };
+    }
+
+    return () => {
+      if (intervalRef.current) {
+        if (DEBUG_BREATHING) {
+          console.log(`[BreathingExercise:${debugIdRef.current}] CLEANUP interval`, {
+            t: Date.now(),
+            phaseIndexRef: phaseIndexRef.current,
+            cycleRef: cycleRef.current,
+            countdownRef: countdownRef.current,
+          });
+        }
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
+  }, [isPaused, config.phases, totalCycles]);
+
+  // Calculate breath scale based on current phase
+  const getBreathScale = () => {
+    if (currentPhase?.name === 'inhale') return 1.4;
+    if (currentPhase?.name === 'exhale') return 0.8;
+    if (currentPhase?.name === 'hold') return 1.4; // Stay expanded
+    if (currentPhase?.name === 'holdEmpty') return 0.8; // Stay contracted
+    return 1;
+  };
+
+  const breathScale = getBreathScale();
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      className="text-center"
+    >
+      {/* Cycle indicator */}
+      <div className="flex justify-center gap-2 mb-8">
+        {Array.from({ length: totalCycles }).map((_, i) => (
+          <div
+            key={i}
+            className={`w-3 h-3 rounded-full transition-colors ${
+              i < displayState.cycle ? `bg-gradient-to-r ${categoryColor}` : 'bg-white/20'
+            }`}
+          />
+        ))}
+      </div>
+
+      {/* Breathing circle */}
+      <div className="relative w-72 h-72 mx-auto mb-8">
+        {/* Outer glow */}
+        <motion.div
+          animate={{ scale: breathScale }}
+          transition={{ duration: currentPhase?.duration || 4, ease: 'easeInOut' }}
+          className={`absolute inset-0 rounded-full bg-gradient-to-br ${categoryColor} opacity-20 blur-xl`}
+        />
+        
+        {/* Main circle */}
+        <motion.div
+          animate={{ scale: breathScale }}
+          transition={{ duration: currentPhase?.duration || 4, ease: 'easeInOut' }}
+          className={`absolute inset-4 rounded-full bg-gradient-to-br ${categoryColor} opacity-40`}
+        />
+        
+        {/* Inner circle with countdown */}
+        <motion.div
+          animate={{ scale: breathScale }}
+          transition={{ duration: currentPhase?.duration || 4, ease: 'easeInOut' }}
+          className={`absolute inset-12 rounded-full bg-gradient-to-br ${categoryColor} flex items-center justify-center`}
+        >
+          <span className="text-6xl font-bold text-white">{displayState.countdown}</span>
+        </motion.div>
+      </div>
+
+      {/* Instruction */}
+      <h2 className="text-2xl font-semibold text-white mb-2">
+        {currentPhase?.instruction || 'Breathe'}
+      </h2>
+      <p className="text-white/60 mb-8">
+        Cycle {displayState.cycle} of {totalCycles}
+      </p>
+
+      {/* Controls */}
+      <div className="flex justify-center gap-4">
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={isPaused ? onResume : onPause}
+          className="p-4 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+        >
+          {isPaused ? (
+            <Play className="w-6 h-6 text-white" />
+          ) : (
+            <Pause className="w-6 h-6 text-white" />
+          )}
+        </motion.button>
+        
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={onComplete}
+          className="p-4 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+        >
+          <SkipForward className="w-6 h-6 text-white" />
+        </motion.button>
+      </div>
+    </motion.div>
+  );
+};
+
+// ============================================================================
+// PROMPT EXERCISE
+// ============================================================================
+
+interface PromptExerciseProps {
+  exercise: MentalExercise;
+  isPaused: boolean;
+  elapsedSeconds: number;
+  categoryColor: string;
+  onPause: () => void;
+  onResume: () => void;
+  onComplete: () => void;
+  soundEnabled?: boolean;
+}
+
+const PromptExercise: React.FC<PromptExerciseProps> = ({
+  exercise,
+  isPaused,
+  elapsedSeconds,
+  categoryColor,
+  onPause,
+  onResume,
+  onComplete,
+  soundEnabled = true,
+}) => {
+  const [currentPromptIndex, setCurrentPromptIndex] = useState(0);
+  const [hasFinishedAllPrompts, setHasFinishedAllPrompts] = useState(false);
+  const narrationRunIdRef = useRef(0);
+  
+  const config = exercise.exerciseConfig.config as any;
+  const prompts = Array.isArray(config?.prompts) ? config.prompts.filter(Boolean) : [];
+  const safeTotalPrompts = Math.max(1, prompts.length);
+  const currentPrompt = prompts[currentPromptIndex];
+  const isLastPrompt = prompts.length === 0 ? true : currentPromptIndex >= prompts.length - 1;
+  const targetDuration = typeof config?.duration === 'number' ? config.duration : undefined;
+  const remaining = targetDuration != null ? Math.max(0, targetDuration - elapsedSeconds) : undefined;
+
+  const handleNext = () => {
+    if (isLastPrompt) {
+      onComplete();
+    } else {
+      setCurrentPromptIndex((prev) => prev + 1);
+    }
+  };
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      className="text-center"
+    >
+      {/* Progress */}
+      <div className="flex items-center justify-between mb-8">
+        <span className="text-white/60 text-sm">
+          Step {Math.min(currentPromptIndex + 1, safeTotalPrompts)} of {safeTotalPrompts}
+        </span>
+        <span className="text-white/60 text-sm font-mono">
+          {remaining != null ? formatTime(remaining) : formatTime(elapsedSeconds)}
+        </span>
+      </div>
+
+      {/* Progress bar */}
+      <div className="h-1 bg-white/10 rounded-full mb-10 overflow-hidden">
+        <motion.div
+          initial={{ width: 0 }}
+          animate={{ width: `${(Math.min(currentPromptIndex + 1, safeTotalPrompts) / safeTotalPrompts) * 100}%` }}
+          className={`h-full bg-gradient-to-r ${categoryColor}`}
+        />
+      </div>
+
+      {/* Prompt */}
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={currentPromptIndex}
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -20 }}
+          className="min-h-[200px] flex items-center justify-center"
+        >
+          <p className="text-xl text-white leading-relaxed max-w-lg">
+            {currentPrompt || 'Stay with this for a moment. When you’re ready, tap Complete.'}
+          </p>
+        </motion.div>
+      </AnimatePresence>
+
+      {/* Auto-advance narration: read each step, then advance when finished */}
+      <AutoNarrator
+        enabled={soundEnabled && !isPaused}
+        text={currentPrompt || 'Stay with this for a moment. When you’re ready, tap Complete.'}
+        onDone={() => {
+          if (hasFinishedAllPrompts) return;
+          if (!isLastPrompt) {
+            setCurrentPromptIndex((prev) => prev + 1);
+            return;
+          }
+          // last prompt finished reading → keep running until timer ends (if duration provided)
+          setHasFinishedAllPrompts(true);
+        }}
+        runIdRef={narrationRunIdRef}
+        voiceChoice={null}
+      />
+
+      {/* After all prompts are read, silently continue until timer ends (if duration exists) */}
+      {hasFinishedAllPrompts && targetDuration != null && remaining === 0 && (
+        <AutoCompleteOnce onComplete={onComplete} />
+      )}
+
+      {/* Controls */}
+      <div className="flex justify-center gap-4 mt-10">
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={isPaused ? onResume : onPause}
+          className="p-4 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+        >
+          {isPaused ? (
+            <Play className="w-6 h-6 text-white" />
+          ) : (
+            <Pause className="w-6 h-6 text-white" />
+          )}
+        </motion.button>
+
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={() => {
+            stopNarration();
+            handleNext();
+          }}
+          className={`flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r ${categoryColor} text-white font-semibold`}
+        >
+          {isLastPrompt ? 'Complete' : 'Next'}
+          <ChevronRight className="w-5 h-5" />
+        </motion.button>
+      </div>
+    </motion.div>
+  );
+};
+
+const AutoCompleteOnce: React.FC<{ onComplete: () => void }> = ({ onComplete }) => {
+  const doneRef = useRef(false);
+  useEffect(() => {
+    if (doneRef.current) return;
+    doneRef.current = true;
+    onComplete();
+  }, [onComplete]);
+  return null;
+};
+
+const AutoNarrator: React.FC<{
+  enabled: boolean;
+  text: string;
+  onDone: () => void;
+  runIdRef: React.MutableRefObject<number>;
+  voiceChoice?: VoiceChoice | null;
+}> = ({ enabled, text, onDone, runIdRef }) => {
+  useEffect(() => {
+    if (!enabled) return;
+    const runId = (runIdRef.current += 1);
+    // cancel any previous narration before starting new
+    stopNarration();
+    speakStep(text, {
+      onEnd: () => {
+        // ignore stale runs
+        if (runIdRef.current !== runId) return;
+        onDone();
+      },
+      onError: () => {
+        // If TTS fails, don't block the flow — still advance
+        if (runIdRef.current !== runId) return;
+        onDone();
+      },
+    }, voiceChoice ?? null);
+    return () => {
+      // if text changes/unmounts, stop current narration
+      if (runIdRef.current === runId) stopNarration();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled, text, voiceChoice]);
+  return null;
+};
+
+// ============================================================================
+// COMPLETION SCREEN
+// ============================================================================
+
+interface CompletionScreenProps {
+  exercise: MentalExercise;
+  elapsedSeconds: number;
+  preExerciseMood?: number;
+  postExerciseMood?: number;
+  categoryColor: string;
+  onRate: (rating: number) => void;
+}
+
+const CompletionScreen: React.FC<CompletionScreenProps> = ({
+  exercise,
+  elapsedSeconds,
+  preExerciseMood,
+  postExerciseMood,
+  categoryColor,
+  onRate,
+}) => {
+  const moodImproved = postExerciseMood && preExerciseMood && postExerciseMood > preExerciseMood;
+  
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0 }}
+      className="text-center"
+    >
+      {/* Success icon */}
+      <motion.div
+        initial={{ scale: 0 }}
+        animate={{ scale: 1 }}
+        transition={{ type: 'spring', delay: 0.1 }}
+        className={`mx-auto w-20 h-20 rounded-full bg-gradient-to-br ${categoryColor} flex items-center justify-center mb-6`}
+      >
+        <CheckCircle className="w-10 h-10 text-white" />
+      </motion.div>
+
+      <h2 className="text-2xl font-bold text-white mb-2">Well Done!</h2>
+      <p className="text-white/60 mb-6">
+        You completed {exercise.name}
+      </p>
+
+      {/* Stats */}
+      <div className="flex justify-center gap-8 mb-8">
+        <div className="text-center">
+          <div className="text-2xl font-bold text-white">{formatTime(elapsedSeconds)}</div>
+          <div className="text-sm text-white/60">Duration</div>
+        </div>
+        
+        {moodImproved && (
+          <div className="text-center">
+            <div className="text-2xl font-bold text-green-400">+{postExerciseMood! - preExerciseMood!}</div>
+            <div className="text-sm text-white/60">Mood Change</div>
+          </div>
+        )}
+      </div>
+
+      {/* Rating prompt */}
+      <p className="text-white/80 mb-4">How helpful was this exercise?</p>
+      
+      <div className="flex justify-center gap-2 mb-8">
+        {[1, 2, 3, 4, 5].map((rating) => (
+          <motion.button
+            key={rating}
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => onRate(rating)}
+            className="w-12 h-12 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-white font-bold transition-colors"
+          >
+            {rating}
+          </motion.button>
+        ))}
+      </div>
+
+      <p className="text-sm text-white/40">1 = Not helpful, 5 = Very helpful</p>
+    </motion.div>
+  );
+};
+
+export default ExercisePlayer;

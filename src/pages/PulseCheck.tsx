@@ -8,17 +8,20 @@ import { useUser } from '../hooks/useUser';
 import SignInModal from '../components/SignInModal';
 import Chat from '../components/pulsecheck/Chat';
 import ConnectedCoachesBadge from '../components/pulsecheck/ConnectedCoachesBadge';
+import NoraOnboarding from '../components/pulsecheck/NoraOnboarding';
 import ProfilePhoto from '../components/pulsecheck/ProfilePhoto';
 import SideNav from '../components/Navigation/SideNav';
 import { ChevronDownIcon, ChevronUpIcon } from '@heroicons/react/24/outline';
 
 const STORAGE_KEY_PC = 'pulsecheck_has_seen_marketing';
+const STORAGE_KEY_NORA_ONBOARDING = 'pulsecheck_has_seen_nora_onboarding';
 
 const PulseCheckPage: NextPage = () => {
     const currentUser = useUser();
     const [showMarketing, setShowMarketing] = useState(true);
     const [isLoading, setIsLoading] = useState(true);
     const [isSignInModalOpen, setIsSignInModalOpen] = useState(false);
+    const [showNoraOnboarding, setShowNoraOnboarding] = useState(false);
     // Add custom styles for animations
     const customStyles = `
         @keyframes fadeInScale {
@@ -158,6 +161,23 @@ const PulseCheckPage: NextPage = () => {
         }
         setIsLoading(false);
     }, []);
+
+    // Check if user needs to see Nora onboarding (for logged-in users)
+    useEffect(() => {
+        if (currentUser && !showMarketing) {
+            const hasSeenNoraOnboarding = typeof window !== 'undefined' 
+                ? localStorage.getItem(STORAGE_KEY_NORA_ONBOARDING) 
+                : null;
+            if (hasSeenNoraOnboarding !== 'true') {
+                setShowNoraOnboarding(true);
+            }
+        }
+    }, [currentUser, showMarketing]);
+
+    const handleNoraOnboardingComplete = () => {
+        localStorage.setItem(STORAGE_KEY_NORA_ONBOARDING, 'true');
+        setShowNoraOnboarding(false);
+    };
 
     const handleUseWebApp = () => {
         if (currentUser) {
@@ -1545,6 +1565,24 @@ const PulseCheckPage: NextPage = () => {
 
     // If user chose web app (and is logged in), show web app content
     if (!showMarketing && currentUser) {
+        // Show Nora onboarding if user hasn't seen it yet
+        if (showNoraOnboarding) {
+            return (
+                <>
+                    <PageHead
+                        metaData={{
+                            pageId: "pulse-check-onboarding",
+                            pageTitle: "Meet Nora — Your AI Mental Performance Coach",
+                            metaDescription: "Your workout data now talks back. Meet Nora, your AI mental performance coach.",
+                            lastUpdated: new Date().toISOString()
+                        }}
+                        pageOgUrl="https://fitwithpulse.ai/PulseCheck"
+                    />
+                    <NoraOnboarding onComplete={handleNoraOnboardingComplete} />
+                </>
+            );
+        }
+
         return (
             <>
                 <PageHead

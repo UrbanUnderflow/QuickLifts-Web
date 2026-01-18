@@ -1,13 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useUser, useUserLoading } from '../../hooks/useUser';
 import { db } from '../../api/firebase/config';
 import { collection, getDocs, doc, getDoc, updateDoc, query, where, orderBy, limit } from 'firebase/firestore';
 import { convertFirestoreTimestamp } from '../../utils/formatDate';
-import { FaBars, FaTimes } from 'react-icons/fa';
-import { signOut } from 'firebase/auth';
-import { auth } from '../../api/firebase/config';
+import CoachLayout from '../../components/CoachLayout';
+import { motion } from 'framer-motion';
 
 type Invite = {
   coachId: string;
@@ -15,6 +13,18 @@ type Invite = {
   permission: 'full' | 'limited';
   allowedAthletes?: string[];
 };
+
+// Glass Card Component
+const GlassCard: React.FC<{
+  children: React.ReactNode;
+  className?: string;
+}> = ({ children, className = '' }) => (
+  <div className={`relative rounded-2xl backdrop-blur-md bg-zinc-900/60 border border-white/10 overflow-hidden ${className}`}>
+    {/* Top reflection line */}
+    <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#E0FE10]/40 to-transparent" />
+    {children}
+  </div>
+);
 
 const InboxPage: React.FC = () => {
   const router = useRouter();
@@ -34,33 +44,6 @@ const InboxPage: React.FC = () => {
     avatarUrl?: string;
     otherUserId?: string;
   }>>([]);
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [canSeeEarnings, setCanSeeEarnings] = useState(false);
-  const handleSignOut = async () => {
-    try {
-      await signOut(auth);
-      try { localStorage.removeItem('pulse_has_seen_marketing'); } catch (_) {}
-      router.replace('/');
-    } catch (err) {
-      console.error('Error signing out:', err);
-    }
-  };
-
-  // Manual accept only; no auto-accept from URL
-
-  useEffect(() => {
-    const loadCoachFlags = async () => {
-      if (!currentUser?.id) return;
-      try {
-        const snap = await getDoc(doc(db, 'coaches', currentUser.id));
-        const data: any = snap.exists() ? snap.data() : null;
-        setCanSeeEarnings(!!(data?.earningsAccess === true || data?.userType === 'partner'));
-      } catch (_) {
-        setCanSeeEarnings(false);
-      }
-    };
-    loadCoachFlags();
-  }, [currentUser?.id]);
 
   useEffect(() => {
     const loadInvites = async () => {
@@ -200,97 +183,29 @@ const InboxPage: React.FC = () => {
 
   if (loading || userLoading) {
     return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center">Loading...</div>
+      <CoachLayout title="Inbox" subtitle="See invites and messages" requiresActiveSubscription={false}>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+          <GlassCard className="p-8 text-center">
+            <div className="text-zinc-400">Loading...</div>
+          </GlassCard>
+        </div>
+      </CoachLayout>
     );
   }
 
   return (
-    <div className="min-h-screen bg-black text-white">
-      <div className="container mx-auto px-6 py-8">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-bold">Inbox</h1>
-            <p className="text-zinc-400">See invites and messages</p>
-          </div>
-          <nav className="hidden md:flex items-center gap-2">
-            {[
-              { href: '/coach/dashboard', label: 'Dashboard' },
-              { href: '/coach/referrals', label: 'Referrals' },
-              ...(canSeeEarnings ? [{ href: '/coach/revenue', label: 'Earnings' }] : []),
-              { href: '/coach/staff', label: 'Staff' },
-              { href: '/coach/inbox', label: 'Inbox' },
-              { href: '/coach/profile', label: 'Profile' }
-            ].map((item) => {
-              const isActive = router.pathname === item.href;
-              return (
-                <Link key={item.href} href={item.href} className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${isActive ? 'bg-[#E0FE10] text-black' : 'text-zinc-300 hover:text-white hover:bg-zinc-800'}`}>
-                  {item.label}
-                </Link>
-              );
-            })}
-          </nav>
-          <button
-            aria-label="Open navigation"
-            onClick={() => setMobileNavOpen(true)}
-            className="md:hidden inline-flex items-center justify-center p-2 rounded-md text-zinc-300 hover:text-white hover:bg-zinc-800"
-          >
-            <FaBars />
-          </button>
-        </div>
-
-        {/* Mobile slide-over navigation */}
-        {mobileNavOpen && (
-          <div className="fixed inset-0 z-50 md:hidden">
-            <div className="absolute inset-0 bg-black/60" onClick={() => setMobileNavOpen(false)} />
-            <div className="absolute top-0 right-0 h-full w-72 bg-zinc-900 border-l border-zinc-800 shadow-xl p-5 flex flex-col">
-              <div className="flex items-center justify-between mb-6">
-                <div className="text-lg font-semibold text-white">Menu</div>
-                <button aria-label="Close navigation" onClick={() => setMobileNavOpen(false)} className="inline-flex items-center justify-center p-2 rounded-md text-zinc-300 hover:text-white hover:bg-zinc-800">
-                  <FaTimes />
-                </button>
-              </div>
-              <div className="flex flex-col gap-2">
-                {[
-                  { href: '/coach/dashboard', label: 'Dashboard' },
-                  { href: '/coach/referrals', label: 'Referrals' },
-                  ...(canSeeEarnings ? [{ href: '/coach/revenue', label: 'Earnings' }] : []),
-                  { href: '/coach/staff', label: 'Staff' },
-                  { href: '/coach/inbox', label: 'Inbox' },
-                  { href: '/coach/profile', label: 'Profile' }
-                ].map((item) => {
-                  const isActive = router.pathname === item.href;
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      onClick={() => setMobileNavOpen(false)}
-                      className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                        isActive ? 'bg-[#E0FE10] text-black' : 'text-zinc-300 hover:text-white hover:bg-zinc-800'
-                      }`}
-                    >
-                      {item.label}
-                    </Link>
-                  );
-                })}
-              </div>
-              <div className="mt-auto pt-6 border-t border-zinc-800">
-                <button
-                  onClick={() => { setMobileNavOpen(false); handleSignOut(); }}
-                  className="w-full bg-zinc-800 text-white px-4 py-2 rounded-lg border border-zinc-700 hover:bg-zinc-700 transition-colors"
-                >
-                  Sign Out
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
+    <CoachLayout title="Inbox" subtitle="See invites and messages" requiresActiveSubscription={false}>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-8">
         {/* Staff Invites */}
-        <div className="mb-10">
-          <h3 className="text-xl font-semibold mb-3">Staff Invites</h3>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+        >
+          <h3 className="text-xl font-semibold mb-4 text-white">Staff Invites</h3>
           {acceptedCoachId && (
             <div className="mb-3 bg-green-600/15 border border-green-700 text-green-300 px-4 py-2 rounded-lg text-sm">
-              You’re now connected to the coach who invited you.
+              You're now connected to the coach who invited you.
             </div>
           )}
           {connectedCoaches.length > 0 && (
@@ -299,68 +214,105 @@ const InboxPage: React.FC = () => {
             </div>
           )}
           {invites.length === 0 ? (
-            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 text-zinc-400">No invites.</div>
+            <GlassCard className="p-6">
+              <div className="text-zinc-400">No invites.</div>
+            </GlassCard>
           ) : (
             <div className="space-y-3">
               {invites.map((inv) => (
-                <div key={inv.coachId} className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 flex items-center justify-between">
-                  <div>
-                    <div className="text-white">Invitation to join {inv.coachName || 'a coach'}'s staff</div>
-                    <div className="text-zinc-400 text-sm">Permission: {inv.permission === 'full' ? 'Full access' : 'Limited'}</div>
+                <GlassCard key={inv.coachId} className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-white">Invitation to join {inv.coachName || 'a coach'}'s staff</div>
+                      <div className="text-zinc-400 text-sm">Permission: {inv.permission === 'full' ? 'Full access' : 'Limited'}</div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <motion.button 
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={()=>acceptInvite(inv)} 
+                        className="bg-[#E0FE10] text-black px-4 py-2 rounded-xl font-medium"
+                      >
+                        Accept
+                      </motion.button>
+                      <motion.button 
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={()=>declineInvite(inv)} 
+                        className="bg-zinc-800/60 border border-zinc-700/50 text-white px-4 py-2 rounded-xl"
+                      >
+                        Decline
+                      </motion.button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <button onClick={()=>acceptInvite(inv)} className="bg-[#E0FE10] text-black px-3 py-1.5 rounded-md">Accept</button>
-                    <button onClick={()=>declineInvite(inv)} className="bg-zinc-800 border border-zinc-700 px-3 py-1.5 rounded-md">Decline</button>
-                  </div>
-                </div>
+                </GlassCard>
               ))}
             </div>
           )}
-        </div>
+        </motion.div>
 
         {/* Messages (from chats) */}
-        <div>
-          <h3 className="text-xl font-semibold mb-3">Messages</h3>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+        >
+          <h3 className="text-xl font-semibold mb-4 text-white">Messages</h3>
           {chats.length === 0 ? (
-            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 text-zinc-400">Messages will appear here soon.</div>
+            <GlassCard className="p-6">
+              <div className="text-zinc-400">Messages will appear here soon.</div>
+            </GlassCard>
           ) : (
             <div className="space-y-2">
-              {chats.map((chat) => (
-                <button
+              {chats.map((chat, idx) => (
+                <motion.button
                   key={chat.id}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: idx * 0.05 }}
                   onClick={() => router.push(`/messages/dm/${chat.id}`)}
-                  className="w-full flex items-start gap-4 p-4 rounded-xl bg-zinc-900 hover:bg-zinc-800 transition-colors text-left"
+                  className="w-full"
                 >
-                  {/* Avatar */}
-                  <div className="flex-shrink-0">
-                    {chat.avatarUrl ? (
-                      <img src={chat.avatarUrl} alt={chat.title} className="w-12 h-12 rounded-full object-cover" />
-                    ) : (
-                      <div className="w-12 h-12 rounded-full flex items-center justify-center bg-gradient-to-br from-green-500 to-emerald-600">
-                        <span className="text-white font-semibold text-lg">{chat.title?.[0]?.toUpperCase() || 'U'}</span>
+                  <GlassCard className="p-4 hover:bg-zinc-800/40 transition-colors">
+                    <div className="flex items-start gap-4 text-left">
+                      {/* Avatar */}
+                      <div className="flex-shrink-0">
+                        {chat.avatarUrl ? (
+                          <img src={chat.avatarUrl} alt={chat.title} className="w-12 h-12 rounded-full object-cover border border-zinc-700/50" />
+                        ) : (
+                          <div className="w-12 h-12 rounded-full flex items-center justify-center bg-gradient-to-br from-[#E0FE10] to-green-500">
+                            <span className="text-black font-semibold text-lg">{chat.title?.[0]?.toUpperCase() || 'U'}</span>
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
 
-                  {/* Content */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between mb-1">
-                      <h4 className="font-semibold text-white truncate">{chat.title}</h4>
-                      <span className="text-xs text-gray-500 ml-2">{chat.lastMessageTime.toLocaleDateString?.() || ''}</span>
+                      {/* Content */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-1">
+                          <h4 className="font-semibold text-white truncate">{chat.title}</h4>
+                          <span className="text-xs text-zinc-500 ml-2">{chat.lastMessageTime.toLocaleDateString?.() || ''}</span>
+                        </div>
+                        <p className="text-sm text-zinc-400 truncate">{chat.lastMessage}</p>
+                      </div>
                     </div>
-                    <p className="text-sm text-gray-400 truncate">{chat.lastMessage}</p>
-                  </div>
-                </button>
+                  </GlassCard>
+                </motion.button>
               ))}
             </div>
           )}
-        </div>
+        </motion.div>
 
         {toast && (
-          <div className="fixed bottom-5 right-5 bg-zinc-900 border border-zinc-700 text-white px-4 py-2 rounded-lg text-sm">{toast}</div>
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="fixed bottom-5 right-5 bg-zinc-900/90 backdrop-blur-lg border border-zinc-700 text-white px-4 py-2 rounded-lg text-sm"
+          >
+            {toast}
+          </motion.div>
         )}
       </div>
-    </div>
+    </CoachLayout>
   );
 };
 

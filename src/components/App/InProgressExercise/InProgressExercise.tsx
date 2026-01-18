@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { X } from 'lucide-react';
-import { ExerciseLog, Exercise } from '../../../api/firebase/exercise/types';
+import { X, Play, Pause, CheckCircle2, Dumbbell, Timer, Repeat } from 'lucide-react';
+import { ExerciseLog } from '../../../api/firebase/exercise/types';
 import Modal from '../../../components/Modal';
 
 interface InProgressExerciseProps {
@@ -11,6 +11,9 @@ interface InProgressExerciseProps {
   onClose: () => void;
   onExerciseSelect: (index: number) => void;
 }
+
+// Chromatic Glass color palette
+const accentColor = '#E0FE10';
 
 const InProgressExercise: React.FC<InProgressExerciseProps> = ({
   exercises,
@@ -23,9 +26,13 @@ const InProgressExercise: React.FC<InProgressExerciseProps> = ({
   // Initial validation
   if (!exercises || exercises.length === 0) {
     return (
-      <div className="fixed inset-0 bg-zinc-900 flex items-center justify-center">
-        <p className="text-white">No exercises available</p>
-        <button onClick={onClose} className="mt-4 bg-[#E0FE10] text-black px-4 py-2 rounded">
+      <div className="fixed inset-0 bg-[#0a0a0b] flex flex-col items-center justify-center p-6">
+        <p className="text-white text-lg mb-4">No exercises available</p>
+        <button 
+          onClick={onClose} 
+          className="px-6 py-3 rounded-xl font-medium"
+          style={{ backgroundColor: accentColor, color: '#0a0a0b' }}
+        >
           Close Workout
         </button>
       </div>
@@ -34,9 +41,13 @@ const InProgressExercise: React.FC<InProgressExerciseProps> = ({
 
   if (currentExerciseIndex < 0 || currentExerciseIndex >= exercises.length) {
     return (
-      <div className="fixed inset-0 bg-zinc-900 flex items-center justify-center">
-        <p className="text-white">Invalid exercise selection</p>
-        <button onClick={onClose} className="mt-4 bg-[#E0FE10] text-black px-4 py-2 rounded">
+      <div className="fixed inset-0 bg-[#0a0a0b] flex flex-col items-center justify-center p-6">
+        <p className="text-white text-lg mb-4">Invalid exercise selection</p>
+        <button 
+          onClick={onClose} 
+          className="px-6 py-3 rounded-xl font-medium"
+          style={{ backgroundColor: accentColor, color: '#0a0a0b' }}
+        >
           Close Workout
         </button>
       </div>
@@ -49,16 +60,20 @@ const InProgressExercise: React.FC<InProgressExerciseProps> = ({
 
   if (!currentExercise) {
     return (
-      <div className="fixed inset-0 bg-zinc-900 flex items-center justify-center">
-        <p className="text-white">Exercise data is missing</p>
-        <button onClick={onClose} className="mt-4 bg-[#E0FE10] text-black px-4 py-2 rounded">
+      <div className="fixed inset-0 bg-[#0a0a0b] flex flex-col items-center justify-center p-6">
+        <p className="text-white text-lg mb-4">Exercise data is missing</p>
+        <button 
+          onClick={onClose} 
+          className="px-6 py-3 rounded-xl font-medium"
+          style={{ backgroundColor: accentColor, color: '#0a0a0b' }}
+        >
           Close Workout
         </button>
       </div>
     );
   }
 
-  // Timer state management with useState callbacks to ensure proper initialization
+  // Timer state management
   const [isPaused, setIsPaused] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentScreenTime, setCurrentScreenTime] = useState(() => {
@@ -73,8 +88,6 @@ const InProgressExercise: React.FC<InProgressExerciseProps> = ({
   useEffect(() => {
     const screenTimeValue = currentExercise?.category?.details?.screenTime;
     const newScreenTime = screenTimeValue ?? 60;
-    console.log(`[InProgressExercise Effect] Exercise index changed to ${currentExerciseIndex}. Read screenTime value: ${screenTimeValue}. Using: ${newScreenTime}`);
-    console.log('[InProgressExercise Effect] Current exercise object:', currentExercise);
     setCurrentScreenTime(newScreenTime);
     setTimeRemaining(newScreenTime);
     setIsPaused(false);
@@ -83,37 +96,24 @@ const InProgressExercise: React.FC<InProgressExerciseProps> = ({
 
   // Timer effect
   useEffect(() => {
-    console.log("Timer state:", {
-      timeRemaining,
-      isPaused,
-      isCompleting,
-      screenTime: currentScreenTime,
-      exercise: currentExercise.name
-    });
-
     if (isPaused || isCompleting) return;
 
-    // If screenTime is 0 or less, just pause the timer (don't auto-complete)
     if (currentScreenTime <= 0) {
-      console.log(`[InProgressExercise Timer Effect] screenTime is ${currentScreenTime}, pausing timer.`);
       setIsPaused(true);
       return;
     }
 
-    // If time has run out, just pause the timer (don't auto-complete)
     if (timeRemaining <= 0) {
-      console.log('[InProgressExercise Timer Effect] Time reached 0, pausing timer. User must manually complete.');
       setIsPaused(true);
       return;
     }
 
-    // Otherwise, decrement the timer
     const timerId = setInterval(() => {
       setTimeRemaining((prev: number) => (prev > 0 ? prev - 1 : 0));
     }, 1000);
 
     return () => clearInterval(timerId);
-  }, [timeRemaining, isPaused, isCompleting, currentScreenTime, onComplete, currentExercise.name]);
+  }, [timeRemaining, isPaused, isCompleting, currentScreenTime]);
 
   // Video URL handling
   const getCurrentVideoUrl = (): string => {
@@ -127,12 +127,129 @@ const InProgressExercise: React.FC<InProgressExerciseProps> = ({
     return videos[videoPosition]?.videoURL || '';
   };
 
+  // Get exercise info helper
+  const getExerciseInfo = (exerciseLog: ExerciseLog) => {
+    const exercise = exerciseLog.exercise;
+    const screenTime = exercise?.category?.details?.screenTime;
+    
+    if (screenTime && screenTime > 0) {
+      const mins = Math.floor(screenTime / 60);
+      const secs = screenTime % 60;
+      return { type: 'timed', value: mins > 0 ? `${mins}:${secs.toString().padStart(2, '0')}` : `${secs}s` };
+    }
+    
+    const sets = exercise?.category?.details?.sets || exercise?.sets || 3;
+    const reps = exercise?.category?.details?.reps?.[0] || exercise?.reps || 12;
+    return { type: 'reps', sets, reps };
+  };
+
+  // Format time display
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // Exercise Card Component
+  const ExerciseCard = ({ exerciseLog, index, isActive, isCompleted }: {
+    exerciseLog: ExerciseLog;
+    index: number;
+    isActive: boolean;
+    isCompleted: boolean;
+  }) => {
+    const info = getExerciseInfo(exerciseLog);
+    const gifUrl = exerciseLog.exercise?.videos?.[0]?.gifURL;
+    
+    return (
+      <button
+        onClick={() => onExerciseSelect(index)}
+        className={`w-full text-left p-3 rounded-xl transition-all duration-200 ${
+          isActive 
+            ? 'bg-[#1a1d1f] border border-[#E0FE10]/40' 
+            : 'bg-[#141617] border border-transparent hover:border-zinc-700/50'
+        }`}
+      >
+        <div className="flex items-center gap-3">
+          {/* Thumbnail */}
+          <div className={`relative w-12 h-12 rounded-xl overflow-hidden flex-shrink-0 ${
+            isActive ? 'ring-2 ring-[#E0FE10]/50' : ''
+          }`}>
+            {isCompleted ? (
+              <div 
+                className="w-full h-full flex items-center justify-center"
+                style={{ backgroundColor: accentColor }}
+              >
+                <CheckCircle2 className="w-6 h-6 text-black" />
+              </div>
+            ) : gifUrl ? (
+              <img
+                src={gifUrl}
+                alt={exerciseLog.exercise?.name || 'Exercise'}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="w-full h-full bg-zinc-800 flex items-center justify-center">
+                <Dumbbell className="w-5 h-5 text-zinc-600" />
+              </div>
+            )}
+          </div>
+          
+          {/* Info */}
+          <div className="flex-1 min-w-0">
+            <p className={`font-medium text-sm truncate ${isActive ? 'text-white' : 'text-zinc-300'}`}>
+              {exerciseLog.exercise?.name || 'Exercise'}
+            </p>
+            
+            {/* Sets/Reps or Time */}
+            <div className="flex items-center gap-2 mt-1">
+              {isCompleted ? (
+                <span className="text-xs font-medium" style={{ color: accentColor }}>Completed</span>
+              ) : info.type === 'timed' ? (
+                <div className="flex items-center gap-1">
+                  <Timer className="w-3 h-3 text-zinc-500" />
+                  <span className="text-xs text-zinc-500">{info.value}</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <span 
+                    className="text-[10px] font-medium px-1.5 py-0.5 rounded"
+                    style={{ backgroundColor: `${accentColor}15`, color: accentColor }}
+                  >
+                    {info.sets} sets
+                  </span>
+                  <span 
+                    className="text-[10px] font-medium px-1.5 py-0.5 rounded flex items-center gap-1"
+                    style={{ backgroundColor: `${accentColor}15`, color: accentColor }}
+                  >
+                    <Repeat className="w-2.5 h-2.5" />
+                    {info.reps} reps
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </button>
+    );
+  };
+
   return (
-    <div className="fixed inset-0 bg-zinc-900 flex flex-col">
-      <div className="relative flex h-full">
-        <div className="w-full lg:w-2/3 relative bg-black">
+    <div className="fixed inset-0 bg-[#0a0a0b] z-50">
+      <div className="h-full flex flex-col lg:flex-row">
+        
+        {/* Left Panel - Video Section */}
+        <div className="relative flex-1 lg:h-full bg-black">
+          {/* Close Button */}
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="absolute top-4 right-4 z-30 w-10 h-10 rounded-full bg-black/60 backdrop-blur-sm border border-white/10 flex items-center justify-center hover:bg-black/80 transition-colors"
+          >
+            <X className="w-5 h-5 text-white" />
+          </button>
+
+          {/* Video Container */}
           <div className="relative w-full h-full flex items-center justify-center">
-            <div className="w-[700px] h-[900px] relative rounded-2xl overflow-hidden">
+            <div className="relative w-full h-full lg:max-w-[800px] lg:max-h-[90vh] lg:rounded-2xl overflow-hidden">
               <video
                 src={getCurrentVideoUrl()}
                 className="absolute inset-0 w-full h-full object-cover"
@@ -140,229 +257,205 @@ const InProgressExercise: React.FC<InProgressExerciseProps> = ({
                 loop
                 muted
                 playsInline
-                onError={(e) => console.error('Video error:', e)}
               />
-   
-                {/* Desktop Controls */}
-                <div className="hidden lg:block absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent">
-                  <div className="p-8">
-                    <h2 className="text-white text-3xl font-bold mb-4">
-                      {currentExercise?.name || 'Exercise'}
-                    </h2>
 
-                    <div className="flex items-center justify-between">
-                      {/* Simple countdown timer */}
-                      <div className="text-center">
-                        <span className="text-[#E0FE10] text-3xl font-bold">
-                          {timeRemaining}
+              {/* Video Overlay - Bottom Controls */}
+              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent">
+                <div className="p-6 lg:p-8">
+                  {/* Exercise Name */}
+                  <h2 className="text-white text-2xl lg:text-3xl font-bold mb-4">
+                    {currentExercise?.name || 'Exercise'}
+                  </h2>
+
+                  {/* Stats Row */}
+                  <div className="flex items-center justify-between">
+                    {/* Timer */}
+                    <div className="flex items-center gap-4">
+                      <div>
+                        <span 
+                          className="text-3xl lg:text-4xl font-bold"
+                          style={{ color: accentColor }}
+                        >
+                          {formatTime(timeRemaining)}
                         </span>
-                        <p className="text-zinc-400 text-sm">seconds</p>
+                        <p className="text-zinc-400 text-sm">remaining</p>
                       </div>
 
+                      {/* Pause/Play Button */}
                       {currentScreenTime > 0 && (
                         <button 
                           onClick={() => setIsPaused(!isPaused)}
-                          className="bg-black/30 hover:bg-black/50 p-4 rounded-xl border border-[#E0FE10]/20 backdrop-blur-sm transition-all duration-200 group"
+                          className="w-12 h-12 rounded-full flex items-center justify-center transition-all hover:scale-105"
+                          style={{ 
+                            backgroundColor: `${accentColor}20`,
+                            border: `1px solid ${accentColor}40`
+                          }}
                         >
                           {isPaused ? (
-                            <svg className="w-6 h-6 text-[#E0FE10] group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
+                            <Play className="w-5 h-5 ml-0.5" style={{ color: accentColor }} fill={accentColor} />
                           ) : (
-                            <svg className="w-6 h-6 text-[#E0FE10] group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
+                            <Pause className="w-5 h-5" style={{ color: accentColor }} fill={accentColor} />
                           )}
                         </button>
                       )}
-
-                      <div className="text-center">
-                        <span className="text-[#E0FE10] text-lg font-bold">
-                          {currentExerciseIndex + 1}/{currentExerciseLogs.length}
-                        </span>
-                        <p className="text-zinc-400 text-sm">exercises</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Mobile Controls */}
-                <div className="lg:hidden absolute top-0 left-0 right-0 bg-gradient-to-b from-black/90 to-transparent">
-                  <div className="p-4 flex items-center justify-between">
-                    {/* Simple countdown timer */}
-                    <div className="text-center">
-                      <span className="text-[#E0FE10] text-2xl font-bold">
-                        {timeRemaining}
-                      </span>
-                      <p className="text-zinc-400 text-xs">seconds</p>
                     </div>
 
-                    {currentScreenTime > 0 && (
-                      <button 
-                        onClick={() => setIsPaused(!isPaused)}
-                        className="bg-black/30 hover:bg-black/50 p-3 rounded-xl border border-[#E0FE10]/20 backdrop-blur-sm"
+                    {/* Progress Counter */}
+                    <div className="text-right">
+                      <span 
+                        className="text-2xl lg:text-3xl font-bold"
+                        style={{ color: accentColor }}
                       >
-                        {isPaused ? (
-                          <svg className="w-6 h-6 text-[#E0FE10]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                        ) : (
-                          <svg className="w-6 h-6 text-[#E0FE10]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                        )}
-                      </button>
-                    )}
-
-                    <div className="text-center">
-                      <span className="text-[#E0FE10] text-lg font-bold">
                         {currentExerciseIndex + 1}/{currentExerciseLogs.length}
                       </span>
-                      <p className="text-zinc-400 text-xs">exercises</p>
+                      <p className="text-zinc-400 text-sm">exercises</p>
                     </div>
                   </div>
                 </div>
+              </div>
             </div>
           </div>
-   
-          <button
-            onClick={() => setIsModalOpen(true)}  // Changed from onClose
-            className="absolute top-4 right-4 w-10 h-10 rounded-full bg-black/50 flex items-center justify-center">
-            <X className="text-white" size={20} />
-          </button>
-        </div>
-   
-        {/* Right side panel */}
-        <div className="hidden lg:flex lg:w-1/3 p-6">
-          <div className="w-full bg-black/50 rounded-2xl p-6 flex flex-col">
-            <h2 className="text-white text-2xl font-bold mb-6">Workout Progress</h2>
-            <div className="flex-1 overflow-y-auto pr-2">
-              {currentExerciseLogs.map((exerciseLog, idx) => (
-                <div 
-                  key={exerciseLog.id || idx}
-                  onClick={() => {
-                    console.log(`[InProgressExercise SideList] Clicked item index: ${idx}`);
-                    onExerciseSelect(idx);
-                  }}
-                  className={`mb-4 p-4 rounded-lg cursor-pointer hover:bg-zinc-700/50 transition-colors ${
-                    idx === currentExerciseIndex 
-                      ? 'bg-[#E0FE10]/10 border border-[#E0FE10]' 
-                      : 'bg-zinc-800/50'
-                  }`}
-                >
-                  <div className="flex items-center gap-4">
-                    <div className={`w-12 h-12 rounded-full overflow-hidden border-2 
-                      ${idx === currentExerciseIndex 
-                        ? 'border-[#E0FE10]' 
-                        : idx < currentExerciseIndex 
-                        ? 'border-zinc-600' 
-                        : 'border-zinc-400'
-                      }`}
+
+          {/* Mobile: Exercise info, bubbles and Complete button */}
+          <div className="lg:hidden absolute bottom-0 left-0 right-0 pb-6 pt-32 bg-gradient-to-t from-black via-black/95 to-transparent">
+            {/* Current Exercise Info */}
+            <div className="px-4 mb-4 text-center">
+              <h3 className="text-white text-lg font-semibold mb-2">
+                {currentExercise?.name || 'Exercise'}
+              </h3>
+              {/* Sets/Reps Display */}
+              {(() => {
+                const info = getExerciseInfo(currentExerciseLog);
+                if (info.type === 'timed') {
+                  return (
+                    <div className="flex items-center justify-center gap-2">
+                      <span 
+                        className="text-xs font-medium px-2.5 py-1 rounded-full flex items-center gap-1.5"
+                        style={{ backgroundColor: `${accentColor}15`, color: accentColor }}
+                      >
+                        <Timer className="w-3 h-3" />
+                        {info.value}
+                      </span>
+                    </div>
+                  );
+                }
+                return (
+                  <div className="flex items-center justify-center gap-2">
+                    <span 
+                      className="text-xs font-medium px-2.5 py-1 rounded-full"
+                      style={{ backgroundColor: `${accentColor}15`, color: accentColor }}
                     >
-                      {exerciseLog.logSubmitted ? (
-                        <div className="bg-[#E0FE10] w-full h-full flex items-center justify-center">
-                          <span className="text-black">✓</span>
-                        </div>
-                      ) : (
-                        exerciseLog.exercise?.videos?.[0]?.gifURL ? (
-                          <img
-                            src={exerciseLog.exercise.videos[0].gifURL}
-                            alt={exerciseLog.exercise?.name || 'Exercise'}
-                            className="w-full h-full object-cover"
-                            onError={(e) => {
-                              // If image fails, render placeholder div instead (handled by parent logic now)
-                              (e.target as HTMLImageElement).style.display = 'none'; 
-                              // Optionally add a class to the parent div to show placeholder
-                            }}
-                          />
-                        ) : (
-                          // Render placeholder if no gifURL
-                          <div className="w-full h-full bg-zinc-700 flex items-center justify-center">
-                            <span className="text-white font-medium text-lg">
-                              {exerciseLog.exercise?.name?.charAt(0).toUpperCase() || 'E'}
-                            </span>
-                          </div>
-                        )
-                      )}
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-white font-medium">{exerciseLog.exercise?.name}</p>
-                      <p className="text-zinc-400 text-sm">
-                        {exerciseLog.logSubmitted ? 'Completed' : 'Pending'}
-                      </p>
-                    </div>
+                      {info.sets} sets
+                    </span>
+                    <span 
+                      className="text-xs font-medium px-2.5 py-1 rounded-full flex items-center gap-1"
+                      style={{ backgroundColor: `${accentColor}15`, color: accentColor }}
+                    >
+                      <Repeat className="w-3 h-3" />
+                      {info.reps} reps
+                    </span>
                   </div>
-                </div>
-              ))}
+                );
+              })()}
             </div>
+
+            {/* Exercise Bubbles */}
+            <div className="px-4 mb-4 overflow-x-auto scrollbar-hide">
+              <div className="flex gap-2 w-fit mx-auto">
+                {currentExerciseLogs.map((exerciseLog, idx) => {
+                  const isActive = idx === currentExerciseIndex;
+                  const isCompleted = exerciseLog.logSubmitted;
+                  const gifUrl = exerciseLog.exercise?.videos?.[0]?.gifURL;
+                  
+                  return (
+                    <button
+                      key={exerciseLog.id || idx}
+                      onClick={() => onExerciseSelect(idx)}
+                      className={`flex-shrink-0 w-12 h-12 rounded-full overflow-hidden transition-all ${
+                        isActive 
+                          ? 'ring-2 ring-offset-2 ring-offset-black' 
+                          : ''
+                      }`}
+                      style={isActive ? { '--tw-ring-color': accentColor } as React.CSSProperties : {}}
+                    >
+                      {isCompleted ? (
+                        <div 
+                          className="w-full h-full flex items-center justify-center"
+                          style={{ backgroundColor: accentColor }}
+                        >
+                          <CheckCircle2 className="w-5 h-5 text-black" />
+                        </div>
+                      ) : gifUrl ? (
+                        <img
+                          src={gifUrl}
+                          alt=""
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-zinc-800 flex items-center justify-center">
+                          <span className="text-zinc-400 text-xs font-medium">
+                            {exerciseLog.exercise?.name?.charAt(0) || 'E'}
+                          </span>
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Complete Button - Mobile */}
+            <div className="px-4">
+              <button
+                onClick={onComplete}
+                className="w-full flex items-center justify-center gap-2 py-4 rounded-xl font-semibold transition-all hover:opacity-90 active:scale-[0.98]"
+                style={{ backgroundColor: accentColor, color: '#0a0a0b' }}
+              >
+                <CheckCircle2 className="w-5 h-5" />
+                <span>Complete Move</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Right Panel - Progress List (Desktop Only) */}
+        <div className="hidden lg:flex lg:w-[380px] xl:w-[420px] flex-col bg-[#0f1112] border-l border-zinc-800/50">
+          {/* Header */}
+          <div className="p-6 border-b border-zinc-800/50">
+            <h2 className="text-xl font-bold text-white">Workout Progress</h2>
+            <p className="text-zinc-500 text-sm mt-1">
+              {currentExerciseLogs.filter(l => l.logSubmitted).length} of {currentExerciseLogs.length} completed
+            </p>
+          </div>
+
+          {/* Exercise List */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-2">
+            {currentExerciseLogs.map((exerciseLog, idx) => (
+              <ExerciseCard
+                key={exerciseLog.id || idx}
+                exerciseLog={exerciseLog}
+                index={idx}
+                isActive={idx === currentExerciseIndex}
+                isCompleted={exerciseLog.logSubmitted}
+              />
+            ))}
+          </div>
+
+          {/* Complete Button - Desktop */}
+          <div className="p-6 border-t border-zinc-800/50">
             <button
               onClick={onComplete}
-              className="w-full bg-[#E0FE10] text-black px-8 py-3 rounded-full font-medium hover:bg-[#E0FE10]/90 transition-colors mt-4"
+              className="w-full flex items-center justify-center gap-2 py-4 rounded-xl font-semibold transition-all hover:opacity-90 active:scale-[0.98]"
+              style={{ backgroundColor: accentColor, color: '#0a0a0b' }}
             >
-              Complete Move
+              <CheckCircle2 className="w-5 h-5" />
+              <span>Complete Move</span>
             </button>
           </div>
         </div>
-   
-        {/* Mobile bubbles and button */}
-        <div className="lg:hidden absolute bottom-0 left-0 right-0 flex flex-col items-center py-10 space-y-4 z-20">
-          <h2 className="text-white text-2xl font-bold mb-2">
-            {currentExercise?.name || ''}
-          </h2>
-          <div className="px-4 overflow-x-auto">
-            <div className="flex gap-2 w-fit">
-              {currentExerciseLogs.map((exerciseLog, idx) => (
-                <div
-                  key={exerciseLog.id || idx}
-                  onClick={() => onExerciseSelect(idx)}
-                  className={`flex-shrink-0 relative w-10 h-10 rounded-full overflow-hidden border-2 
-                    ${idx === currentExerciseIndex 
-                      ? 'border-[#E0FE10]'
-                      : idx < currentExerciseIndex
-                      ? 'border-zinc-600'
-                      : 'border-zinc-400'
-                    }`}
-                >
-                  {exerciseLog.logSubmitted ? (
-                    <div className="bg-[#E0FE10] w-full h-full flex items-center justify-center">
-                      <span className="text-black">✓</span>
-                    </div>
-                  ) : (
-                    exerciseLog.exercise?.videos?.[0]?.gifURL ? (
-                      <img
-                        src={exerciseLog.exercise.videos[0].gifURL}
-                        alt={exerciseLog.exercise?.name || 'Exercise'}
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                            // If image fails, render placeholder div instead (handled by parent logic now)
-                            (e.target as HTMLImageElement).style.display = 'none'; 
-                            // Optionally add a class to the parent div to show placeholder
-                        }}
-                      />
-                    ) : (
-                       // Render placeholder if no gifURL
-                       <div className="w-full h-full bg-zinc-700 flex items-center justify-center">
-                        <span className="text-white font-medium text-sm">
-                            {exerciseLog.exercise?.name?.charAt(0).toUpperCase() || 'E'}
-                        </span>
-                       </div>
-                    )
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-          <button
-            onClick={onComplete}
-            className="bg-[#E0FE10] text-black px-8 py-3 rounded-full font-medium hover:bg-[#E0FE10]/90 transition-colors"
-          >
-            Complete Move
-          </button>
-        </div>
       </div>
 
+      {/* Cancel Modal */}
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
@@ -378,7 +471,7 @@ const InProgressExercise: React.FC<InProgressExerciseProps> = ({
         theme="dark"
       />
     </div>
-   );
+  );
 };
 
 export default InProgressExercise;

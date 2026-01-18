@@ -1,22 +1,18 @@
 import React, { useEffect, useState } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useDispatch } from 'react-redux';
 import { useUser } from '../../hooks/useUser';
 import { firebaseStorageService, UploadImageType } from '../../api/firebase/storage/service';
-import { userService } from '../../api/firebase/user';
 import { db } from '../../api/firebase/config';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { FaBars, FaTimes } from 'react-icons/fa';
-import { signOut } from 'firebase/auth';
-import { auth } from '../../api/firebase/config';
 import { showToast } from '../../redux/toastSlice';
+import CoachLayout from '../../components/CoachLayout';
+import { motion } from 'framer-motion';
 
 const CoachProfilePage: React.FC = () => {
   const router = useRouter();
   const dispatch = useDispatch();
   const currentUser = useUser();
-  const [canSeeEarnings, setCanSeeEarnings] = useState(false);
   const [bio, setBio] = useState('');
   const [serviceTitle, setServiceTitle] = useState('');
   const [serviceDescription, setServiceDescription] = useState('');
@@ -37,21 +33,6 @@ const CoachProfilePage: React.FC = () => {
   const [onboardingLink, setOnboardingLink] = useState<string | null>(null);
   const [earnings, setEarnings] = useState<{ totalEarned: number; pendingPayout: number; availableBalance: number; recentSales: Array<{date:string, amount:number, roundTitle:string}> } | null>(null);
   const [buyers, setBuyers] = useState<Record<string, { username?: string; email?: string }>>({});
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
-
-  useEffect(() => {
-    const loadCoachFlags = async () => {
-      if (!currentUser?.id) return;
-      try {
-        const snap = await getDoc(doc(db, 'coaches', currentUser.id));
-        const data: any = snap.exists() ? snap.data() : null;
-        setCanSeeEarnings(!!(data?.earningsAccess === true || data?.userType === 'partner'));
-      } catch (_) {
-        setCanSeeEarnings(false);
-      }
-    };
-    loadCoachFlags();
-  }, [currentUser?.id]);
 
   useEffect(()=>{
     const load = async () => {
@@ -187,16 +168,6 @@ const CoachProfilePage: React.FC = () => {
       dispatch(showToast({ message: 'Profile saved successfully!', type: 'success' }));
     } finally {
       setSaving(false);
-    }
-  };
-
-  const handleSignOut = async () => {
-    try {
-      await signOut(auth);
-      try { localStorage.removeItem('pulse_has_seen_marketing'); } catch (_) {}
-      router.replace('/');
-    } catch (err) {
-      console.error('Error signing out:', err);
     }
   };
 
@@ -405,92 +376,8 @@ const CoachProfilePage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-black text-white">
-      <div className="container mx-auto px-4 sm:px-6 py-6 sm:py-8">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-bold">Coach Profile</h1>
-            <p className="text-zinc-400">Update your photo, bio, and services</p>
-          </div>
-          <nav className="hidden md:flex items-center gap-2">
-            {[
-              { href: '/coach/dashboard', label: 'Dashboard' },
-              { href: '/coach/referrals', label: 'Referrals' },
-              ...(canSeeEarnings ? [{ href: '/coach/revenue', label: 'Earnings' }] : []),
-              { href: '/coach/staff', label: 'Staff' },
-              { href: '/coach/profile', label: 'Profile' }
-            ].map((item) => {
-              const isActive = router.pathname === item.href;
-              return (
-                <Link key={item.href} href={item.href} className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${isActive ? 'bg-[#E0FE10] text-black' : 'text-zinc-300 hover:text-white hover:bg-zinc-800'}`}>
-                  {item.label}
-                </Link>
-              );
-            })}
-          </nav>
-          <button
-            aria-label="Open navigation"
-            onClick={() => setMobileNavOpen(true)}
-            className="md:hidden inline-flex items-center justify-center p-2 rounded-md text-zinc-300 hover:text-white hover:bg-zinc-800"
-          >
-            <FaBars />
-          </button>
-        </div>
-
-        {/* Mobile slide-over navigation */}
-        {mobileNavOpen && (
-          <div className="fixed inset-0 z-50 md:hidden">
-            <div
-              className="absolute inset-0 bg-black/60"
-              onClick={() => setMobileNavOpen(false)}
-            />
-            <div className="absolute top-0 right-0 h-full w-72 bg-zinc-900 border-l border-zinc-800 shadow-xl p-5 flex flex-col">
-              <div className="flex items-center justify-between mb-6">
-                <div className="text-lg font-semibold text-white">Menu</div>
-                <button
-                  aria-label="Close navigation"
-                  onClick={() => setMobileNavOpen(false)}
-                  className="inline-flex items-center justify-center p-2 rounded-md text-zinc-300 hover:text-white hover:bg-zinc-800"
-                >
-                  <FaTimes />
-                </button>
-              </div>
-              <div className="flex flex-col gap-2">
-                {[
-                  { href: '/coach/dashboard', label: 'Dashboard' },
-                  { href: '/coach/referrals', label: 'Referrals' },
-                  ...(canSeeEarnings ? [{ href: '/coach/revenue', label: 'Earnings' }] : []),
-                  { href: '/coach/staff', label: 'Staff' },
-                  { href: '/coach/inbox', label: 'Inbox' },
-                  { href: '/coach/profile', label: 'Profile' }
-                ].map((item) => {
-                  const isActive = router.pathname === item.href;
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      onClick={() => setMobileNavOpen(false)}
-                      className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                        isActive ? 'bg-[#E0FE10] text-black' : 'text-zinc-300 hover:text-white hover:bg-zinc-800'
-                      }`}
-                    >
-                      {item.label}
-                    </Link>
-                  );
-                })}
-              </div>
-              <div className="mt-auto pt-6 border-t border-zinc-800">
-                <button
-                  onClick={() => { setMobileNavOpen(false); handleSignOut(); }}
-                  className="w-full bg-zinc-800 text-white px-4 py-2 rounded-lg border border-zinc-700 hover:bg-zinc-700 transition-colors"
-                >
-                  Sign Out
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
+    <CoachLayout title="Coach Profile" subtitle="Update your photo, bio, and services" requiresActiveSubscription={false}>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
           <div className="bg-zinc-900 rounded-xl p-6 border border-zinc-800 flex flex-col items-center justify-center w-full">
             <div className="text-sm text-zinc-400 mb-4">Update Profile Image</div>
@@ -647,11 +534,19 @@ const CoachProfilePage: React.FC = () => {
                 </div>
               )}
             </div>
-            <button onClick={onSave} disabled={saving} className="bg-[#E0FE10] text-black px-5 py-2 rounded-lg hover:bg-lime-400 disabled:opacity-50">{saving ? 'Saving...' : 'Save Changes'}</button>
+            <motion.button 
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={onSave} 
+              disabled={saving} 
+              className="bg-[#E0FE10] text-black px-5 py-2 rounded-lg font-medium hover:shadow-lg hover:shadow-[#E0FE10]/20 disabled:opacity-50 transition-all"
+            >
+              {saving ? 'Saving...' : 'Save Changes'}
+            </motion.button>
           </div>
         </div>
       </div>
-    </div>
+    </CoachLayout>
   );
 };
 
