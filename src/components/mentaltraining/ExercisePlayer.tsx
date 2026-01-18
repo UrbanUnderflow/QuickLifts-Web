@@ -38,6 +38,33 @@ import {
 // TYPES
 // ============================================================================
 
+/**
+ * Determines if an exercise requires user writing/journaling
+ * These exercises should redirect to Nora chat for interactive completion
+ */
+export function exerciseRequiresWriting(exercise: MentalExercise): boolean {
+  const { exerciseConfig } = exercise;
+  
+  // Mindset exercises with journalRequired flag
+  if (exerciseConfig.type === 'mindset') {
+    const config = exerciseConfig.config;
+    if (config.journalRequired) return true;
+    // Reframe and growth_mindset types benefit from writing
+    if (config.type === 'reframe' || config.type === 'growth_mindset') return true;
+  }
+  
+  // Confidence exercises that require journaling
+  if (exerciseConfig.type === 'confidence') {
+    const config = exerciseConfig.config;
+    // These types require actual user writing
+    if (config.type === 'evidence_journal' || config.type === 'inventory' || config.type === 'affirmations') {
+      return true;
+    }
+  }
+  
+  return false;
+}
+
 interface ExercisePlayerProps {
   exercise: MentalExercise;
   onComplete: (data: {
@@ -50,6 +77,8 @@ interface ExercisePlayerProps {
   }) => void;
   onClose: () => void;
   assignmentId?: string;
+  /** Called when a writing exercise should be started in Nora chat */
+  onStartInChat?: (exercise: MentalExercise) => void;
 }
 
 type PlayerState = 'intro' | 'pre-mood' | 'active' | 'post-mood' | 'complete';
@@ -63,7 +92,10 @@ export const ExercisePlayer: React.FC<ExercisePlayerProps> = ({
   onComplete,
   onClose,
   assignmentId,
+  onStartInChat,
 }) => {
+  // Check if this exercise requires writing - show different flow
+  const requiresWriting = exerciseRequiresWriting(exercise);
   const [state, setState] = useState<PlayerState>('intro');
   const [isPaused, setIsPaused] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -234,6 +266,8 @@ export const ExercisePlayer: React.FC<ExercisePlayerProps> = ({
               onResume={() => setIsPaused(false)}
               onComplete={handleExerciseComplete}
               soundEnabled={soundEnabled}
+              requiresWriting={requiresWriting}
+              onStartInChat={onStartInChat}
             />
           )}
 
@@ -395,6 +429,8 @@ interface ActiveExerciseProps {
   onResume: () => void;
   onComplete: () => void;
   soundEnabled: boolean;
+  requiresWriting?: boolean;
+  onStartInChat?: (exercise: MentalExercise) => void;
 }
 
 const ActiveExercise: React.FC<ActiveExerciseProps> = ({
@@ -406,6 +442,8 @@ const ActiveExercise: React.FC<ActiveExerciseProps> = ({
   onResume,
   onComplete,
   soundEnabled,
+  requiresWriting,
+  onStartInChat,
 }) => {
   if (exercise.exerciseConfig.type === 'breathing') {
     return (
@@ -446,6 +484,8 @@ const ActiveExercise: React.FC<ActiveExerciseProps> = ({
       onResume={onResume}
       onComplete={onComplete}
       soundEnabled={soundEnabled}
+      requiresWriting={requiresWriting}
+      onStartInChat={onStartInChat}
     />
   );
 };
@@ -979,6 +1019,8 @@ interface PromptExerciseProps {
   onResume: () => void;
   onComplete: () => void;
   soundEnabled?: boolean;
+  requiresWriting?: boolean;
+  onStartInChat?: (exercise: MentalExercise) => void;
 }
 
 const PromptExercise: React.FC<PromptExerciseProps> = ({
@@ -990,6 +1032,8 @@ const PromptExercise: React.FC<PromptExerciseProps> = ({
   onResume,
   onComplete,
   soundEnabled = true,
+  requiresWriting = false,
+  onStartInChat,
 }) => {
   const [currentPromptIndex, setCurrentPromptIndex] = useState(0);
   const [hasFinishedAllPrompts, setHasFinishedAllPrompts] = useState(false);
@@ -1005,10 +1049,22 @@ const PromptExercise: React.FC<PromptExerciseProps> = ({
 
   const handleNext = () => {
     if (isLastPrompt) {
-      onComplete();
+      // For writing exercises, redirect to chat instead of completing
+      if (requiresWriting && onStartInChat) {
+        onStartInChat(exercise);
+      } else {
+        onComplete();
+      }
     } else {
       setCurrentPromptIndex((prev) => prev + 1);
     }
+  };
+  
+  // Determine button text based on exercise type
+  const getButtonText = () => {
+    if (!isLastPrompt) return 'Next';
+    if (requiresWriting) return 'Start Exercise';
+    return 'Complete';
   };
 
   const formatTime = (seconds: number) => {
@@ -1104,7 +1160,7 @@ const PromptExercise: React.FC<PromptExerciseProps> = ({
           }}
           className={`flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r ${categoryColor} text-white font-semibold`}
         >
-          {isLastPrompt ? 'Complete' : 'Next'}
+          {getButtonText()}
           <ChevronRight className="w-5 h-5" />
         </motion.button>
       </div>

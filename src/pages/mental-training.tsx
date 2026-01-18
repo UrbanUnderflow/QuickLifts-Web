@@ -38,12 +38,14 @@ import {
   ExerciseCategory,
   AssignmentStatus,
 } from '../api/firebase/mentaltraining';
-import { ExerciseCard, ExercisePlayer, MentalProgressCard } from '../components/mentaltraining';
+import { ExerciseCard, ExercisePlayer, MentalProgressCard, exerciseRequiresWriting } from '../components/mentaltraining';
+import { useRouter } from 'next/router';
 
 type TabType = 'today' | 'library' | 'history';
 
 const MentalTrainingPage: React.FC = () => {
   const currentUser = useUser();
+  const router = useRouter();
 
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabType>('today');
@@ -102,8 +104,23 @@ const MentalTrainingPage: React.FC = () => {
   );
 
   const handleStartExercise = (exercise: MentalExercise, assignmentId?: string) => {
+    // Check if exercise requires writing - redirect to Nora chat
+    if (exerciseRequiresWriting(exercise)) {
+      // Store exercise in localStorage for the chat to pick up
+      localStorage.setItem('pulsecheck_active_exercise', JSON.stringify(exercise));
+      // Navigate to PulseCheck chat with exercise data
+      router.push(`/PulseCheck?exercise=${encodeURIComponent(JSON.stringify(exercise))}`);
+      return;
+    }
+    
     setSelectedExercise(exercise);
     setSelectedAssignmentId(assignmentId);
+  };
+  
+  // Handle redirect to chat for writing exercises from ExercisePlayer
+  const handleStartInChat = (exercise: MentalExercise) => {
+    localStorage.setItem('pulsecheck_active_exercise', JSON.stringify(exercise));
+    router.push(`/PulseCheck?exercise=${encodeURIComponent(JSON.stringify(exercise))}`);
   };
 
   const handleExerciseComplete = async (data: {
@@ -421,6 +438,7 @@ const MentalTrainingPage: React.FC = () => {
               setSelectedExercise(null);
               setSelectedAssignmentId(undefined);
             }}
+            onStartInChat={handleStartInChat}
           />
         )}
       </AnimatePresence>
