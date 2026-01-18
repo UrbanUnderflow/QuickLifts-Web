@@ -151,15 +151,24 @@ export const escalationConditionsService = {
   /**
    * Listen to conditions changes (real-time)
    */
-  listenAll(callback: (conditions: EscalationCondition[]) => void): Unsubscribe {
+  listenAll(
+    callback: (conditions: EscalationCondition[]) => void,
+    onError?: (error: unknown) => void
+  ): Unsubscribe {
     const ref = collection(db, ESCALATION_CONDITIONS_COLLECTION);
     const q = query(ref, orderBy('tier', 'asc'), orderBy('priority', 'desc'));
-    return onSnapshot(q, (snapshot) => {
-      const conditions = snapshot.docs.map(doc => 
-        escalationConditionFromFirestore(doc.id, doc.data())
-      );
-      callback(conditions);
-    });
+    return onSnapshot(
+      q,
+      (snapshot) => {
+        const conditions = snapshot.docs.map(doc =>
+          escalationConditionFromFirestore(doc.id, doc.data())
+        );
+        callback(conditions);
+      },
+      (error) => {
+        if (onError) onError(error);
+      }
+    );
   },
 
   /**

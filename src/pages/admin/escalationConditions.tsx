@@ -16,7 +16,10 @@ import {
   Eye,
   EyeOff,
   Copy,
-  CheckCircle2
+  CheckCircle2,
+  Upload,
+  Wand2,
+  Loader2
 } from 'lucide-react';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import { useUser } from '../../hooks/useUser';
@@ -656,16 +659,41 @@ const EscalationConditionsPage: React.FC = () => {
   const currentUser = useUser();
   const [conditions, setConditions] = useState<EscalationCondition[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [trainingContext, setTrainingContext] = useState<string>('');
   const [showTrainingContext, setShowTrainingContext] = useState(false);
 
+  // Bulk import
+  const [showBulkImport, setShowBulkImport] = useState(false);
+  const [bulkTier, setBulkTier] = useState<EscalationTier>(EscalationTier.MonitorOnly);
+  const [bulkText, setBulkText] = useState('');
+  const [bulkParseLoading, setBulkParseLoading] = useState(false);
+  const [bulkParseError, setBulkParseError] = useState<string | null>(null);
+  const [bulkDrafts, setBulkDrafts] = useState<EscalationConditionInput[]>([]);
+  const [bulkCreateLoading, setBulkCreateLoading] = useState(false);
+  const [bulkCreateResults, setBulkCreateResults] = useState<
+    { index: number; status: 'pending' | 'success' | 'error'; id?: string; error?: string }[]
+  >([]);
+
   // Load conditions on mount
   useEffect(() => {
-    const unsubscribe = escalationConditionsService.listenAll((loadedConditions) => {
-      setConditions(loadedConditions);
-      setIsLoading(false);
-    });
+    const unsubscribe = escalationConditionsService.listenAll(
+      (loadedConditions) => {
+        setConditions(loadedConditions);
+        setIsLoading(false);
+        setLoadError(null);
+      },
+      (error: any) => {
+        console.error('Failed to load escalation conditions:', error);
+        const msg =
+          error?.code === 'permission-denied'
+            ? 'Permission denied. Your account may not have admin access to escalation conditions in Firestore rules.'
+            : error?.message || 'Failed to load escalation conditions.';
+        setLoadError(msg);
+        setIsLoading(false);
+      }
+    );
     return () => unsubscribe();
   }, []);
 
@@ -711,6 +739,123 @@ const EscalationConditionsPage: React.FC = () => {
     navigator.clipboard.writeText(trainingContext);
   };
 
+  const bulkTemplateForTier = (tier: EscalationTier) => {
+    const tc = tierConfig.find((t) => t.tier === tier);
+    const categoryList = (tc?.categories || []).join(', ');
+    return `# Bulk Import Template (v1)
+# Tier is selected in the UI. Categories must map to one of:
+# ${categoryList}
+#
+# Use ONE condition per line:
+# - Title: description
+#
+# Example:
+- Performance Anxiety: Acute nerves before competition; intrusive worry about performance, but no safety risk.
+- Confidence Dip: Self-doubt and fear of judgment affecting training readiness.
+- Overthinking/Rumination: Replaying mistakes, perfectionism, can't shut off the inner critic.
+`;
+  };
+
+  const resetBulkImportState = () => {
+    setBulkText('');
+    setBulkParseError(null);
+    setBulkDrafts([]);
+    setBulkCreateResults([]);
+    setBulkParseLoading(false);
+    setBulkCreateLoading(false);
+  };
+
+  const handleOpenBulkImport = () => {
+    setShowBulkImport(true);
+    setBulkParseError(null);
+    setBulkDrafts([]);
+    setBulkCreateResults([]);
+    if (!bulkText.trim()) {
+      setBulkText(bulkTemplateForTier(bulkTier));
+    }
+  };
+
+  const handleParseBulk = async () => {
+    setBulkParseLoading(true);
+    setBulkParseError(null);
+    setBulkDrafts([]);
+    try {
+      const tc = tierConfig.find((t) => t.tier === bulkTier);
+      const allowedCategories = (tc?.categories || []) as EscalationCategory[];
+      const resp = await fetch('/.netlify/functions/parse-escalation-conditions-bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tier: bulkTier,
+          allowedCategories,
+          template: 'v1',
+          text: bulkText
+        })
+      });
+      if (!resp.ok) {
+        const txt = await resp.text().catch(() => '');
+        throw new Error(`Parse failed: ${resp.status} ${txt}`);
+      }
+      const data = await resp.json();
+      if (!Array.isArray(data?.conditions)) {
+        throw new Error('Parse failed: invalid response format');
+      }
+      setBulkDrafts(data.conditions as EscalationConditionInput[]);
+      if (data?.warning) {
+        // non-fatal
+        console.warn('[bulk-import] warning:', data.warning);
+      }
+    } catch (e: any) {
+      setBulkParseError(e?.message || 'Failed to parse bulk conditions.');
+    } finally {
+      setBulkParseLoading(false);
+    }
+  };
+
+  const updateBulkDraft = (index: number, patch: Partial<EscalationConditionInput>) => {
+    setBulkDrafts((prev) => prev.map((d, i) => (i === index ? { ...d, ...patch } : d)));
+  };
+
+  const handleCreateBulk = async () => {
+    if (!currentUser?.id) return;
+    if (!bulkDrafts.length) return;
+
+    setBulkCreateLoading(true);
+    setBulkCreateResults(bulkDrafts.map((_, i) => ({ index: i, status: 'pending' as const })));
+    try {
+      const results = await Promise.all(
+        bulkDrafts.map(async (draft, i) => {
+          try {
+            // Strict tier bucketing: force selected tier
+            const input: EscalationConditionInput = {
+              ...draft,
+              tier: bulkTier,
+              title: (draft.title || '').trim(),
+              description: (draft.description || '').trim(),
+              category: draft.category,
+              priority: Math.max(0, Math.min(10, Number(draft.priority ?? 0) || 0)),
+              isActive: draft.isActive ?? true,
+              keywords: (draft.keywords || []).map((s) => (s || '').trim()).filter(Boolean),
+              examplePhrases: (draft.examplePhrases || []).map((s) => (s || '').trim()).filter(Boolean),
+            };
+            const id = await escalationConditionsService.create(input, currentUser.id);
+            return { index: i, status: 'success' as const, id };
+          } catch (e: any) {
+            return {
+              index: i,
+              status: 'error' as const,
+              error: e?.message || String(e || 'Unknown error')
+            };
+          }
+        })
+      );
+
+      setBulkCreateResults(results);
+    } finally {
+      setBulkCreateLoading(false);
+    }
+  };
+
   return (
     <AdminRouteGuard>
       <Head>
@@ -745,6 +890,14 @@ const EscalationConditionsPage: React.FC = () => {
               />
             </div>
             <button
+              onClick={handleOpenBulkImport}
+              className="px-4 py-2 rounded-lg bg-zinc-800 text-zinc-300 hover:bg-zinc-700 transition-colors flex items-center gap-2"
+              title="Paste a batch of conditions using the template, have AI parse and map categories, then create all."
+            >
+              <Upload className="w-4 h-4" />
+              Bulk Import
+            </button>
+            <button
               onClick={handleGenerateTrainingContext}
               className="px-4 py-2 rounded-lg bg-zinc-800 text-zinc-300 hover:bg-zinc-700 transition-colors flex items-center gap-2"
             >
@@ -752,6 +905,23 @@ const EscalationConditionsPage: React.FC = () => {
               Export AI Training Context
             </button>
           </div>
+
+          {/* Load Error */}
+          {loadError && (
+            <div className="mb-6 p-4 rounded-xl border border-red-500/30 bg-red-500/10 text-red-200">
+              <div className="flex items-start gap-3">
+                <AlertOctagon className="w-5 h-5 text-red-300 mt-0.5" />
+                <div>
+                  <div className="font-semibold">Failed to load conditions</div>
+                  <div className="text-sm text-red-200/90 mt-1">{loadError}</div>
+                  <div className="text-xs text-red-200/70 mt-2">
+                    If this is a production site, ensure Firestore rules include admin access for
+                    <code className="mx-1 px-1 py-0.5 rounded bg-black/30">escalation-conditions</code>.
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Stats */}
           <div className="grid grid-cols-3 gap-4 mb-6">
@@ -853,6 +1023,263 @@ const EscalationConditionsPage: React.FC = () => {
                       This context is used in the PulseCheck AI system prompt to help classify
                       messages and determine escalation decisions.
                     </p>
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Bulk Import Modal */}
+          <AnimatePresence>
+            {showBulkImport && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70"
+                onClick={() => {
+                  setShowBulkImport(false);
+                  resetBulkImportState();
+                }}
+              >
+                <motion.div
+                  initial={{ scale: 0.95 }}
+                  animate={{ scale: 1 }}
+                  exit={{ scale: 0.95 }}
+                  className="bg-[#1a1e24] rounded-xl w-full max-w-4xl max-h-[85vh] overflow-hidden shadow-2xl"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="flex items-center justify-between p-4 border-b border-zinc-700">
+                    <div>
+                      <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                        <Upload className="w-5 h-5 text-[#d7ff00]" />
+                        Bulk Import Conditions
+                      </h3>
+                      <p className="text-sm text-zinc-500 mt-1">
+                        Use the template. You select the tier; parsing is strict to that tier.
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setShowBulkImport(false);
+                        resetBulkImportState();
+                      }}
+                      className="p-1.5 rounded-lg hover:bg-zinc-700/50 text-zinc-400 hover:text-white transition-colors"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <div className="p-4 overflow-y-auto max-h-[70vh] space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <div className="md:col-span-1">
+                        <label className="block text-sm font-medium text-zinc-400 mb-1">Tier</label>
+                        <select
+                          value={bulkTier}
+                          onChange={(e) => {
+                            const t = Number(e.target.value) as EscalationTier;
+                            setBulkTier(t);
+                            // keep user's text, but if empty, load template for tier
+                            if (!bulkText.trim()) setBulkText(bulkTemplateForTier(t));
+                          }}
+                          className="w-full px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-700 text-white focus:outline-none focus:ring-2 focus:ring-[#d7ff00]/30 focus:border-[#d7ff00]/40"
+                        >
+                          <option value={EscalationTier.MonitorOnly}>Tier 1: Monitor Only</option>
+                          <option value={EscalationTier.ElevatedRisk}>Tier 2: Elevated Risk</option>
+                          <option value={EscalationTier.CriticalRisk}>Tier 3: Critical Risk</option>
+                        </select>
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="block text-sm font-medium text-zinc-400 mb-1">Template (paste batch)</label>
+                        <textarea
+                          value={bulkText}
+                          onChange={(e) => setBulkText(e.target.value)}
+                          className="w-full px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-700 text-white focus:outline-none focus:ring-2 focus:ring-[#d7ff00]/30 focus:border-[#d7ff00]/40 min-h-[220px] font-mono text-xs"
+                        />
+                        <div className="flex items-center justify-between mt-2">
+                          <button
+                            onClick={() => setBulkText(bulkTemplateForTier(bulkTier))}
+                            className="text-xs text-zinc-400 hover:text-white transition-colors"
+                          >
+                            Reset to template
+                          </button>
+                          <button
+                            onClick={handleParseBulk}
+                            disabled={bulkParseLoading || !bulkText.trim()}
+                            className="px-3 py-1.5 rounded-lg bg-[#d7ff00] text-black text-sm font-medium hover:bg-[#d7ff00]/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                          >
+                            {bulkParseLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
+                            Parse & Preview
+                          </button>
+                        </div>
+                        {bulkParseError && (
+                          <div className="mt-3 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-200 text-sm">
+                            {bulkParseError}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {bulkDrafts.length > 0 && (
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="text-sm font-semibold text-white">
+                              Preview ({bulkDrafts.length})
+                            </div>
+                            <div className="text-xs text-zinc-500">
+                              Edit any field before creating. Tier is forced to the selected tier on create.
+                            </div>
+                          </div>
+                          <button
+                            onClick={handleCreateBulk}
+                            disabled={bulkCreateLoading}
+                            className="px-4 py-2 rounded-lg bg-[#d7ff00] text-black text-sm font-medium hover:bg-[#d7ff00]/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                          >
+                            {bulkCreateLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                            Create All
+                          </button>
+                        </div>
+
+                        <div className="space-y-2">
+                          {bulkDrafts.map((d, idx) => {
+                            const result = bulkCreateResults.find((r) => r.index === idx);
+                            return (
+                              <div key={idx} className="rounded-xl border border-zinc-700 bg-zinc-900/40 p-3">
+                                <div className="flex items-center justify-between gap-3">
+                                  <div className="min-w-0">
+                                    <div className="text-sm font-semibold text-white truncate">
+                                      {d.title || `Condition ${idx + 1}`}
+                                    </div>
+                                    <div className="text-xs text-zinc-500">
+                                      Category: <span className="text-zinc-300">{d.category}</span> · Priority: {d.priority ?? 0} · Active: {String(d.isActive ?? true)}
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    {result?.status === 'success' && (
+                                      <span className="text-xs text-green-300 flex items-center gap-1">
+                                        <CheckCircle2 className="w-4 h-4" /> Created
+                                      </span>
+                                    )}
+                                    {result?.status === 'error' && (
+                                      <span className="text-xs text-red-300 flex items-center gap-1">
+                                        <AlertOctagon className="w-4 h-4" /> Error
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {result?.status === 'error' && result.error && (
+                                  <div className="mt-2 text-xs text-red-200/90">{result.error}</div>
+                                )}
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-3">
+                                  <div>
+                                    <label className="block text-xs text-zinc-500 mb-1">Title</label>
+                                    <input
+                                      value={d.title}
+                                      onChange={(e) => updateBulkDraft(idx, { title: e.target.value })}
+                                      className="w-full px-2 py-1.5 rounded bg-zinc-950 border border-zinc-700 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#d7ff00]/20"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-xs text-zinc-500 mb-1">Category</label>
+                                    <select
+                                      value={d.category}
+                                      onChange={(e) => updateBulkDraft(idx, { category: e.target.value as EscalationCategory })}
+                                      className="w-full px-2 py-1.5 rounded bg-zinc-950 border border-zinc-700 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#d7ff00]/20"
+                                    >
+                                      {(tierConfig.find((t) => t.tier === bulkTier)?.categories || []).map((cat) => (
+                                        <option key={cat} value={cat}>
+                                          {getCategoryLabel(cat)}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                  <div className="md:col-span-2">
+                                    <label className="block text-xs text-zinc-500 mb-1">Description</label>
+                                    <textarea
+                                      value={d.description}
+                                      onChange={(e) => updateBulkDraft(idx, { description: e.target.value })}
+                                      className="w-full px-2 py-1.5 rounded bg-zinc-950 border border-zinc-700 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#d7ff00]/20 min-h-[70px]"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-xs text-zinc-500 mb-1">Keywords (comma separated)</label>
+                                    <input
+                                      value={(d.keywords || []).join(', ')}
+                                      onChange={(e) =>
+                                        updateBulkDraft(idx, {
+                                          keywords: e.target.value
+                                            .split(',')
+                                            .map((s) => s.trim())
+                                            .filter(Boolean)
+                                        })
+                                      }
+                                      className="w-full px-2 py-1.5 rounded bg-zinc-950 border border-zinc-700 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#d7ff00]/20"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-xs text-zinc-500 mb-1">Priority (0-10)</label>
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      max={10}
+                                      value={d.priority ?? 0}
+                                      onChange={(e) => updateBulkDraft(idx, { priority: Math.max(0, Math.min(10, Number(e.target.value) || 0)) })}
+                                      className="w-full px-2 py-1.5 rounded bg-zinc-950 border border-zinc-700 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#d7ff00]/20"
+                                    />
+                                  </div>
+                                  <div className="md:col-span-2 flex items-center gap-2">
+                                    <input
+                                      id={`bulk-active-${idx}`}
+                                      type="checkbox"
+                                      checked={d.isActive ?? true}
+                                      onChange={(e) => updateBulkDraft(idx, { isActive: e.target.checked })}
+                                      className="w-4 h-4 rounded border-zinc-700 bg-zinc-900 text-[#d7ff00] focus:ring-[#d7ff00]/30"
+                                    />
+                                    <label htmlFor={`bulk-active-${idx}`} className="text-xs text-zinc-400">
+                                      Active (used for AI classification)
+                                    </label>
+                                  </div>
+                                  <div className="md:col-span-2">
+                                    <label className="block text-xs text-zinc-500 mb-1">Example Phrases (one per line)</label>
+                                    <textarea
+                                      value={(d.examplePhrases || []).join('\n')}
+                                      onChange={(e) =>
+                                        updateBulkDraft(idx, {
+                                          examplePhrases: e.target.value
+                                            .split('\n')
+                                            // Do NOT trim+filter here; filtering removes trailing blank lines and prevents Enter creating a new line.
+                                            // We sanitize (trim+filter) on Create All instead.
+                                            .map((s) => s.replace(/^[-•]\s*/, ''))
+                                        })
+                                      }
+                                      className="w-full px-2 py-1.5 rounded bg-zinc-950 border border-zinc-700 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#d7ff00]/20 min-h-[70px]"
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="p-4 border-t border-zinc-700 bg-zinc-900/30 flex items-center justify-between">
+                    <div className="text-xs text-zinc-500">
+                      Tip: Keep categories exact; AI will map strictly to the selected tier.
+                    </div>
+                    <button
+                      onClick={() => {
+                        setShowBulkImport(false);
+                        resetBulkImportState();
+                      }}
+                      className="px-4 py-2 rounded-lg bg-zinc-800 text-zinc-300 hover:bg-zinc-700 transition-colors"
+                    >
+                      Close
+                    </button>
                   </div>
                 </motion.div>
               </motion.div>

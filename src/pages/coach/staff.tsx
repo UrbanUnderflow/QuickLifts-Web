@@ -1,12 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
-import { FaBars, FaTimes } from 'react-icons/fa';
 import { useRouter } from 'next/router';
 import { useUser } from '../../hooks/useUser';
 import { coachService } from '../../api/firebase/coach';
 import { db } from '../../api/firebase/config';
 import { collection, doc, getDoc, getDocs, query, where, setDoc, updateDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
 import { convertFirestoreTimestamp, formatDate } from '../../utils/formatDate';
+import CoachLayout from '../../components/CoachLayout';
+import { motion } from 'framer-motion';
 
 type StaffMember = {
   id: string;
@@ -38,7 +38,6 @@ type Membership = {
 const StaffPage: React.FC = () => {
   const router = useRouter();
   const currentUser = useUser();
-  const [canSeeEarnings, setCanSeeEarnings] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [showModal, setShowModal] = useState(false);
@@ -50,20 +49,6 @@ const StaffPage: React.FC = () => {
   const [assignFor, setAssignFor] = useState<StaffMember | null>(null);
   const [selectedAthletes, setSelectedAthletes] = useState<string[]>([]);
   const [memberOf, setMemberOf] = useState<Membership[]>([]);
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
-
-  useEffect(() => {
-    const loadCoachFlags = async () => {
-      if (!currentUser?.id) return;
-      try {
-        const profile = await coachService.getCoachProfile(currentUser.id);
-        setCanSeeEarnings(!!(profile?.earningsAccess === true || profile?.userType === 'partner'));
-      } catch (_) {
-        setCanSeeEarnings(false);
-      }
-    };
-    loadCoachFlags();
-  }, [currentUser?.id]);
 
   // Load staff from Firestore
   useEffect(() => {
@@ -287,81 +272,8 @@ const StaffPage: React.FC = () => {
     }
   };
   return (
-    <div className="min-h-screen bg-black text-white">
-      <div className="container mx-auto px-6 py-8">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-bold">Staff</h1>
-            <p className="text-zinc-400">Manage staff coaches and permissions.</p>
-          </div>
-          <nav className="hidden md:flex items-center gap-2">
-            {[
-              { href: '/coach/dashboard', label: 'Dashboard' },
-              { href: '/coach/referrals', label: 'Referrals' },
-              ...(canSeeEarnings ? [{ href: '/coach/revenue', label: 'Earnings' }] : []),
-              { href: '/coach/staff', label: 'Staff' },
-              { href: '/coach/inbox', label: 'Inbox' },
-              { href: '/coach/profile', label: 'Profile' }
-            ].map((item) => {
-              const isActive = router.pathname === item.href;
-              return (
-                <Link key={item.href} href={item.href} className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${isActive ? 'bg-[#E0FE10] text-black' : 'text-zinc-300 hover:text-white hover:bg-zinc-800'}`}>
-                  {item.label}
-                </Link>
-              );
-            })}
-          </nav>
-          <button
-            aria-label="Open navigation"
-            onClick={() => setMobileNavOpen(true)}
-            className="md:hidden inline-flex items-center justify-center p-2 rounded-md text-zinc-300 hover:text-white hover:bg-zinc-800"
-          >
-            <FaBars />
-          </button>
-        </div>
-
-        {mobileNavOpen && (
-          <div className="fixed inset-0 z-50 md:hidden">
-            <div className="absolute inset-0 bg-black/60" onClick={() => setMobileNavOpen(false)} />
-            <div className="absolute top-0 right-0 h-full w-72 bg-zinc-900 border-l border-zinc-800 shadow-xl p-5 flex flex-col">
-              <div className="flex items-center justify-between mb-6">
-                <div className="text-lg font-semibold text-white">Menu</div>
-                <button
-                  aria-label="Close navigation"
-                  onClick={() => setMobileNavOpen(false)}
-                  className="inline-flex items-center justify-center p-2 rounded-md text-zinc-300 hover:text-white hover:bg-zinc-800"
-                >
-                  <FaTimes />
-                </button>
-              </div>
-              <div className="flex flex-col gap-2">
-                {[
-                  { href: '/coach/dashboard', label: 'Dashboard' },
-                  { href: '/coach/referrals', label: 'Referrals' },
-                  ...(canSeeEarnings ? [{ href: '/coach/revenue', label: 'Earnings' }] : []),
-                  { href: '/coach/staff', label: 'Staff' },
-                  { href: '/coach/inbox', label: 'Inbox' },
-                  { href: '/coach/profile', label: 'Profile' }
-                ].map((item) => {
-                  const isActive = router.pathname === item.href;
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      onClick={() => setMobileNavOpen(false)}
-                      className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                        isActive ? 'bg-[#E0FE10] text-black' : 'text-zinc-300 hover:text-white hover:bg-zinc-800'
-                      }`}
-                    >
-                      {item.label}
-                    </Link>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        )}
-
+    <CoachLayout title="Staff" subtitle="Manage staff coaches and permissions" requiresActiveSubscription={false}>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
         {/* Controls */}
         <div className="flex items-center justify-between mb-4">
           <input
@@ -591,12 +503,16 @@ const StaffPage: React.FC = () => {
         )}
 
         {toast && (
-          <div className="fixed bottom-5 right-5 bg-zinc-900 border border-zinc-700 text-white px-4 py-2 rounded-lg text-sm">
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="fixed bottom-5 right-5 bg-zinc-900/90 backdrop-blur-lg border border-zinc-700 text-white px-4 py-2 rounded-lg text-sm"
+          >
             {toast}
-          </div>
+          </motion.div>
         )}
       </div>
-    </div>
+    </CoachLayout>
   );
 };
 

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/router';
-import { FaEnvelope, FaPlusSquare, FaBars, FaCog, FaSignOutAlt, FaInfoCircle, FaHome } from 'react-icons/fa';
+import { FaEnvelope, FaPlusSquare, FaBars, FaCog, FaSignOutAlt, FaInfoCircle, FaHome, FaUserTie, FaBrain, FaUsers, FaChartLine, FaUserFriends, FaInbox } from 'react-icons/fa';
 import { useUser } from '../../hooks/useUser';
 import { signOut } from '../../api/firebase/auth/methods';
 import ProfilePhoto from '../pulsecheck/ProfilePhoto';
@@ -82,6 +82,7 @@ const NavItem: React.FC<NavItemProps> = ({ icon, label, href, isActive, onClick 
 const SideNav: React.FC<SideNavProps> = ({ selectedTab, onTabChange, onAbout }) => {
   const router = useRouter();
   const currentPath = router.pathname;
+  const currentAsPath = router.asPath || router.pathname;
   const currentUser = useUser();
   const [showMoreMenu, setShowMoreMenu] = useState(false);
 
@@ -95,12 +96,44 @@ const SideNav: React.FC<SideNavProps> = ({ selectedTab, onTabChange, onAbout }) 
   };
 
   const isHomePage = currentPath === '/';
-  const isPulseCheckPage = currentPath === '/PulseCheck';
+  // PulseCheck includes /PulseCheck, /PulseCheck/* and legacy /PulseCheckChat
+  const isPulseCheckPage =
+    currentAsPath.startsWith('/PulseCheck') ||
+    currentPath.startsWith('/PulseCheck') ||
+    currentAsPath.startsWith('/PulseCheckChat') ||
+    currentPath === '/PulseCheckChat';
+  const isCoachPage = currentAsPath.startsWith('/coach') || currentPath.startsWith('/coach');
   const isCreatePage = currentPath === '/create';
+  const isPulseCheckNora = isPulseCheckPage && currentAsPath.includes('section=nora');
 
   // Define navigation items dynamically based on current page
-  // When on PulseCheck, show Pulse in nav; when on Pulse, show PulseCheck in nav
-  const navItems = isPulseCheckPage ? [
+  const navItems = isCoachPage ? [
+    // Coach Dashboard navigation (Mental Training is in top tabs, not sidebar)
+    { 
+      icon: <FaUsers />, 
+      label: 'Dashboard', 
+      href: '/coach/dashboard',
+      isActive: currentPath === '/coach/dashboard' || currentPath === '/coach/mental-training',
+    },
+    {
+      icon: <FaUserFriends />,
+      label: 'Referrals',
+      href: '/coach/referrals',
+      isActive: currentPath === '/coach/referrals',
+    },
+    {
+      icon: <FaUserTie />,
+      label: 'Staff',
+      href: '/coach/staff',
+      isActive: currentPath === '/coach/staff',
+    },
+    { 
+      icon: <FaInbox />, 
+      label: 'Inbox', 
+      href: '/coach/inbox',
+      isActive: currentPath === '/coach/inbox',
+    },
+  ] : isPulseCheckPage ? [
     // PulseCheck page navigation
     { 
       icon: <FaHome />, 
@@ -110,19 +143,29 @@ const SideNav: React.FC<SideNavProps> = ({ selectedTab, onTabChange, onAbout }) 
         router.push('/PulseCheck');
       }
     },
+    {
+      icon: <FaBrain />,
+      label: 'Nora',
+      href: '/PulseCheck?section=nora',
+      onClick: () => {
+        router.push('/PulseCheck?section=nora');
+      },
+      isActive: isPulseCheckNora,
+    },
+    {
+      icon: <FaUserTie />,
+      label: 'Coach',
+      href: '/coach/dashboard',
+      onClick: () => {
+        router.push('/coach/dashboard');
+      },
+      isActive: currentAsPath.startsWith('/coach'),
+    },
     { 
       icon: <FaEnvelope />, 
       label: 'Messages', 
       href: '/messages',
       tab: SelectedRootTabs.Messages
-    },
-    { 
-      icon: <FaPlusSquare />, 
-      label: 'Create',
-      tab: SelectedRootTabs.Create,
-      onClick: () => {
-        router.push('/create');
-      }
     },
   ] : [
     // Pulse/Home page navigation
@@ -194,14 +237,21 @@ const SideNav: React.FC<SideNavProps> = ({ selectedTab, onTabChange, onAbout }) 
               className="relative"
             >
               {/* Logo glow */}
-              {isPulseCheckPage && (
+              {(isPulseCheckPage || isCoachPage) && (
                 <div className="absolute -inset-2 bg-[#E0FE10]/10 rounded-xl blur-xl" />
               )}
-              <img 
-                src={isPulseCheckPage ? '/pulseCheckIcon.png' : '/pulse-logo-white.svg'} 
-                alt={isPulseCheckPage ? 'PulseCheck' : 'Pulse'} 
-                className="relative h-8 w-auto" 
-              />
+              {isCoachPage ? (
+                <div className="relative flex items-center gap-2">
+                  <img src="/pulseIcon.png" alt="Pulse" className="h-8 w-8" />
+                  <span className="text-white font-bold text-lg">Coach</span>
+                </div>
+              ) : (
+                <img 
+                  src={isPulseCheckPage ? '/pulseCheckIcon.png' : '/pulse-logo-white.svg'} 
+                  alt={isPulseCheckPage ? 'PulseCheck' : 'Pulse'} 
+                  className="relative h-8 w-auto" 
+                />
+              )}
             </motion.div>
           </div>
           {/* Small screens: icon only */}
@@ -214,8 +264,8 @@ const SideNav: React.FC<SideNavProps> = ({ selectedTab, onTabChange, onAbout }) 
               {/* Icon glow */}
               <div className="absolute -inset-2 bg-[#E0FE10]/20 rounded-full blur-lg opacity-0 group-hover:opacity-100 transition-opacity" />
               <img 
-                src={isPulseCheckPage ? '/pulseCheckIcon.png' : '/pulseIcon.png'} 
-                alt={isPulseCheckPage ? 'PulseCheck' : 'Pulse'} 
+                src={isCoachPage ? '/pulseIcon.png' : isPulseCheckPage ? '/pulseCheckIcon.png' : '/pulseIcon.png'} 
+                alt={isCoachPage ? 'Coach' : isPulseCheckPage ? 'PulseCheck' : 'Pulse'} 
                 className="relative w-10 h-10" 
               />
             </motion.div>
@@ -226,11 +276,14 @@ const SideNav: React.FC<SideNavProps> = ({ selectedTab, onTabChange, onAbout }) 
         <div className="relative flex-1 flex flex-col gap-1 px-3">
           {navItems.map((item, index) => {
             // Determine if this item is active
-            const isActive = isCreatePage
-              ? (item.tab === SelectedRootTabs.Create && currentPath === '/create') || currentPath === item.href
-              : isHomePage && selectedTab && item.tab
-              ? selectedTab === item.tab
-              : currentPath === item.href;
+            const isActive =
+              typeof (item as any).isActive === 'boolean'
+                ? (item as any).isActive
+                : isCreatePage
+                ? (item.tab === SelectedRootTabs.Create && currentPath === '/create') || currentPath === item.href
+                : isHomePage && selectedTab && item.tab
+                ? selectedTab === item.tab
+                : currentPath === item.href || currentAsPath === item.href;
 
             return (
               <NavItem
@@ -368,29 +421,63 @@ const SideNav: React.FC<SideNavProps> = ({ selectedTab, onTabChange, onAbout }) 
                       style={{ background: 'linear-gradient(90deg, transparent, rgba(224,254,16,0.5), transparent)' }}
                     />
                     
-                    {/* App Switcher - Show opposite app */}
-                    <motion.button
-                      onClick={() => {
-                        if (isPulseCheckPage) {
-                          router.push('/');
-                        } else {
-                          router.push('/PulseCheck');
-                        }
-                        setShowMoreMenu(false);
-                      }}
-                      whileHover={{ backgroundColor: 'rgba(255,255,255,0.05)' }}
-                      className="w-full flex items-center gap-3 px-4 py-3 text-white transition-colors"
-                    >
-                      <div className="relative">
-                        <div className="absolute -inset-1 bg-[#E0FE10]/20 rounded-lg blur opacity-50" />
-                        <img 
-                          src={isPulseCheckPage ? '/pulseIcon.png' : '/pulseCheckIcon.png'} 
-                          alt={isPulseCheckPage ? 'Pulse' : 'PulseCheck'} 
-                          className="relative w-5 h-5" 
-                        />
-                      </div>
-                      <span className="font-medium">{isPulseCheckPage ? 'Pulse' : 'PulseCheck'}</span>
-                    </motion.button>
+                    {/* App Switcher - Show available apps */}
+                    {isCoachPage ? (
+                      <>
+                        <motion.button
+                          onClick={() => {
+                            router.push('/PulseCheck');
+                            setShowMoreMenu(false);
+                          }}
+                          whileHover={{ backgroundColor: 'rgba(255,255,255,0.05)' }}
+                          className="w-full flex items-center gap-3 px-4 py-3 text-white transition-colors"
+                        >
+                          <div className="relative">
+                            <div className="absolute -inset-1 bg-[#E0FE10]/20 rounded-lg blur opacity-50" />
+                            <img src="/pulseCheckIcon.png" alt="PulseCheck" className="relative w-5 h-5" />
+                          </div>
+                          <span className="font-medium">PulseCheck</span>
+                        </motion.button>
+                        <div className="border-t border-white/5" />
+                        <motion.button
+                          onClick={() => {
+                            router.push('/');
+                            setShowMoreMenu(false);
+                          }}
+                          whileHover={{ backgroundColor: 'rgba(255,255,255,0.05)' }}
+                          className="w-full flex items-center gap-3 px-4 py-3 text-white transition-colors"
+                        >
+                          <div className="relative">
+                            <div className="absolute -inset-1 bg-[#E0FE10]/20 rounded-lg blur opacity-50" />
+                            <img src="/pulseIcon.png" alt="Pulse" className="relative w-5 h-5" />
+                          </div>
+                          <span className="font-medium">Pulse Home</span>
+                        </motion.button>
+                      </>
+                    ) : (
+                      <motion.button
+                        onClick={() => {
+                          if (isPulseCheckPage) {
+                            router.push('/');
+                          } else {
+                            router.push('/PulseCheck');
+                          }
+                          setShowMoreMenu(false);
+                        }}
+                        whileHover={{ backgroundColor: 'rgba(255,255,255,0.05)' }}
+                        className="w-full flex items-center gap-3 px-4 py-3 text-white transition-colors"
+                      >
+                        <div className="relative">
+                          <div className="absolute -inset-1 bg-[#E0FE10]/20 rounded-lg blur opacity-50" />
+                          <img 
+                            src={isPulseCheckPage ? '/pulseIcon.png' : '/pulseCheckIcon.png'} 
+                            alt={isPulseCheckPage ? 'Pulse' : 'PulseCheck'} 
+                            className="relative w-5 h-5" 
+                          />
+                        </div>
+                        <span className="font-medium">{isPulseCheckPage ? 'Pulse' : 'PulseCheck'}</span>
+                      </motion.button>
+                    )}
                     
                     <div className="border-t border-white/5" />
                     
@@ -456,126 +543,228 @@ const SideNav: React.FC<SideNavProps> = ({ selectedTab, onTabChange, onAbout }) 
           />
         </div>
         
-        <div className="relative h-full flex items-center justify-around px-2">
-          {/* Home icon - goes to PulseCheck chat or Pulse Discover */}
-          <motion.button
-            onClick={() => {
-              if (isPulseCheckPage) {
-                router.push('/PulseCheck');
-              } else if (isCreatePage) {
-                // On /create page, route directly to home
-                router.push('/');
-              } else if (onTabChange) {
-                onTabChange(SelectedRootTabs.Discover);
-              } else {
-                router.push('/');
-              }
-            }}
-            whileTap={{ scale: 0.9 }}
-            className={`relative flex flex-col items-center justify-center p-2 rounded-xl transition-colors ${
-              (isPulseCheckPage && currentPath === '/PulseCheck') || 
-              (isHomePage && selectedTab === SelectedRootTabs.Discover)
-                ? 'text-[#E0FE10]' 
-                : 'text-zinc-400'
-            }`}
-          >
-            {/* Active glow */}
-            {((isPulseCheckPage && currentPath === '/PulseCheck') || 
-              (isHomePage && selectedTab === SelectedRootTabs.Discover)) && (
-              <div className="absolute inset-0 bg-[#E0FE10]/10 rounded-xl blur" />
-            )}
-            <FaHome className="relative text-2xl" />
-          </motion.button>
-          
-          <motion.button
-            onClick={() => {
-              // Always route directly to messages page
-              router.push('/messages');
-            }}
-            whileTap={{ scale: 0.9 }}
-            className={`relative flex flex-col items-center justify-center p-2 rounded-xl transition-colors ${
-              (isHomePage && selectedTab === SelectedRootTabs.Messages) || currentPath === '/messages'
-                ? 'text-[#E0FE10]' 
-                : 'text-zinc-400'
-            }`}
-          >
-            {/* Active glow */}
-            {((isHomePage && selectedTab === SelectedRootTabs.Messages) || currentPath === '/messages') && (
-              <div className="absolute inset-0 bg-[#E0FE10]/10 rounded-xl blur" />
-            )}
-            <FaEnvelope className="relative text-2xl" />
-          </motion.button>
-          
-          <motion.button
-            onClick={() => {
-              if (isCreatePage) {
-                // Already on create page, do nothing
-                return;
-              } else if (isHomePage && onTabChange) {
-                onTabChange(SelectedRootTabs.Create);
-              } else {
-                // Route to /create page
-                router.push('/create');
-              }
-            }}
-            whileTap={{ scale: 0.9 }}
-            className={`relative flex flex-col items-center justify-center p-2 rounded-xl transition-colors ${
-              currentPath === '/create' || (isHomePage && selectedTab === SelectedRootTabs.Create)
-                ? 'text-[#E0FE10]' 
-                : 'text-zinc-400'
-            }`}
-          >
-            {/* Active glow */}
-            {(currentPath === '/create' || (isHomePage && selectedTab === SelectedRootTabs.Create)) && (
-              <div className="absolute inset-0 bg-[#E0FE10]/10 rounded-xl blur" />
-            )}
-            <FaPlusSquare className="relative text-2xl" />
-          </motion.button>
-          
-          <motion.button
-            onClick={() => {
-              if (isCreatePage) {
-                // On /create page, deep-link to home with Profile selected
-                router.push('/?tab=profile');
-              } else if (isHomePage && onTabChange) {
-                onTabChange(SelectedRootTabs.Profile);
-              } else {
-                // Navigate to home page and select Profile (query-based deep link works even without onTabChange)
-                router.push('/?tab=profile');
-              }
-            }}
-            whileTap={{ scale: 0.9 }}
-            className="relative flex flex-col items-center justify-center p-2"
-          >
-            {/* Active glow */}
-            {isHomePage && selectedTab === SelectedRootTabs.Profile && (
-              <div className="absolute inset-0 bg-[#E0FE10]/10 rounded-xl blur" />
-            )}
-            {currentUser?.profileImage?.profileImageURL ? (
-              <img
-                src={currentUser.profileImage.profileImageURL}
-                alt="Profile"
-                className={`relative w-8 h-8 rounded-full object-cover border-2 ${
-                  isHomePage && selectedTab === SelectedRootTabs.Profile 
-                    ? 'border-[#E0FE10] shadow-[0_0_10px_rgba(224,254,16,0.4)]' 
-                    : 'border-transparent'
-                } transition-all`}
-              />
-            ) : (
-              <div className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-all ${
-                isHomePage && selectedTab === SelectedRootTabs.Profile 
-                  ? 'bg-[#E0FE10]/20 border-2 border-[#E0FE10] shadow-[0_0_10px_rgba(224,254,16,0.4)]' 
-                  : 'bg-zinc-700 border-2 border-transparent'
-              }`}>
-                <span className={`text-sm font-semibold ${
-                  isHomePage && selectedTab === SelectedRootTabs.Profile ? 'text-[#E0FE10]' : 'text-white'
+        {isCoachPage ? (
+          /* Coach-specific mobile navigation */
+          <div className="relative h-full flex items-center justify-around px-2">
+            <motion.button
+              onClick={() => router.push('/coach/dashboard')}
+              whileTap={{ scale: 0.9 }}
+              className={`relative flex flex-col items-center justify-center p-2 rounded-xl transition-colors ${
+                currentPath === '/coach/dashboard' ? 'text-[#E0FE10]' : 'text-zinc-400'
+              }`}
+            >
+              {currentPath === '/coach/dashboard' && (
+                <div className="absolute inset-0 bg-[#E0FE10]/10 rounded-xl blur" />
+              )}
+              <FaUsers className="relative text-2xl" />
+            </motion.button>
+            
+            <motion.button
+              onClick={() => router.push('/coach/referrals')}
+              whileTap={{ scale: 0.9 }}
+              className={`relative flex flex-col items-center justify-center p-2 rounded-xl transition-colors ${
+                currentPath === '/coach/referrals' ? 'text-[#E0FE10]' : 'text-zinc-400'
+              }`}
+            >
+              {currentPath === '/coach/referrals' && (
+                <div className="absolute inset-0 bg-[#E0FE10]/10 rounded-xl blur" />
+              )}
+              <FaUserFriends className="relative text-2xl" />
+            </motion.button>
+            
+            <motion.button
+              onClick={() => router.push('/coach/inbox')}
+              whileTap={{ scale: 0.9 }}
+              className={`relative flex flex-col items-center justify-center p-2 rounded-xl transition-colors ${
+                currentPath === '/coach/inbox' ? 'text-[#E0FE10]' : 'text-zinc-400'
+              }`}
+            >
+              {currentPath === '/coach/inbox' && (
+                <div className="absolute inset-0 bg-[#E0FE10]/10 rounded-xl blur" />
+              )}
+              <FaInbox className="relative text-2xl" />
+            </motion.button>
+            
+            <motion.button
+              onClick={() => router.push('/coach/profile')}
+              whileTap={{ scale: 0.9 }}
+              className={`relative flex flex-col items-center justify-center p-2 rounded-xl transition-colors ${
+                currentPath === '/coach/profile' ? 'text-[#E0FE10]' : 'text-zinc-400'
+              }`}
+            >
+              {currentPath === '/coach/profile' && (
+                <div className="absolute inset-0 bg-[#E0FE10]/10 rounded-xl blur" />
+              )}
+              {currentUser?.profileImage?.profileImageURL ? (
+                <img
+                  src={currentUser.profileImage.profileImageURL}
+                  alt="Profile"
+                  className={`relative w-8 h-8 rounded-full object-cover border-2 ${
+                    currentPath === '/coach/profile'
+                      ? 'border-[#E0FE10] shadow-[0_0_10px_rgba(224,254,16,0.4)]' 
+                      : 'border-transparent'
+                  } transition-all`}
+                />
+              ) : (
+                <div className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-all ${
+                  currentPath === '/coach/profile'
+                    ? 'bg-[#E0FE10]/20 border-2 border-[#E0FE10] shadow-[0_0_10px_rgba(224,254,16,0.4)]' 
+                    : 'bg-zinc-700 border-2 border-transparent'
                 }`}>
-                  {currentUser?.username?.[0]?.toUpperCase() || 'U'}
-                </span>
-              </div>
+                  <span className={`text-sm font-semibold ${
+                    currentPath === '/coach/profile' ? 'text-[#E0FE10]' : 'text-white'
+                  }`}>
+                    {currentUser?.username?.[0]?.toUpperCase() || 'U'}
+                  </span>
+                </div>
+              )}
+            </motion.button>
+          </div>
+        ) : (
+          /* Default mobile navigation */
+          <div className="relative h-full flex items-center justify-around px-2">
+            {/* Home icon - goes to PulseCheck chat or Pulse Discover */}
+            <motion.button
+              onClick={() => {
+                if (isPulseCheckPage) {
+                  router.push('/PulseCheck');
+                } else if (isCreatePage) {
+                  // On /create page, route directly to home
+                  router.push('/');
+                } else if (onTabChange) {
+                  onTabChange(SelectedRootTabs.Discover);
+                } else {
+                  router.push('/');
+                }
+              }}
+              whileTap={{ scale: 0.9 }}
+              className={`relative flex flex-col items-center justify-center p-2 rounded-xl transition-colors ${
+                (isPulseCheckPage && currentPath === '/PulseCheck') || 
+                (isHomePage && selectedTab === SelectedRootTabs.Discover)
+                  ? 'text-[#E0FE10]' 
+                  : 'text-zinc-400'
+              }`}
+            >
+              {/* Active glow */}
+              {((isPulseCheckPage && currentPath === '/PulseCheck') || 
+                (isHomePage && selectedTab === SelectedRootTabs.Discover)) && (
+                <div className="absolute inset-0 bg-[#E0FE10]/10 rounded-xl blur" />
+              )}
+              <FaHome className="relative text-2xl" />
+            </motion.button>
+            
+            <motion.button
+              onClick={() => {
+                // Always route directly to messages page
+                router.push('/messages');
+              }}
+              whileTap={{ scale: 0.9 }}
+              className={`relative flex flex-col items-center justify-center p-2 rounded-xl transition-colors ${
+                (isHomePage && selectedTab === SelectedRootTabs.Messages) || currentPath === '/messages'
+                  ? 'text-[#E0FE10]' 
+                  : 'text-zinc-400'
+              }`}
+            >
+              {/* Active glow */}
+              {((isHomePage && selectedTab === SelectedRootTabs.Messages) || currentPath === '/messages') && (
+                <div className="absolute inset-0 bg-[#E0FE10]/10 rounded-xl blur" />
+              )}
+              <FaEnvelope className="relative text-2xl" />
+            </motion.button>
+            
+            {isPulseCheckPage ? (
+              <motion.button
+                onClick={() => {
+                  router.push('/coach/dashboard');
+                }}
+                whileTap={{ scale: 0.9 }}
+                className={`relative flex flex-col items-center justify-center p-2 rounded-xl transition-colors ${
+                  currentAsPath.startsWith('/coach')
+                    ? 'text-[#E0FE10]' 
+                    : 'text-zinc-400'
+                }`}
+                aria-label="Coach Dashboard"
+              >
+                {/* Active glow */}
+                {currentAsPath.startsWith('/coach') && (
+                  <div className="absolute inset-0 bg-[#E0FE10]/10 rounded-xl blur" />
+                )}
+                <FaUserTie className="relative text-2xl" />
+              </motion.button>
+            ) : (
+              <motion.button
+                onClick={() => {
+                  if (isCreatePage) {
+                    // Already on create page, do nothing
+                    return;
+                  } else if (isHomePage && onTabChange) {
+                    onTabChange(SelectedRootTabs.Create);
+                  } else {
+                    // Route to /create page
+                    router.push('/create');
+                  }
+                }}
+                whileTap={{ scale: 0.9 }}
+                className={`relative flex flex-col items-center justify-center p-2 rounded-xl transition-colors ${
+                  currentPath === '/create' || (isHomePage && selectedTab === SelectedRootTabs.Create)
+                    ? 'text-[#E0FE10]' 
+                    : 'text-zinc-400'
+                }`}
+                aria-label="Create"
+              >
+                {/* Active glow */}
+                {(currentPath === '/create' || (isHomePage && selectedTab === SelectedRootTabs.Create)) && (
+                  <div className="absolute inset-0 bg-[#E0FE10]/10 rounded-xl blur" />
+                )}
+                <FaPlusSquare className="relative text-2xl" />
+              </motion.button>
             )}
-          </motion.button>
-        </div>
+            
+            <motion.button
+              onClick={() => {
+                if (isCreatePage) {
+                  // On /create page, deep-link to home with Profile selected
+                  router.push('/?tab=profile');
+                } else if (isHomePage && onTabChange) {
+                  onTabChange(SelectedRootTabs.Profile);
+                } else {
+                  // Navigate to home page and select Profile (query-based deep link works even without onTabChange)
+                  router.push('/?tab=profile');
+                }
+              }}
+              whileTap={{ scale: 0.9 }}
+              className="relative flex flex-col items-center justify-center p-2"
+            >
+              {/* Active glow */}
+              {isHomePage && selectedTab === SelectedRootTabs.Profile && (
+                <div className="absolute inset-0 bg-[#E0FE10]/10 rounded-xl blur" />
+              )}
+              {currentUser?.profileImage?.profileImageURL ? (
+                <img
+                  src={currentUser.profileImage.profileImageURL}
+                  alt="Profile"
+                  className={`relative w-8 h-8 rounded-full object-cover border-2 ${
+                    isHomePage && selectedTab === SelectedRootTabs.Profile 
+                      ? 'border-[#E0FE10] shadow-[0_0_10px_rgba(224,254,16,0.4)]' 
+                      : 'border-transparent'
+                  } transition-all`}
+                />
+              ) : (
+                <div className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-all ${
+                  isHomePage && selectedTab === SelectedRootTabs.Profile 
+                    ? 'bg-[#E0FE10]/20 border-2 border-[#E0FE10] shadow-[0_0_10px_rgba(224,254,16,0.4)]' 
+                    : 'bg-zinc-700 border-2 border-transparent'
+                }`}>
+                  <span className={`text-sm font-semibold ${
+                    isHomePage && selectedTab === SelectedRootTabs.Profile ? 'text-[#E0FE10]' : 'text-white'
+                  }`}>
+                    {currentUser?.username?.[0]?.toUpperCase() || 'U'}
+                  </span>
+                </div>
+              )}
+            </motion.button>
+          </div>
+        )}
       </nav>
     </>
   );

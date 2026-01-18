@@ -53,7 +53,7 @@ const PulseCheckChat: React.FC = () => {
     const name =
       // @ts-ignore prefer displayName then preferredName then username
       (currentUser as any).preferredName || currentUser.displayName || currentUser.username || 'athlete';
-    const greeting = `Hey ${name} — I’m your mental mindset coach. What’s one focus for today?`;
+    const greeting = `Hey ${name} — I'm Nora, your AI mental performance coach. What's one focus for today?`;
     const aiMsg: ChatMessage = {
       id: Math.random().toString(36).slice(2),
       content: greeting,

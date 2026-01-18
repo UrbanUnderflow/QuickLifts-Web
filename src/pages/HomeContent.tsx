@@ -439,10 +439,13 @@ const performExerciseSubmission = async (updatedLogs: ExerciseLog[]) => {
         const summary = workoutSummary ? new WorkoutSummary(workoutSummary) : null;
         await workoutService.cancelWorkout(currentWorkoutSession, summary);
         setCurrentExerciseIndex(0);
-        console.log('🚫 [handleCancelWorkout] Workout cancelled successfully, navigating to home...');
+        console.log('🚫 [handleCancelWorkout] Workout cancelled successfully');
         
-        // Navigate back to home page after successful cancellation
-        router.push('/');
+        // Only navigate if not already on home page
+        // The workout views will automatically hide when currentWorkoutSession is cleared
+        if (router.pathname !== '/') {
+          router.push('/');
+        }
       } catch (error) {
         console.error('Error canceling workout:', error);
       }

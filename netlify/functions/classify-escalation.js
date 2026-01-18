@@ -1,5 +1,5 @@
 /**
- * PulseCheck Escalation Classification Function
+ * Nora (PulseCheck) Escalation Classification Function
  * 
  * Analyzes user messages to determine if escalation is needed.
  * Uses OpenAI with admin-defined escalation conditions as context.
@@ -228,7 +228,7 @@ function buildTrainingContext(conditions) {
  * Build the classification prompt for OpenAI
  */
 function buildClassificationPrompt(message, recentMessages, mentalNotes, escalationHistory, trainingContext) {
-  const systemPrompt = `You are a clinical safety classifier for PulseCheck, a sport psychology support platform.
+  const systemPrompt = `You are a clinical safety classifier for Nora, an AI mental performance coach for athletes.
 
 Your task is to analyze athlete messages and determine if escalation is needed based on clinical criteria.
 

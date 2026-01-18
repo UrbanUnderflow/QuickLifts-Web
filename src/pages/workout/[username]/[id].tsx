@@ -1,16 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import { useSelector } from 'react-redux';
 import { useRouter } from 'next/router';
+import { motion } from 'framer-motion';
+import { ArrowLeft, Clock, Dumbbell, Play, Sparkles } from 'lucide-react';
 import SequentialVideoPlayerView from '../../../components/SequentialVideoPlayerView';
 import SweatListCardView from '../../../components/SweatListCardView';
 import { workoutService } from '../../../api/firebase/workout/service';
-import { ExerciseLog, ExerciseReference } from '../../../api/firebase/exercise/types';
+import { ExerciseLog } from '../../../api/firebase/exercise/types';
 import { Workout } from '../../../api/firebase/workout/types';
 import { userService } from '../../../api/firebase/user/service';
 import { RootState } from '../../../redux/store';
 import { useDispatch } from 'react-redux';
 import { setCurrentWorkout, setCurrentExerciseLogs } from '../../../redux/workoutSlice';
-import Spacer from '../../../components/Spacer';
+
+// Chromatic Glass color palette - subtle variant
+const colors = {
+  primary: '#E0FE10',
+  primaryDim: 'rgba(224, 254, 16, 0.10)',
+  primaryBorder: 'rgba(224, 254, 16, 0.25)',
+  primaryGlow: 'rgba(224, 254, 16, 0.15)',
+};
 
 const WorkoutPreviewer: React.FC = () => {
   const router = useRouter();
@@ -22,7 +31,7 @@ const WorkoutPreviewer: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
 
   const userId = useSelector((state: RootState) => state.user.currentUser?.id);
-
+  const dispatch = useDispatch();
 
   useEffect(() => {
     if (!router.isReady || !username || !id) return;
@@ -37,9 +46,6 @@ const WorkoutPreviewer: React.FC = () => {
         }
 
         const [fetchedWorkout, fetchedLogs] = await workoutService.fetchSavedWorkout(user.id, id as string);
-
-        console.log("Fetched workout:", fetchedWorkout);
-        console.log("fetched logs:", fetchedLogs);
 
         if (fetchedWorkout) {
           setWorkout(fetchedWorkout);
@@ -57,171 +63,281 @@ const WorkoutPreviewer: React.FC = () => {
     fetchWorkoutByUsernameAndId();
   }, [router.isReady, username, id]);
 
-  // Inside the component
-  const dispatch = useDispatch();
-  
   const handleStartWorkout = async () => {
-    console.log('[handleStartWorkout] Starting...'); // Log 1
     if (!workout || !logs.length) {
-      console.error('[handleStartWorkout] Error: Workout or logs missing', { workout, logs });
       setError("Unable to start workout - workout or logs missing");
       return;
     }
-  
+
     try {
       if (userId) {
-        console.log('[handleStartWorkout] User ID found:', userId); // Log
-        console.log('[handleStartWorkout] Logs being sent to service:', logs); // Log 2
-        
-        // Save workout session in Firestore
-        console.log('[handleStartWorkout] Calling workoutService.saveWorkoutSession...'); // Log
         const result = await workoutService.saveWorkoutSession({
           userId,
           workout,
           logs
         });
-  
-        // Deconstruct the result
+
         const savedWorkout = result?.workout;
         const updatedLogsWithNewIds = result?.logs;
 
-        console.log('[handleStartWorkout] Received savedWorkout from service:', savedWorkout);
-        console.log('[handleStartWorkout] Received updatedLogsWithNewIds from service:', updatedLogsWithNewIds);
-
         if (savedWorkout && updatedLogsWithNewIds) {
-          console.log('[handleStartWorkout] Workout session saved successfully. ID:', savedWorkout.id);
-          
-          // Convert workout and *updated* logs to plain objects for Redux
           const plainWorkout = savedWorkout.toDictionary();
           const plainLogs = updatedLogsWithNewIds.map(log => log.toDictionary());
 
-          // ✅ Dispatch Redux actions with plain objects containing correct IDs
-          console.log('[handleStartWorkout] Dispatching setCurrentWorkout with plain object:', plainWorkout);
           dispatch(setCurrentWorkout(plainWorkout));
-          console.log('[handleStartWorkout] Dispatching setCurrentExerciseLogs with updated plain logs:', plainLogs);
           dispatch(setCurrentExerciseLogs(plainLogs));
-          console.log('[handleStartWorkout] Redux actions dispatched.');
-  
-          // ✅ Navigate back to home, which handles the workout state
-          console.log('[handleStartWorkout] Navigating to home page...'); // Log 6
-          router.push('/'); // Re-enable navigation
+
+          router.push('/');
         } else {
-          console.error('[handleStartWorkout] Error: Failed to save workout session - service returned null/undefined.');
           setError("Failed to save workout session");
         }
       } else {
-        console.error('[handleStartWorkout] Error: User ID not found');
         setError("User not authenticated");
       }
     } catch (err) {
-      console.error('[handleStartWorkout] Error caught:', err);
       setError("Failed to start workout: " + (err instanceof Error ? err.message : String(err)));
     }
   };
-  
 
-  // Add loading and error state checks with more visibility
+  // Loading State
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="text-white text-xl">Loading workout...</div>
+      <div className="min-h-screen bg-[#0a0a0b] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <motion.div
+            animate={{ rotate: 360 }}
+            transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+            className="w-10 h-10 rounded-full border-2 border-transparent"
+            style={{ 
+              borderTopColor: colors.primary,
+              borderRightColor: `${colors.primary}40`
+            }}
+          />
+          <p className="text-zinc-500 text-sm">Loading workout...</p>
+        </div>
       </div>
     );
   }
 
+  // Error State
   if (error || !workout) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="text-white text-xl">
-          Error loading workout: {error || "No workout data available"}
+      <div className="min-h-screen bg-[#0a0a0b] flex items-center justify-center p-6">
+        <div className="max-w-md w-full backdrop-blur-sm bg-zinc-900/80 border border-zinc-800 rounded-2xl p-6 text-center">
+          <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center">
+            <span className="text-xl">⚠️</span>
+          </div>
+          <h2 className="text-lg font-semibold text-white mb-2">Error Loading Workout</h2>
+          <p className="text-zinc-400 text-sm mb-6">{error || "No workout data available"}</p>
+          <button
+            onClick={() => router.back()}
+            className="px-5 py-2.5 rounded-xl bg-zinc-800 text-white text-sm font-medium hover:bg-zinc-700 transition-colors"
+          >
+            Go Back
+          </button>
         </div>
       </div>
     );
   }
 
   const videoURLs = workout.exercises
-  .filter(exerciseRef => {
-    // Log exercise name and videos being considered
-    console.log(`[VideoURLs] Processing exercise: ${exerciseRef.exercise.name}, Videos:`, exerciseRef.exercise.videos);
-    return exerciseRef.exercise.videos?.length > 0;
-  })
-  .flatMap(exerciseRef => exerciseRef.exercise.videos.map(video => video.videoURL))
-  .filter(url => url);
+    .filter(exerciseRef => exerciseRef.exercise.videos?.length > 0)
+    .flatMap(exerciseRef => exerciseRef.exercise.videos.map(video => video.videoURL))
+    .filter(url => url);
 
-  // Log the final video URLs being passed to the player
-  console.log("[VideoURLs] Final video URLs for SequentialVideoPlayerView:", videoURLs);
-
-  console.log("preview logs:", logs);
   const duration = Workout.estimatedDuration(workout.exercises);
 
   return (
-    <div className="relative h-screen bg-black">
-      {/* Hero Section */}
-      <div className="h-[45vh] relative">
-        <div className="absolute inset-0">
-          <SequentialVideoPlayerView videoURLs={videoURLs} isMuted={true} ratio="cover" />
-          <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black" />
-        </div>
+    <div className="min-h-screen bg-[#0a0a0b]">
+      {/* Desktop: Side-by-side layout | Mobile: Stacked layout */}
+      <div className="lg:flex lg:h-screen">
         
-        <div className="absolute bottom-6 left-0 right-0 px-6">
-          <h1 className="text-3xl font-bold text-white mb-2">{workout.title}</h1>
-          <div className="flex gap-4">
-            <div className="flex items-center gap-2">
-              <span className="text-xl font-semibold text-[#E0FE10]">{logs.length}</span>
-              <span className="text-sm text-zinc-300">Exercises</span>
+        {/* Left Panel - Hero/Video Section */}
+        <div className="relative lg:w-1/2 xl:w-[55%] h-[45vh] lg:h-full">
+          {/* Video Player */}
+          <div className="absolute inset-0">
+            <SequentialVideoPlayerView videoURLs={videoURLs} isMuted={true} ratio="cover" />
+            
+            {/* Overlays */}
+            <div className="absolute inset-0 bg-gradient-to-b from-[#0a0a0b]/60 via-transparent to-[#0a0a0b] lg:bg-gradient-to-r lg:from-transparent lg:via-transparent lg:to-[#0a0a0b]" />
+            <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0b] via-transparent to-transparent lg:hidden" />
+          </div>
+
+          {/* Back Button */}
+          <button
+            onClick={() => router.back()}
+            className="absolute top-6 left-6 z-20 w-10 h-10 rounded-full bg-black/40 backdrop-blur-sm border border-white/10 flex items-center justify-center hover:bg-black/60 transition-colors"
+          >
+            <ArrowLeft className="w-5 h-5 text-white" />
+          </button>
+
+          {/* AI Badge - Desktop: top right, Mobile: top right */}
+          {workout.title?.toLowerCase().includes('ai') && (
+            <div className="absolute top-6 right-6 z-20 lg:right-auto lg:left-20">
+              <div 
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-black/40 backdrop-blur-sm border border-white/10"
+              >
+                <Sparkles className="w-3 h-3" style={{ color: colors.primary }} />
+                <span className="text-[10px] font-semibold tracking-wider" style={{ color: colors.primary }}>
+                  AI-POWERED
+                </span>
+              </div>
             </div>
-            <div className="w-px h-6 bg-zinc-700" />
-            <div className="flex items-center gap-2">
-              <span className="text-xl font-semibold text-[#E0FE10]">{duration}</span>
-              <span className="text-sm text-zinc-300">Minutes</span>
+          )}
+
+          {/* Hero Content - Mobile only */}
+          <div className="absolute bottom-0 left-0 right-0 p-6 z-10 lg:hidden">
+            {/* Category Badge */}
+            <div 
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full mb-3 text-xs"
+              style={{
+                backgroundColor: colors.primaryDim,
+                border: `1px solid ${colors.primaryBorder}`,
+                color: colors.primary
+              }}
+            >
+              <Dumbbell className="w-3 h-3" />
+              <span className="font-medium">{workout.zone || 'Upper Body'}</span>
+            </div>
+
+            {/* Title */}
+            <h1 className="text-2xl font-bold text-white mb-3 leading-tight">
+              {workout.title}
+            </h1>
+
+            {/* Stats Row */}
+            <div className="flex items-center gap-4 text-sm">
+              <div className="flex items-center gap-2">
+                <div 
+                  className="w-8 h-8 rounded-lg flex items-center justify-center"
+                  style={{ backgroundColor: colors.primaryDim, border: `1px solid ${colors.primaryBorder}` }}
+                >
+                  <Dumbbell className="w-4 h-4" style={{ color: colors.primary }} />
+                </div>
+                <div>
+                  <p className="text-white font-semibold">{logs.length}</p>
+                  <p className="text-zinc-500 text-xs">Exercises</p>
+                </div>
+              </div>
+              <div className="w-px h-8 bg-zinc-800" />
+              <div className="flex items-center gap-2">
+                <div 
+                  className="w-8 h-8 rounded-lg flex items-center justify-center"
+                  style={{ backgroundColor: colors.primaryDim, border: `1px solid ${colors.primaryBorder}` }}
+                >
+                  <Clock className="w-4 h-4" style={{ color: colors.primary }} />
+                </div>
+                <div>
+                  <p className="text-white font-semibold">{duration}</p>
+                  <p className="text-zinc-500 text-xs">Minutes</p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
-      </div>
-  
-      {/* Exercise List */}
-      <div className="flex-1 bg-black min-h-[55vh]">
-        <div className="px-4 -mt-6">
-          <div className="bg-zinc-900/80 backdrop-blur-sm rounded-2xl p-6 border border-zinc-800">
-            <div className="divide-y divide-zinc-800">
-              {logs.map((log) => {
-                // Log the exercise name and gif URLs being passed to SweatListCardView
-                const gifUrls = log.exercise.videos?.map(video => video.gifURL).filter((url): url is string => !!url) || [];
-                console.log(`[SweatList] Exercise: ${log.exercise.name}, GIF URLs:`, gifUrls);
-                
-                return (
+
+        {/* Right Panel - Content Section */}
+        <div className="relative lg:w-1/2 xl:w-[45%] lg:h-full lg:overflow-y-auto">
+          {/* Desktop Header - Only visible on lg+ */}
+          <div className="hidden lg:block sticky top-0 z-20 bg-[#0a0a0b] px-8 pt-8 pb-6">
+            {/* Category Badge */}
+            <div 
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full mb-4 text-xs"
+              style={{
+                backgroundColor: colors.primaryDim,
+                border: `1px solid ${colors.primaryBorder}`,
+                color: colors.primary
+              }}
+            >
+              <Dumbbell className="w-3 h-3" />
+              <span className="font-medium">{workout.zone || 'Upper Body'}</span>
+            </div>
+
+            {/* Title */}
+            <h1 className="text-3xl xl:text-4xl font-bold text-white mb-4 leading-tight">
+              {workout.title}
+            </h1>
+
+            {/* Stats Row */}
+            <div className="flex items-center gap-6">
+              <div className="flex items-center gap-3">
+                <div 
+                  className="w-10 h-10 rounded-xl flex items-center justify-center"
+                  style={{ backgroundColor: colors.primaryDim, border: `1px solid ${colors.primaryBorder}` }}
+                >
+                  <Dumbbell className="w-5 h-5" style={{ color: colors.primary }} />
+                </div>
+                <div>
+                  <p className="text-xl font-bold text-white">{logs.length}</p>
+                  <p className="text-zinc-500 text-sm">Exercises</p>
+                </div>
+              </div>
+              <div className="w-px h-12 bg-zinc-800" />
+              <div className="flex items-center gap-3">
+                <div 
+                  className="w-10 h-10 rounded-xl flex items-center justify-center"
+                  style={{ backgroundColor: colors.primaryDim, border: `1px solid ${colors.primaryBorder}` }}
+                >
+                  <Clock className="w-5 h-5" style={{ color: colors.primary }} />
+                </div>
+                <div>
+                  <p className="text-xl font-bold text-white">{duration}</p>
+                  <p className="text-zinc-500 text-sm">Minutes</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Exercise List */}
+          <div className="px-4 lg:px-8 pb-32 lg:pb-28 -mt-4 lg:mt-0">
+            {/* Glass Card Container */}
+            <div className="rounded-2xl overflow-hidden bg-zinc-900/60 border border-zinc-800/80">
+              {/* Header */}
+              <div className="px-5 py-4 border-b border-zinc-800/80 flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-white">Exercises</h2>
+                <span className="text-xs text-zinc-500">{logs.length} moves</span>
+              </div>
+
+              {/* Exercise List */}
+              <div className="px-5 py-2 divide-y divide-zinc-800/50">
+                {logs.map((log, index) => (
                   <SweatListCardView
                     key={log.id}
                     log={log}
-                    gifUrls={gifUrls} // Use the calculated gifUrls
+                    index={index}
                   />
-                );
-              })}
+                ))}
+              </div>
             </div>
-            <Spacer size={100}></Spacer>
+          </div>
+
+          {/* Start Button - Fixed on mobile, sticky on desktop */}
+          <div className="fixed lg:sticky bottom-0 left-0 right-0 lg:bottom-0 z-50 p-4 lg:p-6 bg-gradient-to-t from-[#0a0a0b] via-[#0a0a0b]/95 to-transparent lg:bg-[#0a0a0b] lg:border-t lg:border-zinc-800/50">
+            <button
+              onClick={handleStartWorkout}
+              className="w-full flex items-center justify-center gap-2.5 py-4 rounded-xl font-semibold text-base transition-all hover:opacity-90 active:scale-[0.98]"
+              style={{ 
+                backgroundColor: colors.primary,
+                color: '#0a0a0b'
+              }}
+            >
+              <Play className="w-5 h-5 fill-current" />
+              <span>Start Workout</span>
+            </button>
           </div>
         </div>
       </div>
-  
-      {/* Start Button */}
-      <div className="fixed bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black via-black/90 to-transparent pt-20">
-        <button
-          onClick={handleStartWorkout}
-          className="w-full py-4 bg-[#E0FE10] text-black font-bold rounded-xl text-lg hover:bg-[#E0FE10]/90 transition-colors"
-        >
-          Start Workout
-        </button>
-      </div>
-  
+
       {/* Error Modal */}
       {error && (
-        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-[60] p-6">
-          <div className="bg-zinc-900 p-6 rounded-xl max-w-sm w-full border border-zinc-800">
-            <h2 className="text-xl font-bold text-white mb-4">Error</h2>
-            <p className="text-zinc-400 mb-6">{error}</p>
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[60] p-6">
+          <div className="max-w-sm w-full bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
+            <h2 className="text-lg font-semibold text-white mb-2">Error</h2>
+            <p className="text-zinc-400 text-sm mb-6">{error}</p>
             <button 
               onClick={() => setError(null)}
-              className="w-full py-3 bg-[#E0FE10] text-black rounded-xl font-medium"
+              className="w-full py-3 rounded-xl font-medium text-sm transition-colors"
+              style={{ backgroundColor: colors.primary, color: '#0a0a0b' }}
             >
               Dismiss
             </button>

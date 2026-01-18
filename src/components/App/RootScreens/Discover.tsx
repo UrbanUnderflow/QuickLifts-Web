@@ -491,38 +491,56 @@ const Discover: React.FC = () => {
     const message = getMyDayMessage();
 
     return (
-      <div className="mb-8">
-        <div className="relative overflow-hidden rounded-2xl border border-zinc-800 bg-gradient-to-br from-lime-500/10 via-zinc-900 to-cyan-500/10 px-4 py-4 sm:px-6 sm:py-5 shadow-lg">
-          <div className="absolute inset-0 pointer-events-none">
-            <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-lime-400/10" />
-            <div className="absolute -left-16 bottom-0 h-40 w-40 rounded-full bg-cyan-400/5" />
+      <div className="mb-8 group">
+        {/* Chromatic glow background on hover */}
+        <div className="absolute -inset-1 rounded-3xl blur-xl opacity-0 group-hover:opacity-30 transition-all duration-700 bg-gradient-to-br from-[#E0FE10]/40 via-transparent to-[#3B82F6]/20 pointer-events-none" />
+        
+        <div className="relative overflow-hidden rounded-3xl backdrop-blur-xl bg-zinc-900/40 border border-white/10">
+          {/* Chromatic reflection line at top */}
+          <div 
+            className="absolute top-0 left-0 right-0 h-[1px] opacity-60"
+            style={{ background: 'linear-gradient(90deg, transparent, rgba(224,254,16,0.6), transparent)' }}
+          />
+          
+          {/* Inner highlight gradient */}
+          <div className="absolute inset-0 bg-gradient-to-br from-white/5 via-transparent to-transparent pointer-events-none" />
+          
+          {/* Floating accent orbs */}
+          <div className="absolute inset-0 pointer-events-none overflow-hidden">
+            <div className="absolute -right-16 -top-16 h-40 w-40 rounded-full bg-[#E0FE10]/15 blur-3xl animate-pulse" />
+            <div className="absolute -left-20 bottom-0 h-48 w-48 rounded-full bg-[#3B82F6]/10 blur-3xl" />
           </div>
 
-          <div className="relative flex items-center justify-between gap-4">
-            <div className="min-w-0">
-              <div className="flex items-center text-[#E0FE10] mb-1">
-                {getTimeBasedIcon()}
-                <p className="ml-2 text-sm font-medium sm:text-base">
-                  {greeting},
+          <div className="relative px-5 py-5 sm:px-6 sm:py-6">
+            <div className="flex items-center justify-between gap-4">
+              <div className="min-w-0">
+                <div className="flex items-center text-[#E0FE10] mb-1.5">
+                  {getTimeBasedIcon()}
+                  <p className="ml-2 text-sm font-medium sm:text-base tracking-wide">
+                    {greeting},
+                  </p>
+                </div>
+                {/* Use currentUser from hook, provide default if null */}
+                <h2 className="truncate text-xl font-bold text-white sm:text-2xl">
+                  {currentUser?.username || 'Fitness Enthusiast'}
+                </h2>
+                <p className="mt-2 text-sm text-zinc-400 sm:text-base">
+                  {message}
                 </p>
               </div>
-              {/* Use currentUser from hook, provide default if null */}
-              <h2 className="truncate text-xl font-bold text-white sm:text-2xl">
-                {currentUser?.username || 'Fitness Enthusiast'}
-              </h2>
-              <p className="mt-2 text-sm text-zinc-400 sm:text-base">
-                {message}
-              </p>
-            </div>
 
-            <button
-              type="button"
-              onClick={() => setShowContentCategorySelector(true)}
-              className="relative inline-flex shrink-0 items-center justify-center rounded-full bg-[#E0FE10] px-4 py-2 text-xs font-semibold text-zinc-900 shadow-lg shadow-lime-400/30 transition hover:bg-lime-300 sm:px-5 sm:py-2.5 sm:text-sm"
-            >
-              <SparklesIcon className="mr-1.5 h-4 w-4 sm:h-5 sm:w-5" />
-              <span>Start today&apos;s workout</span>
-            </button>
+              <button
+                type="button"
+                onClick={() => setShowContentCategorySelector(true)}
+                className="relative inline-flex shrink-0 items-center justify-center rounded-full bg-[#E0FE10] px-4 py-2.5 text-xs font-bold text-zinc-900 transition-all hover:scale-[1.03] active:scale-[0.98] sm:px-5 sm:py-3 sm:text-sm"
+                style={{
+                  boxShadow: '0 0 20px rgba(224, 254, 16, 0.4), 0 4px 12px rgba(224, 254, 16, 0.3)'
+                }}
+              >
+                <SparklesIcon className="mr-1.5 h-4 w-4 sm:h-5 sm:w-5" />
+                <span>Start today&apos;s workout</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -530,49 +548,64 @@ const Discover: React.FC = () => {
   };
 
   const renderSearchBar = () => (
-    <div className="relative mb-6 flex items-center rounded-lg border border-zinc-700/30 bg-zinc-800 shadow-lg">
-      <MagnifyingGlassIcon className="w-5 h-5 ml-4 text-zinc-400" />
-      <input
-        type="text"
-        placeholder="Search moves, rounds, or people..."
-        className="w-full py-3 px-4 bg-transparent text-white focus:outline-none placeholder-zinc-500"
-        value={searchText}
-        onChange={(e) => setSearchText(e.target.value)}
-        onFocus={() => setIsSearching(true)}
-      />
-      {searchText && (
-        <button 
-          onClick={() => {
-            setSearchText('');
-            setIsSearching(false);
-            setSelectedCategory(CategoryTab.ALL);
-            clearSearch();
-          }}
-          className="absolute right-4"
-        >
-          <XCircleIcon className="w-5 h-5 text-zinc-500 hover:text-zinc-300 transition-colors" />
-        </button>
-      )}
+    <div className="relative mb-6 group">
+      {/* Subtle focus glow */}
+      <div className="absolute -inset-0.5 rounded-2xl blur-md opacity-0 group-focus-within:opacity-40 transition-all duration-500 bg-gradient-to-r from-[#E0FE10]/30 to-[#3B82F6]/20 pointer-events-none" />
+      
+      <div className="relative flex items-center rounded-2xl backdrop-blur-xl bg-zinc-900/60 border border-white/10 focus-within:border-white/20 transition-colors">
+        <MagnifyingGlassIcon className="w-5 h-5 ml-4 text-zinc-400" />
+        <input
+          type="text"
+          placeholder="Search moves, rounds, or people..."
+          className="w-full py-3.5 px-4 bg-transparent text-white focus:outline-none placeholder-zinc-500"
+          value={searchText}
+          onChange={(e) => setSearchText(e.target.value)}
+          onFocus={() => setIsSearching(true)}
+        />
+        {searchText && (
+          <button 
+            onClick={() => {
+              setSearchText('');
+              setIsSearching(false);
+              setSelectedCategory(CategoryTab.ALL);
+              clearSearch();
+            }}
+            className="absolute right-4 p-1 rounded-full hover:bg-white/10 transition-colors"
+          >
+            <XCircleIcon className="w-5 h-5 text-zinc-400 hover:text-white transition-colors" />
+          </button>
+        )}
+      </div>
     </div>
   );
 
   const renderCategoryTabs = () => (
-    <div className="flex overflow-x-auto pb-2 mb-6 scrollbar-none">
-      {Object.values(CategoryTab).map(tab => (
-        <button
-          key={tab}
-          onClick={() => setSelectedCategory(tab)}
-          className={`flex items-center px-4 py-2 mr-3 rounded-full text-sm font-medium transition-all
-            ${selectedCategory === tab 
-              ? 'bg-[#E0FE10] text-zinc-900 shadow-md' 
-              : 'bg-zinc-800 text-white hover:bg-zinc-700'}`}
-        >
-          <span className="flex items-center justify-center">
-            {getTabIcon(tab as keyof typeof CategoryTab)}
-            <span className="ml-2">{tab}</span>
-          </span>
-        </button>
-      ))}
+    <div className="flex overflow-x-auto pb-3 mb-6 scrollbar-none gap-3">
+      {Object.values(CategoryTab).map(tab => {
+        const isActive = selectedCategory === tab;
+        return (
+          <button
+            key={tab}
+            onClick={() => setSelectedCategory(tab)}
+            className={`relative flex items-center px-5 py-2.5 rounded-full text-sm font-semibold transition-all duration-300 flex-shrink-0
+              ${isActive 
+                ? 'bg-[#E0FE10] text-zinc-900' 
+                : 'bg-zinc-900/60 backdrop-blur-sm text-white border border-white/10 hover:border-white/20 hover:bg-zinc-800/60'}`}
+            style={isActive ? {
+              boxShadow: '0 0 20px rgba(224, 254, 16, 0.3), 0 2px 8px rgba(224, 254, 16, 0.2)'
+            } : undefined}
+          >
+            {/* Active state glow */}
+            {isActive && (
+              <div className="absolute -inset-0.5 rounded-full bg-[#E0FE10]/30 blur-md -z-10" />
+            )}
+            <span className="flex items-center justify-center">
+              {getTabIcon(tab as keyof typeof CategoryTab)}
+              <span className="ml-2">{tab}</span>
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 
@@ -593,35 +626,56 @@ const Discover: React.FC = () => {
 
   const renderQuickActions = () => (
     <div className="mb-8">
-      <h3 className="mb-3 text-white font-bold">Quick Actions</h3>
-      <div
-        className="relative overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/80 p-4 sm:p-5 shadow-lg"
-      >
-        <div className="absolute inset-0 bg-gradient-to-r from-[#E0FE10]/5 via-transparent to-cyan-400/10 pointer-events-none" />
-        <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-start gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#E0FE10] text-zinc-900 shadow-lg shadow-[#E0FE10]/40 sm:h-12 sm:w-12">
-              <SparklesIcon className="h-6 w-6" />
-            </div>
-            <div>
-              <h4 className="text-base font-semibold text-white sm:text-lg">
-                Start a workout
-              </h4>
-              <p className="mt-1 text-xs text-zinc-400 sm:text-sm">
-                Get a personalized AI-powered Movelist in seconds, using your favorite creator moves.
-              </p>
-            </div>
-          </div>
+      <h3 className="mb-4 text-white font-bold text-lg">Quick Actions</h3>
+      <div className="relative group">
+        {/* Chromatic glow on hover */}
+        <div className="absolute -inset-1 rounded-3xl blur-xl opacity-0 group-hover:opacity-40 transition-all duration-700 bg-gradient-to-r from-[#E0FE10]/30 via-transparent to-[#8B5CF6]/20 pointer-events-none" />
+        
+        {/* Glass card */}
+        <div className="relative overflow-hidden rounded-3xl backdrop-blur-xl bg-zinc-900/50 border border-white/10">
+          {/* Chromatic top reflection */}
+          <div 
+            className="absolute top-0 left-0 right-0 h-[1px] opacity-50"
+            style={{ background: 'linear-gradient(90deg, transparent, rgba(224,254,16,0.5), transparent)' }}
+          />
+          
+          {/* Gradient wash overlay */}
+          <div className="absolute inset-0 bg-gradient-to-br from-[#E0FE10]/8 via-transparent to-[#8B5CF6]/5 pointer-events-none" />
+          
+          <div className="relative p-5 sm:p-6">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-4">
+                {/* Glowing icon container */}
+                <div className="relative">
+                  <div className="absolute inset-0 rounded-full bg-[#E0FE10]/40 blur-xl" />
+                  <div className="relative flex h-12 w-12 items-center justify-center rounded-full bg-[#E0FE10] text-zinc-900 sm:h-14 sm:w-14">
+                    <SparklesIcon className="h-6 w-6 sm:h-7 sm:w-7" />
+                  </div>
+                </div>
+                <div>
+                  <h4 className="text-lg font-bold text-white sm:text-xl">
+                    Start a workout
+                  </h4>
+                  <p className="mt-1.5 text-sm text-zinc-400 max-w-md">
+                    Get a personalized AI-powered Movelist in seconds, using your favorite creator moves.
+                  </p>
+                </div>
+              </div>
 
-          <div className="flex items-center gap-3 sm:flex-col sm:items-end sm:gap-2">
-            <button
-              type="button"
-              onClick={() => setShowContentCategorySelector(true)}
-              className="inline-flex items-center justify-center rounded-full bg-[#E0FE10] px-4 py-2 text-xs font-semibold text-zinc-900 shadow-md shadow-lime-400/40 transition hover:bg-lime-300 sm:px-5 sm:text-sm"
-            >
-              <SparklesIcon className="mr-1.5 h-4 w-4" />
-              <span>Start</span>
-            </button>
+              <div className="flex items-center gap-3 sm:flex-col sm:items-end sm:gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowContentCategorySelector(true)}
+                  className="inline-flex items-center justify-center rounded-full bg-[#E0FE10] px-5 py-2.5 text-sm font-bold text-zinc-900 transition-all hover:scale-[1.03] active:scale-[0.98]"
+                  style={{
+                    boxShadow: '0 0 16px rgba(224, 254, 16, 0.4), 0 2px 8px rgba(224, 254, 16, 0.3)'
+                  }}
+                >
+                  <SparklesIcon className="mr-1.5 h-4 w-4" />
+                  <span>Start</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -634,9 +688,11 @@ const Discover: React.FC = () => {
     return (
       <div className="mb-8">
         <div className="flex items-center mb-4">
-          <h3 className="text-white font-bold">Today's Missions</h3>
+          <h3 className="text-white font-bold text-lg">Today's Missions</h3>
           {todaysMissions.length > 0 && (
-            <span className="text-zinc-500 text-sm ml-2">({todaysMissions.length})</span>
+            <span className="ml-2 px-2 py-0.5 rounded-full text-xs font-semibold bg-[#8B5CF6]/15 text-[#8B5CF6] border border-[#8B5CF6]/30">
+              {todaysMissions.length}
+            </span>
           )}
         </div>
 
@@ -644,32 +700,52 @@ const Discover: React.FC = () => {
           <div className="carousel flex gap-4 overflow-x-auto pb-4 scrollbar-none">
             {/* AI Powered Workouts Card - Always shown first */}
             <div 
-              className="min-w-[320px] border border-[#E0FE10] bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900 rounded-xl p-6 snap-start relative overflow-hidden cursor-pointer transition-transform"
+              className="min-w-[320px] snap-start relative overflow-hidden cursor-pointer transition-all group"
               onClick={() => router.push('/stacks')}
             >
-              {/* Glow effect */}
-              <div className="absolute inset-0 bg-[#E0FE10] opacity-10 blur-3xl"></div>
+              {/* Chromatic glow on hover */}
+              <div className="absolute -inset-1 rounded-3xl blur-xl opacity-0 group-hover:opacity-50 transition-all duration-500 bg-gradient-to-br from-[#E0FE10]/40 to-[#3B82F6]/20 pointer-events-none" />
               
-              <div className="relative z-10">
-                <div className="flex items-start gap-4 mb-4">
-                  <div className="w-14 h-14 rounded-full bg-[#E0FE10] flex items-center justify-center shadow-lg shadow-[#E0FE10]/30">
-                    <SparklesIcon className="w-7 h-7 text-zinc-900" />
+              {/* Glass card */}
+              <div className="relative rounded-3xl backdrop-blur-xl bg-zinc-900/50 border border-[#E0FE10]/30 p-6 transition-all duration-300 group-hover:border-[#E0FE10]/50 overflow-hidden h-full">
+                {/* Gradient top line */}
+                <div 
+                  className="absolute top-0 left-0 right-0 h-[1px] opacity-70"
+                  style={{ background: 'linear-gradient(90deg, transparent, rgba(224,254,16,0.6), transparent)' }}
+                />
+                
+                {/* Glow effect */}
+                <div className="absolute -top-20 -right-20 w-40 h-40 bg-[#E0FE10]/15 rounded-full blur-3xl"></div>
+                
+                <div className="relative z-10">
+                  <div className="flex items-start gap-4 mb-4">
+                    <div className="relative">
+                      <div className="absolute inset-0 rounded-full bg-[#E0FE10]/40 blur-xl" />
+                      <div className="relative w-14 h-14 rounded-full bg-[#E0FE10] flex items-center justify-center">
+                        <SparklesIcon className="w-7 h-7 text-zinc-900" />
+                      </div>
+                    </div>
+                    
+                    <div className="flex-1">
+                      <h4 className="text-white font-bold text-lg mb-1">AI Powered Workouts</h4>
+                      <p className="text-zinc-400 text-sm">Customized just for you</p>
+                    </div>
                   </div>
                   
-                  <div className="flex-1">
-                    <h4 className="text-white font-bold text-lg mb-1">AI Powered Workouts</h4>
-                    <p className="text-zinc-400 text-sm">Customized just for you</p>
-                  </div>
+                  <p className="text-zinc-300 text-sm mb-6 leading-relaxed">
+                    Instantly generate a custom Movelist with AI, blending your favorite creator moves to match your goals for today.
+                  </p>
+                  
+                  <button 
+                    className="w-full bg-[#E0FE10] text-zinc-900 font-bold py-3 px-4 rounded-full flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                    style={{
+                      boxShadow: '0 0 20px rgba(224,254,16,0.4), 0 4px 12px rgba(224,254,16,0.3)'
+                    }}
+                  >
+                    <SparklesIcon className="w-5 h-5" />
+                    <span>Create Workout</span>
+                  </button>
                 </div>
-                
-                <p className="text-zinc-300 text-sm mb-6 leading-relaxed">
-                  Instantly generate a custom Movelist with AI, blending your favorite creator moves to match your goals for today.
-                </p>
-                
-                <button className="w-full bg-[#E0FE10] text-zinc-900 font-bold py-3 px-4 rounded-lg flex items-center justify-center gap-2 hover:bg-[#d0ee00] transition-colors shadow-lg shadow-[#E0FE10]/20">
-                  <SparklesIcon className="w-5 h-5" />
-                  <span>Create Workout</span>
-                </button>
               </div>
             </div>
 
@@ -677,44 +753,49 @@ const Discover: React.FC = () => {
             {todaysMissions.map((mission, index) => (
               <div 
                 key={mission.id}
-                className="min-w-[280px] bg-zinc-800 rounded-xl p-4 snap-start cursor-pointer hover:bg-zinc-750 transition-colors"
+                className="min-w-[280px] snap-start cursor-pointer group relative"
                 onClick={() => {
                   if (!mission.isCompleted && mission.workout) {
                     router.push(`/workout/${mission.workout.id}?roundId=${mission.challengeId}`);
                   }
                 }}
               >
-                <div className="flex justify-between items-start mb-3">
-                  <div className="flex-1">
-                    <h4 className="text-white font-medium text-base mb-1">
-                      {mission.challengeTitle}
-                    </h4>
-                    <p className="text-zinc-400 text-sm">Day {mission.dayIndex + 1}</p>
+                {/* Hover glow */}
+                <div className="absolute -inset-1 rounded-3xl blur-xl opacity-0 group-hover:opacity-40 transition-all duration-500 bg-gradient-to-br from-[#8B5CF6]/30 to-[#3B82F6]/20 pointer-events-none" />
+                
+                <div className="relative rounded-3xl backdrop-blur-xl bg-zinc-900/50 border border-white/10 p-5 transition-all duration-300 group-hover:border-white/20 overflow-hidden h-full">
+                  <div className="flex justify-between items-start mb-3">
+                    <div className="flex-1">
+                      <h4 className="text-white font-semibold text-base mb-1">
+                        {mission.challengeTitle}
+                      </h4>
+                      <p className="text-zinc-400 text-sm">Day {mission.dayIndex + 1}</p>
+                    </div>
+                    {mission.isCompleted && (
+                      <div className="w-7 h-7 rounded-full bg-[#10B981] flex items-center justify-center" style={{ boxShadow: '0 0 10px rgba(16,185,129,0.4)' }}>
+                        <CheckIcon className="w-4 h-4 text-white" />
+                      </div>
+                    )}
                   </div>
-                  {mission.isCompleted && (
-                    <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center">
-                      <CheckIcon className="w-4 h-4 text-white" />
+                  
+                  {mission.workout && (
+                    <div className="space-y-2">
+                      <div className="text-white font-medium text-sm">
+                        {mission.workout.title || mission.workout.workoutName || 'Workout'}
+                      </div>
+                      <div className="flex items-center gap-3 text-xs text-zinc-400">
+                        <span>{mission.workout.durationInMinutes || 30} min</span>
+                        <span>•</span>
+                        <span>{mission.workout.exercises?.length || 0} exercises</span>
+                      </div>
+                      {!mission.isCompleted && (
+                        <button className="mt-3 w-full bg-zinc-800/60 border border-white/10 hover:border-white/20 text-white text-sm font-semibold py-2.5 px-3 rounded-xl transition-colors">
+                          Start Workout
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
-                
-                {mission.workout && (
-                  <div className="space-y-2">
-                    <div className="text-white font-medium text-sm">
-                      {mission.workout.title || mission.workout.workoutName || 'Workout'}
-                    </div>
-                    <div className="flex items-center gap-3 text-xs text-zinc-400">
-                      <span>{mission.workout.durationInMinutes || 30} min</span>
-                      <span>•</span>
-                      <span>{mission.workout.exercises?.length || 0} exercises</span>
-                    </div>
-                    {!mission.isCompleted && (
-                      <button className="mt-3 w-full bg-zinc-700 hover:bg-zinc-600 text-white text-sm font-medium py-2 px-3 rounded-lg transition-colors">
-                        Start Workout
-                      </button>
-                    )}
-                  </div>
-                )}
               </div>
             ))}
           </div>
@@ -778,18 +859,32 @@ const Discover: React.FC = () => {
       return (
         <div className="mb-8">
           <div className="flex items-center mb-4">
-            <h3 className="text-white font-bold">Active Rounds</h3>
+            <h3 className="text-white font-bold text-lg">Active Rounds</h3>
           </div>
-          <div className="bg-zinc-800 rounded-xl p-8 text-center">
-            <UserGroupIcon className="w-12 h-12 text-zinc-600 mx-auto mb-3" />
-            <h4 className="text-white font-medium mb-2">No Active Rounds</h4>
-            <p className="text-zinc-400 text-sm mb-4">Join a round to track your progress with friends</p>
-            <button 
-              onClick={() => router.push('/rounds')}
-              className="bg-[#E0FE10] text-zinc-900 px-6 py-2 rounded-lg font-medium text-sm hover:bg-[#d0ee00] transition-colors"
-            >
-              Browse Rounds
-            </button>
+          <div className="relative group">
+            <div className="absolute -inset-1 rounded-3xl blur-xl opacity-0 group-hover:opacity-30 transition-all duration-700 bg-gradient-to-br from-[#3B82F6]/30 to-[#8B5CF6]/20 pointer-events-none" />
+            <div className="relative rounded-3xl backdrop-blur-xl bg-zinc-900/40 border border-white/10 p-8 text-center overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-br from-[#3B82F6]/5 via-transparent to-[#8B5CF6]/5 pointer-events-none" />
+              <div className="relative">
+                <div className="relative w-16 h-16 mx-auto mb-4">
+                  <div className="absolute inset-0 rounded-full bg-[#3B82F6]/20 blur-xl" />
+                  <div className="relative w-16 h-16 rounded-full bg-zinc-800/80 border border-white/10 flex items-center justify-center">
+                    <UserGroupIcon className="w-8 h-8 text-[#3B82F6]" />
+                  </div>
+                </div>
+                <h4 className="text-white font-semibold mb-2">No Active Rounds</h4>
+                <p className="text-zinc-400 text-sm mb-5">Join a round to track your progress with friends</p>
+                <button 
+                  onClick={() => router.push('/rounds')}
+                  className="bg-[#E0FE10] text-zinc-900 px-6 py-2.5 rounded-full font-bold text-sm transition-all hover:scale-[1.03] active:scale-[0.98]"
+                  style={{
+                    boxShadow: '0 0 16px rgba(224, 254, 16, 0.3), 0 2px 8px rgba(224, 254, 16, 0.2)'
+                  }}
+                >
+                  Browse Rounds
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       );
@@ -798,8 +893,10 @@ const Discover: React.FC = () => {
     return (
       <div className="mb-8">
         <div className="flex items-center mb-4">
-          <h3 className="text-white font-bold">Active Rounds</h3>
-          <span className="text-zinc-500 text-sm ml-2">({activeRounds.length})</span>
+          <h3 className="text-white font-bold text-lg">Active Rounds</h3>
+          <span className="ml-2 px-2 py-0.5 rounded-full text-xs font-semibold bg-[#E0FE10]/15 text-[#E0FE10] border border-[#E0FE10]/30">
+            {activeRounds.length}
+          </span>
         </div>
 
         <div className="relative">
@@ -859,94 +956,116 @@ const Discover: React.FC = () => {
               return (
                 <div
                   key={round.id || index}
-                  className="min-w-[300px] snap-start cursor-pointer rounded-2xl bg-zinc-900/80 p-5 transition-colors hover:bg-zinc-800"
+                  className="min-w-[300px] snap-start cursor-pointer group relative"
                   onClick={() => selectRound(round)}
                 >
-                  <div className="mb-3 flex items-start justify-between">
-                    <div>
-                      <h4 className="mb-1 text-base font-semibold text-white">
-                        {round.challenge?.title || 'Active Round'}
-                      </h4>
-                      <p className="text-sm text-zinc-400">
-                        {daysLeft} {daysLeft === 1 ? 'day' : 'days'} left
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-lg font-bold text-[#E0FE10]">
-                        {round.pulsePoints?.totalPoints || 0}
-                      </div>
-                      <div className="text-xs text-zinc-500">Points</div>
-                    </div>
-                  </div>
+                  {/* Chromatic hover glow */}
+                  <div className="absolute -inset-1 rounded-3xl blur-xl opacity-0 group-hover:opacity-50 transition-all duration-500 bg-gradient-to-br from-[#E0FE10]/30 to-[#10B981]/20 pointer-events-none" />
+                  
+                  {/* Glass card */}
+                  <div className="relative rounded-3xl backdrop-blur-xl bg-zinc-900/50 border border-white/10 p-5 transition-all duration-300 group-hover:border-[#E0FE10]/30 overflow-hidden h-full">
+                    {/* Top chromatic line */}
+                    <div 
+                      className="absolute top-0 left-0 right-0 h-[1px] opacity-50"
+                      style={{ background: 'linear-gradient(90deg, transparent, rgba(224,254,16,0.4), transparent)' }}
+                    />
+                    
+                    {/* Subtle gradient wash */}
+                    <div className="absolute inset-0 bg-gradient-to-br from-[#E0FE10]/5 via-transparent to-transparent pointer-events-none" />
 
-                  {/* Progress Bar */}
-                  <div className="mb-4">
-                    <div className="mb-1 flex justify-between text-xs text-zinc-400">
-                      <span>Progress</span>
-                      <span>{Math.round(progressPercentage)}%</span>
-                    </div>
-                    <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-700">
-                      <div
-                        className="h-2 rounded-full bg-gradient-to-r from-[#E0FE10] to-[#a5c600] transition-all duration-300"
-                        style={{
-                          width: `${progressPercentage}%`,
-                          minWidth: progressPercentage > 0 ? '2px' : '0px', // Ensure visibility for any progress
-                        }}
-                      ></div>
-                    </div>
-                  </div>
+                    <div className="relative">
+                      <div className="mb-3 flex items-start justify-between">
+                        <div>
+                          <h4 className="mb-1 text-base font-bold text-white">
+                            {round.challenge?.title || 'Active Round'}
+                          </h4>
+                          <p className="text-sm text-zinc-400">
+                            {daysLeft} {daysLeft === 1 ? 'day' : 'days'} left
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-xl font-bold text-[#E0FE10]" style={{ textShadow: '0 0 10px rgba(224,254,16,0.3)' }}>
+                            {round.pulsePoints?.totalPoints || 0}
+                          </div>
+                          <div className="text-xs text-zinc-500">Points</div>
+                        </div>
+                      </div>
 
-                  {/* Stats Grid */}
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="text-center">
-                      <div className="text-sm font-semibold text-white">
-                        {round.completedWorkouts?.length || 0}/{totalDays}
+                      {/* Progress Bar */}
+                      <div className="mb-4">
+                        <div className="mb-1.5 flex justify-between text-xs text-zinc-400">
+                          <span>Progress</span>
+                          <span className="text-[#E0FE10] font-medium">{Math.round(progressPercentage)}%</span>
+                        </div>
+                        <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-800/80">
+                          <div
+                            className="h-2 rounded-full transition-all duration-500"
+                            style={{
+                              width: `${progressPercentage}%`,
+                              minWidth: progressPercentage > 0 ? '2px' : '0px',
+                              background: 'linear-gradient(90deg, #E0FE10, #10B981)',
+                              boxShadow: '0 0 8px rgba(224,254,16,0.4)'
+                            }}
+                          ></div>
+                        </div>
                       </div>
-                      <div className="mt-0.5 text-xs text-zinc-500">
-                        Workouts
-                      </div>
-                    </div>
 
-                    <div className="text-center">
-                      <div className="text-sm font-semibold text-white">
-                        {round.currentStreak || 0}
-                      </div>
-                      <div className="mt-0.5 text-xs text-zinc-500">
-                        Streak
-                      </div>
-                    </div>
+                      {/* Stats Grid */}
+                      <div className="grid grid-cols-3 gap-2">
+                        <div className="text-center p-2 rounded-xl bg-zinc-800/40 border border-white/5">
+                          <div className="text-sm font-bold text-white">
+                            {round.completedWorkouts?.length || 0}/{totalDays}
+                          </div>
+                          <div className="mt-0.5 text-[10px] text-zinc-500 uppercase tracking-wide">
+                            Workouts
+                          </div>
+                        </div>
 
-                    <div className="text-center">
-                      <div className="text-sm font-semibold text-white">
-                        {Math.round(progressPercentage)}%
-                      </div>
-                      <div className="mt-0.5 text-xs text-zinc-500">
-                        Time
-                      </div>
-                    </div>
-                  </div>
+                        <div className="text-center p-2 rounded-xl bg-zinc-800/40 border border-white/5">
+                          <div className="text-sm font-bold text-white">
+                            {round.currentStreak || 0}
+                          </div>
+                          <div className="mt-0.5 text-[10px] text-zinc-500 uppercase tracking-wide">
+                            Streak
+                          </div>
+                        </div>
 
-                  {/* Today's Workout Row */}
-                  <div className="mt-4 flex items-center justify-between gap-3 border-t border-zinc-800 pt-3">
-                    <div className="min-w-0">
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
-                        Today&apos;s Workout
-                      </p>
-                      <p className="mt-0.5 truncate text-sm text-white">
-                        {todaysLabel}
-                      </p>
+                        <div className="text-center p-2 rounded-xl bg-zinc-800/40 border border-white/5">
+                          <div className="text-sm font-bold text-white">
+                            {Math.round(progressPercentage)}%
+                          </div>
+                          <div className="mt-0.5 text-[10px] text-zinc-500 uppercase tracking-wide">
+                            Time
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Today's Workout Row */}
+                      <div className="mt-4 flex items-center justify-between gap-3 border-t border-white/5 pt-4">
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+                            Today&apos;s Workout
+                          </p>
+                          <p className="mt-0.5 truncate text-sm font-medium text-white">
+                            {todaysLabel}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            selectRound(round);
+                          }}
+                          className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-[#E0FE10] px-4 py-2 text-xs font-bold text-zinc-900 transition-all hover:scale-[1.03] active:scale-[0.98]"
+                          style={{
+                            boxShadow: '0 0 12px rgba(224,254,16,0.4), 0 2px 6px rgba(224,254,16,0.3)'
+                          }}
+                        >
+                          <PlayIcon className="h-3.5 w-3.5" />
+                          <span>Start workout</span>
+                        </button>
+                      </div>
                     </div>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        selectRound(round);
-                      }}
-                      className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-[#E0FE10] px-3 py-1.5 text-xs font-semibold text-zinc-900 shadow-md shadow-lime-400/40 transition hover:bg-lime-300"
-                    >
-                      <PlayIcon className="h-4 w-4" />
-                      <span>Start workout</span>
-                    </button>
                   </div>
                 </div>
               );
@@ -1051,31 +1170,40 @@ const Discover: React.FC = () => {
 
     return (
       <div className="mb-8">
-        <h3 className="text-white font-bold mb-4">Featured Fitness Creators</h3>
+        <h3 className="text-white font-bold text-lg mb-4">Featured Fitness Creators</h3>
         
-        <div className="carousel flex gap-6 overflow-x-auto pb-2 scrollbar-none">
+        <div className="carousel flex gap-5 overflow-x-auto pb-2 scrollbar-none">
           {featuredCreators.map((creator, index) => (
             <div 
               key={creator.id || index}
-              className="flex flex-col items-center w-20 cursor-pointer"
+              className="flex flex-col items-center w-20 cursor-pointer group"
               onClick={() => selectCreator(creator)}
             >
-              <div className="w-20 h-20 rounded-full mb-2 overflow-hidden">
-                {creator.profileImage?.profileImageURL ? (
-                  <img 
-                    src={creator.profileImage.profileImageURL} 
-                    alt={creator.username}
-                    className="w-full h-full object-cover" 
-                  />
-                ) : (
-                  <div className="w-full h-full bg-zinc-700 flex items-center justify-center">
-                    <span className="text-xl text-[#E0FE10] font-medium">
-                      {creator.username?.charAt(0).toUpperCase() || "U"}
-                    </span>
+              {/* Profile image with gradient border */}
+              <div className="relative mb-2">
+                {/* Hover glow */}
+                <div className="absolute -inset-1 rounded-full bg-gradient-to-br from-[#E0FE10]/40 to-[#8B5CF6]/40 blur-md opacity-0 group-hover:opacity-60 transition-all duration-300" />
+                
+                {/* Gradient border ring */}
+                <div className="relative w-20 h-20 rounded-full p-[2px] bg-gradient-to-br from-[#E0FE10]/60 via-[#3B82F6]/40 to-[#8B5CF6]/60">
+                  <div className="w-full h-full rounded-full overflow-hidden bg-zinc-900">
+                    {creator.profileImage?.profileImageURL ? (
+                      <img 
+                        src={creator.profileImage.profileImageURL} 
+                        alt={creator.username}
+                        className="w-full h-full object-cover" 
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-zinc-800 flex items-center justify-center">
+                        <span className="text-xl text-[#E0FE10] font-bold">
+                          {creator.username?.charAt(0).toUpperCase() || "U"}
+                        </span>
+                      </div>
+                    )}
                   </div>
-                )}
+                </div>
               </div>
-              <span className="text-white text-sm text-center truncate w-full">
+              <span className="text-white text-sm text-center truncate w-full font-medium group-hover:text-[#E0FE10] transition-colors">
                 {creator.username}
               </span>
             </div>
@@ -1088,21 +1216,35 @@ const Discover: React.FC = () => {
   const renderMoveOfTheDaySection = () => {
     if (loadingMoveOfTheDay) {
       return (
-        <div className="mb-8 p-4 bg-zinc-800 rounded-xl shadow-lg animate-pulse">
-          <div className="h-8 bg-zinc-700 rounded w-3/4 mb-4"></div>
-          <div className="aspect-video bg-zinc-700 rounded-lg mb-3"></div>
-          <div className="h-4 bg-zinc-700 rounded w-1/2 mb-2"></div>
-          <div className="h-4 bg-zinc-700 rounded w-1/3"></div>
+        <div className="mb-8 relative">
+          <div className="rounded-3xl backdrop-blur-xl bg-zinc-900/50 border border-white/10 p-5 overflow-hidden">
+            {/* Shimmer effect */}
+            <div className="relative">
+              <div className="absolute inset-0 w-1/2 bg-gradient-to-r from-transparent via-white/5 to-transparent animate-pulse" />
+            </div>
+            <div className="h-7 bg-zinc-800 rounded-lg w-3/4 mb-4"></div>
+            <div className="aspect-video bg-zinc-800 rounded-2xl mb-4"></div>
+            <div className="h-5 bg-zinc-800 rounded w-1/2 mb-2"></div>
+            <div className="h-4 bg-zinc-800 rounded w-1/3"></div>
+          </div>
         </div>
       );
     }
 
     if (!moveOfTheDay) {
       return (
-        <div className="mb-8 p-6 bg-zinc-800 rounded-xl shadow-lg text-center">
-          <CalendarDaysIcon className="w-12 h-12 text-zinc-500 mx-auto mb-3" />
-          <h3 className="text-lg font-semibold text-white mb-1">Move of the Day</h3>
-          <p className="text-zinc-400 text-sm">Check back soon for today's featured move!</p>
+        <div className="mb-8 group relative">
+          <div className="absolute -inset-1 rounded-3xl blur-xl opacity-0 group-hover:opacity-30 transition-all duration-700 bg-gradient-to-br from-[#8B5CF6]/30 to-[#3B82F6]/20 pointer-events-none" />
+          <div className="relative rounded-3xl backdrop-blur-xl bg-zinc-900/50 border border-white/10 p-8 text-center overflow-hidden">
+            <div className="relative w-14 h-14 mx-auto mb-4">
+              <div className="absolute inset-0 rounded-full bg-[#8B5CF6]/20 blur-xl" />
+              <div className="relative w-14 h-14 rounded-full bg-zinc-800/80 border border-white/10 flex items-center justify-center">
+                <CalendarDaysIcon className="w-7 h-7 text-[#8B5CF6]" />
+              </div>
+            </div>
+            <h3 className="text-lg font-bold text-white mb-1">Move of the Day</h3>
+            <p className="text-zinc-400 text-sm">Check back soon for today's featured move!</p>
+          </div>
         </div>
       );
     }
@@ -1110,20 +1252,41 @@ const Discover: React.FC = () => {
     const { exercise, video } = moveOfTheDay;
 
     return (
-      <div className="mb-8 bg-gradient-to-br from-zinc-800 to-zinc-900 p-1 rounded-xl shadow-2xl hover:shadow-lime-500/30 transition-shadow duration-300">
-        <div className="bg-zinc-800 rounded-lg overflow-hidden">
-          <div className="p-4">
-            <div className="flex justify-between items-center mb-3">
-              <h2 className="text-xl font-bold text-[#E0FE10] flex items-center">
-                <BoltIcon className="w-6 h-6 mr-2 text-[#E0FE10]" />
-                Move of the Day
-              </h2>
-              {/* Optional: Add date or a small badge here */}
+      <div className="mb-8 group relative">
+        {/* Hover glow */}
+        <div className="absolute -inset-1 rounded-3xl blur-xl opacity-0 group-hover:opacity-40 transition-all duration-700 bg-gradient-to-br from-[#E0FE10]/30 to-[#8B5CF6]/20 pointer-events-none" />
+        
+        {/* Glass card */}
+        <div className="relative rounded-3xl backdrop-blur-xl bg-zinc-900/50 border border-white/10 overflow-hidden transition-all duration-300 group-hover:border-[#E0FE10]/30">
+          {/* Top chromatic line */}
+          <div 
+            className="absolute top-0 left-0 right-0 h-[1px] opacity-50 z-10"
+            style={{ background: 'linear-gradient(90deg, transparent, rgba(224,254,16,0.5), transparent)' }}
+          />
+          
+          <div className="p-5">
+            <div className="flex justify-between items-center mb-4">
+              <div className="flex items-center gap-3">
+                {/* Glowing icon */}
+                <div className="relative">
+                  <div className="absolute inset-0 rounded-xl bg-[#E0FE10]/30 blur-lg" />
+                  <div className="relative w-10 h-10 rounded-xl bg-[#E0FE10]/20 border border-[#E0FE10]/30 flex items-center justify-center">
+                    <BoltIcon className="w-5 h-5 text-[#E0FE10]" />
+                  </div>
+                </div>
+                <h2 className="text-xl font-bold text-white">
+                  Move of the Day
+                </h2>
+              </div>
+              {/* AI Badge */}
+              <span className="px-3 py-1 rounded-full text-[10px] font-bold tracking-wider bg-[#E0FE10]/15 text-[#E0FE10] border border-[#E0FE10]/30 uppercase">
+                Featured
+              </span>
             </div>
           </div>
 
           <div 
-            className="relative aspect-video w-full cursor-pointer group"
+            className="relative aspect-video w-full cursor-pointer"
             onClick={() => selectExercise(exercise)}
           >
             {video.videoURL ? (
@@ -1147,9 +1310,9 @@ const Discover: React.FC = () => {
             </div>
           </div>
           
-          <div className="p-4">
+          <div className="p-5">
             <h3 
-              className="text-xl font-semibold text-white mb-1 hover:text-[#E0FE10] cursor-pointer transition-colors"
+              className="text-xl font-bold text-white mb-1 hover:text-[#E0FE10] cursor-pointer transition-colors"
               onClick={(e) => {
                 e.stopPropagation();
                 if (video.username) handleProfileClick(video.username);
@@ -1160,35 +1323,42 @@ const Discover: React.FC = () => {
             
             {/* Creator Info */}
             <div 
-              className="flex items-center gap-2 mt-2 mb-3 cursor-pointer"
+              className="flex items-center gap-3 mt-3 mb-4 cursor-pointer group/creator"
               onClick={(e) => {
                 e.stopPropagation();
                 if (video.username) handleProfileClick(video.username);
               }}
             >
-              {video.profileImage?.profileImageURL ? (
-                <img 
-                  src={video.profileImage.profileImageURL}
-                  alt={video.username || "Creator"}
-                  className="w-8 h-8 rounded-full object-cover border-2 border-zinc-700"
-                />
-              ) : (
-                <div className="w-8 h-8 rounded-full bg-zinc-700 flex items-center justify-center text-sm text-[#E0FE10]">
-                  {video.username?.charAt(0).toUpperCase() || "?"}
-                </div>
-              )}
-              <span className="text-sm text-zinc-300 hover:text-white transition-colors">
+              {/* Creator avatar with gradient border */}
+              <div className="relative">
+                <div className="absolute -inset-0.5 rounded-full bg-gradient-to-br from-[#E0FE10]/40 to-[#8B5CF6]/40 opacity-0 group-hover/creator:opacity-100 transition-opacity" />
+                {video.profileImage?.profileImageURL ? (
+                  <img 
+                    src={video.profileImage.profileImageURL}
+                    alt={video.username || "Creator"}
+                    className="relative w-9 h-9 rounded-full object-cover border border-white/10"
+                  />
+                ) : (
+                  <div className="relative w-9 h-9 rounded-full bg-zinc-800 border border-white/10 flex items-center justify-center text-sm text-[#E0FE10] font-bold">
+                    {video.username?.charAt(0).toUpperCase() || "?"}
+                  </div>
+                )}
+              </div>
+              <span className="text-sm text-zinc-300 group-hover/creator:text-[#E0FE10] transition-colors font-medium">
                 {video.username || "QuickLifts Official"}
               </span>
             </div>
 
-            <p className="text-zinc-400 text-xs mb-3 line-clamp-2">
+            <p className="text-zinc-400 text-sm mb-4 line-clamp-2 leading-relaxed">
               {exercise.description || "Check out this amazing move to boost your workout!"}
             </p>
             
             <button
               onClick={() => selectExercise(exercise)}
-              className="w-full bg-[#E0FE10] text-zinc-900 py-2.5 px-4 rounded-lg font-semibold text-sm hover:bg-lime-400 transition-colors flex items-center justify-center gap-2"
+              className="w-full bg-[#E0FE10] text-zinc-900 py-3 px-4 rounded-full font-bold text-sm transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2"
+              style={{
+                boxShadow: '0 0 16px rgba(224,254,16,0.4), 0 2px 8px rgba(224,254,16,0.3)'
+              }}
             >
               <BoltIcon className="w-4 h-4" />
               View Move Details
@@ -1205,9 +1375,11 @@ const Discover: React.FC = () => {
     return (
       <div className="mb-8">
         <div className="flex justify-between items-center mb-4">
-          <h3 className="text-white font-bold">Featured Rounds</h3>
+          <h3 className="text-white font-bold text-lg">Featured Rounds</h3>
           {featuredRounds.length > 0 && (
-            <span className="text-zinc-500 text-sm">({featuredRounds.length})</span>
+            <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-[#3B82F6]/15 text-[#3B82F6] border border-[#3B82F6]/30">
+              {featuredRounds.length}
+            </span>
           )}
         </div>
         
@@ -1215,49 +1387,60 @@ const Discover: React.FC = () => {
           {featuredRounds.map((round, index) => (
             <div 
               key={round.id || index}
-              className="min-w-[260px] bg-zinc-800 rounded-lg p-4 cursor-pointer"
+              className="min-w-[280px] cursor-pointer group relative"
               onClick={() => selectRound(round)}
             >
-              <h4 className="text-white font-medium mb-2">
-                {round.title || round.title || "Featured Round"}
-              </h4>
+              {/* Hover glow */}
+              <div className="absolute -inset-1 rounded-3xl blur-xl opacity-0 group-hover:opacity-40 transition-all duration-500 bg-gradient-to-br from-[#3B82F6]/30 to-[#8B5CF6]/20 pointer-events-none" />
               
-              <div className="flex justify-between text-sm text-zinc-400 mb-2">
-                <span>{round.durationInDays || 30} days</span>
-                <span>{round.privacy || "Public"}</span>
-              </div>
-              
-              <div className="flex items-center mb-2">
-                <div className="flex -space-x-2 mr-2">
-                  {(round.participants || []).slice(0, 3).map((participant, i) => (
-                    <div key={i} className="w-6 h-6 rounded-full border border-zinc-800 bg-zinc-700 overflow-hidden">
-                      {participant.profileImage ? (
-                        <img 
-                          src={participant.profileImage.profileImageURL} 
-                          alt="Participant" 
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <span className="text-xs text-white">
-                            {participant.username?.charAt(0).toUpperCase() || "U"}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  ))}
+              {/* Glass card */}
+              <div className="relative rounded-3xl backdrop-blur-xl bg-zinc-900/50 border border-white/10 p-5 transition-all duration-300 group-hover:border-[#3B82F6]/30 overflow-hidden h-full">
+                <h4 className="text-white font-semibold mb-3">
+                  {round.title || round.title || "Featured Round"}
+                </h4>
+                
+                <div className="flex justify-between text-sm text-zinc-400 mb-3">
+                  <span className="flex items-center gap-1.5">
+                    <CalendarDaysIcon className="w-4 h-4 text-[#3B82F6]" />
+                    {round.durationInDays || 30} days
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full text-xs bg-zinc-800/60 border border-white/10">
+                    {round.privacy || "Public"}
+                  </span>
                 </div>
                 
-                <span className="text-sm text-zinc-400">
-                  {(round.participants || []).length} participants
-                </span>
-              </div>
-              
-              <div className="flex items-center text-sm text-zinc-400">
-                <img src="/icons/calendar.svg" alt="Start date" className="w-4 h-4 mr-1" />
-                <span>
-                  Starts {new Date(round?.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                </span>
+                <div className="flex items-center mb-3">
+                  <div className="flex -space-x-2 mr-3">
+                    {(round.participants || []).slice(0, 3).map((participant, i) => (
+                      <div key={i} className="w-7 h-7 rounded-full border-2 border-zinc-900 bg-zinc-800 overflow-hidden">
+                        {participant.profileImage ? (
+                          <img 
+                            src={participant.profileImage.profileImageURL} 
+                            alt="Participant" 
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <span className="text-xs text-white font-medium">
+                              {participant.username?.charAt(0).toUpperCase() || "U"}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  
+                  <span className="text-sm text-zinc-400">
+                    {(round.participants || []).length} participants
+                  </span>
+                </div>
+                
+                <div className="flex items-center text-sm text-zinc-400">
+                  <CalendarDaysIcon className="w-4 h-4 mr-1.5 text-[#8B5CF6]" />
+                  <span>
+                    Starts {new Date(round?.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  </span>
+                </div>
               </div>
             </div>
           ))}
@@ -1269,19 +1452,32 @@ const Discover: React.FC = () => {
   const renderSearchResults = () => {
     if (!searchText) return null;
     
-    const hasResults = filteredPeople.length > 0 || filteredRounds.length > 0 || filteredExercises.length > 0;
+    // Filter results based on selected category
+    const showPeople = selectedCategory === CategoryTab.ALL || selectedCategory === CategoryTab.PEOPLE;
+    const showRounds = selectedCategory === CategoryTab.ALL || selectedCategory === CategoryTab.ROUNDS;
+    const showMoves = selectedCategory === CategoryTab.ALL || selectedCategory === CategoryTab.MOVES;
+    
+    const hasResults = 
+      (showPeople && filteredPeople.length > 0) || 
+      (showRounds && filteredRounds.length > 0) || 
+      (showMoves && filteredExercises.length > 0);
     
     if (!hasResults) {
       return (
-        <div className="flex flex-col items-center justify-center py-12">
-          <img src="/icons/search-x.svg" alt="No results" className="w-16 h-16 mb-4 text-zinc-600" />
-          <h3 className="text-white font-medium text-lg mb-2">No results found</h3>
-          <p className="text-zinc-400 text-center">
+        <div className="flex flex-col items-center justify-center py-16">
+          <div className="relative w-16 h-16 mb-5">
+            <div className="absolute inset-0 rounded-full bg-zinc-800/60 blur-lg" />
+            <div className="relative w-16 h-16 rounded-full bg-zinc-800/80 border border-white/10 flex items-center justify-center">
+              <MagnifyingGlassIcon className="w-8 h-8 text-zinc-500" />
+            </div>
+          </div>
+          <h3 className="text-white font-semibold text-lg mb-2">No results found</h3>
+          <p className="text-zinc-400 text-center text-sm">
             Try searching for different terms or categories
           </p>
           <button
             onClick={() => setSearchText('')}
-            className="mt-6 text-[#E0FE10] font-medium"
+            className="mt-6 text-[#E0FE10] font-semibold text-sm hover:underline"
           >
             Clear search
           </button>
@@ -1291,38 +1487,48 @@ const Discover: React.FC = () => {
     
     return (
       <div>
-        {filteredPeople.length > 0 && (
+        {/* People Results */}
+        {showPeople && filteredPeople.length > 0 && (
           <div className="mb-8">
-            <h3 className="text-white font-bold mb-4">People</h3>
+            <h3 className="text-white font-bold text-lg mb-4">People</h3>
             
             <div className="space-y-3">
               {filteredPeople.map((user) => (
                 <div 
                   key={user.id}
-                  className="flex items-center p-3 bg-zinc-800 rounded-lg cursor-pointer"
+                  className="group relative cursor-pointer"
                   onClick={() => selectCreator(user)}
                 >
-                  <div className="w-10 h-10 rounded-full overflow-hidden mr-3">
-                    {user.profileImage?.profileImageURL ? (
-                      <img 
-                        src={user.profileImage.profileImageURL} 
-                        alt={user.username}
-                        className="w-full h-full object-cover" 
-                      />
-                    ) : (
-                      <div className="w-full h-full bg-zinc-700 flex items-center justify-center">
-                        <span className="text-white font-medium">
-                          {user.username?.charAt(0).toUpperCase() || "U"}
-                        </span>
-                      </div>
-                    )}
-                  </div>
+                  {/* Hover glow */}
+                  <div className="absolute -inset-1 rounded-2xl blur-lg opacity-0 group-hover:opacity-30 transition-all duration-500 bg-gradient-to-r from-[#E0FE10]/30 to-[#8B5CF6]/20 pointer-events-none" />
                   
-                  <div>
-                    <h4 className="text-white font-medium">{user.username}</h4>
-                    {user.bio && (
-                      <p className="text-zinc-400 text-sm line-clamp-1">{user.bio}</p>
-                    )}
+                  <div className="relative flex items-center p-4 rounded-2xl backdrop-blur-xl bg-zinc-900/50 border border-white/10 group-hover:border-white/20 transition-all">
+                    {/* Avatar with gradient border */}
+                    <div className="relative mr-4">
+                      <div className="absolute -inset-0.5 rounded-full bg-gradient-to-br from-[#E0FE10]/40 to-[#8B5CF6]/40 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      <div className="relative w-12 h-12 rounded-full overflow-hidden border border-white/10">
+                        {user.profileImage?.profileImageURL ? (
+                          <img 
+                            src={user.profileImage.profileImageURL} 
+                            alt={user.username}
+                            className="w-full h-full object-cover" 
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-zinc-800 flex items-center justify-center">
+                            <span className="text-[#E0FE10] font-bold">
+                              {user.username?.charAt(0).toUpperCase() || "U"}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <h4 className="text-white font-semibold group-hover:text-[#E0FE10] transition-colors">{user.username}</h4>
+                      {user.bio && (
+                        <p className="text-zinc-400 text-sm line-clamp-1">{user.bio}</p>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}
@@ -1330,31 +1536,37 @@ const Discover: React.FC = () => {
           </div>
         )}
         
-        {filteredRounds.length > 0 && (
+        {/* Rounds Results */}
+        {showRounds && filteredRounds.length > 0 && (
           <div className="mb-8">
-            <h3 className="text-white font-bold mb-4">Rounds</h3>
+            <h3 className="text-white font-bold text-lg mb-4">Rounds</h3>
             
             <div className="grid grid-cols-2 gap-4">
               {filteredRounds.map((round) => (
                 <div
                   key={round.id}
-                  className="bg-zinc-800 rounded-lg p-4 cursor-pointer"
+                  className="group relative cursor-pointer"
                   onClick={() => selectRound(round)}
                 >
-                  <h4 className="text-white font-medium text-sm mb-2 line-clamp-1">
-                    {round.title || "Round"}
-                  </h4>
+                  {/* Hover glow */}
+                  <div className="absolute -inset-1 rounded-2xl blur-lg opacity-0 group-hover:opacity-30 transition-all duration-500 bg-gradient-to-br from-[#3B82F6]/30 to-[#8B5CF6]/20 pointer-events-none" />
                   
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-xs text-zinc-400">{round.durationInDays || 30} days</span>
-                    <span className="text-xs py-1 px-2 bg-[#E0FE10] bg-opacity-20 text-[#E0FE10] rounded-full">
-                      {round.privacy || "Public"}
-                    </span>
-                  </div>
-                  
-                  <div className="flex items-center text-xs text-zinc-400">
-                    <img src="/icons/users.svg" alt="Participants" className="w-3 h-3 mr-1" />
-                    <span>{(round.participants || []).length} participants</span>
+                  <div className="relative rounded-2xl backdrop-blur-xl bg-zinc-900/50 border border-white/10 p-4 group-hover:border-[#3B82F6]/30 transition-all h-full">
+                    <h4 className="text-white font-semibold text-sm mb-2 line-clamp-1">
+                      {round.title || "Round"}
+                    </h4>
+                    
+                    <div className="flex justify-between items-center mb-3">
+                      <span className="text-xs text-zinc-400">{round.durationInDays || 30} days</span>
+                      <span className="text-[10px] py-1 px-2 rounded-full bg-[#E0FE10]/15 text-[#E0FE10] border border-[#E0FE10]/30 font-semibold">
+                        {round.privacy || "Public"}
+                      </span>
+                    </div>
+                    
+                    <div className="flex items-center text-xs text-zinc-400">
+                      <UserGroupIcon className="w-3.5 h-3.5 mr-1.5 text-[#3B82F6]" />
+                      <span>{(round.participants || []).length} participants</span>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -1362,44 +1574,50 @@ const Discover: React.FC = () => {
           </div>
         )}
         
-        {filteredExercises.length > 0 && (
+        {/* Moves Results */}
+        {showMoves && filteredExercises.length > 0 && (
           <div className="mb-8">
-            <h3 className="text-white font-bold mb-4">Moves</h3>
+            <h3 className="text-white font-bold text-lg mb-4">Moves</h3>
             
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 gap-4">
               {filteredExercises.map((exercise) => (
                 <div 
                   key={exercise.id}
-                  className="bg-zinc-800 rounded-lg overflow-hidden cursor-pointer"
+                  className="group relative cursor-pointer"
                   onClick={() => selectExercise(exercise)}
                 >
-                  <div className="relative aspect-square w-full">
-                    {exercise.videos && exercise.videos.length > 0 && (
-                      <video
-                        src={exercise.videos[exercise.currentVideoPosition || 0]?.videoURL}
-                        className="w-full h-full object-cover"
-                        loop
-                        muted
-                        playsInline
-                        autoPlay
-                        onError={(e) => {
-                          console.error('Video error:', e);
-                          console.log('Video URL:', exercise.videos[exercise.currentVideoPosition || 0]?.videoURL);
-                        }}
-                        onLoadStart={() => {
-                          console.log('Loading video URL:', exercise.videos[exercise.currentVideoPosition || 0]?.videoURL);
-                        }}
-                      />
-                    )}
-                  </div>
+                  {/* Hover glow */}
+                  <div className="absolute -inset-1 rounded-2xl blur-lg opacity-0 group-hover:opacity-30 transition-all duration-500 bg-gradient-to-br from-[#8B5CF6]/30 to-[#E0FE10]/20 pointer-events-none" />
                   
-                  <div className="p-3">
-                    <h4 className="text-white text-sm mb-1">{exercise.name}</h4>
-                    {exercise.primaryBodyParts && (
-                      <p className="text-zinc-500 text-xs">
-                        {exercise.primaryBodyParts.map(part => part.charAt(0).toUpperCase() + part.slice(1)).join(', ')}
-                      </p>
-                    )}
+                  <div className="relative rounded-2xl backdrop-blur-xl bg-zinc-900/50 border border-white/10 overflow-hidden group-hover:border-[#8B5CF6]/30 transition-all">
+                    <div className="relative aspect-square w-full">
+                      {exercise.videos && exercise.videos.length > 0 && (
+                        <video
+                          src={exercise.videos[exercise.currentVideoPosition || 0]?.videoURL}
+                          className="w-full h-full object-cover"
+                          loop
+                          muted
+                          playsInline
+                          autoPlay
+                          onError={(e) => {
+                            console.error('Video error:', e);
+                            console.log('Video URL:', exercise.videos[exercise.currentVideoPosition || 0]?.videoURL);
+                          }}
+                          onLoadStart={() => {
+                            console.log('Loading video URL:', exercise.videos[exercise.currentVideoPosition || 0]?.videoURL);
+                          }}
+                        />
+                      )}
+                    </div>
+                    
+                    <div className="p-3">
+                      <h4 className="text-white font-medium text-sm mb-1 line-clamp-1">{exercise.name}</h4>
+                      {exercise.primaryBodyParts && (
+                        <p className="text-zinc-500 text-xs">
+                          {exercise.primaryBodyParts.map(part => part.charAt(0).toUpperCase() + part.slice(1)).join(', ')}
+                        </p>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}
@@ -1563,7 +1781,7 @@ const Discover: React.FC = () => {
               setIsSearching(true);
             }
           }}
-          className="ml-3 inline-flex h-9 w-9 items-center justify-center rounded-full border border-zinc-700 bg-zinc-900 text-zinc-300 hover:border-zinc-500 hover:text-white"
+          className="ml-3 inline-flex h-10 w-10 items-center justify-center rounded-full backdrop-blur-xl bg-zinc-900/60 border border-white/10 text-zinc-300 hover:border-white/20 hover:text-white transition-all"
         >
           <MagnifyingGlassIcon className="h-5 w-5" />
         </button>
@@ -1589,56 +1807,19 @@ const Discover: React.FC = () => {
       ) : isSearching ? (
         <>
           {renderSearchBar()}
+          {renderCategoryTabs()}
           {renderSearchResults()}
         </>
       ) : (
         <>
           {renderWelcomeSection()}
-          {renderCategoryTabs()}
-
-          {selectedCategory === CategoryTab.ALL && (
-            <>
-              {renderContinueWorkoutCard()}
-              {renderQuickActions()}
-              {renderActiveRounds()}
-              {renderMoveOfTheDaySection()}
-              {/* Temporarily hiding Trending Rounds until we have more data */}
-              {/* {renderTrendingRounds()} */}
-              {renderFeaturedCreators()}
-            </>
-          )}
-          
-          {selectedCategory === CategoryTab.MOVES && (
-            <>
-              {renderMoveOfTheDaySection()}
-              {/* Temporarily hiding Trending Rounds until we have more data */}
-              {/* {renderTrendingRounds()} */}
-            </>
-          )}
-          
-          {selectedCategory === CategoryTab.ROUNDS && (
-            <>
-              {renderTodaysMissions()}
-              {renderActiveRounds()}
-              {renderFeaturedRounds()}
-              <div className="bg-zinc-800 rounded-lg p-6 mb-8">
-                <h3 className="text-white font-bold mb-2">Discover More Rounds</h3>
-                <p className="text-zinc-400 text-sm mb-4">
-                  Search and join training programs created by the community. Train together and push each other to new heights!
-                </p>
-                <button 
-                  onClick={() => router.push('/rounds')}
-                  className="bg-zinc-700 text-white px-4 py-2 rounded-lg font-medium"
-                >
-                  Browse All Rounds
-                </button>
-              </div>
-            </>
-          )}
-          
-          {selectedCategory === CategoryTab.PEOPLE && (
-            renderFeaturedCreators()
-          )}
+          {renderContinueWorkoutCard()}
+          {renderQuickActions()}
+          {renderActiveRounds()}
+          {renderMoveOfTheDaySection()}
+          {/* Temporarily hiding Trending Rounds until we have more data */}
+          {/* {renderTrendingRounds()} */}
+          {renderFeaturedCreators()}
         </>
       )}
     </div>

@@ -70,7 +70,7 @@ exports.handler = async (event, context) => {
     const recentMessages = Array.isArray(convo?.messages) ? convo.messages.slice(-20) : [];
 
     // Persona/system prompt (aligned with iOS basePersona)
-    const basePersona = `You are PulseCheck, an elite sport-psychology coach.\n\nTone ▸ Warm, intellectually sharp, quietly confident.\nApproach ▸ Active-listening → concise reflection → single actionable insight → 1 follow-up Q.\nStyle ▸ ≤ 60 words (≈3 short sentences). Use the athlete's first name. No clichés or filler.\nDon'ts ▸ Never repeat a question they already answered. Never apologize unless a real mistake.`;
+    const basePersona = `You are Nora, an elite AI mental performance coach. Your workout data now talks back.\n\nTone ▸ Warm, intellectually sharp, quietly confident.\nApproach ▸ Active-listening → concise reflection → single actionable insight → 1 follow-up Q.\nStyle ▸ ≤ 60 words (≈3 short sentences). Use the athlete's first name. No clichés or filler.\nDon'ts ▸ Never repeat a question they already answered. Never apologize unless a real mistake.`;
 
     // Context prompt
     const systemPrompt = `${basePersona}\n\n## User Context:\n- Name: ${displayName}${sport ? `\n- Sport/Activity: ${sport}` : ''}${goals.length ? `\n- Mental Performance Goals: ${goals.join(', ')}` : ''}\n\n### Conversation Memory Rule\nBefore asking a question, scan the last 6 messages. If you already asked it and the user answered, do not ask again. Acknowledge their answer and advance the topic.`;
@@ -138,7 +138,7 @@ exports.handler = async (event, context) => {
     if (!convoRef) {
       const data = {
         userId,
-        title: 'PulseCheck',
+        title: 'Nora',
         messages: [userMsg, aiMsg],
         tags: [],
         actionCardInteractions: [],
@@ -154,7 +154,7 @@ exports.handler = async (event, context) => {
       await convoRef.set({
         id: convoRef.id,
         userId,
-        title: convo?.title || 'PulseCheck',
+        title: convo?.title || 'Nora',
         messages: updated,
         updatedAt: nowSec
       }, { merge: true });
