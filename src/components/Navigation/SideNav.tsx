@@ -275,13 +275,16 @@ const SideNav: React.FC<SideNavProps> = ({ selectedTab, onTabChange, onAbout }) 
         {/* Navigation Items */}
         <div className="relative flex-1 flex flex-col gap-1 px-3">
           {navItems.map((item, index) => {
+            const hasTab = (x: typeof item): x is typeof item & { tab: SelectedRootTabs } =>
+              typeof (x as any).tab !== 'undefined';
+
             // Determine if this item is active
             const isActive =
               typeof (item as any).isActive === 'boolean'
                 ? (item as any).isActive
                 : isCreatePage
-                ? (item.tab === SelectedRootTabs.Create && currentPath === '/create') || currentPath === item.href
-                : isHomePage && selectedTab && item.tab
+                ? ((hasTab(item) && item.tab === SelectedRootTabs.Create && currentPath === '/create') || currentPath === item.href)
+                : isHomePage && selectedTab && hasTab(item)
                 ? selectedTab === item.tab
                 : currentPath === item.href || currentAsPath === item.href;
 
@@ -292,7 +295,7 @@ const SideNav: React.FC<SideNavProps> = ({ selectedTab, onTabChange, onAbout }) 
                 label={item.label}
                 href={item.href}
                 isActive={isActive}
-                onClick={item.onClick}
+                onClick={(item as any).onClick}
               />
             );
           })}
