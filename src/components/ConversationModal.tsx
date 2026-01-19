@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { FaTimes, FaUser, FaRobot, FaCalendar, FaComments } from 'react-icons/fa';
 import { coachService, ConversationSession } from '../api/firebase/coach/service';
 
@@ -90,7 +91,8 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
 
   if (!isOpen) return null;
 
-  return (
+  // Use portal to render modal outside of any transformed parent (like AthleteCard with Framer Motion)
+  const modalContent = (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-zinc-900 rounded-lg w-full max-w-6xl h-[80vh] flex flex-col">
         {/* Header */}
@@ -246,6 +248,13 @@ const ConversationModal: React.FC<ConversationModalProps> = ({
       </div>
     </div>
   );
+
+  // Render to document.body via portal to escape any transformed parent containers
+  if (typeof window !== 'undefined') {
+    return createPortal(modalContent, document.body);
+  }
+  
+  return modalContent;
 };
 
 export default ConversationModal;

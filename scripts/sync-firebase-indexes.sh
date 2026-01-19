@@ -65,17 +65,26 @@ deploy_indexes() {
     local env_name=$2
     
     echo -e "${BLUE}📤 Deploying indexes to ${env_name} (${project})...${NC}"
-    echo -e "${YELLOW}💡 This will ADD new indexes but preserve existing ones${NC}"
+    echo -e "${YELLOW}⚠️  IMPORTANT: Deploying indexes can DELETE remote indexes that are not present in firestore.indexes.json${NC}"
+    echo -e "${YELLOW}✅ Rule: Always run the pre-deploy sync check first (and ensure firestore.indexes.json includes ALL live indexes).${NC}"
     
     cd "$PROJECT_ROOT"
+
+    # Pre-deploy safety check: refuse to deploy if local file is out of sync with live indexes
+    if ! bash "$PROJECT_ROOT/scripts/sync-firestore-indexes.sh" --project "$project"; then
+        echo -e "${RED}❌ Aborting deploy: firestore.indexes.json is NOT in sync with live indexes for ${project}.${NC}"
+        echo -e "${YELLOW}💡 Fix: bash scripts/sync-firestore-indexes.sh --project ${project} --write${NC}"
+        echo -e "${YELLOW}   Then review + commit firestore.indexes.json before deploying.${NC}"
+        return 1
+    fi
     
     # Backup current indexes first
     backup_indexes "$project" "$env_name"
     
-    # Deploy indexes (Firebase CLI is additive by default - won't delete existing)
+    # Deploy indexes (WARNING: can delete remote indexes not present in firestore.indexes.json)
     if firebase deploy --only firestore:indexes --project "$project"; then
         echo -e "${GREEN}✅ Indexes deployed successfully to ${env_name}${NC}"
-        echo -e "${BLUE}📋 Note: Existing indexes were preserved${NC}"
+        echo -e "${BLUE}📋 Reminder: keep firestore.indexes.json in sync with live indexes${NC}"
     else
         echo -e "${RED}❌ Failed to deploy indexes to ${env_name}${NC}"
         return 1

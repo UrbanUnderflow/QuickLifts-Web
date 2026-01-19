@@ -29,18 +29,36 @@ exports.handler = async (event, context) => {
     }
 
     const body = JSON.parse(event.body || '{}');
-    const { userId, message, conversationId, skipEscalation = false } = body;
+    const { 
+      userId, 
+      message, 
+      conversationId, 
+      skipEscalation = false,
+      systemPromptContext, // Optional: iOS sends health context and other user-specific data
+      userContext,         // Optional: iOS sends structured user context
+      recentMessages: clientRecentMessages // Optional: iOS may send its own recent messages
+    } = body;
 
     if (!userId || !message) {
       return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing userId or message' }) };
     }
 
-    // Load user context
-    const userSnap = await db.collection('users').doc(userId).get();
-    const userData = userSnap.exists ? userSnap.data() : {};
-    const displayName = userData.displayName || userData.username || 'Athlete';
-    const sport = userData.primarySport || '';
-    const goals = Array.isArray(userData.goals) ? userData.goals : [];
+    // Load user context from Firestore (unless client provided it)
+    let displayName, sport, goals;
+    
+    if (userContext) {
+      // Use client-provided context (iOS sends this with health data)
+      displayName = userContext.name || 'Athlete';
+      sport = userContext.sport || '';
+      goals = Array.isArray(userContext.goals) ? userContext.goals : [];
+    } else {
+      // Load from Firestore
+      const userSnap = await db.collection('users').doc(userId).get();
+      const userData = userSnap.exists ? userSnap.data() : {};
+      displayName = userData.displayName || userData.username || 'Athlete';
+      sport = userData.primarySport || '';
+      goals = Array.isArray(userData.goals) ? userData.goals : [];
+    }
 
     // Load existing conversation (if provided)
     let convoRef = null;
@@ -66,14 +84,31 @@ exports.handler = async (event, context) => {
       }
     }
 
-    // Build recent message history (MVP: use array on doc)
-    const recentMessages = Array.isArray(convo?.messages) ? convo.messages.slice(-20) : [];
+    // Build recent message history
+    // Prefer client-provided messages (iOS sends these), fall back to Firestore conversation
+    let recentMessages;
+    if (Array.isArray(clientRecentMessages) && clientRecentMessages.length > 0) {
+      // iOS client provided recent messages (includes local context)
+      recentMessages = clientRecentMessages.slice(-20);
+      console.log('[pulsecheck-chat] Using client-provided recent messages:', recentMessages.length);
+    } else {
+      // Use Firestore conversation (web clients)
+      recentMessages = Array.isArray(convo?.messages) ? convo.messages.slice(-20) : [];
+    }
 
     // Persona/system prompt (aligned with iOS basePersona)
     const basePersona = `You are Nora, an elite AI mental performance coach. Your workout data now talks back.\n\nTone ▸ Warm, intellectually sharp, quietly confident.\nApproach ▸ Active-listening → concise reflection → single actionable insight → 1 follow-up Q.\nStyle ▸ ≤ 60 words (≈3 short sentences). Use the athlete's first name. No clichés or filler.\nDon'ts ▸ Never repeat a question they already answered. Never apologize unless a real mistake.`;
 
-    // Context prompt
-    const systemPrompt = `${basePersona}\n\n## User Context:\n- Name: ${displayName}${sport ? `\n- Sport/Activity: ${sport}` : ''}${goals.length ? `\n- Mental Performance Goals: ${goals.join(', ')}` : ''}\n\n### Conversation Memory Rule\nBefore asking a question, scan the last 6 messages. If you already asked it and the user answered, do not ask again. Acknowledge their answer and advance the topic.`;
+    // Context prompt - use iOS-provided systemPromptContext if available (includes health data)
+    let systemPrompt;
+    if (systemPromptContext) {
+      // iOS sends complete system prompt including health context
+      systemPrompt = `${systemPromptContext}\n\n### Conversation Memory Rule\nBefore asking a question, scan the last 6 messages. If you already asked it and the user answered, do not ask again. Acknowledge their answer and advance the topic.`;
+      console.log('[pulsecheck-chat] Using iOS-provided system context (includes health data)');
+    } else {
+      // Build system prompt from Firestore data (web clients)
+      systemPrompt = `${basePersona}\n\n## User Context:\n- Name: ${displayName}${sport ? `\n- Sport/Activity: ${sport}` : ''}${goals.length ? `\n- Mental Performance Goals: ${goals.join(', ')}` : ''}\n\n### Conversation Memory Rule\nBefore asking a question, scan the last 6 messages. If you already asked it and the user answered, do not ask again. Acknowledge their answer and advance the topic.`;
+    }
 
     // Prepare messages for OpenAI
     const openAiMessages = [
