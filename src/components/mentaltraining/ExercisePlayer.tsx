@@ -494,6 +494,11 @@ const ActiveExercise: React.FC<ActiveExerciseProps> = ({
 // FOCUS EXERCISE (game-like module)
 // ============================================================================
 
+type FocusPhase = 'instructions' | 'cueWord' | 'getReady' | 'practice';
+
+// Only these focus exercise types should have the cue word selection phase
+const CUE_WORD_EXERCISE_TYPES = ['cue_word', 'cue_word_anchoring', 'anchoring'];
+
 interface FocusExerciseProps {
   config: any;
   isPaused: boolean;
@@ -513,20 +518,271 @@ const FocusExercise: React.FC<FocusExerciseProps> = ({
   onResume,
   onComplete,
 }) => {
-  const duration = typeof config?.duration === 'number' ? config.duration : 180;
-  const remaining = Math.max(0, duration - elapsedSeconds);
+  const DEBUG_FOCUS = false; // Set to true to enable debug logging
+  const debugIdRef = useRef(`focus-${Date.now().toString(16)}-${Math.random().toString(16).slice(2, 8)}`);
 
+  const practiceDuration = typeof config?.duration === 'number' ? config.duration : 60; // Practice duration in seconds
   const instructions: string[] = Array.isArray(config?.instructions) ? config.instructions.filter(Boolean) : [];
+  
+  const [phase, setPhase] = useState<FocusPhase>('instructions');
   const [step, setStep] = useState(0);
+  const [cueWord, setCueWord] = useState('');
+  const [getReadyCountdown, setGetReadyCountdown] = useState(3);
+  const [practiceElapsed, setPracticeElapsed] = useState(0);
+  const [currentRep, setCurrentRep] = useState(1);
+  const narrationRunIdRef = useRef(0);
+  const practiceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const getReadyTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const practiceStartedRef = useRef(false);
+  
+  // Store onComplete in ref to avoid dependency issues
+  const onCompleteRef = useRef(onComplete);
+  useEffect(() => {
+    onCompleteRef.current = onComplete;
+  }, [onComplete]);
+
   const safeTotalSteps = Math.max(1, instructions.length);
   const currentInstruction = instructions[step] || 'Keep your attention on the target.';
-  const narrationRunIdRef = useRef(0);
+  const mode = config?.type || 'single_point';
+  
+  // Determine if this exercise type uses cue word anchoring
+  const usesCueWord = CUE_WORD_EXERCISE_TYPES.includes(mode);
+  
+  // Rep-based practice: each rep is ~15 seconds of focus
+  const repDuration = 15;
+  const totalReps = Math.max(1, Math.ceil(practiceDuration / repDuration));
+  const practiceRemaining = Math.max(0, practiceDuration - practiceElapsed);
 
-  // Auto-complete when timer ends (unless paused)
+  // Debug: Mount/unmount logging
   useEffect(() => {
-    if (isPaused) return;
-    if (remaining <= 0) onComplete();
-  }, [isPaused, remaining, onComplete]);
+    if (!DEBUG_FOCUS) return;
+    console.log(`[FocusExercise:${debugIdRef.current}] MOUNT`, {
+      phase,
+      isPaused,
+      practiceDuration,
+      config,
+    });
+    return () => {
+      console.log(`[FocusExercise:${debugIdRef.current}] UNMOUNT`, {
+        phase,
+        practiceElapsed,
+        hadTimer: !!practiceTimerRef.current,
+      });
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Debug: Log phase changes
+  useEffect(() => {
+    if (!DEBUG_FOCUS) return;
+    console.log(`[FocusExercise:${debugIdRef.current}] PHASE CHANGED`, {
+      phase,
+      isPaused,
+      practiceElapsed,
+      practiceTimerRef: !!practiceTimerRef.current,
+    });
+  }, [phase]);
+
+  // Debug: Log isPaused changes
+  useEffect(() => {
+    if (!DEBUG_FOCUS) return;
+    console.log(`[FocusExercise:${debugIdRef.current}] isPaused CHANGED`, {
+      isPaused,
+      phase,
+      practiceElapsed,
+      practiceTimerRef: !!practiceTimerRef.current,
+    });
+  }, [isPaused]);
+
+  // Practice timer - only runs when in practice phase
+  useEffect(() => {
+    if (DEBUG_FOCUS) {
+      console.log(`[FocusExercise:${debugIdRef.current}] Practice Timer Effect RUNNING`, {
+        phase,
+        isPaused,
+        practiceElapsed,
+        practiceTimerRef: !!practiceTimerRef.current,
+        practiceDuration,
+      });
+    }
+
+    // Clear timer when not in practice or paused
+    if (phase !== 'practice' || isPaused) {
+      if (practiceTimerRef.current) {
+        if (DEBUG_FOCUS) {
+          console.log(`[FocusExercise:${debugIdRef.current}] CLEARING timer (not practice or paused)`, {
+            phase,
+            isPaused,
+          });
+        }
+        clearInterval(practiceTimerRef.current);
+        practiceTimerRef.current = null;
+      }
+      return;
+    }
+
+    // Don't create multiple timers
+    if (practiceTimerRef.current) {
+      if (DEBUG_FOCUS) {
+        console.log(`[FocusExercise:${debugIdRef.current}] Timer already exists, skipping creation`);
+      }
+      return;
+    }
+
+    if (DEBUG_FOCUS) {
+      console.log(`[FocusExercise:${debugIdRef.current}] CREATING NEW TIMER`, {
+        phase,
+        isPaused,
+        practiceElapsed,
+        practiceDuration,
+      });
+    }
+
+    practiceStartedRef.current = true;
+    practiceTimerRef.current = setInterval(() => {
+      setPracticeElapsed((prev) => {
+        const next = prev + 1;
+        if (DEBUG_FOCUS) {
+          console.log(`[FocusExercise:${debugIdRef.current}] TICK`, {
+            prev,
+            next,
+            practiceDuration,
+            willComplete: next >= practiceDuration,
+          });
+        }
+        // Complete when practice is done
+        if (next >= practiceDuration) {
+          if (practiceTimerRef.current) {
+            if (DEBUG_FOCUS) {
+              console.log(`[FocusExercise:${debugIdRef.current}] COMPLETING - clearing timer`);
+            }
+            clearInterval(practiceTimerRef.current);
+            practiceTimerRef.current = null;
+          }
+          setTimeout(() => onCompleteRef.current(), 100);
+        }
+        return next;
+      });
+    }, 1000);
+
+    if (DEBUG_FOCUS) {
+      console.log(`[FocusExercise:${debugIdRef.current}] Timer CREATED`, {
+        timerRef: !!practiceTimerRef.current,
+      });
+      
+      // Sanity check: if we don't see a tick within 1.5s, something is wrong
+      const sanityTimer = setTimeout(() => {
+        console.log(`[FocusExercise:${debugIdRef.current}] SANITY CHECK (1.5s)`, {
+          timerStillExists: !!practiceTimerRef.current,
+          practiceElapsed,
+          phase,
+          isPaused,
+          visibility: typeof document !== 'undefined' ? document.visibilityState : 'unknown',
+        });
+      }, 1500);
+
+      return () => {
+        clearTimeout(sanityTimer);
+        if (practiceTimerRef.current) {
+          console.log(`[FocusExercise:${debugIdRef.current}] CLEANUP - clearing timer`);
+          clearInterval(practiceTimerRef.current);
+          practiceTimerRef.current = null;
+        }
+      };
+    }
+
+    return () => {
+      if (practiceTimerRef.current) {
+        if (DEBUG_FOCUS) {
+          console.log(`[FocusExercise:${debugIdRef.current}] CLEANUP - clearing timer`);
+        }
+        clearInterval(practiceTimerRef.current);
+        practiceTimerRef.current = null;
+      }
+    };
+  }, [phase, isPaused, practiceDuration]);
+
+  // Update rep based on elapsed time
+  useEffect(() => {
+    const newRep = Math.min(totalReps, Math.floor(practiceElapsed / repDuration) + 1);
+    if (newRep !== currentRep) {
+      if (DEBUG_FOCUS) {
+        console.log(`[FocusExercise:${debugIdRef.current}] REP CHANGED`, {
+          from: currentRep,
+          to: newRep,
+          practiceElapsed,
+        });
+      }
+      setCurrentRep(newRep);
+    }
+  }, [practiceElapsed, repDuration, totalReps, currentRep]);
+
+  // Get ready countdown
+  useEffect(() => {
+    if (DEBUG_FOCUS) {
+      console.log(`[FocusExercise:${debugIdRef.current}] GetReady Effect RUNNING`, {
+        phase,
+        getReadyCountdown,
+        hasTimer: !!getReadyTimerRef.current,
+      });
+    }
+
+    if (phase !== 'getReady') {
+      if (getReadyTimerRef.current) {
+        if (DEBUG_FOCUS) {
+          console.log(`[FocusExercise:${debugIdRef.current}] GetReady CLEARING timer (not in getReady phase)`);
+        }
+        clearInterval(getReadyTimerRef.current);
+        getReadyTimerRef.current = null;
+      }
+      return;
+    }
+
+    if (getReadyTimerRef.current) {
+      if (DEBUG_FOCUS) {
+        console.log(`[FocusExercise:${debugIdRef.current}] GetReady timer already exists, skipping`);
+      }
+      return;
+    }
+
+    if (DEBUG_FOCUS) {
+      console.log(`[FocusExercise:${debugIdRef.current}] GetReady CREATING TIMER`);
+    }
+
+    getReadyTimerRef.current = setInterval(() => {
+      setGetReadyCountdown((prev) => {
+        if (DEBUG_FOCUS) {
+          console.log(`[FocusExercise:${debugIdRef.current}] GetReady TICK`, {
+            prev,
+            next: prev - 1,
+            willTransition: prev <= 1,
+          });
+        }
+        if (prev <= 1) {
+          if (getReadyTimerRef.current) {
+            if (DEBUG_FOCUS) {
+              console.log(`[FocusExercise:${debugIdRef.current}] GetReady TRANSITIONING to practice phase`);
+            }
+            clearInterval(getReadyTimerRef.current);
+            getReadyTimerRef.current = null;
+          }
+          setPhase('practice');
+          return 3;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => {
+      if (getReadyTimerRef.current) {
+        if (DEBUG_FOCUS) {
+          console.log(`[FocusExercise:${debugIdRef.current}] GetReady CLEANUP`);
+        }
+        clearInterval(getReadyTimerRef.current);
+        getReadyTimerRef.current = null;
+      }
+    };
+  }, [phase]);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -534,10 +790,218 @@ const FocusExercise: React.FC<FocusExerciseProps> = ({
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const mode = config?.type || 'single_point';
+  const handleNextStep = () => {
+    stopNarration();
+    if (step < safeTotalSteps - 1) {
+      setStep((prev) => prev + 1);
+    } else {
+      // Move to next phase - cue word selection only for anchoring exercises
+      if (usesCueWord) {
+        setPhase('cueWord');
+      } else {
+        // Skip cue word selection and go directly to practice
+        setPhase('getReady');
+      }
+    }
+  };
 
-  // “Something moving” for all focus modes: at minimum pulse + subtle drift.
-  const shouldMove = !isPaused;
+  const handleCueWordSubmit = () => {
+    if (cueWord.trim()) {
+      setPhase('getReady');
+    }
+  };
+
+  // Get practice guidance - returns title, instruction, and technique tip for each rep
+  const getPracticeGuidance = () => {
+    const word = cueWord.toUpperCase();
+    const isLastRep = currentRep >= totalReps;
+    const isSecondToLastRep = currentRep === totalReps - 1;
+    const isDistraction = mode === 'distraction';
+    
+    // Different guidance for CUE WORD exercises vs REGULAR focus exercises
+    if (usesCueWord) {
+      // ========== CUE WORD ANCHORING EXERCISE ==========
+      if (currentRep === 1) {
+        return {
+          title: 'BUILD THE STATE',
+          instruction: 'Soften your gaze on the dot. Let your breathing slow naturally. Feel tension leaving your body.',
+          technique: 'This is the foundation—notice how calm focus feels in your body.'
+        };
+      }
+      if (currentRep === 2) {
+        return {
+          title: 'DEEPEN THE FOCUS',
+          instruction: `Your attention is narrowing. The world outside the dot is fading. You're entering your zone.`,
+          technique: `When you feel truly locked in, silently say "${word}" in your mind.`
+        };
+      }
+      if (currentRep === 3) {
+        return {
+          title: 'ANCHOR THE STATE',
+          instruction: `This focused feeling + your word "${word}" are becoming connected. Say "${word}" each time you exhale.`,
+          technique: `You're creating a neural link: "${word}" = this exact state of focus.`
+        };
+      }
+      if (currentRep === 4) {
+        return {
+          title: 'STRENGTHEN THE ANCHOR',
+          instruction: `Keep repeating "${word}" silently. Each repetition makes the anchor stronger.`,
+          technique: `In competition, just thinking "${word}" will instantly trigger this state.`
+        };
+      }
+      
+      if (isLastRep) {
+        return {
+          title: 'EXERCISE COMPLETE',
+          instruction: `You now own this state. "${word}" is your mental key. Use it anytime you need laser focus.`,
+          technique: `Your anchor is set. In competition, just think "${word}" to trigger this state instantly.`
+        };
+      }
+      
+      if (isSecondToLastRep) {
+        return {
+          title: 'FINAL STRETCH',
+          instruction: `One more rep after this. Keep your focus soft but steady. "${word}" is becoming automatic.`,
+          technique: 'You\'re building a permanent mental tool you can use for life.'
+        };
+      }
+      
+      const sustainPhase = currentRep - 4;
+      const sustainMessages = [
+        {
+          title: 'SUSTAIN THE FOCUS',
+          instruction: `Stay present with the dot. Each breath deepens your connection to "${word}".`,
+          technique: 'The longer you hold this state, the stronger your anchor becomes.'
+        },
+        {
+          title: 'REINFORCE THE LINK',
+          instruction: `Silently repeat "${word}" on each exhale. Feel the word pulling you into focus.`,
+          technique: 'You\'re rewiring your brain to associate this word with peak concentration.'
+        },
+        {
+          title: 'DEEPEN THE ANCHOR',
+          instruction: `If your mind wanders, gently return to the dot and whisper "${word}" internally.`,
+          technique: 'Elite athletes use this exact technique before every performance.'
+        },
+        {
+          title: 'LOCK IT IN',
+          instruction: `Notice how effortlessly "${word}" brings you back to center. That\'s the anchor working.`,
+          technique: 'This is becoming automatic. Trust the process.'
+        },
+        {
+          title: 'BUILD MENTAL MUSCLE',
+          instruction: `Each rep strengthens the neural pathway. "${word}" is becoming a reflex.`,
+          technique: 'Like physical training, mental training requires repetition.'
+        },
+        {
+          title: 'MAINTAIN THE STATE',
+          instruction: `Stay locked on the dot. Let "${word}" pulse silently in the background of your mind.`,
+          technique: 'You\'re building a skill that will serve you in competition.'
+        },
+      ];
+      
+      const messageIndex = (sustainPhase - 1) % sustainMessages.length;
+      return sustainMessages[messageIndex];
+    } else {
+      // ========== REGULAR FOCUS EXERCISES (Single-Point, Distraction, etc.) ==========
+      if (currentRep === 1) {
+        return {
+          title: 'SETTLE IN',
+          instruction: isDistraction 
+            ? 'Find the target with soft eyes. Let it be the center of your world.'
+            : 'Soften your gaze on the dot. Let your breathing slow naturally.',
+          technique: 'This is the foundation—allow yourself to settle into stillness.'
+        };
+      }
+      if (currentRep === 2) {
+        return {
+          title: 'NARROW YOUR FOCUS',
+          instruction: isDistraction
+            ? 'The target may move, but your attention stays locked. Track it smoothly.'
+            : 'Your peripheral awareness is fading. Only the dot exists.',
+          technique: 'Let distractions pass through without grabbing your attention.'
+        };
+      }
+      if (currentRep === 3) {
+        return {
+          title: 'ENTER THE ZONE',
+          instruction: isDistraction
+            ? 'You and the target are connected. Anticipate its movement.'
+            : 'Feel yourself entering a state of flow. Nothing else matters.',
+          technique: 'This calm alertness is the zone athletes talk about.'
+        };
+      }
+      if (currentRep === 4) {
+        return {
+          title: 'DEEPEN THE STATE',
+          instruction: 'Your focus is becoming effortless. Stay with this feeling.',
+          technique: 'Notice how natural sustained attention can feel.'
+        };
+      }
+      
+      if (isLastRep) {
+        return {
+          title: 'EXERCISE COMPLETE',
+          instruction: 'Excellent work. Your focus ability is strengthening with each session.',
+          technique: 'This mental clarity is available to you anytime you practice.'
+        };
+      }
+      
+      if (isSecondToLastRep) {
+        return {
+          title: 'FINAL STRETCH',
+          instruction: 'One more rep. Maintain your focus through to the end.',
+          technique: 'Finishing strong builds mental discipline.'
+        };
+      }
+      
+      const sustainPhase = currentRep - 4;
+      const focusMessages = [
+        {
+          title: 'SUSTAIN YOUR ATTENTION',
+          instruction: isDistraction 
+            ? 'Keep tracking the target. Your eyes and mind move together.'
+            : 'Hold your gaze steady. Let thoughts pass like clouds.',
+          technique: 'Each moment of sustained focus builds neural pathways.'
+        },
+        {
+          title: 'BUILD ENDURANCE',
+          instruction: 'Your attention muscle is getting stronger. Stay present.',
+          technique: 'Mental endurance transfers directly to sport performance.'
+        },
+        {
+          title: 'STAY PRESENT',
+          instruction: isDistraction
+            ? 'Don\'t anticipate where it will go—just follow where it is.'
+            : 'Right here, right now. The dot is your only concern.',
+          technique: 'Present-moment focus is a superpower in competition.'
+        },
+        {
+          title: 'MAINTAIN FLOW',
+          instruction: 'You\'re in a groove now. Trust the process and keep going.',
+          technique: 'This flow state becomes more accessible with practice.'
+        },
+        {
+          title: 'SHARPEN YOUR EDGE',
+          instruction: isDistraction
+            ? 'Notice how you can track movement without tension. Easy focus.'
+            : 'Can you focus even more intently? Find your edge.',
+          technique: 'Elite focus is about quality, not just duration.'
+        },
+        {
+          title: 'REINFORCE THE SKILL',
+          instruction: 'Every rep is training your brain. This focus is becoming automatic.',
+          technique: 'What you practice becomes who you are in competition.'
+        }
+      ];
+      
+      const focusIndex = (sustainPhase - 1) % focusMessages.length;
+      return focusMessages[focusIndex];
+    }
+  };
+
+  // "Something moving" for all focus modes
+  const shouldMove = !isPaused && phase !== 'getReady' && phase !== 'cueWord';
   const moveTransition = { duration: 6, repeat: Infinity, ease: 'easeInOut' as const };
 
   const movingDotAnimate =
@@ -545,6 +1009,276 @@ const FocusExercise: React.FC<FocusExerciseProps> = ({
       ? { x: [0, 120, -80, 140, 0], y: [0, -90, 110, 40, 0] }
       : { x: [0, 10, -8, 6, 0], y: [0, -6, 8, -4, 0], scale: [1, 1.08, 1] };
 
+  // Cue Word Phase
+  if (phase === 'cueWord') {
+    return (
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        className="text-center max-w-md mx-auto"
+      >
+        <div className={`w-20 h-20 mx-auto rounded-2xl bg-gradient-to-br ${categoryColor} flex items-center justify-center mb-6`}>
+          <Target className="w-10 h-10 text-white" />
+        </div>
+
+        <h2 className="text-2xl font-bold text-white mb-3">Choose Your Anchor Word</h2>
+        
+        {/* Explanation box */}
+        <div className={`mb-6 p-4 rounded-2xl bg-white/5 border border-white/10 text-left`}>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-white/80 font-semibold text-sm">🧠 How Anchoring Works</span>
+          </div>
+          <p className="text-white/60 text-sm leading-relaxed">
+            Elite athletes use "anchoring" to trigger peak mental states on demand. You'll build 
+            a state of deep focus, then connect it to a cue word. Later, just saying this word 
+            will instantly bring back the focused state.
+          </p>
+        </div>
+
+        <div className="mb-6">
+          <input
+            type="text"
+            value={cueWord}
+            onChange={(e) => setCueWord(e.target.value.slice(0, 20))}
+            placeholder="e.g., FOCUS, LOCKED, ZONE"
+            className="w-full px-6 py-4 rounded-2xl bg-white/10 border border-white/20 text-white text-center text-xl font-semibold placeholder-white/40 focus:outline-none focus:border-white/40 uppercase tracking-wider"
+            autoFocus
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && cueWord.trim()) {
+                handleCueWordSubmit();
+              }
+            }}
+          />
+          <p className="text-white/40 text-xs mt-2">Pick something short and powerful</p>
+        </div>
+
+        <div className="grid grid-cols-4 gap-2 mb-8">
+          {['FOCUS', 'LOCKED', 'ZONE', 'READY', 'POWER', 'CALM', 'NOW', 'GO'].map((word) => (
+            <button
+              key={word}
+              onClick={() => setCueWord(word)}
+              className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                cueWord === word 
+                  ? `bg-gradient-to-r ${categoryColor} text-white` 
+                  : 'bg-white/5 text-white/60 hover:bg-white/10'
+              }`}
+            >
+              {word}
+            </button>
+          ))}
+        </div>
+
+        <motion.button
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+          onClick={handleCueWordSubmit}
+          disabled={!cueWord.trim()}
+          className={`flex items-center justify-center gap-2 w-full px-6 py-4 rounded-xl font-semibold transition-opacity ${
+            cueWord.trim() 
+              ? `bg-gradient-to-r ${categoryColor} text-white` 
+              : 'bg-white/10 text-white/40 cursor-not-allowed'
+          }`}
+        >
+          Continue with "{cueWord.toUpperCase() || '...'}"
+          <ChevronRight className="w-5 h-5" />
+        </motion.button>
+      </motion.div>
+    );
+  }
+
+  // Get Ready Phase
+  if (phase === 'getReady') {
+    const isDistraction = mode === 'distraction';
+    
+    return (
+      <motion.div
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.9 }}
+        className="text-center"
+      >
+        {/* Show cue word badge only for anchoring exercises */}
+        {usesCueWord && cueWord && (
+          <div className="mb-4">
+            <span className={`inline-block px-4 py-2 rounded-full bg-gradient-to-r ${categoryColor} text-white font-bold text-lg mb-4`}>
+              {cueWord.toUpperCase()}
+            </span>
+          </div>
+        )}
+
+        <div className="mb-8">
+          {usesCueWord ? (
+            <>
+              <p className="text-white/60 text-lg mb-2">Get ready to anchor your focus</p>
+              <p className="text-white/40 text-sm">You'll learn to trigger this state with your cue word</p>
+            </>
+          ) : (
+            <>
+              <p className="text-white/60 text-lg mb-2">
+                {isDistraction ? 'Get ready to track the target' : 'Get ready to focus'}
+              </p>
+              <p className="text-white/40 text-sm">
+                {isDistraction 
+                  ? 'Follow the moving dot with soft, steady attention'
+                  : 'Keep your attention centered on the dot'}
+              </p>
+            </>
+          )}
+        </div>
+
+        <motion.div
+          key={getReadyCountdown}
+          initial={{ scale: 0.5, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 1.5, opacity: 0 }}
+          className={`w-32 h-32 mx-auto rounded-full bg-gradient-to-br ${categoryColor} flex items-center justify-center mb-8`}
+        >
+          <span className="text-6xl font-bold text-white">{getReadyCountdown}</span>
+        </motion.div>
+
+        <p className="text-white/80">
+          {totalReps} rep{totalReps > 1 ? 's' : ''} • {formatTime(practiceDuration)} total
+        </p>
+      </motion.div>
+    );
+  }
+
+  // Practice Phase
+  if (phase === 'practice') {
+    const repProgress = ((practiceElapsed % repDuration) / repDuration) * 100;
+    const guidance = getPracticeGuidance();
+    const repSecondsRemaining = repDuration - (practiceElapsed % repDuration);
+
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -20 }}
+        className="text-center"
+      >
+        {/* Top status */}
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex flex-col items-start">
+            <span className={`text-xs font-bold tracking-wide`} style={{ color: categoryColor.includes('orange') ? '#f97316' : categoryColor.includes('yellow') ? '#eab308' : '#fff' }}>
+              {guidance.title}
+            </span>
+            <span className="text-white/60 text-xs">
+              Rep {currentRep} of {totalReps}
+            </span>
+          </div>
+          
+          {usesCueWord && cueWord && (
+            <span className={`px-3 py-1 rounded-full bg-gradient-to-r ${categoryColor} text-white font-bold text-xs`}>
+              {cueWord.toUpperCase()}
+            </span>
+          )}
+          
+          <div className="flex flex-col items-end">
+            <span className="text-white text-2xl font-bold font-mono">{repSecondsRemaining}s</span>
+            <span className="text-white/40 text-xs">this rep</span>
+          </div>
+        </div>
+
+        {/* Rep progress bar (thick) */}
+        <div className="h-2.5 bg-white/10 rounded-full mb-2 overflow-hidden">
+          <motion.div
+            animate={{ width: `${repProgress}%` }}
+            transition={{ duration: 0.3, ease: 'linear' }}
+            className={`h-full bg-gradient-to-r ${categoryColor}`}
+          />
+        </div>
+
+        {/* Overall progress (thin) */}
+        <div className="h-1 bg-white/5 rounded-full mb-6 overflow-hidden">
+          <motion.div
+            animate={{ width: `${(practiceElapsed / practiceDuration) * 100}%` }}
+            className="h-full bg-white/40"
+          />
+        </div>
+
+        {/* Focus "game" area */}
+        <div className="relative mx-auto w-full max-w-xl h-[240px] rounded-3xl bg-white/5 border border-white/10 overflow-hidden mb-4">
+          {/* Soft glow */}
+          <div className={`absolute -top-24 -left-24 w-72 h-72 bg-gradient-to-br ${categoryColor} opacity-15 blur-[80px]`} />
+          <div className={`absolute -bottom-24 -right-24 w-72 h-72 bg-gradient-to-br ${categoryColor} opacity-15 blur-[80px]`} />
+
+          {/* Target / dot */}
+          <div className="absolute inset-0 flex items-center justify-center">
+            <motion.div
+              animate={shouldMove ? movingDotAnimate : { x: 0, y: 0, scale: 1 }}
+              transition={moveTransition}
+              className="relative"
+            >
+              {/* Outer rings */}
+              <motion.div
+                animate={shouldMove ? { scale: [1, 1.35, 1], opacity: [0.4, 0.12, 0.4] } : { scale: 1, opacity: 0.25 }}
+                transition={{ duration: 2.6, repeat: Infinity, ease: 'easeInOut' }}
+                className={`absolute -inset-10 rounded-full bg-gradient-to-br ${categoryColor} blur-xl`}
+              />
+              <div className="w-4 h-4 rounded-full bg-white shadow-[0_0_0_8px_rgba(255,255,255,0.06)]" />
+            </motion.div>
+          </div>
+        </div>
+
+        {/* Guidance card - separate from the focus area */}
+        <div className="px-5 py-4 rounded-2xl bg-black/40 border border-white/10 mb-6 text-left">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={currentRep}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+            >
+              <p className="text-white text-sm leading-relaxed mb-2">
+                {guidance.instruction}
+              </p>
+              <div className="border-t border-white/10 pt-2">
+                <p className={`text-xs font-medium`} style={{ color: categoryColor.includes('orange') ? '#f97316' : categoryColor.includes('yellow') ? '#eab308' : '#fff' }}>
+                  {guidance.technique}
+                </p>
+              </div>
+            </motion.div>
+          </AnimatePresence>
+          {mode === 'distraction' && (
+            <p className="text-white/50 text-xs mt-2 italic">
+              Track the moving target with soft, steady attention.
+            </p>
+          )}
+        </div>
+
+        {/* Controls */}
+        <div className="flex justify-center gap-4">
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={isPaused ? onResume : onPause}
+            className="p-4 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+          >
+            {isPaused ? <Play className="w-6 h-6 text-white" /> : <Pause className="w-6 h-6 text-white" />}
+          </motion.button>
+
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.97 }}
+            onClick={() => {
+              if (practiceTimerRef.current) {
+                clearInterval(practiceTimerRef.current);
+                practiceTimerRef.current = null;
+              }
+              onComplete();
+            }}
+            className={`flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r ${categoryColor} text-white font-semibold`}
+          >
+            Finish Early
+            <ChevronRight className="w-5 h-5" />
+          </motion.button>
+        </div>
+      </motion.div>
+    );
+  }
+
+  // Instructions Phase (default)
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -557,19 +1291,19 @@ const FocusExercise: React.FC<FocusExerciseProps> = ({
         <span>
           Step {step + 1} of {safeTotalSteps}
         </span>
-        <span className="font-mono">{formatTime(remaining)}</span>
+        <span className="text-xs px-2 py-1 rounded-full bg-white/10">Instructions</span>
       </div>
 
       {/* Progress bar */}
       <div className="h-1 bg-white/10 rounded-full mb-10 overflow-hidden">
         <motion.div
           initial={{ width: 0 }}
-          animate={{ width: `${Math.min(100, (elapsedSeconds / duration) * 100)}%` }}
+          animate={{ width: `${((step + 1) / safeTotalSteps) * 100}%` }}
           className={`h-full bg-gradient-to-r ${categoryColor}`}
         />
       </div>
 
-      {/* Focus “game” area */}
+      {/* Focus "game" area */}
       <div className="relative mx-auto w-full max-w-xl h-[320px] rounded-3xl bg-white/5 border border-white/10 overflow-hidden mb-10">
         {/* Soft glow */}
         <div className={`absolute -top-24 -left-24 w-72 h-72 bg-gradient-to-br ${categoryColor} opacity-15 blur-[80px]`} />
@@ -610,8 +1344,17 @@ const FocusExercise: React.FC<FocusExerciseProps> = ({
         enabled={!isPaused}
         text={currentInstruction}
         onDone={() => {
-          if (instructions.length <= 1) return;
-          if (step < safeTotalSteps - 1) setStep((prev) => prev + 1);
+          if (instructions.length <= 1) {
+            // Skip cue word for non-anchoring exercises
+            setPhase(usesCueWord ? 'cueWord' : 'getReady');
+            return;
+          }
+          if (step < safeTotalSteps - 1) {
+            setStep((prev) => prev + 1);
+          } else {
+            // Skip cue word for non-anchoring exercises
+            setPhase(usesCueWord ? 'cueWord' : 'getReady');
+          }
         }}
         runIdRef={narrationRunIdRef}
         voiceChoice={null}
@@ -631,17 +1374,10 @@ const FocusExercise: React.FC<FocusExerciseProps> = ({
         <motion.button
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.97 }}
-          onClick={() => {
-            stopNarration();
-            if (instructions.length <= 1) {
-              onComplete();
-              return;
-            }
-            setStep((prev) => Math.min(prev + 1, safeTotalSteps - 1));
-          }}
+          onClick={handleNextStep}
           className={`flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r ${categoryColor} text-white font-semibold`}
         >
-          {instructions.length > 1 && step < safeTotalSteps - 1 ? 'Next' : 'Complete'}
+          {step < safeTotalSteps - 1 ? 'Next' : 'Choose Cue Word'}
           <ChevronRight className="w-5 h-5" />
         </motion.button>
       </div>

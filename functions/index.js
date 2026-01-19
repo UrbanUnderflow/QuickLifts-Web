@@ -85,4 +85,17 @@ exports.logNotification = require("./notificationLogger").logNotification;
 exports.logMulticastNotification = require("./notificationLogger").logMulticastNotification; 
 
 // Export the Challenge sync function
-exports.syncChallengeToUserChallenges = require("./syncChallengeToUserChallenges").syncChallengeToUserChallenges; 
+exports.syncChallengeToUserChallenges = require("./syncChallengeToUserChallenges").syncChallengeToUserChallenges;
+
+// Export the Mental Curriculum notification functions
+exports.onCurriculumAssignmentCreated = require("./mentalCurriculumNotifications").onCurriculumAssignmentCreated;
+exports.onCurriculumAssignmentUpdated = require("./mentalCurriculumNotifications").onCurriculumAssignmentUpdated;
+exports.scheduledDailyReminder = require("./mentalCurriculumNotifications").scheduledDailyReminder;
+exports.scheduledCheckpoints = require("./mentalCurriculumNotifications").scheduledCheckpoints;
+exports.generateRecommendations = require("./mentalCurriculumNotifications").generateRecommendations;
+exports.onAthleteSelfAssignment = require("./mentalCurriculumNotifications").onAthleteSelfAssignment;
+exports.processEmailQueue = require("./mentalCurriculumNotifications").processEmailQueue;
+
+// Export the Daily Reflection notification functions
+exports.scheduledDailyReflection = require("./dailyReflectionNotifications").scheduledDailyReflection;
+exports.sendTestReflectionNotification = require("./dailyReflectionNotifications").sendTestReflectionNotification; 

@@ -105,36 +105,11 @@ const SideNav: React.FC<SideNavProps> = ({ selectedTab, onTabChange, onAbout }) 
   const isCoachPage = currentAsPath.startsWith('/coach') || currentPath.startsWith('/coach');
   const isCreatePage = currentPath === '/create';
   const isPulseCheckNora = isPulseCheckPage && currentAsPath.includes('section=nora');
+  const usePulseCheckNav = isPulseCheckPage || isCoachPage;
 
   // Define navigation items dynamically based on current page
-  const navItems = isCoachPage ? [
-    // Coach Dashboard navigation (Mental Training is in top tabs, not sidebar)
-    { 
-      icon: <FaUsers />, 
-      label: 'Dashboard', 
-      href: '/coach/dashboard',
-      isActive: currentPath === '/coach/dashboard' || currentPath === '/coach/mental-training',
-    },
-    {
-      icon: <FaUserFriends />,
-      label: 'Referrals',
-      href: '/coach/referrals',
-      isActive: currentPath === '/coach/referrals',
-    },
-    {
-      icon: <FaUserTie />,
-      label: 'Staff',
-      href: '/coach/staff',
-      isActive: currentPath === '/coach/staff',
-    },
-    { 
-      icon: <FaInbox />, 
-      label: 'Inbox', 
-      href: '/coach/inbox',
-      isActive: currentPath === '/coach/inbox',
-    },
-  ] : isPulseCheckPage ? [
-    // PulseCheck page navigation
+  const navItems = usePulseCheckNav ? [
+    // PulseCheck navigation (used for PulseCheck + Coach pages)
     { 
       icon: <FaHome />, 
       label: 'Home', 
@@ -240,18 +215,12 @@ const SideNav: React.FC<SideNavProps> = ({ selectedTab, onTabChange, onAbout }) 
               {(isPulseCheckPage || isCoachPage) && (
                 <div className="absolute -inset-2 bg-[#E0FE10]/10 rounded-xl blur-xl" />
               )}
-              {isCoachPage ? (
-                <div className="relative flex items-center gap-2">
-                  <img src="/pulseIcon.png" alt="Pulse" className="h-8 w-8" />
-                  <span className="text-white font-bold text-lg">Coach</span>
-                </div>
-              ) : (
-                <img 
-                  src={isPulseCheckPage ? '/pulseCheckIcon.png' : '/pulse-logo-white.svg'} 
-                  alt={isPulseCheckPage ? 'PulseCheck' : 'Pulse'} 
-                  className="relative h-8 w-auto" 
-                />
-              )}
+              {/* Use the same PulseCheck branding for Coach pages (no coach-specific sidebar branding) */}
+              <img 
+                src={usePulseCheckNav ? '/pulseCheckIcon.png' : '/pulse-logo-white.svg'} 
+                alt={usePulseCheckNav ? 'PulseCheck' : 'Pulse'} 
+                className="relative h-8 w-auto" 
+              />
             </motion.div>
           </div>
           {/* Small screens: icon only */}
@@ -264,8 +233,8 @@ const SideNav: React.FC<SideNavProps> = ({ selectedTab, onTabChange, onAbout }) 
               {/* Icon glow */}
               <div className="absolute -inset-2 bg-[#E0FE10]/20 rounded-full blur-lg opacity-0 group-hover:opacity-100 transition-opacity" />
               <img 
-                src={isCoachPage ? '/pulseIcon.png' : isPulseCheckPage ? '/pulseCheckIcon.png' : '/pulseIcon.png'} 
-                alt={isCoachPage ? 'Coach' : isPulseCheckPage ? 'PulseCheck' : 'Pulse'} 
+                src={usePulseCheckNav ? '/pulseCheckIcon.png' : '/pulseIcon.png'} 
+                alt={usePulseCheckNav ? 'PulseCheck' : 'Pulse'} 
                 className="relative w-10 h-10" 
               />
             </motion.div>
@@ -546,77 +515,85 @@ const SideNav: React.FC<SideNavProps> = ({ selectedTab, onTabChange, onAbout }) 
           />
         </div>
         
-        {isCoachPage ? (
-          /* Coach-specific mobile navigation */
+        {usePulseCheckNav ? (
+          /* PulseCheck-style mobile navigation (used for PulseCheck + Coach pages) */
           <div className="relative h-full flex items-center justify-around px-2">
+            {/* Home */}
+            <motion.button
+              onClick={() => router.push('/PulseCheck')}
+              whileTap={{ scale: 0.9 }}
+              className={`relative flex flex-col items-center justify-center p-2 rounded-xl transition-colors ${
+                currentPath === '/PulseCheck' ? 'text-[#E0FE10]' : 'text-zinc-400'
+              }`}
+              aria-label="Home"
+            >
+              {currentPath === '/PulseCheck' && (
+                <div className="absolute inset-0 bg-[#E0FE10]/10 rounded-xl blur" />
+              )}
+              <FaHome className="relative text-2xl" />
+            </motion.button>
+
+            {/* Nora */}
+            <motion.button
+              onClick={() => router.push('/PulseCheck?section=nora')}
+              whileTap={{ scale: 0.9 }}
+              className={`relative flex flex-col items-center justify-center p-2 rounded-xl transition-colors ${
+                isPulseCheckNora ? 'text-[#E0FE10]' : 'text-zinc-400'
+              }`}
+              aria-label="Nora"
+            >
+              {isPulseCheckNora && (
+                <div className="absolute inset-0 bg-[#E0FE10]/10 rounded-xl blur" />
+              )}
+              <FaBrain className="relative text-2xl" />
+            </motion.button>
+
+            {/* Coach */}
             <motion.button
               onClick={() => router.push('/coach/dashboard')}
               whileTap={{ scale: 0.9 }}
               className={`relative flex flex-col items-center justify-center p-2 rounded-xl transition-colors ${
-                currentPath === '/coach/dashboard' ? 'text-[#E0FE10]' : 'text-zinc-400'
+                currentAsPath.startsWith('/coach') ? 'text-[#E0FE10]' : 'text-zinc-400'
               }`}
+              aria-label="Coach"
             >
-              {currentPath === '/coach/dashboard' && (
+              {currentAsPath.startsWith('/coach') && (
                 <div className="absolute inset-0 bg-[#E0FE10]/10 rounded-xl blur" />
               )}
-              <FaUsers className="relative text-2xl" />
+              <FaUserTie className="relative text-2xl" />
             </motion.button>
-            
+
+            {/* Messages */}
             <motion.button
-              onClick={() => router.push('/coach/referrals')}
+              onClick={() => router.push('/messages')}
               whileTap={{ scale: 0.9 }}
               className={`relative flex flex-col items-center justify-center p-2 rounded-xl transition-colors ${
-                currentPath === '/coach/referrals' ? 'text-[#E0FE10]' : 'text-zinc-400'
+                currentPath === '/messages' ? 'text-[#E0FE10]' : 'text-zinc-400'
               }`}
+              aria-label="Messages"
             >
-              {currentPath === '/coach/referrals' && (
+              {currentPath === '/messages' && (
                 <div className="absolute inset-0 bg-[#E0FE10]/10 rounded-xl blur" />
               )}
-              <FaUserFriends className="relative text-2xl" />
+              <FaEnvelope className="relative text-2xl" />
             </motion.button>
-            
+
+            {/* Profile */}
             <motion.button
-              onClick={() => router.push('/coach/inbox')}
+              onClick={() => router.push('/?tab=profile')}
               whileTap={{ scale: 0.9 }}
-              className={`relative flex flex-col items-center justify-center p-2 rounded-xl transition-colors ${
-                currentPath === '/coach/inbox' ? 'text-[#E0FE10]' : 'text-zinc-400'
-              }`}
+              className="relative flex flex-col items-center justify-center p-2"
+              aria-label="Profile"
             >
-              {currentPath === '/coach/inbox' && (
-                <div className="absolute inset-0 bg-[#E0FE10]/10 rounded-xl blur" />
-              )}
-              <FaInbox className="relative text-2xl" />
-            </motion.button>
-            
-            <motion.button
-              onClick={() => router.push('/coach/profile')}
-              whileTap={{ scale: 0.9 }}
-              className={`relative flex flex-col items-center justify-center p-2 rounded-xl transition-colors ${
-                currentPath === '/coach/profile' ? 'text-[#E0FE10]' : 'text-zinc-400'
-              }`}
-            >
-              {currentPath === '/coach/profile' && (
-                <div className="absolute inset-0 bg-[#E0FE10]/10 rounded-xl blur" />
-              )}
               {currentUser?.profileImage?.profileImageURL ? (
                 <img
                   src={currentUser.profileImage.profileImageURL}
                   alt="Profile"
-                  className={`relative w-8 h-8 rounded-full object-cover border-2 ${
-                    currentPath === '/coach/profile'
-                      ? 'border-[#E0FE10] shadow-[0_0_10px_rgba(224,254,16,0.4)]' 
-                      : 'border-transparent'
-                  } transition-all`}
+                  className="relative w-8 h-8 rounded-full object-cover border-2 border-transparent"
                 />
               ) : (
-                <div className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-all ${
-                  currentPath === '/coach/profile'
-                    ? 'bg-[#E0FE10]/20 border-2 border-[#E0FE10] shadow-[0_0_10px_rgba(224,254,16,0.4)]' 
-                    : 'bg-zinc-700 border-2 border-transparent'
-                }`}>
-                  <span className={`text-sm font-semibold ${
-                    currentPath === '/coach/profile' ? 'text-[#E0FE10]' : 'text-white'
-                  }`}>
+                <div className="relative w-8 h-8 rounded-full flex items-center justify-center bg-zinc-700 border-2 border-transparent">
+                  <span className="text-sm font-semibold text-white">
                     {currentUser?.username?.[0]?.toUpperCase() || 'U'}
                   </span>
                 </div>

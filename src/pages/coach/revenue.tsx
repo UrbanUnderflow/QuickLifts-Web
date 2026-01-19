@@ -33,6 +33,35 @@ interface PayoutHistory {
   method: string;
 }
 
+// Type definitions moved outside component
+type AthleteSub = {
+  athleteUserId: string;
+  displayName?: string;
+  username?: string;
+  email?: string;
+  planType: 'pulsecheck-monthly' | 'pulsecheck-annual' | 'Unknown' | null;
+  expiration?: Date | null;
+  isActive: boolean;
+  monthlyCents: number;
+};
+
+type ReferredCoach = {
+  coachUserId: string;
+  username?: string;
+  email?: string;
+  totalAthletes: number;
+  activeAthletes: number;
+  estimatedMRRCents: number;
+  yourShareCents: number;
+  breakdown?: Array<{ plan: string; count: number; monthlyCents: number; subtotalCents: number }>;
+};
+
+type UnifiedEarnings = {
+  totalEarned: number;
+  totalBalance: number;
+  recentSales: Array<{ id?: string; date?: string; amount?: number; roundTitle?: string; buyerId?: string; created?: number; source?: string }>
+} | null;
+
 const CoachRevenue: React.FC = () => {
   const currentUser = useUser();
   const [selectedPeriod, setSelectedPeriod] = useState<'7d' | '30d' | '90d' | '1y' | 'all'>('30d');
@@ -45,6 +74,24 @@ const CoachRevenue: React.FC = () => {
   // Real data containers (unified earnings + derived)
   const [revenueData, setRevenueData] = useState<RevenueData[]>([]);
   const [payoutHistory, setPayoutHistory] = useState<PayoutHistory[]>([]);
+
+  // Connected athletes subscriptions - ALL HOOKS MUST BE BEFORE CONDITIONAL RETURNS
+  const [athleteSubs, setAthleteSubs] = useState<AthleteSub[]>([]);
+  const [athleteLoading, setAthleteLoading] = useState(false);
+
+  // Referred coaches summary
+  const [referred, setReferred] = useState<ReferredCoach[]>([]);
+  const [referredLoading, setReferredLoading] = useState(false);
+  const [expandedCoach, setExpandedCoach] = useState<string | null>(null);
+  const [downloadingMonth, setDownloadingMonth] = useState<string | null>(null);
+
+  // Unified earnings (for creator sales and payout-like info)
+  const [earnings, setEarnings] = useState<UnifiedEarnings>(null);
+  const [buyers, setBuyers] = useState<Record<string, { username?: string; email?: string }>>({});
+
+  // Auto-self-heal unknown athlete subscription states
+  const [autoResolving, setAutoResolving] = useState(false);
+  const healedTriedRef = useRef<Set<string>>(new Set());
 
   const currentMonth = revenueData[0] || { month: '', totalRevenue: 0, athleteRevenue: 0, referralRevenue: 0 };
   const previousMonth = revenueData[1];
@@ -79,95 +126,6 @@ const CoachRevenue: React.FC = () => {
     };
     check();
   }, [currentUser?.id]);
-
-  if (!earningsAccessChecked) {
-    return (
-      <>
-        <PageHead 
-          metaData={{
-            pageId: "coach-revenue",
-            pageTitle: "Revenue & Earnings - Coach Dashboard",
-            metaDescription: "Track your coaching revenue, view payout history, and analyze your earnings growth.",
-            lastUpdated: new Date().toISOString()
-          }}
-          pageOgUrl="https://fitwithpulse.ai/coach/revenue"
-        />
-        <CoachLayout>
-          <div className="p-8">
-            <div className="max-w-3xl mx-auto">
-              <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 text-zinc-300">
-                Checking access…
-              </div>
-            </div>
-          </div>
-        </CoachLayout>
-      </>
-    );
-  }
-
-  if (!canSeeEarnings) {
-    return (
-      <>
-        <PageHead 
-          metaData={{
-            pageId: "coach-revenue",
-            pageTitle: "Revenue & Earnings - Coach Dashboard",
-            metaDescription: "Track your coaching revenue, view payout history, and analyze your earnings growth.",
-            lastUpdated: new Date().toISOString()
-          }}
-          pageOgUrl="https://fitwithpulse.ai/coach/revenue"
-        />
-        <CoachLayout>
-          <div className="p-8">
-            <div className="max-w-3xl mx-auto">
-              <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-8">
-                <h1 className="text-2xl font-bold text-white mb-2">Earnings Access Required</h1>
-                <p className="text-zinc-400 mb-6">
-                  The Earnings tab is only available to partnered coaches.
-                </p>
-                <a
-                  href="/coach/dashboard"
-                  className="inline-flex bg-[#E0FE10] text-black px-5 py-3 rounded-lg font-semibold hover:bg-lime-400 transition-colors"
-                >
-                  Back to Dashboard
-                </a>
-              </div>
-            </div>
-          </div>
-        </CoachLayout>
-      </>
-    );
-  }
-
-  // Connected athletes subscriptions
-  type AthleteSub = {
-    athleteUserId: string;
-    displayName?: string;
-    username?: string;
-    email?: string;
-    planType: 'pulsecheck-monthly' | 'pulsecheck-annual' | 'Unknown' | null;
-    expiration?: Date | null;
-    isActive: boolean;
-    monthlyCents: number;
-  };
-  const [athleteSubs, setAthleteSubs] = useState<AthleteSub[]>([]);
-  const [athleteLoading, setAthleteLoading] = useState(false);
-
-  // Referred coaches summary
-  type ReferredCoach = {
-    coachUserId: string;
-    username?: string;
-    email?: string;
-    totalAthletes: number;
-    activeAthletes: number;
-    estimatedMRRCents: number; // gross from athletes (active * price)
-    yourShareCents: number; // 20% of coach revenue; assume coach revenue is 40% of athlete price → 8% gross
-    breakdown?: Array<{ plan: string; count: number; monthlyCents: number; subtotalCents: number }>;
-  };
-  const [referred, setReferred] = useState<ReferredCoach[]>([]);
-  const [referredLoading, setReferredLoading] = useState(false);
-  const [expandedCoach, setExpandedCoach] = useState<string | null>(null);
-  const [downloadingMonth, setDownloadingMonth] = useState<string | null>(null);
 
   const reloadAthleteSubs = async () => {
     try {
@@ -256,8 +214,6 @@ const CoachRevenue: React.FC = () => {
   }, [currentUser?.id]);
 
   // Auto-self-heal unknown athlete subscription states by syncing RevenueCat and Stripe
-  const [autoResolving, setAutoResolving] = useState(false);
-  const healedTriedRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     const heal = async () => {
       if (autoResolving) return;
@@ -287,15 +243,7 @@ const CoachRevenue: React.FC = () => {
     heal();
   }, [athleteSubs, autoResolving]);
 
-  // Unified earnings (for creator sales and payout-like info)
-  type UnifiedEarnings = {
-    totalEarned: number;
-    totalBalance: number;
-    recentSales: Array<{ id?: string; date?: string; amount?: number; roundTitle?: string; buyerId?: string; created?: number; source?: string }>
-  } | null;
-  const [earnings, setEarnings] = useState<UnifiedEarnings>(null);
-  const [buyers, setBuyers] = useState<Record<string, { username?: string; email?: string }>>({});
-
+  // Unified earnings fetch
   useEffect(() => {
     const fetchUnified = async () => {
       try {
@@ -598,6 +546,66 @@ const CoachRevenue: React.FC = () => {
       default: return 'bg-zinc-700 text-zinc-400';
     }
   };
+
+  // Conditional returns MUST be after all hooks
+  if (!earningsAccessChecked) {
+    return (
+      <>
+        <PageHead 
+          metaData={{
+            pageId: "coach-revenue",
+            pageTitle: "Revenue & Earnings - Coach Dashboard",
+            metaDescription: "Track your coaching revenue, view payout history, and analyze your earnings growth.",
+            lastUpdated: new Date().toISOString()
+          }}
+          pageOgUrl="https://fitwithpulse.ai/coach/revenue"
+        />
+        <CoachLayout>
+          <div className="p-8">
+            <div className="max-w-3xl mx-auto">
+              <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 text-zinc-300">
+                Checking access…
+              </div>
+            </div>
+          </div>
+        </CoachLayout>
+      </>
+    );
+  }
+
+  if (!canSeeEarnings) {
+    return (
+      <>
+        <PageHead 
+          metaData={{
+            pageId: "coach-revenue",
+            pageTitle: "Revenue & Earnings - Coach Dashboard",
+            metaDescription: "Track your coaching revenue, view payout history, and analyze your earnings growth.",
+            lastUpdated: new Date().toISOString()
+          }}
+          pageOgUrl="https://fitwithpulse.ai/coach/revenue"
+        />
+        <CoachLayout>
+          <div className="p-8">
+            <div className="max-w-3xl mx-auto">
+              <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-8">
+                <h1 className="text-2xl font-bold text-white mb-2">Earnings Access Required</h1>
+                <p className="text-zinc-400 mb-6">
+                  The Earnings tab is only available to partnered coaches.
+                </p>
+                <a
+                  href="/coach/dashboard"
+                  className="inline-flex bg-[#E0FE10] text-black px-5 py-3 rounded-lg font-semibold hover:bg-lime-400 transition-colors"
+                >
+                  Back to Dashboard
+                </a>
+              </div>
+            </div>
+          </div>
+        </CoachLayout>
+      </>
+    );
+  }
 
   if (loading) {
     return (

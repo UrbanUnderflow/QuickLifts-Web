@@ -11,3 +11,8 @@ export * from './types';
 export { exerciseLibraryService } from './exerciseLibraryService';
 export { assignmentService } from './assignmentService';
 export { completionService } from './completionService';
+
+// Curriculum Services
+export { curriculumAssignmentService } from './curriculumAssignmentService';
+export { athleteProgressService } from './athleteProgressService';
+export { recommendationService } from './recommendationService';

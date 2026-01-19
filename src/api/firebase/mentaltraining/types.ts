@@ -333,6 +333,247 @@ export interface UserProgramEnrollment {
 }
 
 // ============================================================================
+// CURRICULUM TYPES (14-Day Assignment Cycle)
+// ============================================================================
+
+/**
+ * Mental training pathways based on athlete's primary challenge
+ */
+export enum MentalPathway {
+  Foundation = 'foundation',           // Universal starting point
+  ArousalMastery = 'arousal_mastery', // For anxiety/energy management
+  FocusMastery = 'focus_mastery',     // For concentration issues
+  ConfidenceResilience = 'confidence_resilience', // For belief/bouncing back
+  PressurePerformance = 'pressure_performance', // For underperforming under pressure
+  EliteRefinement = 'elite_refinement', // For MPR 8+ athletes
+}
+
+/**
+ * Status of a curriculum assignment (14-day cycle)
+ */
+export enum CurriculumAssignmentStatus {
+  Active = 'active',
+  Extended = 'extended',   // Below 80%, extended 7 more days
+  Completed = 'completed', // Mastery achieved
+  Paused = 'paused',      // Temporarily stopped
+}
+
+/**
+ * Confidence level for Nora's recommendations
+ */
+export enum RecommendationConfidence {
+  High = 'high',     // Clear pattern, proven intervention
+  Medium = 'medium', // Some indicators, worth trying
+  Low = 'low',       // Limited data, coach judgment needed
+}
+
+/**
+ * Status of a recommendation
+ */
+export enum RecommendationStatus {
+  Pending = 'pending',
+  Accepted = 'accepted',
+  Modified = 'modified',
+  Dismissed = 'dismissed',
+}
+
+/**
+ * Baseline assessment biggest challenge options
+ */
+export enum BiggestChallenge {
+  PreCompetitionAnxiety = 'pre_competition_anxiety',
+  FocusDuringCompetition = 'focus_during_competition',
+  ConfidenceInAbilities = 'confidence_in_abilities',
+  BouncingBackFromSetbacks = 'bouncing_back_from_setbacks',
+  PerformingUnderPressure = 'performing_under_pressure',
+  Other = 'other',
+}
+
+/**
+ * Baseline Assessment - Initial mental training quiz
+ * Part of athlete-mental-progress document
+ */
+export interface BaselineAssessment {
+  // Section 1: Current Mental Training
+  mentalTrainingExperience: 'never' | 'self_tried' | 'worked_with_professional' | 'consistent_6_months';
+  currentPracticeFrequency: 'never' | 'occasionally_when_stressed' | 'weekly' | 'daily';
+  
+  // Section 2: Self-Assessment by Domain (1-5)
+  arousalControlRating: number;
+  focusRating: number;
+  confidenceRating: number;
+  visualizationRating: number;
+  resilienceRating: number;
+  
+  // Section 3: Pressure Response
+  pressureResponse: 'freeze_perform_worse' | 'anxious_push_through' | 'same_as_training' | 'rise_to_occasion';
+  setbackRecovery: 'dwell_for_days' | 'struggle_same_day' | 'move_on_after_time' | 'let_go_immediately';
+  
+  // Section 4: Goals
+  biggestChallenge: BiggestChallenge;
+  biggestChallengeOther?: string;
+  
+  // Metadata
+  completedAt: number;
+}
+
+/**
+ * MentalRecommendation - Nora's exercise recommendation for an athlete
+ * Collection: mental-recommendations
+ */
+export interface MentalRecommendation {
+  id: string;
+  athleteId: string;
+  coachId: string;
+  exerciseId: string;
+  exercise?: MentalExercise; // Denormalized
+  
+  // Recommendation details
+  reason: string;
+  confidence: RecommendationConfidence;
+  pathway: MentalPathway;
+  pathwayStep: number; // Position in pathway sequence
+  
+  // Trigger info
+  triggerType: 'assessment_complete' | 'assignment_complete' | 'manual_request' | 'intervention' | 'competition_prep';
+  previousAssignmentId?: string; // If triggered by completion
+  
+  // Status
+  status: RecommendationStatus;
+  coachOverrideReason?: string; // If coach modified/dismissed
+  
+  createdAt: number;
+  updatedAt: number;
+}
+
+/**
+ * DailyCompletion - Record of daily exercise completion
+ * Subcollection: mental-curriculum-assignments/{assignmentId}/daily-completions
+ */
+export interface DailyCompletion {
+  id: string; // YYYY-MM-DD format
+  date: string; // YYYY-MM-DD
+  completed: boolean;
+  completionCount: number; // How many times completed that day
+  targetCount: number; // Required completions per day
+  
+  // Completion records
+  completions: {
+    completedAt: number;
+    durationSeconds: number;
+    postMood?: number; // 1-5
+  }[];
+  
+  createdAt: number;
+  updatedAt: number;
+}
+
+/**
+ * CurriculumAssignment - Enhanced 14-day exercise assignment
+ * Collection: mental-curriculum-assignments
+ */
+export interface CurriculumAssignment {
+  id: string;
+  athleteId: string;
+  coachId: string;
+  exerciseId: string;
+  exercise?: MentalExercise; // Denormalized
+  
+  // Source tracking
+  recommendationId?: string; // If created from a recommendation
+  source: AssignmentSource;
+  
+  // Curriculum tracking
+  durationDays: number; // Default 14
+  frequency: number; // Times per day (default 1-2)
+  startDate: number; // Unix timestamp
+  endDate: number; // Unix timestamp (startDate + durationDays)
+  
+  // Progress (updated from daily-completions subcollection)
+  completedDays: number;
+  targetDays: number; // = durationDays
+  completionRate: number; // 0-100
+  currentDayNumber: number; // 1-14
+  
+  // Status
+  status: CurriculumAssignmentStatus;
+  masteryAchieved: boolean;
+  extendedCount: number; // How many times extended
+  
+  // Coach note
+  coachNote?: string;
+  
+  // Reminder settings
+  reminderEnabled: boolean;
+  reminderTimes: string[]; // ['08:00', '20:00']
+  
+  // Pathway info
+  pathway: MentalPathway;
+  pathwayStep: number;
+  
+  createdAt: number;
+  updatedAt: number;
+}
+
+/**
+ * AthleteMentalProgress - Athlete's overall mental training progress
+ * Collection: athlete-mental-progress/{athleteId}
+ */
+export interface AthleteMentalProgress {
+  athleteId: string;
+  coachId?: string; // Primary coach
+  
+  // MPR Score (1-10)
+  mprScore: number;
+  mprLastCalculated: number; // Unix timestamp
+  
+  // Pathway progress
+  currentPathway: MentalPathway;
+  pathwayStep: number;
+  completedPathways: MentalPathway[];
+  foundationComplete: boolean;
+  
+  // Foundation tracking
+  foundationBoxBreathingComplete: boolean;
+  foundationCheckInsComplete: boolean;
+  
+  // Assessment
+  baselineAssessment?: BaselineAssessment;
+  assessmentNeeded: boolean;
+  
+  // Stats
+  totalExercisesMastered: number;
+  totalAssignmentsCompleted: number;
+  currentStreak: number;
+  longestStreak: number;
+  
+  // Active assignment tracking
+  activeAssignmentId?: string;
+  activeAssignmentExerciseName?: string;
+  
+  createdAt: number;
+  updatedAt: number;
+}
+
+/**
+ * Pathway definition with exercise sequence
+ */
+export interface PathwayDefinition {
+  pathway: MentalPathway;
+  name: string;
+  description: string;
+  exerciseSequence: {
+    step: number;
+    exerciseId: string;
+    exerciseName: string;
+    weeksRange: string; // e.g., "5-6", "7-8"
+    isFoundation: boolean;
+    isApplication: boolean;
+  }[];
+  graduationCriteria: string[];
+}
+
+// ============================================================================
 // FIRESTORE HELPERS
 // ============================================================================
 
@@ -523,5 +764,211 @@ export function checkInFromFirestore(id: string, data: Record<string, any>): Men
     exerciseCompleted: data.exerciseCompleted,
     createdAt: data.createdAt || Date.now(),
     date: data.date || new Date().toISOString().split('T')[0],
+  };
+}
+
+// ============================================================================
+// CURRICULUM FIRESTORE HELPERS
+// ============================================================================
+
+export function recommendationToFirestore(rec: MentalRecommendation): Record<string, any> {
+  const data: Record<string, any> = {
+    athleteId: rec.athleteId,
+    coachId: rec.coachId,
+    exerciseId: rec.exerciseId,
+    exercise: rec.exercise ? exerciseToFirestore(rec.exercise) : null,
+    reason: rec.reason,
+    confidence: rec.confidence,
+    pathway: rec.pathway,
+    pathwayStep: rec.pathwayStep,
+    triggerType: rec.triggerType,
+    status: rec.status,
+    createdAt: rec.createdAt,
+    updatedAt: rec.updatedAt,
+  };
+
+  // Only include optional fields if they have values (Firestore doesn't allow undefined)
+  if (rec.previousAssignmentId) {
+    data.previousAssignmentId = rec.previousAssignmentId;
+  }
+  if (rec.coachOverrideReason) {
+    data.coachOverrideReason = rec.coachOverrideReason;
+  }
+
+  return data;
+}
+
+export function recommendationFromFirestore(id: string, data: Record<string, any>): MentalRecommendation {
+  return {
+    id,
+    athleteId: data.athleteId || '',
+    coachId: data.coachId || '',
+    exerciseId: data.exerciseId || '',
+    exercise: data.exercise ? exerciseFromFirestore(data.exerciseId, data.exercise) : undefined,
+    reason: data.reason || '',
+    confidence: data.confidence || RecommendationConfidence.Medium,
+    pathway: data.pathway || MentalPathway.Foundation,
+    pathwayStep: data.pathwayStep || 1,
+    triggerType: data.triggerType || 'manual_request',
+    previousAssignmentId: data.previousAssignmentId,
+    status: data.status || RecommendationStatus.Pending,
+    coachOverrideReason: data.coachOverrideReason,
+    createdAt: data.createdAt || Date.now(),
+    updatedAt: data.updatedAt || Date.now(),
+  };
+}
+
+export function curriculumAssignmentToFirestore(assignment: CurriculumAssignment): Record<string, any> {
+  const data: Record<string, any> = {
+    athleteId: assignment.athleteId,
+    coachId: assignment.coachId,
+    exerciseId: assignment.exerciseId,
+    exercise: assignment.exercise ? exerciseToFirestore(assignment.exercise) : null,
+    recommendationId: assignment.recommendationId,
+    source: assignment.source,
+    durationDays: assignment.durationDays,
+    frequency: assignment.frequency,
+    startDate: assignment.startDate,
+    endDate: assignment.endDate,
+    completedDays: assignment.completedDays,
+    targetDays: assignment.targetDays,
+    completionRate: assignment.completionRate,
+    currentDayNumber: assignment.currentDayNumber,
+    status: assignment.status,
+    masteryAchieved: assignment.masteryAchieved,
+    extendedCount: assignment.extendedCount,
+    reminderEnabled: assignment.reminderEnabled,
+    reminderTimes: assignment.reminderTimes,
+    pathway: assignment.pathway,
+    pathwayStep: assignment.pathwayStep,
+    createdAt: assignment.createdAt,
+    updatedAt: assignment.updatedAt,
+  };
+
+  // Only include optional fields if they have values (Firestore doesn't allow undefined)
+  if (assignment.coachNote) {
+    data.coachNote = assignment.coachNote;
+  }
+  if (assignment.recommendationId) {
+    data.recommendationId = assignment.recommendationId;
+  }
+
+  return data;
+}
+
+export function curriculumAssignmentFromFirestore(id: string, data: Record<string, any>): CurriculumAssignment {
+  return {
+    id,
+    athleteId: data.athleteId || '',
+    coachId: data.coachId || '',
+    exerciseId: data.exerciseId || '',
+    exercise: data.exercise ? exerciseFromFirestore(data.exerciseId, data.exercise) : undefined,
+    recommendationId: data.recommendationId,
+    source: data.source || AssignmentSource.Coach,
+    durationDays: data.durationDays || 14,
+    frequency: data.frequency || 1,
+    startDate: data.startDate || Date.now(),
+    endDate: data.endDate || Date.now() + 14 * 24 * 60 * 60 * 1000,
+    completedDays: data.completedDays || 0,
+    targetDays: data.targetDays || 14,
+    completionRate: data.completionRate || 0,
+    currentDayNumber: data.currentDayNumber || 1,
+    status: data.status || CurriculumAssignmentStatus.Active,
+    masteryAchieved: data.masteryAchieved || false,
+    extendedCount: data.extendedCount || 0,
+    coachNote: data.coachNote,
+    reminderEnabled: data.reminderEnabled ?? true,
+    reminderTimes: data.reminderTimes || ['08:00', '20:00'],
+    pathway: data.pathway || MentalPathway.Foundation,
+    pathwayStep: data.pathwayStep || 1,
+    createdAt: data.createdAt || Date.now(),
+    updatedAt: data.updatedAt || Date.now(),
+  };
+}
+
+export function dailyCompletionToFirestore(completion: DailyCompletion): Record<string, any> {
+  return {
+    date: completion.date,
+    completed: completion.completed,
+    completionCount: completion.completionCount,
+    targetCount: completion.targetCount,
+    completions: completion.completions,
+    createdAt: completion.createdAt,
+    updatedAt: completion.updatedAt,
+  };
+}
+
+export function dailyCompletionFromFirestore(id: string, data: Record<string, any>): DailyCompletion {
+  return {
+    id,
+    date: data.date || id,
+    completed: data.completed || false,
+    completionCount: data.completionCount || 0,
+    targetCount: data.targetCount || 1,
+    completions: data.completions || [],
+    createdAt: data.createdAt || Date.now(),
+    updatedAt: data.updatedAt || Date.now(),
+  };
+}
+
+export function athleteProgressToFirestore(progress: AthleteMentalProgress): Record<string, any> {
+  const data: Record<string, any> = {
+    athleteId: progress.athleteId,
+    mprScore: progress.mprScore,
+    mprLastCalculated: progress.mprLastCalculated,
+    currentPathway: progress.currentPathway,
+    pathwayStep: progress.pathwayStep,
+    completedPathways: progress.completedPathways,
+    foundationComplete: progress.foundationComplete,
+    foundationBoxBreathingComplete: progress.foundationBoxBreathingComplete,
+    foundationCheckInsComplete: progress.foundationCheckInsComplete,
+    assessmentNeeded: progress.assessmentNeeded,
+    totalExercisesMastered: progress.totalExercisesMastered,
+    totalAssignmentsCompleted: progress.totalAssignmentsCompleted,
+    currentStreak: progress.currentStreak,
+    longestStreak: progress.longestStreak,
+    createdAt: progress.createdAt,
+    updatedAt: progress.updatedAt,
+  };
+
+  // Only include optional fields if they have values (Firestore doesn't allow undefined)
+  if (progress.coachId) {
+    data.coachId = progress.coachId;
+  }
+  if (progress.baselineAssessment) {
+    data.baselineAssessment = progress.baselineAssessment;
+  }
+  if (progress.activeAssignmentId) {
+    data.activeAssignmentId = progress.activeAssignmentId;
+  }
+  if (progress.activeAssignmentExerciseName) {
+    data.activeAssignmentExerciseName = progress.activeAssignmentExerciseName;
+  }
+
+  return data;
+}
+
+export function athleteProgressFromFirestore(athleteId: string, data: Record<string, any>): AthleteMentalProgress {
+  return {
+    athleteId,
+    coachId: data.coachId,
+    mprScore: data.mprScore || 1,
+    mprLastCalculated: data.mprLastCalculated || Date.now(),
+    currentPathway: data.currentPathway || MentalPathway.Foundation,
+    pathwayStep: data.pathwayStep || 0,
+    completedPathways: data.completedPathways || [],
+    foundationComplete: data.foundationComplete || false,
+    foundationBoxBreathingComplete: data.foundationBoxBreathingComplete || false,
+    foundationCheckInsComplete: data.foundationCheckInsComplete || false,
+    baselineAssessment: data.baselineAssessment,
+    assessmentNeeded: data.assessmentNeeded ?? true,
+    totalExercisesMastered: data.totalExercisesMastered || 0,
+    totalAssignmentsCompleted: data.totalAssignmentsCompleted || 0,
+    currentStreak: data.currentStreak || 0,
+    longestStreak: data.longestStreak || 0,
+    activeAssignmentId: data.activeAssignmentId,
+    activeAssignmentExerciseName: data.activeAssignmentExerciseName,
+    createdAt: data.createdAt || Date.now(),
+    updatedAt: data.updatedAt || Date.now(),
   };
 }
