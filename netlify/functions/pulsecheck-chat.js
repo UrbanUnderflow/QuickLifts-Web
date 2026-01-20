@@ -6,7 +6,7 @@
 // - Includes escalation classification for safety monitoring
 // - Saves/updates conversation document in Firestore (conversations)
 
-const { initializeFirebaseAdmin, db, headers } = require('./config/firebase');
+const { initializeFirebaseAdmin, admin, headers } = require('./config/firebase');
 
 // Escalation Tier enum values
 const EscalationTier = {
@@ -22,13 +22,36 @@ exports.handler = async (event, context) => {
   }
 
   try {
-    initializeFirebaseAdmin({ headers: event.headers || {} });
+    // Initialize Firebase Admin
+    let db;
+    try {
+      initializeFirebaseAdmin({ headers: event.headers || {} });
+      // Get fresh db reference after initialization
+      db = admin.firestore();
+    } catch (firebaseInitError) {
+      console.error('[pulsecheck-chat] Firebase initialization error:', firebaseInitError);
+      return { 
+        statusCode: 500, 
+        headers, 
+        body: JSON.stringify({ error: 'Firebase initialization failed', detail: firebaseInitError.message }) 
+      };
+    }
 
     if (event.httpMethod !== 'POST') {
       return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method not allowed' }) };
     }
 
-    const body = JSON.parse(event.body || '{}');
+    let body;
+    try {
+      body = JSON.parse(event.body || '{}');
+    } catch (parseError) {
+      console.error('[pulsecheck-chat] JSON parse error:', parseError);
+      return { 
+        statusCode: 400, 
+        headers, 
+        body: JSON.stringify({ error: 'Invalid JSON in request body' }) 
+      };
+    }
     const { 
       userId, 
       message, 
@@ -53,11 +76,19 @@ exports.handler = async (event, context) => {
       goals = Array.isArray(userContext.goals) ? userContext.goals : [];
     } else {
       // Load from Firestore
-      const userSnap = await db.collection('users').doc(userId).get();
-      const userData = userSnap.exists ? userSnap.data() : {};
-      displayName = userData.displayName || userData.username || 'Athlete';
-      sport = userData.primarySport || '';
-      goals = Array.isArray(userData.goals) ? userData.goals : [];
+      try {
+        const userSnap = await db.collection('users').doc(userId).get();
+        const userData = userSnap.exists ? userSnap.data() : {};
+        displayName = userData.displayName || userData.username || 'Athlete';
+        sport = userData.primarySport || '';
+        goals = Array.isArray(userData.goals) ? userData.goals : [];
+      } catch (userLoadError) {
+        console.error('[pulsecheck-chat] Error loading user data:', userLoadError);
+        // Use defaults if user load fails
+        displayName = 'Athlete';
+        sport = '';
+        goals = [];
+      }
     }
 
     // Load existing conversation (if provided)
@@ -72,15 +103,22 @@ exports.handler = async (event, context) => {
 
     if (!convo) {
       // Get most recent conversation for this user
-      const snap = await db
-        .collection('conversations')
-        .where('userId', '==', userId)
-        .orderBy('updatedAt', 'desc')
-        .limit(1)
-        .get();
-      if (!snap.empty) {
-        convoRef = snap.docs[0].ref;
-        convo = snap.docs[0].data();
+      try {
+        const snap = await db
+          .collection('conversations')
+          .where('userId', '==', userId)
+          .orderBy('updatedAt', 'desc')
+          .limit(1)
+          .get();
+        if (!snap.empty) {
+          convoRef = snap.docs[0].ref;
+          convo = snap.docs[0].data();
+        }
+      } catch (convoQueryError) {
+        console.error('[pulsecheck-chat] Error querying conversations:', convoQueryError);
+        // Continue without existing conversation - will create new one
+        convoRef = null;
+        convo = null;
       }
     }
 
@@ -170,30 +208,36 @@ exports.handler = async (event, context) => {
     };
 
     let newConvoId = conversationId || convo?.id;
-    if (!convoRef) {
-      const data = {
-        userId,
-        title: 'Nora',
-        messages: [userMsg, aiMsg],
-        tags: [],
-        actionCardInteractions: [],
-        sessionDuration: 0,
-        createdAt: nowSec,
-        updatedAt: nowSec
-      };
-      const docRef = await db.collection('conversations').add(data);
-      newConvoId = docRef.id;
-      await docRef.set({ id: newConvoId }, { merge: true });
-    } else {
-      const updated = Array.isArray(convo?.messages) ? [...convo.messages, userMsg, aiMsg] : [userMsg, aiMsg];
-      await convoRef.set({
-        id: convoRef.id,
-        userId,
-        title: convo?.title || 'Nora',
-        messages: updated,
-        updatedAt: nowSec
-      }, { merge: true });
-      newConvoId = convoRef.id;
+    try {
+      if (!convoRef) {
+        const data = {
+          userId,
+          title: 'Nora',
+          messages: [userMsg, aiMsg],
+          tags: [],
+          actionCardInteractions: [],
+          sessionDuration: 0,
+          createdAt: nowSec,
+          updatedAt: nowSec
+        };
+        const docRef = await db.collection('conversations').add(data);
+        newConvoId = docRef.id;
+        await docRef.set({ id: newConvoId }, { merge: true });
+      } else {
+        const updated = Array.isArray(convo?.messages) ? [...convo.messages, userMsg, aiMsg] : [userMsg, aiMsg];
+        await convoRef.set({
+          id: convoRef.id,
+          userId,
+          title: convo?.title || 'Nora',
+          messages: updated,
+          updatedAt: nowSec
+        }, { merge: true });
+        newConvoId = convoRef.id;
+      }
+    } catch (saveError) {
+      console.error('[pulsecheck-chat] Error saving conversation:', saveError);
+      // Continue - we still have the response to return, just conversation wasn't saved
+      // This is not critical enough to fail the entire request
     }
 
     // === ESCALATION CLASSIFICATION ===
@@ -202,29 +246,51 @@ exports.handler = async (event, context) => {
     
     if (!skipEscalation) {
       try {
+        console.log('[pulsecheck-chat] Starting escalation classification...');
         escalation = await classifyEscalation(
+          db,
           userId,
           message,
           recentMessages,
           newConvoId
         );
         
-        console.log('[pulsecheck-chat] Escalation check:', {
+        console.log('[pulsecheck-chat] Escalation check result:', {
           userId: userId.slice(0, 8) + '...',
           tier: escalation?.tier,
-          shouldEscalate: escalation?.shouldEscalate
+          shouldEscalate: escalation?.shouldEscalate,
+          category: escalation?.category,
+          confidence: escalation?.confidence,
+          hasEscalation: !!escalation
         });
 
-        // If critical (Tier 3), we need to notify immediately
-        if (escalation && escalation.tier === EscalationTier.CriticalRisk) {
-          // Trigger escalation record creation asynchronously
-          createEscalationRecord(userId, newConvoId, aiMsg.id, message, escalation)
-            .catch(err => console.error('[pulsecheck-chat] Escalation record error:', err));
+        // Create escalation records for Tier 2 (Elevated) and Tier 3 (Critical)
+        if (escalation && escalation.shouldEscalate) {
+          const tier = escalation.tier;
+          if (tier === EscalationTier.ElevatedRisk || tier === EscalationTier.CriticalRisk) {
+            console.log(`[pulsecheck-chat] Creating escalation record for Tier ${tier}`);
+            // Trigger escalation record creation asynchronously
+            createEscalationRecord(db, userId, newConvoId, aiMsg.id, message, escalation)
+              .then(recordId => {
+                console.log('[pulsecheck-chat] Escalation record created successfully:', recordId);
+              })
+              .catch(err => {
+                console.error('[pulsecheck-chat] Escalation record creation error:', err);
+                console.error('[pulsecheck-chat] Error stack:', err.stack);
+              });
+          } else {
+            console.log(`[pulsecheck-chat] Escalation tier ${tier} does not require record creation (Tier 2/3 only)`);
+          }
+        } else {
+          console.log('[pulsecheck-chat] No escalation needed or shouldEscalate is false');
         }
       } catch (escErr) {
         console.error('[pulsecheck-chat] Escalation classification error:', escErr);
+        console.error('[pulsecheck-chat] Escalation error stack:', escErr.stack);
         // Don't fail the chat if classification fails
       }
+    } else {
+      console.log('[pulsecheck-chat] Escalation skipped (skipEscalation=true)');
     }
 
     return {
@@ -244,7 +310,22 @@ exports.handler = async (event, context) => {
     };
   } catch (error) {
     console.error('[pulsecheck-chat] error', error);
-    return { statusCode: 500, headers, body: JSON.stringify({ error: 'Server error' }) };
+    console.error('[pulsecheck-chat] error stack', error.stack);
+    console.error('[pulsecheck-chat] error message', error.message);
+    
+    // Return more detailed error for debugging (but don't expose sensitive info)
+    const errorMessage = error.message || 'Unknown error';
+    const isDevelopment = process.env.NETLIFY_DEV === 'true' || process.env.NODE_ENV === 'development';
+    
+    return { 
+      statusCode: 500, 
+      headers, 
+      body: JSON.stringify({ 
+        error: 'Server error',
+        detail: isDevelopment ? errorMessage : undefined,
+        type: error.name || 'Error'
+      }) 
+    };
   }
 };
 
@@ -256,22 +337,40 @@ function cryptoRandomId() {
 /**
  * Classify message for escalation
  */
-async function classifyEscalation(userId, message, recentMessages, conversationId) {
+async function classifyEscalation(db, userId, message, recentMessages, conversationId) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return null;
 
   // Load escalation conditions from Firestore
-  const conditionsSnap = await db
-    .collection('escalation-conditions')
-    .where('isActive', '==', true)
-    .orderBy('tier', 'asc')
-    .orderBy('priority', 'desc')
-    .get();
+  let conditionsSnap;
+  try {
+    console.log('[pulsecheck-chat] Loading escalation conditions from Firestore...');
+    conditionsSnap = await db
+      .collection('escalation-conditions')
+      .where('isActive', '==', true)
+      .orderBy('tier', 'asc')
+      .orderBy('priority', 'desc')
+      .get();
+    console.log(`[pulsecheck-chat] Loaded ${conditionsSnap.docs.length} active escalation conditions`);
+  } catch (queryError) {
+    console.error('[pulsecheck-chat] Error loading escalation conditions:', queryError);
+    console.error('[pulsecheck-chat] Query error details:', {
+      message: queryError.message,
+      code: queryError.code,
+      stack: queryError.stack
+    });
+    // If query fails (e.g., missing index), continue without conditions
+    return null;
+  }
 
   const conditions = conditionsSnap.docs.map(doc => ({
     id: doc.id,
     ...doc.data()
   }));
+  
+  if (conditions.length === 0) {
+    console.warn('[pulsecheck-chat] No active escalation conditions found - classification may be less accurate');
+  }
 
   // Build training context
   const trainingContext = buildEscalationTrainingContext(conditions);
@@ -318,18 +417,35 @@ CRITICAL: Err on side of caution. Tier 3 has ZERO threshold for safety concerns.
     });
 
     if (!res.ok) {
-      console.error('[pulsecheck-chat] Classification API error');
+      const errorText = await res.text();
+      console.error('[pulsecheck-chat] Classification API error:', {
+        status: res.status,
+        statusText: res.statusText,
+        error: errorText
+      });
       return null;
     }
 
     const data = await res.json();
     const content = data.choices?.[0]?.message?.content;
     
-    if (!content) return null;
+    if (!content) {
+      console.warn('[pulsecheck-chat] Classification API returned no content');
+      return null;
+    }
     
-    return JSON.parse(content);
+    try {
+      const parsed = JSON.parse(content);
+      console.log('[pulsecheck-chat] Classification result:', parsed);
+      return parsed;
+    } catch (parseErr) {
+      console.error('[pulsecheck-chat] Failed to parse classification JSON:', parseErr);
+      console.error('[pulsecheck-chat] Raw content:', content);
+      return null;
+    }
   } catch (err) {
-    console.error('[pulsecheck-chat] Classification parse error:', err);
+    console.error('[pulsecheck-chat] Classification error:', err);
+    console.error('[pulsecheck-chat] Classification error stack:', err.stack);
     return null;
   }
 }
@@ -355,39 +471,62 @@ function buildEscalationTrainingContext(conditions) {
 /**
  * Create escalation record for Tier 2/3
  */
-async function createEscalationRecord(userId, conversationId, messageId, triggerContent, classification) {
-  const nowSec = Math.floor(Date.now() / 1000);
-  
-  const data = {
-    userId,
-    conversationId,
-    tier: classification.tier,
-    category: classification.category || 'general',
-    triggerMessageId: messageId,
-    triggerContent: triggerContent,
-    classificationReason: classification.reason || '',
-    classificationConfidence: classification.confidence || 0,
-    consentStatus: classification.tier === EscalationTier.CriticalRisk ? 'not-required' : 'pending',
-    handoffStatus: 'pending',
-    coachNotified: false,
-    createdAt: nowSec,
-    status: 'active'
-  };
+async function createEscalationRecord(db, userId, conversationId, messageId, triggerContent, classification) {
+  try {
+    console.log('[pulsecheck-chat] createEscalationRecord called with:', {
+      userId: userId.slice(0, 8) + '...',
+      conversationId,
+      tier: classification.tier,
+      category: classification.category
+    });
+    
+    const nowSec = Math.floor(Date.now() / 1000);
+    
+    const data = {
+      userId,
+      conversationId,
+      tier: classification.tier,
+      category: classification.category || 'general',
+      triggerMessageId: messageId,
+      triggerContent: triggerContent,
+      classificationReason: classification.reason || '',
+      classificationConfidence: classification.confidence || 0,
+      consentStatus: classification.tier === EscalationTier.CriticalRisk ? 'not-required' : 'pending',
+      handoffStatus: 'pending',
+      coachNotified: false,
+      createdAt: nowSec,
+      status: 'active'
+    };
 
-  const docRef = await db.collection('escalation-records').add(data);
-  await docRef.update({ id: docRef.id });
+    console.log('[pulsecheck-chat] Creating escalation record in Firestore...');
+    const docRef = await db.collection('escalation-records').add(data);
+    console.log('[pulsecheck-chat] Escalation record document created with ID:', docRef.id);
+    
+    await docRef.update({ id: docRef.id });
+    console.log('[pulsecheck-chat] Updated escalation record with ID field');
 
-  // Update conversation state
-  await db.collection('conversations').doc(conversationId).set({
-    escalationTier: classification.tier,
-    escalationStatus: 'active',
-    escalationRecordId: docRef.id,
-    isInSafetyMode: classification.tier === EscalationTier.CriticalRisk,
-    lastEscalationAt: nowSec
-  }, { merge: true });
+    // Update conversation state
+    console.log('[pulsecheck-chat] Updating conversation with escalation state...');
+    await db.collection('conversations').doc(conversationId).set({
+      escalationTier: classification.tier,
+      escalationStatus: 'active',
+      escalationRecordId: docRef.id,
+      isInSafetyMode: classification.tier === EscalationTier.CriticalRisk,
+      lastEscalationAt: nowSec
+    }, { merge: true });
+    console.log('[pulsecheck-chat] Conversation updated successfully');
 
-  console.log('[pulsecheck-chat] Escalation record created:', docRef.id);
-  return docRef.id;
+    console.log('[pulsecheck-chat] Escalation record created successfully:', docRef.id);
+    return docRef.id;
+  } catch (error) {
+    console.error('[pulsecheck-chat] Error in createEscalationRecord:', error);
+    console.error('[pulsecheck-chat] Error details:', {
+      message: error.message,
+      code: error.code,
+      stack: error.stack
+    });
+    throw error; // Re-throw so caller can handle it
+  }
 }
 
 
