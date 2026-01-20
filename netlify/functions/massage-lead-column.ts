@@ -20,7 +20,8 @@ interface RequestBody {
   batchSize?: number;
 }
 
-const BATCH_SIZE = 20; // Process 20 leads at a time to avoid timeouts
+const BATCH_SIZE = 50; // Process 50 leads at a time (increased for efficiency)
+const MAX_EXECUTION_TIME_MS = 20000; // 20 seconds - leave buffer before Netlify timeout
 
 const handler: Handler = async (event) => {
   const headers = {
@@ -134,13 +135,56 @@ const handler: Handler = async (event) => {
 
     console.log(`[massage-lead-column] Processing ${leads.length} leads for list ${listId}`);
 
+    const startTime = Date.now();
     let processedCount = 0;
     let errorCount = 0;
     const errors: { leadId: string; error: string }[] = [];
 
-    // Process in batches
-    for (let i = 0; i < leads.length; i += batchSize) {
-      const batch = leads.slice(i, i + batchSize);
+    // Filter out leads that already have the new column (for resuming partial transformations)
+    const leadsToProcess = leads.filter(lead => {
+      const existingValue = lead.data[newColumnName];
+      return existingValue === undefined || existingValue === null || existingValue === '';
+    });
+
+    console.log(`[massage-lead-column] ${leadsToProcess.length} leads need processing (${leads.length - leadsToProcess.length} already processed)`);
+
+    // Process in batches with timeout protection
+    for (let i = 0; i < leadsToProcess.length; i += batchSize) {
+      // Check if we're approaching timeout
+      const elapsedTime = Date.now() - startTime;
+      if (elapsedTime > MAX_EXECUTION_TIME_MS) {
+        console.log(`[massage-lead-column] Approaching timeout, stopping at ${processedCount}/${leadsToProcess.length} leads`);
+        
+        // Update the list's columns array to include the new column (even if partial)
+        const updatedColumns = [...currentColumns];
+        if (!updatedColumns.includes(newColumnName)) {
+          updatedColumns.push(newColumnName);
+          await db.collection('lead-lists').doc(listId).update({
+            columns: updatedColumns,
+            updatedAt: new Date(),
+          });
+        }
+
+        const alreadyProcessed = leads.length - leadsToProcess.length;
+        const totalProcessed = alreadyProcessed + processedCount;
+
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({
+            success: true,
+            partial: true,
+            processedCount: totalProcessed,
+            errorCount,
+            totalLeads: leads.length,
+            remainingLeads: leadsToProcess.length - processedCount,
+            newColumnName,
+            message: `Processed ${totalProcessed} of ${leads.length} leads. Run the transformation again to continue processing the remaining ${leadsToProcess.length - processedCount} leads.`,
+            errors: errors.slice(0, 10),
+          }),
+        };
+      }
+      const batch = leadsToProcess.slice(i, i + batchSize);
       
       // Process each lead in the batch in parallel
       const results = await Promise.allSettled(
@@ -222,7 +266,7 @@ OUTPUT:`,
       for (const result of results) {
         if (result.status === 'fulfilled') {
           const { ref, transformedValue } = result.value;
-          const currentData = leads.find(l => l.ref === ref)?.data || {};
+          const currentData = leadsToProcess.find(l => l.ref === ref)?.data || {};
           firestoreBatch.update(ref, {
             data: {
               ...currentData,
@@ -244,7 +288,44 @@ OUTPUT:`,
         await firestoreBatch.commit();
       }
 
-      console.log(`[massage-lead-column] Processed batch ${Math.floor(i / batchSize) + 1}, total: ${processedCount}/${leads.length}`);
+      const batchNumber = Math.floor(i / batchSize) + 1;
+      const totalBatches = Math.ceil(leadsToProcess.length / batchSize);
+      console.log(`[massage-lead-column] Processed batch ${batchNumber}/${totalBatches}, total: ${processedCount}/${leadsToProcess.length}`);
+      
+      // Check timeout after each batch
+      const elapsedTime = Date.now() - startTime;
+      if (elapsedTime > MAX_EXECUTION_TIME_MS) {
+        console.log(`[massage-lead-column] Timeout approaching, stopping at batch ${batchNumber}`);
+        
+        // Update the list's columns array to include the new column (even if partial)
+        const updatedColumns = [...currentColumns];
+        if (!updatedColumns.includes(newColumnName)) {
+          updatedColumns.push(newColumnName);
+          await db.collection('lead-lists').doc(listId).update({
+            columns: updatedColumns,
+            updatedAt: new Date(),
+          });
+        }
+
+        const alreadyProcessed = leads.length - leadsToProcess.length;
+        const totalProcessed = alreadyProcessed + processedCount;
+
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({
+            success: true,
+            partial: true,
+            processedCount: totalProcessed,
+            errorCount,
+            totalLeads: leads.length,
+            remainingLeads: leadsToProcess.length - processedCount,
+            newColumnName,
+            message: `Processed ${totalProcessed} of ${leads.length} leads before timeout. Run the transformation again to continue processing the remaining ${leadsToProcess.length - processedCount} leads.`,
+            errors: errors.slice(0, 10),
+          }),
+        };
+      }
     }
 
     // Update the list's columns array to include the new column
