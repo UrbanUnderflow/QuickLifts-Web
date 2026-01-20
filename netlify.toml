@@ -181,6 +181,10 @@
 [functions.triggerCalorieAnalysis]
   is_background = true
 
+# Lead massaging function - increased timeout for large datasets
+[functions.massage-lead-column]
+  timeout = 26
+
 # Coach Partnership Functions
 [functions.create-coach-checkout-session]
   external_node_modules = ["stripe"]
