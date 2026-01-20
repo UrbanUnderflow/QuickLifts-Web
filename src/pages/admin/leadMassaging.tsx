@@ -603,7 +603,21 @@ OUTPUT:`;
         throw new Error(result.error || 'Failed to transform column');
       }
 
-      setMessage({ type: 'success', text: `Successfully transformed ${result.processedCount} rows into "${newColumnName}"` });
+      // Show detailed toast message
+      let toastMessage = '';
+      if (result.partial) {
+        toastMessage = `Partially completed: ${result.processedCount} of ${result.totalLeads} leads transformed. ${result.remainingLeads} remaining. ${result.message || 'Run again to continue.'}`;
+      } else {
+        toastMessage = `✅ Successfully transformed ${result.processedCount} of ${result.totalLeads} leads into "${newColumnName}"${result.errorCount > 0 ? ` (${result.errorCount} errors)` : ''}`;
+      }
+
+      setMessage({ type: 'success', text: toastMessage });
+      
+      // Auto-dismiss toast after 5 seconds
+      setTimeout(() => {
+        setMessage(null);
+      }, 5000);
+
       setIsTransformModalOpen(false);
       setSourceColumns([]);
       setNewColumnName('');
@@ -715,20 +729,26 @@ OUTPUT:`;
             </div>
           </div>
 
-          {/* Message Banner */}
+          {/* Toast Notification */}
           {message && (
-            <div className={`mb-6 p-4 rounded-xl border ${
+            <div className={`fixed top-4 right-4 z-50 p-4 rounded-xl border shadow-lg max-w-md animate-in slide-in-from-top-5 ${
               message.type === 'success' 
-                ? 'bg-green-900/20 border-green-800 text-green-400'
+                ? 'bg-green-900/95 border-green-700 text-green-100'
                 : message.type === 'error'
-                ? 'bg-red-900/20 border-red-800 text-red-400'
-                : 'bg-blue-900/20 border-blue-800 text-blue-400'
+                ? 'bg-red-900/95 border-red-700 text-red-100'
+                : 'bg-blue-900/95 border-blue-700 text-blue-100'
             }`}>
-              <div className="flex items-center gap-2">
-                {message.type === 'success' ? <CheckCircle className="w-5 h-5" /> : 
-                 message.type === 'error' ? <AlertCircle className="w-5 h-5" /> : 
-                 <AlertCircle className="w-5 h-5" />}
-                {message.text}
+              <div className="flex items-start gap-3">
+                {message.type === 'success' ? <CheckCircle className="w-5 h-5 flex-shrink-0 mt-0.5" /> : 
+                 message.type === 'error' ? <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" /> : 
+                 <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />}
+                <p className="text-sm flex-1">{message.text}</p>
+                <button
+                  onClick={() => setMessage(null)}
+                  className="text-zinc-400 hover:text-white transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
               </div>
             </div>
           )}
