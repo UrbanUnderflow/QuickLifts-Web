@@ -140,7 +140,15 @@ export async function getFirebaseAdmin(): Promise<admin.app.App> {
 
   if (projectId && clientEmail && privateKey) {
     // Handle various formats of the private key
-    let formattedPrivateKey = privateKey;
+    let formattedPrivateKey = privateKey.trim();
+    
+    // Remove surrounding quotes if present
+    if (formattedPrivateKey.startsWith('"') && formattedPrivateKey.endsWith('"')) {
+      formattedPrivateKey = formattedPrivateKey.slice(1, -1);
+    }
+    if (formattedPrivateKey.startsWith("'") && formattedPrivateKey.endsWith("'")) {
+      formattedPrivateKey = formattedPrivateKey.slice(1, -1);
+    }
     
     // If the key contains literal \n strings, replace them with actual newlines
     if (formattedPrivateKey.includes('\\n')) {
@@ -152,11 +160,15 @@ export async function getFirebaseAdmin(): Promise<admin.app.App> {
       formattedPrivateKey = formattedPrivateKey.replace(/\\\\n/g, '\n');
     }
     
-    // If the key is missing proper PEM headers/footers, it might be base64 encoded
-    // Ensure proper PEM format
+    // If the key is missing proper PEM headers/footers, try to add them
     if (!formattedPrivateKey.includes('-----BEGIN')) {
-      console.error('[getFirebaseAdmin] Private key missing PEM headers');
-      throw new Error('Invalid private key format - missing PEM headers');
+      // If it's just the key material without markers, add them
+      if (!formattedPrivateKey.includes('-----BEGIN') && !formattedPrivateKey.includes('-----END')) {
+        formattedPrivateKey = `-----BEGIN PRIVATE KEY-----\n${formattedPrivateKey}\n-----END PRIVATE KEY-----`;
+      } else {
+        console.error('[getFirebaseAdmin] Private key missing PEM headers');
+        throw new Error('Invalid private key format - missing PEM headers');
+      }
     }
     
     try {

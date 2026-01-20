@@ -42,12 +42,13 @@ const handler: Handler = async (event) => {
     return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method not allowed' }) };
   }
 
-  const instantlyApiKey = process.env.INSTANTLY_API_KEY;
+  // Check both INSTANTLY_KEY and INSTANTLY_API_KEY for backwards compatibility
+  const instantlyApiKey = process.env.INSTANTLY_KEY || process.env.INSTANTLY_API_KEY;
   if (!instantlyApiKey) {
     return {
       statusCode: 500,
       headers,
-      body: JSON.stringify({ error: 'INSTANTLY_API_KEY not configured in environment variables' }),
+      body: JSON.stringify({ error: 'INSTANTLY_KEY or INSTANTLY_API_KEY not configured in environment variables' }),
     };
   }
 

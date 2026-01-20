@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Head from 'next/head';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import { collection, getDocs, query, orderBy, addDoc, deleteDoc, doc, Timestamp, updateDoc, writeBatch, where, limit, startAfter, getDoc } from 'firebase/firestore';
@@ -43,6 +43,67 @@ const formatDate = (date: Timestamp | Date | undefined): string => {
     day: 'numeric', 
     hour: '2-digit', 
     minute: '2-digit' 
+  });
+};
+
+// Parse Excel file (XLSX, XLS)
+const parseExcel = async (file: File): Promise<{ headers: string[]; rows: Record<string, string>[] }> => {
+  // Dynamically import xlsx library
+  const XLSX = await import('xlsx');
+  
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array' });
+        
+        // Get first sheet
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        
+        // Convert to JSON with header row
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' }) as any[][];
+        
+        if (jsonData.length === 0) {
+          reject(new Error('Excel file is empty'));
+          return;
+        }
+        
+        // First row is headers
+        const headers = jsonData[0].map((h: any) => String(h || '').trim()).filter((h: string) => h);
+        
+        if (headers.length === 0) {
+          reject(new Error('No headers found in Excel file'));
+          return;
+        }
+        
+        // Convert rows to objects
+        const rows: Record<string, string>[] = [];
+        for (let i = 1; i < jsonData.length; i++) {
+          const row = jsonData[i];
+          const rowObj: Record<string, string> = {};
+          headers.forEach((header, index) => {
+            rowObj[header] = String(row[index] || '').trim();
+          });
+          // Only add row if it has at least one non-empty value
+          if (Object.values(rowObj).some(v => v)) {
+            rows.push(rowObj);
+          }
+        }
+        
+        resolve({ headers, rows });
+      } catch (error) {
+        reject(error);
+      }
+    };
+    
+    reader.onerror = () => {
+      reject(new Error('Failed to read Excel file'));
+    };
+    
+    reader.readAsArrayBuffer(file);
   });
 };
 
@@ -108,6 +169,8 @@ const LeadMassagingAdmin: React.FC = () => {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [newListName, setNewListName] = useState('');
   const [csvInput, setCsvInput] = useState('');
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [importProgress, setImportProgress] = useState<{ current: number; total: number } | null>(null);
 
@@ -119,11 +182,12 @@ const LeadMassagingAdmin: React.FC = () => {
 
   // Transform Modal State
   const [isTransformModalOpen, setIsTransformModalOpen] = useState(false);
-  const [sourceColumn, setSourceColumn] = useState('');
+  const [sourceColumns, setSourceColumns] = useState<string[]>([]);
   const [transformPrompt, setTransformPrompt] = useState('');
   const [newColumnName, setNewColumnName] = useState('');
   const [isTransforming, setIsTransforming] = useState(false);
   const [transformProgress, setTransformProgress] = useState<{ current: number; total: number } | null>(null);
+  const [tokenEstimate, setTokenEstimate] = useState<{ inputTokens: number; outputTokens: number; estimatedCost: number } | null>(null);
 
   // Push to Instantly Modal State
   const [isPushModalOpen, setIsPushModalOpen] = useState(false);
@@ -141,6 +205,119 @@ const LeadMassagingAdmin: React.FC = () => {
 
   // Get selected list
   const selectedList = leadLists.find(l => l.id === selectedListId);
+
+  // Estimate token usage for transformation
+  const estimateTokenUsage = useCallback(async () => {
+    const currentSelectedList = leadLists.find(l => l.id === selectedListId);
+    
+    if (!selectedListId || sourceColumns.length === 0 || !transformPrompt.trim() || !currentSelectedList) {
+      setTokenEstimate(null);
+      return;
+    }
+
+    try {
+      // Sample a few leads to estimate average data length
+      const sampleQuery = query(
+        collection(db, 'lead-list-items'),
+        where('listId', '==', selectedListId),
+        limit(10)
+      );
+      const sampleSnapshot = await getDocs(sampleQuery);
+      const sampleLeads = sampleSnapshot.docs.map(doc => doc.data().data as Record<string, string>);
+
+      // Calculate average data length per lead for selected columns
+      let totalDataLength = 0;
+      let sampleCount = 0;
+      
+      sampleLeads.forEach(lead => {
+        const columnData = sourceColumns.map(col => {
+          const value = lead[col] || '';
+          return sourceColumns.length === 1 
+            ? value 
+            : `${col}: "${value}"`;
+        }).join('\n');
+        totalDataLength += columnData.length;
+        sampleCount++;
+      });
+
+      const avgDataLength = sampleCount > 0 ? totalDataLength / sampleCount : 100; // Default estimate
+      const totalLeads = currentSelectedList.rowCount || 0;
+
+      // System prompt (approximate)
+      const systemPrompt = `You are a data transformation assistant. Your job is to transform text data based on user instructions. 
+                  
+CRITICAL RULES:
+- Output ONLY the transformed text, nothing else
+- Do not include quotes, labels, or explanations
+- Keep responses concise and direct
+- If the input is empty or unclear, output an empty string
+- You have access to multiple data columns - use all of them as needed based on the instructions`;
+
+      // User prompt template
+      const userPromptTemplate = sourceColumns.length === 1
+        ? `Transform this text according to the instructions:
+
+INPUT TEXT: "${'X'.repeat(Math.ceil(avgDataLength))}"
+
+INSTRUCTIONS: ${transformPrompt}
+
+OUTPUT:`
+        : `Transform the following data according to the instructions:
+
+INPUT DATA:
+${'X'.repeat(Math.ceil(avgDataLength))}
+
+INSTRUCTIONS: ${transformPrompt}
+
+OUTPUT:`;
+
+      // Rough token estimation: ~4 characters per token for English text
+      const charsPerToken = 4;
+      const systemTokens = Math.ceil(systemPrompt.length / charsPerToken);
+      const userPromptBaseTokens = Math.ceil((userPromptTemplate.length - avgDataLength) / charsPerToken);
+      const avgDataTokens = Math.ceil(avgDataLength / charsPerToken);
+      const userPromptTokensPerLead = userPromptBaseTokens + avgDataTokens;
+
+      // Total input tokens (system + user prompts for all leads)
+      const inputTokensPerLead = systemTokens + userPromptTokensPerLead;
+      const totalInputTokens = inputTokensPerLead * totalLeads;
+
+      // Output tokens (max_tokens is 150, but average will be less)
+      const estimatedOutputTokensPerLead = 50; // Conservative estimate
+      const totalOutputTokens = estimatedOutputTokensPerLead * totalLeads;
+
+      // Cost estimation for gpt-4o-mini (as of 2024)
+      // Input: $0.15 per 1M tokens
+      // Output: $0.60 per 1M tokens
+      const inputCostPerMillion = 0.15;
+      const outputCostPerMillion = 0.60;
+      const estimatedCost = 
+        (totalInputTokens / 1_000_000) * inputCostPerMillion +
+        (totalOutputTokens / 1_000_000) * outputCostPerMillion;
+
+      setTokenEstimate({
+        inputTokens: totalInputTokens,
+        outputTokens: totalOutputTokens,
+        estimatedCost
+      });
+    } catch (error) {
+      console.error('Error estimating tokens:', error);
+      setTokenEstimate(null);
+    }
+  }, [selectedListId, sourceColumns, transformPrompt, leadLists]);
+
+  // Update token estimate when relevant fields change
+  useEffect(() => {
+    if (isTransformModalOpen && selectedListId) {
+      const timeoutId = setTimeout(() => {
+        estimateTokenUsage();
+      }, 500); // Debounce
+
+      return () => clearTimeout(timeoutId);
+    } else {
+      setTokenEstimate(null);
+    }
+  }, [isTransformModalOpen, selectedListId, sourceColumns, transformPrompt, estimateTokenUsage]);
 
   // Load lead lists
   const loadLeadLists = useCallback(async () => {
@@ -229,14 +406,40 @@ const LeadMassagingAdmin: React.FC = () => {
     }
   }, [message]);
 
-  // Import CSV data
+  // Handle file drop
+  const handleFileDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    
+    const file = e.dataTransfer.files[0];
+    if (file) {
+      handleFileSelect(file);
+    }
+  };
+
+  // Handle file select
+  const handleFileSelect = async (file: File) => {
+    const validExtensions = ['.xlsx', '.xls', '.csv'];
+    const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase();
+    
+    if (!validExtensions.includes(fileExtension)) {
+      setMessage({ type: 'error', text: 'Please upload a valid Excel (.xlsx, .xls) or CSV file' });
+      return;
+    }
+    
+    setUploadedFile(file);
+    setCsvInput(''); // Clear CSV input when file is selected
+  };
+
+  // Import data (CSV or Excel)
   const handleImportCSV = async () => {
     if (!newListName.trim()) {
       setMessage({ type: 'error', text: 'Please enter a list name' });
       return;
     }
-    if (!csvInput.trim()) {
-      setMessage({ type: 'error', text: 'Please paste CSV data' });
+    
+    if (!uploadedFile && !csvInput.trim()) {
+      setMessage({ type: 'error', text: 'Please upload an Excel file or paste CSV data' });
       return;
     }
 
@@ -244,7 +447,30 @@ const LeadMassagingAdmin: React.FC = () => {
     setImportProgress(null);
 
     try {
-      const { headers, rows } = parseCSV(csvInput);
+      let headers: string[];
+      let rows: Record<string, string>[];
+      
+      if (uploadedFile) {
+        // Parse Excel file
+        const fileExtension = '.' + uploadedFile.name.split('.').pop()?.toLowerCase();
+        if (fileExtension === '.csv') {
+          // Read CSV file as text
+          const text = await uploadedFile.text();
+          const parsed = parseCSV(text);
+          headers = parsed.headers;
+          rows = parsed.rows;
+        } else {
+          // Parse Excel file
+          const parsed = await parseExcel(uploadedFile);
+          headers = parsed.headers;
+          rows = parsed.rows;
+        }
+      } else {
+        // Parse CSV from text input
+        const parsed = parseCSV(csvInput);
+        headers = parsed.headers;
+        rows = parsed.rows;
+      }
       
       if (headers.length === 0) {
         throw new Error('No headers found in CSV');
@@ -288,6 +514,7 @@ const LeadMassagingAdmin: React.FC = () => {
       setIsCreateModalOpen(false);
       setNewListName('');
       setCsvInput('');
+      setUploadedFile(null);
       loadLeadLists();
       setSelectedListId(listRef.id);
     } catch (error) {
@@ -344,8 +571,8 @@ const LeadMassagingAdmin: React.FC = () => {
 
   // Transform column with AI
   const handleTransformColumn = async () => {
-    if (!selectedListId || !sourceColumn || !newColumnName.trim() || !transformPrompt.trim()) {
-      setMessage({ type: 'error', text: 'Please fill in all fields' });
+    if (!selectedListId || sourceColumns.length === 0 || !newColumnName.trim() || !transformPrompt.trim()) {
+      setMessage({ type: 'error', text: 'Please select at least one source column, enter a new column name, and provide a transformation prompt' });
       return;
     }
 
@@ -364,7 +591,7 @@ const LeadMassagingAdmin: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           listId: selectedListId,
-          sourceColumn,
+          sourceColumns, // Send array of columns
           newColumnName: newColumnName.trim(),
           prompt: transformPrompt.trim()
         })
@@ -378,7 +605,7 @@ const LeadMassagingAdmin: React.FC = () => {
 
       setMessage({ type: 'success', text: `Successfully transformed ${result.processedCount} rows into "${newColumnName}"` });
       setIsTransformModalOpen(false);
-      setSourceColumn('');
+      setSourceColumns([]);
       setNewColumnName('');
       setTransformPrompt('');
       
@@ -595,7 +822,7 @@ const LeadMassagingAdmin: React.FC = () => {
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => {
-                          setSourceColumn('');
+                          setSourceColumns([]);
                           setNewColumnName('');
                           setTransformPrompt('');
                           setIsTransformModalOpen(true);
@@ -716,7 +943,7 @@ const LeadMassagingAdmin: React.FC = () => {
           <div className="mt-8 p-6 bg-zinc-900/50 rounded-xl border border-zinc-800">
             <h3 className="text-sm font-semibold text-zinc-300 mb-2">💡 How to Use</h3>
             <ul className="text-sm text-zinc-500 space-y-1">
-              <li>• <strong>Import</strong> - Paste CSV data (first row should be headers) to create a new lead list</li>
+              <li>• <strong>Import</strong> - Click "+ New Lead List" then drag & drop an Excel file (.xlsx, .xls) or CSV file, or paste CSV data. First row should be headers.</li>
               <li>• <strong>Transform</strong> - Use AI to create new columns from existing data (e.g., summarize company descriptions into personalization hooks)</li>
               <li>• <strong>Push</strong> - Send your enriched leads directly to an Instantly campaign</li>
             </ul>
@@ -735,7 +962,7 @@ const LeadMassagingAdmin: React.FC = () => {
                   <Upload className="w-5 h-5 text-[#d7ff00]" />
                   Create New Lead List
                 </h2>
-                <p className="text-sm text-zinc-400 mt-1">Import leads from CSV data</p>
+                <p className="text-sm text-zinc-400 mt-1">Upload Excel or CSV file, or paste CSV data</p>
               </div>
               <button
                 onClick={() => setIsCreateModalOpen(false)}
@@ -762,16 +989,89 @@ const LeadMassagingAdmin: React.FC = () => {
                 />
               </div>
 
+              {/* File Upload Area */}
               <div className="mb-4">
                 <label className="block text-sm font-medium text-zinc-400 mb-2">
-                  CSV Data
+                  Upload Excel or CSV File
+                </label>
+                <div
+                  onDrop={handleFileDrop}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setIsDragOver(true);
+                  }}
+                  onDragLeave={() => setIsDragOver(false)}
+                  className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors ${
+                    isDragOver
+                      ? 'border-[#d7ff00] bg-[#d7ff00]/10'
+                      : 'border-zinc-700 bg-zinc-900/50 hover:border-zinc-600'
+                  }`}
+                >
+                  {uploadedFile ? (
+                    <div className="flex items-center justify-center gap-3">
+                      <FileSpreadsheet className="w-8 h-8 text-[#d7ff00]" />
+                      <div className="text-left">
+                        <p className="text-white font-medium">{uploadedFile.name}</p>
+                        <p className="text-xs text-zinc-400">
+                          {(uploadedFile.size / 1024).toFixed(2)} KB
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setUploadedFile(null);
+                          setCsvInput('');
+                        }}
+                        disabled={isImporting}
+                        className="ml-auto p-2 hover:bg-zinc-800 rounded-lg transition-colors"
+                      >
+                        <X className="w-4 h-4 text-zinc-400" />
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <Upload className="w-12 h-12 mx-auto mb-4 text-zinc-500" />
+                      <p className="text-white mb-2">
+                        Drag and drop an Excel or CSV file here
+                      </p>
+                      <p className="text-sm text-zinc-400 mb-4">or</p>
+                      <label className="inline-block">
+                        <input
+                          type="file"
+                          accept=".xlsx,.xls,.csv"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleFileSelect(file);
+                          }}
+                          disabled={isImporting}
+                          className="hidden"
+                        />
+                        <span className="inline-flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg cursor-pointer transition-colors">
+                          <Upload className="w-4 h-4" />
+                          Browse Files
+                        </span>
+                      </label>
+                      <p className="text-xs text-zinc-500 mt-4">
+                        Supports .xlsx, .xls, and .csv files
+                      </p>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* CSV Paste Option (Alternative) */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-zinc-400 mb-2">
+                  Or Paste CSV Data
                 </label>
                 <textarea
                   value={csvInput}
-                  onChange={(e) => setCsvInput(e.target.value)}
+                  onChange={(e) => {
+                    setCsvInput(e.target.value);
+                    if (e.target.value.trim()) setUploadedFile(null); // Clear file when pasting CSV
+                  }}
                   placeholder={`Paste your CSV data here. First row should be column headers.\n\nExample:\nemail,first_name,company_name,company_description\njohn@example.com,John,Acme Fitness,"A boutique fitness studio focusing on HIIT and strength training"`}
-                  className="w-full h-64 px-4 py-3 bg-zinc-900 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-[#d7ff00] transition-colors resize-none font-mono text-sm"
-                  disabled={isImporting}
+                  className="w-full h-32 px-4 py-3 bg-zinc-900 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-[#d7ff00] transition-colors resize-none font-mono text-sm"
+                  disabled={isImporting || !!uploadedFile}
                 />
                 <p className="text-xs text-zinc-500 mt-2">
                   Tip: Copy directly from Google Sheets - it will paste as CSV format
@@ -809,9 +1109,9 @@ const LeadMassagingAdmin: React.FC = () => {
               </button>
               <button
                 onClick={handleImportCSV}
-                disabled={isImporting || !newListName.trim() || !csvInput.trim()}
+                disabled={isImporting || !newListName.trim() || (!uploadedFile && !csvInput.trim())}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                  isImporting || !newListName.trim() || !csvInput.trim()
+                  isImporting || !newListName.trim() || (!uploadedFile && !csvInput.trim())
                     ? 'bg-zinc-700 text-zinc-400 cursor-not-allowed'
                     : 'bg-[#d7ff00] text-black hover:bg-[#c5eb00]'
                 }`}
@@ -824,7 +1124,7 @@ const LeadMassagingAdmin: React.FC = () => {
                 ) : (
                   <>
                     <Upload className="w-4 h-4" />
-                    Import CSV
+                    Import {uploadedFile ? 'File' : 'CSV'}
                   </>
                 )}
               </button>
@@ -859,19 +1159,40 @@ const LeadMassagingAdmin: React.FC = () => {
             <div className="p-6 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-zinc-400 mb-2">
-                  Source Column
+                  Source Columns <span className="text-zinc-500">(Select one or more)</span>
                 </label>
-                <select
-                  value={sourceColumn}
-                  onChange={(e) => setSourceColumn(e.target.value)}
-                  className="w-full px-4 py-3 bg-zinc-900 border border-zinc-700 rounded-xl text-white focus:outline-none focus:border-purple-500 transition-colors"
-                  disabled={isTransforming}
-                >
-                  <option value="">Select a column...</option>
-                  {selectedList.columns.map((col) => (
-                    <option key={col} value={col}>{col}</option>
-                  ))}
-                </select>
+                <div className="max-h-48 overflow-y-auto bg-zinc-900 border border-zinc-700 rounded-xl p-4 space-y-2">
+                  {selectedList.columns.length === 0 ? (
+                    <p className="text-zinc-500 text-sm">No columns available</p>
+                  ) : (
+                    selectedList.columns.map((col) => (
+                      <label
+                        key={col}
+                        className="flex items-center gap-3 p-2 hover:bg-zinc-800 rounded-lg cursor-pointer transition-colors"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={sourceColumns.includes(col)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSourceColumns([...sourceColumns, col]);
+                            } else {
+                              setSourceColumns(sourceColumns.filter(c => c !== col));
+                            }
+                          }}
+                          disabled={isTransforming}
+                          className="w-4 h-4 rounded border-zinc-600 bg-zinc-800 text-purple-500 focus:ring-purple-500 focus:ring-offset-zinc-900"
+                        />
+                        <span className="text-white text-sm flex-1">{col}</span>
+                      </label>
+                    ))
+                  )}
+                </div>
+                {sourceColumns.length > 0 && (
+                  <p className="text-xs text-purple-400 mt-2">
+                    {sourceColumns.length} column{sourceColumns.length !== 1 ? 's' : ''} selected: {sourceColumns.join(', ')}
+                  </p>
+                )}
               </div>
 
               <div>
@@ -881,11 +1202,78 @@ const LeadMassagingAdmin: React.FC = () => {
                 <textarea
                   value={transformPrompt}
                   onChange={(e) => setTransformPrompt(e.target.value)}
-                  placeholder="e.g., Summarize this company description into 6-10 words that could be used as an email personalization hook. Keep it conversational and relevant."
+                  placeholder={`Create a personalized email hook that will be inserted into this email template:\n\n"Hi {{firstName}},\nI came across {{companyName}} and liked what I saw. [PERSONALIZATION_HOOK HERE].\nI'm the founder of Pulse, a platform helping studios, gyms, and corporations, build and engage community..."\n\nRequirements:\n- Use the selected column data to create a specific, relevant hook\n- 8-15 words, conversational and natural\n- Should connect the company to community/engagement themes\n- Flow naturally after "I came across [company] and liked what I saw"\n- Highlight something unique or interesting about the company\n- No generic phrases - be specific to this company`}
                   className="w-full h-32 px-4 py-3 bg-zinc-900 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-purple-500 transition-colors resize-none"
                   disabled={isTransforming}
                 />
+                <div className="mt-2 space-y-1">
+                  <p className="text-xs text-zinc-500">
+                    The AI will have access to all selected columns. Reference them in your prompt (e.g., "using the company name and description columns...").
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTransformPrompt(`Create a personalized email hook (8-15 words) that will be inserted into this outreach email:
+
+"Hi {{firstName}},
+I came across {{companyName}} and liked what I saw. [PERSONALIZATION_HOOK].
+I'm the founder of Pulse, a platform helping studios, gyms, and corporations, build and engage community. Think what run club has done in real life, digitally."
+
+Using the selected column data, write a hook that:
+- Is specific and relevant to this company (use company name, description, industry, or other available data)
+- Highlights something unique, interesting, or impressive about them
+- Connects naturally to community, engagement, or growth themes (to bridge to Pulse's value prop)
+- Sounds conversational and authentic - like a real person noticed something specific
+- Flows naturally after "I came across [company] and liked what I saw"
+- Avoids generic phrases like "impressive work" or "great company" - be specific
+
+Example good hooks:
+- "Your focus on building community through group classes really stands out."
+- "The way you've grown your studio community is exactly what we help scale digitally."
+- "Your approach to member engagement aligns perfectly with what we're building at Pulse."
+
+Output ONLY the hook text, nothing else.`);
+                    }}
+                    className="text-xs text-purple-400 hover:text-purple-300 underline"
+                    disabled={isTransforming}
+                  >
+                    Use suggested prompt for email personalization hooks
+                  </button>
+                </div>
               </div>
+
+              {/* Token Estimation */}
+              {tokenEstimate && selectedList && (
+                <div className="p-4 bg-blue-900/20 border border-blue-800 rounded-xl">
+                  <div className="flex items-start gap-3">
+                    <Sparkles className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-blue-400 mb-2">Estimated Token Usage</p>
+                      <div className="space-y-1 text-xs text-blue-300">
+                        <div className="flex justify-between">
+                          <span>Input tokens:</span>
+                          <span className="font-mono">{tokenEstimate.inputTokens.toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Output tokens (est.):</span>
+                          <span className="font-mono">{tokenEstimate.outputTokens.toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between pt-2 border-t border-blue-800/50">
+                          <span className="font-medium">Estimated cost:</span>
+                          <span className="font-mono font-semibold">
+                            ${tokenEstimate.estimatedCost < 0.01 
+                              ? '<0.01' 
+                              : tokenEstimate.estimatedCost.toFixed(4)}
+                          </span>
+                        </div>
+                        <p className="text-blue-400/70 mt-2 pt-2 border-t border-blue-800/50">
+                          Based on {selectedList.rowCount.toLocaleString()} leads using gpt-4o-mini
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div>
                 <label className="block text-sm font-medium text-zinc-400 mb-2">
@@ -935,9 +1323,9 @@ const LeadMassagingAdmin: React.FC = () => {
               </button>
               <button
                 onClick={handleTransformColumn}
-                disabled={isTransforming || !sourceColumn || !newColumnName.trim() || !transformPrompt.trim()}
+                disabled={isTransforming || sourceColumns.length === 0 || !newColumnName.trim() || !transformPrompt.trim()}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                  isTransforming || !sourceColumn || !newColumnName.trim() || !transformPrompt.trim()
+                  isTransforming || sourceColumns.length === 0 || !newColumnName.trim() || !transformPrompt.trim()
                     ? 'bg-zinc-700 text-zinc-400 cursor-not-allowed'
                     : 'bg-purple-600 text-white hover:bg-purple-500'
                 }`}

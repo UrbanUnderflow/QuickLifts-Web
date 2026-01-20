@@ -244,9 +244,21 @@ exports.handler = async (event, context) => {
     // Run classification in parallel with response (don't block)
     let escalation = null;
     
+    console.log('[pulsecheck-chat] ========== ESCALATION FLOW START ==========');
+    console.log('[pulsecheck-chat] Escalation parameters:', {
+      skipEscalation,
+      userId: userId.slice(0, 8) + '...',
+      messageLength: message.length,
+      messagePreview: message.substring(0, 50) + '...',
+      recentMessagesCount: recentMessages?.length || 0,
+      conversationId: newConvoId
+    });
+    
     if (!skipEscalation) {
       try {
-        console.log('[pulsecheck-chat] Starting escalation classification...');
+        console.log('[pulsecheck-chat] [1/5] Starting escalation classification...');
+        const classificationStartTime = Date.now();
+        
         escalation = await classifyEscalation(
           db,
           userId,
@@ -255,57 +267,117 @@ exports.handler = async (event, context) => {
           newConvoId
         );
         
-        console.log('[pulsecheck-chat] Escalation check result:', {
-          userId: userId.slice(0, 8) + '...',
+        const classificationDuration = Date.now() - classificationStartTime;
+        console.log(`[pulsecheck-chat] [2/5] Classification completed in ${classificationDuration}ms`);
+        console.log('[pulsecheck-chat] [2/5] Escalation classification result:', {
+          hasResult: !!escalation,
           tier: escalation?.tier,
+          tierName: escalation?.tier === 0 ? 'None' : escalation?.tier === 1 ? 'MonitorOnly' : escalation?.tier === 2 ? 'ElevatedRisk' : escalation?.tier === 3 ? 'CriticalRisk' : 'Unknown',
           shouldEscalate: escalation?.shouldEscalate,
           category: escalation?.category,
+          reason: escalation?.reason,
           confidence: escalation?.confidence,
-          hasEscalation: !!escalation
+          fullObject: JSON.stringify(escalation, null, 2)
         });
 
         // Create escalation records for Tier 2 (Elevated) and Tier 3 (Critical)
+        console.log('[pulsecheck-chat] [3/5] Evaluating escalation record creation...');
+        console.log('[pulsecheck-chat] [3/5] Evaluation checks:', {
+          hasEscalation: !!escalation,
+          shouldEscalate: escalation?.shouldEscalate,
+          tier: escalation?.tier,
+          isTier2: escalation?.tier === EscalationTier.ElevatedRisk,
+          isTier3: escalation?.tier === EscalationTier.CriticalRisk,
+          shouldCreateRecord: escalation && escalation.shouldEscalate && (escalation.tier === EscalationTier.ElevatedRisk || escalation.tier === EscalationTier.CriticalRisk)
+        });
+        
         if (escalation && escalation.shouldEscalate) {
           const tier = escalation.tier;
+          console.log(`[pulsecheck-chat] [4/5] Escalation triggered! Tier: ${tier}`);
+          
           if (tier === EscalationTier.ElevatedRisk || tier === EscalationTier.CriticalRisk) {
-            console.log(`[pulsecheck-chat] Creating escalation record for Tier ${tier}`);
+            console.log(`[pulsecheck-chat] [4/5] Tier ${tier} requires record creation - proceeding...`);
+            console.log(`[pulsecheck-chat] [4/5] Record creation params:`, {
+              userId: userId.slice(0, 8) + '...',
+              conversationId: newConvoId,
+              messageId: aiMsg.id,
+              tier,
+              category: escalation.category
+            });
+            
             // Trigger escalation record creation asynchronously
+            const recordCreationStartTime = Date.now();
             createEscalationRecord(db, userId, newConvoId, aiMsg.id, message, escalation)
               .then(recordId => {
-                console.log('[pulsecheck-chat] Escalation record created successfully:', recordId);
+                const recordCreationDuration = Date.now() - recordCreationStartTime;
+                console.log(`[pulsecheck-chat] [5/5] ✅ Escalation record created successfully in ${recordCreationDuration}ms`);
+                console.log(`[pulsecheck-chat] [5/5] Record ID: ${recordId}`);
+                console.log('[pulsecheck-chat] ========== ESCALATION FLOW SUCCESS ==========');
               })
               .catch(err => {
-                console.error('[pulsecheck-chat] Escalation record creation error:', err);
-                console.error('[pulsecheck-chat] Error stack:', err.stack);
+                const recordCreationDuration = Date.now() - recordCreationStartTime;
+                console.error(`[pulsecheck-chat] [5/5] ❌ Escalation record creation FAILED after ${recordCreationDuration}ms`);
+                console.error('[pulsecheck-chat] [5/5] Error details:', {
+                  message: err.message,
+                  code: err.code,
+                  stack: err.stack
+                });
+                console.error('[pulsecheck-chat] ========== ESCALATION FLOW FAILED ==========');
               });
           } else {
-            console.log(`[pulsecheck-chat] Escalation tier ${tier} does not require record creation (Tier 2/3 only)`);
+            console.log(`[pulsecheck-chat] [4/5] Tier ${tier} does not require record creation (only Tier 2/3 create records)`);
+            console.log('[pulsecheck-chat] ========== ESCALATION FLOW COMPLETE (No record needed) ==========');
           }
         } else {
-          console.log('[pulsecheck-chat] No escalation needed or shouldEscalate is false');
+          console.log('[pulsecheck-chat] [3/5] No escalation record needed:', {
+            reason: !escalation ? 'No escalation result' : !escalation.shouldEscalate ? 'shouldEscalate is false' : 'Unknown',
+            escalationTier: escalation?.tier
+          });
+          console.log('[pulsecheck-chat] ========== ESCALATION FLOW COMPLETE (No escalation) ==========');
         }
       } catch (escErr) {
-        console.error('[pulsecheck-chat] Escalation classification error:', escErr);
-        console.error('[pulsecheck-chat] Escalation error stack:', escErr.stack);
+        console.error('[pulsecheck-chat] ❌ ESCALATION CLASSIFICATION EXCEPTION');
+        console.error('[pulsecheck-chat] Error type:', escErr.constructor.name);
+        console.error('[pulsecheck-chat] Error message:', escErr.message);
+        console.error('[pulsecheck-chat] Error code:', escErr.code);
+        console.error('[pulsecheck-chat] Error stack:', escErr.stack);
+        console.error('[pulsecheck-chat] ========== ESCALATION FLOW ERROR ==========');
         // Don't fail the chat if classification fails
       }
     } else {
-      console.log('[pulsecheck-chat] Escalation skipped (skipEscalation=true)');
+      console.log('[pulsecheck-chat] ⏭️ Escalation skipped (skipEscalation=true)');
+      console.log('[pulsecheck-chat] ========== ESCALATION FLOW SKIPPED ==========');
     }
 
+    // Prepare response
+    const escalationResponse = escalation ? {
+      tier: escalation.tier,
+      category: escalation.category,
+      reason: escalation.reason,
+      confidence: escalation.confidence,
+      shouldEscalate: escalation.shouldEscalate
+    } : null;
+    
+    console.log('[pulsecheck-chat] ========== RESPONSE PREPARATION ==========');
+    console.log('[pulsecheck-chat] Response escalation object:', {
+      hasEscalation: !!escalationResponse,
+      escalationResponse: JSON.stringify(escalationResponse, null, 2)
+    });
+    console.log('[pulsecheck-chat] Full response payload:', {
+      conversationId: newConvoId,
+      assistantMessageLength: assistantMessage.length,
+      hasEscalation: !!escalationResponse,
+      escalationTier: escalationResponse?.tier,
+      escalationShouldEscalate: escalationResponse?.shouldEscalate
+    });
+    
     return {
       statusCode: 200,
       headers,
       body: JSON.stringify({
         conversationId: newConvoId,
         assistantMessage,
-        escalation: escalation ? {
-          tier: escalation.tier,
-          category: escalation.category,
-          reason: escalation.reason,
-          confidence: escalation.confidence,
-          shouldEscalate: escalation.shouldEscalate
-        } : null
+        escalation: escalationResponse
       })
     };
   } catch (error) {
@@ -342,40 +414,77 @@ async function classifyEscalation(db, userId, message, recentMessages, conversat
   if (!apiKey) return null;
 
   // Load escalation conditions from Firestore
+  console.log('[classifyEscalation] [STEP 1] Loading escalation conditions from Firestore...');
+  console.log('[classifyEscalation] [STEP 1] Query parameters:', {
+    collection: 'escalation-conditions',
+    filter: 'isActive == true',
+    orderBy: ['tier asc', 'priority desc']
+  });
+  
   let conditionsSnap;
   try {
-    console.log('[pulsecheck-chat] Loading escalation conditions from Firestore...');
+    const queryStartTime = Date.now();
     conditionsSnap = await db
       .collection('escalation-conditions')
       .where('isActive', '==', true)
       .orderBy('tier', 'asc')
       .orderBy('priority', 'desc')
       .get();
-    console.log(`[pulsecheck-chat] Loaded ${conditionsSnap.docs.length} active escalation conditions`);
+    const queryDuration = Date.now() - queryStartTime;
+    console.log(`[classifyEscalation] [STEP 1] ✅ Query completed in ${queryDuration}ms`);
+    console.log(`[classifyEscalation] [STEP 1] Loaded ${conditionsSnap.docs.length} documents`);
   } catch (queryError) {
-    console.error('[pulsecheck-chat] Error loading escalation conditions:', queryError);
-    console.error('[pulsecheck-chat] Query error details:', {
-      message: queryError.message,
-      code: queryError.code,
-      stack: queryError.stack
-    });
+    console.error('[classifyEscalation] [STEP 1] ❌ Query FAILED');
+    console.error('[classifyEscalation] [STEP 1] Error type:', queryError.constructor.name);
+    console.error('[classifyEscalation] [STEP 1] Error message:', queryError.message);
+    console.error('[classifyEscalation] [STEP 1] Error code:', queryError.code);
+    console.error('[classifyEscalation] [STEP 1] Error stack:', queryError.stack);
     // If query fails (e.g., missing index), continue without conditions
     return null;
   }
 
-  const conditions = conditionsSnap.docs.map(doc => ({
-    id: doc.id,
-    ...doc.data()
-  }));
+  console.log('[classifyEscalation] [STEP 2] Processing conditions...');
+  const conditions = conditionsSnap.docs.map((doc, index) => {
+    const data = doc.data();
+    console.log(`[classifyEscalation] [STEP 2] Condition ${index + 1}/${conditionsSnap.docs.length}:`, {
+      id: doc.id,
+      tier: data.tier,
+      category: data.category,
+      title: data.title,
+      isActive: data.isActive,
+      priority: data.priority,
+      examplePhrasesCount: data.examplePhrases?.length || 0,
+      keywordsCount: data.keywords?.length || 0
+    });
+    return {
+      id: doc.id,
+      ...data
+    };
+  });
   
   if (conditions.length === 0) {
-    console.warn('[pulsecheck-chat] No active escalation conditions found - classification may be less accurate');
+    console.warn('[classifyEscalation] [STEP 2] ⚠️ No active escalation conditions found');
+    console.warn('[classifyEscalation] [STEP 2] Classification will proceed with default behavior');
+    // Continue with classification but with minimal context
+  } else {
+    const tierBreakdown = {
+      tier0: conditions.filter(c => c.tier === 0).length,
+      tier1: conditions.filter(c => c.tier === 1).length,
+      tier2: conditions.filter(c => c.tier === 2).length,
+      tier3: conditions.filter(c => c.tier === 3).length
+    };
+    console.log('[classifyEscalation] [STEP 2] ✅ Conditions breakdown:', tierBreakdown);
+    console.log('[classifyEscalation] [STEP 2] Total conditions:', conditions.length);
   }
 
   // Build training context
+  console.log('[classifyEscalation] [STEP 3] Building training context...');
   const trainingContext = buildEscalationTrainingContext(conditions);
+  console.log('[classifyEscalation] [STEP 3] Training context length:', trainingContext.length);
+  console.log('[classifyEscalation] [STEP 3] Training context preview:', trainingContext.substring(0, 200) + '...');
 
   // Build classification prompt
+  console.log('[classifyEscalation] [STEP 4] Building classification prompt...');
   const systemPrompt = `You are a clinical safety classifier for PulseCheck.
 
 ESCALATION TIERS:
@@ -397,7 +506,23 @@ CRITICAL: Err on side of caution. Tier 3 has ZERO threshold for safety concerns.
       ).join('\n')
     : '';
 
+  console.log('[classifyEscalation] [STEP 4] Prompt details:', {
+    systemPromptLength: systemPrompt.length,
+    userMessageLength: message.length,
+    conversationContextLength: conversationContext.length,
+    recentMessagesCount: recentMessages.length
+  });
+
+  console.log('[classifyEscalation] [STEP 5] Calling OpenAI API for classification...');
+  console.log('[classifyEscalation] [STEP 5] API request details:', {
+    endpoint: 'https://api.openai.com/v1/chat/completions',
+    model: 'gpt-4o-mini',
+    hasApiKey: !!apiKey,
+    apiKeyPrefix: apiKey ? apiKey.substring(0, 10) + '...' : 'MISSING'
+  });
+
   try {
+    const apiCallStartTime = Date.now();
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -416,36 +541,108 @@ CRITICAL: Err on side of caution. Tier 3 has ZERO threshold for safety concerns.
       })
     });
 
+    const apiCallDuration = Date.now() - apiCallStartTime;
+    console.log(`[classifyEscalation] [STEP 5] API call completed in ${apiCallDuration}ms`);
+    console.log('[classifyEscalation] [STEP 5] Response status:', res.status, res.statusText);
+    
     if (!res.ok) {
       const errorText = await res.text();
-      console.error('[pulsecheck-chat] Classification API error:', {
+      console.error('[classifyEscalation] [STEP 5] ❌ API call FAILED');
+      console.error('[classifyEscalation] [STEP 5] Error details:', {
         status: res.status,
         statusText: res.statusText,
-        error: errorText
+        error: errorText,
+        headers: Object.fromEntries(res.headers.entries())
       });
       return null;
     }
 
+    console.log('[classifyEscalation] [STEP 6] Parsing API response...');
     const data = await res.json();
+    console.log('[classifyEscalation] [STEP 6] Response structure:', {
+      hasChoices: !!data.choices,
+      choicesCount: data.choices?.length || 0,
+      model: data.model,
+      usage: data.usage
+    });
+    
     const content = data.choices?.[0]?.message?.content;
+    console.log('[classifyEscalation] [STEP 6] Content extracted:', {
+      hasContent: !!content,
+      contentLength: content?.length || 0,
+      contentPreview: content ? content.substring(0, 200) + '...' : 'NONE'
+    });
     
     if (!content) {
-      console.warn('[pulsecheck-chat] Classification API returned no content');
+      console.warn('[classifyEscalation] [STEP 6] ⚠️ No content in response');
+      console.warn('[classifyEscalation] [STEP 6] Full response:', JSON.stringify(data, null, 2));
       return null;
     }
     
+    console.log('[classifyEscalation] [STEP 7] Parsing JSON content...');
     try {
       const parsed = JSON.parse(content);
-      console.log('[pulsecheck-chat] Classification result:', parsed);
+      console.log('[classifyEscalation] [STEP 7] ✅ JSON parsed successfully');
+      console.log('[classifyEscalation] [STEP 7] Raw classification result:', JSON.stringify(parsed, null, 2));
+      
+      console.log('[classifyEscalation] [STEP 8] Validating and normalizing classification result...');
+      
+      // Ensure shouldEscalate is set correctly based on tier
+      // Tier 2 (Elevated) and Tier 3 (Critical) should always escalate
+      // Tier 1 (Monitor) might escalate depending on the response
+      // Tier 0 (None) should never escalate
+      const originalTier = parsed.tier;
+      const originalShouldEscalate = parsed.shouldEscalate;
+      
+      if (parsed.tier === undefined || parsed.tier === null) {
+        console.warn('[classifyEscalation] [STEP 8] ⚠️ Classification missing tier, defaulting to 0');
+        parsed.tier = 0;
+      }
+      
+      // Set shouldEscalate based on tier if not provided or incorrect
+      if (parsed.shouldEscalate === undefined || parsed.shouldEscalate === null) {
+        parsed.shouldEscalate = parsed.tier >= EscalationTier.ElevatedRisk;
+        console.log('[classifyEscalation] [STEP 8] Set shouldEscalate based on tier:', {
+          tier: parsed.tier,
+          shouldEscalate: parsed.shouldEscalate,
+          reason: 'was undefined/null'
+        });
+      } else if (parsed.tier >= EscalationTier.ElevatedRisk && !parsed.shouldEscalate) {
+        // Override: Tier 2/3 must escalate
+        console.warn('[classifyEscalation] [STEP 8] ⚠️ Overriding shouldEscalate to true for tier', parsed.tier);
+        parsed.shouldEscalate = true;
+      } else if (parsed.tier === EscalationTier.None && parsed.shouldEscalate) {
+        // Override: Tier 0 should not escalate
+        console.warn('[classifyEscalation] [STEP 8] ⚠️ Overriding shouldEscalate to false for tier 0');
+        parsed.shouldEscalate = false;
+      }
+      
+      console.log('[classifyEscalation] [STEP 8] Validation complete:', {
+        original: { tier: originalTier, shouldEscalate: originalShouldEscalate },
+        final: { tier: parsed.tier, shouldEscalate: parsed.shouldEscalate },
+        changed: originalTier !== parsed.tier || originalShouldEscalate !== parsed.shouldEscalate
+      });
+      
+      console.log('[classifyEscalation] [STEP 8] ✅ Final classification result:', JSON.stringify(parsed, null, 2));
+      console.log('[classifyEscalation] ========== CLASSIFICATION COMPLETE ==========');
       return parsed;
     } catch (parseErr) {
-      console.error('[pulsecheck-chat] Failed to parse classification JSON:', parseErr);
-      console.error('[pulsecheck-chat] Raw content:', content);
+      console.error('[classifyEscalation] [STEP 7] ❌ JSON parse FAILED');
+      console.error('[classifyEscalation] [STEP 7] Parse error:', {
+        message: parseErr.message,
+        stack: parseErr.stack
+      });
+      console.error('[classifyEscalation] [STEP 7] Raw content that failed to parse:', content);
+      console.error('[classifyEscalation] [STEP 7] Content length:', content.length);
+      console.error('[classifyEscalation] [STEP 7] Content type:', typeof content);
       return null;
     }
   } catch (err) {
-    console.error('[pulsecheck-chat] Classification error:', err);
-    console.error('[pulsecheck-chat] Classification error stack:', err.stack);
+    console.error('[classifyEscalation] ❌ CLASSIFICATION EXCEPTION');
+    console.error('[classifyEscalation] Error type:', err.constructor.name);
+    console.error('[classifyEscalation] Error message:', err.message);
+    console.error('[classifyEscalation] Error code:', err.code);
+    console.error('[classifyEscalation] Error stack:', err.stack);
     return null;
   }
 }
@@ -472,14 +669,18 @@ function buildEscalationTrainingContext(conditions) {
  * Create escalation record for Tier 2/3
  */
 async function createEscalationRecord(db, userId, conversationId, messageId, triggerContent, classification) {
+  console.log('[createEscalationRecord] ========== RECORD CREATION START ==========');
+  console.log('[createEscalationRecord] [STEP 1] Function called with parameters:', {
+    userId: userId.slice(0, 8) + '...',
+    conversationId,
+    messageId,
+    triggerContentLength: triggerContent.length,
+    triggerContentPreview: triggerContent.substring(0, 50) + '...',
+    classification: JSON.stringify(classification, null, 2)
+  });
+  
   try {
-    console.log('[pulsecheck-chat] createEscalationRecord called with:', {
-      userId: userId.slice(0, 8) + '...',
-      conversationId,
-      tier: classification.tier,
-      category: classification.category
-    });
-    
+    console.log('[createEscalationRecord] [STEP 2] Preparing record data...');
     const nowSec = Math.floor(Date.now() / 1000);
     
     const data = {
@@ -498,29 +699,60 @@ async function createEscalationRecord(db, userId, conversationId, messageId, tri
       status: 'active'
     };
 
-    console.log('[pulsecheck-chat] Creating escalation record in Firestore...');
-    const docRef = await db.collection('escalation-records').add(data);
-    console.log('[pulsecheck-chat] Escalation record document created with ID:', docRef.id);
-    
-    await docRef.update({ id: docRef.id });
-    console.log('[pulsecheck-chat] Updated escalation record with ID field');
+    console.log('[createEscalationRecord] [STEP 2] Record data prepared:', {
+      tier: data.tier,
+      category: data.category,
+      consentStatus: data.consentStatus,
+      handoffStatus: data.handoffStatus,
+      createdAt: data.createdAt,
+      status: data.status,
+      hasTriggerContent: !!data.triggerContent,
+      triggerContentLength: data.triggerContent.length,
+      hasReason: !!data.classificationReason,
+      confidence: data.classificationConfidence
+    });
 
-    // Update conversation state
-    console.log('[pulsecheck-chat] Updating conversation with escalation state...');
-    await db.collection('conversations').doc(conversationId).set({
+    console.log('[createEscalationRecord] [STEP 3] Creating document in escalation-records collection...');
+    const addStartTime = Date.now();
+    const docRef = await db.collection('escalation-records').add(data);
+    const addDuration = Date.now() - addStartTime;
+    console.log(`[createEscalationRecord] [STEP 3] ✅ Document created in ${addDuration}ms`);
+    console.log('[createEscalationRecord] [STEP 3] Document ID:', docRef.id);
+    console.log('[createEscalationRecord] [STEP 3] Document path:', docRef.path);
+    
+    console.log('[createEscalationRecord] [STEP 4] Updating document with ID field...');
+    const updateStartTime = Date.now();
+    await docRef.update({ id: docRef.id });
+    const updateDuration = Date.now() - updateStartTime;
+    console.log(`[createEscalationRecord] [STEP 4] ✅ ID field updated in ${updateDuration}ms`);
+
+    console.log('[createEscalationRecord] [STEP 5] Updating conversation document...');
+    const conversationUpdateStartTime = Date.now();
+    const conversationUpdate = {
       escalationTier: classification.tier,
       escalationStatus: 'active',
       escalationRecordId: docRef.id,
       isInSafetyMode: classification.tier === EscalationTier.CriticalRisk,
       lastEscalationAt: nowSec
-    }, { merge: true });
-    console.log('[pulsecheck-chat] Conversation updated successfully');
+    };
+    console.log('[createEscalationRecord] [STEP 5] Conversation update data:', conversationUpdate);
+    
+    await db.collection('conversations').doc(conversationId).set(conversationUpdate, { merge: true });
+    const conversationUpdateDuration = Date.now() - conversationUpdateStartTime;
+    console.log(`[createEscalationRecord] [STEP 5] ✅ Conversation updated in ${conversationUpdateDuration}ms`);
+    console.log('[createEscalationRecord] [STEP 5] Conversation ID:', conversationId);
 
-    console.log('[pulsecheck-chat] Escalation record created successfully:', docRef.id);
+    console.log('[createEscalationRecord] ========== RECORD CREATION SUCCESS ==========');
+    console.log('[createEscalationRecord] Final record ID:', docRef.id);
     return docRef.id;
   } catch (error) {
-    console.error('[pulsecheck-chat] Error in createEscalationRecord:', error);
-    console.error('[pulsecheck-chat] Error details:', {
+    console.error('[createEscalationRecord] ========== RECORD CREATION FAILED ==========');
+    console.error('[createEscalationRecord] Error type:', error.constructor.name);
+    console.error('[createEscalationRecord] Error message:', error.message);
+    console.error('[createEscalationRecord] Error code:', error.code);
+    console.error('[createEscalationRecord] Error stack:', error.stack);
+    console.error('[createEscalationRecord] Error details:', {
+      name: error.name,
       message: error.message,
       code: error.code,
       stack: error.stack
