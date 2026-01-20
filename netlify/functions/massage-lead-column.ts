@@ -14,7 +14,7 @@ interface RequestBody {
   batchSize?: number;
 }
 
-const BATCH_SIZE = 50; // Process 50 leads at a time (increased for efficiency)
+const LEADS_PER_API_CALL = 1000; // Process 1000 leads per OpenAI API call
 const MAX_EXECUTION_TIME_MS = 20000; // 20 seconds - leave buffer before Netlify timeout
 
 const handler: Handler = async (event) => {
@@ -87,7 +87,7 @@ const handler: Handler = async (event) => {
       };
     }
 
-    const { listId, sourceColumn, sourceColumns, newColumnName, prompt, batchSize = BATCH_SIZE } = body;
+    const { listId, sourceColumn, sourceColumns, newColumnName, prompt } = body;
 
     // Support both single column (legacy) and multiple columns (new)
     const columns = sourceColumns || (sourceColumn ? [sourceColumn] : []);
@@ -113,13 +113,23 @@ const handler: Handler = async (event) => {
     const listData = listDoc.data();
     const currentColumns = listData?.columns || [];
 
-    // Validate all source columns exist
+    // Check for missing columns - if any are missing, we'll use generic fallback
     const missingColumns = columns.filter(col => !currentColumns.includes(col));
+    const validColumns = columns.filter(col => currentColumns.includes(col));
+    
     if (missingColumns.length > 0) {
+      console.log(`[massage-lead-column] Warning: Some source columns not found: ${missingColumns.join(', ')}. Will use generic fallback for those.`);
+    }
+    
+    // If no valid columns exist, we can't proceed
+    if (validColumns.length === 0 && columns.length > 0) {
       return {
         statusCode: 400,
         headers,
-        body: JSON.stringify({ error: `Source column(s) not found in list: ${missingColumns.join(', ')}` }),
+        body: JSON.stringify({ 
+          error: `None of the source columns exist in list: ${columns.join(', ')}`,
+          hint: 'Please select columns that exist in your lead list, or the function will generate generic hooks for missing data.'
+        }),
       };
     }
 
@@ -159,16 +169,24 @@ const handler: Handler = async (event) => {
     let errorCount = 0;
     const errors: { leadId: string; error: string }[] = [];
 
-    // Filter out leads that already have the new column (for resuming partial transformations)
+    // Filter out leads that already have a value in the new column (skip if value exists)
     const leadsToProcess = leads.filter(lead => {
       const existingValue = lead.data[newColumnName];
-      return existingValue === undefined || existingValue === null || existingValue === '';
+      // Skip if the column exists and has a non-empty value
+      if (existingValue !== undefined && existingValue !== null && existingValue !== '') {
+        return false; // Skip this lead - it already has a value
+      }
+      return true; // Process this lead - no value exists
     });
 
-    console.log(`[massage-lead-column] ${leadsToProcess.length} leads need processing (${leads.length - leadsToProcess.length} already processed)`);
+    const skippedCount = leads.length - leadsToProcess.length;
+    if (skippedCount > 0) {
+      console.log(`[massage-lead-column] Skipping ${skippedCount} leads that already have values in "${newColumnName}"`);
+    }
+    console.log(`[massage-lead-column] ${leadsToProcess.length} leads need processing (${skippedCount} already have values)`);
 
-    // Process in batches with timeout protection
-    for (let i = 0; i < leadsToProcess.length; i += batchSize) {
+    // Process in batches of 1000 leads per API call
+    for (let i = 0; i < leadsToProcess.length; i += LEADS_PER_API_CALL) {
       // Check if we're approaching timeout before processing this batch
       let elapsedTime = Date.now() - startTime;
       if (elapsedTime > MAX_EXECUTION_TIME_MS) {
@@ -203,113 +221,276 @@ const handler: Handler = async (event) => {
           }),
         };
       }
-      const batch = leadsToProcess.slice(i, i + batchSize);
+
+      const batch = leadsToProcess.slice(i, i + LEADS_PER_API_CALL);
+      const batchNumber = Math.floor(i / LEADS_PER_API_CALL) + 1;
+      const totalBatches = Math.ceil(leadsToProcess.length / LEADS_PER_API_CALL);
       
-      // Process each lead in the batch in parallel
-      const results = await Promise.allSettled(
-        batch.map(async (lead) => {
-          // Build input data from all selected columns
-          const inputData: Record<string, string> = {};
-          let hasAnyData = false;
-          
-          columns.forEach(col => {
-            const value = lead.data[col] || '';
-            inputData[col] = value;
-            if (value.trim()) {
-              hasAnyData = true;
-            }
-          });
-          
-          if (!hasAnyData) {
-            // Skip if all columns are empty, just add empty new column
-            return { id: lead.id, ref: lead.ref, transformedValue: '' };
+      console.log(`[massage-lead-column] Processing batch ${batchNumber}/${totalBatches} with ${batch.length} leads`);
+
+      // Build input data for all leads in this batch
+      const batchInputData: Array<{ leadId: string; leadRef: any; inputData: Record<string, string>; hasData: boolean; hasValidColumns: boolean }> = [];
+      
+      for (const lead of batch) {
+        const inputData: Record<string, string> = {};
+        let hasAnyData = false;
+        let hasValidColumnData = false;
+        
+        // Only use valid columns that exist
+        validColumns.forEach(col => {
+          const value = lead.data[col] || '';
+          inputData[col] = value;
+          if (value.trim()) {
+            hasAnyData = true;
+            hasValidColumnData = true;
           }
+        });
+        
+        batchInputData.push({
+          leadId: lead.id,
+          leadRef: lead.ref,
+          inputData,
+          hasData: hasAnyData,
+          hasValidColumns: hasValidColumnData,
+        });
+      }
 
-          try {
-            // Build input text showing all column values
-            const inputText = columns.length === 1
-              ? inputData[columns[0]]
-              : columns.map(col => `${col}: "${inputData[col]}"`).join('\n');
+      // Separate leads: those with valid column data, those with no data, and those needing generic hooks
+      const leadsWithValidData = batchInputData.filter(item => item.hasValidColumns);
+      const leadsNeedingGenericHook = batchInputData.filter(item => !item.hasValidColumns && item.hasData);
+      const leadsWithoutData = batchInputData.filter(item => !item.hasData);
 
-            const completion = await openai.chat.completions.create({
-              model: 'gpt-4o-mini', // Use faster, cheaper model for bulk processing
-              messages: [
-                {
-                  role: 'system',
-                  content: `You are a data transformation assistant. Your job is to transform text data based on user instructions. 
-                  
+      let transformedValues: string[] = [];
+      let genericHooks: string[] = [];
+
+      // Process leads with valid column data
+      if (leadsWithValidData.length > 0) {
+        try {
+          // Build input text for all leads with valid data
+          const inputText = leadsWithValidData.map((item, index) => {
+            const leadInput = validColumns.length === 1
+              ? item.inputData[validColumns[0]]
+              : validColumns.map(col => `${col}: "${item.inputData[col]}"`).join('\n');
+            return `LEAD ${index + 1}:\n${leadInput}`;
+          }).join('\n\n');
+
+          const completion = await openai.chat.completions.create({
+            model: 'gpt-4o-mini',
+            messages: [
+              {
+                role: 'system',
+                content: `You are a data transformation assistant. You will receive multiple leads and must transform each one according to the instructions.
+
 CRITICAL RULES:
-- Output ONLY the transformed text, nothing else
-- Do not include quotes, labels, or explanations
+- You must return a JSON object with a "values" key containing an array with exactly ${leadsWithValidData.length} strings
+- Each string in the array corresponds to the transformed value for LEAD 1, LEAD 2, etc. in order
+- Output ONLY the transformed text for each lead, nothing else
+- Do not include quotes, labels, or explanations in the individual values
 - Keep responses concise and direct
-- If the input is empty or unclear, output an empty string
-- You have access to multiple data columns - use all of them as needed based on the instructions`,
-                },
-                {
-                  role: 'user',
-                  content: columns.length === 1
-                    ? `Transform this text according to the instructions:
+- If the input is empty or unclear, output an empty string for that lead
+- The response must be valid JSON: {"values": ["value1", "value2", "value3", ...]}`,
+              },
+              {
+                role: 'user',
+                content: `Transform the following ${leadsWithValidData.length} leads according to the instructions:
 
-INPUT TEXT: "${inputText}"
-
-INSTRUCTIONS: ${prompt}
-
-OUTPUT:`
-                    : `Transform the following data according to the instructions:
-
-INPUT DATA:
 ${inputText}
 
 INSTRUCTIONS: ${prompt}
 
-OUTPUT:`,
-                },
-              ],
-              temperature: 0.3,
-              max_tokens: 150,
+Return a JSON object with a "values" array containing ${leadsWithValidData.length} strings, one for each lead in order. Example: {"values": ["transformed value 1", "transformed value 2", ...]}`,
+              },
+            ],
+            temperature: 0.3,
+            response_format: { type: 'json_object' },
+            max_tokens: 2000, // Increased for multiple responses
+          });
+
+          const responseContent = completion.choices[0]?.message?.content?.trim() || '';
+          
+          // Try to parse as JSON array or JSON object
+          try {
+            const parsed = JSON.parse(responseContent);
+            
+            // Handle different response formats
+            if (Array.isArray(parsed)) {
+              transformedValues = parsed.map(v => String(v || '').trim());
+            } else if (typeof parsed === 'object' && parsed.values) {
+              transformedValues = Array.isArray(parsed.values) 
+                ? parsed.values.map((v: any) => String(v || '').trim())
+                : [];
+            } else if (typeof parsed === 'object') {
+              // Try to extract array from object
+              const keys = Object.keys(parsed).sort();
+              transformedValues = keys.map(key => String(parsed[key] || '').trim());
+            } else {
+              throw new Error('Unexpected response format');
+            }
+
+            // Ensure we have the right number of values
+            if (transformedValues.length !== leadsWithValidData.length) {
+              console.warn(`[massage-lead-column] Expected ${leadsWithValidData.length} values, got ${transformedValues.length}. Padding with empty strings.`);
+              while (transformedValues.length < leadsWithValidData.length) {
+                transformedValues.push('');
+              }
+              transformedValues = transformedValues.slice(0, leadsWithValidData.length);
+            }
+          } catch (parseError: any) {
+            console.error('[massage-lead-column] Error parsing JSON response:', parseError);
+            console.error('[massage-lead-column] Response content:', responseContent);
+            // Fallback: treat as array of empty strings
+            transformedValues = new Array(leadsWithValidData.length).fill('');
+            errorCount += leadsWithValidData.length;
+            leadsWithValidData.forEach((item, idx) => {
+              errors.push({
+                leadId: item.leadId,
+                error: `Failed to parse response: ${parseError.message}`,
+              });
             });
-
-            const transformedValue = completion.choices[0]?.message?.content?.trim() || '';
-            return { id: lead.id, ref: lead.ref, transformedValue };
-          } catch (err) {
-            console.error(`[massage-lead-column] Error processing lead ${lead.id}:`, err);
-            throw err;
           }
-        })
-      );
+        } catch (apiError: any) {
+          console.error(`[massage-lead-column] Error in API call for batch ${batchNumber}:`, apiError);
+          // Mark all leads in this batch as failed
+          transformedValues = new Array(leadsWithValidData.length).fill('');
+          errorCount += leadsWithValidData.length;
+          leadsWithValidData.forEach((item) => {
+            errors.push({
+              leadId: item.leadId,
+              error: apiError.message || 'API call failed',
+            });
+          });
+        }
+      }
 
-      // Update Firestore for successful transformations
+      // Generate generic personalized hooks for leads missing the source columns
+      if (leadsNeedingGenericHook.length > 0) {
+        console.log(`[massage-lead-column] Generating ${leadsNeedingGenericHook.length} generic hooks for leads with missing source columns`);
+        
+        try {
+          const genericPrompt = `Create a personalized email hook (8-15 words) that will be inserted into this outreach email:
+
+"Hi {{firstName}},
+I came across {{companyName}} and liked what I saw. [PERSONALIZATION_HOOK].
+I'm the founder of Pulse, a platform helping studios, gyms, and corporations, build and engage community. Think what run club has done in real life, digitally."
+
+Since we don't have specific company data for these leads, create a generic but still personalized hook that:
+- Is warm and engaging
+- Connects to community, engagement, or growth themes
+- Sounds authentic and conversational
+- Works for any company in the fitness/wellness/community space
+- Is 8-15 words
+
+Return a JSON object with a "values" array containing ${leadsNeedingGenericHook.length} different generic hooks. Each should be slightly varied but follow the same theme.`;
+
+          const genericCompletion = await openai.chat.completions.create({
+            model: 'gpt-4o-mini',
+            messages: [
+              {
+                role: 'system',
+                content: `You are a data transformation assistant. Generate personalized email hooks when specific company data is not available.
+
+CRITICAL RULES:
+- You must return a JSON object with a "values" key containing an array with exactly ${leadsNeedingGenericHook.length} strings
+- Each string should be a unique, slightly varied generic hook (8-15 words)
+- All hooks should be warm, engaging, and relevant to community/engagement themes
+- Keep responses concise and direct
+- The response must be valid JSON: {"values": ["hook1", "hook2", "hook3", ...]}`,
+              },
+              {
+                role: 'user',
+                content: genericPrompt,
+              },
+            ],
+            temperature: 0.7, // Higher temperature for variety in generic hooks
+            response_format: { type: 'json_object' },
+            max_tokens: 1000,
+          });
+
+          const genericResponseContent = genericCompletion.choices[0]?.message?.content?.trim() || '';
+          
+          try {
+            const parsed = JSON.parse(genericResponseContent);
+            
+            if (parsed.values && Array.isArray(parsed.values)) {
+              genericHooks = parsed.values.map((v: any) => String(v || '').trim());
+            } else {
+              throw new Error('Unexpected response format');
+            }
+
+            // Ensure we have the right number of hooks
+            if (genericHooks.length !== leadsNeedingGenericHook.length) {
+              console.warn(`[massage-lead-column] Expected ${leadsNeedingGenericHook.length} generic hooks, got ${genericHooks.length}. Reusing hooks.`);
+              while (genericHooks.length < leadsNeedingGenericHook.length) {
+                genericHooks.push(...genericHooks.slice(0, leadsNeedingGenericHook.length - genericHooks.length));
+              }
+              genericHooks = genericHooks.slice(0, leadsNeedingGenericHook.length);
+            }
+          } catch (parseError: any) {
+            console.error('[massage-lead-column] Error parsing generic hooks response:', parseError);
+            // Fallback: use a default generic hook for all
+            genericHooks = new Array(leadsNeedingGenericHook.length).fill('Your focus on building community really stands out.');
+          }
+        } catch (apiError: any) {
+          console.error(`[massage-lead-column] Error generating generic hooks:`, apiError);
+          // Fallback: use a default generic hook
+          genericHooks = new Array(leadsNeedingGenericHook.length).fill('Your focus on building community really stands out.');
+        }
+      }
+
+      // Combine all leads, maintaining order: valid data -> generic hooks -> empty
+      const allTransformedValues: Array<{ ref: any; value: string }> = [];
+      let validDataIndex = 0;
+      let genericHookIndex = 0;
+      
+      for (const item of batchInputData) {
+        if (item.hasValidColumns) {
+          // Use transformed value from valid columns
+          allTransformedValues.push({
+            ref: item.leadRef,
+            value: transformedValues[validDataIndex] || '',
+          });
+          validDataIndex++;
+        } else if (item.hasData && !item.hasValidColumns) {
+          // Use generic hook for leads with data but missing source columns
+          allTransformedValues.push({
+            ref: item.leadRef,
+            value: genericHooks[genericHookIndex] || 'Your focus on building community really stands out.',
+          });
+          genericHookIndex++;
+        } else {
+          // No data at all - empty value
+          allTransformedValues.push({
+            ref: item.leadRef,
+            value: '',
+          });
+        }
+      }
+
+      // Update Firestore for all leads in this batch
       const firestoreBatch = db.batch();
       let batchUpdates = 0;
 
-      for (const result of results) {
-        if (result.status === 'fulfilled') {
-          const { ref, transformedValue } = result.value;
-          const currentData = leadsToProcess.find(l => l.ref === ref)?.data || {};
+      for (const { ref, value } of allTransformedValues) {
+        const lead = leadsToProcess.find(l => l.ref === ref);
+        if (lead) {
+          const currentData = lead.data || {};
           firestoreBatch.update(ref, {
             data: {
               ...currentData,
-              [newColumnName]: transformedValue,
+              [newColumnName]: value,
             },
           });
           batchUpdates++;
           processedCount++;
-        } else {
-          errorCount++;
-          errors.push({
-            leadId: batch[results.indexOf(result)]?.id || 'unknown',
-            error: result.reason?.message || 'Unknown error',
-          });
         }
       }
 
       if (batchUpdates > 0) {
         await firestoreBatch.commit();
+        console.log(`[massage-lead-column] Committed ${batchUpdates} updates for batch ${batchNumber}`);
       }
 
-      const batchNumber = Math.floor(i / batchSize) + 1;
-      const totalBatches = Math.ceil(leadsToProcess.length / batchSize);
-      console.log(`[massage-lead-column] Processed batch ${batchNumber}/${totalBatches}, total: ${processedCount}/${leadsToProcess.length}`);
+      console.log(`[massage-lead-column] Completed batch ${batchNumber}/${totalBatches}, total: ${processedCount}/${leadsToProcess.length}`);
       
       // Check timeout after each batch
       elapsedTime = Date.now() - startTime;
