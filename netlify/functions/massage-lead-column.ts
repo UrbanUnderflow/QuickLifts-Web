@@ -1,8 +1,11 @@
 import { Handler } from '@netlify/functions';
 import OpenAI from 'openai';
-
-// Use require for CommonJS module (same as working functions like pulsecheck-chat.js)
-const { initializeFirebaseAdmin, admin } = require('./config/firebase');
+// Import from CommonJS module - using require() with type assertion for TypeScript compatibility
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { initializeFirebaseAdmin, admin } = require('./config/firebase') as {
+  initializeFirebaseAdmin: (request: { headers?: Record<string, string> }) => void;
+  admin: typeof import('firebase-admin');
+};
 
 const openai = new OpenAI({
   apiKey: process.env.OPEN_AI_SECRET_KEY || process.env.OPENAI_API_KEY,
