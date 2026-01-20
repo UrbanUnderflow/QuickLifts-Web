@@ -176,9 +176,14 @@ const LeadMassagingAdmin: React.FC = () => {
 
   // Lead Items State
   const [leadItems, setLeadItems] = useState<LeadItem[]>([]);
+  const [allLeadItems, setAllLeadItems] = useState<LeadItem[]>([]); // Store all leads for counting
   const [loadingItems, setLoadingItems] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  
+  // Sorting State
+  const [sortColumn, setSortColumn] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
   // Transform Modal State
   const [isTransformModalOpen, setIsTransformModalOpen] = useState(false);
@@ -205,6 +210,27 @@ const LeadMassagingAdmin: React.FC = () => {
 
   // Get selected list
   const selectedList = leadLists.find(l => l.id === selectedListId);
+
+  // Sort lead items based on selected column
+  const sortedLeadItems = useMemo(() => {
+    if (!sortColumn) return leadItems;
+    
+    return [...leadItems].sort((a, b) => {
+      const aValue = a.data[sortColumn] || '';
+      const bValue = b.data[sortColumn] || '';
+      
+      // Handle numeric values
+      const aNum = parseFloat(aValue);
+      const bNum = parseFloat(bValue);
+      if (!isNaN(aNum) && !isNaN(bNum)) {
+        return sortDirection === 'asc' ? aNum - bNum : bNum - aNum;
+      }
+      
+      // Handle string values
+      const comparison = aValue.localeCompare(bValue, undefined, { numeric: true, sensitivity: 'base' });
+      return sortDirection === 'asc' ? comparison : -comparison;
+    });
+  }, [leadItems, sortColumn, sortDirection]);
 
   // Estimate token usage for transformation
   const estimateTokenUsage = useCallback(async () => {
@@ -372,6 +398,9 @@ OUTPUT:`;
         id: doc.id,
         ...doc.data()
       })) as LeadItem[];
+
+      // Store all items for counting
+      setAllLeadItems(allItems);
 
       // Slice for pagination
       const startIndex = (page - 1) * ROWS_PER_PAGE;
@@ -875,11 +904,52 @@ OUTPUT:`;
                     <div className="px-4 py-2 bg-zinc-900/50 border-b border-zinc-800">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-xs text-zinc-500">Columns:</span>
-                        {selectedList.columns.map((col) => (
-                          <span key={col} className="px-2 py-0.5 bg-zinc-800 rounded text-xs text-zinc-300">
-                            {col}
-                          </span>
-                        ))}
+                        {selectedList.columns.map((col) => {
+                          // Count non-empty values for this column across ALL leads
+                          const valueCount = allLeadItems.filter(item => {
+                            const value = item.data[col];
+                            return value !== undefined && value !== null && value !== '';
+                          }).length;
+                          
+                          const isSorted = sortColumn === col;
+                          const isAsc = sortDirection === 'asc';
+                          
+                          return (
+                            <button
+                              key={col}
+                              onClick={() => {
+                                if (isSorted && isAsc) {
+                                  setSortDirection('desc');
+                                } else if (isSorted && !isAsc) {
+                                  setSortColumn(null);
+                                  setSortDirection('asc');
+                                } else {
+                                  setSortColumn(col);
+                                  setSortDirection('asc');
+                                }
+                              }}
+                              className={`px-2 py-1 rounded text-xs font-medium transition-colors flex items-center gap-1.5 ${
+                                isSorted
+                                  ? 'bg-purple-600 text-white'
+                                  : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+                              }`}
+                            >
+                              <span>{col}</span>
+                              <span className={`px-1.5 py-0.5 rounded text-[10px] ${
+                                isSorted
+                                  ? 'bg-purple-700 text-purple-100'
+                                  : 'bg-zinc-700 text-zinc-400'
+                              }`}>
+                                {valueCount.toLocaleString()}
+                              </span>
+                              {isSorted && (
+                                <span className="text-[10px]">
+                                  {isAsc ? '↑' : '↓'}
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
                   )}
@@ -911,13 +981,13 @@ OUTPUT:`;
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-zinc-800">
-                            {leadItems.map((item, index) => (
+                            {sortedLeadItems.map((item, index) => (
                               <tr key={item.id} className="hover:bg-zinc-900/30">
                                 <td className="px-4 py-3 text-zinc-500 whitespace-nowrap">
                                   {(currentPage - 1) * ROWS_PER_PAGE + index + 1}
                                 </td>
                                 {selectedList?.columns.map((col) => (
-                                  <td key={col} className="px-4 py-3 text-zinc-300 max-w-xs truncate" title={item.data[col] || ''}>
+                                  <td key={col} className={`px-4 py-3 text-zinc-300 max-w-xs truncate ${sortColumn === col ? 'bg-purple-900/10' : ''}`} title={item.data[col] || ''}>
                                     {item.data[col] || '-'}
                                   </td>
                                 ))}
