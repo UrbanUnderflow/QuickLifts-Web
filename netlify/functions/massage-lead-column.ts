@@ -1,11 +1,5 @@
 import { Handler } from '@netlify/functions';
 import OpenAI from 'openai';
-// Import from CommonJS module - using require() with type assertion for TypeScript compatibility
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const { initializeFirebaseAdmin, admin } = require('./config/firebase') as {
-  initializeFirebaseAdmin: (request: { headers?: Record<string, string> }) => void;
-  admin: typeof import('firebase-admin');
-};
 
 const openai = new OpenAI({
   apiKey: process.env.OPEN_AI_SECRET_KEY || process.env.OPENAI_API_KEY,
@@ -40,6 +34,10 @@ const handler: Handler = async (event) => {
   }
 
   try {
+    // Initialize Firebase Admin - require inside handler to avoid top-level issues
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { initializeFirebaseAdmin, admin } = require('./config/firebase');
+    
     // Initialize Firebase Admin
     try {
       console.log('[massage-lead-column] Initializing Firebase Admin...');
@@ -77,7 +75,18 @@ const handler: Handler = async (event) => {
       };
     }
 
-    const body = JSON.parse(event.body || '{}') as RequestBody;
+    let body: RequestBody;
+    try {
+      body = JSON.parse(event.body || '{}') as RequestBody;
+    } catch (parseError: any) {
+      console.error('[massage-lead-column] JSON parse error:', parseError);
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: 'Invalid JSON in request body', detail: parseError.message }),
+      };
+    }
+
     const { listId, sourceColumn, sourceColumns, newColumnName, prompt, batchSize = BATCH_SIZE } = body;
 
     // Support both single column (legacy) and multiple columns (new)
@@ -123,9 +132,19 @@ const handler: Handler = async (event) => {
     }
 
     // Fetch all leads for this list
-    const leadsSnapshot = await db.collection('lead-list-items')
-      .where('listId', '==', listId)
-      .get();
+    let leadsSnapshot;
+    try {
+      leadsSnapshot = await db.collection('lead-list-items')
+        .where('listId', '==', listId)
+        .get();
+    } catch (queryError: any) {
+      console.error('[massage-lead-column] Error fetching leads:', queryError);
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({ error: 'Failed to fetch leads', detail: queryError.message }),
+      };
+    }
 
     const leads = leadsSnapshot.docs.map(doc => ({
       id: doc.id,
@@ -150,8 +169,8 @@ const handler: Handler = async (event) => {
 
     // Process in batches with timeout protection
     for (let i = 0; i < leadsToProcess.length; i += batchSize) {
-      // Check if we're approaching timeout
-      const elapsedTime = Date.now() - startTime;
+      // Check if we're approaching timeout before processing this batch
+      let elapsedTime = Date.now() - startTime;
       if (elapsedTime > MAX_EXECUTION_TIME_MS) {
         console.log(`[massage-lead-column] Approaching timeout, stopping at ${processedCount}/${leadsToProcess.length} leads`);
         
@@ -293,7 +312,7 @@ OUTPUT:`,
       console.log(`[massage-lead-column] Processed batch ${batchNumber}/${totalBatches}, total: ${processedCount}/${leadsToProcess.length}`);
       
       // Check timeout after each batch
-      const elapsedTime = Date.now() - startTime;
+      elapsedTime = Date.now() - startTime;
       if (elapsedTime > MAX_EXECUTION_TIME_MS) {
         console.log(`[massage-lead-column] Timeout approaching, stopping at batch ${batchNumber}`);
         
@@ -349,13 +368,19 @@ OUTPUT:`,
         errors: errors.slice(0, 10), // Only return first 10 errors
       }),
     };
-  } catch (error) {
-    console.error('[massage-lead-column] Error:', error);
+  } catch (error: any) {
+    console.error('[massage-lead-column] Unhandled error:', error);
+    console.error('[massage-lead-column] Error stack:', error?.stack);
+    console.error('[massage-lead-column] Error name:', error?.name);
+    console.error('[massage-lead-column] Error message:', error?.message);
+    
     return {
       statusCode: 500,
       headers,
       body: JSON.stringify({
-        error: error instanceof Error ? error.message : 'Failed to transform column',
+        error: 'Failed to transform column',
+        detail: error instanceof Error ? error.message : String(error),
+        type: error?.name || 'UnknownError',
       }),
     };
   }
