@@ -150,7 +150,17 @@ const PulseCheckChat: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: currentUser.id, message: text, conversationId })
       });
-      const json = await res.json();
+      
+      let json;
+      try {
+        json = await res.json();
+      } catch (parseError) {
+        console.error('[PulseCheck Chat] Failed to parse response:', parseError);
+        const text = await res.text();
+        console.error('[PulseCheck Chat] Response text:', text);
+        throw new Error('Invalid response from server');
+      }
+      
       if (res.ok) {
         if (json.conversationId && json.conversationId !== conversationId) setConversationId(json.conversationId);
         const aiMsg: ChatMessage = {
@@ -161,6 +171,13 @@ const PulseCheckChat: React.FC = () => {
         };
         setMessages(prev => [...prev, aiMsg]);
       } else {
+        console.error('[PulseCheck Chat] Server error:', {
+          status: res.status,
+          statusText: res.statusText,
+          error: json.error,
+          detail: json.detail,
+          type: json.type
+        });
         const aiMsg: ChatMessage = {
           id: Math.random().toString(36).slice(2),
           content: 'Something went wrong. Please try again shortly.',
@@ -169,7 +186,8 @@ const PulseCheckChat: React.FC = () => {
         };
         setMessages(prev => [...prev, aiMsg]);
       }
-    } catch (_e) {
+    } catch (e) {
+      console.error('[PulseCheck Chat] Network/request error:', e);
       const aiMsg: ChatMessage = {
         id: Math.random().toString(36).slice(2),
         content: 'Network error. Please try again.',
