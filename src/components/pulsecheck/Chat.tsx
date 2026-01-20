@@ -535,8 +535,22 @@ const Chat: React.FC = () => {
         setMessages(prev => [...prev, aiMsg]);
         
         // Handle escalation if present
+        console.log('[PulseCheck Chat] Response data:', {
+          hasEscalation: !!json.escalation,
+          escalation: json.escalation,
+          shouldEscalate: json.escalation?.shouldEscalate,
+          tier: json.escalation?.tier
+        });
+        
         if (json.escalation && json.escalation.shouldEscalate) {
+          console.log('[PulseCheck Chat] Triggering escalation handler');
           handleEscalation(json.escalation, text);
+        } else {
+          console.log('[PulseCheck Chat] No escalation triggered:', {
+            hasEscalation: !!json.escalation,
+            shouldEscalate: json.escalation?.shouldEscalate,
+            reason: !json.escalation ? 'No escalation object' : !json.escalation.shouldEscalate ? 'shouldEscalate is false' : 'Unknown'
+          });
         }
       } else {
         console.error('[PulseCheck Chat] Server error:', {

@@ -1,14 +1,17 @@
 import { Handler } from '@netlify/functions';
 import OpenAI from 'openai';
-import { getFirestore } from './utils/getServiceAccount';
+
+// Use require for CommonJS module (same as working functions like pulsecheck-chat.js)
+const { initializeFirebaseAdmin, admin } = require('./config/firebase');
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+  apiKey: process.env.OPEN_AI_SECRET_KEY || process.env.OPENAI_API_KEY,
 });
 
 interface RequestBody {
   listId: string;
-  sourceColumn: string;
+  sourceColumn?: string; // Legacy support
+  sourceColumns?: string[]; // New: support multiple columns
   newColumnName: string;
   prompt: string;
   batchSize?: number;
@@ -33,18 +36,56 @@ const handler: Handler = async (event) => {
   }
 
   try {
-    const body = JSON.parse(event.body || '{}') as RequestBody;
-    const { listId, sourceColumn, newColumnName, prompt, batchSize = BATCH_SIZE } = body;
-
-    if (!listId || !sourceColumn || !newColumnName || !prompt) {
-      return {
-        statusCode: 400,
-        headers,
-        body: JSON.stringify({ error: 'Missing required fields: listId, sourceColumn, newColumnName, prompt' }),
+    // Initialize Firebase Admin
+    try {
+      console.log('[massage-lead-column] Initializing Firebase Admin...');
+      initializeFirebaseAdmin({ headers: event.headers || {} });
+      console.log('[massage-lead-column] Firebase Admin initialized successfully');
+    } catch (firebaseInitError: any) {
+      console.error('[massage-lead-column] Firebase initialization error:', firebaseInitError);
+      console.error('[massage-lead-column] Error details:', {
+        message: firebaseInitError.message,
+        stack: firebaseInitError.stack,
+        name: firebaseInitError.name
+      });
+      return { 
+        statusCode: 500, 
+        headers, 
+        body: JSON.stringify({ 
+          error: 'Firebase initialization failed', 
+          detail: firebaseInitError.message,
+          hint: 'Check that FIREBASE_SECRET_KEY is properly formatted with PEM headers in Netlify environment variables'
+        }) 
       };
     }
 
-    const db = await getFirestore();
+    // Get fresh db reference after initialization
+    let db;
+    try {
+      db = admin.firestore();
+      console.log('[massage-lead-column] Firestore instance obtained');
+    } catch (dbError: any) {
+      console.error('[massage-lead-column] Error getting Firestore:', dbError);
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({ error: 'Failed to get Firestore instance', detail: dbError.message })
+      };
+    }
+
+    const body = JSON.parse(event.body || '{}') as RequestBody;
+    const { listId, sourceColumn, sourceColumns, newColumnName, prompt, batchSize = BATCH_SIZE } = body;
+
+    // Support both single column (legacy) and multiple columns (new)
+    const columns = sourceColumns || (sourceColumn ? [sourceColumn] : []);
+    
+    if (!listId || columns.length === 0 || !newColumnName || !prompt) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: 'Missing required fields: listId, sourceColumns (or sourceColumn), newColumnName, prompt' }),
+      };
+    }
 
     // Verify the list exists and get current columns
     const listDoc = await db.collection('lead-lists').doc(listId).get();
@@ -59,11 +100,13 @@ const handler: Handler = async (event) => {
     const listData = listDoc.data();
     const currentColumns = listData?.columns || [];
 
-    if (!currentColumns.includes(sourceColumn)) {
+    // Validate all source columns exist
+    const missingColumns = columns.filter(col => !currentColumns.includes(col));
+    if (missingColumns.length > 0) {
       return {
         statusCode: 400,
         headers,
-        body: JSON.stringify({ error: `Source column "${sourceColumn}" not found in list` }),
+        body: JSON.stringify({ error: `Source column(s) not found in list: ${missingColumns.join(', ')}` }),
       };
     }
 
@@ -99,14 +142,29 @@ const handler: Handler = async (event) => {
       // Process each lead in the batch in parallel
       const results = await Promise.allSettled(
         batch.map(async (lead) => {
-          const sourceValue = lead.data[sourceColumn] || '';
+          // Build input data from all selected columns
+          const inputData: Record<string, string> = {};
+          let hasAnyData = false;
           
-          if (!sourceValue.trim()) {
-            // Skip empty values, just add empty new column
+          columns.forEach(col => {
+            const value = lead.data[col] || '';
+            inputData[col] = value;
+            if (value.trim()) {
+              hasAnyData = true;
+            }
+          });
+          
+          if (!hasAnyData) {
+            // Skip if all columns are empty, just add empty new column
             return { id: lead.id, ref: lead.ref, transformedValue: '' };
           }
 
           try {
+            // Build input text showing all column values
+            const inputText = columns.length === 1
+              ? inputData[columns[0]]
+              : columns.map(col => `${col}: "${inputData[col]}"`).join('\n');
+
             const completion = await openai.chat.completions.create({
               model: 'gpt-4o-mini', // Use faster, cheaper model for bulk processing
               messages: [
@@ -118,13 +176,23 @@ CRITICAL RULES:
 - Output ONLY the transformed text, nothing else
 - Do not include quotes, labels, or explanations
 - Keep responses concise and direct
-- If the input is empty or unclear, output an empty string`,
+- If the input is empty or unclear, output an empty string
+- You have access to multiple data columns - use all of them as needed based on the instructions`,
                 },
                 {
                   role: 'user',
-                  content: `Transform this text according to the instructions:
+                  content: columns.length === 1
+                    ? `Transform this text according to the instructions:
 
-INPUT TEXT: "${sourceValue}"
+INPUT TEXT: "${inputText}"
+
+INSTRUCTIONS: ${prompt}
+
+OUTPUT:`
+                    : `Transform the following data according to the instructions:
+
+INPUT DATA:
+${inputText}
 
 INSTRUCTIONS: ${prompt}
 
