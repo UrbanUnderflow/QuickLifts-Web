@@ -2,7 +2,7 @@
 // - Accepts user message and optional conversationId
 // - Loads minimal user context
 // - Loads recent conversation messages
-// - Calls OpenAI Chat Completions (requires OPENAI_API_KEY)
+// - Calls OpenAI Chat Completions (requires OPEN_AI_SECRET_KEY)
 // - Includes escalation classification for safety monitoring
 // - Saves/updates conversation document in Firestore (conversations)
 
@@ -161,9 +161,9 @@ exports.handler = async (event, context) => {
     openAiMessages.push({ role: 'user', content: message });
 
     // Call OpenAI
-    const apiKey = process.env.OPENAI_API_KEY;
+    const apiKey = process.env.OPEN_AI_SECRET_KEY;
     if (!apiKey) {
-      return { statusCode: 500, headers, body: JSON.stringify({ error: 'Missing OPENAI_API_KEY' }) };
+      return { statusCode: 500, headers, body: JSON.stringify({ error: 'Missing OPEN_AI_SECRET_KEY' }) };
     }
 
     const completionRes = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -338,7 +338,7 @@ function cryptoRandomId() {
  * Classify message for escalation
  */
 async function classifyEscalation(db, userId, message, recentMessages, conversationId) {
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = process.env.OPEN_AI_SECRET_KEY;
   if (!apiKey) return null;
 
   // Load escalation conditions from Firestore
