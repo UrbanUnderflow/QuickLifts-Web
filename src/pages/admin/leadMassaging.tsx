@@ -190,6 +190,8 @@ const LeadMassagingAdmin: React.FC = () => {
   const [sourceColumns, setSourceColumns] = useState<string[]>([]);
   const [transformPrompt, setTransformPrompt] = useState('');
   const [newColumnName, setNewColumnName] = useState('');
+  const [columnMode, setColumnMode] = useState<'new' | 'existing'>('new');
+  const [selectedExistingColumn, setSelectedExistingColumn] = useState<string>('');
   const [isTransforming, setIsTransforming] = useState(false);
   const [transformProgress, setTransformProgress] = useState<{ current: number; total: number } | null>(null);
   const [tokenEstimate, setTokenEstimate] = useState<{ inputTokens: number; outputTokens: number; estimatedCost: number } | null>(null);
@@ -600,14 +602,26 @@ OUTPUT:`;
 
   // Transform column with AI
   const handleTransformColumn = async () => {
-    if (!selectedListId || sourceColumns.length === 0 || !newColumnName.trim() || !transformPrompt.trim()) {
-      setMessage({ type: 'error', text: 'Please select at least one source column, enter a new column name, and provide a transformation prompt' });
+    if (!selectedListId || sourceColumns.length === 0 || !transformPrompt.trim()) {
+      setMessage({ type: 'error', text: 'Please select at least one source column and provide a transformation prompt' });
       return;
     }
 
-    // Check if new column name already exists
-    if (selectedList?.columns.includes(newColumnName.trim())) {
-      setMessage({ type: 'error', text: 'Column name already exists. Please choose a different name.' });
+    // Determine the target column name
+    const targetColumnName = columnMode === 'new' 
+      ? newColumnName.trim()
+      : selectedExistingColumn;
+
+    if (!targetColumnName) {
+      setMessage({ type: 'error', text: columnMode === 'new' 
+        ? 'Please enter a new column name' 
+        : 'Please select an existing column to update' });
+      return;
+    }
+
+    // For new columns, check if name already exists
+    if (columnMode === 'new' && selectedList?.columns.includes(targetColumnName)) {
+      setMessage({ type: 'error', text: 'Column name already exists. Please select "Update Existing Column" instead or choose a different name.' });
       return;
     }
 
@@ -621,7 +635,7 @@ OUTPUT:`;
         body: JSON.stringify({
           listId: selectedListId,
           sourceColumns, // Send array of columns
-          newColumnName: newColumnName.trim(),
+          newColumnName: targetColumnName,
           prompt: transformPrompt.trim()
         })
       });
@@ -637,7 +651,8 @@ OUTPUT:`;
       if (result.partial) {
         toastMessage = `Partially completed: ${result.processedCount} of ${result.totalLeads} leads transformed. ${result.remainingLeads} remaining. ${result.message || 'Run again to continue.'}`;
       } else {
-        toastMessage = `✅ Successfully transformed ${result.processedCount} of ${result.totalLeads} leads into "${newColumnName}"${result.errorCount > 0 ? ` (${result.errorCount} errors)` : ''}`;
+        const actionText = columnMode === 'new' ? 'created' : 'updated';
+        toastMessage = `✅ Successfully ${actionText} ${result.processedCount} of ${result.totalLeads} leads in "${targetColumnName}"${result.errorCount > 0 ? ` (${result.errorCount} errors)` : ''}`;
       }
 
       setMessage({ type: 'success', text: toastMessage });
@@ -650,6 +665,8 @@ OUTPUT:`;
       setIsTransformModalOpen(false);
       setSourceColumns([]);
       setNewColumnName('');
+      setSelectedExistingColumn('');
+      setColumnMode('new');
       setTransformPrompt('');
       
       // Reload data
@@ -760,7 +777,7 @@ OUTPUT:`;
 
           {/* Toast Notification */}
           {message && (
-            <div className={`fixed top-4 right-4 z-50 p-4 rounded-xl border shadow-lg max-w-md animate-in slide-in-from-top-5 ${
+            <div className={`fixed top-4 right-4 z-[100] p-4 rounded-xl border shadow-lg max-w-md animate-in slide-in-from-top-5 ${
               message.type === 'success' 
                 ? 'bg-green-900/95 border-green-700 text-green-100'
                 : message.type === 'error'
@@ -1043,7 +1060,7 @@ OUTPUT:`;
 
       {/* Create Lead List Modal */}
       {isCreateModalOpen && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[90] flex items-center justify-center p-4">
           <div className="bg-[#1a1e24] rounded-2xl border border-zinc-700 w-full max-w-3xl max-h-[90vh] overflow-hidden">
             {/* Modal Header */}
             <div className="flex items-center justify-between p-6 border-b border-zinc-700">
@@ -1225,7 +1242,19 @@ OUTPUT:`;
 
       {/* Transform Column Modal */}
       {isTransformModalOpen && selectedList && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div 
+          className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[90] flex items-center justify-center p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setIsTransformModalOpen(false);
+              setSourceColumns([]);
+              setNewColumnName('');
+              setSelectedExistingColumn('');
+              setColumnMode('new');
+              setTransformPrompt('');
+            }
+          }}
+        >
           <div className="bg-[#1a1e24] rounded-2xl border border-zinc-700 w-full max-w-lg overflow-hidden">
             {/* Modal Header */}
             <div className="flex items-center justify-between p-6 border-b border-zinc-700">
@@ -1237,7 +1266,14 @@ OUTPUT:`;
                 <p className="text-sm text-zinc-400 mt-1">Create a new column using AI</p>
               </div>
               <button
-                onClick={() => setIsTransformModalOpen(false)}
+                onClick={() => {
+                  setIsTransformModalOpen(false);
+                  setSourceColumns([]);
+                  setNewColumnName('');
+                  setSelectedExistingColumn('');
+                  setColumnMode('new');
+                  setTransformPrompt('');
+                }}
                 disabled={isTransforming}
                 className="p-2 hover:bg-zinc-800 rounded-lg transition-colors"
               >
@@ -1367,19 +1403,86 @@ Output ONLY the hook text, nothing else.`);
 
               <div>
                 <label className="block text-sm font-medium text-zinc-400 mb-2">
-                  New Column Name
+                  Column Selection
                 </label>
-                <input
-                  type="text"
-                  value={newColumnName}
-                  onChange={(e) => setNewColumnName(e.target.value)}
-                  placeholder="e.g., personalization_hook"
-                  className="w-full px-4 py-3 bg-zinc-900 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-purple-500 transition-colors"
-                  disabled={isTransforming}
-                />
-                <p className="text-xs text-zinc-500 mt-1">
-                  Use snake_case for Instantly compatibility (e.g., personalization_hook)
-                </p>
+                <div className="space-y-3">
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setColumnMode('new');
+                        setSelectedExistingColumn('');
+                      }}
+                      className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        columnMode === 'new'
+                          ? 'bg-purple-600 text-white'
+                          : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+                      }`}
+                      disabled={isTransforming}
+                    >
+                      Create New Column
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setColumnMode('existing');
+                        setNewColumnName('');
+                      }}
+                      className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        columnMode === 'existing'
+                          ? 'bg-purple-600 text-white'
+                          : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+                      }`}
+                      disabled={isTransforming}
+                    >
+                      Update Existing Column
+                    </button>
+                  </div>
+
+                  {columnMode === 'new' ? (
+                    <div>
+                      <input
+                        type="text"
+                        value={newColumnName}
+                        onChange={(e) => setNewColumnName(e.target.value)}
+                        placeholder="e.g., personalization_hook"
+                        className="w-full px-4 py-3 bg-zinc-900 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-purple-500 transition-colors"
+                        disabled={isTransforming}
+                      />
+                      <p className="text-xs text-zinc-500 mt-1">
+                        Use snake_case for Instantly compatibility (e.g., personalization_hook)
+                      </p>
+                    </div>
+                  ) : (
+                    <div>
+                      <select
+                        value={selectedExistingColumn}
+                        onChange={(e) => setSelectedExistingColumn(e.target.value)}
+                        className="w-full px-4 py-3 bg-zinc-900 border border-zinc-700 rounded-xl text-white focus:outline-none focus:border-purple-500 transition-colors"
+                        disabled={isTransforming}
+                      >
+                        <option value="">Select column to update...</option>
+                        {selectedList?.columns.map((col) => {
+                          // Count how many leads have values in this column
+                          const valueCount = allLeadItems.filter(item => {
+                            const value = item.data[col];
+                            return value !== undefined && value !== null && value !== '';
+                          }).length;
+                          const emptyCount = selectedList.rowCount - valueCount;
+                          
+                          return (
+                            <option key={col} value={col}>
+                              {col} ({valueCount.toLocaleString()} with values, {emptyCount.toLocaleString()} empty)
+                            </option>
+                          );
+                        })}
+                      </select>
+                      <p className="text-xs text-zinc-500 mt-1">
+                        Will only update leads that don't have values in this column
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
 
               {transformProgress && (
@@ -1405,7 +1508,14 @@ Output ONLY the hook text, nothing else.`);
             {/* Modal Footer */}
             <div className="flex items-center justify-end gap-3 p-6 border-t border-zinc-700">
               <button
-                onClick={() => setIsTransformModalOpen(false)}
+                onClick={() => {
+                  setIsTransformModalOpen(false);
+                  setSourceColumns([]);
+                  setNewColumnName('');
+                  setSelectedExistingColumn('');
+                  setColumnMode('new');
+                  setTransformPrompt('');
+                }}
                 disabled={isTransforming}
                 className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm transition-colors"
               >
@@ -1413,9 +1523,9 @@ Output ONLY the hook text, nothing else.`);
               </button>
               <button
                 onClick={handleTransformColumn}
-                disabled={isTransforming || sourceColumns.length === 0 || !newColumnName.trim() || !transformPrompt.trim()}
+                disabled={isTransforming || sourceColumns.length === 0 || !transformPrompt.trim() || (columnMode === 'new' && !newColumnName.trim()) || (columnMode === 'existing' && !selectedExistingColumn)}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                  isTransforming || sourceColumns.length === 0 || !newColumnName.trim() || !transformPrompt.trim()
+                  isTransforming || sourceColumns.length === 0 || !transformPrompt.trim() || (columnMode === 'new' && !newColumnName.trim()) || (columnMode === 'existing' && !selectedExistingColumn)
                     ? 'bg-zinc-700 text-zinc-400 cursor-not-allowed'
                     : 'bg-purple-600 text-white hover:bg-purple-500'
                 }`}
@@ -1439,7 +1549,7 @@ Output ONLY the hook text, nothing else.`);
 
       {/* Push to Instantly Modal */}
       {isPushModalOpen && selectedList && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[90] flex items-center justify-center p-4">
           <div className="bg-[#1a1e24] rounded-2xl border border-zinc-700 w-full max-w-lg max-h-[90vh] overflow-hidden">
             {/* Modal Header */}
             <div className="flex items-center justify-between p-6 border-b border-zinc-700">

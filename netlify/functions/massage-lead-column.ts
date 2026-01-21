@@ -133,12 +133,11 @@ const handler: Handler = async (event) => {
       };
     }
 
-    if (currentColumns.includes(newColumnName)) {
-      return {
-        statusCode: 400,
-        headers,
-        body: JSON.stringify({ error: `Column "${newColumnName}" already exists` }),
-      };
+    // Check if column already exists - if it does, we'll update existing values (skip ones with values)
+    const columnExists = currentColumns.includes(newColumnName);
+    if (!columnExists) {
+      // Only add to columns list if it's a new column
+      // For existing columns, we'll just update the values
     }
 
     // Fetch all leads for this list
@@ -192,12 +191,18 @@ const handler: Handler = async (event) => {
       if (elapsedTime > MAX_EXECUTION_TIME_MS) {
         console.log(`[massage-lead-column] Approaching timeout, stopping at ${processedCount}/${leadsToProcess.length} leads`);
         
-        // Update the list's columns array to include the new column (even if partial)
-        const updatedColumns = [...currentColumns];
-        if (!updatedColumns.includes(newColumnName)) {
-          updatedColumns.push(newColumnName);
+        // Update the list's columns array to include the new column (even if partial, only if new)
+        if (!columnExists) {
+          const updatedColumns = [...currentColumns];
+          if (!updatedColumns.includes(newColumnName)) {
+            updatedColumns.push(newColumnName);
+            await db.collection('lead-lists').doc(listId).update({
+              columns: updatedColumns,
+              updatedAt: new Date(),
+            });
+          }
+        } else {
           await db.collection('lead-lists').doc(listId).update({
-            columns: updatedColumns,
             updatedAt: new Date(),
           });
         }
@@ -497,12 +502,18 @@ CRITICAL RULES:
       if (elapsedTime > MAX_EXECUTION_TIME_MS) {
         console.log(`[massage-lead-column] Timeout approaching, stopping at batch ${batchNumber}`);
         
-        // Update the list's columns array to include the new column (even if partial)
-        const updatedColumns = [...currentColumns];
-        if (!updatedColumns.includes(newColumnName)) {
-          updatedColumns.push(newColumnName);
+        // Update the list's columns array to include the new column (even if partial, only if new)
+        if (!columnExists) {
+          const updatedColumns = [...currentColumns];
+          if (!updatedColumns.includes(newColumnName)) {
+            updatedColumns.push(newColumnName);
+            await db.collection('lead-lists').doc(listId).update({
+              columns: updatedColumns,
+              updatedAt: new Date(),
+            });
+          }
+        } else {
           await db.collection('lead-lists').doc(listId).update({
-            columns: updatedColumns,
             updatedAt: new Date(),
           });
         }
@@ -528,12 +539,19 @@ CRITICAL RULES:
       }
     }
 
-    // Update the list's columns array to include the new column
-    const updatedColumns = [...currentColumns, newColumnName];
-    await db.collection('lead-lists').doc(listId).update({
-      columns: updatedColumns,
-      updatedAt: new Date(),
-    });
+    // Update the list's columns array to include the new column (only if it's new)
+    if (!columnExists) {
+      const updatedColumns = [...currentColumns, newColumnName];
+      await db.collection('lead-lists').doc(listId).update({
+        columns: updatedColumns,
+        updatedAt: new Date(),
+      });
+    } else {
+      // Just update the timestamp for existing columns
+      await db.collection('lead-lists').doc(listId).update({
+        updatedAt: new Date(),
+      });
+    }
 
     console.log(`[massage-lead-column] Complete. Processed: ${processedCount}, Errors: ${errorCount}`);
 
