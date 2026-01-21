@@ -14,7 +14,7 @@ interface RequestBody {
   batchSize?: number;
 }
 
-const LEADS_PER_API_CALL = 80; // Smaller batches => fewer timeouts, more reliable progress
+const LEADS_PER_API_CALL = 30; // Smaller batches => fewer timeouts, more reliable progress
 const MAX_EXECUTION_TIME_MS = 24000; // 24 seconds - leave buffer before Netlify timeout (26s limit)
 const OPENAI_TIMEOUT_MS = 18000; // Give OpenAI more time (still within Netlify budget)
 
@@ -390,7 +390,7 @@ Return a JSON object with a "values" array containing ${leadsWithValidData.lengt
             ],
             temperature: 0.3,
             response_format: { type: 'json_object' },
-            max_tokens: 1200, // Enough for ~80 short hooks; keeps latency down
+            max_tokens: 700, // Enough for ~30 short hooks; keeps latency down
           });
 
           // Add timeout to OpenAI API call
