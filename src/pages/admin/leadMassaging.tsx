@@ -195,6 +195,7 @@ const LeadMassagingAdmin: React.FC = () => {
   const [isTransforming, setIsTransforming] = useState(false);
   const [transformProgress, setTransformProgress] = useState<{ current: number; total: number } | null>(null);
   const [tokenEstimate, setTokenEstimate] = useState<{ inputTokens: number; outputTokens: number; estimatedCost: number } | null>(null);
+  const [autoContinueTransform, setAutoContinueTransform] = useState(true);
 
   // Push to Instantly Modal State
   const [isPushModalOpen, setIsPushModalOpen] = useState(false);
@@ -625,42 +626,90 @@ OUTPUT:`;
       return;
     }
 
+    // Initialize progress immediately (based on how many already have values in target column)
+    const totalForProgress = selectedList?.rowCount || 0;
+    const alreadyHaveValueCount = allLeadItems.filter(item => {
+      const v = item.data?.[targetColumnName];
+      return v !== undefined && v !== null && String(v).trim() !== '';
+    }).length;
+    if (totalForProgress > 0) {
+      setTransformProgress({ current: Math.min(alreadyHaveValueCount, totalForProgress), total: totalForProgress });
+    }
+
     setIsTransforming(true);
-    setTransformProgress(null);
 
     try {
-      const response = await fetch('/.netlify/functions/massage-lead-column', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          listId: selectedListId,
-          sourceColumns, // Send array of columns
-          newColumnName: targetColumnName,
-          prompt: transformPrompt.trim()
-        })
-      });
-
-      // Check if response is OK and is JSON
-      const contentType = response.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        const text = await response.text();
-        console.error('[handleTransformColumn] Non-JSON response:', {
-          status: response.status,
-          statusText: response.statusText,
-          contentType,
-          bodyPreview: text.substring(0, 200)
+      const callTransformOnce = async () => {
+        const response = await fetch('/.netlify/functions/massage-lead-column', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            listId: selectedListId,
+            sourceColumns, // Send array of columns
+            newColumnName: targetColumnName,
+            prompt: transformPrompt.trim()
+          })
         });
-        
-        if (response.status === 504 || response.status === 502) {
-          throw new Error('Request timed out. The transformation is taking too long. Please try again - it will continue from where it left off.');
+
+        // Check if response is OK and is JSON
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+          const text = await response.text();
+          console.error('[handleTransformColumn] Non-JSON response:', {
+            status: response.status,
+            statusText: response.statusText,
+            contentType,
+            bodyPreview: text.substring(0, 200)
+          });
+          
+          if (response.status === 504 || response.status === 502) {
+            throw new Error('Request timed out. The transformation is taking too long. Please try again - it will continue from where it left off.');
+          }
+          throw new Error(`Server returned ${response.status}: ${response.statusText}. Response was not JSON.`);
         }
-        throw new Error(`Server returned ${response.status}: ${response.statusText}. Response was not JSON.`);
-      }
 
-      const result = await response.json();
+        const result = await response.json();
+        if (!response.ok) {
+          throw new Error(result.error || 'Failed to transform column');
+        }
+        return result;
+      };
 
-      if (!response.ok) {
-        throw new Error(result.error || 'Failed to transform column');
+      let result: any = null;
+      let loops = 0;
+
+      // Auto-continue: keep invoking the function until done (or no progress)
+      while (true) {
+        loops++;
+        result = await callTransformOnce();
+
+        const totalLeads = typeof result.totalLeads === 'number'
+          ? result.totalLeads
+          : (selectedList?.rowCount || 0);
+        const processed = typeof result.processedCount === 'number' ? result.processedCount : 0;
+        if (totalLeads > 0) {
+          setTransformProgress({ current: Math.min(processed, totalLeads), total: totalLeads });
+        }
+
+        const shouldContinue =
+          !!autoContinueTransform &&
+          !!result.partial &&
+          typeof result.remainingLeads === 'number' &&
+          result.remainingLeads > 0;
+
+        if (!shouldContinue) break;
+
+        const newlyProcessed = typeof result.newlyProcessedCount === 'number' ? result.newlyProcessedCount : null;
+        if (newlyProcessed !== null && newlyProcessed <= 0) {
+          // Stop auto-loop if this run made no progress (prevents infinite loop)
+          break;
+        }
+
+        // Safety valve: avoid accidental infinite loops
+        if (loops >= 250) break;
+
+        // Small delay to avoid hammering the function / API
+        await new Promise(resolve => setTimeout(resolve, 400));
       }
 
       // Show detailed toast message
@@ -697,6 +746,7 @@ OUTPUT:`;
       setSelectedExistingColumn('');
       setColumnMode('new');
       setTransformPrompt('');
+      setAutoContinueTransform(true);
       
       // Reload data
       loadLeadLists();
@@ -898,6 +948,31 @@ OUTPUT:`;
 
             {/* Main Content Area */}
             <div className="lg:col-span-3">
+              {/* Transform Progress Overlay */}
+              {isTransforming && transformProgress && transformProgress.total > 0 && (
+                <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[110] w-[min(720px,calc(100vw-2rem))]">
+                  <div className="bg-[#1a1e24] border border-zinc-700 rounded-xl p-4 shadow-2xl">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-white truncate">Transforming…</p>
+                        <p className="text-xs text-zinc-400">
+                          {transformProgress.current.toLocaleString()} / {transformProgress.total.toLocaleString()} completed
+                        </p>
+                      </div>
+                      <div className="text-xs text-zinc-400 font-mono">
+                        {Math.floor((transformProgress.current / transformProgress.total) * 100)}%
+                      </div>
+                    </div>
+                    <div className="mt-3 h-2 bg-zinc-800 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-purple-500 transition-all"
+                        style={{ width: `${Math.min(100, (transformProgress.current / transformProgress.total) * 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {!selectedListId ? (
                 <div className="bg-[#1a1e24] rounded-xl border border-zinc-800 flex flex-col items-center justify-center py-20 text-zinc-500">
                   <Database className="w-16 h-16 mb-4 opacity-30" />
@@ -1281,6 +1356,7 @@ OUTPUT:`;
               setSelectedExistingColumn('');
               setColumnMode('new');
               setTransformPrompt('');
+              setAutoContinueTransform(true);
             }
           }}
         >
@@ -1302,6 +1378,7 @@ OUTPUT:`;
                   setSelectedExistingColumn('');
                   setColumnMode('new');
                   setTransformPrompt('');
+                  setAutoContinueTransform(true);
                 }}
                 disabled={isTransforming}
                 className="p-2 hover:bg-zinc-800 rounded-lg transition-colors"
@@ -1514,6 +1591,22 @@ Output ONLY the hook text, nothing else.`);
                 </div>
               </div>
 
+              <div className="flex items-center gap-3 p-4 bg-zinc-900 border border-zinc-700 rounded-xl">
+                <input
+                  type="checkbox"
+                  checked={autoContinueTransform}
+                  onChange={(e) => setAutoContinueTransform(e.target.checked)}
+                  disabled={isTransforming}
+                  className="w-4 h-4 rounded border-zinc-600 bg-zinc-800 text-purple-500 focus:ring-purple-500 focus:ring-offset-zinc-900"
+                />
+                <div className="flex-1">
+                  <p className="text-sm text-white">Auto-run until complete</p>
+                  <p className="text-xs text-zinc-500">
+                    Automatically keeps processing the next batches until all empty rows are filled (or no progress is made).
+                  </p>
+                </div>
+              </div>
+
               {transformProgress && (
                 <div className="p-4 bg-purple-900/20 border border-purple-800 rounded-xl">
                   <div className="flex items-center gap-3">
@@ -1544,6 +1637,7 @@ Output ONLY the hook text, nothing else.`);
                   setSelectedExistingColumn('');
                   setColumnMode('new');
                   setTransformPrompt('');
+                  setAutoContinueTransform(true);
                 }}
                 disabled={isTransforming}
                 className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm transition-colors"
