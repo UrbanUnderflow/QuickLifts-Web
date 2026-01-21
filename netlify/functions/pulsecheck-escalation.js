@@ -364,6 +364,7 @@ ${transcript}`;
  * Notify coach of escalation (Tier 1 and above)
  */
 async function notifyCoach(body) {
+  const { sendCoachEscalationEmail } = require('./utils/sendCoachEscalationEmail');
   const { escalationId, userId, coachId } = body;
 
   if (!escalationId || !userId) {
@@ -400,6 +401,18 @@ async function notifyCoach(body) {
 
   const nowSec = Math.floor(Date.now() / 1000);
 
+  // Load tier (for correct coach messaging + email copy)
+  let tier = EscalationTier.None;
+  try {
+    const escalationSnap = await db.collection('escalation-records').doc(escalationId).get();
+    if (escalationSnap.exists) {
+      const data = escalationSnap.data() || {};
+      if (typeof data.tier === 'number') tier = data.tier;
+    }
+  } catch (e) {
+    console.warn('[pulsecheck-escalation] Failed to load escalation tier (non-blocking):', e?.message || e);
+  }
+
   // Update escalation record
   await db.collection('escalation-records').doc(escalationId).update({
     coachNotified: true,
@@ -413,13 +426,53 @@ async function notifyCoach(body) {
   await db.collection('notifications').add({
     userId: targetCoachId,
     type: 'escalation-alert',
-    title: 'Athlete Check-In Alert',
-    message: 'An athlete you coach has been flagged for elevated concern. Please check your dashboard.',
+    title: tier === EscalationTier.MonitorOnly ? 'Athlete Check-In (Monitor)' : 'Athlete Check-In Alert',
+    message:
+      tier === EscalationTier.MonitorOnly
+        ? 'An athlete you coach was flagged for monitor-only concern. Please review when you can.'
+        : tier === EscalationTier.ElevatedRisk || tier === EscalationTier.CriticalRisk
+          ? 'An athlete you coach had an escalation event and was handed off to a clinical professional. Please check your dashboard.'
+          : 'An athlete you coach has been flagged for elevated concern. Please check your dashboard.',
     escalationId,
     athleteId: userId,
     read: false,
     createdAt: nowSec
   });
+
+  // Email coach (non-blocking). Do NOT include conversation details.
+  try {
+    const coachSnap = await db.collection('users').doc(targetCoachId).get();
+    const coach = coachSnap.exists ? (coachSnap.data() || {}) : {};
+    const coachEmail = typeof coach.email === 'string' ? coach.email.trim() : '';
+    const coachName = (coach.displayName || coach.username || '').trim();
+
+    const athleteSnap = await db.collection('users').doc(userId).get();
+    const athlete = athleteSnap.exists ? (athleteSnap.data() || {}) : {};
+    const athleteName = (athlete.displayName || athlete.username || 'An athlete').trim();
+
+    if (coachEmail) {
+      const siteUrl = process.env.SITE_URL || '';
+      const result = await sendCoachEscalationEmail({
+        coachEmail,
+        coachName,
+        athleteName,
+        tier,
+        siteUrl,
+      });
+      console.log('[pulsecheck-escalation] Coach email sent (best-effort):', {
+        success: result?.success,
+        skipped: result?.skipped,
+        tier,
+        coachId: targetCoachId,
+      });
+    } else {
+      console.log('[pulsecheck-escalation] Coach email missing; skipping email send', {
+        coachId: targetCoachId,
+      });
+    }
+  } catch (emailErr) {
+    console.warn('[pulsecheck-escalation] Coach email send failed (non-blocking):', emailErr?.message || emailErr);
+  }
 
   console.log('[pulsecheck-escalation] Coach notified:', {
     coachId: targetCoachId,

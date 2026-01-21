@@ -25,6 +25,13 @@ const {
 // Import the Move of the Day function
 const { selectMoveOfTheDay } = require("./moveOfTheDay");
 
+// Lead Massaging (AI transforms for lead lists)
+const {
+  onLeadMassageJobCreated,
+  onLeadMassageItemJobCreated,
+  onGenerateWriteForLeadMassage,
+} = require("./leadMassagingJobs");
+
 // Export all functions for Firebase to discover
 exports.syncWorkoutSessionToRoot = syncWorkoutSessionToRoot;
 exports.syncWorkoutSummaryToRoot = syncWorkoutSummaryToRoot;
@@ -99,3 +106,8 @@ exports.processEmailQueue = require("./mentalCurriculumNotifications").processEm
 // Export the Daily Reflection notification functions
 exports.scheduledDailyReflection = require("./dailyReflectionNotifications").scheduledDailyReflection;
 exports.sendTestReflectionNotification = require("./dailyReflectionNotifications").sendTestReflectionNotification; 
+
+// Export Lead Massaging worker functions
+exports.onLeadMassageJobCreated = onLeadMassageJobCreated;
+exports.onLeadMassageItemJobCreated = onLeadMassageItemJobCreated;
+exports.onGenerateWriteForLeadMassage = onGenerateWriteForLeadMassage;

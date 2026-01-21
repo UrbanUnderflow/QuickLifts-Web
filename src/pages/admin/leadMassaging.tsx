@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Head from 'next/head';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
-import { collection, getDocs, query, orderBy, addDoc, deleteDoc, doc, Timestamp, updateDoc, writeBatch, where, limit, startAfter, getDoc } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, addDoc, deleteDoc, doc, Timestamp, updateDoc, writeBatch, where, limit, startAfter, getDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
 import { 
   Database, Upload, Trash2, Loader2, Sparkles, Clock, AlertCircle, CheckCircle, 
@@ -202,6 +202,8 @@ const LeadMassagingAdmin: React.FC = () => {
   const [transformJobDebug, setTransformJobDebug] = useState<any>(null);
   const [transformLastHeartbeatMs, setTransformLastHeartbeatMs] = useState<number | null>(null);
   const [transformNowMs, setTransformNowMs] = useState<number>(Date.now());
+  const transformJobUnsubscribeRef = useRef<null | (() => void)>(null);
+  const leadItemsUnsubscribeRef = useRef<null | (() => void)>(null);
   const lastLoggedJobMessageRef = useRef<string>('');
   const lastLoggedJobPhaseRef = useRef<string>('');
 
@@ -211,6 +213,54 @@ const LeadMassagingAdmin: React.FC = () => {
     const t = setInterval(() => setTransformNowMs(Date.now()), 1000);
     return () => clearInterval(t);
   }, [isTransforming]);
+
+  // Live subscription for lead items so the table updates progressively while jobs run.
+  useEffect(() => {
+    // Cleanup any previous subscription
+    if (leadItemsUnsubscribeRef.current) {
+      leadItemsUnsubscribeRef.current();
+      leadItemsUnsubscribeRef.current = null;
+    }
+
+    if (!selectedListId) return;
+
+    try {
+      const qAll = query(
+        collection(db, 'lead-list-items'),
+        where('listId', '==', selectedListId),
+        orderBy('createdAt', 'asc')
+      );
+
+      const unsubscribe = onSnapshot(
+        qAll,
+        (snapshot) => {
+          const allItems = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          })) as LeadItem[];
+
+          setAllLeadItems(allItems);
+          const startIndex = (currentPage - 1) * ROWS_PER_PAGE;
+          const endIndex = startIndex + ROWS_PER_PAGE;
+          setLeadItems(allItems.slice(startIndex, endIndex));
+        },
+        (error) => {
+          console.error('[leadMassaging] lead-list-items snapshot error:', error);
+        }
+      );
+
+      leadItemsUnsubscribeRef.current = unsubscribe;
+    } catch (e) {
+      console.error('[leadMassaging] failed to subscribe to lead-list-items:', e);
+    }
+
+    return () => {
+      if (leadItemsUnsubscribeRef.current) {
+        leadItemsUnsubscribeRef.current();
+        leadItemsUnsubscribeRef.current = null;
+      }
+    };
+  }, [selectedListId, currentPage]);
 
   const parseTimestampToMs = (value: any): number | null => {
     if (!value) return null;
@@ -709,53 +759,16 @@ OUTPUT:`;
       if (!jobId) throw new Error('Failed to start transform job (missing jobId)');
       setTransformJobId(jobId);
 
-      // Trigger the worker from the client (fire-and-forget) so the job actually starts running.
-      // This avoids unreliable function-to-function HTTP calls inside Netlify.
-      fetch('/.netlify/functions/process-massage-lead-job', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jobId }),
-      })
-        .then(async (res) => {
-          console.log('[leadMassaging] worker trigger response:', res.status);
-          // Some Netlify background invocations may return non-JSON; that’s fine.
-          // We rely on Firestore job updates for truth.
-        })
-        .catch((e) => {
-          console.error('[leadMassaging] worker trigger failed:', e);
-        });
-
+      // Subscribe to the Firestore job doc for live progress + completion.
+      // The Firebase worker will fan-out and process automatically (no Netlify worker trigger needed).
+      const jobRef = doc(db, 'lead-massage-jobs', jobId);
       const finalJob = await new Promise<any>((resolve, reject) => {
-        let attempts = 0;
-        const maxAttempts = 60 * 30; // ~30 minutes at 2s intervals
+        const unsubscribe = onSnapshot(
+          jobRef,
+          (snap) => {
+            if (!snap.exists()) return;
+            const job = { id: snap.id, ...snap.data() } as any;
 
-        const interval = setInterval(async () => {
-          attempts++;
-          try {
-            const statusRes = await fetch(`/.netlify/functions/get-massage-lead-job?jobId=${encodeURIComponent(jobId)}`);
-            const ct = statusRes.headers.get('content-type');
-            if (!ct || !ct.includes('application/json')) {
-              // transient; keep polling
-              if (attempts >= maxAttempts) {
-                clearInterval(interval);
-                setTransformPollInterval(null);
-                reject(new Error('Timed out waiting for job status.'));
-              }
-              return;
-            }
-
-            const statusJson = await statusRes.json();
-            const job = statusJson?.job;
-            if (!statusRes.ok || !job) {
-              if (attempts >= maxAttempts) {
-                clearInterval(interval);
-                setTransformPollInterval(null);
-                reject(new Error(statusJson?.error || 'Failed to fetch job status.'));
-              }
-              return;
-            }
-
-            // Surface job message/debug so we can see what it's doing (avoid console spam)
             const nextMessage = typeof job?.message === 'string' ? job.message : '';
             const nextPhase = typeof job?.debug?.phase === 'string' ? job.debug.phase : '';
             if (nextMessage && nextMessage !== lastLoggedJobMessageRef.current) {
@@ -783,25 +796,20 @@ OUTPUT:`;
 
             const status = job.status as string | undefined;
             if (status === 'completed' || status === 'paused' || status === 'failed' || status === 'cancelled') {
-              clearInterval(interval);
-              setTransformPollInterval(null);
+              unsubscribe();
+              transformJobUnsubscribeRef.current = null;
               resolve(job);
             }
-
-            if (attempts >= maxAttempts) {
-              clearInterval(interval);
-              setTransformPollInterval(null);
-              reject(new Error('Timed out waiting for job to complete.'));
-            }
-          } catch (err) {
-            if (attempts >= maxAttempts) {
-              clearInterval(interval);
-              setTransformPollInterval(null);
-              reject(err);
-            }
+          },
+          (err) => {
+            console.error('[leadMassaging] job snapshot error:', err);
+            unsubscribe();
+            transformJobUnsubscribeRef.current = null;
+            reject(err);
           }
-        }, 2000);
-        setTransformPollInterval(interval);
+        );
+
+        transformJobUnsubscribeRef.current = unsubscribe;
       });
 
       // Show detailed toast message
@@ -865,6 +873,10 @@ OUTPUT:`;
       setTransformJobMessage('');
       setTransformJobDebug(null);
       setTransformLastHeartbeatMs(null);
+      if (transformJobUnsubscribeRef.current) {
+        transformJobUnsubscribeRef.current();
+        transformJobUnsubscribeRef.current = null;
+      }
       if (transformPollInterval) {
         clearInterval(transformPollInterval);
         setTransformPollInterval(null);
