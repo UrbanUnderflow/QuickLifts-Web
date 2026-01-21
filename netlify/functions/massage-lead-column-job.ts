@@ -85,20 +85,84 @@ const handler: Handler = async (event) => {
     process.env.DEPLOY_URL;
 
   if (baseUrl) {
-    // eslint-disable-next-line @typescript-eslint/no-floating-promises
-    fetch(`${baseUrl}/.netlify/functions/process-massage-lead-job`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ jobId }),
-    }).catch((e) => {
+    const workerUrl = `${baseUrl}/.netlify/functions/process-massage-lead-job`;
+    try {
+      await jobRef.set(
+        {
+          debug: {
+            ...(await jobRef.get().then((d) => d.data()?.debug || {})),
+            trigger: {
+              attemptedAt: new Date(),
+              workerUrl,
+            },
+          },
+          updatedAt: new Date(),
+        },
+        { merge: true }
+      );
+
+      // Trigger worker and capture response for debugging
+      const res = await fetch(workerUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobId }),
+      });
+
+      await jobRef.set(
+        {
+          debug: {
+            ...(await jobRef.get().then((d) => d.data()?.debug || {})),
+            trigger: {
+              attemptedAt: new Date(),
+              workerUrl,
+              responseStatus: res.status,
+              responseOk: res.ok,
+            },
+          },
+          updatedAt: new Date(),
+        },
+        { merge: true }
+      );
+    } catch (e: any) {
       console.error('[massage-lead-column-job] Failed to trigger worker:', e);
-    });
+      await jobRef.set(
+        {
+          status: 'failed' as JobStatus,
+          message: 'Failed to start worker. See debug.trigger for details.',
+          debug: {
+            ...(await jobRef.get().then((d) => d.data()?.debug || {})),
+            trigger: {
+              attemptedAt: new Date(),
+              workerUrl,
+              error: e?.message || String(e),
+            },
+          },
+          updatedAt: new Date(),
+        },
+        { merge: true }
+      );
+    }
   } else {
     console.warn('[massage-lead-column-job] Missing site URL env var; worker not auto-triggered. Job remains queued.', {
       URL: process.env.URL,
       DEPLOY_PRIME_URL: process.env.DEPLOY_PRIME_URL,
       DEPLOY_URL: process.env.DEPLOY_URL,
     });
+    await jobRef.set(
+      {
+        status: 'failed' as JobStatus,
+        message: 'Missing Netlify site URL env vars; cannot trigger worker.',
+        debug: {
+          ...(await jobRef.get().then((d) => d.data()?.debug || {})),
+          trigger: {
+            attemptedAt: new Date(),
+            error: 'Missing URL/DEPLOY_PRIME_URL/DEPLOY_URL',
+          },
+        },
+        updatedAt: new Date(),
+      },
+      { merge: true }
+    );
   }
 
   return {
