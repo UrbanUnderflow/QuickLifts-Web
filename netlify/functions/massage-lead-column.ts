@@ -14,8 +14,9 @@ interface RequestBody {
   batchSize?: number;
 }
 
-const LEADS_PER_API_CALL = 1000; // Process 1000 leads per OpenAI API call
-const MAX_EXECUTION_TIME_MS = 20000; // 20 seconds - leave buffer before Netlify timeout
+const LEADS_PER_API_CALL = 200; // Process 200 leads per OpenAI API call (reduced to avoid timeouts)
+const MAX_EXECUTION_TIME_MS = 24000; // 24 seconds - leave buffer before Netlify timeout (26s limit)
+const OPENAI_TIMEOUT_MS = 10000; // 10 second timeout for OpenAI API calls
 
 const handler: Handler = async (event) => {
   const headers = {
@@ -270,6 +271,47 @@ const handler: Handler = async (event) => {
 
       // Process leads with valid column data
       if (leadsWithValidData.length > 0) {
+        // Check timeout before making API call
+        elapsedTime = Date.now() - startTime;
+        if (elapsedTime > MAX_EXECUTION_TIME_MS) {
+          console.log(`[massage-lead-column] Approaching timeout before API call, stopping at ${processedCount}/${leadsToProcess.length} leads`);
+          
+          // Update the list's columns array (only if new column)
+          if (!columnExists) {
+            const updatedColumns = [...currentColumns];
+            if (!updatedColumns.includes(newColumnName)) {
+              updatedColumns.push(newColumnName);
+              await db.collection('lead-lists').doc(listId).update({
+                columns: updatedColumns,
+                updatedAt: new Date(),
+              });
+            }
+          } else {
+            await db.collection('lead-lists').doc(listId).update({
+              updatedAt: new Date(),
+            });
+          }
+
+          const alreadyProcessed = leads.length - leadsToProcess.length;
+          const totalProcessed = alreadyProcessed + processedCount;
+
+          return {
+            statusCode: 200,
+            headers,
+            body: JSON.stringify({
+              success: true,
+              partial: true,
+              processedCount: totalProcessed,
+              errorCount,
+              totalLeads: leads.length,
+              remainingLeads: leadsToProcess.length - processedCount,
+              newColumnName,
+              message: `Approaching timeout. Processed ${totalProcessed} of ${leads.length} leads. Run again to continue processing the remaining ${leadsToProcess.length - processedCount} leads.`,
+              errors: errors.slice(0, 10),
+            }),
+          };
+        }
+
         try {
           // Build input text for all leads with valid data
           const inputText = leadsWithValidData.map((item, index) => {
@@ -279,7 +321,8 @@ const handler: Handler = async (event) => {
             return `LEAD ${index + 1}:\n${leadInput}`;
           }).join('\n\n');
 
-          const completion = await openai.chat.completions.create({
+          // Add timeout wrapper for OpenAI API call
+          const apiCallPromise = openai.chat.completions.create({
             model: 'gpt-4o-mini',
             messages: [
               {
@@ -310,6 +353,13 @@ Return a JSON object with a "values" array containing ${leadsWithValidData.lengt
             response_format: { type: 'json_object' },
             max_tokens: 2000, // Increased for multiple responses
           });
+
+          // Add timeout to OpenAI API call
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('OpenAI API call timed out')), OPENAI_TIMEOUT_MS)
+          );
+
+          const completion = await Promise.race([apiCallPromise, timeoutPromise]) as any;
 
           const responseContent = completion.choices[0]?.message?.content?.trim() || '';
           
@@ -355,6 +405,48 @@ Return a JSON object with a "values" array containing ${leadsWithValidData.lengt
           }
         } catch (apiError: any) {
           console.error(`[massage-lead-column] Error in API call for batch ${batchNumber}:`, apiError);
+          console.error(`[massage-lead-column] Error type: ${apiError.name}, message: ${apiError.message}`);
+          
+          // If timeout, return early with partial results
+          if (apiError.message?.includes('timed out') || apiError.message?.includes('timeout')) {
+            console.log(`[massage-lead-column] OpenAI API timeout for batch ${batchNumber}, returning partial results`);
+            
+            // Update the list's columns array (only if new column)
+            if (!columnExists) {
+              const updatedColumns = [...currentColumns];
+              if (!updatedColumns.includes(newColumnName)) {
+                updatedColumns.push(newColumnName);
+                await db.collection('lead-lists').doc(listId).update({
+                  columns: updatedColumns,
+                  updatedAt: new Date(),
+                });
+              }
+            } else {
+              await db.collection('lead-lists').doc(listId).update({
+                updatedAt: new Date(),
+              });
+            }
+
+            const alreadyProcessed = leads.length - leadsToProcess.length;
+            const totalProcessed = alreadyProcessed + processedCount;
+
+            return {
+              statusCode: 200,
+              headers,
+              body: JSON.stringify({
+                success: true,
+                partial: true,
+                processedCount: totalProcessed,
+                errorCount,
+                totalLeads: leads.length,
+                remainingLeads: leadsToProcess.length - processedCount,
+                newColumnName,
+                message: `OpenAI API timeout. Processed ${totalProcessed} of ${leads.length} leads. Run again to continue processing the remaining ${leadsToProcess.length - processedCount} leads.`,
+                errors: errors.slice(0, 10),
+              }),
+            };
+          }
+          
           // Mark all leads in this batch as failed
           transformedValues = new Array(leadsWithValidData.length).fill('');
           errorCount += leadsWithValidData.length;
@@ -387,7 +479,8 @@ Since we don't have specific company data for these leads, create a generic but 
 
 Return a JSON object with a "values" array containing ${leadsNeedingGenericHook.length} different generic hooks. Each should be slightly varied but follow the same theme.`;
 
-          const genericCompletion = await openai.chat.completions.create({
+          // Add timeout wrapper for generic hooks API call
+          const genericApiCallPromise = openai.chat.completions.create({
             model: 'gpt-4o-mini',
             messages: [
               {
@@ -410,6 +503,12 @@ CRITICAL RULES:
             response_format: { type: 'json_object' },
             max_tokens: 1000,
           });
+
+          const genericTimeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('OpenAI API call timed out')), OPENAI_TIMEOUT_MS)
+          );
+
+          const genericCompletion = await Promise.race([genericApiCallPromise, genericTimeoutPromise]) as any;
 
           const genericResponseContent = genericCompletion.choices[0]?.message?.content?.trim() || '';
           
