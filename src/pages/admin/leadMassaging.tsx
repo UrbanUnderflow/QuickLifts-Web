@@ -197,6 +197,40 @@ const LeadMassagingAdmin: React.FC = () => {
   const [tokenEstimate, setTokenEstimate] = useState<{ inputTokens: number; outputTokens: number; estimatedCost: number } | null>(null);
   const [autoContinueTransform, setAutoContinueTransform] = useState(true);
   const [transformJobId, setTransformJobId] = useState<string | null>(null);
+  const [transformPollInterval, setTransformPollInterval] = useState<NodeJS.Timeout | null>(null);
+  const [transformJobMessage, setTransformJobMessage] = useState<string>('');
+  const [transformJobDebug, setTransformJobDebug] = useState<any>(null);
+  const [transformLastHeartbeatMs, setTransformLastHeartbeatMs] = useState<number | null>(null);
+  const [transformNowMs, setTransformNowMs] = useState<number>(Date.now());
+
+  // Keep a ticking clock while transforming so the "stale" warning updates live
+  useEffect(() => {
+    if (!isTransforming) return;
+    const t = setInterval(() => setTransformNowMs(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [isTransforming]);
+
+  const parseTimestampToMs = (value: any): number | null => {
+    if (!value) return null;
+    if (typeof value === 'number') return value;
+    if (typeof value === 'string') {
+      const ms = Date.parse(value);
+      return Number.isFinite(ms) ? ms : null;
+    }
+    // Common Firestore/admin timestamp shapes
+    if (typeof value === 'object') {
+      // firebase-admin Timestamp JSON
+      if (typeof value.seconds === 'number') return value.seconds * 1000;
+      if (typeof value._seconds === 'number') return value._seconds * 1000;
+      if (typeof value.nanoseconds === 'number' && typeof value.seconds === 'number') return value.seconds * 1000;
+      if (typeof value.toDate === 'function') {
+        const d = value.toDate();
+        const ms = d?.getTime?.();
+        return typeof ms === 'number' ? ms : null;
+      }
+    }
+    return null;
+  };
 
   // Push to Instantly Modal State
   const [isPushModalOpen, setIsPushModalOpen] = useState(false);
@@ -686,6 +720,7 @@ OUTPUT:`;
               // transient; keep polling
               if (attempts >= maxAttempts) {
                 clearInterval(interval);
+                setTransformPollInterval(null);
                 reject(new Error('Timed out waiting for job status.'));
               }
               return;
@@ -696,9 +731,24 @@ OUTPUT:`;
             if (!statusRes.ok || !job) {
               if (attempts >= maxAttempts) {
                 clearInterval(interval);
+                setTransformPollInterval(null);
                 reject(new Error(statusJson?.error || 'Failed to fetch job status.'));
               }
               return;
+            }
+
+            // Surface job message/debug so we can see what it's doing
+            if (job?.message && job.message !== transformJobMessage) {
+              console.log('[leadMassaging] job update:', job.message, job.debug || {});
+              setTransformJobMessage(job.message);
+            }
+            if (job?.debug) {
+              setTransformJobDebug(job.debug);
+              const hb =
+                parseTimestampToMs(job.debug?.lastHeartbeatAt) ??
+                parseTimestampToMs(job.debug?.lastHeartbeatAtMs) ??
+                parseTimestampToMs(job.updatedAt);
+              if (hb) setTransformLastHeartbeatMs(hb);
             }
 
             const totalLeads = typeof job.totalLeads === 'number' ? job.totalLeads : (selectedList?.rowCount || 0);
@@ -708,28 +758,33 @@ OUTPUT:`;
             }
 
             const status = job.status as string | undefined;
-            if (status === 'completed' || status === 'paused' || status === 'failed') {
+            if (status === 'completed' || status === 'paused' || status === 'failed' || status === 'cancelled') {
               clearInterval(interval);
+              setTransformPollInterval(null);
               resolve(job);
             }
 
             if (attempts >= maxAttempts) {
               clearInterval(interval);
+              setTransformPollInterval(null);
               reject(new Error('Timed out waiting for job to complete.'));
             }
           } catch (err) {
             if (attempts >= maxAttempts) {
               clearInterval(interval);
+              setTransformPollInterval(null);
               reject(err);
             }
           }
         }, 2000);
+        setTransformPollInterval(interval);
       });
 
       // Show detailed toast message
       let toastMessage = '';
       const isPartial = finalJob?.status === 'paused';
       const isFailed = finalJob?.status === 'failed';
+      const isCancelled = finalJob?.status === 'cancelled';
       const alreadyProcessed = typeof finalJob?.alreadyProcessedCount === 'number' ? finalJob.alreadyProcessedCount : null;
       const newlyProcessed = typeof finalJob?.newlyProcessedCount === 'number' ? finalJob.newlyProcessedCount : null;
       const details =
@@ -741,7 +796,9 @@ OUTPUT:`;
         throw new Error(finalJob?.message || 'Transform job failed');
       }
 
-      if (isPartial) {
+      if (isCancelled) {
+        toastMessage = `Job cancelled. Updated ${newlyProcessed || 0} new leads before cancellation. ${finalJob.remainingLeads || 0} remaining.`;
+      } else if (isPartial) {
         const details =
           alreadyProcessed !== null && newlyProcessed !== null
             ? ` (${newlyProcessed} newly updated this run, ${alreadyProcessed} already had values)`
@@ -767,6 +824,9 @@ OUTPUT:`;
       setTransformPrompt('');
       setAutoContinueTransform(true);
       setTransformJobId(null);
+      setTransformJobMessage('');
+      setTransformJobDebug(null);
+      setTransformLastHeartbeatMs(null);
       
       // Reload data
       loadLeadLists();
@@ -778,6 +838,41 @@ OUTPUT:`;
       setIsTransforming(false);
       setTransformProgress(null);
       setTransformJobId(null);
+      setTransformJobMessage('');
+      setTransformJobDebug(null);
+      setTransformLastHeartbeatMs(null);
+      if (transformPollInterval) {
+        clearInterval(transformPollInterval);
+        setTransformPollInterval(null);
+      }
+    }
+  };
+
+  // Cancel transform job
+  const handleCancelTransform = async () => {
+    if (!transformJobId) return;
+
+    try {
+      const response = await fetch(`/.netlify/functions/cancel-massage-lead-job?jobId=${encodeURIComponent(transformJobId)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to cancel job');
+      }
+
+      // Stop polling
+      if (transformPollInterval) {
+        clearInterval(transformPollInterval);
+        setTransformPollInterval(null);
+      }
+
+      setMessage({ type: 'info', text: 'Job cancellation requested. It may take a moment to stop.' });
+    } catch (error) {
+      console.error('Error cancelling job:', error);
+      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Failed to cancel job' });
     }
   };
 
@@ -974,14 +1069,43 @@ OUTPUT:`;
                 <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[110] w-[min(720px,calc(100vw-2rem))]">
                   <div className="bg-[#1a1e24] border border-zinc-700 rounded-xl p-4 shadow-2xl">
                     <div className="flex items-center justify-between gap-3">
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium text-white truncate">Transforming…</p>
                         <p className="text-xs text-zinc-400">
                           {transformProgress.current.toLocaleString()} / {transformProgress.total.toLocaleString()} completed
                         </p>
+                        {(transformJobMessage || transformJobDebug?.phase) && (
+                          <p className="text-xs text-zinc-500 mt-1 truncate">
+                            {transformJobDebug?.phase ? `[${transformJobDebug.phase}] ` : ''}
+                            {transformJobMessage || 'Working…'}
+                          </p>
+                        )}
+                        {transformLastHeartbeatMs && (() => {
+                          const ageMs = Math.max(0, transformNowMs - transformLastHeartbeatMs);
+                          if (ageMs < 45_000) return null;
+                          const ageSec = Math.floor(ageMs / 1000);
+                          const isVeryStale = ageMs >= 120_000;
+                          return (
+                            <p className={`text-xs mt-1 ${isVeryStale ? 'text-red-400' : 'text-yellow-400'}`}>
+                              {isVeryStale ? '⚠️ No progress for' : 'No progress for'} {ageSec}s — likely stuck or the worker crashed. Check Netlify function logs.
+                            </p>
+                          );
+                        })()}
                       </div>
-                      <div className="text-xs text-zinc-400 font-mono">
-                        {Math.floor((transformProgress.current / transformProgress.total) * 100)}%
+                      <div className="flex items-center gap-3">
+                        <div className="text-xs text-zinc-400 font-mono">
+                          {Math.floor((transformProgress.current / transformProgress.total) * 100)}%
+                        </div>
+                        {transformJobId && (
+                          <button
+                            onClick={handleCancelTransform}
+                            className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white text-xs font-medium rounded-lg transition-colors flex items-center gap-1.5"
+                            title="Stop transformation"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                            Stop
+                          </button>
+                        )}
                       </div>
                     </div>
                     <div className="mt-3 h-2 bg-zinc-800 rounded-full overflow-hidden">
