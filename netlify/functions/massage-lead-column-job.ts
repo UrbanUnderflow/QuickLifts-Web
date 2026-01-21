@@ -76,94 +76,24 @@ const handler: Handler = async (event) => {
     updatedAt: createdAt,
   });
 
-  // Kick off worker (background) function and return jobId immediately.
-  // NOTE: Netlify background functions don't reliably support "return early and keep running" with an IIFE.
-  // We instead use a separate background worker function that reads this jobId and runs to completion.
-  const baseUrl =
-    process.env.URL ||
-    process.env.DEPLOY_PRIME_URL ||
-    process.env.DEPLOY_URL;
-
-  if (baseUrl) {
-    const workerUrl = `${baseUrl}/.netlify/functions/process-massage-lead-job`;
-    try {
-      await jobRef.set(
-        {
-          debug: {
-            ...(await jobRef.get().then((d) => d.data()?.debug || {})),
-            trigger: {
-              attemptedAt: new Date(),
-              workerUrl,
-            },
-          },
-          updatedAt: new Date(),
+  // IMPORTANT: Do NOT try to trigger the worker from inside this function.
+  // Netlify function-to-function HTTP calls can fail depending on runtime/network settings.
+  // The admin UI will trigger the background worker using the returned jobId.
+  await jobRef.set(
+    {
+      message: 'Job queued (waiting for worker trigger)',
+      debug: {
+        ...(await jobRef.get().then((d) => d.data()?.debug || {})),
+        trigger: {
+          mode: 'client',
+          note: 'Client should call /.netlify/functions/process-massage-lead-job with { jobId }',
+          attemptedAt: new Date(),
         },
-        { merge: true }
-      );
-
-      // Trigger worker and capture response for debugging
-      const res = await fetch(workerUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jobId }),
-      });
-
-      await jobRef.set(
-        {
-          debug: {
-            ...(await jobRef.get().then((d) => d.data()?.debug || {})),
-            trigger: {
-              attemptedAt: new Date(),
-              workerUrl,
-              responseStatus: res.status,
-              responseOk: res.ok,
-            },
-          },
-          updatedAt: new Date(),
-        },
-        { merge: true }
-      );
-    } catch (e: any) {
-      console.error('[massage-lead-column-job] Failed to trigger worker:', e);
-      await jobRef.set(
-        {
-          status: 'failed' as JobStatus,
-          message: 'Failed to start worker. See debug.trigger for details.',
-          debug: {
-            ...(await jobRef.get().then((d) => d.data()?.debug || {})),
-            trigger: {
-              attemptedAt: new Date(),
-              workerUrl,
-              error: e?.message || String(e),
-            },
-          },
-          updatedAt: new Date(),
-        },
-        { merge: true }
-      );
-    }
-  } else {
-    console.warn('[massage-lead-column-job] Missing site URL env var; worker not auto-triggered. Job remains queued.', {
-      URL: process.env.URL,
-      DEPLOY_PRIME_URL: process.env.DEPLOY_PRIME_URL,
-      DEPLOY_URL: process.env.DEPLOY_URL,
-    });
-    await jobRef.set(
-      {
-        status: 'failed' as JobStatus,
-        message: 'Missing Netlify site URL env vars; cannot trigger worker.',
-        debug: {
-          ...(await jobRef.get().then((d) => d.data()?.debug || {})),
-          trigger: {
-            attemptedAt: new Date(),
-            error: 'Missing URL/DEPLOY_PRIME_URL/DEPLOY_URL',
-          },
-        },
-        updatedAt: new Date(),
       },
-      { merge: true }
-    );
-  }
+      updatedAt: new Date(),
+    },
+    { merge: true }
+  );
 
   return {
     statusCode: 202,

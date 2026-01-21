@@ -709,6 +709,22 @@ OUTPUT:`;
       if (!jobId) throw new Error('Failed to start transform job (missing jobId)');
       setTransformJobId(jobId);
 
+      // Trigger the worker from the client (fire-and-forget) so the job actually starts running.
+      // This avoids unreliable function-to-function HTTP calls inside Netlify.
+      fetch('/.netlify/functions/process-massage-lead-job', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobId }),
+      })
+        .then(async (res) => {
+          console.log('[leadMassaging] worker trigger response:', res.status);
+          // Some Netlify background invocations may return non-JSON; that’s fine.
+          // We rely on Firestore job updates for truth.
+        })
+        .catch((e) => {
+          console.error('[leadMassaging] worker trigger failed:', e);
+        });
+
       const finalJob = await new Promise<any>((resolve, reject) => {
         let attempts = 0;
         const maxAttempts = 60 * 30; // ~30 minutes at 2s intervals
