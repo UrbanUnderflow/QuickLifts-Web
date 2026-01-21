@@ -196,6 +196,7 @@ const LeadMassagingAdmin: React.FC = () => {
   const [transformProgress, setTransformProgress] = useState<{ current: number; total: number } | null>(null);
   const [tokenEstimate, setTokenEstimate] = useState<{ inputTokens: number; outputTokens: number; estimatedCost: number } | null>(null);
   const [autoContinueTransform, setAutoContinueTransform] = useState(true);
+  const [transformJobId, setTransformJobId] = useState<string | null>(null);
 
   // Push to Instantly Modal State
   const [isPushModalOpen, setIsPushModalOpen] = useState(false);
@@ -639,98 +640,116 @@ OUTPUT:`;
     setIsTransforming(true);
 
     try {
-      const callTransformOnce = async () => {
-        const response = await fetch('/.netlify/functions/massage-lead-column', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            listId: selectedListId,
-            sourceColumns, // Send array of columns
-            newColumnName: targetColumnName,
-            prompt: transformPrompt.trim()
-          })
+      // Start a background job (Netlify background function) and poll for status.
+      const startResponse = await fetch('/.netlify/functions/massage-lead-column-job', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          listId: selectedListId,
+          sourceColumns,
+          newColumnName: targetColumnName,
+          prompt: transformPrompt.trim(),
+        }),
+      });
+
+      const startContentType = startResponse.headers.get('content-type');
+      if (!startContentType || !startContentType.includes('application/json')) {
+        const text = await startResponse.text();
+        console.error('[handleTransformColumn] Non-JSON start response:', {
+          status: startResponse.status,
+          statusText: startResponse.statusText,
+          contentType: startContentType,
+          bodyPreview: text.substring(0, 200),
         });
-
-        // Check if response is OK and is JSON
-        const contentType = response.headers.get('content-type');
-        if (!contentType || !contentType.includes('application/json')) {
-          const text = await response.text();
-          console.error('[handleTransformColumn] Non-JSON response:', {
-            status: response.status,
-            statusText: response.statusText,
-            contentType,
-            bodyPreview: text.substring(0, 200)
-          });
-          
-          if (response.status === 504 || response.status === 502) {
-            throw new Error('Request timed out. The transformation is taking too long. Please try again - it will continue from where it left off.');
-          }
-          throw new Error(`Server returned ${response.status}: ${response.statusText}. Response was not JSON.`);
-        }
-
-        const result = await response.json();
-        if (!response.ok) {
-          throw new Error(result.error || 'Failed to transform column');
-        }
-        return result;
-      };
-
-      let result: any = null;
-      let loops = 0;
-
-      // Auto-continue: keep invoking the function until done (or no progress)
-      while (true) {
-        loops++;
-        result = await callTransformOnce();
-
-        const totalLeads = typeof result.totalLeads === 'number'
-          ? result.totalLeads
-          : (selectedList?.rowCount || 0);
-        const processed = typeof result.processedCount === 'number' ? result.processedCount : 0;
-        if (totalLeads > 0) {
-          setTransformProgress({ current: Math.min(processed, totalLeads), total: totalLeads });
-        }
-
-        const shouldContinue =
-          !!autoContinueTransform &&
-          !!result.partial &&
-          typeof result.remainingLeads === 'number' &&
-          result.remainingLeads > 0;
-
-        if (!shouldContinue) break;
-
-        const newlyProcessed = typeof result.newlyProcessedCount === 'number' ? result.newlyProcessedCount : null;
-        if (newlyProcessed !== null && newlyProcessed <= 0) {
-          // Stop auto-loop if this run made no progress (prevents infinite loop)
-          break;
-        }
-
-        // Safety valve: avoid accidental infinite loops
-        if (loops >= 250) break;
-
-        // Small delay to avoid hammering the function / API
-        await new Promise(resolve => setTimeout(resolve, 400));
+        throw new Error(`Failed to start background job (HTTP ${startResponse.status}).`);
       }
+
+      const startResult = await startResponse.json();
+      if (!startResponse.ok) {
+        throw new Error(startResult.error || 'Failed to start transform job');
+      }
+
+      const jobId = startResult.jobId as string | undefined;
+      if (!jobId) throw new Error('Failed to start transform job (missing jobId)');
+      setTransformJobId(jobId);
+
+      const finalJob = await new Promise<any>((resolve, reject) => {
+        let attempts = 0;
+        const maxAttempts = 60 * 30; // ~30 minutes at 2s intervals
+
+        const interval = setInterval(async () => {
+          attempts++;
+          try {
+            const statusRes = await fetch(`/.netlify/functions/get-massage-lead-job?jobId=${encodeURIComponent(jobId)}`);
+            const ct = statusRes.headers.get('content-type');
+            if (!ct || !ct.includes('application/json')) {
+              // transient; keep polling
+              if (attempts >= maxAttempts) {
+                clearInterval(interval);
+                reject(new Error('Timed out waiting for job status.'));
+              }
+              return;
+            }
+
+            const statusJson = await statusRes.json();
+            const job = statusJson?.job;
+            if (!statusRes.ok || !job) {
+              if (attempts >= maxAttempts) {
+                clearInterval(interval);
+                reject(new Error(statusJson?.error || 'Failed to fetch job status.'));
+              }
+              return;
+            }
+
+            const totalLeads = typeof job.totalLeads === 'number' ? job.totalLeads : (selectedList?.rowCount || 0);
+            const processed = typeof job.processedCount === 'number' ? job.processedCount : 0;
+            if (totalLeads > 0) {
+              setTransformProgress({ current: Math.min(processed, totalLeads), total: totalLeads });
+            }
+
+            const status = job.status as string | undefined;
+            if (status === 'completed' || status === 'paused' || status === 'failed') {
+              clearInterval(interval);
+              resolve(job);
+            }
+
+            if (attempts >= maxAttempts) {
+              clearInterval(interval);
+              reject(new Error('Timed out waiting for job to complete.'));
+            }
+          } catch (err) {
+            if (attempts >= maxAttempts) {
+              clearInterval(interval);
+              reject(err);
+            }
+          }
+        }, 2000);
+      });
 
       // Show detailed toast message
       let toastMessage = '';
-      if (result.partial) {
-        const alreadyProcessed = typeof result.alreadyProcessedCount === 'number' ? result.alreadyProcessedCount : null;
-        const newlyProcessed = typeof result.newlyProcessedCount === 'number' ? result.newlyProcessedCount : null;
+      const isPartial = finalJob?.status === 'paused';
+      const isFailed = finalJob?.status === 'failed';
+      const alreadyProcessed = typeof finalJob?.alreadyProcessedCount === 'number' ? finalJob.alreadyProcessedCount : null;
+      const newlyProcessed = typeof finalJob?.newlyProcessedCount === 'number' ? finalJob.newlyProcessedCount : null;
+      const details =
+        alreadyProcessed !== null && newlyProcessed !== null
+          ? ` (${newlyProcessed} newly updated, ${alreadyProcessed} already had values)`
+          : '';
+
+      if (isFailed) {
+        throw new Error(finalJob?.message || 'Transform job failed');
+      }
+
+      if (isPartial) {
         const details =
           alreadyProcessed !== null && newlyProcessed !== null
             ? ` (${newlyProcessed} newly updated this run, ${alreadyProcessed} already had values)`
             : '';
-        toastMessage = `Partially completed: ${result.processedCount} of ${result.totalLeads} leads done${details}. ${result.remainingLeads} remaining. ${result.message || 'Run again to continue.'}`;
+        toastMessage = `Partially completed: ${finalJob.processedCount} of ${finalJob.totalLeads} leads done${details}. ${finalJob.remainingLeads} remaining. ${finalJob.message || 'Run again to continue.'}`;
       } else {
         const actionText = columnMode === 'new' ? 'created' : 'updated';
-        const alreadyProcessed = typeof result.alreadyProcessedCount === 'number' ? result.alreadyProcessedCount : null;
-        const newlyProcessed = typeof result.newlyProcessedCount === 'number' ? result.newlyProcessedCount : null;
-        const details =
-          alreadyProcessed !== null && newlyProcessed !== null
-            ? ` (${newlyProcessed} newly updated, ${alreadyProcessed} already had values)`
-            : '';
-        toastMessage = `✅ Successfully ${actionText} "${targetColumnName}" for ${result.processedCount} of ${result.totalLeads} leads${details}${result.errorCount > 0 ? ` (${result.errorCount} errors)` : ''}`;
+        toastMessage = `✅ Successfully ${actionText} "${targetColumnName}" for ${finalJob.processedCount} of ${finalJob.totalLeads} leads${details}${finalJob.errorCount > 0 ? ` (${finalJob.errorCount} errors)` : ''}`;
       }
 
       setMessage({ type: 'success', text: toastMessage });
@@ -747,6 +766,7 @@ OUTPUT:`;
       setColumnMode('new');
       setTransformPrompt('');
       setAutoContinueTransform(true);
+      setTransformJobId(null);
       
       // Reload data
       loadLeadLists();
@@ -757,6 +777,7 @@ OUTPUT:`;
     } finally {
       setIsTransforming(false);
       setTransformProgress(null);
+      setTransformJobId(null);
     }
   };
 

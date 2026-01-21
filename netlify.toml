@@ -185,6 +185,14 @@
 [functions.massage-lead-column]
   timeout = 26
 
+# Lead massaging background job (async processing)
+[functions.massage-lead-column-job]
+  is_background = true
+  timeout = 900
+
+[functions.get-massage-lead-job]
+  timeout = 26
+
 # Coach Partnership Functions
 [functions.create-coach-checkout-session]
   external_node_modules = ["stripe"]
