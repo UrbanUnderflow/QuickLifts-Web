@@ -72,7 +72,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint src/**/*.{ts,tsx} --max-warnings 0",
-    "netlify-dev": "netlify dev",
+    "netlify-dev": "netlify dev --port 8888 --functions-port 9999",
     "env-check": "node env-check.js",
     "stripe:create-products": "node scripts/create-stripe-products.js",
     "promo:create-samples": "node scripts/create-promo-codes.js sample",

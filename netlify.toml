@@ -2,8 +2,9 @@
 [dev]
   command = "next dev"
   framework = "next"
+  port = 8888
   targetPort = 3000
-  functionsPort = 8888
+  functionsPort = 9999
 
 [build]
   command = "next build"
