@@ -151,6 +151,7 @@ const Chat: React.FC = () => {
   });
   const [escalationProcessing, setEscalationProcessing] = useState(false);
   const [currentEscalationId, setCurrentEscalationId] = useState<string | null>(null);
+  const [hasActiveEscalation, setHasActiveEscalation] = useState(false);
   
   // Nora intro card state
   const [showNoraIntro, setShowNoraIntro] = useState(() => {
@@ -440,6 +441,11 @@ const Chat: React.FC = () => {
   const handleEscalation = useCallback(async (escalation: EscalationResponse, userMessage: string) => {
     if (!escalation || !escalation.shouldEscalate) return;
     
+    // Set active escalation state for visual cues (Tier 2 and 3)
+    if (escalation.tier === EscalationTier.ElevatedRisk || escalation.tier === EscalationTier.CriticalRisk) {
+      setHasActiveEscalation(true);
+    }
+    
     // For Tier 2 (Elevated) - show consent modal
     if (escalation.tier === EscalationTier.ElevatedRisk) {
       // Create escalation record first
@@ -507,6 +513,10 @@ const Chat: React.FC = () => {
     setMessages(prev => [...prev, userMsg]);
     setSending(true);
 
+    // Log message being sent
+    console.log('📤 Sending message to Nora:', text);
+    console.log('─'.repeat(60));
+
     try {
       const res = await fetch('/.netlify/functions/pulsecheck-chat', {
         method: 'POST',
@@ -534,32 +544,55 @@ const Chat: React.FC = () => {
         };
         setMessages(prev => [...prev, aiMsg]);
         
-        // Handle escalation if present
-        console.log('[PulseCheck Chat] Response data:', {
-          hasEscalation: !!json.escalation,
-          escalation: json.escalation,
-          shouldEscalate: json.escalation?.shouldEscalate,
-          tier: json.escalation?.tier
-        });
+        // ========== ESCALATION TIER LOGGING ==========
+        const tier = json.escalation?.tier ?? 0;
+        const tierName = tier === 0 ? 'None' : tier === 1 ? 'Monitor-Only' : tier === 2 ? 'Elevated Risk' : tier === 3 ? 'Critical Risk' : 'Unknown';
+        const category = json.escalation?.category || 'N/A';
+        const confidence = json.escalation?.confidence ?? 0;
+        const reason = json.escalation?.reason || 'N/A';
+        const shouldEscalate = json.escalation?.shouldEscalate ?? false;
         
+        // Prominent console log for tier
+        console.log(
+          `%c🚨 ESCALATION TIER: ${tier} (${tierName})`,
+          `font-size: 16px; font-weight: bold; color: ${tier === 0 ? '#71717A' : tier === 1 ? '#3B82F6' : tier === 2 ? '#F97316' : '#EF4444'}; padding: 4px 8px; background: ${tier === 0 ? 'rgba(113, 113, 122, 0.1)' : tier === 1 ? 'rgba(59, 130, 246, 0.1)' : tier === 2 ? 'rgba(249, 115, 22, 0.1)' : 'rgba(239, 68, 68, 0.1)'}; border-radius: 4px;`
+        );
+        console.log('📝 Message:', text);
+        console.log('📊 Classification Details:', {
+          tier: `${tier} (${tierName})`,
+          category,
+          confidence: `${(confidence * 100).toFixed(1)}%`,
+          shouldEscalate,
+          reason
+        });
+        console.log('🔍 Full Escalation Object:', json.escalation || 'No escalation data');
+        console.log('─'.repeat(60));
+        
+        // Handle escalation if present
         if (json.escalation && json.escalation.shouldEscalate) {
-          console.log('[PulseCheck Chat] Triggering escalation handler');
+          console.log('[PulseCheck Chat] ✅ Triggering escalation handler');
           handleEscalation(json.escalation, text);
         } else {
-          console.log('[PulseCheck Chat] No escalation triggered:', {
+          console.log('[PulseCheck Chat] ⏭️ No escalation action needed:', {
             hasEscalation: !!json.escalation,
             shouldEscalate: json.escalation?.shouldEscalate,
             reason: !json.escalation ? 'No escalation object' : !json.escalation.shouldEscalate ? 'shouldEscalate is false' : 'Unknown'
           });
         }
       } else {
-        console.error('[PulseCheck Chat] Server error:', {
+        console.error('❌ [PulseCheck Chat] Server error:', {
           status: res.status,
           statusText: res.statusText,
           error: json.error,
           detail: json.detail,
           type: json.type
         });
+        // Log escalation tier even on error if available
+        if (json.escalation) {
+          const tier = json.escalation?.tier ?? 0;
+          const tierName = tier === 0 ? 'None' : tier === 1 ? 'Monitor-Only' : tier === 2 ? 'Elevated Risk' : tier === 3 ? 'Critical Risk' : 'Unknown';
+          console.log(`⚠️ Escalation tier detected despite error: ${tier} (${tierName})`);
+        }
         const aiMsg: ChatMessage = {
           id: Math.random().toString(36).slice(2),
           content: 'Something went wrong. Please try again shortly.',
@@ -600,9 +633,24 @@ const Chat: React.FC = () => {
     <div className="flex flex-col h-full bg-[#0a0a0b] relative overflow-hidden">
       {/* Ambient Floating Orbs - Chromatic Glass Background */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        <FloatingOrb color="#E0FE10" size="w-[400px] h-[400px]" position={{ top: '-15%', left: '-10%' }} delay={0} />
-        <FloatingOrb color="#3B82F6" size="w-[300px] h-[300px]" position={{ top: '40%', right: '-5%' }} delay={2} />
-        <FloatingOrb color="#8B5CF6" size="w-[250px] h-[250px]" position={{ bottom: '10%', left: '20%' }} delay={4} />
+        <FloatingOrb 
+          color={hasActiveEscalation ? "#F97316" : "#E0FE10"} 
+          size="w-[400px] h-[400px]" 
+          position={{ top: '-15%', left: '-10%' }} 
+          delay={0} 
+        />
+        <FloatingOrb 
+          color={hasActiveEscalation ? "#FB923C" : "#3B82F6"} 
+          size="w-[300px] h-[300px]" 
+          position={{ top: '40%', right: '-5%' }} 
+          delay={2} 
+        />
+        <FloatingOrb 
+          color={hasActiveEscalation ? "#F59E0B" : "#8B5CF6"} 
+          size="w-[250px] h-[250px]" 
+          position={{ bottom: '10%', left: '20%' }} 
+          delay={4} 
+        />
       </div>
 
       {/* Noise texture overlay */}
@@ -725,13 +773,44 @@ const Chat: React.FC = () => {
                       {/* AI Avatar with glow */}
                       {!m.isFromUser && (
                         <div className="relative flex-shrink-0">
-                          {/* Glow behind avatar */}
-                          <div className="absolute inset-0 w-8 h-8 bg-[#E0FE10]/30 rounded-full blur-lg" />
+                          {/* Glow behind avatar - warm when escalation active */}
+                          <motion.div 
+                            className={`absolute inset-0 w-8 h-8 rounded-full blur-lg transition-colors duration-1000`}
+                            style={{ 
+                              backgroundColor: hasActiveEscalation ? 'rgba(249, 115, 22, 0.25)' : 'rgba(224, 254, 16, 0.3)'
+                            }}
+                            animate={hasActiveEscalation ? {
+                              opacity: [0.25, 0.4, 0.25],
+                              scale: [1, 1.1, 1]
+                            } : {}}
+                            transition={hasActiveEscalation ? {
+                              duration: 3,
+                              repeat: Infinity,
+                              ease: "easeInOut"
+                            } : {}}
+                          />
                           <div className="relative w-8 h-8 rounded-full flex items-center justify-center overflow-hidden">
-                            {/* Gradient border effect */}
-                            <div className="absolute inset-0 bg-gradient-to-br from-[#E0FE10]/30 to-[#E0FE10]/10 rounded-full" />
+                            {/* Gradient border effect - warm when escalation active */}
+                            <motion.div 
+                              className="absolute inset-0 rounded-full transition-colors duration-1000"
+                              style={{ 
+                                background: hasActiveEscalation 
+                                  ? 'linear-gradient(135deg, rgba(249, 115, 22, 0.3), rgba(251, 146, 60, 0.15))'
+                                  : 'linear-gradient(135deg, rgba(224, 254, 16, 0.3), rgba(224, 254, 16, 0.1))'
+                              }}
+                              animate={hasActiveEscalation ? {
+                                opacity: [0.3, 0.5, 0.3]
+                              } : {}}
+                              transition={hasActiveEscalation ? {
+                                duration: 2.5,
+                                repeat: Infinity,
+                                ease: "easeInOut"
+                              } : {}}
+                            />
                             <div className="absolute inset-[1px] bg-[#0a0a0b] rounded-full flex items-center justify-center">
-                              <Brain className="w-4 h-4 text-[#E0FE10]" />
+                              <Brain 
+                                className={`w-4 h-4 transition-colors duration-1000 ${hasActiveEscalation ? 'text-[#F97316]' : 'text-[#E0FE10]'}`}
+                              />
                             </div>
                           </div>
                         </div>
@@ -867,11 +946,25 @@ const Chat: React.FC = () => {
                     className="flex gap-4 items-start"
                   >
                     <div className="relative flex-shrink-0">
-                      <div className="absolute inset-0 w-8 h-8 bg-[#E0FE10]/30 rounded-full blur-lg animate-pulse" />
+                      <div 
+                        className={`absolute inset-0 w-8 h-8 rounded-full blur-lg animate-pulse transition-colors duration-1000`}
+                        style={{ 
+                          backgroundColor: hasActiveEscalation ? 'rgba(249, 115, 22, 0.3)' : 'rgba(224, 254, 16, 0.3)'
+                        }}
+                      />
                       <div className="relative w-8 h-8 rounded-full flex items-center justify-center overflow-hidden">
-                        <div className="absolute inset-0 bg-gradient-to-br from-[#E0FE10]/30 to-[#E0FE10]/10 rounded-full" />
+                        <div 
+                          className="absolute inset-0 rounded-full transition-colors duration-1000"
+                          style={{ 
+                            background: hasActiveEscalation 
+                              ? 'linear-gradient(135deg, rgba(249, 115, 22, 0.3), rgba(251, 146, 60, 0.1))'
+                              : 'linear-gradient(135deg, rgba(224, 254, 16, 0.3), rgba(224, 254, 16, 0.1))'
+                          }}
+                        />
                         <div className="absolute inset-[1px] bg-[#0a0a0b] rounded-full flex items-center justify-center">
-                          <Brain className="w-4 h-4 text-[#E0FE10]" />
+                          <Brain 
+                            className={`w-4 h-4 transition-colors duration-1000 ${hasActiveEscalation ? 'text-[#F97316]' : 'text-[#E0FE10]'}`}
+                          />
                         </div>
                       </div>
                     </div>
@@ -920,8 +1013,26 @@ const Chat: React.FC = () => {
           
           <div className="max-w-3xl mx-auto px-4 py-4">
             <div className="relative group">
-              {/* Glow effect on focus */}
-              <div className="absolute -inset-1 rounded-2xl bg-gradient-to-r from-[#E0FE10]/0 via-[#E0FE10]/10 to-[#E0FE10]/0 opacity-0 group-focus-within:opacity-100 blur transition-opacity" />
+              {/* Glow effect on focus - warm when escalation active */}
+              <motion.div 
+                className={`absolute -inset-1 rounded-2xl blur transition-opacity ${hasActiveEscalation ? 'opacity-20' : 'opacity-0 group-focus-within:opacity-100'}`}
+                style={{ 
+                  background: hasActiveEscalation
+                    ? 'linear-gradient(90deg, rgba(249, 115, 22, 0), rgba(249, 115, 22, 0.15), rgba(249, 115, 22, 0))'
+                    : 'linear-gradient(90deg, rgba(224, 254, 16, 0), rgba(224, 254, 16, 0.1), rgba(224, 254, 16, 0))'
+                }}
+                animate={hasActiveEscalation ? {
+                  opacity: [0.15, 0.25, 0.15]
+                } : {}}
+                transition={hasActiveEscalation ? {
+                  duration: 3,
+                  repeat: Infinity,
+                  ease: "easeInOut"
+                } : {}}
+              />
+              {!hasActiveEscalation && (
+                <div className="absolute -inset-1 rounded-2xl bg-gradient-to-r from-[#E0FE10]/0 via-[#E0FE10]/10 to-[#E0FE10]/0 opacity-0 group-focus-within:opacity-100 blur transition-opacity" />
+              )}
               
               <div className="relative">
                 <textarea
@@ -935,7 +1046,11 @@ const Chat: React.FC = () => {
                   }}
                   placeholder="Message Nora..."
                   rows={1}
-                  className="w-full bg-zinc-900/60 backdrop-blur-sm border border-white/10 rounded-xl px-4 py-3 pr-12 outline-none focus:border-[#E0FE10]/30 focus:bg-zinc-900/80 resize-none text-white placeholder:text-zinc-500 transition-all"
+                  className={`w-full bg-zinc-900/60 backdrop-blur-sm border rounded-xl px-4 py-3 pr-12 outline-none resize-none text-white placeholder:text-zinc-500 transition-all ${
+                    hasActiveEscalation 
+                      ? 'border-[#F97316]/20 focus:border-[#F97316]/40 focus:bg-zinc-900/80' 
+                      : 'border-white/10 focus:border-[#E0FE10]/30 focus:bg-zinc-900/80'
+                  }`}
                   style={{
                     minHeight: '52px',
                     maxHeight: '200px'
