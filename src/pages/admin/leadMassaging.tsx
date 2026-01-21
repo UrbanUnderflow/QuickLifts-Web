@@ -666,10 +666,22 @@ OUTPUT:`;
       // Show detailed toast message
       let toastMessage = '';
       if (result.partial) {
-        toastMessage = `Partially completed: ${result.processedCount} of ${result.totalLeads} leads transformed. ${result.remainingLeads} remaining. ${result.message || 'Run again to continue.'}`;
+        const alreadyProcessed = typeof result.alreadyProcessedCount === 'number' ? result.alreadyProcessedCount : null;
+        const newlyProcessed = typeof result.newlyProcessedCount === 'number' ? result.newlyProcessedCount : null;
+        const details =
+          alreadyProcessed !== null && newlyProcessed !== null
+            ? ` (${newlyProcessed} newly updated this run, ${alreadyProcessed} already had values)`
+            : '';
+        toastMessage = `Partially completed: ${result.processedCount} of ${result.totalLeads} leads done${details}. ${result.remainingLeads} remaining. ${result.message || 'Run again to continue.'}`;
       } else {
         const actionText = columnMode === 'new' ? 'created' : 'updated';
-        toastMessage = `✅ Successfully ${actionText} ${result.processedCount} of ${result.totalLeads} leads in "${targetColumnName}"${result.errorCount > 0 ? ` (${result.errorCount} errors)` : ''}`;
+        const alreadyProcessed = typeof result.alreadyProcessedCount === 'number' ? result.alreadyProcessedCount : null;
+        const newlyProcessed = typeof result.newlyProcessedCount === 'number' ? result.newlyProcessedCount : null;
+        const details =
+          alreadyProcessed !== null && newlyProcessed !== null
+            ? ` (${newlyProcessed} newly updated, ${alreadyProcessed} already had values)`
+            : '';
+        toastMessage = `✅ Successfully ${actionText} "${targetColumnName}" for ${result.processedCount} of ${result.totalLeads} leads${details}${result.errorCount > 0 ? ` (${result.errorCount} errors)` : ''}`;
       }
 
       setMessage({ type: 'success', text: toastMessage });

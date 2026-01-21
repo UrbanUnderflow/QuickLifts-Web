@@ -14,9 +14,15 @@ interface RequestBody {
   batchSize?: number;
 }
 
-const LEADS_PER_API_CALL = 200; // Process 200 leads per OpenAI API call (reduced to avoid timeouts)
+const LEADS_PER_API_CALL = 80; // Smaller batches => fewer timeouts, more reliable progress
 const MAX_EXECUTION_TIME_MS = 24000; // 24 seconds - leave buffer before Netlify timeout (26s limit)
-const OPENAI_TIMEOUT_MS = 10000; // 10 second timeout for OpenAI API calls
+const OPENAI_TIMEOUT_MS = 18000; // Give OpenAI more time (still within Netlify budget)
+
+const MAX_FIELD_CHARS = 240;
+function normalizeFieldValue(value: unknown): string {
+  if (value === undefined || value === null) return '';
+  return String(value).replace(/\s+/g, ' ').trim().slice(0, MAX_FIELD_CHARS);
+}
 
 const handler: Handler = async (event) => {
   const headers = {
@@ -169,7 +175,7 @@ const handler: Handler = async (event) => {
     let errorCount = 0;
     const errors: { leadId: string; error: string }[] = [];
 
-    // Filter out leads that already have a value in the new column (skip if value exists)
+    // Filter out leads that already have a value in the target column (skip if value exists)
     let skippedCount = 0;
     let processedCountBeforeFilter = 0;
     
@@ -178,9 +184,10 @@ const handler: Handler = async (event) => {
       const existingValue = lead.data?.[newColumnName];
       
       // More strict check: skip if value exists and is not empty/whitespace
-      const hasValue = existingValue !== undefined && 
-                      existingValue !== null && 
-                      String(existingValue).trim() !== '';
+      const hasValue =
+        existingValue !== undefined &&
+        existingValue !== null &&
+        String(existingValue).trim() !== '';
       
       if (hasValue) {
         skippedCount++;
@@ -213,6 +220,8 @@ const handler: Handler = async (event) => {
       console.log(`[massage-lead-column] ⚠️  No leads to process! All ${leads.length} leads already have values.`);
     }
 
+    const alreadyProcessedCount = skippedCount;
+
     // Process in batches of 1000 leads per API call
     for (let i = 0; i < leadsToProcess.length; i += LEADS_PER_API_CALL) {
       // Check if we're approaching timeout before processing this batch
@@ -236,8 +245,8 @@ const handler: Handler = async (event) => {
           });
         }
 
-        const alreadyProcessed = leads.length - leadsToProcess.length;
-        const totalProcessed = alreadyProcessed + processedCount;
+        const newlyProcessedCount = processedCount;
+        const totalProcessed = alreadyProcessedCount + newlyProcessedCount;
 
         return {
           statusCode: 200,
@@ -246,11 +255,13 @@ const handler: Handler = async (event) => {
             success: true,
             partial: true,
             processedCount: totalProcessed,
+            alreadyProcessedCount,
+            newlyProcessedCount,
             errorCount,
             totalLeads: leads.length,
-            remainingLeads: leadsToProcess.length - processedCount,
+            remainingLeads: Math.max(0, leadsToProcess.length - newlyProcessedCount),
             newColumnName,
-            message: `Processed ${totalProcessed} of ${leads.length} leads. Run the transformation again to continue processing the remaining ${leadsToProcess.length - processedCount} leads.`,
+            message: `Approaching timeout. Updated ${newlyProcessedCount} new leads this run. Run again to continue processing the remaining ${Math.max(0, leadsToProcess.length - newlyProcessedCount)} leads.`,
             errors: errors.slice(0, 10),
           }),
         };
@@ -272,7 +283,7 @@ const handler: Handler = async (event) => {
         
         // Only use valid columns that exist
         validColumns.forEach(col => {
-          const value = lead.data[col] || '';
+          const value = normalizeFieldValue(lead.data[col] || '');
           inputData[col] = value;
           if (value.trim()) {
             hasAnyData = true;
@@ -344,8 +355,8 @@ const handler: Handler = async (event) => {
           // Build input text for all leads with valid data
           const inputText = leadsWithValidData.map((item, index) => {
             const leadInput = validColumns.length === 1
-              ? item.inputData[validColumns[0]]
-              : validColumns.map(col => `${col}: "${item.inputData[col]}"`).join('\n');
+              ? normalizeFieldValue(item.inputData[validColumns[0]])
+              : validColumns.map(col => `${col}: "${normalizeFieldValue(item.inputData[col])}"`).join('\n');
             return `LEAD ${index + 1}:\n${leadInput}`;
           }).join('\n\n');
 
@@ -379,7 +390,7 @@ Return a JSON object with a "values" array containing ${leadsWithValidData.lengt
             ],
             temperature: 0.3,
             response_format: { type: 'json_object' },
-            max_tokens: 2000, // Increased for multiple responses
+            max_tokens: 1200, // Enough for ~80 short hooks; keeps latency down
           });
 
           // Add timeout to OpenAI API call
@@ -455,8 +466,8 @@ Return a JSON object with a "values" array containing ${leadsWithValidData.lengt
               });
             }
 
-            const alreadyProcessed = leads.length - leadsToProcess.length;
-            const totalProcessed = alreadyProcessed + processedCount;
+            const newlyProcessedCount = processedCount;
+            const totalProcessed = alreadyProcessedCount + newlyProcessedCount;
 
             return {
               statusCode: 200,
@@ -465,11 +476,13 @@ Return a JSON object with a "values" array containing ${leadsWithValidData.lengt
                 success: true,
                 partial: true,
                 processedCount: totalProcessed,
+                alreadyProcessedCount,
+                newlyProcessedCount,
                 errorCount,
                 totalLeads: leads.length,
-                remainingLeads: leadsToProcess.length - processedCount,
+                remainingLeads: Math.max(0, leadsToProcess.length - newlyProcessedCount),
                 newColumnName,
-                message: `OpenAI API timeout. Processed ${totalProcessed} of ${leads.length} leads. Run again to continue processing the remaining ${leadsToProcess.length - processedCount} leads.`,
+                message: `OpenAI API timeout. Updated ${newlyProcessedCount} new leads this run. Run again to continue processing the remaining ${Math.max(0, leadsToProcess.length - newlyProcessedCount)} leads.`,
                 errors: errors.slice(0, 10),
               }),
             };
@@ -652,8 +665,8 @@ CRITICAL RULES:
           });
         }
 
-        const alreadyProcessed = leads.length - leadsToProcess.length;
-        const totalProcessed = alreadyProcessed + processedCount;
+        const newlyProcessedCount = processedCount;
+        const totalProcessed = alreadyProcessedCount + newlyProcessedCount;
 
         return {
           statusCode: 200,
@@ -662,11 +675,13 @@ CRITICAL RULES:
             success: true,
             partial: true,
             processedCount: totalProcessed,
+            alreadyProcessedCount,
+            newlyProcessedCount,
             errorCount,
             totalLeads: leads.length,
-            remainingLeads: leadsToProcess.length - processedCount,
+            remainingLeads: Math.max(0, leadsToProcess.length - newlyProcessedCount),
             newColumnName,
-            message: `Processed ${totalProcessed} of ${leads.length} leads before timeout. Run the transformation again to continue processing the remaining ${leadsToProcess.length - processedCount} leads.`,
+            message: `Processed ${newlyProcessedCount} new leads before timeout. Run again to continue processing the remaining ${Math.max(0, leadsToProcess.length - newlyProcessedCount)} leads.`,
             errors: errors.slice(0, 10),
           }),
         };
@@ -687,16 +702,21 @@ CRITICAL RULES:
       });
     }
 
-    console.log(`[massage-lead-column] Complete. Processed: ${processedCount}, Errors: ${errorCount}`);
+    const newlyProcessedCount = processedCount;
+    const totalProcessed = alreadyProcessedCount + newlyProcessedCount;
+    console.log(`[massage-lead-column] Complete. Newly updated: ${newlyProcessedCount}, Already had values: ${alreadyProcessedCount}, Total processed: ${totalProcessed}, Errors: ${errorCount}`);
 
     return {
       statusCode: 200,
       headers,
       body: JSON.stringify({
         success: true,
-        processedCount,
+        processedCount: totalProcessed,
+        alreadyProcessedCount,
+        newlyProcessedCount,
         errorCount,
         totalLeads: leads.length,
+        remainingLeads: Math.max(0, leadsToProcess.length - newlyProcessedCount),
         newColumnName,
         errors: errors.slice(0, 10), // Only return first 10 errors
       }),
