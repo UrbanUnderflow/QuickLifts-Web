@@ -186,11 +186,19 @@
   timeout = 26
 
 # Lead massaging background job (async processing)
+# Start endpoint (fast): creates job + triggers worker
 [functions.massage-lead-column-job]
+  timeout = 26
+
+# Worker (slow): does the actual processing in background
+[functions.process-massage-lead-job]
   is_background = true
   timeout = 900
 
 [functions.get-massage-lead-job]
+  timeout = 26
+
+[functions.cancel-massage-lead-job]
   timeout = 26
 
 # Coach Partnership Functions
