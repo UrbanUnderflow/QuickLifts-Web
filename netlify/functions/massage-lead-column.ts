@@ -170,20 +170,48 @@ const handler: Handler = async (event) => {
     const errors: { leadId: string; error: string }[] = [];
 
     // Filter out leads that already have a value in the new column (skip if value exists)
+    let skippedCount = 0;
+    let processedCountBeforeFilter = 0;
+    
     const leadsToProcess = leads.filter(lead => {
-      const existingValue = lead.data[newColumnName];
-      // Skip if the column exists and has a non-empty value
-      if (existingValue !== undefined && existingValue !== null && existingValue !== '') {
+      // Access the value from the nested data structure
+      const existingValue = lead.data?.[newColumnName];
+      
+      // More strict check: skip if value exists and is not empty/whitespace
+      const hasValue = existingValue !== undefined && 
+                      existingValue !== null && 
+                      String(existingValue).trim() !== '';
+      
+      if (hasValue) {
+        skippedCount++;
+        // Debug: log first few skipped leads
+        if (skippedCount <= 5) {
+          console.log(`[massage-lead-column] SKIPPING lead ${lead.id} - has value: "${existingValue}" (type: ${typeof existingValue})`);
+        }
         return false; // Skip this lead - it already has a value
+      }
+      
+      processedCountBeforeFilter++;
+      // Debug: log first few leads to process
+      if (processedCountBeforeFilter <= 5) {
+        console.log(`[massage-lead-column] WILL PROCESS lead ${lead.id} - no value (value: ${existingValue}, type: ${typeof existingValue})`);
       }
       return true; // Process this lead - no value exists
     });
 
-    const skippedCount = leads.length - leadsToProcess.length;
     if (skippedCount > 0) {
-      console.log(`[massage-lead-column] Skipping ${skippedCount} leads that already have values in "${newColumnName}"`);
+      console.log(`[massage-lead-column] ✅ Filtered out ${skippedCount} leads that already have values in "${newColumnName}"`);
     }
-    console.log(`[massage-lead-column] ${leadsToProcess.length} leads need processing (${skippedCount} already have values)`);
+    console.log(`[massage-lead-column] ✅ ${leadsToProcess.length} leads need processing (${skippedCount} skipped, ${leads.length} total)`);
+    
+    // Verify filtering worked - check a sample
+    if (leadsToProcess.length > 0) {
+      const sampleLead = leadsToProcess[0];
+      const sampleValue = sampleLead.data[newColumnName];
+      console.log(`[massage-lead-column] ✅ Sample lead to process - ID: ${sampleLead.id}, "${newColumnName}" value:`, sampleValue, `(should be empty/null/undefined)`);
+    } else {
+      console.log(`[massage-lead-column] ⚠️  No leads to process! All ${leads.length} leads already have values.`);
+    }
 
     // Process in batches of 1000 leads per API call
     for (let i = 0; i < leadsToProcess.length; i += LEADS_PER_API_CALL) {
@@ -577,6 +605,13 @@ CRITICAL RULES:
       for (const { ref, value } of allTransformedValues) {
         const lead = leadsToProcess.find(l => l.ref === ref);
         if (lead) {
+          // Double-check: verify this lead doesn't already have a value
+          const existingValue = lead.data?.[newColumnName];
+          if (existingValue !== undefined && existingValue !== null && String(existingValue).trim() !== '') {
+            console.warn(`[massage-lead-column] ⚠️  Skipping update for lead ${lead.id} - already has value: "${existingValue}"`);
+            continue; // Skip this lead - it already has a value
+          }
+          
           const currentData = lead.data || {};
           firestoreBatch.update(ref, {
             data: {
