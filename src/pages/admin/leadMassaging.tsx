@@ -640,6 +640,23 @@ OUTPUT:`;
         })
       });
 
+      // Check if response is OK and is JSON
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await response.text();
+        console.error('[handleTransformColumn] Non-JSON response:', {
+          status: response.status,
+          statusText: response.statusText,
+          contentType,
+          bodyPreview: text.substring(0, 200)
+        });
+        
+        if (response.status === 504 || response.status === 502) {
+          throw new Error('Request timed out. The transformation is taking too long. Please try again - it will continue from where it left off.');
+        }
+        throw new Error(`Server returned ${response.status}: ${response.statusText}. Response was not JSON.`);
+      }
+
       const result = await response.json();
 
       if (!response.ok) {
