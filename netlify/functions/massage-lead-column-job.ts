@@ -76,17 +76,17 @@ const handler: Handler = async (event) => {
     updatedAt: createdAt,
   });
 
-  // IMPORTANT: Do NOT try to trigger the worker from inside this function.
-  // Netlify function-to-function HTTP calls can fail depending on runtime/network settings.
-  // The admin UI will trigger the background worker using the returned jobId.
+  // Worker trigger is handled by Firebase Cloud Functions:
+  // - onCreate(lead-massage-jobs/{jobId}) will enqueue per-lead work items
+  // - subsequent triggers will progressively write results back to lead-list-items
   await jobRef.set(
     {
-      message: 'Job queued (waiting for worker trigger)',
+      message: 'Job queued (worker will start automatically)',
       debug: {
         ...(await jobRef.get().then((d) => d.data()?.debug || {})),
         trigger: {
-          mode: 'client',
-          note: 'Client should call /.netlify/functions/process-massage-lead-job with { jobId }',
+          mode: 'firebase',
+          note: 'Firebase worker will fan-out and process this job automatically.',
           attemptedAt: new Date(),
         },
       },

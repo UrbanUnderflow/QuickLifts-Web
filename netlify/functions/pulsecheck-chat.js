@@ -16,6 +16,64 @@ const EscalationTier = {
   CriticalRisk: 3
 };
 
+// ============================================================================
+// Mental assignment reminder onboarding (chat-driven preference capture)
+// ============================================================================
+
+function normalizeText(t) {
+  return String(t || '').trim().toLowerCase();
+}
+
+function parseYesNo(text) {
+  const t = normalizeText(text);
+  if (!t) return null;
+  if (/\b(yes|yeah|yep|sure|ok|okay|please do|do it|enable|turn on)\b/.test(t)) return 'yes';
+  if (/\b(no|nope|nah|don't|do not|stop|disable|turn off)\b/.test(t)) return 'no';
+  return null;
+}
+
+function parseTimeFromText(text) {
+  const t = normalizeText(text);
+  if (!t) return null;
+  if (/\bnoon\b/.test(t)) return { hour: 12, minute: 0 };
+  if (/\bmidnight\b/.test(t)) return { hour: 0, minute: 0 };
+
+  // e.g. "7", "7pm", "7:30 pm", "19:15"
+  const m = t.match(/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b/);
+  if (!m) return null;
+  let hour = Number(m[1]);
+  const minute = m[2] ? Number(m[2]) : 0;
+  const ampm = m[3];
+
+  if (!Number.isFinite(hour) || !Number.isFinite(minute) || minute < 0 || minute > 59) return null;
+
+  if (ampm) {
+    if (hour < 1 || hour > 12) return null;
+    if (ampm === 'pm' && hour !== 12) hour += 12;
+    if (ampm === 'am' && hour === 12) hour = 0;
+  } else {
+    // 24h fallback
+    if (hour < 0 || hour > 23) return null;
+  }
+
+  return { hour, minute };
+}
+
+function shouldUseSmartNoon(text) {
+  const t = normalizeText(text);
+  return /\b(you decide|you choose|whatever you think|best time|surprise me|up to you|pick for me)\b/.test(t);
+}
+
+async function getActiveMentalAssignments(db, userId) {
+  const snap = await db
+    .collection('mental-exercise-assignments')
+    .where('athleteUserId', '==', userId)
+    .where('status', 'in', ['pending', 'in_progress'])
+    .limit(5)
+    .get();
+  return snap.empty ? [] : snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
 exports.handler = async (event, context) => {
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers, body: '' };
@@ -66,6 +124,17 @@ exports.handler = async (event, context) => {
       return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing userId or message' }) };
     }
 
+    // Always load user doc for preferences (even if iOS provides userContext)
+    let userSnapForPrefs = null;
+    let userDataForPrefs = {};
+    try {
+      userSnapForPrefs = await db.collection('users').doc(userId).get();
+      userDataForPrefs = userSnapForPrefs.exists ? (userSnapForPrefs.data() || {}) : {};
+    } catch (e) {
+      console.error('[pulsecheck-chat] Error loading user prefs:', e);
+      userDataForPrefs = {};
+    }
+
     // Load user context from Firestore (unless client provided it)
     let displayName, sport, goals;
     
@@ -77,8 +146,7 @@ exports.handler = async (event, context) => {
     } else {
       // Load from Firestore
       try {
-        const userSnap = await db.collection('users').doc(userId).get();
-        const userData = userSnap.exists ? userSnap.data() : {};
+        const userData = userDataForPrefs || {};
         displayName = userData.displayName || userData.username || 'Athlete';
         sport = userData.primarySport || '';
         goals = Array.isArray(userData.goals) ? userData.goals : [];
@@ -148,47 +216,174 @@ exports.handler = async (event, context) => {
       systemPrompt = `${basePersona}\n\n## User Context:\n- Name: ${displayName}${sport ? `\n- Sport/Activity: ${sport}` : ''}${goals.length ? `\n- Mental Performance Goals: ${goals.join(', ')}` : ''}\n\n### Conversation Memory Rule\nBefore asking a question, scan the last 6 messages. If you already asked it and the user answered, do not ask again. Acknowledge their answer and advance the topic.`;
     }
 
-    // Prepare messages for OpenAI
-    const openAiMessages = [
-      { role: 'system', content: systemPrompt }
-    ];
+    // =========================================================================
+    // Assignment reminder onboarding (before OpenAI)
+    // =========================================================================
+    const assignmentPrefs = userDataForPrefs?.mentalTrainingPreferences?.assignmentReminders;
+    const onboarding = userDataForPrefs?.mentalTrainingPreferences?.assignmentRemindersOnboarding || {};
+    const onboardingState = onboarding?.state || 'none';
 
-    for (const m of recentMessages) {
-      const role = m.isFromUser ? 'user' : 'assistant';
-      openAiMessages.push({ role, content: m.content });
+    let assistantMessage = null;
+    let handledOnboarding = false;
+
+    if (onboardingState === 'asked') {
+      const yn = parseYesNo(message);
+      if (yn === 'no') {
+        await db.collection('users').doc(userId).set({
+          mentalTrainingPreferences: {
+            assignmentReminders: {
+              enabled: false,
+              updatedAt: new Date()
+            },
+            assignmentRemindersOnboarding: {
+              state: 'none',
+              updatedAt: new Date()
+            }
+          }
+        }, { merge: true });
+        assistantMessage = `All good, ${displayName.split(' ')[0]} — I won't send reminders for assignments.`;
+        handledOnboarding = true;
+      } else if (yn === 'yes') {
+        await db.collection('users').doc(userId).set({
+          mentalTrainingPreferences: {
+            assignmentRemindersOnboarding: {
+              state: 'awaiting_time',
+              updatedAt: new Date()
+            }
+          }
+        }, { merge: true });
+        assistantMessage =
+          `Got it. What time should I remind you if you haven’t completed your assigned exercise?\n\n` +
+          `- Reply with a time like “7pm”\n` +
+          `- Or say “you decide” and I’ll default to noon local time.`;
+        handledOnboarding = true;
+      }
+    } else if (onboardingState === 'awaiting_time') {
+      const tz =
+        assignmentPrefs?.timezone ||
+        userDataForPrefs?.dailyReflectionPreferences?.timezone ||
+        userDataForPrefs?.timezone ||
+        'UTC';
+
+      if (shouldUseSmartNoon(message)) {
+        await db.collection('users').doc(userId).set({
+          mentalTrainingPreferences: {
+            assignmentReminders: {
+              enabled: true,
+              mode: 'smart',
+              hour: 12,
+              minute: 0,
+              timezone: tz,
+              updatedAt: new Date()
+            },
+            assignmentRemindersOnboarding: {
+              state: 'none',
+              updatedAt: new Date()
+            }
+          }
+        }, { merge: true });
+        assistantMessage = `Perfect. I’ll remind you at noon local time if you haven’t completed your assignment.`;
+        handledOnboarding = true;
+      } else {
+        const parsed = parseTimeFromText(message);
+        if (!parsed) {
+          assistantMessage = `Tell me a reminder time like “7pm” (or say “you decide” for noon).`;
+          handledOnboarding = true;
+        } else {
+          await db.collection('users').doc(userId).set({
+            mentalTrainingPreferences: {
+              assignmentReminders: {
+                enabled: true,
+                mode: 'custom',
+                hour: parsed.hour,
+                minute: parsed.minute,
+                timezone: tz,
+                updatedAt: new Date()
+              },
+              assignmentRemindersOnboarding: {
+                state: 'none',
+                updatedAt: new Date()
+              }
+            }
+          }, { merge: true });
+          const minuteStr = String(parsed.minute).padStart(2, '0');
+          assistantMessage = `Done. I’ll remind you at ${parsed.hour}:${minuteStr} (your local time) if you haven’t completed your assignment.`;
+          handledOnboarding = true;
+        }
+      }
     }
 
-    openAiMessages.push({ role: 'user', content: message });
+    // If not handled, proceed with OpenAI
+    if (!handledOnboarding) {
+      // Prepare messages for OpenAI
+      const openAiMessages = [
+        { role: 'system', content: systemPrompt }
+      ];
 
-    // Call OpenAI
-    const apiKey = process.env.OPEN_AI_SECRET_KEY;
-    if (!apiKey) {
-      return { statusCode: 500, headers, body: JSON.stringify({ error: 'Missing OPEN_AI_SECRET_KEY' }) };
+      for (const m of recentMessages) {
+        const role = m.isFromUser ? 'user' : 'assistant';
+        openAiMessages.push({ role, content: m.content });
+      }
+
+      openAiMessages.push({ role: 'user', content: message });
+
+      // Call OpenAI
+      const apiKey = process.env.OPEN_AI_SECRET_KEY;
+      if (!apiKey) {
+        return { statusCode: 500, headers, body: JSON.stringify({ error: 'Missing OPEN_AI_SECRET_KEY' }) };
+      }
+
+      const completionRes = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: openAiMessages,
+          temperature: 0.6,
+          max_tokens: 220,
+          frequency_penalty: 0.5,
+          presence_penalty: 0.3
+        })
+      });
+
+      if (!completionRes.ok) {
+        const errText = await completionRes.text();
+        return { statusCode: 502, headers, body: JSON.stringify({ error: 'OpenAI error', detail: errText }) };
+      }
+
+      const completion = await completionRes.json();
+      assistantMessage = completion.choices?.[0]?.message?.content?.trim() || "I'm here to support you. Can you share more?";
+
+      // If user has active assignments and hasn't opted in/out yet, Nora should ask once.
+      try {
+        const hasExplicitPref = assignmentPrefs?.enabled === true || assignmentPrefs?.enabled === false;
+        const lastPromptedAt = onboarding?.lastPromptedAtSec || 0;
+        const nowSec = Math.floor(Date.now() / 1000);
+        const recentlyPrompted = nowSec - lastPromptedAt < 7 * 24 * 60 * 60; // 7 days
+
+        if (!hasExplicitPref && onboardingState === 'none' && !recentlyPrompted) {
+          const activeAssignments = await getActiveMentalAssignments(db, userId);
+          if (activeAssignments.length > 0) {
+            assistantMessage +=
+              `\n\nAlso — you have assigned mental exercises right now. Want me to send reminders if you haven’t completed them by noon (local time)? Reply “yes” or “no”.`;
+            await db.collection('users').doc(userId).set({
+              mentalTrainingPreferences: {
+                assignmentRemindersOnboarding: {
+                  state: 'asked',
+                  lastPromptedAtSec: nowSec,
+                  updatedAt: new Date()
+                }
+              }
+            }, { merge: true });
+          }
+        }
+      } catch (e) {
+        console.warn('[pulsecheck-chat] assignment reminder prompt check failed (non-blocking):', e?.message || e);
+      }
     }
-
-    const completionRes = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: openAiMessages,
-        temperature: 0.6,
-        max_tokens: 220,
-        frequency_penalty: 0.5,
-        presence_penalty: 0.3
-      })
-    });
-
-    if (!completionRes.ok) {
-      const errText = await completionRes.text();
-      return { statusCode: 502, headers, body: JSON.stringify({ error: 'OpenAI error', detail: errText }) };
-    }
-
-    const completion = await completionRes.json();
-    const assistantMessage = completion.choices?.[0]?.message?.content?.trim() || "I'm here to support you. Can you share more?";
 
     // Update conversation: append messages and save
     const nowSec = Math.floor(Date.now() / 1000);
@@ -280,57 +475,64 @@ exports.handler = async (event, context) => {
           fullObject: JSON.stringify(escalation, null, 2)
         });
 
-        // Create escalation records for Tier 2 (Elevated) and Tier 3 (Critical)
+        // Create escalation records for Tier 1+ (Monitor-Only and above)
         console.log('[pulsecheck-chat] [3/5] Evaluating escalation record creation...');
         console.log('[pulsecheck-chat] [3/5] Evaluation checks:', {
           hasEscalation: !!escalation,
           shouldEscalate: escalation?.shouldEscalate,
           tier: escalation?.tier,
+          isTier1: escalation?.tier === EscalationTier.MonitorOnly,
           isTier2: escalation?.tier === EscalationTier.ElevatedRisk,
           isTier3: escalation?.tier === EscalationTier.CriticalRisk,
-          shouldCreateRecord: escalation && escalation.shouldEscalate && (escalation.tier === EscalationTier.ElevatedRisk || escalation.tier === EscalationTier.CriticalRisk)
+          shouldCreateRecord: escalation && escalation.tier >= EscalationTier.MonitorOnly
         });
         
-        if (escalation && escalation.shouldEscalate) {
+        if (escalation && escalation.tier >= EscalationTier.MonitorOnly) {
           const tier = escalation.tier;
-          console.log(`[pulsecheck-chat] [4/5] Escalation triggered! Tier: ${tier}`);
+          console.log(`[pulsecheck-chat] [4/5] Escalation tier detected (record will be saved). Tier: ${tier}`);
+          console.log(`[pulsecheck-chat] [4/5] Record creation params:`, {
+            userId: userId.slice(0, 8) + '...',
+            conversationId: newConvoId,
+            messageId: aiMsg.id,
+            tier,
+            category: escalation.category,
+            shouldEscalate: escalation.shouldEscalate
+          });
           
-          if (tier === EscalationTier.ElevatedRisk || tier === EscalationTier.CriticalRisk) {
-            console.log(`[pulsecheck-chat] [4/5] Tier ${tier} requires record creation - proceeding...`);
-            console.log(`[pulsecheck-chat] [4/5] Record creation params:`, {
-              userId: userId.slice(0, 8) + '...',
-              conversationId: newConvoId,
-              messageId: aiMsg.id,
-              tier,
-              category: escalation.category
-            });
-            
-            // Trigger escalation record creation asynchronously
-            const recordCreationStartTime = Date.now();
-            createEscalationRecord(db, userId, newConvoId, aiMsg.id, message, escalation)
-              .then(recordId => {
-                const recordCreationDuration = Date.now() - recordCreationStartTime;
-                console.log(`[pulsecheck-chat] [5/5] ✅ Escalation record created successfully in ${recordCreationDuration}ms`);
-                console.log(`[pulsecheck-chat] [5/5] Record ID: ${recordId}`);
-                console.log('[pulsecheck-chat] ========== ESCALATION FLOW SUCCESS ==========');
-              })
-              .catch(err => {
-                const recordCreationDuration = Date.now() - recordCreationStartTime;
-                console.error(`[pulsecheck-chat] [5/5] ❌ Escalation record creation FAILED after ${recordCreationDuration}ms`);
-                console.error('[pulsecheck-chat] [5/5] Error details:', {
-                  message: err.message,
-                  code: err.code,
-                  stack: err.stack
-                });
-                console.error('[pulsecheck-chat] ========== ESCALATION FLOW FAILED ==========');
+          // Trigger escalation record creation asynchronously (Tier 1+)
+          const recordCreationStartTime = Date.now();
+          createEscalationRecord(db, userId, newConvoId, aiMsg.id, message, escalation)
+            .then(async recordId => {
+              const recordCreationDuration = Date.now() - recordCreationStartTime;
+              console.log(`[pulsecheck-chat] [5/5] ✅ Escalation record created successfully in ${recordCreationDuration}ms`);
+              console.log(`[pulsecheck-chat] [5/5] Record ID: ${recordId}`);
+
+              // Tier 1 (Monitor-Only): notify coach (no AuntEdna escalation)
+              if (tier === EscalationTier.MonitorOnly) {
+                console.log('[pulsecheck-chat] [5/5] Tier 1 => notifying coach (monitor-only)');
+                try {
+                  await notifyCoachForEscalation(db, recordId, userId, tier);
+                  console.log('[pulsecheck-chat] [5/5] ✅ Coach notified for Tier 1 escalation');
+                } catch (notifyErr) {
+                  console.error('[pulsecheck-chat] [5/5] ❌ Coach notify failed (non-blocking):', notifyErr?.message || notifyErr);
+                }
+              }
+
+              console.log('[pulsecheck-chat] ========== ESCALATION FLOW SUCCESS ==========');
+            })
+            .catch(err => {
+              const recordCreationDuration = Date.now() - recordCreationStartTime;
+              console.error(`[pulsecheck-chat] [5/5] ❌ Escalation record creation FAILED after ${recordCreationDuration}ms`);
+              console.error('[pulsecheck-chat] [5/5] Error details:', {
+                message: err.message,
+                code: err.code,
+                stack: err.stack
               });
-          } else {
-            console.log(`[pulsecheck-chat] [4/5] Tier ${tier} does not require record creation (only Tier 2/3 create records)`);
-            console.log('[pulsecheck-chat] ========== ESCALATION FLOW COMPLETE (No record needed) ==========');
-          }
+              console.error('[pulsecheck-chat] ========== ESCALATION FLOW FAILED ==========');
+            });
         } else {
           console.log('[pulsecheck-chat] [3/5] No escalation record needed:', {
-            reason: !escalation ? 'No escalation result' : !escalation.shouldEscalate ? 'shouldEscalate is false' : 'Unknown',
+            reason: !escalation ? 'No escalation result' : escalation.tier === EscalationTier.None ? 'tier is 0 (None)' : 'Unknown',
             escalationTier: escalation?.tier
           });
           console.log('[pulsecheck-chat] ========== ESCALATION FLOW COMPLETE (No escalation) ==========');
@@ -683,6 +885,13 @@ async function createEscalationRecord(db, userId, conversationId, messageId, tri
     console.log('[createEscalationRecord] [STEP 2] Preparing record data...');
     const nowSec = Math.floor(Date.now() / 1000);
     
+    // Tier behavior:
+    // - Tier 1 (MonitorOnly): save record + notify coach; no consent/handoff needed
+    // - Tier 2 (ElevatedRisk): consent-based handoff
+    // - Tier 3 (CriticalRisk): mandatory clinical handoff, no consent
+    const consentStatus =
+      classification.tier === EscalationTier.ElevatedRisk ? 'pending' : 'not-required';
+
     const data = {
       userId,
       conversationId,
@@ -692,7 +901,7 @@ async function createEscalationRecord(db, userId, conversationId, messageId, tri
       triggerContent: triggerContent,
       classificationReason: classification.reason || '',
       classificationConfidence: classification.confidence || 0,
-      consentStatus: classification.tier === EscalationTier.CriticalRisk ? 'not-required' : 'pending',
+      consentStatus,
       handoffStatus: 'pending',
       coachNotified: false,
       createdAt: nowSec,
@@ -759,6 +968,92 @@ async function createEscalationRecord(db, userId, conversationId, messageId, tri
     });
     throw error; // Re-throw so caller can handle it
   }
+}
+
+/**
+ * Tier 1+ coach notification helper (Tier 1 required; Tier 2 optional; Tier 3 optional)
+ * Mirrors `pulsecheck-escalation` notifyCoach behavior, but runs locally to avoid function-to-function calls.
+ */
+async function notifyCoachForEscalation(db, escalationId, userId, tier) {
+  const { sendCoachEscalationEmail } = require('./utils/sendCoachEscalationEmail');
+
+  // Find athlete's connected coach
+  const connectionSnap = await db
+    .collection('athlete-coach-connections')
+    .where('athleteId', '==', userId)
+    .where('status', '==', 'accepted')
+    .limit(1)
+    .get();
+
+  if (connectionSnap.empty) {
+    console.log('[notifyCoachForEscalation] No coach found for athlete', { userId: userId?.slice?.(0, 8) + '...' });
+    return { success: false, reason: 'no_coach_connected' };
+  }
+
+  const targetCoachId = connectionSnap.docs[0].data().coachId;
+  const nowSec = Math.floor(Date.now() / 1000);
+
+  // Update escalation record (idempotent-ish: overwrite to true)
+  await db.collection('escalation-records').doc(escalationId).update({
+    coachNotified: true,
+    coachId: targetCoachId,
+    coachNotifiedAt: nowSec
+  });
+
+  // Create notification for coach
+  const title = tier === EscalationTier.MonitorOnly ? 'Athlete Check-In (Monitor)' : 'Athlete Check-In Alert';
+  const msg =
+    tier === EscalationTier.MonitorOnly
+      ? 'An athlete you coach was flagged for monitor-only concern. Please review when you can.'
+      : 'An athlete you coach has been flagged for elevated concern. Please check your dashboard.';
+
+  await db.collection('notifications').add({
+    userId: targetCoachId,
+    type: 'escalation-alert',
+    title,
+    message: msg,
+    escalationId,
+    athleteId: userId,
+    read: false,
+    createdAt: nowSec
+  });
+
+  // Email coach (non-blocking). Do NOT include conversation details.
+  try {
+    const coachSnap = await db.collection('users').doc(targetCoachId).get();
+    const coach = coachSnap.exists ? (coachSnap.data() || {}) : {};
+    const coachEmail = typeof coach.email === 'string' ? coach.email.trim() : '';
+    const coachName = (coach.displayName || coach.username || '').trim();
+
+    const athleteSnap = await db.collection('users').doc(userId).get();
+    const athlete = athleteSnap.exists ? (athleteSnap.data() || {}) : {};
+    const athleteName = (athlete.displayName || athlete.username || 'An athlete').trim();
+
+    if (coachEmail) {
+      const siteUrl = process.env.SITE_URL || '';
+      const result = await sendCoachEscalationEmail({
+        coachEmail,
+        coachName,
+        athleteName,
+        tier,
+        siteUrl,
+      });
+      console.log('[notifyCoachForEscalation] Coach email sent (best-effort):', {
+        success: result?.success,
+        skipped: result?.skipped,
+        tier,
+        coachId: targetCoachId,
+      });
+    } else {
+      console.log('[notifyCoachForEscalation] Coach email missing; skipping email send', {
+        coachId: targetCoachId,
+      });
+    }
+  } catch (emailErr) {
+    console.warn('[notifyCoachForEscalation] Coach email send failed (non-blocking):', emailErr?.message || emailErr);
+  }
+
+  return { success: true, coachId: targetCoachId };
 }
 
 

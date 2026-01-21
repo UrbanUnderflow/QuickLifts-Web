@@ -256,3 +256,8 @@
   # Runs every 30 minutes and checks Firestore config for the admin-configured send times.
   # The function itself enforces "only once per day" at the chosen morning and evening times.
   schedule = "*/30 * * * *"
+
+# Mental Training: Assignment reminders (noon local deadline)
+[functions.scheduled-mental-assignment-reminder]
+  # Runs every 30 minutes and sends a reminder if the user has active assignments and hasn't completed by their local reminder time (default noon).
+  schedule = "*/30 * * * *"
