@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Head from 'next/head';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import { collection, getDocs, query, orderBy, addDoc, deleteDoc, doc, Timestamp, updateDoc, writeBatch, where, limit, startAfter, getDoc } from 'firebase/firestore';
@@ -202,6 +202,8 @@ const LeadMassagingAdmin: React.FC = () => {
   const [transformJobDebug, setTransformJobDebug] = useState<any>(null);
   const [transformLastHeartbeatMs, setTransformLastHeartbeatMs] = useState<number | null>(null);
   const [transformNowMs, setTransformNowMs] = useState<number>(Date.now());
+  const lastLoggedJobMessageRef = useRef<string>('');
+  const lastLoggedJobPhaseRef = useRef<string>('');
 
   // Keep a ticking clock while transforming so the "stale" warning updates live
   useEffect(() => {
@@ -737,10 +739,16 @@ OUTPUT:`;
               return;
             }
 
-            // Surface job message/debug so we can see what it's doing
-            if (job?.message && job.message !== transformJobMessage) {
-              console.log('[leadMassaging] job update:', job.message, job.debug || {});
-              setTransformJobMessage(job.message);
+            // Surface job message/debug so we can see what it's doing (avoid console spam)
+            const nextMessage = typeof job?.message === 'string' ? job.message : '';
+            const nextPhase = typeof job?.debug?.phase === 'string' ? job.debug.phase : '';
+            if (nextMessage && nextMessage !== lastLoggedJobMessageRef.current) {
+              console.log('[leadMassaging] job update:', nextMessage, job.debug || {});
+              lastLoggedJobMessageRef.current = nextMessage;
+              setTransformJobMessage(nextMessage);
+            }
+            if (nextPhase && nextPhase !== lastLoggedJobPhaseRef.current) {
+              lastLoggedJobPhaseRef.current = nextPhase;
             }
             if (job?.debug) {
               setTransformJobDebug(job.debug);
