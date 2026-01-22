@@ -21,6 +21,7 @@ interface ChatMessage {
   messageType?: string;
   mentalNote?: MentalNote; // For mental note action cards
   exercise?: MentalExercise; // For exercise instruction cards
+  escalationTier?: EscalationTier; // For subtle UI cue on the triggering response
 }
 
 interface MentalNote {
@@ -152,6 +153,7 @@ const Chat: React.FC = () => {
   const [escalationProcessing, setEscalationProcessing] = useState(false);
   const [currentEscalationId, setCurrentEscalationId] = useState<string | null>(null);
   const [hasActiveEscalation, setHasActiveEscalation] = useState(false);
+  const [uiEscalationTier, setUiEscalationTier] = useState<EscalationTier>(EscalationTier.None);
   
   // Nora intro card state
   const [showNoraIntro, setShowNoraIntro] = useState(() => {
@@ -444,6 +446,7 @@ const Chat: React.FC = () => {
     // Set active escalation state for visual cues (Tier 2 and 3)
     if (escalation.tier === EscalationTier.ElevatedRisk || escalation.tier === EscalationTier.CriticalRisk) {
       setHasActiveEscalation(true);
+      setUiEscalationTier(escalation.tier);
     }
     
     // For Tier 2 (Elevated) - show consent modal
@@ -536,16 +539,24 @@ const Chat: React.FC = () => {
       
       if (res.ok) {
         if (json.conversationId && json.conversationId !== conversationId) setConversationId(json.conversationId);
+        const tier = json.escalation?.tier ?? 0;
+        const tierEnum = (tier as EscalationTier) ?? EscalationTier.None;
+
+        // Update UI cue tier (Tier 1/2/3). Don't reset back to 0 automatically.
+        if (tierEnum >= EscalationTier.MonitorOnly) {
+          setHasActiveEscalation(true);
+          setUiEscalationTier(tierEnum);
+        }
         const aiMsg: ChatMessage = {
           id: Math.random().toString(36).slice(2),
           content: json.assistantMessage || "I'm here to support you. Can you share more?",
           isFromUser: false,
-          timestamp: Math.floor(Date.now() / 1000)
+          timestamp: Math.floor(Date.now() / 1000),
+          escalationTier: tierEnum >= EscalationTier.MonitorOnly ? tierEnum : undefined
         };
         setMessages(prev => [...prev, aiMsg]);
         
         // ========== ESCALATION TIER LOGGING ==========
-        const tier = json.escalation?.tier ?? 0;
         const tierName = tier === 0 ? 'None' : tier === 1 ? 'Monitor-Only' : tier === 2 ? 'Elevated Risk' : tier === 3 ? 'Critical Risk' : 'Unknown';
         const category = json.escalation?.category || 'N/A';
         const confidence = json.escalation?.confidence ?? 0;
@@ -634,19 +645,37 @@ const Chat: React.FC = () => {
       {/* Ambient Floating Orbs - Chromatic Glass Background */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <FloatingOrb 
-          color={hasActiveEscalation ? "#F97316" : "#E0FE10"} 
+          color={
+            uiEscalationTier === EscalationTier.MonitorOnly
+              ? "#3B82F6"
+              : uiEscalationTier >= EscalationTier.ElevatedRisk
+                ? "#F97316"
+                : "#E0FE10"
+          } 
           size="w-[400px] h-[400px]" 
           position={{ top: '-15%', left: '-10%' }} 
           delay={0} 
         />
         <FloatingOrb 
-          color={hasActiveEscalation ? "#FB923C" : "#3B82F6"} 
+          color={
+            uiEscalationTier === EscalationTier.MonitorOnly
+              ? "#60A5FA"
+              : uiEscalationTier >= EscalationTier.ElevatedRisk
+                ? "#FB923C"
+                : "#3B82F6"
+          } 
           size="w-[300px] h-[300px]" 
           position={{ top: '40%', right: '-5%' }} 
           delay={2} 
         />
         <FloatingOrb 
-          color={hasActiveEscalation ? "#F59E0B" : "#8B5CF6"} 
+          color={
+            uiEscalationTier === EscalationTier.MonitorOnly
+              ? "#93C5FD"
+              : uiEscalationTier >= EscalationTier.ElevatedRisk
+                ? "#F59E0B"
+                : "#8B5CF6"
+          } 
           size="w-[250px] h-[250px]" 
           position={{ bottom: '10%', left: '20%' }} 
           delay={4} 
@@ -777,13 +806,18 @@ const Chat: React.FC = () => {
                           <motion.div 
                             className={`absolute inset-0 w-8 h-8 rounded-full blur-lg transition-colors duration-1000`}
                             style={{ 
-                              backgroundColor: hasActiveEscalation ? 'rgba(249, 115, 22, 0.25)' : 'rgba(224, 254, 16, 0.3)'
+                              backgroundColor:
+                                uiEscalationTier === EscalationTier.MonitorOnly
+                                  ? 'rgba(59, 130, 246, 0.18)'
+                                  : uiEscalationTier >= EscalationTier.ElevatedRisk
+                                    ? 'rgba(249, 115, 22, 0.25)'
+                                    : 'rgba(224, 254, 16, 0.3)'
                             }}
-                            animate={hasActiveEscalation ? {
+                            animate={uiEscalationTier >= EscalationTier.MonitorOnly ? {
                               opacity: [0.25, 0.4, 0.25],
                               scale: [1, 1.1, 1]
                             } : {}}
-                            transition={hasActiveEscalation ? {
+                            transition={uiEscalationTier >= EscalationTier.MonitorOnly ? {
                               duration: 3,
                               repeat: Infinity,
                               ease: "easeInOut"
@@ -794,14 +828,17 @@ const Chat: React.FC = () => {
                             <motion.div 
                               className="absolute inset-0 rounded-full transition-colors duration-1000"
                               style={{ 
-                                background: hasActiveEscalation 
-                                  ? 'linear-gradient(135deg, rgba(249, 115, 22, 0.3), rgba(251, 146, 60, 0.15))'
-                                  : 'linear-gradient(135deg, rgba(224, 254, 16, 0.3), rgba(224, 254, 16, 0.1))'
+                                background:
+                                  uiEscalationTier === EscalationTier.MonitorOnly
+                                    ? 'linear-gradient(135deg, rgba(59, 130, 246, 0.28), rgba(96, 165, 250, 0.12))'
+                                    : uiEscalationTier >= EscalationTier.ElevatedRisk
+                                      ? 'linear-gradient(135deg, rgba(249, 115, 22, 0.3), rgba(251, 146, 60, 0.15))'
+                                      : 'linear-gradient(135deg, rgba(224, 254, 16, 0.3), rgba(224, 254, 16, 0.1))'
                               }}
-                              animate={hasActiveEscalation ? {
+                              animate={uiEscalationTier >= EscalationTier.MonitorOnly ? {
                                 opacity: [0.3, 0.5, 0.3]
                               } : {}}
-                              transition={hasActiveEscalation ? {
+                              transition={uiEscalationTier >= EscalationTier.MonitorOnly ? {
                                 duration: 2.5,
                                 repeat: Infinity,
                                 ease: "easeInOut"
@@ -809,7 +846,13 @@ const Chat: React.FC = () => {
                             />
                             <div className="absolute inset-[1px] bg-[#0a0a0b] rounded-full flex items-center justify-center">
                               <Brain 
-                                className={`w-4 h-4 transition-colors duration-1000 ${hasActiveEscalation ? 'text-[#F97316]' : 'text-[#E0FE10]'}`}
+                                className={`w-4 h-4 transition-colors duration-1000 ${
+                                  uiEscalationTier === EscalationTier.MonitorOnly
+                                    ? 'text-[#3B82F6]'
+                                    : uiEscalationTier >= EscalationTier.ElevatedRisk
+                                      ? 'text-[#F97316]'
+                                      : 'text-[#E0FE10]'
+                                }`}
                               />
                             </div>
                           </div>
@@ -908,7 +951,24 @@ const Chat: React.FC = () => {
                                 {m.content}
                               </span>
                             ) : (
-                              <span>{m.content}</span>
+                              <span
+                                className={
+                                  m.escalationTier === EscalationTier.MonitorOnly
+                                    ? 'text-blue-50'
+                                    : m.escalationTier && m.escalationTier >= EscalationTier.ElevatedRisk
+                                      ? 'text-orange-50'
+                                      : ''
+                                }
+                                style={
+                                  m.escalationTier === EscalationTier.MonitorOnly
+                                    ? { textShadow: '0 0 14px rgba(59, 130, 246, 0.18)' }
+                                    : m.escalationTier && m.escalationTier >= EscalationTier.ElevatedRisk
+                                      ? { textShadow: '0 0 14px rgba(249, 115, 22, 0.18)' }
+                                      : undefined
+                                }
+                              >
+                                {m.content}
+                              </span>
                             )}
                           </div>
                         )}
@@ -949,21 +1009,35 @@ const Chat: React.FC = () => {
                       <div 
                         className={`absolute inset-0 w-8 h-8 rounded-full blur-lg animate-pulse transition-colors duration-1000`}
                         style={{ 
-                          backgroundColor: hasActiveEscalation ? 'rgba(249, 115, 22, 0.3)' : 'rgba(224, 254, 16, 0.3)'
+                          backgroundColor:
+                            uiEscalationTier === EscalationTier.MonitorOnly
+                              ? 'rgba(59, 130, 246, 0.2)'
+                              : uiEscalationTier >= EscalationTier.ElevatedRisk
+                                ? 'rgba(249, 115, 22, 0.3)'
+                                : 'rgba(224, 254, 16, 0.3)'
                         }}
                       />
                       <div className="relative w-8 h-8 rounded-full flex items-center justify-center overflow-hidden">
                         <div 
                           className="absolute inset-0 rounded-full transition-colors duration-1000"
                           style={{ 
-                            background: hasActiveEscalation 
-                              ? 'linear-gradient(135deg, rgba(249, 115, 22, 0.3), rgba(251, 146, 60, 0.1))'
-                              : 'linear-gradient(135deg, rgba(224, 254, 16, 0.3), rgba(224, 254, 16, 0.1))'
+                            background:
+                              uiEscalationTier === EscalationTier.MonitorOnly
+                                ? 'linear-gradient(135deg, rgba(59, 130, 246, 0.28), rgba(96, 165, 250, 0.1))'
+                                : uiEscalationTier >= EscalationTier.ElevatedRisk
+                                  ? 'linear-gradient(135deg, rgba(249, 115, 22, 0.3), rgba(251, 146, 60, 0.1))'
+                                  : 'linear-gradient(135deg, rgba(224, 254, 16, 0.3), rgba(224, 254, 16, 0.1))'
                           }}
                         />
                         <div className="absolute inset-[1px] bg-[#0a0a0b] rounded-full flex items-center justify-center">
                           <Brain 
-                            className={`w-4 h-4 transition-colors duration-1000 ${hasActiveEscalation ? 'text-[#F97316]' : 'text-[#E0FE10]'}`}
+                            className={`w-4 h-4 transition-colors duration-1000 ${
+                              uiEscalationTier === EscalationTier.MonitorOnly
+                                ? 'text-[#3B82F6]'
+                                : uiEscalationTier >= EscalationTier.ElevatedRisk
+                                  ? 'text-[#F97316]'
+                                  : 'text-[#E0FE10]'
+                            }`}
                           />
                         </div>
                       </div>
@@ -1017,9 +1091,12 @@ const Chat: React.FC = () => {
               <motion.div 
                 className={`absolute -inset-1 rounded-2xl blur transition-opacity ${hasActiveEscalation ? 'opacity-20' : 'opacity-0 group-focus-within:opacity-100'}`}
                 style={{ 
-                  background: hasActiveEscalation
-                    ? 'linear-gradient(90deg, rgba(249, 115, 22, 0), rgba(249, 115, 22, 0.15), rgba(249, 115, 22, 0))'
-                    : 'linear-gradient(90deg, rgba(224, 254, 16, 0), rgba(224, 254, 16, 0.1), rgba(224, 254, 16, 0))'
+                  background:
+                    uiEscalationTier === EscalationTier.MonitorOnly
+                      ? 'linear-gradient(90deg, rgba(59, 130, 246, 0), rgba(59, 130, 246, 0.12), rgba(59, 130, 246, 0))'
+                      : uiEscalationTier >= EscalationTier.ElevatedRisk
+                        ? 'linear-gradient(90deg, rgba(249, 115, 22, 0), rgba(249, 115, 22, 0.15), rgba(249, 115, 22, 0))'
+                        : 'linear-gradient(90deg, rgba(224, 254, 16, 0), rgba(224, 254, 16, 0.1), rgba(224, 254, 16, 0))'
                 }}
                 animate={hasActiveEscalation ? {
                   opacity: [0.15, 0.25, 0.15]
@@ -1048,7 +1125,9 @@ const Chat: React.FC = () => {
                   rows={1}
                   className={`w-full bg-zinc-900/60 backdrop-blur-sm border rounded-xl px-4 py-3 pr-12 outline-none resize-none text-white placeholder:text-zinc-500 transition-all ${
                     hasActiveEscalation 
-                      ? 'border-[#F97316]/20 focus:border-[#F97316]/40 focus:bg-zinc-900/80' 
+                      ? uiEscalationTier === EscalationTier.MonitorOnly
+                        ? 'border-[#3B82F6]/20 focus:border-[#3B82F6]/40 focus:bg-zinc-900/80'
+                        : 'border-[#F97316]/20 focus:border-[#F97316]/40 focus:bg-zinc-900/80'
                       : 'border-white/10 focus:border-[#E0FE10]/30 focus:bg-zinc-900/80'
                   }`}
                   style={{

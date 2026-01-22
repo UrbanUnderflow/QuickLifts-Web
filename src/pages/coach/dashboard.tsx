@@ -20,6 +20,9 @@ import {
 } from 'lucide-react';
 import { db } from '../../api/firebase/config';
 import { doc, getDoc, collection, getDocs, query, where, updateDoc } from 'firebase/firestore';
+import { EscalationRecordStatus } from '../../api/firebase/escalation/types';
+import { escalationRecordsService } from '../../api/firebase/escalation/service';
+import { EscalationTier } from '../../api/firebase/escalation/types';
 
 // Floating Orb Component for loading/error states
 const FloatingOrb: React.FC<{
@@ -177,7 +180,188 @@ const CoachDashboard: React.FC = () => {
 
         setCoachProfile(coachProfile);
         const connectedAthletes = await coachService.getConnectedAthletes(coachProfile.id);
-        setAthletes(connectedAthletes);
+        
+        // Load active escalations for this coach and map to athletes
+        console.log('🔍 [CoachDashboard] ========== ESCALATION LOADING START ==========');
+        console.log('🔍 [CoachDashboard] Coach ID:', coachProfile.id);
+        console.log('🔍 [CoachDashboard] Connected athletes count:', connectedAthletes.length);
+        console.log('🔍 [CoachDashboard] Athlete IDs:', connectedAthletes.map(a => ({ id: a.id, name: a.displayName })));
+        
+        try {
+          // Get escalations by coachId (if coach was notified)
+          console.log('🔍 [CoachDashboard] Step 1: Querying escalations by coachId...');
+          const escalationsByCoach = await escalationRecordsService.getActiveForCoach(coachProfile.id);
+          console.log('✅ [CoachDashboard] Step 1 Result: Found', escalationsByCoach.length, 'escalations by coachId');
+          escalationsByCoach.forEach((esc, idx) => {
+            console.log(`   [${idx + 1}] Escalation: userId=${esc.userId}, tier=${esc.tier}, status=${esc.status}, coachId=${esc.coachId}`);
+          });
+          
+          // Also get escalations by athlete userId (in case coachId not set yet)
+          const athleteIds = connectedAthletes.map(a => a.id);
+          const escalationMap = new Map<string, number>(); // athleteId -> tier
+          
+          console.log('🔍 [CoachDashboard] Step 2: Querying escalation-records collection by userId for each athlete...');
+          console.log('🔍 [CoachDashboard] Collection: escalation-records');
+          console.log('🔍 [CoachDashboard] Filter: status == "active"');
+          
+          // Query escalations for each athlete
+          const escalationRef = collection(db, 'escalation-records');
+          
+          // Query ALL escalations first to see what exists
+          console.log('🔍 [CoachDashboard] Step 2a: Querying ALL escalation-records (no filters) to see what exists...');
+          try {
+            const allEscalationsSnapshot = await getDocs(collection(db, 'escalation-records'));
+            console.log('📊 [CoachDashboard] Total escalation-records in collection:', allEscalationsSnapshot.docs.length);
+            allEscalationsSnapshot.docs.forEach((doc: any, idx: number) => {
+              const data = doc.data();
+              console.log(`   [${idx + 1}] Doc ID: ${doc.id}`, {
+                userId: data.userId,
+                tier: data.tier,
+                status: data.status,
+                coachId: data.coachId,
+                coachNotified: data.coachNotified,
+                createdAt: data.createdAt
+              });
+            });
+          } catch (allQueryError) {
+            console.error('❌ [CoachDashboard] Error querying all escalations:', allQueryError);
+          }
+          
+          const escalationQueries = athleteIds.map(athleteId => {
+            console.log(`🔍 [CoachDashboard] Creating query for athlete: ${athleteId}`);
+            return query(
+              escalationRef,
+              where('userId', '==', athleteId),
+              where('status', '==', EscalationRecordStatus.Active)
+            );
+          });
+          
+          console.log('🔍 [CoachDashboard] Step 2b: Executing', escalationQueries.length, 'queries...');
+          const escalationSnapshots = await Promise.all(
+            escalationQueries.map(async (q, index) => {
+              try {
+                const snapshot = await getDocs(q);
+                console.log(`✅ [CoachDashboard] Query ${index + 1} (athlete: ${athleteIds[index]}): Found ${snapshot.docs.length} escalations`);
+                snapshot.docs.forEach((doc, docIdx) => {
+                  const data = doc.data();
+                  console.log(`   [Doc ${docIdx + 1}] ID: ${doc.id}`, {
+                    userId: data.userId,
+                    tier: data.tier,
+                    status: data.status,
+                    category: data.category,
+                    coachId: data.coachId
+                  });
+                });
+                return snapshot;
+              } catch (queryError) {
+                console.error(`❌ [CoachDashboard] Query ${index + 1} failed for athlete ${athleteIds[index]}:`, queryError);
+                return { docs: [] } as any;
+              }
+            })
+          );
+          
+          // Process all escalations (from both coachId and userId queries)
+          const allEscalations = [...escalationsByCoach];
+          console.log('🔍 [CoachDashboard] Step 3: Processing escalations from userId queries...');
+          escalationSnapshots.forEach((snapshot, index) => {
+            const athleteId = athleteIds[index];
+            console.log(`🔍 [CoachDashboard] Processing snapshot ${index + 1} for athlete ${athleteId}: ${snapshot.docs.length} docs`);
+            snapshot.docs.forEach((doc: any, docIdx: number) => {
+              const data = doc.data();
+              const tier = data.tier;
+              console.log(`   [Doc ${docIdx + 1}] Processing:`, {
+                docId: doc.id,
+                userId: data.userId,
+                tier: tier,
+                status: data.status,
+                tierValid: tier && tier >= EscalationTier.MonitorOnly
+              });
+              
+              if (tier && tier >= EscalationTier.MonitorOnly) {
+                const escalationData = {
+                  id: doc.id,
+                  userId: athleteId,
+                  tier: tier,
+                  status: data.status,
+                  conversationId: data.conversationId || '',
+                  category: data.category || 'general',
+                  triggerMessageId: data.triggerMessageId || '',
+                  triggerContent: data.triggerContent || '',
+                  classificationReason: data.classificationReason || '',
+                  classificationConfidence: data.classificationConfidence || 0,
+                  consentStatus: data.consentStatus || 'pending',
+                  handoffStatus: data.handoffStatus || 'pending',
+                  coachNotified: data.coachNotified || false,
+                  createdAt: data.createdAt || Date.now() / 1000
+                };
+                allEscalations.push(escalationData as any);
+                console.log(`   ✅ Added escalation to allEscalations:`, escalationData);
+              } else {
+                console.log(`   ⏭️ Skipped escalation (tier ${tier} < MonitorOnly)`);
+              }
+            });
+          });
+          
+          console.log('📊 [CoachDashboard] Step 4: Total active escalations found:', allEscalations.length);
+          allEscalations.forEach((esc, idx) => {
+            console.log(`   [${idx + 1}] userId=${esc.userId}, tier=${esc.tier}, status=${esc.status}`);
+          });
+          
+          // Map escalations to athletes (Tier 1+)
+          console.log('🔍 [CoachDashboard] Step 5: Mapping escalations to athletes...');
+          allEscalations.forEach((escalation, idx) => {
+            console.log(`🔍 [CoachDashboard] Processing escalation ${idx + 1}:`, {
+              userId: escalation.userId,
+              tier: escalation.tier,
+              status: escalation.status,
+              tierValid: escalation.tier >= EscalationTier.MonitorOnly
+            });
+            
+            // Show Tier 1+ on cards
+            if (escalation.tier >= EscalationTier.MonitorOnly) {
+              const existingTier = escalationMap.get(escalation.userId);
+              console.log(`   Current tier in map for ${escalation.userId}:`, existingTier);
+              // Keep highest tier if multiple escalations exist
+              if (!existingTier || escalation.tier > existingTier) {
+                escalationMap.set(escalation.userId, escalation.tier);
+                console.log(`   ✅ Mapped escalation tier ${escalation.tier} to athlete ${escalation.userId}`);
+              } else {
+                console.log(`   ⏭️ Skipped (existing tier ${existingTier} >= new tier ${escalation.tier})`);
+              }
+            } else {
+              console.log(`   ⏭️ Skipped (tier ${escalation.tier} < MonitorOnly)`);
+            }
+          });
+          
+          console.log('📊 [CoachDashboard] Step 6: Final escalation map:', Array.from(escalationMap.entries()));
+          
+          // Add escalation tier to athlete data
+          console.log('🔍 [CoachDashboard] Step 7: Adding escalation tiers to athlete data...');
+          const athletesWithEscalation = connectedAthletes.map(athlete => {
+            const tier = escalationMap.get(athlete.id) || 0;
+            console.log(`   Athlete: ${athlete.displayName} (${athlete.id}) → tier: ${tier}`);
+            if (tier > 0) {
+              console.log(`   ✅ ${athlete.displayName} HAS escalation tier ${tier}`);
+            } else {
+              console.log(`   ⚠️ ${athlete.displayName} has NO escalation`);
+            }
+            return {
+              ...athlete,
+              activeEscalationTier: tier
+            };
+          });
+          
+          console.log('✅ [CoachDashboard] ========== ESCALATION LOADING COMPLETE ==========');
+          setAthletes(athletesWithEscalation);
+        } catch (escalationError: any) {
+          console.error('❌ [CoachDashboard] Failed to load escalations (non-blocking):', escalationError);
+          console.error('❌ [CoachDashboard] Error details:', {
+            message: escalationError?.message,
+            stack: escalationError?.stack,
+            name: escalationError?.name
+          });
+          setAthletes(connectedAthletes);
+        }
 
         // Fetch shared athletes
         try {
@@ -613,20 +797,23 @@ const CoachDashboard: React.FC = () => {
               </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {sharedAthletes.map((athlete, idx) => (
-                <motion.div
-                  key={athlete.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.1 * idx }}
-                >
-                  <AthleteCard
-                  athlete={athlete}
-                    onViewDetails={() => {}}
-                    onMessageAthlete={() => {}}
-                />
-                </motion.div>
-              ))}
+              {sharedAthletes.map((athlete, idx) => {
+                // Load escalation for shared athletes too (if coach has access)
+                return (
+                  <motion.div
+                    key={athlete.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.1 * idx }}
+                  >
+                    <AthleteCard
+                      athlete={athlete}
+                      onViewDetails={() => {}}
+                      onMessageAthlete={() => {}}
+                    />
+                  </motion.div>
+                );
+              })}
             </div>
           </motion.div>
         )}

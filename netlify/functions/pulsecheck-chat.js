@@ -1044,13 +1044,91 @@ async function notifyCoachForEscalation(db, escalationId, userId, tier) {
         tier,
         coachId: targetCoachId,
       });
+
+      // Log to Notification Logs dashboard (email channel; no FCM token)
+      try {
+        const FieldValue = admin.firestore.FieldValue;
+        await db.collection('notification-logs').add({
+          fcmToken: coachEmail ? `email:${coachEmail.substring(0, 20)}...` : 'EMAIL',
+          title: `Coach escalation email (Tier ${tier})`,
+          body:
+            tier === EscalationTier.MonitorOnly
+              ? 'Tier 1 coach-review escalation email sent (privacy-safe).'
+              : `Tier ${tier} clinical-handoff escalation email sent (privacy-safe).`,
+          notificationType: 'COACH_ESCALATION_EMAIL',
+          functionName: 'netlify/pulsecheck-chat.notifyCoachForEscalation',
+          success: !!result?.success,
+          messageId: result?.messageId || null,
+          error: result?.success
+            ? null
+            : { code: result?.reason || 'EMAIL_FAILED', message: result?.error || 'Email send failed or skipped' },
+          dataPayload: {
+            channel: 'email',
+            coachId: targetCoachId,
+            athleteId: userId,
+            escalationId,
+            tier,
+            skipped: !!result?.skipped,
+          },
+          timestamp: FieldValue.serverTimestamp(),
+          timestampEpoch: nowSec,
+          createdAt: FieldValue.serverTimestamp(),
+          version: '1.0',
+        });
+      } catch (logErr) {
+        console.warn('[notifyCoachForEscalation] Failed to write notification-logs (non-blocking):', logErr?.message || logErr);
+      }
     } else {
       console.log('[notifyCoachForEscalation] Coach email missing; skipping email send', {
         coachId: targetCoachId,
       });
+
+      // Log missing email to Notification Logs dashboard (helps debug why nothing appears)
+      try {
+        const FieldValue = admin.firestore.FieldValue;
+        await db.collection('notification-logs').add({
+          fcmToken: 'EMAIL',
+          title: `Coach escalation email skipped (Tier ${tier})`,
+          body: 'Coach email missing on user profile; email not sent.',
+          notificationType: 'COACH_ESCALATION_EMAIL',
+          functionName: 'netlify/pulsecheck-chat.notifyCoachForEscalation',
+          success: false,
+          messageId: null,
+          error: { code: 'MISSING_COACH_EMAIL', message: 'Coach user doc has no email.' },
+          dataPayload: { channel: 'email', coachId: targetCoachId, athleteId: userId, escalationId, tier },
+          timestamp: FieldValue.serverTimestamp(),
+          timestampEpoch: nowSec,
+          createdAt: FieldValue.serverTimestamp(),
+          version: '1.0',
+        });
+      } catch (logErr) {
+        console.warn('[notifyCoachForEscalation] Failed to write notification-logs for missing email (non-blocking):', logErr?.message || logErr);
+      }
     }
   } catch (emailErr) {
     console.warn('[notifyCoachForEscalation] Coach email send failed (non-blocking):', emailErr?.message || emailErr);
+
+    // Log email exception to Notification Logs dashboard
+    try {
+      const FieldValue = admin.firestore.FieldValue;
+      await db.collection('notification-logs').add({
+        fcmToken: 'EMAIL',
+        title: `Coach escalation email error (Tier ${tier})`,
+        body: 'Coach escalation email threw an exception (privacy-safe).',
+        notificationType: 'COACH_ESCALATION_EMAIL',
+        functionName: 'netlify/pulsecheck-chat.notifyCoachForEscalation',
+        success: false,
+        messageId: null,
+        error: { code: emailErr?.code || 'EMAIL_EXCEPTION', message: emailErr?.message || String(emailErr) },
+        dataPayload: { channel: 'email', coachId: targetCoachId, athleteId: userId, escalationId, tier },
+        timestamp: FieldValue.serverTimestamp(),
+        timestampEpoch: nowSec,
+        createdAt: FieldValue.serverTimestamp(),
+        version: '1.0',
+      });
+    } catch (logErr) {
+      console.warn('[notifyCoachForEscalation] Failed to write notification-logs for email exception (non-blocking):', logErr?.message || logErr);
+    }
   }
 
   return { success: true, coachId: targetCoachId };

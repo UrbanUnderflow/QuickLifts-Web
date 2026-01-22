@@ -814,33 +814,39 @@ class CoachService {
         console.log('[CoachService] No workout data found, using 0 sessions');
       }
 
-      // 3. Calculate weekly goal progress (placeholder - you'll need to implement based on your goals structure)
+      // 3. Calculate weekly goal progress: Track Nora check-ins (7 conversations per week)
       let weeklyGoalProgress = 0;
       try {
-        // You might have a goals or challenges collection
-        const goalsRef = collection(db, 'user-challenge'); // Based on your existing structure
-        const goalsQuery = query(goalsRef, where('userId', '==', athleteUserId));
-        const goalsSnapshot = await getDocs(goalsQuery);
+        const now = new Date();
+        const weekStart = new Date(now);
+        weekStart.setDate(now.getDate() - now.getDay()); // Start of week (Sunday)
+        weekStart.setHours(0, 0, 0, 0);
         
-        if (goalsSnapshot.docs.length > 0) {
-          // Calculate average progress from active challenges
-          let totalProgress = 0;
-          let activeGoals = 0;
+        // Get all conversations for this user
+        const conversationsRef = collection(db, 'conversations');
+        const conversationQuery = query(conversationsRef, where('userId', '==', athleteUserId));
+        const conversationSnapshot = await getDocs(conversationQuery);
+        
+        // Count unique days with conversations this week
+        const checkInDates = new Set<string>();
+        conversationSnapshot.docs.forEach(doc => {
+          const conversationData = doc.data();
+          const conversationDate = convertFirestoreTimestamp(conversationData.createdAt || conversationData.updatedAt);
           
-          goalsSnapshot.docs.forEach(doc => {
-            const goalData = doc.data();
-            if (goalData.progress !== undefined) {
-              totalProgress += goalData.progress;
-              activeGoals++;
-            }
-          });
-          
-          if (activeGoals > 0) {
-            weeklyGoalProgress = Math.round(totalProgress / activeGoals);
+          // Check if conversation is within this week
+          if (conversationDate >= weekStart) {
+            const dateStr = conversationDate.toISOString().split('T')[0]; // YYYY-MM-DD
+            checkInDates.add(dateStr);
           }
-        }
-      } catch (goalsError) {
-        console.log('[CoachService] No goals data found, using 0% progress');
+        });
+        
+        const checkInsThisWeek = checkInDates.size;
+        const targetCheckIns = 7; // Daily check-ins with Nora
+        weeklyGoalProgress = Math.min(100, Math.round((checkInsThisWeek / targetCheckIns) * 100));
+        
+        console.log(`[CoachService] Weekly goal: ${checkInsThisWeek}/${targetCheckIns} check-ins = ${weeklyGoalProgress}%`);
+      } catch (weeklyGoalError) {
+        console.log('[CoachService] Error calculating weekly goal progress:', weeklyGoalError);
       }
 
       // 4. Basic sentiment analysis (temporary fallback)
@@ -1151,8 +1157,9 @@ class CoachService {
 
   /**
    * Get messages for a specific date - USING SAME LOCAL DATE LOGIC AS CONVERSATION MODAL
+   * Public method for accessing message content for coach tooltips
    */
-  private async getMessagesForDate(userId: string, dateString: string): Promise<string[]> {
+  async getMessagesForDate(userId: string, dateString: string): Promise<string[]> {
     try {
       console.log(`🔍 [CoachService] Searching for messages for user ${userId} on date ${dateString}`);
       

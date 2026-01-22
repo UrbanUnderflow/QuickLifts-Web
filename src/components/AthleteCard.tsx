@@ -16,6 +16,7 @@ import ConversationModal from './ConversationModal';
 import CoachAthleteMessagingModal from './CoachAthleteMessagingModal';
 import AthleteDetailsModal from './AthleteDetailsModal';
 import { useUser } from '../hooks/useUser';
+import { EscalationTier, getTierLabel, getTierColor } from '../api/firebase/escalation/types';
 
 interface AthleteData {
   id: string;
@@ -28,6 +29,7 @@ interface AthleteData {
   sentimentScore?: number;
   lastConversationDate?: Date;
   conversationCount?: number;
+  activeEscalationTier?: number; // 0 = None, 1 = MonitorOnly, 2 = ElevatedRisk, 3 = CriticalRisk
 }
 
 interface AthleteCardProps {
@@ -46,10 +48,29 @@ const AthleteCard: React.FC<AthleteCardProps> = ({
   const [sentimentLoaded, setSentimentLoaded] = useState(false);
   const [hoveredDot, setHoveredDot] = useState<DailySentimentRecord | null>(null);
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
+  const [hoveredDayContext, setHoveredDayContext] = useState<{ sampleMessage?: string; topics?: string[] } | null>(null);
+  const [hoveredEscalationBadge, setHoveredEscalationBadge] = useState(false);
+  const [escalationBadgePosition, setEscalationBadgePosition] = useState({ x: 0, y: 0 });
   const [isConversationModalOpen, setIsConversationModalOpen] = useState(false);
   const [isMessagingModalOpen, setIsMessagingModalOpen] = useState(false);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const currentUser = useUser();
+
+  // Debug: Log escalation tier when it changes
+  useEffect(() => {
+    console.log(`🔍 [AthleteCard] ${athlete.displayName} (${athlete.id}) - Escalation tier check:`, {
+      activeEscalationTier: athlete.activeEscalationTier,
+      isDefined: athlete.activeEscalationTier !== undefined,
+      isGreaterThanZero: athlete.activeEscalationTier !== undefined && athlete.activeEscalationTier > 0,
+      shouldShowBadge: athlete.activeEscalationTier !== undefined && athlete.activeEscalationTier >= EscalationTier.MonitorOnly
+    });
+    
+    if (athlete.activeEscalationTier !== undefined && athlete.activeEscalationTier > 0) {
+      console.log(`✅ [AthleteCard] ${athlete.displayName} HAS active escalation tier:`, athlete.activeEscalationTier);
+    } else {
+      console.log(`⚠️ [AthleteCard] ${athlete.displayName} has NO escalation (tier: ${athlete.activeEscalationTier})`);
+    }
+  }, [athlete.activeEscalationTier, athlete.displayName, athlete.id]);
 
   useEffect(() => {
     loadSentimentHistory();
@@ -57,8 +78,48 @@ const AthleteCard: React.FC<AthleteCardProps> = ({
 
   const loadSentimentHistory = async () => {
     try {
-      const history = await coachService.getDailySentimentHistory(athlete.id, 28);
-      setSentimentHistory(history);
+      // First, try to get existing sentiment history
+      let history = await coachService.getDailySentimentHistory(athlete.id, 28);
+      console.log(`[AthleteCard] Loaded sentiment history for ${athlete.displayName}:`, {
+        count: history.length,
+        dates: history.map(r => r.date).slice(0, 10),
+        recentDates: history.slice(0, 3).map(r => ({
+          date: r.date,
+          score: r.sentimentScore,
+          messageCount: r.messageCount
+        }))
+      });
+      
+      // Check if we have recent days (last 3 days) with conversations but no sentiment
+      const today = new Date();
+      const recentDates = [];
+      for (let i = 0; i < 3; i++) {
+        const date = new Date(today);
+        date.setDate(today.getDate() - i);
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        recentDates.push(`${year}-${month}-${day}`);
+      }
+      
+      const missingDates = recentDates.filter(dateStr => !history.find(r => r.date === dateStr));
+      if (missingDates.length > 0) {
+        console.log(`[AthleteCard] Missing sentiment data for recent dates: ${missingDates.join(', ')}. Processing...`);
+        // Auto-process sentiment for missing recent days
+        try {
+          const processed = await coachService.processSentimentForAthlete(athlete.id, 28);
+          history = processed;
+          console.log(`[AthleteCard] Processed sentiment, now have ${history.length} records`);
+        } catch (processError) {
+          console.warn('[AthleteCard] Failed to auto-process sentiment (non-blocking):', processError);
+        }
+      }
+      
+      // Filter out records with no messages (days without conversations)
+      const historyWithMessages = history.filter(r => r.messageCount > 0);
+      console.log(`[AthleteCard] Filtered sentiment history: ${history.length} total records, ${historyWithMessages.length} with messages`);
+      
+      setSentimentHistory(historyWithMessages);
       setSentimentLoaded(true);
     } catch (error) {
       console.error('Error loading sentiment history:', error);
@@ -91,17 +152,129 @@ const AthleteCard: React.FC<AthleteCardProps> = ({
     return 'Negative';
   };
 
-  const handleDotHover = (record: DailySentimentRecord, event: React.MouseEvent) => {
+  // Coach-friendly sentiment level descriptions
+  const getSentimentLevel = (score: number): { level: string; description: string; intensity: string } => {
+    if (score >= 0.7) {
+      return {
+        level: 'Very Positive',
+        intensity: 'High',
+        description: 'Athlete expressed strong positive emotions, enthusiasm, or satisfaction.'
+      };
+    } else if (score >= 0.3) {
+      return {
+        level: 'Positive',
+        intensity: 'Moderate',
+        description: 'Athlete showed generally positive mood and outlook.'
+      };
+    } else if (score >= 0.1) {
+      return {
+        level: 'Slightly Positive',
+        intensity: 'Low',
+        description: 'Athlete had a mildly positive or neutral-positive tone.'
+      };
+    } else if (score >= -0.1) {
+      return {
+        level: 'Neutral',
+        intensity: 'None',
+        description: 'Athlete maintained a balanced, neutral emotional state.'
+      };
+    } else if (score >= -0.3) {
+      return {
+        level: 'Slightly Negative',
+        intensity: 'Low',
+        description: 'Athlete showed mild concerns or slightly negative emotions.'
+      };
+    } else if (score >= -0.6) {
+      return {
+        level: 'Moderately Negative',
+        intensity: 'Moderate',
+        description: 'Athlete expressed notable stress, worry, or negative feelings that may need attention.'
+      };
+    } else if (score >= -0.8) {
+      return {
+        level: 'Significantly Negative',
+        intensity: 'High',
+        description: 'Athlete showed strong negative emotions, distress, or significant concerns requiring support.'
+      };
+    } else {
+      return {
+        level: 'Severely Negative',
+        intensity: 'Critical',
+        description: 'Athlete expressed extreme distress, hopelessness, or critical concerns that need immediate attention.'
+      };
+    }
+  };
+
+  const handleDotHover = async (record: DailySentimentRecord, event: React.MouseEvent) => {
     const rect = event.currentTarget.getBoundingClientRect();
-    setTooltipPosition({
-      x: rect.left + rect.width / 2,
-      y: rect.top - 10
-    });
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    
+    // Calculate position - center above the dot
+    let x = rect.left + rect.width / 2;
+    let y = rect.top - 10;
+    
+    // Adjust if tooltip would go off screen
+    if (x < 110) x = 110; // Keep away from left edge (half tooltip width)
+    if (x > viewportWidth - 110) x = viewportWidth - 110; // Keep away from right edge
+    if (y < 150) {
+      // If too close to top, show below instead
+      y = rect.bottom + 10;
+    }
+    
+    setTooltipPosition({ x, y });
     setHoveredDot(record);
+    
+    // Fetch message context for this day to provide coach-friendly insights
+    if (record.messageCount > 0) {
+      try {
+        const messages = await coachService.getMessagesForDate(athlete.id, record.date);
+        if (messages.length > 0) {
+          // Get a sample message (prefer user messages, not AI responses)
+          const userMessages = messages.filter((msg, idx) => idx % 2 === 0 || msg.toLowerCase().includes('i ') || msg.toLowerCase().includes('my '));
+          const sampleMessage = userMessages[0] || messages[0];
+          
+          // Extract key topics/concerns from messages
+          const topics: string[] = [];
+          const allText = messages.join(' ').toLowerCase();
+          
+          if (allText.includes('stress') || allText.includes('stressed') || allText.includes('stressing')) topics.push('Stress');
+          if (allText.includes('anxious') || allText.includes('anxiety') || allText.includes('worried') || allText.includes('worry')) topics.push('Anxiety');
+          if (allText.includes('depress') || allText.includes('sad') || allText.includes('down')) topics.push('Mood');
+          if (allText.includes('tired') || allText.includes('exhaust') || allText.includes('fatigue')) topics.push('Fatigue');
+          if (allText.includes('injur') || allText.includes('hurt') || allText.includes('pain')) topics.push('Injury');
+          if (allText.includes('competition') || allText.includes('compete') || allText.includes('game') || allText.includes('match')) topics.push('Competition');
+          if (allText.includes('recover') || allText.includes('heal') || allText.includes('rehab')) topics.push('Recovery');
+          if (allText.includes('hopeless') || allText.includes('helpless') || allText.includes('can\'t')) topics.push('Hopelessness');
+          
+          setHoveredDayContext({
+            sampleMessage: sampleMessage.length > 120 ? sampleMessage.substring(0, 120) + '...' : sampleMessage,
+            topics: topics.slice(0, 3) // Limit to 3 topics
+          });
+        } else {
+          setHoveredDayContext(null);
+        }
+      } catch (error) {
+        console.warn('[AthleteCard] Failed to fetch message context:', error);
+        setHoveredDayContext(null);
+      }
+    } else {
+      setHoveredDayContext(null);
+    }
+    
+    console.log('[AthleteCard] Tooltip hover:', { 
+      date: record.date, 
+      x, 
+      y, 
+      rect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
+      viewport: { width: viewportWidth, height: viewportHeight },
+      hoveredDotSet: true
+    });
   };
 
   const handleDotLeave = () => {
     setHoveredDot(null);
+    setHoveredDayContext(null);
   };
 
   const formatDate = (dateString: string): string => {
@@ -134,19 +307,114 @@ const AthleteCard: React.FC<AthleteCardProps> = ({
     return (now.getTime() - last.getTime()) < 86400000;
   };
 
+  // Get escalation tier explanation for coach
+  const getEscalationExplanation = (tier: number) => {
+    switch (tier) {
+      case EscalationTier.MonitorOnly:
+        return {
+          title: 'Tier 1: Monitor Only',
+          description: 'The athlete expressed concerns that warrant your attention but don\'t require immediate clinical intervention.',
+          action: 'You\'ve been notified. Please check in with the athlete when convenient.',
+          examples: ['Performance stress', 'Fatigue concerns', 'Emotional variability', 'Burnout indicators'],
+          color: '#3B82F6'
+        };
+      case EscalationTier.ElevatedRisk:
+        return {
+          title: 'Tier 2: Elevated Risk',
+          description: 'The athlete showed signs of elevated psychological distress that may benefit from professional support.',
+          action: 'A clinical handoff has been initiated (with athlete consent). A mental health professional will reach out.',
+          examples: ['Persistent distress', 'Anxiety indicators', 'Injury-related psychological concerns', 'Recurring concerns'],
+          color: '#F97316'
+        };
+      case EscalationTier.CriticalRisk:
+        return {
+          title: 'Tier 3: Critical Risk',
+          description: 'The athlete expressed critical safety concerns requiring immediate professional intervention.',
+          action: 'A mandatory clinical handoff has been initiated. A mental health professional is being connected immediately.',
+          examples: ['Self-harm indicators', 'Suicidal ideation', 'Imminent safety risk', 'Severe psychological distress'],
+          color: '#EF4444'
+        };
+      default:
+        return null;
+    }
+  };
+
   return (
-    <motion.div 
-      whileHover={{ y: -4, scale: 1.01 }}
-      transition={{ duration: 0.2 }}
-      className="relative group"
-    >
+    <>
+      <motion.div 
+        whileHover={{ y: -4, scale: 1.01 }}
+        transition={{ duration: 0.2 }}
+        className="relative group"
+        style={{ overflow: 'visible' }}
+      >
       {/* Chromatic glow background */}
       <div className="absolute -inset-1 rounded-2xl blur-xl opacity-0 group-hover:opacity-40 transition-all duration-700 bg-gradient-to-br from-[#E0FE10]/30 via-transparent to-[#3B82F6]/20" />
       
-      {/* Card surface */}
-      <div className="relative rounded-2xl overflow-hidden backdrop-blur-xl bg-zinc-900/60 border border-white/10">
-        {/* Chromatic top line */}
-        <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-[#E0FE10]/60 to-transparent" />
+      {/* Card surface - overflow-hidden only for card content, not tooltips */}
+      <div 
+        className={`relative rounded-2xl backdrop-blur-xl border transition-all duration-500 ${
+          athlete.activeEscalationTier && athlete.activeEscalationTier >= EscalationTier.MonitorOnly
+            ? athlete.activeEscalationTier === EscalationTier.MonitorOnly
+              ? 'bg-zinc-900/70 border-[#3B82F6]/40'
+              : 'bg-zinc-900/75 border-[#F97316]/40'
+            : 'bg-zinc-900/60 border-white/10'
+        }`}
+        style={{
+          overflow: 'visible',
+          ...(athlete.activeEscalationTier && athlete.activeEscalationTier >= EscalationTier.MonitorOnly
+            ? athlete.activeEscalationTier === EscalationTier.MonitorOnly
+              ? { boxShadow: '0 0 25px rgba(59, 130, 246, 0.15), inset 0 0 30px rgba(59, 130, 246, 0.03)' }
+              : { boxShadow: '0 0 25px rgba(249, 115, 22, 0.15), inset 0 0 30px rgba(249, 115, 22, 0.03)' }
+            : {})
+        }}
+      >
+        {/* Chromatic top line - blue for Tier 1, warm for Tier 2/3 */}
+        <div 
+          className="absolute top-0 left-0 right-0 h-[1px] transition-all duration-500"
+          style={{
+            background: athlete.activeEscalationTier && athlete.activeEscalationTier >= EscalationTier.MonitorOnly
+              ? athlete.activeEscalationTier === EscalationTier.MonitorOnly
+                ? 'linear-gradient(90deg, transparent, rgba(59, 130, 246, 0.7), transparent)'
+                : 'linear-gradient(90deg, transparent, rgba(249, 115, 22, 0.7), transparent)'
+              : 'linear-gradient(90deg, transparent, rgba(224, 254, 16, 0.6), transparent)'
+          }}
+        />
+        
+        {/* Escalation Badge */}
+        {athlete.activeEscalationTier && athlete.activeEscalationTier >= EscalationTier.MonitorOnly && (() => {
+          const tierColors = getTierColor(athlete.activeEscalationTier);
+          const tierLabel = athlete.activeEscalationTier === EscalationTier.MonitorOnly 
+            ? 'Tier 1 Escalation'
+            : athlete.activeEscalationTier === EscalationTier.ElevatedRisk
+            ? 'Tier 2 Escalation'
+            : 'Tier 3 Escalation';
+          
+          return (
+            <div className="absolute top-3 right-3 z-10">
+              <motion.div
+                initial={{ scale: 0, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                onMouseEnter={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  setEscalationBadgePosition({
+                    x: rect.right - 10,
+                    y: rect.top + rect.height / 2
+                  });
+                  setHoveredEscalationBadge(true);
+                }}
+                onMouseLeave={() => setHoveredEscalationBadge(false)}
+                className="px-3 py-1.5 rounded-full text-xs font-semibold border-2 shadow-lg backdrop-blur-md cursor-help transition-all hover:scale-105"
+                style={{
+                  backgroundColor: tierColors.bg,
+                  color: tierColors.text,
+                  borderColor: tierColors.border,
+                }}
+              >
+                {tierLabel}
+              </motion.div>
+            </div>
+          );
+        })()}
         
         {/* Inner highlight */}
         <div className="absolute inset-0 bg-gradient-to-br from-white/5 via-transparent to-transparent pointer-events-none" />
@@ -226,7 +494,7 @@ const AthleteCard: React.FC<AthleteCardProps> = ({
           {athlete.weeklyGoalProgress !== undefined && (
             <div className="mb-4">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs text-zinc-500">Weekly Goal</span>
+                <span className="text-xs text-zinc-500">Weekly Check-Ins</span>
                 <span className="text-xs font-medium text-white">{Math.round(athlete.weeklyGoalProgress)}%</span>
               </div>
               <div className="relative w-full h-2 rounded-full bg-zinc-800 overflow-hidden">
@@ -279,7 +547,15 @@ const AthleteCard: React.FC<AthleteCardProps> = ({
                 {sentimentHistory.length > 0 ? (
                   <div>
                     <div className="flex items-center justify-between mb-3">
-                      <span className="text-xs text-zinc-500">28-Day Mood Cycle</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-zinc-500">28-Day Mood Cycle</span>
+                        <span className="text-xs text-zinc-600">
+                          {(() => {
+                            const today = new Date();
+                            return today.toLocaleDateString('en-US', { month: 'short' });
+                          })()}
+                        </span>
+                      </div>
                       <span 
                         className="text-xs font-medium px-2 py-0.5 rounded-full"
                         style={{ 
@@ -291,58 +567,91 @@ const AthleteCard: React.FC<AthleteCardProps> = ({
                       </span>
                     </div>
                     
-                    {/* 28-Day Sentiment Grid */}
+                    {/* 28-Day Sentiment Grid - Count backwards from today */}
                     <div className="space-y-1">
-                      {[0, 1, 2, 3].map((weekIndex) => (
-                        <div key={weekIndex} className="flex justify-between items-center gap-1">
-                          {[0, 1, 2, 3, 4, 5, 6].map((dayIndex) => {
-                            const dataIndex = weekIndex * 7 + dayIndex;
-                            const record = sentimentHistory[27 - dataIndex];
-                            const isCurrentBlock = weekIndex >= 2;
-                            
-                            if (!record) {
+                      {(() => {
+                        const today = new Date();
+                        const gridDays: Array<{ date: Date; record: DailySentimentRecord | null; isToday: boolean }> = [];
+                        
+                        // Helper to format date as YYYY-MM-DD in local timezone (not UTC)
+                        const formatDateLocal = (d: Date): string => {
+                          const year = d.getFullYear();
+                          const month = String(d.getMonth() + 1).padStart(2, '0');
+                          const day = String(d.getDate()).padStart(2, '0');
+                          return `${year}-${month}-${day}`;
+                        };
+                        
+                        // Build array of last 28 days counting backwards from today
+                        for (let i = 0; i < 28; i++) {
+                          const date = new Date(today);
+                          date.setDate(date.getDate() - i);
+                          const dateStr = formatDateLocal(date); // YYYY-MM-DD in local timezone
+                          const record = sentimentHistory.find(r => r.date === dateStr) || null;
+                          
+                          // Debug logging for first few days
+                          if (i < 3 && record) {
+                            console.log(`[AthleteCard] Day ${i}: ${dateStr} → Found record:`, {
+                              date: record.date,
+                              score: record.sentimentScore,
+                              messageCount: record.messageCount
+                            });
+                          }
+                          
+                          gridDays.push({ date, record, isToday: i === 0 });
+                        }
+                        
+                        // Render in 4 rows of 7 days
+                        return [0, 1, 2, 3].map((weekIndex) => (
+                          <div key={weekIndex} className="flex justify-between items-center gap-1">
+                            {[0, 1, 2, 3, 4, 5, 6].map((dayIndex) => {
+                              const gridIndex = weekIndex * 7 + dayIndex;
+                              const { date, record, isToday } = gridDays[gridIndex] || { date: new Date(), record: null, isToday: false };
+                              
+                              if (!record) {
+                                return (
+                                  <div 
+                                    key={gridIndex} 
+                                    className="w-7 h-7 rounded-lg border border-zinc-800 bg-zinc-900/50 flex items-center justify-center"
+                                  >
+                                    <span className="text-[10px] text-zinc-700">{date.getDate()}</span>
+                                  </div>
+                                );
+                              }
+                              
+                              // Only show color if there were actual conversations that day
+                              const hasData = record.messageCount > 0;
+                              const color = hasData ? getSentimentColorHex(record.sentimentScore) : '#374151';
+                              const dayOfMonth = date.getDate();
+                              
                               return (
-                                <div 
-                                  key={dataIndex} 
-                                  className="w-7 h-7 rounded-lg border border-zinc-800 bg-zinc-900/50 flex items-center justify-center"
+                                <motion.div
+                                  key={record.id || gridIndex}
+                                  whileHover={{ scale: 1.15 }}
+                                  className={`relative w-7 h-7 rounded-lg cursor-pointer flex items-center justify-center transition-all duration-200 ${
+                                    isToday
+                                      ? 'ring-1 ring-[#E0FE10]/40 shadow-sm shadow-[#E0FE10]/10' 
+                                      : 'border border-zinc-700/50'
+                                  }`}
+                                  style={{ backgroundColor: color }}
+                                  onMouseEnter={(e) => handleDotHover(record, e)}
+                                  onMouseLeave={handleDotLeave}
                                 >
-                                  <span className="text-[10px] text-zinc-700">-</span>
-                                </div>
+                                  <span className={`text-[10px] font-medium ${
+                                    hasData 
+                                      ? (record.sentimentScore > 0.1 ? 'text-white' : 'text-zinc-200')
+                                      : 'text-zinc-500'
+                                  }`}>
+                                    {dayOfMonth}
+                                  </span>
+                                  {isToday && (
+                                    <div className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-[#E0FE10] rounded-full" />
+                                  )}
+                                </motion.div>
                               );
-                            }
-                            
-                            const color = getSentimentColorHex(record.sentimentScore);
-                            const hasData = record.messageCount > 0;
-                            const dayOfMonth = record.date ? record.date.split('-')[2] : '';
-                            
-                            return (
-                              <motion.div
-                                key={record.id}
-                                whileHover={{ scale: 1.15 }}
-                                className={`relative w-7 h-7 rounded-lg cursor-pointer flex items-center justify-center transition-all duration-200 ${
-                                  isCurrentBlock 
-                                    ? 'ring-1 ring-[#E0FE10]/40 shadow-sm shadow-[#E0FE10]/10' 
-                                    : 'border border-zinc-700/50'
-                                }`}
-                                style={{ backgroundColor: hasData ? color : '#374151' }}
-                                onMouseEnter={(e) => handleDotHover(record, e)}
-                                onMouseLeave={handleDotLeave}
-                              >
-                                <span className={`text-[10px] font-medium ${
-                                  hasData 
-                                    ? (record.sentimentScore > 0.1 ? 'text-white' : 'text-zinc-200')
-                                    : 'text-zinc-500'
-                                }`}>
-                                  {dayOfMonth}
-                                </span>
-                                {isCurrentBlock && (
-                                  <div className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-[#E0FE10] rounded-full" />
-                                )}
-                              </motion.div>
-                            );
-                          })}
-                        </div>
-                      ))}
+                            })}
+                          </div>
+                        ));
+                      })()}
                     </div>
                     
                     {/* Legend */}
@@ -407,64 +716,232 @@ const AthleteCard: React.FC<AthleteCardProps> = ({
           </div>
         </div>
       </div>
+    </motion.div>
 
-      {/* Sentiment Tooltip */}
+      {/* Sentiment Tooltip - Render outside card container to avoid overflow clipping */}
       <AnimatePresence>
         {hoveredDot && (
           <motion.div
-            initial={{ opacity: 0, y: 5 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 5 }}
-            className="fixed z-50 pointer-events-none"
+            initial={{ opacity: 0, scale: 0.95, y: 5 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 5 }}
+            transition={{ duration: 0.15 }}
+            className="fixed pointer-events-none"
             style={{
-              left: tooltipPosition.x - 100,
-              top: tooltipPosition.y - 120,
-              minWidth: '200px'
+              left: `${tooltipPosition.x}px`,
+              top: `${tooltipPosition.y}px`,
+              transform: 'translate(-50%, -100%)',
+              zIndex: 99999,
             }}
+            onAnimationStart={() => console.log('[AthleteCard] Tooltip animating in:', hoveredDot?.date)}
+            onAnimationComplete={() => console.log('[AthleteCard] Tooltip animation complete')}
           >
-            <div className="rounded-xl backdrop-blur-xl bg-zinc-900/95 border border-white/10 p-3 shadow-2xl">
-              <div className="text-sm font-medium text-white mb-2">
-                {formatDate(hoveredDot.date)}
+            <div className="rounded-xl backdrop-blur-xl bg-zinc-900/98 border border-white/20 p-4 shadow-2xl min-w-[280px] max-w-[320px]">
+              {/* Header */}
+              <div className="flex items-center justify-between mb-3 pb-2 border-b border-white/10">
+                <div className="text-sm font-semibold text-white">
+                  {formatDate(hoveredDot.date)}
+                </div>
+                <div 
+                  className="px-2 py-0.5 rounded-full text-[10px] font-medium"
+                  style={{ 
+                    backgroundColor: `${getSentimentColorHex(hoveredDot.sentimentScore)}20`,
+                    color: getSentimentColorHex(hoveredDot.sentimentScore)
+                  }}
+                >
+                  {getSentimentLabel(hoveredDot.sentimentScore)}
+                </div>
               </div>
               
-              <div className="space-y-1.5 text-xs">
-                <div className="flex justify-between">
-                  <span className="text-zinc-500">Messages:</span>
-                  <span className="text-white font-medium">{hoveredDot.messageCount}</span>
-                </div>
+              {/* Details */}
+              <div className="space-y-3 text-xs">
+                {/* Coach-Friendly Sentiment Level */}
+                {(() => {
+                  const sentimentLevel = getSentimentLevel(hoveredDot.sentimentScore);
+                  return (
+                    <div className="pb-2 border-b border-white/10">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-zinc-400 text-[10px]">Sentiment Level</span>
+                        <span 
+                          className="px-2 py-0.5 rounded-full text-[10px] font-semibold"
+                          style={{ 
+                            backgroundColor: `${getSentimentColorHex(hoveredDot.sentimentScore)}20`,
+                            color: getSentimentColorHex(hoveredDot.sentimentScore)
+                          }}
+                        >
+                          {sentimentLevel.level}
+                        </span>
+                      </div>
+                      <p className="text-zinc-300 text-[11px] leading-relaxed mt-1.5">
+                        {sentimentLevel.description}
+                      </p>
+                      {sentimentLevel.intensity !== 'None' && (
+                        <div className="mt-1.5 text-[10px] text-zinc-500">
+                          Intensity: <span className="text-zinc-400 font-medium">{sentimentLevel.intensity}</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
                 
-                <div className="flex justify-between items-center">
-                  <span className="text-zinc-500">Sentiment:</span>
-                  <span 
-                    className="font-medium px-2 py-0.5 rounded-full text-[10px]"
-                    style={{ 
-                      backgroundColor: hoveredDot.messageCount > 0 ? `${getSentimentColorHex(hoveredDot.sentimentScore)}20` : '#374151',
-                      color: hoveredDot.messageCount > 0 ? getSentimentColorHex(hoveredDot.sentimentScore) : '#6B7280'
-                    }}
-                  >
-                    {hoveredDot.messageCount > 0 ? getSentimentLabel(hoveredDot.sentimentScore) : 'No Data'}
-                  </span>
-                </div>
+                {/* Message Context */}
+                {hoveredDayContext && hoveredDayContext.sampleMessage && (
+                  <div className="pb-2 border-b border-white/10">
+                    <div className="text-zinc-400 text-[10px] mb-1.5">Sample Message:</div>
+                    <p className="text-zinc-200 text-[11px] leading-relaxed italic">
+                      "{hoveredDayContext.sampleMessage}"
+                    </p>
+                    {hoveredDayContext.topics && hoveredDayContext.topics.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {hoveredDayContext.topics.map((topic, idx) => (
+                          <span 
+                            key={idx}
+                            className="px-2 py-0.5 rounded-full text-[10px] bg-zinc-800/50 text-zinc-300 border border-zinc-700/50"
+                          >
+                            {topic}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
                 
-                <div className="flex justify-between">
-                  <span className="text-zinc-500">Score:</span>
-                  <span className="text-white font-medium">
-                    {hoveredDot.messageCount > 0 ? hoveredDot.sentimentScore.toFixed(2) : '-'}
-                  </span>
+                {/* Stats */}
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-zinc-400 flex items-center gap-1.5">
+                      <MessageCircle className="w-3 h-3" />
+                      Messages
+                    </span>
+                    <span className="text-white font-semibold">{hoveredDot.messageCount}</span>
+                  </div>
+                  
+                  {/* Technical score (collapsed by default, can expand) */}
+                  <details className="group">
+                    <summary className="cursor-pointer text-zinc-500 text-[10px] hover:text-zinc-400 transition-colors">
+                      Technical Details
+                    </summary>
+                    <div className="mt-2 pt-2 border-t border-white/5">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-zinc-500 text-[10px]">Raw Score:</span>
+                        <span className="text-zinc-400 text-[10px] font-mono">
+                          {hoveredDot.sentimentScore >= 0 ? '+' : ''}{hoveredDot.sentimentScore.toFixed(3)}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 h-1.5 rounded-full bg-zinc-800 overflow-hidden">
+                          <div 
+                            className="h-full rounded-full transition-all"
+                            style={{ 
+                              width: `${((hoveredDot.sentimentScore + 1) / 2) * 100}%`,
+                              backgroundColor: getSentimentColorHex(hoveredDot.sentimentScore)
+                            }}
+                          />
+                        </div>
+                      </div>
+                      <div className="flex justify-between text-[10px] text-zinc-600 mt-1">
+                        <span>Negative (-1.0)</span>
+                        <span>Neutral (0.0)</span>
+                        <span>Positive (+1.0)</span>
+                      </div>
+                    </div>
+                  </details>
                 </div>
                 
                 {hoveredDot.messageCount === 0 && (
-                  <div className="text-zinc-600 text-center pt-2 italic border-t border-white/5 mt-2">
-                    No messages this day
+                  <div className="text-zinc-500 text-center pt-2 italic border-t border-white/5 mt-2 text-[10px]">
+                    No conversations this day
                   </div>
                 )}
               </div>
               
-              {/* Tooltip arrow */}
-              <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-zinc-900/95" />
+              {/* Tooltip arrow pointing down */}
+              <div 
+                className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-[6px] border-r-[6px] border-t-[6px] border-transparent"
+                style={{ borderTopColor: 'rgba(24, 24, 27, 0.98)' }}
+              />
             </div>
           </motion.div>
         )}
+      </AnimatePresence>
+
+      {/* Escalation Badge Tooltip */}
+      <AnimatePresence>
+        {hoveredEscalationBadge && athlete.activeEscalationTier && athlete.activeEscalationTier >= EscalationTier.MonitorOnly && (() => {
+          const explanation = getEscalationExplanation(athlete.activeEscalationTier);
+          if (!explanation) return null;
+          
+          return (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, x: -10 }}
+              animate={{ opacity: 1, scale: 1, x: 0 }}
+              exit={{ opacity: 0, scale: 0.95, x: -10 }}
+              transition={{ duration: 0.15 }}
+              className="fixed pointer-events-none"
+              style={{
+                left: `${escalationBadgePosition.x}px`,
+                top: `${escalationBadgePosition.y}px`,
+                transform: 'translate(-100%, -50%)',
+                zIndex: 99999,
+              }}
+            >
+              <div className="rounded-xl backdrop-blur-xl bg-zinc-900/98 border border-white/20 p-4 shadow-2xl min-w-[300px] max-w-[360px]">
+                {/* Header */}
+                <div className="flex items-center justify-between mb-3 pb-2 border-b border-white/10">
+                  <div className="text-sm font-semibold text-white">
+                    {explanation.title}
+                  </div>
+                  <div 
+                    className="px-2 py-0.5 rounded-full text-[10px] font-medium"
+                    style={{ 
+                      backgroundColor: `${explanation.color}20`,
+                      color: explanation.color
+                    }}
+                  >
+                    Active
+                  </div>
+                </div>
+                
+                {/* Description */}
+                <div className="space-y-3 text-xs">
+                  <div>
+                    <div className="text-zinc-400 text-[10px] mb-1.5">What This Means:</div>
+                    <p className="text-zinc-200 text-[11px] leading-relaxed">
+                      {explanation.description}
+                    </p>
+                  </div>
+                  
+                  <div className="pt-2 border-t border-white/10">
+                    <div className="text-zinc-400 text-[10px] mb-1.5">Action Taken:</div>
+                    <p className="text-zinc-200 text-[11px] leading-relaxed">
+                      {explanation.action}
+                    </p>
+                  </div>
+                  
+                  <div className="pt-2 border-t border-white/10">
+                    <div className="text-zinc-400 text-[10px] mb-2">Common Indicators:</div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {explanation.examples.map((example, idx) => (
+                        <span 
+                          key={idx}
+                          className="px-2 py-0.5 rounded-full text-[10px] bg-zinc-800/50 text-zinc-300 border border-zinc-700/50"
+                        >
+                          {example}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Tooltip arrow pointing right */}
+                <div 
+                  className="absolute right-0 top-1/2 transform translate-x-full -translate-y-1/2 w-0 h-0 border-t-[6px] border-b-[6px] border-l-[6px] border-transparent"
+                  style={{ borderLeftColor: 'rgba(24, 24, 27, 0.98)' }}
+                />
+              </div>
+            </motion.div>
+          );
+        })()}
       </AnimatePresence>
 
       {/* Modals */}
@@ -493,7 +970,7 @@ const AthleteCard: React.FC<AthleteCardProps> = ({
         athleteName={athlete.displayName}
         onStartMessaging={() => setIsMessagingModalOpen(true)}
       />
-    </motion.div>
+    </>
   );
 };
 
