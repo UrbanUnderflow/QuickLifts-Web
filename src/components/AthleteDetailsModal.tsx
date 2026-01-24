@@ -499,7 +499,7 @@ const AthleteDetailsModal: React.FC<AthleteDetailsModalProps> = ({
                       <p className="text-sm text-zinc-400">Total Weigh-ins</p>
                       <p className="text-xs text-zinc-500">
                         {lastWeighIn 
-                          ? `Last: ${formatDate(new Date(lastWeighIn.createdAt * 1000))}`
+                          ? `Last: ${formatDate(lastWeighIn.createdAt ? (typeof lastWeighIn.createdAt === 'number' ? new Date(lastWeighIn.createdAt * 1000) : new Date(lastWeighIn.createdAt)) : new Date())}`
                           : 'No weigh-ins yet'}
                       </p>
                     </div>
@@ -607,17 +607,17 @@ const AthleteDetailsModal: React.FC<AthleteDetailsModalProps> = ({
                         </div>
                       )}
 
-                      {athleteProfile.sport && (
+                      {(athleteProfile as any).sport && (
                         <div>
                           <span className="text-zinc-400">Sport:</span>
-                          <span className="text-white ml-2">{athleteProfile.sport}</span>
+                          <span className="text-white ml-2">{(athleteProfile as any).sport}</span>
                         </div>
                       )}
 
-                      {athleteProfile.mentalPerformanceGoals && athleteProfile.mentalPerformanceGoals.length > 0 && (
+                      {(athleteProfile as any).mentalPerformanceGoals && (athleteProfile as any).mentalPerformanceGoals.length > 0 && (
                         <div>
                           <span className="text-zinc-400">Mental Goals:</span>
-                          <span className="text-white ml-2">{athleteProfile.mentalPerformanceGoals.join(', ')}</span>
+                          <span className="text-white ml-2">{(athleteProfile as any).mentalPerformanceGoals.join(', ')}</span>
                         </div>
                       )}
                     </div>
