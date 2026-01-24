@@ -115,8 +115,10 @@ exports.handler = async (event, context) => {
       message, 
       conversationId, 
       skipEscalation = false,
-      systemPromptContext, // Optional: iOS sends health context and other user-specific data
+      systemPromptContext, // DEPRECATED: iOS used to send full prompt, now sends raw data
       userContext,         // Optional: iOS sends structured user context
+      healthContext,       // Optional: iOS sends health data from HealthKit
+      lastNoraResponseLength, // Optional: For turn-taking detection
       recentMessages: clientRecentMessages // Optional: iOS may send its own recent messages
     } = body;
 
@@ -202,18 +204,150 @@ exports.handler = async (event, context) => {
       recentMessages = Array.isArray(convo?.messages) ? convo.messages.slice(-20) : [];
     }
 
-    // Persona/system prompt (aligned with iOS basePersona)
-    const basePersona = `You are Nora, an elite AI mental performance coach. Your workout data now talks back.\n\nTone ▸ Warm, intellectually sharp, quietly confident.\nApproach ▸ Active-listening → concise reflection → single actionable insight → 1 follow-up Q.\nStyle ▸ ≤ 60 words (≈3 short sentences). Use the athlete's first name. No clichés or filler.\nDon'ts ▸ Never repeat a question they already answered. Never apologize unless a real mistake.`;
+    // =========================================================================
+    // Response Context Detection (for natural conversation flow)
+    // =========================================================================
+    
+    function classifyResponseContext(userMessage, lastNoraResponseLength) {
+      const lowercased = userMessage.toLowerCase();
+      const wordCount = userMessage.split(/\s+/).filter(w => w.length > 0).length;
+      
+      // 1. TURN-TAKING: If Nora just gave a long response (100+ words), keep this one shorter
+      if (lastNoraResponseLength && lastNoraResponseLength > 100) {
+        return {
+          context: 'turnTaking',
+          wordRange: { min: 40, max: 80 },
+          maxTokens: 220
+        };
+      }
+      
+      // 2. TEACHING: User asking "how", "what should I", "why", "explain", etc.
+      const teachingIndicators = [
+        'how do i', 'how can i', 'how should i',
+        'what should', 'what can i do',
+        'why do i', 'why does', 'why is',
+        'explain', 'help me understand',
+        'what\'s the best way', 'any tips',
+        'advice on', 'advice for',
+        'what would you recommend', 'what do you suggest'
+      ];
+      if (teachingIndicators.some(indicator => lowercased.includes(indicator))) {
+        return {
+          context: 'teaching',
+          wordRange: { min: 100, max: 200 },
+          maxTokens: 450
+        };
+      }
+      
+      // 3. QUICK EXCHANGE: User sent a very short message (<15 words)
+      if (wordCount < 15) {
+        const shortQuestionIndicators = ['?', 'what', 'how', 'why', 'when', 'where', 'who'];
+        const isQuestion = shortQuestionIndicators.some(ind => lowercased.includes(ind));
+        
+        // Short questions might need teaching, not quick exchange
+        if (isQuestion && teachingIndicators.some(indicator => lowercased.includes(indicator))) {
+          return {
+            context: 'teaching',
+            wordRange: { min: 100, max: 200 },
+            maxTokens: 450
+          };
+        }
+        
+        return {
+          context: 'quickExchange',
+          wordRange: { min: 30, max: 50 },
+          maxTokens: 150
+        };
+      }
+      
+      // 4. LISTENING: User sharing deeply (long message OR emotional content)
+      const emotionalIndicators = [
+        'i feel', 'i\'m feeling', 'feeling like',
+        'struggling', 'overwhelmed', 'stressed',
+        'disappointed', 'frustrated', 'anxious',
+        'worried', 'scared', 'nervous',
+        'not my best', 'hard time', 'difficult'
+      ];
+      const isEmotionalShare = emotionalIndicators.some(ind => lowercased.includes(ind));
+      
+      if (wordCount > 80 || isEmotionalShare) {
+        return {
+          context: 'listening',
+          wordRange: { min: 30, max: 60 },
+          maxTokens: 180
+        };
+      }
+      
+      // 5. STANDARD: Default balanced conversation
+      return {
+        context: 'standard',
+        wordRange: { min: 60, max: 100 },
+        maxTokens: 280
+      };
+    }
+    
+    // Detect response context
+    const responseContext = classifyResponseContext(message, lastNoraResponseLength);
+    console.log(`[pulsecheck-chat] Response context: ${responseContext.context}, word range: ${responseContext.wordRange.min}-${responseContext.wordRange.max}`);
+    
+    // =========================================================================
+    // Build System Prompt (centralized for both iOS and web)
+    // =========================================================================
+    
+    const basePersona = `You are **Nora**, an elite AI mental performance coach. Your workout data now talks back.
 
-    // Context prompt - use iOS-provided systemPromptContext if available (includes health data)
-    let systemPrompt;
-    if (systemPromptContext) {
-      // iOS sends complete system prompt including health context
+Tone ▸ Warm, intellectually sharp, quietly confident.
+
+Conversation Style ▸ 
+- Respond naturally like a real person in conversation
+- Match the user's energy: short messages get short responses, deep questions get thorough answers
+- When they share deeply or emotionally, validate briefly and give them space to continue
+- When they ask questions or need explanation, provide thorough guidance
+- After you give a long response, keep the next one shorter (take turns in conversation)
+
+Approach ▸ Active-listening → concise reflection → actionable insight when appropriate.
+Style ▸ Use the athlete's first name. No clichés or filler. Be genuine and present.
+Don'ts ▸ Never repeat a question they already answered. Never apologize unless a real mistake.`;
+
+    // Build user context section
+    let userContextSection = `## User Context:\n- Name: ${displayName}`;
+    if (sport) userContextSection += `\n- Sport/Activity: ${sport}`;
+    if (userContext?.mood) userContextSection += `\n- Current Mood: ${userContext.mood}/10`;
+    if (goals.length) userContextSection += `\n- Mental Performance Goals: ${goals.join(', ')}`;
+    
+    // Add health context if provided (iOS sends this from HealthKit)
+    let healthContextSection = '';
+    if (healthContext) {
+      healthContextSection = `\n\n## Health & Fitness Context:\n${healthContext}\n\nUse this health data to provide personalized insights and recommendations. Reference specific patterns, trends, and achievements when relevant to the conversation. Be encouraging about positive trends and supportive about areas for improvement.`;
+    }
+    
+    // Add context-specific instructions
+    let contextInstructions = '';
+    switch (responseContext.context) {
+      case 'teaching':
+        contextInstructions = `\n\n## Response Mode: TEACHING\nThe user is asking for help, explanation, or guidance.\n\nYOUR RESPONSE SHOULD:\n- Be thorough and educational (${responseContext.wordRange.min}-${responseContext.wordRange.max} words)\n- Explain the concept or strategy clearly\n- Give a specific, actionable example they can use\n- End with a check-in question to ensure understanding\n\nThis is a coaching moment - take the time to teach properly.`;
+        break;
+      case 'listening':
+        contextInstructions = `\n\n## Response Mode: LISTENING\nThe user is sharing something meaningful or emotional.\n\nYOUR RESPONSE MUST:\n- Be brief and validating (${responseContext.wordRange.min}-${responseContext.wordRange.max} words)\n- Show you heard the specific details they shared\n- Validate the weight of what they're carrying\n- Reframe any self-criticism positively\n- End with an open question that gives them space: "How are you feeling about that?" or "How are you holding up?"\n\nDO NOT:\n- Ask "what action can you take?" or offer solutions yet\n- Pivot to achievements/PRs unless they asked\n- Match their message length - they need space to continue sharing`;
+        break;
+      case 'quickExchange':
+        contextInstructions = `\n\n## Response Mode: QUICK EXCHANGE\nThe user sent a short message. Match their energy.\n\nYOUR RESPONSE SHOULD:\n- Be snappy and conversational (${responseContext.wordRange.min}-${responseContext.wordRange.max} words)\n- Match their brevity\n- Keep the dialogue flowing naturally`;
+        break;
+      case 'turnTaking':
+        contextInstructions = `\n\n## Response Mode: TURN-TAKING\nYou just gave a longer response. Now it's their turn to talk more.\n\nYOUR RESPONSE SHOULD:\n- Be moderate in length (${responseContext.wordRange.min}-${responseContext.wordRange.max} words)\n- Avoid another long explanation\n- Give them space to respond and continue the conversation`;
+        break;
+      case 'standard':
+        contextInstructions = `\n\n## Response Mode: STANDARD\nBalanced conversational response (${responseContext.wordRange.min}-${responseContext.wordRange.max} words).\nBe natural and genuine.`;
+        break;
+    }
+    
+    // Build final system prompt
+    let systemPrompt = `${basePersona}\n\n${userContextSection}${healthContextSection}${contextInstructions}\n\n### Conversation Memory Rule\nBefore asking a question, scan the last 6 messages. If you already asked it and the user answered, **do not ask again**.\nInstead, acknowledge their answer and advance the topic.`;
+    
+    // Legacy support: If iOS still sends systemPromptContext (old version), use it but log a warning
+    if (systemPromptContext && !healthContext) {
+      console.warn('[pulsecheck-chat] DEPRECATED: iOS sent systemPromptContext. Please update to send healthContext and userContext separately.');
       systemPrompt = `${systemPromptContext}\n\n### Conversation Memory Rule\nBefore asking a question, scan the last 6 messages. If you already asked it and the user answered, do not ask again. Acknowledge their answer and advance the topic.`;
-      console.log('[pulsecheck-chat] Using iOS-provided system context (includes health data)');
-    } else {
-      // Build system prompt from Firestore data (web clients)
-      systemPrompt = `${basePersona}\n\n## User Context:\n- Name: ${displayName}${sport ? `\n- Sport/Activity: ${sport}` : ''}${goals.length ? `\n- Mental Performance Goals: ${goals.join(', ')}` : ''}\n\n### Conversation Memory Rule\nBefore asking a question, scan the last 6 messages. If you already asked it and the user answered, do not ask again. Acknowledge their answer and advance the topic.`;
     }
 
     // =========================================================================
@@ -343,7 +477,7 @@ exports.handler = async (event, context) => {
           model: 'gpt-4o-mini',
           messages: openAiMessages,
           temperature: 0.6,
-          max_tokens: 220,
+          max_tokens: responseContext.maxTokens,
           frequency_penalty: 0.5,
           presence_penalty: 0.3
         })

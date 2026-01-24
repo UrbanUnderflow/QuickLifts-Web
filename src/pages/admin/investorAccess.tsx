@@ -238,11 +238,10 @@ const InvestorAccessPage: React.FC = () => {
 
   // Generate a random access code
   const generateAccessCode = (): string => {
-    // Generate a random alphanumeric code (no dashes)
+    // Generate an 8-character alphanumeric code (no dashes)
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Exclude confusing characters like 0, O, I, 1
-    const length = 8; // Default length for generated codes
     let code = '';
-    for (let i = 0; i < length; i++) {
+    for (let i = 0; i < 8; i++) {
       code += chars.charAt(Math.floor(Math.random() * chars.length));
     }
     return code;
@@ -265,8 +264,10 @@ const InvestorAccessPage: React.FC = () => {
       return;
     }
     
-    // Additional validation: ensure code has at least 3 characters
+    // Clean code: remove any dashes and convert to uppercase
     const cleanCode = finalAccessCode.replace(/-/g, '').toUpperCase();
+    
+    // Minimum length validation (at least 3 characters)
     if (cleanCode.length < 3) {
       alert('Access code must be at least 3 characters');
       return;
