@@ -849,8 +849,7 @@ const LegalDocumentsAdmin: React.FC = () => {
           const walker = printWindow.document.createTreeWalker(
             printWindow.document.body,
             NodeFilter.SHOW_TEXT,
-            null,
-            false
+            null
           );
           let node;
           while (node = walker.nextNode()) {
