@@ -168,6 +168,11 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
   // Corporate equity documents state
   const [corporateEquityDocs, setCorporateEquityDocs] = useState<any[]>([]);
   const [isLoadingCorporateDocs, setIsLoadingCorporateDocs] = useState(false);
+  
+  // Cap table state
+  const [stakeholders, setStakeholders] = useState<any[]>([]);
+  const [equityPool, setEquityPool] = useState<any | null>(null);
+  const [isLoadingCapTable, setIsLoadingCapTable] = useState(false);
 
   const monthlyRevenue2025 = [
     { month: 'Jan', label: 'January', value: 246 },
@@ -2422,6 +2427,58 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
     return () => {
       unsubscribeEquity();
       unsubscribeLegal();
+    };
+  }, []);
+
+  // Real-time listener for cap table data (stakeholders + equity pool)
+  useEffect(() => {
+    setIsLoadingCapTable(true);
+    
+    // Listen to stakeholders
+    const stakeholdersQuery = query(
+      collection(db, 'equity-stakeholders'),
+      orderBy('createdAt', 'desc')
+    );
+    
+    const unsubscribeStakeholders = onSnapshot(
+      stakeholdersQuery,
+      (snapshot) => {
+        const stakeholdersData = snapshot.docs.map(d => ({
+          id: d.id,
+          ...d.data(),
+        }));
+        setStakeholders(stakeholdersData);
+        setIsLoadingCapTable(false);
+      },
+      (error) => {
+        console.error('Error listening to stakeholders:', error);
+        setStakeholders([]);
+        setIsLoadingCapTable(false);
+      }
+    );
+    
+    // Listen to equity pool (query collection, typically one document)
+    const equityPoolQuery = query(collection(db, 'equity-pool'));
+    const unsubscribeEquityPool = onSnapshot(
+      equityPoolQuery,
+      (snapshot) => {
+        if (!snapshot.empty) {
+          // Get the first document (there should typically be only one)
+          const poolDoc = snapshot.docs[0];
+          setEquityPool({ id: poolDoc.id, ...poolDoc.data() });
+        } else {
+          setEquityPool(null);
+        }
+      },
+      (error) => {
+        console.error('Error listening to equity pool:', error);
+        setEquityPool(null);
+      }
+    );
+    
+    return () => {
+      unsubscribeStakeholders();
+      unsubscribeEquityPool();
     };
   }, []);
 
@@ -6884,75 +6941,160 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
 
                     <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8 mb-6">
                         <h3 className="text-white text-xl font-semibold mb-2">Pulse Intelligence Labs, Inc.</h3>
-                        <p className="text-zinc-400 text-sm mb-6">Capitalization table as of incorporation</p>
+                        <p className="text-zinc-400 text-sm mb-6">
+                          {isLoadingCapTable ? 'Loading cap table...' : `Capitalization table as of ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`}
+                        </p>
 
-                        {/* Summary Stats */}
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-                            <div className="bg-zinc-800/60 rounded-lg p-4">
-                                <p className="text-zinc-400 text-xs mb-1">Authorized Shares</p>
-                                <p className="text-white text-2xl font-bold">10,000,000</p>
-                            </div>
-                            <div className="bg-zinc-800/60 rounded-lg p-4">
-                                <p className="text-zinc-400 text-xs mb-1">Issued & Outstanding</p>
-                                <p className="text-[#E0FE10] text-2xl font-bold">9,000,000</p>
-                            </div>
-                            <div className="bg-zinc-800/60 rounded-lg p-4">
-                                <p className="text-zinc-400 text-xs mb-1">Unissued (Equity Pool)</p>
-                                <p className="text-zinc-300 text-2xl font-bold">1,000,000</p>
-                            </div>
-                        </div>
+                        {isLoadingCapTable ? (
+                          <div className="flex items-center justify-center py-20">
+                            <Loader2 className="w-8 h-8 text-[#E0FE10] animate-spin" />
+                            <span className="ml-3 text-zinc-400">Loading cap table data...</span>
+                          </div>
+                        ) : (() => {
+                          // Calculate cap table from stakeholders and equity pool
+                          const AUTHORIZED_SHARES = 10000000; // Default authorized shares
+                          const poolTotal = equityPool?.totalReserved || 0;
+                          
+                          // Calculate issued shares (sharesOwned + optionsExercised)
+                          // Check both sharesOwned (new field) and totalShares (legacy field)
+                          const issuedShares = stakeholders.reduce((total, stakeholder) => {
+                            // For founders and direct share holders, use sharesOwned or totalShares (legacy)
+                            const sharesOwned = stakeholder.sharesOwned || stakeholder.totalShares || 0;
+                            const optionsExercised = stakeholder.optionsExercised || 0;
+                            return total + sharesOwned + optionsExercised;
+                          }, 0);
+                          
+                          // Unissued shares = authorized - issued, but also consider equity pool
+                          // The equity pool should be separate from issued shares
+                          const unissuedShares = Math.max(0, AUTHORIZED_SHARES - issuedShares);
+                          const totalShares = AUTHORIZED_SHARES;
+                          
+                          // Filter out reserved pool entries and calculate ownership
+                          // Only filter if explicitly marked as reserved pool
+                          const activeStakeholders = stakeholders.filter(s => {
+                            // Don't filter out if they have actual shares
+                            if (s.isReservedPool && (s.sharesOwned || s.totalShares || 0) > 0) {
+                              return true; // Keep if they have shares even if marked as pool
+                            }
+                            return !s.isReservedPool;
+                          });
+                          
+                          // Format number with commas
+                          const formatNumber = (num: number) => new Intl.NumberFormat('en-US').format(num);
+                          
+                          // Format percentage
+                          const formatPercent = (shares: number, total: number) => {
+                            if (total === 0) return '0%';
+                            return ((shares / total) * 100).toFixed(1) + '%';
+                          };
+                          
+                          // Get vesting info from grants
+                          const getVestingInfo = (stakeholder: any) => {
+                            if (!stakeholder.grants || stakeholder.grants.length === 0) return { vesting: '—', cliff: '—' };
+                            const grant = stakeholder.grants[0];
+                            const vestingMonths = grant.vestingMonths || 0;
+                            const cliffMonths = grant.cliffMonths || 0;
+                            const vestingYears = vestingMonths / 12;
+                            const cliffYears = cliffMonths / 12;
+                            return {
+                              vesting: vestingYears > 0 ? `${vestingYears} ${vestingYears === 1 ? 'year' : 'years'}` : '—',
+                              cliff: cliffMonths > 0 ? `${cliffMonths} ${cliffMonths === 1 ? 'month' : 'months'}` : '—'
+                            };
+                          };
+                          
+                          return (
+                            <>
+                              {/* Summary Stats */}
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+                                <div className="bg-zinc-800/60 rounded-lg p-4">
+                                  <p className="text-zinc-400 text-xs mb-1">Authorized Shares</p>
+                                  <p className="text-white text-2xl font-bold">{formatNumber(AUTHORIZED_SHARES)}</p>
+                                </div>
+                                <div className="bg-zinc-800/60 rounded-lg p-4">
+                                  <p className="text-zinc-400 text-xs mb-1">Issued & Outstanding</p>
+                                  <p className="text-[#E0FE10] text-2xl font-bold">{formatNumber(issuedShares)}</p>
+                                </div>
+                                <div className="bg-zinc-800/60 rounded-lg p-4">
+                                  <p className="text-zinc-400 text-xs mb-1">Unissued (Equity Pool)</p>
+                                  <p className="text-zinc-300 text-2xl font-bold">{formatNumber(unissuedShares)}</p>
+                                </div>
+                              </div>
 
-                        {/* Cap Table */}
-                        <div className="rounded-lg border border-zinc-800 overflow-hidden">
-                            <table className="w-full text-sm">
-                                <thead className="bg-zinc-800/80">
+                              {/* Cap Table */}
+                              <div className="rounded-lg border border-zinc-800 overflow-hidden">
+                                <table className="w-full text-sm">
+                                  <thead className="bg-zinc-800/80">
                                     <tr>
-                                        <th className="text-left px-4 py-3 text-zinc-400 font-medium">Shareholder</th>
-                                        <th className="text-right px-4 py-3 text-zinc-400 font-medium">Shares</th>
-                                        <th className="text-right px-4 py-3 text-zinc-400 font-medium">Ownership</th>
-                                        <th className="text-left px-4 py-3 text-zinc-400 font-medium hidden sm:table-cell">Vesting</th>
-                                        <th className="text-left px-4 py-3 text-zinc-400 font-medium hidden md:table-cell">Cliff</th>
-                                        <th className="text-left px-4 py-3 text-zinc-400 font-medium hidden lg:table-cell">Notes</th>
+                                      <th className="text-left px-4 py-3 text-zinc-400 font-medium">Shareholder</th>
+                                      <th className="text-right px-4 py-3 text-zinc-400 font-medium">Shares</th>
+                                      <th className="text-right px-4 py-3 text-zinc-400 font-medium">Ownership</th>
+                                      <th className="text-left px-4 py-3 text-zinc-400 font-medium hidden sm:table-cell">Vesting</th>
+                                      <th className="text-left px-4 py-3 text-zinc-400 font-medium hidden md:table-cell">Cliff</th>
+                                      <th className="text-left px-4 py-3 text-zinc-400 font-medium hidden lg:table-cell">Notes</th>
                                     </tr>
-                                </thead>
-                                <tbody>
-                                    <tr className="border-t border-zinc-800">
+                                  </thead>
+                                  <tbody>
+                                    {activeStakeholders.map((stakeholder, index) => {
+                                      // Check both sharesOwned (new) and totalShares (legacy) for founders
+                                      const sharesOwned = stakeholder.sharesOwned || stakeholder.totalShares || 0;
+                                      const optionsExercised = stakeholder.optionsExercised || 0;
+                                      const totalSharesForStakeholder = sharesOwned + optionsExercised;
+                                      const ownership = formatPercent(totalSharesForStakeholder, totalShares);
+                                      const vestingInfo = getVestingInfo(stakeholder);
+                                      const stakeholderType = stakeholder.type || '';
+                                      const typeLabel = stakeholderType === 'founder' ? 'Founder' : 
+                                                       stakeholderType === 'employee' ? 'Employee' :
+                                                       stakeholderType === 'advisor' ? 'Advisor' :
+                                                       stakeholderType === 'investor' ? 'Investor' :
+                                                       stakeholderType === 'contractor' ? 'Contractor' : '';
+                                      
+                                      if (totalSharesForStakeholder === 0) return null;
+                                      
+                                      return (
+                                        <tr key={stakeholder.id || index} className="border-t border-zinc-800">
+                                          <td className="px-4 py-3">
+                                            <p className="text-white font-medium">{stakeholder.name || 'Unknown'}</p>
+                                            {typeLabel && <p className="text-zinc-500 text-xs">{typeLabel}{stakeholder.title ? ` • ${stakeholder.title}` : ''}</p>}
+                                          </td>
+                                          <td className="px-4 py-3 text-right text-zinc-100">{formatNumber(totalSharesForStakeholder)}</td>
+                                          <td className="px-4 py-3 text-right">
+                                            <span className="text-[#E0FE10] font-semibold">{ownership}</span>
+                                          </td>
+                                          <td className="px-4 py-3 text-zinc-300 hidden sm:table-cell">{vestingInfo.vesting}</td>
+                                          <td className="px-4 py-3 text-zinc-300 hidden md:table-cell">{vestingInfo.cliff}</td>
+                                          <td className="px-4 py-3 text-zinc-400 text-xs hidden lg:table-cell">{stakeholder.notes || '—'}</td>
+                                        </tr>
+                                      );
+                                    })}
+                                    {unissuedShares > 0 && (
+                                      <tr className="border-t border-zinc-800 bg-zinc-800/30">
                                         <td className="px-4 py-3">
-                                            <p className="text-white font-medium">Tremaine Grant</p>
-                                            <p className="text-zinc-500 text-xs">Founder</p>
+                                          <p className="text-zinc-300 font-medium">Employee Equity Pool</p>
+                                          <p className="text-zinc-500 text-xs">Unissued / Reserved</p>
                                         </td>
-                                        <td className="px-4 py-3 text-right text-zinc-100">9,000,000</td>
+                                        <td className="px-4 py-3 text-right text-zinc-400">{formatNumber(unissuedShares)}</td>
                                         <td className="px-4 py-3 text-right">
-                                            <span className="text-[#E0FE10] font-semibold">90%</span>
-                                        </td>
-                                        <td className="px-4 py-3 text-zinc-300 hidden sm:table-cell">4 years</td>
-                                        <td className="px-4 py-3 text-zinc-300 hidden md:table-cell">1 year</td>
-                                        <td className="px-4 py-3 text-zinc-400 text-xs hidden lg:table-cell">Double-trigger acceleration</td>
-                                    </tr>
-                                    <tr className="border-t border-zinc-800 bg-zinc-800/30">
-                                        <td className="px-4 py-3">
-                                            <p className="text-zinc-300 font-medium">Employee Equity Pool</p>
-                                            <p className="text-zinc-500 text-xs">Unissued / Reserved</p>
-                                        </td>
-                                        <td className="px-4 py-3 text-right text-zinc-400">1,000,000</td>
-                                        <td className="px-4 py-3 text-right">
-                                            <span className="text-zinc-400 font-semibold">10%</span>
+                                          <span className="text-zinc-400 font-semibold">{formatPercent(unissuedShares, totalShares)}</span>
                                         </td>
                                         <td className="px-4 py-3 text-zinc-500 hidden sm:table-cell">—</td>
                                         <td className="px-4 py-3 text-zinc-500 hidden md:table-cell">—</td>
                                         <td className="px-4 py-3 text-zinc-500 text-xs hidden lg:table-cell">Reserved for future hires (ESOP)</td>
-                                    </tr>
+                                      </tr>
+                                    )}
                                     <tr className="border-t-2 border-zinc-700 bg-zinc-800/50">
-                                        <td className="px-4 py-3 text-white font-semibold">Total</td>
-                                        <td className="px-4 py-3 text-right text-white font-semibold">10,000,000</td>
-                                        <td className="px-4 py-3 text-right text-white font-semibold">100%</td>
-                                        <td className="px-4 py-3 hidden sm:table-cell"></td>
-                                        <td className="px-4 py-3 hidden md:table-cell"></td>
-                                        <td className="px-4 py-3 hidden lg:table-cell"></td>
+                                      <td className="px-4 py-3 text-white font-semibold">Total</td>
+                                      <td className="px-4 py-3 text-right text-white font-semibold">{formatNumber(totalShares)}</td>
+                                      <td className="px-4 py-3 text-right text-white font-semibold">100%</td>
+                                      <td className="px-4 py-3 hidden sm:table-cell"></td>
+                                      <td className="px-4 py-3 hidden md:table-cell"></td>
+                                      <td className="px-4 py-3 hidden lg:table-cell"></td>
                                     </tr>
-                                </tbody>
-                            </table>
-                        </div>
+                                  </tbody>
+                                </table>
+                              </div>
+                            </>
+                          );
+                        })()}
 
                         {/* Convertible Notes */}
                         <div className="mt-6 bg-zinc-800/30 rounded-xl p-5 border border-zinc-800">
@@ -6989,9 +7131,17 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                                     </tbody>
                                 </table>
                             </div>
-                            <p className="text-zinc-500 text-xs mt-3">
-                                We can populate cap/discount/interest/maturity once the template PDF is added to the repo/public dataroom.
-                            </p>
+                            <div className="mt-4 pt-4 border-t border-zinc-800">
+                                <a
+                                    href="/LaunchConvertibleNote25K01_05_2026.pdf"
+                                    download="Launch-Convertible-Note-25K.pdf"
+                                    className="inline-flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg text-sm text-zinc-200 transition-colors"
+                                >
+                                    <Download className="w-4 h-4" />
+                                    Download Launch Convertible Note (PDF)
+                                </a>
+                                <p className="text-zinc-500 text-xs mt-2">Launch (Founder University) Convertible Note - $25,000</p>
+                            </div>
                         </div>
 
                         {/* Mobile-only details */}
