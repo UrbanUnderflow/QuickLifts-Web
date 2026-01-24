@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Head from 'next/head';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
-import { collection, getDocs, query, orderBy, addDoc, deleteDoc, doc, Timestamp, updateDoc, where, serverTimestamp } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, addDoc, deleteDoc, doc, Timestamp, updateDoc, where, serverTimestamp, getDoc } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -1257,6 +1257,152 @@ const EquityAdminPage: React.FC = () => {
     } catch (error) {
       console.error('Error adding stakeholder:', error);
       setMessage({ type: 'error', text: 'Failed to add stakeholder' });
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  // Generate Board Consent for an advisor and auto-attach it
+  const handleGenerateBoardConsent = async (stakeholder: Stakeholder) => {
+    if (stakeholder.type !== 'advisor') {
+      setMessage({ type: 'error', text: 'This function is only for advisors' });
+      return;
+    }
+
+    setGenerating(true);
+    
+    // Get grant details from the stakeholder's first grant (if any)
+    const grant = stakeholder.grants?.[0];
+    const grantDetails = grant ? {
+      equityType: grant.equityType || 'nso',
+      numberOfShares: grant.numberOfShares || stakeholder.optionsGranted || stakeholder.totalShares || 10000,
+      strikePrice: grant.strikePrice || 0.001,
+      vestingSchedule: grant.vestingSchedule || 'monthly',
+      vestingStartDate: grant.vestingStartDate || stakeholder.startDate,
+      cliffMonths: grant.cliffMonths || 3,
+      vestingMonths: grant.vestingMonths || 24,
+    } : {
+      equityType: 'nso',
+      numberOfShares: stakeholder.optionsGranted || stakeholder.totalShares || 10000,
+      strikePrice: 0.001,
+      vestingSchedule: 'monthly',
+      vestingStartDate: stakeholder.startDate,
+      cliffMonths: 3,
+      vestingMonths: 24,
+    };
+
+    try {
+      const docTitle = `Board Consent - ${stakeholder.name}`;
+      
+      // Check if there's an existing board consent document for this advisor
+      const existingBoardConsent = equityDocuments.find(d => 
+        d.stakeholderId === stakeholder.id && 
+        d.documentType === 'board_consent' &&
+        d.status === 'completed'
+      );
+      
+      let documentId: string;
+      
+      if (existingBoardConsent) {
+        // Update existing document instead of creating a new one
+        documentId = existingBoardConsent.id;
+        
+        // Update the existing document to generating status
+        await updateDoc(doc(db, 'equity-documents', documentId), {
+          status: 'generating',
+          updatedAt: Timestamp.now(),
+        });
+        
+        setMessage({ type: 'info', text: 'Regenerating Board Consent...' });
+      } else {
+        // Create new placeholder doc in Firestore
+        const placeholder = await addDoc(collection(db, 'equity-documents'), {
+          title: docTitle,
+          prompt: `Generate a Board Consent approving equity grant for ${stakeholder.name}: ${grantDetails.numberOfShares} Non-Qualified Stock Options with ${grantDetails.vestingMonths} month vesting and ${grantDetails.cliffMonths} month cliff.`,
+          content: '',
+          documentType: 'board_consent',
+          requiresSignature: true,
+          stakeholderId: stakeholder.id,
+          stakeholderName: stakeholder.name,
+          stakeholderEmail: stakeholder.email,
+          stakeholderType: 'advisor',
+          grantDetails,
+          createdAt: Timestamp.now(),
+          status: 'generating',
+        });
+        documentId = placeholder.id;
+        setMessage({ type: 'info', text: 'Generating Board Consent...' });
+      }
+
+      // Call API to generate document
+      const response = await fetch('/.netlify/functions/generate-equity-document', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          stakeholderId: stakeholder.id,
+          stakeholderName: stakeholder.name,
+          stakeholderEmail: stakeholder.email,
+          stakeholderType: 'advisor',
+          documentType: 'board_consent',
+          requiresSignature: true,
+          prompt: `Generate a Board Consent (Written Consent of the Board of Directors in Lieu of Meeting) approving equity grant for ${stakeholder.name}: ${grantDetails.numberOfShares} Non-Qualified Stock Options with ${grantDetails.vestingMonths} month vesting and ${grantDetails.cliffMonths} month cliff.`,
+          grantDetails,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.success && result.content) {
+        await updateDoc(doc(db, 'equity-documents', documentId), {
+          content: result.content,
+          title: result.title || docTitle,
+          status: 'completed',
+          updatedAt: Timestamp.now(),
+        });
+        
+        // Auto-attach the generated board consent to the advisor
+        setBoardConsentSelection(prev => ({ ...prev, [stakeholder.id]: documentId }));
+        
+        // Reset verification state since we're regenerating
+        setBoardConsentVerification(prev => ({ ...prev, [stakeholder.id]: { status: 'idle' } }));
+        
+        // Refresh data to get the updated document
+        await loadData();
+        
+        // Auto-verify and link the board consent after data is loaded
+        // Use a small delay to ensure state is updated
+        setTimeout(async () => {
+          try {
+            // Get the updated document from Firestore to ensure we have the latest content
+            const docRef = doc(db, 'equity-documents', documentId);
+            const docSnap = await getDoc(docRef);
+            if (docSnap.exists()) {
+              const newDoc = { id: docSnap.id, ...docSnap.data() } as EquityDocument;
+              // Temporarily add to equityDocuments array for verification
+              setEquityDocuments(prev => {
+                const filtered = prev.filter(d => d.id !== documentId);
+                return [newDoc, ...filtered];
+              });
+              await verifyAndLinkBoardConsent(stakeholder, documentId);
+            }
+          } catch (error) {
+            console.error('Error auto-verifying board consent:', error);
+            // If auto-verification fails, just select it and let user verify manually
+            setMessage({ type: 'info', text: 'Board Consent regenerated. Please click Verify to link it.' });
+          }
+        }, 300);
+        
+        setMessage({ type: 'success', text: existingBoardConsent ? 'Board Consent regenerated and attached! Verifying...' : 'Board Consent generated and attached! Verifying...' });
+      } else {
+        await updateDoc(doc(db, 'equity-documents', documentId), {
+          status: 'error',
+          errorMessage: result.error || 'Failed to generate document',
+        });
+        setMessage({ type: 'error', text: result.error || 'Failed to generate document' });
+      }
+    } catch (error) {
+      console.error('Error generating board consent:', error);
+      setMessage({ type: 'error', text: 'Failed to generate Board Consent' });
     } finally {
       setGenerating(false);
     }
@@ -3003,62 +3149,89 @@ const EquityAdminPage: React.FC = () => {
                                 )}
                               </div>
 
-                              <div className="mt-4 grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 items-end">
-                                <div>
-                                  <label className="block text-xs text-zinc-400 mb-2">Board Consent Document</label>
-                                  <select
-                                    value={
-                                      boardConsentSelection[stakeholder.id] ??
-                                      (stakeholder.boardConsentDocId ?? '')
-                                    }
-                                    onChange={(e) => {
-                                      const selectedId = e.target.value;
-                                      setBoardConsentSelection(prev => ({ ...prev, [stakeholder.id]: selectedId }));
-                                      // Reset verification state when changing selection
-                                      setBoardConsentVerification(prev => ({ ...prev, [stakeholder.id]: { status: 'idle' } }));
-                                    }}
-                                    className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-white text-sm focus:outline-none focus:border-amber-500"
-                                  >
-                                    <option value="">Select Board Consent…</option>
-                                    {equityDocuments
-                                      .filter(d => d.documentType === 'board_consent' && d.status === 'completed')
-                                      .map(d => (
-                                        <option key={d.id} value={d.id}>
-                                          {d.title} ({formatDate(d.createdAt)})
-                                        </option>
-                                      ))}
-                                  </select>
-                                </div>
+                              <div className="mt-4 space-y-3">
+                                <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto] gap-3 items-end">
+                                  <div>
+                                    <label className="block text-xs text-zinc-400 mb-2">Board Consent Document</label>
+                                    <select
+                                      value={
+                                        boardConsentSelection[stakeholder.id] ??
+                                        (stakeholder.boardConsentDocId ?? '')
+                                      }
+                                      onChange={(e) => {
+                                        const selectedId = e.target.value;
+                                        setBoardConsentSelection(prev => ({ ...prev, [stakeholder.id]: selectedId }));
+                                        // Reset verification state when changing selection
+                                        setBoardConsentVerification(prev => ({ ...prev, [stakeholder.id]: { status: 'idle' } }));
+                                      }}
+                                      className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-white text-sm focus:outline-none focus:border-amber-500"
+                                    >
+                                      <option value="">Select Board Consent…</option>
+                                      {equityDocuments
+                                        .filter(d => d.documentType === 'board_consent' && d.status === 'completed')
+                                        .map(d => (
+                                          <option key={d.id} value={d.id}>
+                                            {d.title} ({formatDate(d.createdAt)})
+                                          </option>
+                                        ))}
+                                    </select>
+                                  </div>
 
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    const selectedId = boardConsentSelection[stakeholder.id] ?? (stakeholder.boardConsentDocId ?? '');
-                                    if (!selectedId) {
-                                      setMessage({ type: 'error', text: 'Please select a Board Consent to verify.' });
-                                      return;
-                                    }
-                                    verifyAndLinkBoardConsent(stakeholder, selectedId);
-                                  }}
-                                  disabled={boardConsentVerification[stakeholder.id]?.status === 'verifying' || !(boardConsentSelection[stakeholder.id] ?? stakeholder.boardConsentDocId)}
-                                  className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                                    boardConsentVerification[stakeholder.id]?.status === 'verifying'
-                                      ? 'bg-zinc-700 text-zinc-300 cursor-not-allowed'
-                                      : 'bg-amber-600 text-white hover:bg-amber-500'
-                                  }`}
-                                >
-                                  {boardConsentVerification[stakeholder.id]?.status === 'verifying' ? (
-                                    <>
-                                      <Loader2 className="w-4 h-4 animate-spin" />
-                                      Verifying…
-                                    </>
-                                  ) : (
-                                    <>
-                                      <ClipboardCheck className="w-4 h-4" />
-                                      Verify
-                                    </>
-                                  )}
-                                </button>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleGenerateBoardConsent(stakeholder);
+                                    }}
+                                    disabled={generating}
+                                    className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                                      generating
+                                        ? 'bg-zinc-700 text-zinc-300 cursor-not-allowed'
+                                        : 'bg-blue-600 text-white hover:bg-blue-500'
+                                    }`}
+                                  >
+                                    {generating ? (
+                                      <>
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                        Generating…
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Sparkles className="w-4 h-4" />
+                                        Generate
+                                      </>
+                                    )}
+                                  </button>
+
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const selectedId = boardConsentSelection[stakeholder.id] ?? (stakeholder.boardConsentDocId ?? '');
+                                      if (!selectedId) {
+                                        setMessage({ type: 'error', text: 'Please select a Board Consent to verify.' });
+                                        return;
+                                      }
+                                      verifyAndLinkBoardConsent(stakeholder, selectedId);
+                                    }}
+                                    disabled={boardConsentVerification[stakeholder.id]?.status === 'verifying' || !(boardConsentSelection[stakeholder.id] ?? stakeholder.boardConsentDocId)}
+                                    className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                                      boardConsentVerification[stakeholder.id]?.status === 'verifying'
+                                        ? 'bg-zinc-700 text-zinc-300 cursor-not-allowed'
+                                        : 'bg-amber-600 text-white hover:bg-amber-500'
+                                    }`}
+                                  >
+                                    {boardConsentVerification[stakeholder.id]?.status === 'verifying' ? (
+                                      <>
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                        Verifying…
+                                      </>
+                                    ) : (
+                                      <>
+                                        <ClipboardCheck className="w-4 h-4" />
+                                        Verify
+                                      </>
+                                    )}
+                                  </button>
+                                </div>
                               </div>
 
                               {/* Verification feedback */}
@@ -3122,7 +3295,7 @@ const EquityAdminPage: React.FC = () => {
                                         </div>
                                         <div className="flex items-center gap-2 flex-wrap">
                                           <button
-                                            onClick={(e) => { e.stopPropagation(); setExpandedEquityDoc(expandedEquityDoc === edoc.id ? null : edoc.id); }}
+                                            onClick={(e) => { e.stopPropagation(); window.open(`/equity-doc/${edoc.id}`, '_blank'); }}
                                             className="flex items-center gap-1 px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-white rounded-lg text-xs transition-colors"
                                           >
                                             <Eye className="w-3 h-3" />

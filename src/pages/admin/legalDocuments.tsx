@@ -834,14 +834,48 @@ const LegalDocumentsAdmin: React.FC = () => {
       ? generateProjectStylePdf(document, includeSignature, exhibitDocs)
       : generateLegalStylePdf(document, includeSignature, exhibitDocs);
 
+    // Create a new window and write HTML directly
     const printWindow = window.open('', '_blank');
     if (printWindow) {
+      // Write the HTML content immediately
+      printWindow.document.open();
       printWindow.document.write(html);
       printWindow.document.close();
-      printWindow.focus();
-      setTimeout(() => {
-        printWindow.print();
-      }, 250);
+      
+      // Function to clean up and print
+      const cleanupAndPrint = () => {
+        // Remove any "about:blank" text from the document
+        try {
+          const walker = printWindow.document.createTreeWalker(
+            printWindow.document.body,
+            NodeFilter.SHOW_TEXT,
+            null,
+            false
+          );
+          let node;
+          while (node = walker.nextNode()) {
+            if (node.textContent && node.textContent.includes('about:blank')) {
+              node.textContent = node.textContent.replace(/about:blank/gi, '');
+            }
+          }
+        } catch (e) {
+          // Ignore errors
+        }
+        
+        printWindow.focus();
+        setTimeout(() => {
+          printWindow.print();
+        }, 100);
+      };
+      
+      // Wait for the document to be ready, then print
+      if (printWindow.document.readyState === 'complete') {
+        cleanupAndPrint();
+      } else {
+        printWindow.addEventListener('load', cleanupAndPrint, { once: true });
+        // Fallback timeout
+        setTimeout(cleanupAndPrint, 1000);
+      }
     }
   };
 
@@ -875,6 +909,13 @@ const LegalDocumentsAdmin: React.FC = () => {
           <style>
             @page {
               margin: 0.75in 1in;
+              /* Remove browser-added headers and footers (date, URL, etc.) */
+              @top-left { content: ""; }
+              @top-center { content: ""; }
+              @top-right { content: ""; }
+              @bottom-left { content: ""; }
+              @bottom-center { content: ""; }
+              @bottom-right { content: ""; }
             }
             body {
               font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
@@ -892,6 +933,7 @@ const LegalDocumentsAdmin: React.FC = () => {
               color: #111;
               border-bottom: 3px solid #333;
               padding-bottom: 12px;
+              text-align: center;
             }
             h2 {
               font-size: 16pt;
@@ -1012,6 +1054,36 @@ const LegalDocumentsAdmin: React.FC = () => {
               }
             }
           </style>
+          <script>
+            // Remove any "about:blank" text from the page
+            (function() {
+              function removeAboutBlank() {
+                try {
+                  const walker = document.createTreeWalker(
+                    document.body,
+                    NodeFilter.SHOW_TEXT,
+                    null,
+                    false
+                  );
+                  let node;
+                  while (node = walker.nextNode()) {
+                    if (node.textContent && node.textContent.includes('about:blank')) {
+                      node.textContent = node.textContent.replace(/about:blank/gi, '');
+                    }
+                  }
+                } catch (e) {
+                  // Ignore errors
+                }
+              }
+              
+              if (document.readyState === 'complete') {
+                removeAboutBlank();
+              } else {
+                window.addEventListener('load', removeAboutBlank);
+                document.addEventListener('DOMContentLoaded', removeAboutBlank);
+              }
+            })();
+          </script>
         </head>
         <body>
           <div class="header">
@@ -1080,6 +1152,13 @@ const LegalDocumentsAdmin: React.FC = () => {
           <style>
             @page {
               margin: 1in;
+              /* Remove browser-added headers and footers (date, URL, etc.) */
+              @top-left { content: ""; }
+              @top-center { content: ""; }
+              @top-right { content: ""; }
+              @bottom-left { content: ""; }
+              @bottom-center { content: ""; }
+              @bottom-right { content: ""; }
             }
             body {
               font-family: 'Times New Roman', Times, serif;
@@ -1193,6 +1272,36 @@ const LegalDocumentsAdmin: React.FC = () => {
               }
             }
           </style>
+          <script>
+            // Remove any "about:blank" text from the page
+            (function() {
+              function removeAboutBlank() {
+                try {
+                  const walker = document.createTreeWalker(
+                    document.body,
+                    NodeFilter.SHOW_TEXT,
+                    null,
+                    false
+                  );
+                  let node;
+                  while (node = walker.nextNode()) {
+                    if (node.textContent && node.textContent.includes('about:blank')) {
+                      node.textContent = node.textContent.replace(/about:blank/gi, '');
+                    }
+                  }
+                } catch (e) {
+                  // Ignore errors
+                }
+              }
+              
+              if (document.readyState === 'complete') {
+                removeAboutBlank();
+              } else {
+                window.addEventListener('load', removeAboutBlank);
+                document.addEventListener('DOMContentLoaded', removeAboutBlank);
+              }
+            })();
+          </script>
         </head>
         <body>
           <div class="header">
