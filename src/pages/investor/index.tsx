@@ -2698,7 +2698,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                     type="text"
                     value={accessCode}
                     onChange={(e) => {
-                      // Only allow alphanumeric, uppercase (no dashes)
+                      // Only allow alphanumeric, uppercase (no dashes, no length limit)
                       let value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
                       setAccessCode(value);
                       setAccessError(null);
