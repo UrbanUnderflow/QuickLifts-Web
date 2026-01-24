@@ -132,7 +132,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
   
   // Access control state
   const [hasAccess, setHasAccess] = useState<boolean | null>(null);
-  const [accessEmail, setAccessEmail] = useState('');
+  const [accessCode, setAccessCode] = useState('');
   const [isCheckingAccess, setIsCheckingAccess] = useState(false);
   const [accessError, setAccessError] = useState<string | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
@@ -1470,10 +1470,10 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
 
   // Check for stored access on mount
   useEffect(() => {
-    const storedEmail = localStorage.getItem('investorAccessEmail');
+    const storedCode = localStorage.getItem('investorAccessCode') || localStorage.getItem('investorAccessEmail'); // Backward compatibility
     const storedSectionAccess = localStorage.getItem('investorSectionAccess');
     
-    if (storedEmail) {
+    if (storedCode) {
       // Try to use cached section access first for faster load
       if (storedSectionAccess) {
         try {
@@ -1482,15 +1482,15 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
           // Ignore parse errors
         }
       }
-      verifyAccess(storedEmail, true);
+      verifyAccess(storedCode, true);
     } else {
       setIsInitializing(false);
     }
   }, []);
 
-  const verifyAccess = async (email: string, isAutoCheck: boolean = false) => {
-    if (!email.trim()) {
-      setAccessError('Please enter your email address');
+  const verifyAccess = async (code: string, isAutoCheck: boolean = false) => {
+    if (!code.trim()) {
+      setAccessError('Please enter your access code');
       return;
     }
 
@@ -1499,8 +1499,18 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
 
     try {
       const accessRef = collection(db, 'investorAccess');
-      const q = query(accessRef, where('email', '==', email.toLowerCase().trim()));
-      const snapshot = await getDocs(q);
+      // Normalize code: remove dashes and convert to uppercase
+      const normalizedCode = code.toUpperCase().replace(/[^A-Z0-9]/g, '').trim();
+      
+      // Try normalized code (no dashes)
+      let q = query(accessRef, where('accessCode', '==', normalizedCode));
+      let snapshot = await getDocs(q);
+      
+      // Fallback: try email for backward compatibility
+      if (snapshot.empty) {
+        q = query(accessRef, where('email', '==', code.toLowerCase().trim()));
+        snapshot = await getDocs(q);
+      }
 
       if (!snapshot.empty) {
         const accessDoc = snapshot.docs[0];
@@ -1510,14 +1520,16 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
           // Store section access from Firestore, falling back to defaults
           const storedSectionAccess = accessData.sectionAccess || DEFAULT_SECTION_ACCESS;
           setSectionAccess(storedSectionAccess);
-          localStorage.setItem('investorAccessEmail', email.toLowerCase().trim());
+          const accessCodeToStore = accessData.accessCode || accessData.email || code.toUpperCase().trim();
+          localStorage.setItem('investorAccessCode', accessCodeToStore);
           localStorage.setItem('investorSectionAccess', JSON.stringify(storedSectionAccess));
           
           // Log this access event for analytics
           try {
             const logsRef = collection(db, 'investorAccessLogs');
             await addDoc(logsRef, {
-              email: email.toLowerCase().trim(),
+              accessCode: accessCodeToStore,
+              email: accessData.email || null, // Keep for backward compatibility
               investorAccessId: accessDoc.id,
               name: accessData.name || null,
               company: accessData.company || null,
@@ -1532,15 +1544,15 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
         } else {
           setHasAccess(false);
           setAccessError('Your access has been revoked. Please contact invest@fitwithpulse.ai');
-          localStorage.removeItem('investorAccessEmail');
+          localStorage.removeItem('investorAccessCode');
           localStorage.removeItem('investorSectionAccess');
         }
       } else {
         setHasAccess(false);
         if (!isAutoCheck) {
-          setAccessError('This email does not have access to the investor dataroom. Please contact invest@fitwithpulse.ai to request access.');
+          setAccessError('Invalid access code. Please check your code and try again, or contact invest@fitwithpulse.ai to request access.');
         }
-        localStorage.removeItem('investorAccessEmail');
+        localStorage.removeItem('investorAccessCode');
         localStorage.removeItem('investorSectionAccess');
       }
     } catch (error) {
@@ -1554,14 +1566,15 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
 
   const handleAccessSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    verifyAccess(accessEmail);
+    verifyAccess(accessCode);
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('investorAccessEmail');
+    localStorage.removeItem('investorAccessCode');
+    localStorage.removeItem('investorAccessEmail'); // Clean up old key
     localStorage.removeItem('investorSectionAccess');
     setHasAccess(null);
-    setAccessEmail('');
+    setAccessCode('');
     setSectionAccess(DEFAULT_SECTION_ACCESS);
   };
 
@@ -2680,16 +2693,18 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
             <form onSubmit={handleAccessSubmit} className="space-y-4">
               <div>
                 <div className="relative">
-                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500" />
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500" />
                   <input
-                    type="email"
-                    value={accessEmail}
+                    type="text"
+                    value={accessCode}
                     onChange={(e) => {
-                      setAccessEmail(e.target.value);
+                      // Only allow alphanumeric, uppercase (no dashes)
+                      let value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+                      setAccessCode(value);
                       setAccessError(null);
                     }}
-                    placeholder="Enter your email address"
-                    className="w-full pl-12 pr-4 py-3 bg-zinc-800 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-[#E0FE10] focus:border-transparent"
+                    placeholder="Enter access code"
+                    className="w-full pl-12 pr-4 py-3 bg-zinc-800 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-[#E0FE10] focus:border-transparent font-mono text-center"
                     disabled={isCheckingAccess}
                   />
                 </div>
@@ -2704,7 +2719,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
               
               <button
                 type="submit"
-                disabled={isCheckingAccess || !accessEmail.trim()}
+                disabled={isCheckingAccess || !accessCode.trim()}
                 className="w-full py-3 bg-[#E0FE10] text-black font-semibold rounded-lg hover:bg-[#d8f521] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
               >
                 {isCheckingAccess ? (

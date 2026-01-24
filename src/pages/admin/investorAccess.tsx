@@ -78,7 +78,8 @@ const DEFAULT_SECTION_ACCESS: SectionAccess = {
 
 interface InvestorAccess {
   id: string;
-  email: string;
+  accessCode: string; // Changed from email to accessCode
+  email?: string; // Keep for backward compatibility/migration
   name?: string;
   company?: string;
   isApproved: boolean;
@@ -90,7 +91,8 @@ interface InvestorAccess {
 
 interface AccessLog {
   id: string;
-  email: string;
+  accessCode: string; // Changed from email to accessCode
+  email?: string; // Keep for backward compatibility
   investorAccessId: string;
   name?: string;
   company?: string;
@@ -111,19 +113,18 @@ const InvestorAccessPage: React.FC = () => {
   const [showLogsModal, setShowLogsModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState<InvestorAccess | null>(null);
   const [isModalLoading, setIsModalLoading] = useState(false);
-  const [emailStatus, setEmailStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
-  const [sendEmail, setSendEmail] = useState(true); // Checkbox state for sending email
   
   // Access logs state
   const [accessLogs, setAccessLogs] = useState<AccessLog[]>([]);
   const [userAccessLogs, setUserAccessLogs] = useState<AccessLog[]>([]);
   
   // New user form state
-  const [newEmail, setNewEmail] = useState('');
+  const [newAccessCode, setNewAccessCode] = useState('');
   const [newName, setNewName] = useState('');
   const [newCompany, setNewCompany] = useState('');
   const [newNotes, setNewNotes] = useState('');
   const [newSectionAccess, setNewSectionAccess] = useState<SectionAccess>({ ...DEFAULT_SECTION_ACCESS });
+  const [generateCode, setGenerateCode] = useState(true); // Auto-generate code by default
   
   // Edit form state
   const [editSectionAccess, setEditSectionAccess] = useState<SectionAccess>({ ...DEFAULT_SECTION_ACCESS });
@@ -178,18 +179,18 @@ const InvestorAccessPage: React.FC = () => {
     setSelectedUser(user);
     // Filter from already-fetched logs
     const userLogs = accessLogs.filter(
-      log => log.email.toLowerCase() === user.email.toLowerCase()
+      log => log.accessCode === user.accessCode || (log.email && user.email && log.email.toLowerCase() === user.email.toLowerCase())
     );
     setUserAccessLogs(userLogs);
     setShowLogsModal(true);
   };
 
-  const getAccessCount = (email: string): number => {
-    return accessLogs.filter(log => log.email.toLowerCase() === email.toLowerCase()).length;
+  const getAccessCount = (accessCode: string): number => {
+    return accessLogs.filter(log => log.accessCode === accessCode).length;
   };
 
-  const getLastAccess = (email: string): string => {
-    const userLogs = accessLogs.filter(log => log.email.toLowerCase() === email.toLowerCase());
+  const getLastAccess = (accessCode: string): string => {
+    const userLogs = accessLogs.filter(log => log.accessCode === accessCode);
     if (userLogs.length === 0) return 'Never';
     const lastLog = userLogs[0]; // Already sorted desc
     return formatDateTime(lastLog.accessedAt);
@@ -227,6 +228,7 @@ const InvestorAccessPage: React.FC = () => {
     
     const term = searchTerm.toLowerCase();
     const filtered = accessList.filter(user => 
+      user.accessCode?.toLowerCase().includes(term) ||
       user.email?.toLowerCase().includes(term) || 
       user.name?.toLowerCase().includes(term) ||
       user.company?.toLowerCase().includes(term)
@@ -234,25 +236,57 @@ const InvestorAccessPage: React.FC = () => {
     setFilteredList(filtered);
   };
 
+  // Generate a random access code
+  const generateAccessCode = (): string => {
+    // Generate a random alphanumeric code (no dashes)
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Exclude confusing characters like 0, O, I, 1
+    const length = 8; // Default length for generated codes
+    let code = '';
+    for (let i = 0; i < length; i++) {
+      code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return code;
+  };
+
   const resetAddForm = () => {
-    setNewEmail('');
+    const newCode = generateAccessCode();
+    setNewAccessCode(newCode);
     setNewName('');
     setNewCompany('');
     setNewNotes('');
     setNewSectionAccess({ ...DEFAULT_SECTION_ACCESS });
-    setSendEmail(true);
-    setEmailStatus('idle');
+    setGenerateCode(true);
   };
 
   const handleAddUser = async () => {
-    if (!newEmail.trim()) return;
+    const finalAccessCode = generateCode ? generateAccessCode() : newAccessCode.trim().replace(/-/g, '').toUpperCase();
+    if (!finalAccessCode.trim()) {
+      alert('Please enter or generate an access code');
+      return;
+    }
+    
+    // Additional validation: ensure code has at least 3 characters
+    const cleanCode = finalAccessCode.replace(/-/g, '').toUpperCase();
+    if (cleanCode.length < 3) {
+      alert('Access code must be at least 3 characters');
+      return;
+    }
     
     setIsModalLoading(true);
-    setEmailStatus('idle');
     try {
+      // Check if access code already exists
       const accessRef = collection(db, 'investorAccess');
+      const existingQuery = query(accessRef, where('accessCode', '==', cleanCode));
+      const existingSnapshot = await getDocs(existingQuery);
+      
+      if (!existingSnapshot.empty) {
+        alert('This access code already exists. Please use a different code or generate a new one.');
+        setIsModalLoading(false);
+        return;
+      }
+      
       await addDoc(accessRef, {
-        email: newEmail.toLowerCase().trim(),
+        accessCode: cleanCode,
         name: newName.trim() || null,
         company: newCompany.trim() || null,
         notes: newNotes.trim() || null,
@@ -262,38 +296,14 @@ const InvestorAccessPage: React.FC = () => {
         updatedAt: new Date(),
       });
       
-      // Send access notification email if checkbox is checked
-      if (sendEmail) {
-        setEmailStatus('sending');
-        try {
-          const emailResponse = await fetch('/.netlify/functions/send-investor-access-email', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              email: newEmail.toLowerCase().trim(),
-              name: newName.trim() || null,
-            }),
-          });
-          
-          if (emailResponse.ok) {
-            setEmailStatus('sent');
-          } else {
-            console.error('Failed to send access email');
-            setEmailStatus('error');
-          }
-        } catch (emailError) {
-          console.error('Error sending access email:', emailError);
-          setEmailStatus('error');
-        }
-      }
-      
       resetAddForm();
       setShowAddModal(false);
       fetchAccessList();
+      // Show success message with the access code
+      alert(`Access code created successfully!\n\nAccess Code: ${cleanCode.toUpperCase()}\n\nYou can share this code with the investor.`);
     } catch (error) {
       console.error('Error adding investor access:', error);
+      alert('Error creating access code. Please try again.');
     } finally {
       setIsModalLoading(false);
     }
@@ -542,7 +552,7 @@ const InvestorAccessPage: React.FC = () => {
                 <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-zinc-400" />
                 <input
                   type="text"
-                  placeholder="Search by email, name, or company..."
+                  placeholder="Search by access code, name, or company..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="w-full pl-10 pr-4 py-2 rounded-md bg-zinc-700 text-white border border-zinc-600 focus:outline-none focus:ring-1 focus:ring-[#E0FE10]"
@@ -566,7 +576,7 @@ const InvestorAccessPage: React.FC = () => {
               <table className="min-w-full">
                 <thead>
                   <tr className="bg-zinc-700 text-white text-left">
-                    <th className="px-4 py-3">Email</th>
+                    <th className="px-4 py-3">Access Code</th>
                     <th className="px-4 py-3">Name</th>
                     <th className="px-4 py-3">Company</th>
                     <th className="px-4 py-3">Sections</th>
@@ -595,12 +605,11 @@ const InvestorAccessPage: React.FC = () => {
                       <tr key={user.id} className="text-white hover:bg-zinc-700/50">
                         <td className="px-4 py-3">
                           <div className="flex items-center">
-                            <Mail size={14} className="text-zinc-500 mr-2" />
-                            {user.email}
+                            <span className="font-mono text-[#E0FE10] font-semibold">{user.accessCode || user.email || '—'}</span>
                             <button 
-                              onClick={() => copyToClipboard(user.email)} 
+                              onClick={() => copyToClipboard(user.accessCode || user.email || '')} 
                               className="ml-2 text-zinc-400 hover:text-zinc-200"
-                              title="Copy email"
+                              title="Copy access code"
                             >
                               <Copy size={14} />
                             </button>
@@ -619,12 +628,12 @@ const InvestorAccessPage: React.FC = () => {
                             className="flex items-center gap-1.5 text-sm hover:text-[#E0FE10] transition-colors"
                           >
                             <Activity size={14} className="text-zinc-500" />
-                            <span className={getAccessCount(user.email) > 0 ? 'text-[#E0FE10]' : 'text-zinc-500'}>
-                              {getAccessCount(user.email)}
+                            <span className={getAccessCount(user.accessCode || user.email || '') > 0 ? 'text-[#E0FE10]' : 'text-zinc-500'}>
+                              {getAccessCount(user.accessCode || user.email || '')}
                             </span>
                           </button>
                         </td>
-                        <td className="px-4 py-3 text-zinc-400 text-sm">{getLastAccess(user.email)}</td>
+                        <td className="px-4 py-3 text-zinc-400 text-sm">{getLastAccess(user.accessCode || user.email || '')}</td>
                         <td className="px-4 py-3">
                           {user.isApproved ? (
                             <span className="px-2 py-1 rounded-full bg-green-500/20 text-green-500 text-xs font-medium">
@@ -683,14 +692,34 @@ const InvestorAccessPage: React.FC = () => {
             
             <div className="space-y-4">
               <div>
-                <label className="block text-zinc-400 text-sm mb-1">Email *</label>
-                <input
-                  type="email"
-                  value={newEmail}
-                  onChange={(e) => setNewEmail(e.target.value)}
-                  placeholder="investor@example.com"
-                  className="w-full px-4 py-2 rounded-md bg-zinc-700 text-white border border-zinc-600 focus:outline-none focus:ring-1 focus:ring-[#E0FE10]"
-                />
+                <label className="block text-zinc-400 text-sm mb-1">Access Code *</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newAccessCode}
+                    onChange={(e) => {
+                      // Only allow alphanumeric, uppercase
+                      let value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+                      setNewAccessCode(value);
+                      setGenerateCode(false);
+                    }}
+                    placeholder="Enter access code"
+                    className="flex-1 px-4 py-2 rounded-md bg-zinc-700 text-white border border-zinc-600 focus:outline-none focus:ring-1 focus:ring-[#E0FE10] font-mono"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const newCode = generateAccessCode();
+                      setNewAccessCode(newCode);
+                      setGenerateCode(true);
+                    }}
+                    className="px-4 py-2 rounded-md bg-zinc-700 text-white border border-zinc-600 hover:bg-zinc-600 transition-colors text-sm"
+                    title="Generate new code"
+                  >
+                    Generate
+                  </button>
+                </div>
+                <p className="text-zinc-500 text-xs mt-1">Enter a custom code or click Generate for a random one</p>
               </div>
               
               <div>
@@ -722,30 +751,10 @@ const InvestorAccessPage: React.FC = () => {
                 <textarea
                   value={newNotes}
                   onChange={(e) => setNewNotes(e.target.value)}
-                  placeholder="Optional notes about this investor..."
+                  placeholder="Optional notes about this access code..."
                   rows={2}
                   className="w-full px-4 py-2 rounded-md bg-zinc-700 text-white border border-zinc-600 focus:outline-none focus:ring-1 focus:ring-[#E0FE10] resize-none"
                 />
-              </div>
-              
-              {/* Send Email Checkbox */}
-              <div 
-                className="flex items-center gap-3 p-3 bg-zinc-700/50 rounded-lg cursor-pointer hover:bg-zinc-700 transition-colors"
-                onClick={() => setSendEmail(!sendEmail)}
-              >
-                <div
-                  className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors flex-shrink-0 ${
-                    sendEmail
-                      ? 'bg-[#E0FE10] border-[#E0FE10]'
-                      : 'border-zinc-500 bg-transparent'
-                  }`}
-                >
-                  {sendEmail && <Check size={14} className="text-black" />}
-                </div>
-                <div>
-                  <span className="text-white text-sm font-medium">Send access notification email</span>
-                  <p className="text-zinc-500 text-xs mt-0.5">Email will include dataroom link and access instructions</p>
-                </div>
               </div>
             </div>
             
@@ -763,7 +772,7 @@ const InvestorAccessPage: React.FC = () => {
               <button
                 onClick={handleAddUser}
                 className="flex-1 px-4 py-2 rounded-lg bg-[#E0FE10] text-black font-medium hover:bg-[#d8f521] transition-colors flex items-center justify-center"
-                disabled={isModalLoading || !newEmail.trim()}
+                disabled={isModalLoading || !newAccessCode.trim()}
               >
                 {isModalLoading ? (
                   <Loader2 size={20} className="animate-spin" />
@@ -781,7 +790,7 @@ const InvestorAccessPage: React.FC = () => {
         <div className="fixed inset-0 bg-black/50 backdrop-blur flex items-center justify-center z-50 p-4">
           <div className="bg-zinc-800 rounded-xl p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto">
             <h3 className="text-xl font-bold text-white mb-2">Edit Section Access</h3>
-            <p className="text-zinc-400 text-sm mb-4">{selectedUser.email}</p>
+            <p className="text-zinc-400 text-sm mb-4 font-mono">{selectedUser.accessCode || selectedUser.email}</p>
             
             {renderSectionCheckboxes(editSectionAccess, setEditSectionAccess)}
             
@@ -825,8 +834,8 @@ const InvestorAccessPage: React.FC = () => {
               </h3>
               <p className="text-zinc-400 text-center mb-6">
                 {selectedUser.isApproved
-                  ? `Are you sure you want to revoke investor dataroom access for ${selectedUser.email}?`
-                  : `Are you sure you want to grant investor dataroom access to ${selectedUser.email}?`}
+                  ? `Are you sure you want to revoke investor dataroom access for access code ${selectedUser.accessCode || selectedUser.email}?`
+                  : `Are you sure you want to grant investor dataroom access to access code ${selectedUser.accessCode || selectedUser.email}?`}
               </p>
               <div className="flex gap-4 w-full">
                 <button
@@ -872,7 +881,7 @@ const InvestorAccessPage: React.FC = () => {
               </div>
               <h3 className="text-2xl font-bold text-white mb-2">Delete Access Record</h3>
               <p className="text-zinc-400 text-center mb-6">
-                Are you sure you want to permanently delete the access record for {selectedUser.email}? This action cannot be undone.
+                Are you sure you want to permanently delete the access record for access code {selectedUser.accessCode || selectedUser.email}? This action cannot be undone.
               </p>
               <div className="flex gap-4 w-full">
                 <button
@@ -909,7 +918,7 @@ const InvestorAccessPage: React.FC = () => {
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h3 className="text-xl font-bold text-white">Access History</h3>
-                <p className="text-zinc-400 text-sm">{selectedUser.email}</p>
+                <p className="text-zinc-400 text-sm font-mono">{selectedUser.accessCode || selectedUser.email}</p>
               </div>
               <div className="flex items-center gap-4">
                 <div className="text-right">
