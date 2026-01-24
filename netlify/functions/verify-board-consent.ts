@@ -56,9 +56,12 @@ const handler: Handler = async (event) => {
             `  "issues": string[]\n` +
             `}\n\n` +
             `Rules:\n` +
-            `- approvalDate should be a human-readable date like "Jan 11, 2026" if you can infer it.\n` +
-            `- If no date is present/inferrable, approvalDate must be null and add an issue.\n` +
-            `- Be strict: if stakeholder name doesn't appear, mark invalid.\n`,
+            `- approvalDate should be a human-readable date like "Jan 11, 2026" or "January 11, 2026" if you can infer it from the document.\n` +
+            `- Look for dates in: effectiveness clauses ("effective as of..."), signature blocks ("Date: ..."), or recitals ("Dated as of...", "Approved on...").\n` +
+            `- If no date is present/inferrable, approvalDate must be null and add an issue: "Approval date is missing or not inferrable."\n` +
+            `- Check for signature date in the signature block - if missing, add issue: "Signature date is missing."\n` +
+            `- Be strict: if stakeholder name doesn't appear, mark invalid.\n` +
+            `- The document must have BOTH an approval/effective date AND a signature date clearly stated.\n`,
         },
         {
           role: 'user',

@@ -3,13 +3,13 @@ import Head from 'next/head';
 import { useRouter } from 'next/router';
 import dynamic from 'next/dynamic';
 import { GetServerSideProps } from 'next';
-import { ArrowUpRight, Download, ChevronRight, ChevronDown, ArrowLeft, TrendingUp, Lock, Loader2, Mail, AlertCircle, X } from 'lucide-react';
+import { ArrowUpRight, Download, ChevronRight, ChevronDown, ArrowLeft, TrendingUp, Lock, Loader2, Mail, AlertCircle, X, Copy, Check, FileText, Clock, Eye } from 'lucide-react';
 
 import Footer from '../../components/Footer/Footer';
 import PageHead from '../../components/PageHead';
 import { adminMethods } from '../../api/firebase/admin/methods';
 import { PageMetaData as FirestorePageMetaData } from '../../api/firebase/admin/types';
-import { doc, getDoc, collection, getDocs, query, where, addDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, collection, getDocs, query, where, addDoc, serverTimestamp, orderBy, onSnapshot, Unsubscribe } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
 import { UserChallenge } from '../../api/firebase/workout/types';
 import { convertFirestoreTimestamp } from '../../utils/formatDate';
@@ -62,6 +62,7 @@ type SectionRefs = {
 // Section access interface
 interface SectionAccess {
   overview: boolean;
+  entity: boolean;
   product: boolean;
   traction: boolean;
   ip: boolean;
@@ -72,11 +73,13 @@ interface SectionAccess {
   financials: boolean;
   captable: boolean;
   deck: boolean;
+  legal: boolean;
   documents: boolean;
 }
 
 const DEFAULT_SECTION_ACCESS: SectionAccess = {
   overview: true,
+  entity: true,
   product: true,
   traction: true,
   ip: true,
@@ -87,6 +90,7 @@ const DEFAULT_SECTION_ACCESS: SectionAccess = {
   financials: true,
   captable: true,
   deck: true,
+  legal: true,
   documents: true,
 };
 
@@ -121,7 +125,7 @@ interface InvestorDataroomPageProps {
 }
 
 // Valid section IDs for URL navigation
-const VALID_SECTIONS = ['overview', 'product', 'traction', 'ip', 'vision', 'market', 'techstack', 'team', 'financials', 'captable', 'deck', 'investment', 'documents'] as const;
+const VALID_SECTIONS = ['overview', 'entity', 'product', 'traction', 'ip', 'vision', 'market', 'techstack', 'team', 'financials', 'captable', 'deck', 'legal', 'investment', 'documents'] as const;
 
 const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => {
   const router = useRouter();
@@ -156,6 +160,14 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
   const [isLoadingKMetrics, setIsLoadingKMetrics] = useState(true);
   const [activeRetentionTab, setActiveRetentionTab] = useState<string>('retention');
   const [activeRevenueYear, setActiveRevenueYear] = useState<'2025' | '2024'>('2025');
+  
+  // Legal documents state
+  const [legalDocuments, setLegalDocuments] = useState<any[]>([]);
+  const [isLoadingLegalDocs, setIsLoadingLegalDocs] = useState(false);
+  
+  // Corporate equity documents state
+  const [corporateEquityDocs, setCorporateEquityDocs] = useState<any[]>([]);
+  const [isLoadingCorporateDocs, setIsLoadingCorporateDocs] = useState(false);
 
   const monthlyRevenue2025 = [
     { month: 'Jan', label: 'January', value: 246 },
@@ -2219,10 +2231,40 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
       </a>
     </div>
   );
+
+  // Copy button component
+  const CopyButton: React.FC<{ text: string }> = ({ text }) => {
+    const [copied, setCopied] = useState(false);
+    
+    const handleCopy = async () => {
+      try {
+        await navigator.clipboard.writeText(text);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } catch (err) {
+        console.error('Failed to copy:', err);
+      }
+    };
+    
+    return (
+      <button
+        onClick={handleCopy}
+        className="p-2 rounded-lg bg-zinc-700/50 hover:bg-zinc-700 border border-zinc-600 hover:border-zinc-500 transition-colors"
+        title={copied ? 'Copied!' : 'Copy to clipboard'}
+      >
+        {copied ? (
+          <Check className="w-4 h-4 text-[#E0FE10]" />
+        ) : (
+          <Copy className="w-4 h-4 text-zinc-400" />
+        )}
+      </button>
+    );
+  };
   
   // Refs for sections
   const sectionsRef = useRef<SectionRefs>({
     overview: null,
+    entity: null,
     vision: null,
     ip: null,
     market: null,
@@ -2233,6 +2275,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
     financials: null,
     captable: null,
     deck: null,
+    legal: null,
     documents: null,
   });
 
@@ -2246,6 +2289,141 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
     // Scroll to top of content area when switching sections
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
+
+  // Real-time listener for corporate equity documents (EIP, Board Consent, Advisor docs)
+  useEffect(() => {
+    setIsLoadingCorporateDocs(true);
+    
+    const equityQuery = query(
+      collection(db, 'equity-documents'),
+      orderBy('createdAt', 'desc')
+    );
+    
+    const unsubscribe = onSnapshot(
+      equityQuery,
+      (snapshot) => {
+        const allDocs: any[] = snapshot.docs
+          .map(d => ({
+            id: d.id,
+            ...d.data(),
+          }))
+          .filter((doc: any) => {
+            // Filter for completed documents of specific types
+            if (doc.status !== 'completed') return false;
+            const docType = doc.documentType;
+            return docType === 'eip' || 
+                   docType === 'board_consent' || 
+                   docType === 'advisor_nso_agreement' ||
+                   (doc.stakeholderType === 'advisor' && docType === 'option_agreement');
+          });
+        
+        // Sort by creation date (newest first)
+        allDocs.sort((a: any, b: any) => {
+          const aDate = (a.createdAt as any)?.toDate ? (a.createdAt as any).toDate() : new Date(a.createdAt as any);
+          const bDate = (b.createdAt as any)?.toDate ? (b.createdAt as any).toDate() : new Date(b.createdAt as any);
+          return bDate.getTime() - aDate.getTime();
+        });
+        
+        setCorporateEquityDocs(allDocs);
+        setIsLoadingCorporateDocs(false);
+      },
+      (error) => {
+        console.error('Error listening to corporate equity documents:', error);
+        setCorporateEquityDocs([]);
+        setIsLoadingCorporateDocs(false);
+      }
+    );
+    
+    return () => unsubscribe();
+  }, []);
+
+  // Real-time listeners for legal documents (equity + legal collections)
+  useEffect(() => {
+    setIsLoadingLegalDocs(true);
+    
+    let equityDocs: any[] = [];
+    let legalDocs: any[] = [];
+    let equityLoaded = false;
+    let legalLoaded = false;
+    
+    const mergeAndSetDocuments = () => {
+      const allDocs = [...equityDocs, ...legalDocs];
+      
+      // Sort by creation date (newest first)
+      allDocs.sort((a, b) => {
+        const aDate = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt);
+        const bDate = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt);
+        return bDate.getTime() - aDate.getTime();
+      });
+      
+      setLegalDocuments(allDocs);
+      
+      if (equityLoaded && legalLoaded) {
+        setIsLoadingLegalDocs(false);
+      }
+    };
+    
+    // Listen to equity documents
+    const equityQuery = query(
+      collection(db, 'equity-documents'),
+      orderBy('createdAt', 'desc')
+    );
+    
+    const unsubscribeEquity = onSnapshot(
+      equityQuery,
+      (snapshot) => {
+        equityDocs = snapshot.docs
+          .map(d => ({
+            id: d.id,
+            ...d.data(),
+            source: 'equity',
+            type: 'equity'
+          }))
+          .filter((doc: any) => doc.status === 'completed');
+        
+        equityLoaded = true;
+        mergeAndSetDocuments();
+      },
+      (error) => {
+        console.error('Error listening to equity documents:', error);
+        equityLoaded = true;
+        mergeAndSetDocuments();
+      }
+    );
+    
+    // Listen to legal documents
+    const legalQuery = query(
+      collection(db, 'legal-documents'),
+      orderBy('createdAt', 'desc')
+    );
+    
+    const unsubscribeLegal = onSnapshot(
+      legalQuery,
+      (snapshot) => {
+        legalDocs = snapshot.docs
+          .map(d => ({
+            id: d.id,
+            ...d.data(),
+            source: 'legal',
+            type: 'legal'
+          }))
+          .filter((doc: any) => doc.status === 'completed');
+        
+        legalLoaded = true;
+        mergeAndSetDocuments();
+      },
+      (error) => {
+        console.error('Error listening to legal documents:', error);
+        legalLoaded = true;
+        mergeAndSetDocuments();
+      }
+    );
+    
+    return () => {
+      unsubscribeEquity();
+      unsubscribeLegal();
+    };
+  }, []);
 
   // Fetch financial data
   useEffect(() => {
@@ -2705,17 +2883,19 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                 <nav className="space-y-1">
                   {[
                     { id: 'overview', label: 'Company Overview', number: 1 },
-                    { id: 'product', label: 'Product & Technology', number: 2 },
-                    { id: 'traction', label: 'Traction & Metrics', number: 3 },
-                    { id: 'ip', label: 'IP & Defensibility', number: 4 },
-                    { id: 'vision', label: 'Vision & Evolution', number: 5 },
-                    { id: 'market', label: 'Market Opportunity', number: 6 },
-                    { id: 'techstack', label: 'Technical Stack', number: 7 },
-                    { id: 'team', label: 'Team', number: 8 },
-                    { id: 'financials', label: 'Financial Information', number: 9 },
-                    { id: 'captable', label: 'Cap Table', number: 10 },
-                    { id: 'deck', label: 'Pitch Deck', number: 11 },
-                    { id: 'documents', label: 'All Documents', number: 12 },
+                    { id: 'entity', label: 'Business Entity', number: 2 },
+                    { id: 'product', label: 'Product & Technology', number: 3 },
+                    { id: 'traction', label: 'Traction & Metrics', number: 4 },
+                    { id: 'ip', label: 'IP & Defensibility', number: 5 },
+                    { id: 'vision', label: 'Vision & Evolution', number: 6 },
+                    { id: 'market', label: 'Market Opportunity', number: 7 },
+                    { id: 'techstack', label: 'Technical Stack', number: 8 },
+                    { id: 'team', label: 'Team', number: 9 },
+                    { id: 'financials', label: 'Financial Information', number: 10 },
+                    { id: 'captable', label: 'Cap Table', number: 11 },
+                    { id: 'deck', label: 'Pitch Deck', number: 12 },
+                    { id: 'legal', label: 'Legal Documents', number: 13 },
+                    { id: 'documents', label: 'All Documents', number: 14 },
                   ].map((item) => (
                     <button
                       key={item.id}
@@ -2922,6 +3102,452 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                   <LockedSectionView sectionName="Company Overview" />
                 )
               )}
+
+              {/* Business Entity Section */}
+              {activeSection === 'entity' && (
+                hasSectionAccess('entity') ? (
+              <section 
+                id="entity" 
+                ref={(el) => { sectionsRef.current.entity = el; }}
+                className="mb-20"
+              >
+                {/* Header with gradient accent */}
+                <div className="flex items-center mb-8">
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#E0FE10] to-[#a8c40a] flex items-center justify-center mr-4 shadow-lg shadow-[#E0FE10]/20">
+                    <span className="font-bold text-black text-lg">2</span>
+                  </div>
+                  <div>
+                    <h2 className="text-white text-3xl font-bold">Business Entity</h2>
+                    <p className="text-zinc-500 text-sm">Legal and administrative information</p>
+                  </div>
+                </div>
+
+                {/* Main content card */}
+                <div className="relative rounded-2xl overflow-hidden mb-10">
+                  <div className="absolute inset-0 bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-800">
+                    <div 
+                      className="absolute w-[400px] h-[400px] rounded-full opacity-10"
+                      style={{
+                        background: 'radial-gradient(circle, #E0FE10 0%, transparent 70%)',
+                        top: '-20%',
+                        right: '-10%',
+                        filter: 'blur(60px)',
+                      }}
+                    />
+                  </div>
+                  
+                  <div className="relative bg-zinc-900/80 backdrop-blur-sm border border-zinc-800 rounded-2xl p-8 md:p-10">
+                    {/* Company Details Section */}
+                    <div className="mb-8">
+                      <h3 className="text-white text-xl font-semibold mb-6 flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-lg bg-[#E0FE10]/20 border border-[#E0FE10]/30 flex items-center justify-center">
+                          <span className="text-[#E0FE10] text-sm font-bold">ℹ</span>
+                        </div>
+                        Company Details
+                      </h3>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-5">
+                          <label className="text-zinc-400 text-xs font-medium mb-2 block">Company Name</label>
+                          <div className="flex items-center justify-between">
+                            <p className="text-white text-lg font-medium">Pulse Intelligence Labs, Inc.</p>
+                            <CopyButton text="Pulse Intelligence Labs, Inc." />
+                          </div>
+                        </div>
+                        
+                        <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-5">
+                          <label className="text-zinc-400 text-xs font-medium mb-2 block">Entity Type</label>
+                          <p className="text-white text-lg font-medium">Delaware C Corporation</p>
+                        </div>
+                        
+                        <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-5">
+                          <label className="text-zinc-400 text-xs font-medium mb-2 block">EIN (Employer Identification Number)</label>
+                          <div className="flex items-center justify-between">
+                            <p className="text-white text-lg font-medium">41-3072897</p>
+                            <CopyButton text="41-3072897" />
+                          </div>
+                        </div>
+                        
+                        <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-5">
+                          <label className="text-zinc-400 text-xs font-medium mb-2 block">Incorporation Date</label>
+                          <p className="text-white text-lg font-medium">December 11, 2025</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Contact Information Section */}
+                    <div className="mb-8">
+                      <h3 className="text-white text-xl font-semibold mb-6 flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-lg bg-[#E0FE10]/20 border border-[#E0FE10]/30 flex items-center justify-center">
+                          <Mail className="w-4 h-4 text-[#E0FE10]" />
+                        </div>
+                        Contact Information
+                      </h3>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-5">
+                          <label className="text-zinc-400 text-xs font-medium mb-2 block">Representative Name</label>
+                          <div className="flex items-center justify-between">
+                            <p className="text-white text-lg font-medium">Tremaine Grant</p>
+                            <CopyButton text="Tremaine Grant" />
+                          </div>
+                        </div>
+                        
+                        <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-5">
+                          <label className="text-zinc-400 text-xs font-medium mb-2 block">Company Phone Number</label>
+                          <div className="flex items-center justify-between">
+                            <p className="text-white text-lg font-medium">(954) 548-4221</p>
+                            <CopyButton text="(954) 548-4221" />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Business Address Section */}
+                    <div className="mb-8">
+                      <h3 className="text-white text-xl font-semibold mb-6 flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-lg bg-[#E0FE10]/20 border border-[#E0FE10]/30 flex items-center justify-center">
+                          <span className="text-[#E0FE10] text-sm font-bold">📍</span>
+                        </div>
+                        Business Address
+                      </h3>
+                      
+                      <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-5">
+                        <label className="text-zinc-400 text-xs font-medium mb-2 block">Registered Address</label>
+                        <div className="flex items-start justify-between gap-4">
+                          <p className="text-white text-lg font-medium">1111B S Governors Avenue STE 50759<br />Dover, DE 19904<br />United States</p>
+                          <CopyButton text="1111B S Governors Avenue STE 50759, Dover, DE 19904, United States" />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Corporate Documents Section */}
+                    <div>
+                      <h3 className="text-white text-xl font-semibold mb-6 flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-lg bg-[#E0FE10]/20 border border-[#E0FE10]/30 flex items-center justify-center">
+                          <FileText className="w-4 h-4 text-[#E0FE10]" />
+                        </div>
+                        Corporate Documents
+                      </h3>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <a 
+                          href="/PulseIntelligenceLabsCertificateofIncorporation.pdf" 
+                          download
+                          className="flex items-center gap-4 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-[#E0FE10]/30 rounded-xl transition-all group"
+                        >
+                          <div className="w-12 h-12 rounded-lg bg-[#E0FE10]/10 flex items-center justify-center flex-shrink-0">
+                            <Download className="w-5 h-5 text-[#E0FE10]" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-white font-medium group-hover:text-[#E0FE10] transition-colors">Certificate of Incorporation</div>
+                            <div className="text-zinc-500 text-sm">PDF • Delaware C-Corp</div>
+                          </div>
+                        </a>
+                        
+                        <a 
+                          href="/PulseIntelligenceLabsInc - Approved Certificate of Incorporation (Articles of Incorporation).pdf" 
+                          download
+                          className="flex items-center gap-4 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-[#E0FE10]/30 rounded-xl transition-all group"
+                        >
+                          <div className="w-12 h-12 rounded-lg bg-[#E0FE10]/10 flex items-center justify-center flex-shrink-0">
+                            <Download className="w-5 h-5 text-[#E0FE10]" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-white font-medium group-hover:text-[#E0FE10] transition-colors">Articles of Incorporation</div>
+                            <div className="text-zinc-500 text-sm">PDF • Approved Certificate</div>
+                          </div>
+                        </a>
+                        
+                        <a 
+                          href="/Pulse Intelligence Labs_ Inc. Bylaws.pdf" 
+                          download
+                          className="flex items-center gap-4 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-[#E0FE10]/30 rounded-xl transition-all group"
+                        >
+                          <div className="w-12 h-12 rounded-lg bg-[#E0FE10]/10 flex items-center justify-center flex-shrink-0">
+                            <Download className="w-5 h-5 text-[#E0FE10]" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-white font-medium group-hover:text-[#E0FE10] transition-colors">Corporate Bylaws</div>
+                            <div className="text-zinc-500 text-sm">PDF • Company Bylaws</div>
+                          </div>
+                        </a>
+                        
+                        <a 
+                          href="/Founder Intellectual Property Assignment Agreement - Pulse Intelligence Labs.pdf" 
+                          download="Founder-IP-Assignment-Agreement.pdf"
+                          className="flex items-center gap-4 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-[#E0FE10]/30 rounded-xl transition-all group"
+                        >
+                          <div className="w-12 h-12 rounded-lg bg-[#E0FE10]/10 flex items-center justify-center flex-shrink-0">
+                            <Download className="w-5 h-5 text-[#E0FE10]" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-white font-medium group-hover:text-[#E0FE10] transition-colors">IP Assignment Agreement</div>
+                            <div className="text-zinc-500 text-sm">PDF • Signed Founder IP Assignment</div>
+                          </div>
+                        </a>
+                        
+                        <a 
+                          href="/Founder Restricted Stock Purchase Agreement - Pulse Intelligence Labs.pdf"
+                          download="Founder-RSPA.pdf"
+                          className="flex items-center gap-4 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-[#E0FE10]/30 rounded-xl transition-all group"
+                        >
+                          <div className="w-12 h-12 rounded-lg bg-[#E0FE10]/10 flex items-center justify-center flex-shrink-0">
+                            <Download className="w-5 h-5 text-[#E0FE10]" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-white font-medium group-hover:text-[#E0FE10] transition-colors">Founder RSPA</div>
+                            <div className="text-zinc-500 text-sm">PDF • Signed Restricted Stock Purchase Agreement</div>
+                          </div>
+                        </a>
+                        
+                        <a 
+                          href="/RSPA for Tremaine Grant.pdf"
+                          download
+                          className="flex items-center gap-4 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-[#E0FE10]/30 rounded-xl transition-all group"
+                        >
+                          <div className="w-12 h-12 rounded-lg bg-[#E0FE10]/10 flex items-center justify-center flex-shrink-0">
+                            <Download className="w-5 h-5 text-[#E0FE10]" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-white font-medium group-hover:text-[#E0FE10] transition-colors">RSPA for Tremaine Grant</div>
+                            <div className="text-zinc-500 text-sm">PDF • Restricted Stock Purchase Agreement</div>
+                          </div>
+                        </a>
+                        
+                        <a 
+                          href="/Common Stock Certificate Tremaine Grant (1).pdf"
+                          download
+                          className="flex items-center gap-4 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-[#E0FE10]/30 rounded-xl transition-all group"
+                        >
+                          <div className="w-12 h-12 rounded-lg bg-[#E0FE10]/10 flex items-center justify-center flex-shrink-0">
+                            <Download className="w-5 h-5 text-[#E0FE10]" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-white font-medium group-hover:text-[#E0FE10] transition-colors">Common Stock Certificate</div>
+                            <div className="text-zinc-500 text-sm">PDF • Tremaine Grant</div>
+                          </div>
+                        </a>
+                        
+                        <a 
+                          href="/Stock Assignment Separate from Certificate for Tremaine Grant (1).pdf"
+                          download
+                          className="flex items-center gap-4 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-[#E0FE10]/30 rounded-xl transition-all group"
+                        >
+                          <div className="w-12 h-12 rounded-lg bg-[#E0FE10]/10 flex items-center justify-center flex-shrink-0">
+                            <Download className="w-5 h-5 text-[#E0FE10]" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-white font-medium group-hover:text-[#E0FE10] transition-colors">Stock Assignment</div>
+                            <div className="text-zinc-500 text-sm">PDF • Separate from Certificate</div>
+                          </div>
+                        </a>
+                        
+                        <a 
+                          href="/Employee CIIAA for Tremaine Grant.pdf"
+                          download
+                          className="flex items-center gap-4 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-[#E0FE10]/30 rounded-xl transition-all group"
+                        >
+                          <div className="w-12 h-12 rounded-lg bg-[#E0FE10]/10 flex items-center justify-center flex-shrink-0">
+                            <Download className="w-5 h-5 text-[#E0FE10]" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-white font-medium group-hover:text-[#E0FE10] transition-colors">Employee CIIAA</div>
+                            <div className="text-zinc-500 text-sm">PDF • Confidentiality & IP Assignment</div>
+                          </div>
+                        </a>
+                        
+                        <a 
+                          href="/Section 83(b) for Tremaine Grant.pdf"
+                          download
+                          className="flex items-center gap-4 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-[#E0FE10]/30 rounded-xl transition-all group"
+                        >
+                          <div className="w-12 h-12 rounded-lg bg-[#E0FE10]/10 flex items-center justify-center flex-shrink-0">
+                            <Download className="w-5 h-5 text-[#E0FE10]" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-white font-medium group-hover:text-[#E0FE10] transition-colors">Section 83(b) Election</div>
+                            <div className="text-zinc-500 text-sm">PDF • Tax Election Form</div>
+                          </div>
+                        </a>
+                        
+                        <a 
+                          href="/Proof of 83(b) filing w_ attached Lob mailed contents for Tremaine Grant.pdf"
+                          download
+                          className="flex items-center gap-4 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-[#E0FE10]/30 rounded-xl transition-all group"
+                        >
+                          <div className="w-12 h-12 rounded-lg bg-[#E0FE10]/10 flex items-center justify-center flex-shrink-0">
+                            <Download className="w-5 h-5 text-[#E0FE10]" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-white font-medium group-hover:text-[#E0FE10] transition-colors">83(b) Filing Proof</div>
+                            <div className="text-zinc-500 text-sm">PDF • Proof of Filing with Contents</div>
+                          </div>
+                        </a>
+                        
+                        <a 
+                          href="/PulseIntelligenceLabsInc - CP 575 Letter (2).pdf"
+                          download
+                          className="flex items-center gap-4 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-[#E0FE10]/30 rounded-xl transition-all group"
+                        >
+                          <div className="w-12 h-12 rounded-lg bg-[#E0FE10]/10 flex items-center justify-center flex-shrink-0">
+                            <Download className="w-5 h-5 text-[#E0FE10]" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-white font-medium group-hover:text-[#E0FE10] transition-colors">CP 575 Letter</div>
+                            <div className="text-zinc-500 text-sm">PDF • IRS Confirmation Letter</div>
+                          </div>
+                        </a>
+                        
+                        <a 
+                          href="/SS-4.pdf"
+                          download
+                          className="flex items-center gap-4 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-[#E0FE10]/30 rounded-xl transition-all group"
+                        >
+                          <div className="w-12 h-12 rounded-lg bg-[#E0FE10]/10 flex items-center justify-center flex-shrink-0">
+                            <Download className="w-5 h-5 text-[#E0FE10]" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-white font-medium group-hover:text-[#E0FE10] transition-colors">SS-4 Form</div>
+                            <div className="text-zinc-500 text-sm">PDF • EIN Application Form</div>
+                          </div>
+                        </a>
+                        
+                        <a 
+                          href="/Form 8821.pdf"
+                          download
+                          className="flex items-center gap-4 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-[#E0FE10]/30 rounded-xl transition-all group"
+                        >
+                          <div className="w-12 h-12 rounded-lg bg-[#E0FE10]/10 flex items-center justify-center flex-shrink-0">
+                            <Download className="w-5 h-5 text-[#E0FE10]" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-white font-medium group-hover:text-[#E0FE10] transition-colors">Form 8821</div>
+                            <div className="text-zinc-500 text-sm">PDF • Tax Information Authorization</div>
+                          </div>
+                        </a>
+                      </div>
+
+                      {/* Equity Documents (EIP, Board Consent, Advisor Docs) */}
+                      {isLoadingCorporateDocs ? (
+                        <div className="mt-6 flex items-center justify-center py-8">
+                          <Loader2 className="w-6 h-6 text-[#E0FE10] animate-spin" />
+                          <span className="ml-3 text-zinc-400 text-sm">Loading equity documents...</span>
+                        </div>
+                      ) : corporateEquityDocs.length > 0 && (
+                        <div className="mt-8 pt-8 border-t border-zinc-800">
+                          <h4 className="text-white text-lg font-semibold mb-4 flex items-center gap-2">
+                            <div className="w-6 h-6 rounded-lg bg-[#E0FE10]/20 border border-[#E0FE10]/30 flex items-center justify-center">
+                              <FileText className="w-3.5 h-3.5 text-[#E0FE10]" />
+                            </div>
+                            Equity Documents
+                          </h4>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {corporateEquityDocs.map((doc) => {
+                              const docDate = doc.createdAt?.toDate ? doc.createdAt.toDate() : new Date(doc.createdAt);
+                              const formattedDate = docDate.toLocaleDateString('en-US', { 
+                                year: 'numeric', 
+                                month: 'short', 
+                                day: 'numeric' 
+                              });
+                              
+                              // Determine document type label
+                              let docTypeLabel = 'Equity Document';
+                              let docDescription = '';
+                              
+                              if (doc.documentType === 'eip') {
+                                docTypeLabel = 'Equity Incentive Plan';
+                                docDescription = 'Company-wide equity plan';
+                              } else if (doc.documentType === 'board_consent') {
+                                docTypeLabel = 'Board Consent';
+                                docDescription = doc.stakeholderName 
+                                  ? `Board approval for ${doc.stakeholderName}`
+                                  : 'Board approval document';
+                              } else if (doc.documentType === 'advisor_nso_agreement' || (doc.stakeholderType === 'advisor' && doc.documentType === 'option_agreement')) {
+                                docTypeLabel = 'Advisor Equity Agreement';
+                                docDescription = doc.stakeholderName 
+                                  ? `Advisor agreement for ${doc.stakeholderName}`
+                                  : 'Advisor equity grant';
+                              }
+                              
+                              const viewUrl = `/equity-doc/${doc.id}`;
+                              
+                              return (
+                                <a
+                                  key={doc.id}
+                                  href={viewUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-4 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-[#E0FE10]/30 rounded-xl transition-all group"
+                                >
+                                  <div className="w-12 h-12 rounded-lg bg-[#E0FE10]/10 flex items-center justify-center flex-shrink-0">
+                                    <FileText className="w-5 h-5 text-[#E0FE10]" />
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="text-white font-medium group-hover:text-[#E0FE10] transition-colors">
+                                      {doc.title || docTypeLabel}
+                                    </div>
+                                    <div className="text-zinc-500 text-sm">
+                                      {docDescription || 'Equity document'} • {formattedDate}
+                                    </div>
+                                  </div>
+                                  <div className="flex-shrink-0">
+                                    <ArrowUpRight className="w-4 h-4 text-zinc-500 group-hover:text-[#E0FE10] transition-colors" />
+                                  </div>
+                                </a>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Employee Agreements Section */}
+                      <div className="mt-8 pt-8 border-t border-zinc-800">
+                        <h3 className="text-white text-xl font-semibold mb-6 flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-lg bg-[#E0FE10]/20 border border-[#E0FE10]/30 flex items-center justify-center">
+                            <FileText className="w-4 h-4 text-[#E0FE10]" />
+                          </div>
+                          Employee Agreements
+                        </h3>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <button 
+                            type="button"
+                            onClick={generateAdvisorAgreementPdf}
+                            className="flex items-center gap-4 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-[#E0FE10]/30 rounded-xl transition-all group text-left"
+                          >
+                            <div className="w-12 h-12 rounded-lg bg-[#E0FE10]/10 flex items-center justify-center flex-shrink-0">
+                              <Download className="w-5 h-5 text-[#E0FE10]" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-white font-medium group-hover:text-[#E0FE10] transition-colors">Advisor Agreement</div>
+                              <div className="text-zinc-500 text-sm">PDF • Independent Advisor / Trial Contractor</div>
+                            </div>
+                          </button>
+                          
+                          <button 
+                            type="button"
+                            onClick={generateContractorAgreementPdf}
+                            className="flex items-center gap-4 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-[#E0FE10]/30 rounded-xl transition-all group text-left"
+                          >
+                            <div className="w-12 h-12 rounded-lg bg-[#E0FE10]/10 flex items-center justify-center flex-shrink-0">
+                              <Download className="w-5 h-5 text-[#E0FE10]" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-white font-medium group-hover:text-[#E0FE10] transition-colors">Contractor Agreement</div>
+                              <div className="text-zinc-500 text-sm">PDF • Independent Contractor (Design)</div>
+                            </div>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </section>
+                ) : (
+                  <LockedSectionView sectionName="Business Entity" />
+                )
+              )}
               
               {/* Product & Technology Section */}
               {activeSection === 'product' && (
@@ -2933,7 +3559,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
               >
                 <div className="flex items-center mb-6">
                   <div className="w-10 h-10 rounded-full bg-[#E0FE10] flex items-center justify-center mr-4">
-                    <span className="font-bold text-black">2</span>
+                    <span className="font-bold text-black">3</span>
                   </div>
                   <h2 className="text-white text-3xl font-bold">Product & Technology</h2>
                 </div>
@@ -6469,6 +7095,121 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                 </section>
                   ) : (
                     <LockedSectionView sectionName="Pitch Deck" />
+                  )
+                )}
+
+                {/* Legal Documents Section */}
+                {activeSection === 'legal' && (
+                  hasSectionAccess('legal') ? (
+                <section 
+                  id="legal" 
+                  ref={(el) => { sectionsRef.current.legal = el; }}
+                  className="mb-20"
+                >
+                  {/* Header */}
+                  <div className="flex items-center mb-8">
+                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#E0FE10] to-[#a8c40a] flex items-center justify-center mr-4 shadow-lg shadow-[#E0FE10]/20">
+                      <span className="font-bold text-black text-lg">13</span>
+                    </div>
+                    <div>
+                      <h2 className="text-white text-3xl font-bold">Legal Documents</h2>
+                      <p className="text-zinc-500 text-sm">All legal and equity documents</p>
+                    </div>
+                  </div>
+
+                  {/* Documents List */}
+                  {isLoadingLegalDocs ? (
+                    <div className="flex items-center justify-center py-20">
+                      <Loader2 className="w-8 h-8 text-[#E0FE10] animate-spin" />
+                      <span className="ml-3 text-zinc-400">Loading documents...</span>
+                    </div>
+                  ) : legalDocuments.length === 0 ? (
+                    <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-12 text-center">
+                      <FileText className="w-16 h-16 text-zinc-600 mx-auto mb-4" />
+                      <h3 className="text-white text-xl font-semibold mb-2">No Legal Documents</h3>
+                      <p className="text-zinc-400">No legal documents have been generated yet.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {legalDocuments.map((doc) => {
+                        const docDate = doc.createdAt?.toDate ? doc.createdAt.toDate() : new Date(doc.createdAt);
+                        const formattedDate = docDate.toLocaleDateString('en-US', { 
+                          year: 'numeric', 
+                          month: 'long', 
+                          day: 'numeric' 
+                        });
+                        
+                        const docTypeLabel = doc.documentType 
+                          ? doc.documentType.split('_').map((word: string) => 
+                              word.charAt(0).toUpperCase() + word.slice(1)
+                            ).join(' ')
+                          : 'Document';
+                        
+                        const isEquityDoc = doc.source === 'equity';
+                        const viewUrl = isEquityDoc ? `/equity-doc/${doc.id}` : `/legal-doc/${doc.id}`;
+                        
+                        return (
+                          <div
+                            key={doc.id}
+                            className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6 hover:border-[#E0FE10]/30 transition-all"
+                          >
+                            <div className="flex items-start justify-between gap-4">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-3 mb-2 flex-wrap">
+                                  <h3 className="text-white font-semibold text-lg">{doc.title || 'Untitled Document'}</h3>
+                                  <span className="px-3 py-1 bg-zinc-800 rounded-full text-xs text-zinc-300">
+                                    {docTypeLabel}
+                                  </span>
+                                  {isEquityDoc && (
+                                    <span className="px-3 py-1 bg-blue-900/30 border border-blue-800 rounded-full text-xs text-blue-400">
+                                      Equity Document
+                                    </span>
+                                  )}
+                                  {!isEquityDoc && (
+                                    <span className="px-3 py-1 bg-purple-900/30 border border-purple-800 rounded-full text-xs text-purple-400">
+                                      Legal Document
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-4 text-sm text-zinc-500 flex-wrap">
+                                  <span className="flex items-center gap-1">
+                                    <Clock className="w-4 h-4" />
+                                    {formattedDate}
+                                  </span>
+                                  {doc.stakeholderName && (
+                                    <span className="text-zinc-400">
+                                      For: {doc.stakeholderName}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2 flex-shrink-0">
+                                <a
+                                  href={viewUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 hover:border-zinc-600 rounded-lg text-sm text-white transition-colors"
+                                >
+                                  <Eye className="w-4 h-4" />
+                                  View
+                                </a>
+                                <a
+                                  href={`${viewUrl}?download=true`}
+                                  className="flex items-center gap-2 px-4 py-2 bg-[#E0FE10] hover:bg-[#d8f521] text-black rounded-lg text-sm font-medium transition-colors"
+                                >
+                                  <Download className="w-4 h-4" />
+                                  Download
+                                </a>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </section>
+                  ) : (
+                    <LockedSectionView sectionName="Legal Documents" />
                   )
                 )}
 

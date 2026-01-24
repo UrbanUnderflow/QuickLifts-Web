@@ -25,6 +25,7 @@ import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 // Define all available sections
 const INVESTOR_SECTIONS = [
   { id: 'overview', label: 'Overview' },
+  { id: 'entity', label: 'Business Entity' },
   { id: 'product', label: 'Product' },
   { id: 'traction', label: 'Traction' },
   { id: 'ip', label: 'IP & Moats' },
@@ -35,6 +36,7 @@ const INVESTOR_SECTIONS = [
   { id: 'financials', label: 'Financials' },
   { id: 'captable', label: 'Cap Table' },
   { id: 'deck', label: 'Pitch Deck' },
+  { id: 'legal', label: 'Legal Documents' },
   { id: 'documents', label: 'All Documents' },
 ] as const;
 
@@ -42,6 +44,7 @@ type SectionId = typeof INVESTOR_SECTIONS[number]['id'];
 
 interface SectionAccess {
   overview: boolean;
+  entity: boolean;
   product: boolean;
   traction: boolean;
   ip: boolean;
@@ -52,11 +55,13 @@ interface SectionAccess {
   financials: boolean;
   captable: boolean;
   deck: boolean;
+  legal: boolean;
   documents: boolean;
 }
 
 const DEFAULT_SECTION_ACCESS: SectionAccess = {
   overview: true,
+  entity: true,
   product: true,
   traction: true,
   ip: true,
@@ -67,6 +72,7 @@ const DEFAULT_SECTION_ACCESS: SectionAccess = {
   financials: true,
   captable: true,
   deck: true,
+  legal: true,
   documents: true,
 };
 

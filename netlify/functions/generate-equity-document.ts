@@ -78,12 +78,32 @@ CRITICAL REQUIREMENTS:
 1. This is for a SOLE DIRECTOR company - Tremaine Grant is the SOLE member of the Board of Directors. Do NOT create signature blocks for multiple directors.
 2. Reference DGCL §141(f) for written consent authority.
 3. Include explicit Plan incorporation language.
-4. Do NOT include a separate "FURTHER RESOLVED" for fair market value determination - establish FMV in the recitals only, not as a redundant resolution.`,
-    userPrompt: (data: RequestBody) => `Generate a Board Consent document (Written Consent of the Board of Directors in Lieu of Meeting) for:
+4. Do NOT include a separate "FURTHER RESOLVED" for fair market value determination - establish FMV in the recitals only, not as a redundant resolution.
+
+MANDATORY DATE REQUIREMENTS (CRITICAL - VERIFICATION WILL FAIL WITHOUT THESE):
+- You MUST include the approval date in at least TWO places:
+  1. In an effectiveness clause: "This Written Consent shall be effective as of [DATE]"
+  2. In the signature block: "Date: [DATE]"
+- You MUST also include a date in the recitals or header: "Dated as of [DATE]" or "Approved on [DATE]"
+- The date format must be human-readable like "January 23, 2026" or "Jan 23, 2026"
+- DO NOT use placeholders like [DATE], [CURRENT_DATE], or blank lines for dates
+- DO NOT leave date fields empty or with underscores
+- The approval date and signature date must be the SAME date and must be explicitly written out
+- If you fail to include these dates, the document will fail verification`,
+    userPrompt: (data: RequestBody) => {
+      // Get current date in the format "January 23, 2026"
+      const currentDate = new Date().toLocaleDateString('en-US', { 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+      });
+      
+      return `Generate a Board Consent document (Written Consent of the Board of Directors in Lieu of Meeting) for:
 
 COMPANY: Pulse Intelligence Labs, Inc., a Delaware corporation
 GRANTEE: ${data.stakeholderName}
 ROLE: ${data.stakeholderType}
+APPROVAL DATE: ${currentDate}
 ${data.grantDetails ? `
 GRANT TO APPROVE:
 - Type: ${data.grantDetails.equityType === 'iso' ? 'Incentive Stock Option' : data.grantDetails.equityType === 'nso' ? 'Non-Qualified Stock Option' : data.grantDetails.equityType}
@@ -114,7 +134,10 @@ DOCUMENT STRUCTURE REQUIREMENTS:
    - Resolution ratifying prior actions taken in connection with this grant
    - Do NOT include a separate FMV resolution - the FMV is already established in the recitals
 
-5. EFFECTIVENESS: "This Written Consent shall be effective as of the date first written below and may be executed in counterparts."
+5. EFFECTIVENESS AND DATE (MANDATORY - VERIFICATION WILL FAIL WITHOUT THIS):
+   - You MUST include this EXACT text with the date filled in: "This Written Consent shall be effective as of ${currentDate} and may be executed in counterparts."
+   - You MUST also include one of these lines near the top (in header or first recital): "Dated as of ${currentDate}" OR "Approved on ${currentDate}" OR "Written Consent dated ${currentDate}"
+   - CRITICAL: The date "${currentDate}" MUST be written out in full - DO NOT use placeholders, underscores, or leave blank
 
 6. SIGNATURE BLOCK - CRITICAL FORMAT (SOLE DIRECTOR ONLY):
    Use this EXACT format - do NOT add multiple director signature lines:
@@ -125,9 +148,26 @@ DOCUMENT STRUCTURE REQUIREMENTS:
    Tremaine Grant
    Sole Director
 
-   Date: ______________________________
+   Date: ${currentDate}
+   
+   MANDATORY DATE REQUIREMENTS (VERIFICATION WILL FAIL IF THESE ARE MISSING):
+   - The signature block Date field MUST contain: "${currentDate}" - write it out in full
+   - DO NOT use underscores, blank lines, or placeholders in the Date field
+   - The date "${currentDate}" must appear in AT LEAST these three places:
+     1. In the effectiveness clause: "effective as of ${currentDate}"
+     2. In a header/recital: "Dated as of ${currentDate}" or "Approved on ${currentDate}"
+     3. In the signature block: "Date: ${currentDate}"
+   - All three dates must be the same: "${currentDate}"
+   - Write the date in full text format like "January 23, 2026" - do not abbreviate
+   - If any date is missing or left blank, the document verification will fail
 
-Make it formal and suitable for corporate records. This document will be investor-diligence ready.`,
+EXAMPLE OF CORRECT DATE USAGE:
+- Header: "Dated as of January 23, 2026"
+- Effectiveness: "This Written Consent shall be effective as of January 23, 2026"
+- Signature: "Date: January 23, 2026"
+
+Make it formal and suitable for corporate records. This document will be investor-diligence ready.`;
+    },
   },
 
   stockholder_consent: {
