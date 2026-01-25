@@ -77,11 +77,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(200).json({ success: true, prospects: tableParsed, parser: 'markdown' });
   }
 
-  const apiKey = process.env.OPENAI_OPENAI_API_KEY || process.env.OPENAI_API_KEY; // allow either name
-  const key = process.env.OPENAI_API_KEY || process.env.OPENAI_OPENAI_API_KEY;
+  const apiKey = process.env.OPEN_AI_SECRET_KEY;
+  const key = process.env.OPEN_AI_SECRET_KEY;
   const useKey = key || apiKey;
   if (!useKey) {
-    return res.status(200).json({ success: true, prospects: [], parser: 'none', warning: 'No OPENAI_API_KEY; only markdown tables supported' });
+    return res.status(200).json({ success: true, prospects: [], parser: 'none', warning: 'No OPEN_AI_SECRET_KEY; only markdown tables supported' });
   }
 
   try {

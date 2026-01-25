@@ -107,7 +107,7 @@ const handler: Handler = async (event) => {
       return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing required field: content' }) };
     }
 
-    const openaiApiKey = process.env.OPENAI_API_KEY;
+    const openaiApiKey = process.env.OPEN_AI_SECRET_KEY;
     if (!openaiApiKey) {
       return { statusCode: 500, headers, body: JSON.stringify({ error: 'OpenAI API key not configured' }) };
     }

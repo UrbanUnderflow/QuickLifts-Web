@@ -300,9 +300,9 @@ async function generateConversationSummary(body) {
   ).join('\n');
 
   // Generate summary with OpenAI
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = process.env.OPEN_AI_SECRET_KEY;
   if (!apiKey) {
-    return { statusCode: 500, headers, body: JSON.stringify({ error: 'Missing OPENAI_API_KEY' }) };
+    return { statusCode: 500, headers, body: JSON.stringify({ error: 'Missing OPEN_AI_SECRET_KEY' }) };
   }
 
   const summaryPrompt = `You are creating a clinical summary for a mental health professional reviewing an athlete's PulseCheck conversation.
@@ -768,7 +768,7 @@ async function generateConversationSummaryInternal(messages) {
     return 'No conversation history available.';
   }
 
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = process.env.OPEN_AI_SECRET_KEY;
   if (!apiKey) {
     return 'Summary unavailable.';
   }

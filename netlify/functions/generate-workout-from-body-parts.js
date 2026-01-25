@@ -230,12 +230,12 @@ exports.handler = async (event, context) => {
   }
 
   try {
-    const apiKey = process.env.OPENAI_API_KEY;
+    const apiKey = process.env.OPEN_AI_SECRET_KEY;
     if (!apiKey) {
       return {
         statusCode: 500,
         headers,
-        body: JSON.stringify({ error: 'Missing OPENAI_API_KEY' })
+        body: JSON.stringify({ error: 'Missing OPEN_AI_SECRET_KEY' })
       };
     }
 

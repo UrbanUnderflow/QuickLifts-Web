@@ -412,7 +412,20 @@ const LegalDocumentsAdmin: React.FC = () => {
           })
         });
 
-        const result = await response.json();
+        // Handle non-JSON responses (e.g., timeouts, server errors)
+        let result;
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          try {
+            result = await response.json();
+          } catch (parseError) {
+            const text = await response.text();
+            throw new Error(`Server returned invalid JSON. Response: ${text.substring(0, 200)}`);
+          }
+        } else {
+          const text = await response.text();
+          throw new Error(`Server error (${response.status}): ${text.substring(0, 200)}`);
+        }
 
         if (!response.ok) {
           throw new Error(result.error || `Failed to revise document (HTTP ${response.status})`);

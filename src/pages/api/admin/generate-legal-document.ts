@@ -202,7 +202,7 @@ export default async function handler(
     return res.status(400).json({ error: 'Missing required fields: prompt and documentType' });
   }
 
-  const openaiApiKey = process.env.OPENAI_API_KEY;
+    const openaiApiKey = process.env.OPEN_AI_SECRET_KEY;
   
   if (!openaiApiKey) {
     return res.status(500).json({ error: 'OpenAI API key not configured' });
