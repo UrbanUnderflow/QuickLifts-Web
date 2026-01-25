@@ -17,7 +17,7 @@ const corsHeaders = {
 };
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+  apiKey: process.env.OPEN_AI_SECRET_KEY,
 });
 
 function json(statusCode: number, body: unknown) {
@@ -37,8 +37,8 @@ export const handler: Handler = async (event) => {
     return json(405, { error: 'Method not allowed' });
   }
 
-  if (!process.env.OPENAI_API_KEY) {
-    return json(400, { error: 'OPENAI_API_KEY not configured' });
+  if (!process.env.OPEN_AI_SECRET_KEY) {
+    return json(400, { error: 'OPEN_AI_SECRET_KEY not configured' });
   }
 
   let body: RequestBody;

@@ -126,7 +126,7 @@ export function stopNarration() {
 }
 
 async function speakViaNetlifyTTS(req: SpeakRequest, opts: SpeakOptions) {
-  // Hit our Netlify function which uses OPENAI_API_KEY server-side.
+  // Hit our Netlify function which uses OPEN_AI_SECRET_KEY server-side.
   const res = await fetch('/.netlify/functions/tts-mental-step', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

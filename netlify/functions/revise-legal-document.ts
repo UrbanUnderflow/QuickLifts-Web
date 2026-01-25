@@ -36,7 +36,7 @@ const handler: Handler = async (event) => {
       };
     }
 
-    const openaiApiKey = process.env.OPENAI_API_KEY;
+    const openaiApiKey = process.env.OPEN_AI_SECRET_KEY;
     
     if (!openaiApiKey) {
       return { 
@@ -117,17 +117,46 @@ Return the complete revised document with all changes applied.`
           }
         ],
         temperature: 0.2,
-        max_tokens: 4000
+        // Increased from 4000 to 16384 (GPT-4o max) to prevent document truncation
+        // TODO: Consider implementing a diff-based approach where we only send changed sections
+        // and merge locally to reduce token usage for very large documents
+        max_tokens: 16384
       })
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
+      const errorData = await response.json().catch(() => ({ error: { message: 'Unknown error' } }));
       console.error('OpenAI API error:', errorData);
+      
+      // Handle specific OpenAI error types
+      const errorType = errorData?.error?.type || errorData?.error?.code;
+      const errorMessage = errorData?.error?.message || 'Unknown error';
+      
+      let userFriendlyMessage = 'Failed to revise document';
+      let statusCode = 500;
+      
+      if (errorType === 'insufficient_quota' || errorMessage.includes('quota')) {
+        userFriendlyMessage = 'OpenAI API quota exceeded. This could be due to rate limits, account tier limits, or payment method issues. Please check your OpenAI account settings or try again later.';
+        statusCode = 429; // Too Many Requests
+      } else if (errorType === 'rate_limit_exceeded' || errorMessage.includes('rate limit')) {
+        userFriendlyMessage = 'Rate limit exceeded. Please wait a moment and try again.';
+        statusCode = 429;
+      } else if (errorType === 'invalid_api_key' || errorMessage.includes('API key')) {
+        userFriendlyMessage = 'OpenAI API key is invalid or missing. Please check your configuration.';
+        statusCode = 500;
+      } else if (errorMessage) {
+        // Include the actual error message for debugging
+        userFriendlyMessage = `OpenAI API error: ${errorMessage}`;
+      }
+      
       return { 
-        statusCode: 500, 
+        statusCode, 
         headers, 
-        body: JSON.stringify({ error: 'Failed to revise document' }) 
+        body: JSON.stringify({ 
+          error: userFriendlyMessage,
+          errorType: errorType,
+          details: process.env.NODE_ENV === 'development' ? errorData : undefined
+        }) 
       };
     }
 

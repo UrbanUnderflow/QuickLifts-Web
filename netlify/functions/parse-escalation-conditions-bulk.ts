@@ -27,7 +27,7 @@ const headers = {
 };
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+  apiKey: process.env.OPEN_AI_SECRET_KEY,
 });
 
 function normalizeList(items: unknown): string[] {
@@ -82,8 +82,8 @@ export const handler: Handler = async (event) => {
   }
 
   try {
-    if (!process.env.OPENAI_API_KEY) {
-      return { statusCode: 500, headers, body: JSON.stringify({ error: 'Missing OPENAI_API_KEY' }) };
+    if (!process.env.OPEN_AI_SECRET_KEY) {
+      return { statusCode: 500, headers, body: JSON.stringify({ error: 'Missing OPEN_AI_SECRET_KEY' }) };
     }
 
     const body = (JSON.parse(event.body || '{}') || {}) as RequestBody;

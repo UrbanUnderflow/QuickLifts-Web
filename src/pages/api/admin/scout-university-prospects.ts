@@ -40,8 +40,8 @@ const normalizeProgramSize = (val?: string): ProgramSize => {
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) return res.status(500).json({ error: 'OPENAI_API_KEY not configured' });
+  const apiKey = process.env.OPEN_AI_SECRET_KEY;
+  if (!apiKey) return res.status(500).json({ error: 'OPEN_AI_SECRET_KEY not configured' });
 
   try {
     const { sports, limit, existing, debug } = (req.body || {}) as { sports?: string[]; limit?: number; existing?: { emails?: string[]; decisionMakers?: string[]; universities?: string[]; pairs?: string[] }; debug?: boolean };

@@ -74,7 +74,7 @@ const AdminAiVoice: React.FC = () => {
       }, choice);
     } catch (e: any) {
       console.error('Preview failed', e);
-      setError('Preview failed. If OPENAI_API_KEY is not configured locally, it will fall back to browser TTS.');
+      setError('Preview failed. If OPEN_AI_SECRET_KEY is not configured locally, it will fall back to browser TTS.');
       setPlaying(false);
     }
   };

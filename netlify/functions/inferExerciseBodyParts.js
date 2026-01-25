@@ -33,7 +33,7 @@ const VALID_BODY_PARTS = [
 
 // Initialize OpenAI
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+  apiKey: process.env.OPEN_AI_SECRET_KEY,
 });
 
 /**

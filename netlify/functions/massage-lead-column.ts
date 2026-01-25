@@ -2,7 +2,7 @@ import { Handler } from '@netlify/functions';
 import OpenAI from 'openai';
 
 const openai = new OpenAI({
-  apiKey: process.env.OPEN_AI_SECRET_KEY || process.env.OPENAI_API_KEY,
+  apiKey: process.env.OPEN_AI_SECRET_KEY,
 });
 
 interface RequestBody {

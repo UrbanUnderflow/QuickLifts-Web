@@ -462,6 +462,7 @@ Don'ts ▸ Never repeat a question they already answered. Never apologize unless
       openAiMessages.push({ role: 'user', content: message });
 
       // Call OpenAI
+      // Support both environment variable names for compatibility
       const apiKey = process.env.OPEN_AI_SECRET_KEY;
       if (!apiKey) {
         return { statusCode: 500, headers, body: JSON.stringify({ error: 'Missing OPEN_AI_SECRET_KEY' }) };
@@ -484,8 +485,63 @@ Don'ts ▸ Never repeat a question they already answered. Never apologize unless
       });
 
       if (!completionRes.ok) {
-        const errText = await completionRes.text();
-        return { statusCode: 502, headers, body: JSON.stringify({ error: 'OpenAI error', detail: errText }) };
+        // Parse OpenAI error response
+        let errorData;
+        const contentType = completionRes.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          try {
+            errorData = await completionRes.json();
+          } catch (e) {
+            const errText = await completionRes.text();
+            console.error('[pulsecheck-chat] OpenAI API error (non-JSON):', errText);
+            return { 
+              statusCode: 502, 
+              headers, 
+              body: JSON.stringify({ error: 'OpenAI API error', detail: errText.substring(0, 500) }) 
+            };
+          }
+        } else {
+          const errText = await completionRes.text();
+          console.error('[pulsecheck-chat] OpenAI API error (non-JSON):', errText);
+          return { 
+            statusCode: 502, 
+            headers, 
+            body: JSON.stringify({ error: 'OpenAI API error', detail: errText.substring(0, 500) }) 
+          };
+        }
+
+        // Handle specific OpenAI error types
+        const errorType = errorData?.error?.type || errorData?.error?.code;
+        const errorMessage = errorData?.error?.message || 'Unknown error';
+        
+        console.error('[pulsecheck-chat] OpenAI API error:', { errorType, errorMessage, status: completionRes.status });
+        
+        let userFriendlyMessage = 'AI service temporarily unavailable. Please try again shortly.';
+        let statusCode = 502;
+        
+        if (errorType === 'insufficient_quota' || errorMessage.includes('quota')) {
+          userFriendlyMessage = 'AI service quota exceeded. Please check your OpenAI account settings or try again later.';
+          statusCode = 429; // Too Many Requests
+        } else if (errorType === 'rate_limit_exceeded' || errorMessage.includes('rate limit')) {
+          userFriendlyMessage = 'AI service rate limit exceeded. Please wait a moment and try again.';
+          statusCode = 429;
+        } else if (errorType === 'invalid_api_key' || errorMessage.includes('API key')) {
+          userFriendlyMessage = 'AI service configuration error. Please contact support.';
+          statusCode = 500;
+        } else if (errorMessage) {
+          // Include the actual error message for debugging (truncated)
+          userFriendlyMessage = `AI service error: ${errorMessage.substring(0, 200)}`;
+        }
+        
+        return { 
+          statusCode, 
+          headers, 
+          body: JSON.stringify({ 
+            error: userFriendlyMessage,
+            errorType: errorType,
+            detail: process.env.NODE_ENV === 'development' ? errorMessage : undefined
+          }) 
+        };
       }
 
       const completion = await completionRes.json();
@@ -882,14 +938,54 @@ CRITICAL: Err on side of caution. Tier 3 has ZERO threshold for safety concerns.
     console.log('[classifyEscalation] [STEP 5] Response status:', res.status, res.statusText);
     
     if (!res.ok) {
-      const errorText = await res.text();
+      // Parse OpenAI error response
+      let errorData;
+      const contentType = res.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        try {
+          errorData = await res.json();
+        } catch (e) {
+          const errorText = await res.text();
+          console.error('[classifyEscalation] [STEP 5] ❌ API call FAILED (non-JSON error)');
+          console.error('[classifyEscalation] [STEP 5] Error details:', {
+            status: res.status,
+            statusText: res.statusText,
+            error: errorText.substring(0, 500),
+            headers: Object.fromEntries(res.headers.entries())
+          });
+          return null;
+        }
+      } else {
+        const errorText = await res.text();
+        console.error('[classifyEscalation] [STEP 5] ❌ API call FAILED (non-JSON error)');
+        console.error('[classifyEscalation] [STEP 5] Error details:', {
+          status: res.status,
+          statusText: res.statusText,
+          error: errorText.substring(0, 500),
+          headers: Object.fromEntries(res.headers.entries())
+        });
+        return null;
+      }
+
+      const errorType = errorData?.error?.type || errorData?.error?.code;
+      const errorMessage = errorData?.error?.message || 'Unknown error';
+      
       console.error('[classifyEscalation] [STEP 5] ❌ API call FAILED');
       console.error('[classifyEscalation] [STEP 5] Error details:', {
         status: res.status,
         statusText: res.statusText,
-        error: errorText,
+        errorType: errorType,
+        errorMessage: errorMessage,
         headers: Object.fromEntries(res.headers.entries())
       });
+      
+      // Log specific quota/rate limit errors
+      if (errorType === 'insufficient_quota' || errorMessage.includes('quota')) {
+        console.error('[classifyEscalation] [STEP 5] ⚠️ QUOTA EXCEEDED - OpenAI API quota issue');
+      } else if (errorType === 'rate_limit_exceeded' || errorMessage.includes('rate limit')) {
+        console.error('[classifyEscalation] [STEP 5] ⚠️ RATE LIMIT EXCEEDED');
+      }
+      
       return null;
     }
 

@@ -103,9 +103,9 @@ exports.handler = async (event, context) => {
     );
 
     // Call OpenAI for classification
-    const apiKey = process.env.OPENAI_API_KEY;
+    const apiKey = process.env.OPEN_AI_SECRET_KEY;
     if (!apiKey) {
-      return { statusCode: 500, headers, body: JSON.stringify({ error: 'Missing OPENAI_API_KEY' }) };
+      return { statusCode: 500, headers, body: JSON.stringify({ error: 'Missing OPEN_AI_SECRET_KEY' }) };
     }
 
     const completionRes = await fetch('https://api.openai.com/v1/chat/completions', {
