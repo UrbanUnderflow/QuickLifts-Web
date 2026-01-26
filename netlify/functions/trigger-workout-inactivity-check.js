@@ -135,6 +135,7 @@ exports.handler = async (event, context) => {
 
     const batchUserChallenge = db.batch(); // Batch for UserChallenge updates
     const userChallengesToMarkInactiveRefs = []; // Refs for UserChallenges to set isCurrentlyActive = false (12h)
+    const usersToUpdate = new Set(); // Track unique user IDs to update in users collection
 
     try {
         // Query for active user challenges
@@ -215,6 +216,7 @@ exports.handler = async (event, context) => {
                 if (!testMode) {
                     // 1. Mark UserChallenge as inactive
                     userChallengesToMarkInactiveRefs.push(doc.ref);
+                    usersToUpdate.add(userId); // Track user to update in users collection
 
                     // 2. Update WorkoutSession
                     if (lastActiveRoundWorkoutId && userId) {
@@ -335,8 +337,19 @@ exports.handler = async (event, context) => {
                     updatedAt: admin.firestore.FieldValue.serverTimestamp()
                 });
             });
+            
+            // Also update the users collection for each unique user
+            console.log(`Updating ${usersToUpdate.size} user documents in users collection.`);
+            usersToUpdate.forEach(userId => {
+                const userRef = db.collection('users').doc(userId);
+                batchUserChallenge.update(userRef, {
+                    isCurrentlyActive: false,
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                });
+            });
+            
             await batchUserChallenge.commit();
-            console.log('UserChallenge batch update successful for 12h+ inactive users.');
+            console.log('UserChallenge and users batch update successful for 12h+ inactive users.');
         } else {
             console.log(`${testMode ? 'Test mode: ' : simulationMode ? 'Simulation mode: ' : ''}No UserChallenges updated via batch for 12h+ inactivity.`);
         }

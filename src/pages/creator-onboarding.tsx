@@ -14,30 +14,20 @@ import {
 } from 'react-icons/fa6';
 import { useUser } from '../hooks/useUser';
 import SignInModal from '../components/SignInModal';
-import { platformDetection } from '../utils/platformDetection';
 
 const CreatorOnboardingPage: React.FC = () => {
   const router = useRouter();
   const currentUser = useUser();
   const [isSignInModalOpen, setIsSignInModalOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
-  const [isIOS, setIsIOS] = useState(false);
   const [embedOrigin, setEmbedOrigin] = useState<string>('');
 
   useEffect(() => {
-    setIsIOS(platformDetection.isIOS());
     // Used for YouTube embed "origin" param (helps reduce embed friction on some networks)
     if (typeof window !== 'undefined') {
       setEmbedOrigin(window.location.origin);
     }
   }, []);
-
-  // If iOS user lands here directly, redirect them to App Store
-  useEffect(() => {
-    if (isIOS) {
-      window.location.href = 'https://apps.apple.com/ca/app/pulse-community-workouts/id6451497729';
-    }
-  }, [isIOS]);
 
   const handleGetStarted = () => {
     if (!currentUser) {
@@ -116,18 +106,6 @@ const CreatorOnboardingPage: React.FC = () => {
       ]
     }
   ];
-
-  // Show loading if detecting iOS
-  if (isIOS) {
-    return (
-      <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-12 h-12 border-4 border-[#E0FE10] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-zinc-400">Redirecting to App Store...</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <>

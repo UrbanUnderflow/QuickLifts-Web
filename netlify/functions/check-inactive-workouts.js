@@ -80,6 +80,7 @@ exports.handler = async (event) => {
 
     const batch = db.batch();
     const updatesToCommit = []; // Track refs to update
+    const usersToUpdate = new Set(); // Track unique user IDs to update in users collection
 
     try {
         // Query for active user challenges
@@ -119,6 +120,7 @@ exports.handler = async (event) => {
 
                 // Mark for update in the batch
                 updatesToCommit.push(doc.ref);
+                usersToUpdate.add(userId); // Track user to update in users collection
 
                 // Prepare and send notification
                 const fcmToken = challengeData.fcmToken; // Get FCM token from the challenge doc
@@ -147,6 +149,7 @@ exports.handler = async (event) => {
                  console.warn(`User challenge ${docId} (User: ${userId}) is active but has no 'lastActive' timestamp. Marking inactive without notification.`);
                  // Mark for update in the batch because lastActive is missing
                  updatesToCommit.push(doc.ref);
+                 usersToUpdate.add(userId); // Track user to update in users collection
                  // Do not increment inactiveUsersCount or send notification for this case
             } else {
                 // lastActiveTimestamp exists and is within the threshold - do nothing
@@ -163,8 +166,19 @@ exports.handler = async (event) => {
                     updatedAt: admin.firestore.FieldValue.serverTimestamp() // Use server timestamp
                 });
             });
+            
+            // Also update the users collection for each unique user
+            console.log(`Updating ${usersToUpdate.size} user documents in users collection.`);
+            usersToUpdate.forEach(userId => {
+                const userRef = db.collection('users').doc(userId);
+                batch.update(userRef, {
+                    isCurrentlyActive: false,
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                });
+            });
+            
             await batch.commit();
-            console.log('Batch update successful.');
+            console.log('Batch update successful (user-challenge and users collections updated).');
         } else {
             console.log('No user challenges needed to be marked as inactive.');
         }

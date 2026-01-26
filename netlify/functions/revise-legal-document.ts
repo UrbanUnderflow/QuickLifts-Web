@@ -18,13 +18,16 @@ const handler: Handler = async (event) => {
 
   try {
     const body = JSON.parse(event.body || '{}');
-    const { documentId, currentContent, revisionPrompt, documentType, originalPrompt, requiresSignature } = body;
+    const { documentId, currentContent, revisionPrompt, documentType, originalPrompt, requiresSignature, mode, excerpts } = body;
 
-    if (!currentContent) {
+    const hasExcerpts = Array.isArray(excerpts) && excerpts.some((e: any) => typeof e === 'string' && e.trim().length > 0);
+    const shouldUsePatches = mode === 'patches' && hasExcerpts;
+
+    if (!currentContent && !shouldUsePatches) {
       return { 
         statusCode: 400, 
         headers, 
-        body: JSON.stringify({ error: 'Missing required field: currentContent' }) 
+        body: JSON.stringify({ error: 'Missing required field: currentContent (or provide mode=\"patches\" with excerpts[])' }) 
       };
     }
 
@@ -46,18 +49,13 @@ const handler: Handler = async (event) => {
       };
     }
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${openaiApiKey}`
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        messages: [
-          {
-            role: 'system',
-            content: `You are a document revision assistant for professional business/legal/technical documents. You will receive:
+    const abortController = new AbortController();
+    const timeout = setTimeout(() => abortController.abort(), 25_000);
+
+    const buildLegacyMessages = () => ([
+      {
+        role: 'system' as const,
+        content: `You are a document revision assistant for professional business/legal/technical documents. You will receive:
 1) an existing document
 2) the original context/prompt
 3) revision instructions
@@ -98,10 +96,10 @@ OUTPUT FORMAT (STRICT):
 
 QUALITY BAR:
 - The result should read as if a human authored a single cohesive document, not a stitched-together paste.`
-          },
-          {
-            role: 'user',
-            content: `Here is the original document that needs revision:
+      },
+      {
+        role: 'user' as const,
+        content: `Here is the original document that needs revision:
 
 ---
 ${currentContent}
@@ -114,15 +112,85 @@ Please apply the following revisions:
 ${revisionPrompt}
 
 Return the complete revised document with all changes applied.`
-          }
-        ],
-        temperature: 0.2,
-        // Increased from 4000 to 16384 (GPT-4o max) to prevent document truncation
-        // TODO: Consider implementing a diff-based approach where we only send changed sections
-        // and merge locally to reduce token usage for very large documents
-        max_tokens: 16384
-      })
+      }
+    ]);
+
+    const buildPatchMessages = () => {
+      const safeExcerpts = (Array.isArray(excerpts) ? excerpts : [])
+        .filter((e: any) => typeof e === 'string' && e.trim().length > 0)
+        .slice(0, 10)
+        .map((e: string) => e.length > 5000 ? e.slice(0, 5000) : e);
+
+      const system = `You are a document revision assistant. You will receive:
+1) EXCERPTS from a longer document (NOT the full document)
+2) the original context/prompt (optional)
+3) revision instructions
+
+Your job is to return a JSON object ONLY (no markdown) containing patches that can be applied to the FULL document locally.
+
+CRITICAL RULES:
+- Anchors MUST be copied verbatim from the provided EXCERPTS (exact substring match).
+- Prefer patches that target a single, specific location using unique anchors.
+- Do NOT invent anchors and do NOT paraphrase anchors.
+- Keep patches as small as possible while fully applying the revision.
+
+PATCH TYPES (choose the safest):
+- replace_exact: { "type":"replace_exact","old_text":"...","new_text":"..." }
+- replace_between: { "type":"replace_between","start_anchor":"...","end_anchor":"...","new_text":"...","keep_anchors":true }
+- insert_after: { "type":"insert_after","after_anchor":"...","insert_text":"..." }
+- delete_between: { "type":"delete_between","start_anchor":"...","end_anchor":"...","keep_anchors":true }
+
+OUTPUT FORMAT (STRICT):
+{ "patches": [ ... ], "summary": "short optional" }
+
+NOTES:
+- Use keep_anchors=true unless you are certain anchors should be removed.
+- If you need to replace a paragraph, use replace_exact with the exact old paragraph text if it is unique.`;
+
+      const user = `EXCERPTS (verbatim, use these for anchors only):
+
+${safeExcerpts.map((e: string, i: number) => `--- EXCERPT ${i + 1} ---\n${e}\n--- END EXCERPT ${i + 1} ---`).join('\n\n')}
+
+Original context/prompt for this document: ${originalPrompt || 'Not provided'}
+Document type: ${documentType || 'Legal Document'}
+requiresSignature: ${Boolean(requiresSignature) ? 'TRUE' : 'FALSE'}
+
+Revision instructions:
+${revisionPrompt}
+
+Return ONLY the JSON object.`;
+
+      return [
+        { role: 'system' as const, content: system },
+        { role: 'user' as const, content: user },
+      ];
+    };
+
+    const requestBody = shouldUsePatches
+      ? {
+          model: 'gpt-4o-mini',
+          messages: buildPatchMessages(),
+          temperature: 0.2,
+          max_tokens: 1200,
+          response_format: { type: 'json_object' },
+        }
+      : {
+          model: 'gpt-4o',
+          messages: buildLegacyMessages(),
+          temperature: 0.2,
+          max_tokens: 16384,
+        };
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${openaiApiKey}`
+      },
+      body: JSON.stringify(requestBody),
+      signal: abortController.signal,
     });
+    clearTimeout(timeout);
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ error: { message: 'Unknown error' } }));
@@ -161,25 +229,52 @@ Return the complete revised document with all changes applied.`
     }
 
     const data = await response.json();
-    const revisedContent = data.choices[0]?.message?.content;
+    const content = data.choices[0]?.message?.content;
 
-    if (!revisedContent) {
+    if (!content) {
       return { 
         statusCode: 500, 
         headers, 
-        body: JSON.stringify({ error: 'No revised content generated' }) 
+        body: JSON.stringify({ error: shouldUsePatches ? 'No patch JSON generated' : 'No revised content generated' }) 
       };
     }
 
-    // Extract title if it changed
+    // Patch mode: parse JSON and return patches
+    if (shouldUsePatches) {
+      try {
+        const parsed = JSON.parse(content);
+        const patches = Array.isArray(parsed?.patches) ? parsed.patches : [];
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({
+            success: true,
+            mode: 'patches',
+            patches,
+            summary: typeof parsed?.summary === 'string' ? parsed.summary : undefined,
+            documentId,
+          }),
+        };
+      } catch (e: any) {
+        return {
+          statusCode: 500,
+          headers,
+          body: JSON.stringify({
+            error: 'Failed to parse patch JSON from model output',
+            detail: process.env.NODE_ENV === 'development' ? (e?.message || String(e)) : undefined,
+          }),
+        };
+      }
+    }
+
+    const revisedContent = content;
+
+    // Extract title if it changed (legacy mode)
     const lines = revisedContent.split('\n').filter((line: string) => line.trim());
     let title = null;
-    
     if (lines[0] && !lines[0].includes('EFFECTIVE DATE') && !lines[0].toLowerCase().startsWith('this')) {
       const potentialTitle = lines[0].replace(/^#+\s*/, '').replace(/\*+/g, '').trim();
-      if (potentialTitle.length < 100) {
-        title = potentialTitle;
-      }
+      if (potentialTitle.length < 100) title = potentialTitle;
     }
 
     return {
@@ -187,6 +282,7 @@ Return the complete revised document with all changes applied.`
       headers,
       body: JSON.stringify({
         success: true,
+        mode: 'full',
         content: revisedContent,
         title: title,
         documentId: documentId
@@ -195,11 +291,14 @@ Return the complete revised document with all changes applied.`
 
   } catch (error) {
     console.error('Error revising legal document:', error);
+    const isAbort = (error as any)?.name === 'AbortError';
     return { 
       statusCode: 500, 
       headers, 
       body: JSON.stringify({ 
-        error: error instanceof Error ? error.message : 'Failed to revise document' 
+        error: isAbort
+          ? 'TimeoutError: Task timed out after 25 seconds'
+          : (error instanceof Error ? error.message : 'Failed to revise document')
       }) 
     };
   }
