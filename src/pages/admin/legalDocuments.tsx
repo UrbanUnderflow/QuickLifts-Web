@@ -175,7 +175,7 @@ const LegalDocumentsAdmin: React.FC = () => {
     excerptCounts?: { first: number; retry?: number };
     patchCounts?: { first: number; retry?: number };
     patchFailures?: Array<{ attempt: 'first' | 'retry'; failures: Array<{ patchIndex: number; reason: string }> }>;
-    mode?: 'patches' | 'full';
+    mode?: 'patches' | 'full' | 'error';
   } | null>(null);
   const [showRevisionDebug, setShowRevisionDebug] = useState(false);
   
@@ -643,7 +643,7 @@ const LegalDocumentsAdmin: React.FC = () => {
           } else {
             // Automatic retry once with more context (more sections + intro/outro)
             const excerpts2 = buildRevisionExcerpts(editingDocument.content, editPrompt, { maxSections: 6, includeIntroOutro: true });
-            debugInfo.excerptCounts = { ...debugInfo.excerptCounts, retry: excerpts2.length };
+            debugInfo.excerptCounts = { first: debugInfo.excerptCounts?.first ?? 0, retry: excerpts2.length };
             debugInfo.excerptsUsed = [
               ...(debugInfo.excerptsUsed || []),
               ...excerpts2.map((e, i) => `Retry Excerpt ${i + 1}: ${e.substring(0, 100)}...`),
@@ -1181,7 +1181,7 @@ const LegalDocumentsAdmin: React.FC = () => {
       
       // If line has box-drawing characters, preserve it with monospace (even if not in a full diagram block)
       // This catches individual diagram lines that might have been missed by the block detection
-      if (/[┌┐└┘│─├┤┬┴┼]/.test(line) || /^[\+\|][\-\|]+[\+\|]/.test(trimmed) || /^\|[\s\S]*\|$/.test(trimmed)) {
+      if (/[┌┐└┘│─├┤┬┴┼]/.test(line) || /^[\+\|][\-\|]+[\+\|]/.test(trimmedLine) || /^\|[\s\S]*\|$/.test(trimmedLine)) {
         const escapedLine = line
           .replace(/&/g, '&amp;')
           .replace(/</g, '&lt;')
