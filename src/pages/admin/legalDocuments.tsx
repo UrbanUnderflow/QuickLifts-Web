@@ -4,6 +4,8 @@ import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import { collection, getDocs, query, orderBy, addDoc, deleteDoc, doc, Timestamp, updateDoc, where, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
 import { FileText, Download, Trash2, Loader2, Sparkles, Clock, AlertCircle, CheckCircle, RefreshCw, Eye, ChevronUp, Edit3, ClipboardCheck, X, AlertTriangle, CheckCircle2, Send, Mail, Check, PenTool, Share2, Copy, Paperclip, Link2 } from 'lucide-react';
+import { applyDocumentPatches, type DocumentPatch } from '../../utils/documentPatches';
+import { formatDiagram, previewFormattedDiagram, extractSectionHeaders, insertDiagramIntoDocument } from '../../utils/diagramFormatter';
 
 // Types
 interface LegalDocument {
@@ -168,6 +170,22 @@ const LegalDocumentsAdmin: React.FC = () => {
   const [editRequiresSignature, setEditRequiresSignature] = useState<boolean>(false);
   const [isRevising, setIsRevising] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
+  const [revisionDebugInfo, setRevisionDebugInfo] = useState<{
+    excerptsUsed?: string[];
+    excerptCounts?: { first: number; retry?: number };
+    patchCounts?: { first: number; retry?: number };
+    patchFailures?: Array<{ attempt: 'first' | 'retry'; failures: Array<{ patchIndex: number; reason: string }> }>;
+    mode?: 'patches' | 'full';
+  } | null>(null);
+  const [showRevisionDebug, setShowRevisionDebug] = useState(false);
+  
+  // Diagram Insert State
+  const [showDiagramSection, setShowDiagramSection] = useState(false);
+  const [diagramInput, setDiagramInput] = useState('');
+  const [diagramPosition, setDiagramPosition] = useState<'start' | 'end' | string>('end');
+  const [diagramPreview, setDiagramPreview] = useState('');
+  const [availableHeaders, setAvailableHeaders] = useState<string[]>([]);
+  const [contentManuallyModified, setContentManuallyModified] = useState(false);
 
   // Audit Modal State
   const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
@@ -370,7 +388,167 @@ const LegalDocumentsAdmin: React.FC = () => {
     setEditTitle(document.title);
     setEditRequiresSignature(Boolean(document.requiresSignature ?? SIGNATURE_REQUIRED_TYPES.includes(document.documentType)));
     setEditError(null);
+    setRevisionDebugInfo(null);
+    setShowRevisionDebug(false);
+    // Reset diagram state
+    setShowDiagramSection(false);
+    setDiagramInput('');
+    setDiagramPosition('end');
+    setDiagramPreview('');
+    setContentManuallyModified(false);
+    // Extract section headers for insertion position dropdown
+    setAvailableHeaders(extractSectionHeaders(document.content));
     setIsEditModalOpen(true);
+  };
+
+  // Handle diagram input change and auto-preview
+  const handleDiagramInputChange = (value: string) => {
+    setDiagramInput(value);
+    // Auto-generate preview when input changes
+    if (value.trim()) {
+      const preview = previewFormattedDiagram(value);
+      setDiagramPreview(preview);
+    } else {
+      setDiagramPreview('');
+    }
+  };
+
+  // Insert formatted diagram into the document
+  const handleInsertDiagram = () => {
+    if (!editingDocument || !diagramInput.trim()) {
+      return;
+    }
+    
+    const formattedDiagram = formatDiagram(diagramInput);
+    
+    const position = diagramPosition === 'start' || diagramPosition === 'end' 
+      ? diagramPosition 
+      : { afterHeader: diagramPosition };
+    
+    const newContent = insertDiagramIntoDocument(
+      editingDocument.content,
+      formattedDiagram,
+      position
+    );
+    
+    // Verify content actually changed
+    if (newContent === editingDocument.content) {
+      setMessage({ type: 'error', text: 'Diagram insertion failed. Please check the insertion position and try again.' });
+      return;
+    }
+    
+    // Update the editing document with new content
+    setEditingDocument({
+      ...editingDocument,
+      content: newContent,
+    });
+    
+    // Mark that content was manually modified (so save doesn't call AI revision)
+    setContentManuallyModified(true);
+    
+    // Clear diagram input after insertion
+    setDiagramInput('');
+    setDiagramPreview('');
+    setShowDiagramSection(false);
+    
+    setMessage({ type: 'success', text: 'Diagram inserted into document. Click Save to apply changes.' });
+  };
+
+  // Build small excerpts for patch-based revision (reduce tokens + latency)
+  const buildRevisionExcerpts = (fullText: string, revisionInstructions: string, options?: { maxSections?: number; includeIntroOutro?: boolean }): string[] => {
+    const maxSections = Math.max(1, options?.maxSections ?? 3);
+    const includeIntroOutro = options?.includeIntroOutro ?? false;
+
+    const text = String(fullText || '');
+    const prompt = String(revisionInstructions || '');
+    const lowerText = text.toLowerCase();
+    const lowerPrompt = prompt.toLowerCase();
+
+    // Split into sections by markdown H2 headers. Keep header in each section.
+    // If no headers exist, fall back to chunking.
+    const headerMatches = [...text.matchAll(/^##\s+.+$/gm)];
+    const sections: { start: number; end: number; content: string; header: string }[] = [];
+
+    if (headerMatches.length > 0) {
+      for (let i = 0; i < headerMatches.length; i++) {
+        const start = headerMatches[i].index ?? 0;
+        const end = i + 1 < headerMatches.length ? (headerMatches[i + 1].index ?? text.length) : text.length;
+        const content = text.slice(start, end).trim();
+        const header = (headerMatches[i][0] || '').trim();
+        if (content) sections.push({ start, end, content, header });
+      }
+    } else {
+      // Chunk into ~2500 char blocks if the doc isn't structured with headers.
+      const CHUNK = 2500;
+      for (let i = 0; i < text.length; i += CHUNK) {
+        const content = text.slice(i, i + CHUNK).trim();
+        if (content) sections.push({ start: i, end: Math.min(text.length, i + CHUNK), content, header: `CHUNK_${Math.floor(i / CHUNK) + 1}` });
+      }
+    }
+
+    // Keyword scoring
+    const rawTokens = lowerPrompt
+      .replace(/[^a-z0-9\s\-\.\#]/g, ' ')
+      .split(/\s+/)
+      .map(t => t.trim())
+      .filter(Boolean);
+    const stop = new Set(['the', 'a', 'an', 'and', 'or', 'to', 'of', 'in', 'for', 'on', 'with', 'by', 'be', 'is', 'are', 'as', 'at', 'from', 'it', 'this', 'that', 'these', 'those']);
+    const keywords = Array.from(new Set(rawTokens.filter(t => t.length >= 3 && !stop.has(t)))).slice(0, 24);
+
+    const numberHints = (lowerPrompt.match(/\b(section\s+)?(\d{1,3})\b/g) || [])
+      .map(m => m.replace(/section\s+/g, '').trim())
+      .filter(Boolean);
+
+    const scored = sections.map((s, idx) => {
+      const lowerSection = s.content.toLowerCase();
+      let score = 0;
+      for (const k of keywords) {
+        if (!k) continue;
+        // Weight header hits a bit higher
+        if (s.header.toLowerCase().includes(k)) score += 4;
+        const occurrences = (lowerSection.match(new RegExp(`\\b${k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'g')) || []).length;
+        score += Math.min(10, occurrences);
+      }
+      for (const n of numberHints) {
+        if (!n) continue;
+        if (s.header.toLowerCase().includes(n)) score += 6;
+        if (lowerSection.includes(` ${n}.`) || lowerSection.includes(`\n${n}.`) || lowerSection.includes(`#${n}`)) score += 4;
+      }
+      // Slight bias toward earlier sections when uncertain
+      score += Math.max(0, 2 - Math.floor(idx / 3));
+      return { idx, score };
+    });
+
+    scored.sort((a, b) => b.score - a.score);
+    const pickedIdxs = new Set<number>();
+    for (const s of scored) {
+      if (pickedIdxs.size >= maxSections) break;
+      if (s.score <= 0 && pickedIdxs.size > 0) break;
+      pickedIdxs.add(s.idx);
+      // Include a neighbor section for anchor stability when possible
+      if (pickedIdxs.size < maxSections) {
+        if (s.idx - 1 >= 0) pickedIdxs.add(s.idx - 1);
+        if (s.idx + 1 < sections.length) pickedIdxs.add(s.idx + 1);
+      }
+      if (pickedIdxs.size >= maxSections) break;
+    }
+
+    const idxs = Array.from(pickedIdxs).sort((a, b) => a - b).slice(0, Math.max(maxSections, 1));
+    const excerpts = idxs.map(i => sections[i]?.content).filter(Boolean) as string[];
+
+    if (includeIntroOutro) {
+      const intro = text.slice(0, 1200).trim();
+      const outro = text.slice(Math.max(0, text.length - 1200)).trim();
+      if (intro && !excerpts.some(e => e.startsWith(intro.slice(0, 80)))) excerpts.unshift(intro);
+      if (outro && !excerpts.some(e => e.includes(outro.slice(-80)))) excerpts.push(outro);
+    }
+
+    // If the doc is tiny, just return it (patch mode still works).
+    if (text.length <= 6000) return [text];
+
+    // Ensure we never accidentally send the whole doc for big inputs.
+    // If excerpts got too large, trim each excerpt to 4000 chars.
+    return excerpts.map(e => (e.length > 4000 ? e.slice(0, 4000) : e));
   };
 
   // Handle Document Revision
@@ -380,14 +558,14 @@ const LegalDocumentsAdmin: React.FC = () => {
       return;
     }
 
-    // Allow saving if either title changed OR revision prompt provided
+    // Allow saving if either title changed, revision prompt provided, signature changed, or content manually modified
     const titleChanged = editTitle.trim() !== editingDocument.title;
     const hasRevisionPrompt = editPrompt.trim().length > 0;
     const signatureChanged =
       Boolean(editRequiresSignature) !== Boolean(editingDocument.requiresSignature ?? SIGNATURE_REQUIRED_TYPES.includes(editingDocument.documentType));
 
-    if (!titleChanged && !hasRevisionPrompt && !signatureChanged) {
-      setMessage({ type: 'error', text: 'Please enter a new title, revision instructions, or change signature requirement' });
+    if (!titleChanged && !hasRevisionPrompt && !signatureChanged && !contentManuallyModified) {
+      setMessage({ type: 'error', text: 'Please enter a new title, revision instructions, change signature requirement, or insert a diagram' });
       return;
     }
 
@@ -397,41 +575,127 @@ const LegalDocumentsAdmin: React.FC = () => {
     try {
       let newContent = editingDocument.content;
       
-      // Only call API if there's a revision prompt
-      if (hasRevisionPrompt) {
-        const response = await fetch('/.netlify/functions/revise-legal-document', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            documentId: editingDocument.id,
-            currentContent: editingDocument.content,
-            revisionPrompt: editPrompt,
-            documentType: editingDocument.documentType,
-            originalPrompt: editingDocument.prompt,
-            requiresSignature: editRequiresSignature
-          })
-        });
+      // Only call API if there's a revision prompt AND content wasn't manually modified
+      // (If content was manually modified via diagram insert, we just save the new content directly)
+      if (hasRevisionPrompt && !contentManuallyModified) {
+        const requestOnce = async (payload: any) => {
+          const response = await fetch('/.netlify/functions/revise-legal-document', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
 
-        // Handle non-JSON responses (e.g., timeouts, server errors)
-        let result;
-        const contentType = response.headers.get('content-type');
-        if (contentType && contentType.includes('application/json')) {
-          try {
-            result = await response.json();
-          } catch (parseError) {
+          // Handle non-JSON responses (e.g., timeouts, server errors)
+          let result: any;
+          const contentType = response.headers.get('content-type');
+          if (contentType && contentType.includes('application/json')) {
+            try {
+              result = await response.json();
+            } catch (parseError) {
+              const text = await response.text();
+              throw new Error(`Server returned invalid JSON. Response: ${text.substring(0, 200)}`);
+            }
+          } else {
             const text = await response.text();
-            throw new Error(`Server returned invalid JSON. Response: ${text.substring(0, 200)}`);
+            throw new Error(`Server error (${response.status}): ${text.substring(0, 200)}`);
           }
-        } else {
-          const text = await response.text();
-          throw new Error(`Server error (${response.status}): ${text.substring(0, 200)}`);
+
+          if (!response.ok) {
+            throw new Error(result.error || `Failed to revise document (HTTP ${response.status})`);
+          }
+          return result;
+        };
+
+        const basePayload = {
+          documentId: editingDocument.id,
+          revisionPrompt: editPrompt,
+          documentType: editingDocument.documentType,
+          originalPrompt: editingDocument.prompt,
+          requiresSignature: editRequiresSignature,
+        };
+
+        // Attempt 1: patch-mode with small excerpts
+        const excerpts1 = buildRevisionExcerpts(editingDocument.content, editPrompt, { maxSections: 3, includeIntroOutro: false });
+        let result: any;
+        let debugInfo: typeof revisionDebugInfo = {
+          excerptsUsed: excerpts1.map((e, i) => `Excerpt ${i + 1}: ${e.substring(0, 100)}...`),
+          excerptCounts: { first: excerpts1.length },
+          mode: 'patches',
+        };
+        
+        try {
+          result = await requestOnce({ ...basePayload, mode: 'patches', excerpts: excerpts1 });
+        } catch (e) {
+          // If the request itself failed (timeout/server), let it bubble up
+          setRevisionDebugInfo({ ...debugInfo, mode: 'error' });
+          throw e;
         }
 
-        if (!response.ok) {
-          throw new Error(result.error || `Failed to revise document (HTTP ${response.status})`);
+        // If patch-mode returns patches, apply locally; otherwise fall back to full content response.
+        if (Array.isArray(result?.patches) && result.patches.length > 0) {
+          const patches = result.patches as DocumentPatch[];
+          const applied = applyDocumentPatches(editingDocument.content, patches);
+          debugInfo.patchCounts = { first: patches.length };
+
+          if (applied.failures.length === 0) {
+            newContent = applied.text;
+            setRevisionDebugInfo(debugInfo);
+          } else {
+            // Automatic retry once with more context (more sections + intro/outro)
+            const excerpts2 = buildRevisionExcerpts(editingDocument.content, editPrompt, { maxSections: 6, includeIntroOutro: true });
+            debugInfo.excerptCounts = { ...debugInfo.excerptCounts, retry: excerpts2.length };
+            debugInfo.excerptsUsed = [
+              ...(debugInfo.excerptsUsed || []),
+              ...excerpts2.map((e, i) => `Retry Excerpt ${i + 1}: ${e.substring(0, 100)}...`),
+            ];
+            debugInfo.patchFailures = [{
+              attempt: 'first',
+              failures: applied.failures.slice(0, 10).map(f => ({ patchIndex: f.patchIndex, reason: f.reason })),
+            }];
+            
+            const retry = await requestOnce({ ...basePayload, mode: 'patches', excerpts: excerpts2 });
+            if (Array.isArray(retry?.patches) && retry.patches.length > 0) {
+              const retryApplied = applyDocumentPatches(editingDocument.content, retry.patches as DocumentPatch[]);
+              debugInfo.patchCounts = { ...debugInfo.patchCounts, retry: retry.patches.length };
+              
+              if (retryApplied.failures.length === 0) {
+                newContent = retryApplied.text;
+                setRevisionDebugInfo(debugInfo);
+              } else {
+                debugInfo.patchFailures.push({
+                  attempt: 'retry',
+                  failures: retryApplied.failures.slice(0, 10).map(f => ({ patchIndex: f.patchIndex, reason: f.reason })),
+                });
+                setRevisionDebugInfo(debugInfo);
+                // Graceful failure: include limited diagnostics in console (dev only)
+                if (process.env.NODE_ENV === 'development') {
+                  // eslint-disable-next-line no-console
+                  console.warn('[legalDocuments] Patch apply failed', {
+                    failures: retryApplied.failures.slice(0, 5),
+                    firstAttemptFailures: applied.failures.slice(0, 5),
+                  });
+                }
+                throw new Error('Could not apply AI changes to the document. Try a more specific revision instruction (e.g., name the exact section header) and retry.');
+              }
+            } else if (typeof retry?.content === 'string' && retry.content.trim().length > 0) {
+              // Back-compat: full revised content
+              debugInfo.mode = 'full';
+              setRevisionDebugInfo(debugInfo);
+              newContent = retry.content;
+            } else {
+              setRevisionDebugInfo(debugInfo);
+              throw new Error('AI did not return a usable patch or revised content.');
+            }
+          }
+        } else if (typeof result?.content === 'string' && result.content.trim().length > 0) {
+          // Back-compat: full revised content
+          debugInfo.mode = 'full';
+          setRevisionDebugInfo(debugInfo);
+          newContent = result.content;
+        } else {
+          setRevisionDebugInfo(debugInfo);
+          throw new Error('AI did not return a usable patch or revised content.');
         }
-        
-        newContent = result.content;
       }
 
       // Update document with revised content and/or new title
@@ -448,8 +712,13 @@ const LegalDocumentsAdmin: React.FC = () => {
       };
       updateData.requiresSignature = Boolean(editRequiresSignature);
       
-      if (hasRevisionPrompt) {
+      // Update content if there's a revision prompt OR if content was manually modified (e.g., diagram inserted)
+      if (hasRevisionPrompt || contentManuallyModified) {
         updateData.content = newContent;
+      }
+      
+      // Only update revision history if there's an actual revision prompt
+      if (hasRevisionPrompt) {
         // Convert existing revision history timestamps to Timestamp if needed
         const convertedHistory = revisionHistory.map(rev => ({
           prompt: rev.prompt,
@@ -462,21 +731,20 @@ const LegalDocumentsAdmin: React.FC = () => {
 
       await updateDoc(doc(db, 'legal-documents', editingDocument.id), updateData);
 
-      setMessage({ type: 'success', text: hasRevisionPrompt ? 'Document revised successfully!' : 'Saved successfully!' });
+      setMessage({ type: 'success', text: hasRevisionPrompt && !contentManuallyModified ? 'Document revised successfully!' : 'Saved successfully!' });
       setIsEditModalOpen(false);
       setEditingDocument(null);
       setEditPrompt('');
       setEditTitle('');
       setEditRequiresSignature(false);
+      setContentManuallyModified(false);
       loadDocuments();
     } catch (error) {
       console.error('Error revising document:', error);
       let errorMessage = 'Failed to revise document';
       if (error instanceof Error) {
         errorMessage = error.message;
-        // Check for Firestore-specific errors
         if (error.message.includes('pattern') || error.message.includes('invalid') || error.message.includes('permission')) {
-          console.error('Firestore error details:', error);
           errorMessage = `Firestore error: ${error.message}. Please check that all fields are valid.`;
         }
       }
@@ -730,6 +998,77 @@ const LegalDocumentsAdmin: React.FC = () => {
     // Normalize line endings
     let result = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
     
+    // First, extract and preserve code blocks (for ASCII diagrams)
+    const codeBlocks: string[] = [];
+    const codeBlockPlaceholder = '___CODE_BLOCK___';
+    result = result.replace(/```[\s\S]*?```/g, (match) => {
+      const index = codeBlocks.length;
+      codeBlocks.push(match);
+      return `${codeBlockPlaceholder}${index}${codeBlockPlaceholder}`;
+    });
+    
+    // Also detect and preserve ASCII diagrams that are NOT in code blocks
+    // Look for patterns like box-drawing characters, numbered items with boxes, etc.
+    const allLines = result.split('\n');
+    const diagramBlocks: Array<{ start: number; end: number; placeholder: string }> = [];
+    let diagramStart = -1;
+    let diagramLines: string[] = [];
+    
+    for (let i = 0; i < allLines.length; i++) {
+      const line = allLines[i];
+      const trimmed = line.trim();
+      
+      // Check if this line looks like part of an ASCII diagram
+      // More lenient detection - any line with box chars, or patterns like "DATA →", or numbered items with vertical bars
+      const hasBoxChars = /[┌┐└┘│─├┤┬┴┼]/.test(line) || /^[\+\|][\-\|]+[\+\|]/.test(trimmed);
+      const hasDiagramTitle = /(DATA\s*→|DELIVERY\s*LOOP|Implementation\s+Diagram)/i.test(trimmed);
+      const hasNumberedBox = /^\d+\)\s+.*\|/.test(trimmed) || /^\|\s*\d+\)/.test(trimmed);
+      const hasBoxStructure = /^\|[\s\S]*\|$/.test(trimmed) && trimmed.length > 10;
+      
+      if (hasBoxChars || hasDiagramTitle || hasNumberedBox || hasBoxStructure) {
+        if (diagramStart === -1) {
+          diagramStart = i;
+          diagramLines = [];
+        }
+        diagramLines.push(line);
+      } else if (diagramStart !== -1) {
+        // We were in a diagram but hit a non-diagram line
+        // If we have at least 5 lines, it's probably a diagram
+        if (diagramLines.length >= 5) {
+          const diagramContent = diagramLines.join('\n');
+          const index = codeBlocks.length;
+          codeBlocks.push(diagramContent);
+          diagramBlocks.push({ 
+            start: diagramStart, 
+            end: i - 1, 
+            placeholder: `${codeBlockPlaceholder}${index}${codeBlockPlaceholder}` 
+          });
+        }
+        diagramStart = -1;
+        diagramLines = [];
+      }
+    }
+    
+    // Handle diagram at end of document
+    if (diagramStart !== -1 && diagramLines.length >= 5) {
+      const diagramContent = diagramLines.join('\n');
+      const index = codeBlocks.length;
+      codeBlocks.push(diagramContent);
+      diagramBlocks.push({ 
+        start: diagramStart, 
+        end: allLines.length - 1, 
+        placeholder: `${codeBlockPlaceholder}${index}${codeBlockPlaceholder}` 
+      });
+    }
+    
+    // Replace detected diagram blocks with placeholders (in reverse order to preserve indices)
+    const newLines = [...allLines];
+    for (let i = diagramBlocks.length - 1; i >= 0; i--) {
+      const block = diagramBlocks[i];
+      newLines.splice(block.start, block.end - block.start + 1, block.placeholder);
+    }
+    result = newLines.join('\n');
+    
     // Convert **bold** to <strong>
     result = result.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
     
@@ -754,6 +1093,31 @@ const LegalDocumentsAdmin: React.FC = () => {
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       const trimmedLine = line.trim();
+      
+      // Check for code block placeholder
+      const codeBlockMatch = line.match(new RegExp(`${codeBlockPlaceholder}(\\d+)${codeBlockPlaceholder}`));
+      if (codeBlockMatch) {
+        // Close any open list
+        if (inList) {
+          processedLines.push(listType === 'ol' ? '</ol>' : '</ul>');
+          inList = false;
+          listType = null;
+        }
+        
+        // Extract code block content (remove ``` markers)
+        const codeBlockIndex = parseInt(codeBlockMatch[1], 10);
+        const codeBlockContent = codeBlocks[codeBlockIndex];
+        const codeContent = codeBlockContent
+          .replace(/^```[\s\n]*/, '')  // Remove opening ```
+          .replace(/[\s\n]*```$/, '')  // Remove closing ```
+          .replace(/&/g, '&amp;')      // Escape HTML entities
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;');
+        
+        // Wrap in <pre> tag with monospace styling
+        processedLines.push(`<pre class="ascii-diagram">${codeContent}</pre>`);
+        continue;
+      }
       
       // Skip empty lines but close lists
       if (!trimmedLine) {
@@ -812,6 +1176,17 @@ const LegalDocumentsAdmin: React.FC = () => {
       // Pass through headers and hr unchanged
       if (trimmedLine.startsWith('<h') || trimmedLine === '<hr>') {
         processedLines.push(trimmedLine);
+        continue;
+      }
+      
+      // If line has box-drawing characters, preserve it with monospace (even if not in a full diagram block)
+      // This catches individual diagram lines that might have been missed by the block detection
+      if (/[┌┐└┘│─├┤┬┴┼]/.test(line) || /^[\+\|][\-\|]+[\+\|]/.test(trimmed) || /^\|[\s\S]*\|$/.test(trimmed)) {
+        const escapedLine = line
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;');
+        processedLines.push(`<pre class="ascii-diagram" style="margin: 0; padding: 4px 0; background: transparent; border: none;">${escapedLine}</pre>`);
         continue;
       }
       
@@ -1052,6 +1427,19 @@ const LegalDocumentsAdmin: React.FC = () => {
             .exhibits-reference ul {
               margin-bottom: 0;
             }
+            .ascii-diagram {
+              font-family: 'Courier New', Courier, monospace;
+              font-size: 9pt;
+              line-height: 1.4;
+              white-space: pre;
+              overflow-x: auto;
+              background: #f9f9f9;
+              border: 1px solid #ddd;
+              border-radius: 4px;
+              padding: 16px;
+              margin: 20px 0;
+              color: #222;
+            }
             .footer {
               margin-top: 60px;
               padding-top: 20px;
@@ -1263,6 +1651,19 @@ const LegalDocumentsAdmin: React.FC = () => {
               margin-top: 0;
               text-transform: uppercase;
               font-size: 12pt;
+            }
+            .ascii-diagram {
+              font-family: 'Courier New', Courier, monospace;
+              font-size: 9pt;
+              line-height: 1.4;
+              white-space: pre;
+              overflow-x: auto;
+              background: #f9f9f9;
+              border: 1px solid #ddd;
+              border-radius: 4px;
+              padding: 16px;
+              margin: 20px 0;
+              color: #222;
             }
             .footer {
               margin-top: 60px;
@@ -1811,13 +2212,23 @@ const LegalDocumentsAdmin: React.FC = () => {
 
               <div className="mb-4">
                 <label className="block text-sm font-medium text-zinc-400 mb-2">
-                  Current Document Preview
+                  Document Content <span className="text-zinc-500 font-normal">(editable)</span>
                 </label>
-                <div className="p-4 bg-zinc-900 rounded-xl border border-zinc-700 max-h-40 overflow-y-auto">
-                  <p className="text-sm text-zinc-400 whitespace-pre-wrap line-clamp-6">
-                    {editingDocument.content.substring(0, 500)}...
-                  </p>
-                </div>
+                <textarea
+                  value={editingDocument.content}
+                  onChange={(e) => {
+                    setEditingDocument({
+                      ...editingDocument,
+                      content: e.target.value,
+                    });
+                    setContentManuallyModified(true);
+                  }}
+                  className="w-full h-64 px-4 py-3 bg-zinc-900 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500 transition-colors resize-none font-mono text-sm whitespace-pre-wrap"
+                  placeholder="Document content will appear here..."
+                />
+                <p className="text-xs text-zinc-500 mt-2">
+                  You can edit the document content directly here. Changes will be saved when you click "Save".
+                </p>
               </div>
 
               <div>
@@ -1834,6 +2245,197 @@ const LegalDocumentsAdmin: React.FC = () => {
                   Be specific about what sections to change, what to add, or what to remove. Leave empty to only update the title.
                 </p>
               </div>
+
+              {/* Insert Diagram Section */}
+              <div className="mt-4 border-t border-zinc-700 pt-4">
+                <button
+                  onClick={() => setShowDiagramSection(!showDiagramSection)}
+                  className="flex items-center justify-between w-full text-left text-sm font-medium text-zinc-400 hover:text-zinc-300 transition-colors"
+                >
+                  <span className="flex items-center gap-2">
+                    <span className="text-lg">📊</span>
+                    Insert Diagram
+                    <span className="text-xs text-zinc-500 font-normal">(ASCII box diagrams)</span>
+                  </span>
+                  <ChevronUp className={`w-4 h-4 transition-transform ${showDiagramSection ? '' : 'rotate-180'}`} />
+                </button>
+                
+                {showDiagramSection && (
+                  <div className="mt-4 space-y-4">
+                    {/* Diagram Input */}
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-400 mb-2">
+                        Paste Your Diagram
+                      </label>
+                      <textarea
+                        value={diagramInput}
+                        onChange={(e) => handleDiagramInputChange(e.target.value)}
+                        placeholder={`Paste your ASCII box diagram here. Example:
+
+┌────────────┐
+│ 1) Data Sources │
+│ • Item one       │
+│ • Item two       │
+└────────────┘
+       │
+       v
+┌────────────┐
+│ 2) Next Step    │
+└────────────┘`}
+                        className="w-full h-48 px-4 py-3 bg-zinc-900 border border-zinc-700 rounded-xl text-white placeholder-zinc-600 focus:outline-none focus:border-blue-500 transition-colors resize-none font-mono text-xs"
+                      />
+                      <p className="text-xs text-zinc-500 mt-2">
+                        Paste your text-based diagram above. It will be automatically formatted with proper alignment and wrapped in a code block.
+                      </p>
+                    </div>
+
+                    {/* Insert Position */}
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-400 mb-2">
+                        Insert Position
+                      </label>
+                      <select
+                        value={diagramPosition}
+                        onChange={(e) => setDiagramPosition(e.target.value)}
+                        className="w-full px-4 py-3 bg-zinc-900 border border-zinc-700 rounded-xl text-white focus:outline-none focus:border-blue-500 transition-colors"
+                      >
+                        <option value="end">At the end of document</option>
+                        <option value="start">At the beginning of document</option>
+                        {availableHeaders.length > 0 && (
+                          <optgroup label="After section header">
+                            {availableHeaders.map((header, idx) => (
+                              <option key={idx} value={header}>
+                                After: {header.length > 40 ? header.substring(0, 40) + '...' : header}
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
+                      </select>
+                    </div>
+
+                    {/* Diagram Preview */}
+                    {diagramPreview && (
+                      <div>
+                        <label className="block text-sm font-medium text-zinc-400 mb-2">
+                          Formatted Preview
+                        </label>
+                        <div className="p-4 bg-zinc-950 rounded-xl border border-zinc-700 overflow-x-auto">
+                          <pre className="text-xs text-green-400 font-mono whitespace-pre">
+                            {diagramPreview}
+                          </pre>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Insert Button */}
+                    <div className="flex justify-end">
+                      <button
+                        onClick={handleInsertDiagram}
+                        disabled={!diagramInput.trim()}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                          diagramInput.trim()
+                            ? 'bg-green-600 hover:bg-green-500 text-white'
+                            : 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
+                        }`}
+                      >
+                        <span>📊</span>
+                        Insert Diagram
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Revision Debug (Dev Only) */}
+              {process.env.NODE_ENV === 'development' && revisionDebugInfo && (
+                <div className="mt-4 border-t border-zinc-700 pt-4">
+                  <button
+                    onClick={() => setShowRevisionDebug(!showRevisionDebug)}
+                    className="flex items-center justify-between w-full text-left text-sm font-medium text-zinc-400 hover:text-zinc-300 transition-colors"
+                  >
+                    <span className="flex items-center gap-2">
+                      <span className="text-xs bg-purple-900/30 text-purple-400 px-2 py-0.5 rounded">DEV</span>
+                      Revision Debug Info
+                    </span>
+                    <ChevronUp className={`w-4 h-4 transition-transform ${showRevisionDebug ? '' : 'rotate-180'}`} />
+                  </button>
+                  
+                  {showRevisionDebug && (
+                    <div className="mt-3 p-4 bg-zinc-900/50 rounded-xl border border-zinc-700 space-y-3">
+                      <div>
+                        <p className="text-xs font-semibold text-zinc-400 mb-1">Mode:</p>
+                        <p className="text-xs text-zinc-500 font-mono">
+                          {revisionDebugInfo.mode === 'patches' ? '✅ Patch-based' : revisionDebugInfo.mode === 'full' ? '📄 Full document' : '❌ Error'}
+                        </p>
+                      </div>
+                      
+                      {revisionDebugInfo.excerptCounts && (
+                        <div>
+                          <p className="text-xs font-semibold text-zinc-400 mb-1">Excerpts Used:</p>
+                          <p className="text-xs text-zinc-500">
+                            First attempt: {revisionDebugInfo.excerptCounts.first} excerpt{revisionDebugInfo.excerptCounts.first !== 1 ? 's' : ''}
+                            {revisionDebugInfo.excerptCounts.retry !== undefined && (
+                              <> • Retry: {revisionDebugInfo.excerptCounts.retry} excerpt{revisionDebugInfo.excerptCounts.retry !== 1 ? 's' : ''}</>
+                            )}
+                          </p>
+                        </div>
+                      )}
+                      
+                      {revisionDebugInfo.patchCounts && (
+                        <div>
+                          <p className="text-xs font-semibold text-zinc-400 mb-1">Patches Generated:</p>
+                          <p className="text-xs text-zinc-500">
+                            First attempt: {revisionDebugInfo.patchCounts.first} patch{revisionDebugInfo.patchCounts.first !== 1 ? 'es' : ''}
+                            {revisionDebugInfo.patchCounts.retry !== undefined && (
+                              <> • Retry: {revisionDebugInfo.patchCounts.retry} patch{revisionDebugInfo.patchCounts.retry !== 1 ? 'es' : ''}</>
+                            )}
+                          </p>
+                        </div>
+                      )}
+                      
+                      {revisionDebugInfo.excerptsUsed && revisionDebugInfo.excerptsUsed.length > 0 && (
+                        <div>
+                          <p className="text-xs font-semibold text-zinc-400 mb-1">Excerpt Previews:</p>
+                          <div className="space-y-1 max-h-32 overflow-y-auto">
+                            {revisionDebugInfo.excerptsUsed.map((excerpt, idx) => (
+                              <p key={idx} className="text-xs text-zinc-600 font-mono break-words">
+                                {excerpt}
+                              </p>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {revisionDebugInfo.patchFailures && revisionDebugInfo.patchFailures.length > 0 && (
+                        <div>
+                          <p className="text-xs font-semibold text-red-400 mb-1">Patch Failures:</p>
+                          <div className="space-y-2">
+                            {revisionDebugInfo.patchFailures.map((failure, idx) => (
+                              <div key={idx} className="p-2 bg-red-900/20 rounded border border-red-800/50">
+                                <p className="text-xs font-semibold text-red-300 mb-1">
+                                  {failure.attempt === 'first' ? 'First Attempt' : 'Retry Attempt'}:
+                                </p>
+                                <div className="space-y-1">
+                                  {failure.failures.slice(0, 5).map((f, fIdx) => (
+                                    <p key={fIdx} className="text-xs text-red-400 font-mono">
+                                      Patch #{f.patchIndex}: {f.reason}
+                                    </p>
+                                  ))}
+                                  {failure.failures.length > 5 && (
+                                    <p className="text-xs text-red-500 italic">
+                                      ... and {failure.failures.length - 5} more
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Modal Footer */}
@@ -1849,12 +2451,14 @@ const LegalDocumentsAdmin: React.FC = () => {
                 disabled={
                   isRevising ||
                   (!editPrompt.trim() &&
+                    !contentManuallyModified &&
                     editTitle.trim() === editingDocument?.title &&
                     editRequiresSignature === Boolean(editingDocument?.requiresSignature ?? SIGNATURE_REQUIRED_TYPES.includes(editingDocument?.documentType || '')))
                 }
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                   isRevising ||
                   (!editPrompt.trim() &&
+                    !contentManuallyModified &&
                     editTitle.trim() === editingDocument?.title &&
                     editRequiresSignature === Boolean(editingDocument?.requiresSignature ?? SIGNATURE_REQUIRED_TYPES.includes(editingDocument?.documentType || '')))
                     ? 'bg-zinc-700 text-zinc-400 cursor-not-allowed'
@@ -1864,12 +2468,12 @@ const LegalDocumentsAdmin: React.FC = () => {
                 {isRevising ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    {editPrompt.trim() ? 'Revising...' : 'Saving...'}
+                    {editPrompt.trim() && !contentManuallyModified ? 'Revising...' : 'Saving...'}
                   </>
                 ) : (
                   <>
                     <Sparkles className="w-4 h-4" />
-                    {editPrompt.trim() ? 'Apply Changes' : 'Save'}
+                    {editPrompt.trim() && !contentManuallyModified ? 'Apply Changes' : 'Save'}
                   </>
                 )}
               </button>
