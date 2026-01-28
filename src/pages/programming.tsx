@@ -5505,3 +5505,32 @@ const handleSendChatMessage = async (message: string) => {
                                 </p>
                               </div>
                               <button
+                                onClick={() => handleRemoveStack(stack.roundWorkoutId || stack.id || '')}
+                                className="p-1.5 hover:bg-zinc-700 rounded transition-colors"
+                                title="Remove from round"
+                              >
+                                <X className="h-4 w-4 text-zinc-400" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-zinc-500 text-sm text-center py-2">No workouts selected yet</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+            </div>
+            ) : (
+              <div className="flex items-center justify-center h-full">
+                <p className="text-zinc-500">Manual mode content</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </>
+  );
+};
+
+export default DesktopChallengeSetupView;
