@@ -486,6 +486,7 @@ const performExerciseSubmission = async (updatedLogs: ExerciseLog[]) => {
             onComplete={completeExercise}
             onClose={handleCancelWorkout}
             onExerciseSelect={setCurrentExerciseIndex}
+            workoutExercises={currentWorkoutSession?.exercises || []}
           />
         );
       default:

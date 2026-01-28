@@ -10,9 +10,6 @@ import { FaUser, FaCheck} from 'react-icons/fa';
 import HomeContent from './HomeContent';
 import { useUser } from '../hooks/useUser';
 import SignInModal from '../components/SignInModal';
-import { Swiper, SwiperSlide } from 'swiper/react';
-import { Autoplay } from 'swiper/modules';
-import 'swiper/css';
 import { exerciseService } from '../api/firebase/exercise/service';
 
 interface SerializablePageMetaData extends Omit<FirestorePageMetaData, 'lastUpdated'> {
@@ -69,6 +66,12 @@ const MarketingContent: React.FC<{
   ];
 
   const [moveVideos, setMoveVideos] = useState<string[]>([]);
+  const [currentBgVideoIndex, setCurrentBgVideoIndex] = useState(0);
+
+  const heroVideoSources = moveVideos.length
+    ? moveVideos
+    : ['move.mp4', 'rounds.mp4', 'mymoves.mp4', 'createstack.mp4', 'LaunchRounds.mp4'];
+  const currentHeroVideo = heroVideoSources[currentBgVideoIndex % heroVideoSources.length];
 
   useEffect(() => {
     let isMounted = true;
@@ -91,6 +94,14 @@ const MarketingContent: React.FC<{
     loadVideos();
     return () => { isMounted = false; };
   }, []);
+
+  useEffect(() => {
+    if (heroVideoSources.length <= 1) return;
+    const interval = setInterval(() => {
+      setCurrentBgVideoIndex((i) => (i + 1) % heroVideoSources.length);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [heroVideoSources.length]);
 
   return (
     <div className="min-h-screen bg-zinc-900">
@@ -176,10 +187,23 @@ const MarketingContent: React.FC<{
         </div>
       </header>
 
-      {/* Hero Section - Updated with Web App Button */}
+      {/* Hero Section - Video background (no carousel) */}
       <section className="relative min-h-[calc(100vh-80px)] flex items-center justify-center px-4 sm:px-6 pt-20 sm:pt-24 pb-12 overflow-hidden">
-        {/* Enhanced Background Elements */}
-        <div className="absolute inset-0 bg-gradient-to-br from-zinc-950 via-green-950/30 to-zinc-900"></div>
+        {/* Full-bleed video background */}
+        <div className="absolute inset-0">
+          <video
+            key={currentBgVideoIndex}
+            className="absolute inset-0 w-full h-full object-cover"
+            src={currentHeroVideo.startsWith('http') ? currentHeroVideo : `/${currentHeroVideo}`}
+            autoPlay
+            muted
+            loop
+            playsInline
+          />
+        </div>
+        {/* Dark overlay for text readability */}
+        <div className="absolute inset-0 bg-gradient-to-br from-zinc-950/85 via-zinc-900/75 to-zinc-950/90"></div>
+        {/* Enhanced Background Elements (subtle) */}
         <div className="absolute inset-0">
           <div className="absolute top-20 left-20 w-96 h-96 bg-[#E0FE10]/10 rounded-full filter blur-3xl animate-pulse"></div>
           <div className="absolute bottom-20 right-20 w-80 h-80 bg-lime-500/10 rounded-full filter blur-3xl animate-pulse animation-delay-1000"></div>
@@ -262,39 +286,6 @@ const MarketingContent: React.FC<{
                   <span className="text-xs text-zinc-400">on the App Store</span>
                 </div>
                 <span className="text-xs text-zinc-500">Trusted by creators and athletes</span>
-              </div>
-
-              {/* Moves Carousel */}
-              <div className="animate-fade-in-up animation-delay-1800">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-white text-xs font-semibold">Real Moves from Creators on Pulse</h3>
-                  <div className="flex items-center gap-1 text-zinc-500 text-[10px]">
-                    <FaUser className="h-2.5 w-2.5" />
-                    <span>Live from our community</span>
-                  </div>
-                </div>
-                <Swiper
-                  modules={[Autoplay]}
-                  spaceBetween={12}
-                  slidesPerView={1.5}
-                  autoplay={{
-                    delay: 3000,
-                    disableOnInteraction: false,
-                  }}
-                  loop={true}
-                  breakpoints={{
-                    640: { slidesPerView: 2.5 },
-                    1024: { slidesPerView: 3.5 }
-                  }}
-                >
-                  {(moveVideos.length ? moveVideos : ['move.mp4','rounds.mp4','mymoves.mp4','createstack.mp4','LaunchRounds.mp4']).map((src, idx) => (
-                    <SwiperSlide key={idx}>
-                      <div className="rounded-2xl overflow-hidden border border-zinc-800 bg-zinc-900/60">
-                        <video src={src.startsWith('http') ? src : `/${src}`} className="w-full h-36 object-cover" autoPlay muted loop playsInline />
-                      </div>
-                    </SwiperSlide>
-                  ))}
-                </Swiper>
               </div>
 
               {/* Creator Flow - Compact Horizontal */}
