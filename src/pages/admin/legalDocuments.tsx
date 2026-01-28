@@ -345,7 +345,11 @@ const LegalDocumentsAdmin: React.FC = () => {
       });
 
       // Call API to generate document
-      const response = await fetch('/api/admin/generate-legal-document', {
+      const isLocalhost = typeof window !== 'undefined' && window.location.hostname === 'localhost';
+      const generateEndpoint = isLocalhost
+        ? '/api/admin/generate-legal-document'
+        : '/.netlify/functions/generate-legal-document';
+      const response = await fetch(generateEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

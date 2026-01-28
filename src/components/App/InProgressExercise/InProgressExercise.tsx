@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { X, Play, Pause, CheckCircle2, Dumbbell, Timer, Repeat } from 'lucide-react';
-import { ExerciseLog } from '../../../api/firebase/exercise/types';
+import { ExerciseLog, ExerciseReference } from '../../../api/firebase/exercise/types';
 import Modal from '../../../components/Modal';
 
 interface InProgressExerciseProps {
@@ -10,6 +10,7 @@ interface InProgressExerciseProps {
   onComplete: () => void;
   onClose: () => void;
   onExerciseSelect: (index: number) => void;
+  workoutExercises?: ExerciseReference[]; // Workout's exercise references for ordering
 }
 
 // Chromatic Glass color palette
@@ -22,7 +23,119 @@ const InProgressExercise: React.FC<InProgressExerciseProps> = ({
   onComplete,
   onClose,
   onExerciseSelect,
+  workoutExercises = [],
 }) => {
+  // Sort exercises to match iOS ordering logic:
+  // 1. Use explicit order property if available
+  // 2. Fall back to workout exercise order
+  // 3. Group exercises by groupId for supersets
+  const { sortedLogs, indexMapping } = useMemo(() => {
+    if (!currentExerciseLogs || currentExerciseLogs.length === 0) {
+      return { sortedLogs: [], indexMapping: new Map<number, number>() };
+    }
+
+    // Helper: get UI order index (explicit order or array index)
+    const getUIOrderIndex = (log: ExerciseLog, originalIndex: number): number => {
+      if (log.order != null) return log.order;
+      return originalIndex;
+    };
+
+    // Helper: get workout order index for an exercise id
+    const getWorkoutOrderIndex = (exerciseId: string): number => {
+      const idx = workoutExercises.findIndex(ref => ref.exercise?.id === exerciseId);
+      return idx >= 0 ? idx : Number.MAX_SAFE_INTEGER;
+    };
+
+    // Helper: get groupId for an exercise
+    const getGroupId = (exerciseId: string): number => {
+      const ref = workoutExercises.find(r => r.exercise?.id === exerciseId);
+      return ref?.groupId ?? 0;
+    };
+
+    // Create array of indices with their original positions
+    const indices = currentExerciseLogs.map((_, i) => i);
+
+    // Sort indices based on iOS ordering logic
+    const sortedIndices = [...indices].sort((a, b) => {
+      const logA = currentExerciseLogs[a];
+      const logB = currentExerciseLogs[b];
+
+      // 1. Sort by UI order (explicit order or array position)
+      const orderA = getUIOrderIndex(logA, a);
+      const orderB = getUIOrderIndex(logB, b);
+      if (orderA !== orderB) return orderA - orderB;
+
+      // 2. Sort by workout order
+      const workoutOrderA = getWorkoutOrderIndex(logA.exercise?.id || '');
+      const workoutOrderB = getWorkoutOrderIndex(logB.exercise?.id || '');
+      if (workoutOrderA !== workoutOrderB) return workoutOrderA - workoutOrderB;
+
+      // 3. Stable tie-breaker
+      return a - b;
+    });
+
+    // Build superset blocks (group exercises with same groupId together)
+    const visited = new Set<number>();
+    const blocks: number[][] = [];
+
+    for (const idx of sortedIndices) {
+      if (visited.has(idx)) continue;
+
+      const exerciseId = currentExerciseLogs[idx].exercise?.id || '';
+      const groupId = getGroupId(exerciseId);
+
+      if (groupId === 0) {
+        // Single exercise (no superset)
+        blocks.push([idx]);
+        visited.add(idx);
+      } else {
+        // Gather all members of this superset
+        const groupMembers = sortedIndices.filter(otherIdx => {
+          const otherId = currentExerciseLogs[otherIdx].exercise?.id || '';
+          return getGroupId(otherId) === groupId;
+        });
+        groupMembers.forEach(i => visited.add(i));
+        
+        // Sort group members by their UI order within the group
+        const sortedGroupMembers = groupMembers.sort((a, b) => {
+          return getUIOrderIndex(currentExerciseLogs[a], a) - getUIOrderIndex(currentExerciseLogs[b], b);
+        });
+        blocks.push(sortedGroupMembers);
+      }
+    }
+
+    // Flatten blocks to get final sorted indices
+    const finalSortedIndices = blocks.flat();
+
+    // Create sorted logs array
+    const sorted = finalSortedIndices.map(i => currentExerciseLogs[i]);
+
+    // Create mapping from sorted index to original index
+    const mapping = new Map<number, number>();
+    finalSortedIndices.forEach((originalIdx, sortedIdx) => {
+      mapping.set(sortedIdx, originalIdx);
+    });
+
+    return { sortedLogs: sorted, indexMapping: mapping };
+  }, [currentExerciseLogs, workoutExercises]);
+
+  // Map the current exercise index to sorted position
+  const sortedCurrentIndex = useMemo(() => {
+    // Find where the original currentExerciseIndex appears in our sorted order
+    for (const [sortedIdx, originalIdx] of indexMapping.entries()) {
+      if (originalIdx === currentExerciseIndex) {
+        return sortedIdx;
+      }
+    }
+    return currentExerciseIndex;
+  }, [currentExerciseIndex, indexMapping]);
+
+  // Handle exercise selection - convert sorted index back to original
+  const handleExerciseSelect = (sortedIndex: number) => {
+    const originalIndex = indexMapping.get(sortedIndex) ?? sortedIndex;
+    onExerciseSelect(originalIndex);
+  };
+
   // Initial validation
   if (!exercises || exercises.length === 0) {
     return (
@@ -39,7 +152,7 @@ const InProgressExercise: React.FC<InProgressExerciseProps> = ({
     );
   }
 
-  if (currentExerciseIndex < 0 || currentExerciseIndex >= exercises.length) {
+  if (sortedCurrentIndex < 0 || sortedCurrentIndex >= sortedLogs.length) {
     return (
       <div className="fixed inset-0 bg-[#0a0a0b] flex flex-col items-center justify-center p-6">
         <p className="text-white text-lg mb-4">Invalid exercise selection</p>
@@ -54,8 +167,8 @@ const InProgressExercise: React.FC<InProgressExerciseProps> = ({
     );
   }
 
-  // Current exercise data
-  const currentExerciseLog = currentExerciseLogs[currentExerciseIndex];
+  // Current exercise data - use sorted logs
+  const currentExerciseLog = sortedLogs[sortedCurrentIndex];
   const currentExercise = currentExerciseLog?.exercise;
 
   if (!currentExercise) {
@@ -115,16 +228,20 @@ const InProgressExercise: React.FC<InProgressExerciseProps> = ({
     return () => clearInterval(timerId);
   }, [timeRemaining, isPaused, isCompleting, currentScreenTime]);
 
-  // Video URL handling
+  // Video URL handling - matches iOS logic
+  // Uses selectedVideo from category details, falls back to first video
   const getCurrentVideoUrl = (): string => {
     const videos = currentExercise?.videos || [];
     if (videos.length === 0) return '';
     
-    const videoPosition = Math.min(
-      currentExercise?.currentVideoPosition ?? 0, 
-      videos.length - 1
-    );
-    return videos[videoPosition]?.videoURL || '';
+    // Check for selectedVideo in category details (matches iOS pattern)
+    const selectedVideo = currentExercise?.category?.details?.selectedVideo;
+    if (selectedVideo?.videoURL) {
+      return selectedVideo.videoURL;
+    }
+    
+    // Fall back to first video (matches iOS .first fallback)
+    return videos[0]?.videoURL || '';
   };
 
   // Get exercise info helper
@@ -158,11 +275,13 @@ const InProgressExercise: React.FC<InProgressExerciseProps> = ({
     isCompleted: boolean;
   }) => {
     const info = getExerciseInfo(exerciseLog);
-    const gifUrl = exerciseLog.exercise?.videos?.[0]?.gifURL;
+    // Get selected video from category details, fall back to first video
+    const selectedVideo = exerciseLog.exercise?.category?.details?.selectedVideo;
+    const gifUrl = selectedVideo?.gifURL || exerciseLog.exercise?.videos?.[0]?.gifURL;
     
     return (
       <button
-        onClick={() => onExerciseSelect(index)}
+        onClick={() => handleExerciseSelect(index)}
         className={`w-full text-left p-3 rounded-xl transition-all duration-200 ${
           isActive 
             ? 'bg-[#1a1d1f] border border-[#E0FE10]/40' 
@@ -306,7 +425,7 @@ const InProgressExercise: React.FC<InProgressExerciseProps> = ({
                         className="text-2xl lg:text-3xl font-bold"
                         style={{ color: accentColor }}
                       >
-                        {currentExerciseIndex + 1}/{currentExerciseLogs.length}
+                        {sortedCurrentIndex + 1}/{sortedLogs.length}
                       </span>
                       <p className="text-zinc-400 text-sm">exercises</p>
                     </div>
@@ -359,18 +478,20 @@ const InProgressExercise: React.FC<InProgressExerciseProps> = ({
               })()}
             </div>
 
-            {/* Exercise Bubbles */}
+            {/* Exercise Bubbles - using sorted order */}
             <div className="px-4 mb-4 overflow-x-auto scrollbar-hide">
               <div className="flex gap-2 w-fit mx-auto">
-                {currentExerciseLogs.map((exerciseLog, idx) => {
-                  const isActive = idx === currentExerciseIndex;
+                {sortedLogs.map((exerciseLog, idx) => {
+                  const isActive = idx === sortedCurrentIndex;
                   const isCompleted = exerciseLog.logSubmitted;
-                  const gifUrl = exerciseLog.exercise?.videos?.[0]?.gifURL;
+                  // Get selected video from category details, fall back to first video
+                  const selectedVideo = exerciseLog.exercise?.category?.details?.selectedVideo;
+                  const gifUrl = selectedVideo?.gifURL || exerciseLog.exercise?.videos?.[0]?.gifURL;
                   
                   return (
                     <button
                       key={exerciseLog.id || idx}
-                      onClick={() => onExerciseSelect(idx)}
+                      onClick={() => handleExerciseSelect(idx)}
                       className={`flex-shrink-0 w-12 h-12 rounded-full overflow-hidden transition-all ${
                         isActive 
                           ? 'ring-2 ring-offset-2 ring-offset-black' 
@@ -424,18 +545,18 @@ const InProgressExercise: React.FC<InProgressExerciseProps> = ({
           <div className="p-6 border-b border-zinc-800/50">
             <h2 className="text-xl font-bold text-white">Workout Progress</h2>
             <p className="text-zinc-500 text-sm mt-1">
-              {currentExerciseLogs.filter(l => l.logSubmitted).length} of {currentExerciseLogs.length} completed
+              {sortedLogs.filter(l => l.logSubmitted).length} of {sortedLogs.length} completed
             </p>
           </div>
 
-          {/* Exercise List */}
+          {/* Exercise List - using sorted order */}
           <div className="flex-1 overflow-y-auto p-4 space-y-2">
-            {currentExerciseLogs.map((exerciseLog, idx) => (
+            {sortedLogs.map((exerciseLog, idx) => (
               <ExerciseCard
                 key={exerciseLog.id || idx}
                 exerciseLog={exerciseLog}
                 index={idx}
-                isActive={idx === currentExerciseIndex}
+                isActive={idx === sortedCurrentIndex}
                 isCompleted={exerciseLog.logSubmitted}
               />
             ))}
