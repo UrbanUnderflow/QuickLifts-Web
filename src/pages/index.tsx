@@ -216,143 +216,98 @@ const MarketingContent: React.FC<{
           <div className="h-full w-full bg-[url('/grid-pattern.svg')] bg-repeat"></div>
         </div>
 
-        {/* Content - Two Column Layout */}
-        <div className="relative z-20 max-w-7xl mx-auto w-full">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
-            
-            {/* Left Column - Text Content */}
-            <div className="text-center lg:text-left">
-              <div className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#E0FE10]/20 to-lime-500/20 backdrop-blur-sm border border-[#E0FE10]/30 rounded-full mb-4 animate-fade-in-up">
-                <FaGamepad className="h-3 w-3 text-[#E0FE10]" />
-                <span className="text-[#E0FE10] text-xs font-medium">Gamified Fitness Platform</span>
+        {/* Content - Centered Apple Fitness+ style layout */}
+        <div className="relative z-20 flex flex-col items-center justify-between min-h-[calc(100vh-80px)] w-full max-w-4xl mx-auto px-4 sm:px-6 pt-4 pb-8 sm:pb-12">
+          {/* Top: Logo + Headline (centered) */}
+          <div className="flex flex-col items-center text-center animate-fade-in-up">
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-[#E0FE10]/15 backdrop-blur-sm border border-[#E0FE10]/40 rounded-full mb-6 sm:mb-8">
+              <FaGamepad className="h-4 w-4 text-[#E0FE10]" aria-hidden />
+              <span className="text-[#E0FE10] text-sm sm:text-base font-medium">Gamified Fitness Platform</span>
+            </div>
+            <img
+              src="/pulse-logo-white.svg"
+              alt="Pulse"
+              className="h-14 sm:h-16 lg:h-20 w-auto mb-6 sm:mb-8"
+            />
+            <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold text-white leading-tight tracking-tight max-w-3xl">
+              <span className="block">Gets you moving.</span>
+              <span className="block mt-1">Keeps you going.</span>
+            </h1>
+            <p className="mt-4 sm:mt-6 text-zinc-300 text-lg sm:text-xl md:text-2xl font-medium max-w-2xl">
+              Find it in the Pulse app.
+            </p>
+          </div>
+
+          {/* Bottom: Traditional CTA buttons + trust (centered) */}
+          <div className="flex flex-col items-center text-center mt-auto pt-8 sm:pt-12 animate-fade-in-up animation-delay-300">
+            <div className="flex flex-col sm:flex-row gap-4 sm:gap-5 justify-center items-center w-full sm:w-auto">
+              <button
+                onClick={onUseWebApp}
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-3 px-8 sm:px-10 py-4 sm:py-5 rounded-2xl bg-[#E0FE10] text-black font-bold text-lg sm:text-xl shadow-lg shadow-[#E0FE10]/30 hover:bg-[#d4f00f] hover:shadow-[#E0FE10]/40 active:scale-[0.98] transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-[#E0FE10]/50 min-h-[56px]"
+                aria-label="Get started with Pulse"
+              >
+                <FaUser className="h-5 w-5 sm:h-6 sm:w-6" aria-hidden />
+                Get started
+              </button>
+              <a
+                href="/creators"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-3 px-8 sm:px-10 py-4 sm:py-5 rounded-2xl border-2 border-white/90 text-white font-bold text-lg sm:text-xl bg-white/5 hover:bg-white/10 backdrop-blur-sm transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-white/30 min-h-[56px]"
+                aria-label="Run challenges as a creator"
+              >
+                <FaTrophy className="h-5 w-5 sm:h-6 sm:w-6" aria-hidden />
+                Run as creator
+              </a>
+            </div>
+            {/* Trust bar - larger, accessible text */}
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-3 mt-6 sm:mt-8 text-zinc-300">
+              <div className="flex items-center gap-2 bg-zinc-900/80 border border-zinc-700 rounded-full px-4 py-2.5">
+                <span className="text-white font-bold text-base">4.9</span>
+                <div className="flex items-center text-[#E0FE10]" aria-hidden>
+                  <FaStar className="h-4 w-4" />
+                  <FaStar className="h-4 w-4" />
+                  <FaStar className="h-4 w-4" />
+                  <FaStar className="h-4 w-4" />
+                  <FaStar className="h-4 w-4" />
+                </div>
+                <span className="text-zinc-300 text-sm sm:text-base">on the App Store</span>
               </div>
-              
-              <div className="mb-4 animate-fade-in-up animation-delay-300">
-                <img 
-                  src="/pulse-logo-white.svg" 
-                  alt="Pulse" 
-                  className="h-12 sm:h-16 lg:h-20 w-auto mx-auto lg:mx-0" 
+              <span className="text-zinc-400 text-sm sm:text-base">Trusted by creators and athletes</span>
+            </div>
+            {/* Creator flow - compact, centered, readable */}
+            <div className="mt-6 flex flex-wrap items-center justify-center gap-2 sm:gap-4 text-zinc-400">
+              <div className="flex items-center gap-2">
+                <FaBolt className="h-4 w-4 text-[#E0FE10]" aria-hidden />
+                <span className="text-sm sm:text-base font-medium text-zinc-300">Create</span>
+              </div>
+              <FaArrowRight className="h-4 w-4 text-zinc-600 rotate-90 sm:rotate-0" aria-hidden />
+              <div className="flex items-center gap-2">
+                <FaGamepad className="h-4 w-4 text-purple-400" aria-hidden />
+                <span className="text-sm sm:text-base font-medium text-zinc-300">Launch Rounds</span>
+              </div>
+              <FaArrowRight className="h-4 w-4 text-zinc-600 rotate-90 sm:rotate-0" aria-hidden />
+              <div className="flex items-center gap-2">
+                <FaCoins className="h-4 w-4 text-orange-400" aria-hidden />
+                <span className="text-sm sm:text-base font-medium text-zinc-300">Earn</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Phone screenshot - below hero for visual proof */}
+      <section className="relative py-12 sm:py-16 bg-zinc-950/80 border-b border-zinc-800">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 flex justify-center">
+          <div className="relative group">
+            <div className="relative w-[280px] sm:w-[320px] lg:w-[360px]">
+              <div className="absolute -inset-6 bg-gradient-to-r from-[#E0FE10]/20 to-lime-400/20 rounded-[3rem] blur-2xl opacity-50 group-hover:opacity-70 transition-opacity duration-500" />
+              <div className="relative rounded-[2.5rem] overflow-hidden border-4 border-zinc-800/50 shadow-2xl transform group-hover:scale-[1.02] transition-transform duration-500">
+                <img
+                  src="/Winner1.png"
+                  alt="Pulse App - Round progress and leaderboard"
+                  className="w-full h-auto"
                 />
               </div>
-
-              {/* Single Intent-Based CTA: Role Selector */}
-              <div className="mb-6 animate-fade-in-up animation-delay-450">
-                <p className="text-zinc-400 text-sm mb-3">I'm here to:</p>
-                <div className="flex flex-col sm:flex-row gap-3 justify-center lg:justify-start">
-                  <button
-                    onClick={onUseWebApp}
-                    className="group relative overflow-hidden px-5 py-3 rounded-xl border-2 border-[#E0FE10]/40 hover:border-[#E0FE10] bg-gradient-to-br from-[#E0FE10]/10 to-lime-400/5 backdrop-blur-sm transition-all duration-300 hover:shadow-lg hover:shadow-[#E0FE10]/20"
-                  >
-                    <div className="absolute inset-0 bg-gradient-to-r from-[#E0FE10]/0 to-[#E0FE10]/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                    <div className="relative flex items-center gap-3">
-                      <div className="w-10 h-10 bg-gradient-to-br from-[#E0FE10] to-lime-400 rounded-lg flex items-center justify-center shadow-lg shadow-[#E0FE10]/20">
-                        <FaUser className="h-4 w-4 text-black" />
-                      </div>
-                      <div className="text-left">
-                        <div className="text-white font-bold text-sm">Work out with others</div>
-                        <div className="text-zinc-400 text-xs">Join challenges & train together</div>
-                      </div>
-                    </div>
-                  </button>
-                  <a
-                    href="/creators"
-                    className="group relative overflow-hidden px-5 py-3 rounded-xl border-2 border-purple-400/40 hover:border-purple-400 bg-gradient-to-br from-purple-500/10 to-blue-500/5 backdrop-blur-sm transition-all duration-300 hover:shadow-lg hover:shadow-purple-400/20"
-                  >
-                    <div className="absolute inset-0 bg-gradient-to-r from-purple-500/0 to-purple-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                    <div className="relative flex items-center gap-3">
-                      <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-blue-500 rounded-lg flex items-center justify-center shadow-lg shadow-purple-500/20">
-                        <FaTrophy className="h-4 w-4 text-white" />
-                      </div>
-                      <div className="text-left">
-                        <div className="text-white font-bold text-sm">Run challenges as a creator</div>
-                        <div className="text-zinc-400 text-xs">Build your community & earn</div>
-                      </div>
-                    </div>
-                  </a>
-                </div>
-              </div>
-              
-              {/* Trust Bar - App Store Rating */}
-              <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-2 text-zinc-300 mb-4 animate-fade-in-up animation-delay-1500">
-                <div className="flex items-center gap-2 bg-zinc-900/70 border border-zinc-800 rounded-full px-3 py-1.5">
-                  <span className="text-white font-semibold text-sm">4.9</span>
-                  <div className="flex items-center text-[#E0FE10]">
-                    <FaStar className="h-3 w-3" />
-                    <FaStar className="h-3 w-3" />
-                    <FaStar className="h-3 w-3" />
-                    <FaStar className="h-3 w-3" />
-                    <FaStar className="h-3 w-3" />
-                  </div>
-                  <span className="text-xs text-zinc-400">on the App Store</span>
-                </div>
-                <span className="text-xs text-zinc-500">Trusted by creators and athletes</span>
-              </div>
-
-              {/* Creator Flow - Compact Horizontal */}
-              <div className="mt-4 animate-fade-in-up animation-delay-2000">
-                <div className="flex flex-col sm:flex-row items-center justify-center gap-1.5 sm:gap-0">
-                  {/* Create Content */}
-                  <div className="flex items-center gap-2 bg-zinc-800/40 rounded-lg px-3 py-2 w-full sm:w-auto">
-                    <div className="w-7 h-7 bg-zinc-700 rounded-md flex items-center justify-center flex-shrink-0">
-                      <FaBolt className="h-3 w-3 text-[#E0FE10]" />
-                    </div>
-                    <div>
-                      <div className="text-zinc-300 font-medium text-xs leading-tight">Create Content</div>
-                      <div className="text-zinc-500 text-[10px] leading-snug">Record Moves</div>
-                    </div>
-                  </div>
-
-                  {/* Arrow */}
-                  <div className="flex items-center justify-center px-2 rotate-90 sm:rotate-0">
-                    <FaArrowRight className="h-3 w-3 text-zinc-700" />
-                  </div>
-
-                  {/* Launch Rounds */}
-                  <div className="flex items-center gap-2 bg-zinc-800/40 rounded-lg px-3 py-2 w-full sm:w-auto">
-                    <div className="w-7 h-7 bg-zinc-700 rounded-md flex items-center justify-center flex-shrink-0">
-                      <FaGamepad className="h-3 w-3 text-purple-400" />
-                    </div>
-                    <div>
-                      <div className="text-zinc-300 font-medium text-xs leading-tight">Launch Rounds</div>
-                      <div className="text-zinc-500 text-[10px] leading-snug">Turn Movelists into challenges</div>
-                    </div>
-                  </div>
-
-                  {/* Arrow */}
-                  <div className="flex items-center justify-center px-2 rotate-90 sm:rotate-0">
-                    <FaArrowRight className="h-3 w-3 text-zinc-700" />
-                  </div>
-
-                  {/* Earn Revenue */}
-                  <div className="flex items-center gap-2 bg-zinc-800/40 rounded-lg px-3 py-2 w-full sm:w-auto">
-                    <div className="w-7 h-7 bg-zinc-700 rounded-md flex items-center justify-center flex-shrink-0">
-                      <FaCoins className="h-3 w-3 text-orange-400" />
-                    </div>
-                    <div>
-                      <div className="text-zinc-300 font-medium text-xs leading-tight">Earn Revenue</div>
-                      <div className="text-zinc-500 text-[10px] leading-snug">Monetize expertise</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
             </div>
-
-            {/* Right Column - Phone Screenshot */}
-            <div className="hidden lg:flex items-center justify-center lg:justify-end py-8 animate-fade-in-up animation-delay-1800">
-              <div className="relative group">
-                <div className="relative w-[320px] lg:w-[360px]">
-                  <div className="absolute -inset-6 bg-gradient-to-r from-[#E0FE10]/30 to-lime-400/30 rounded-[3rem] blur-2xl opacity-40 group-hover:opacity-60 transition-opacity duration-500"></div>
-                  <div className="relative rounded-[2.5rem] overflow-hidden border-4 border-zinc-800/50 shadow-2xl transform group-hover:scale-105 transition-transform duration-500">
-                    <img 
-                      src="/Winner1.png" 
-                      alt="Pulse App - Winner Screen" 
-                      className="w-full h-auto"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-
           </div>
         </div>
       </section>
