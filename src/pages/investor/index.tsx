@@ -6297,3 +6297,44 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                                             High-level P&amp;L for {activePLYear} subscription revenue. All amounts in USD.
                                         </p>
                                     </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsPLModalOpen(false)}
+                                        className="text-zinc-400 hover:text-white transition-colors"
+                                    >
+                                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                        </svg>
+                                    </button>
+                                </div>
+
+                                <div className="text-center py-8 text-zinc-500">
+                                    P&amp;L data coming soon
+                                </div>
+
+                                <div className="flex justify-end mt-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsPLModalOpen(false)}
+                                        className="px-4 py-2 rounded-lg border border-zinc-700 text-sm text-zinc-200 hover:bg-zinc-800 transition-colors"
+                                    >
+                                        Close
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </section>
+                  ) : (
+                    <LockedSectionView sectionName="Financial Information" />
+                  )
+                )}
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+};
+
+export default InvestorDataroom;

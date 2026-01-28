@@ -182,7 +182,63 @@ const ChromaticGlassPage: NextPage = () => {
       charcoal: { name: 'Secondary Charcoal', color: '#1C1C1E', hex: '#1C1C1E' },
       black: { name: 'Secondary Black', color: '#0D0D0D', hex: '#0D0D0D' },
       slate: { name: 'Slate', color: '#64748B', hex: '#64748B' },
-    }
+    },
+    success: [
+      { name: 'Achievement', color: '#115B43', hex: '#115B43', meaning: 'Major success', useFor: 'Workout fully completed, End of a Round' },
+      { name: 'Confirmed', color: '#18BE53', hex: '#18BE53', meaning: 'Task done, state resolved', useFor: 'Workout completed, Goal met' },
+      { name: 'Progress', color: '#009262', hex: '#009262', meaning: 'You\'re doing well, keep going', useFor: 'Progress bars, "On track" indicators' },
+      { name: 'Ambient', color: '#32C997', hex: '#32C997', meaning: 'Everything is okay', useFor: 'Background glows, Passive success indicators' },
+      { name: 'Soft', color: '#84DFC1', hex: '#84DFC1', meaning: 'Routine context, not an event', useFor: 'Glass tint for success states' },
+    ],
+    warning: [
+      { name: 'Escalation', color: '#E48900', hex: '#E48900', meaning: 'Last step before danger', useFor: '"Are you sure?", Unsaved changes' },
+      { name: 'Risk', color: '#FFAD30', hex: '#FFAD30', meaning: 'Consequences possible', useFor: 'Overtraining warnings, Fatigue cues' },
+      { name: 'Urgent', color: '#FFD24D', hex: '#FFD24D', meaning: 'User must notice this', useFor: '"Workout ending soon", Sync about to fail' },
+      { name: 'Attention', color: '#FFC870', hex: '#FFC870', meaning: 'Something needs awareness', useFor: 'Resume workout banner, Delayed session notice' },
+      { name: 'Hint', color: '#FFD586', hex: '#FFD586', meaning: 'Gentle nudge', useFor: '"Still there?", Incomplete rep warning' },
+    ],
+    danger: [
+      { name: 'Terminal', color: '#C33025', hex: '#C33025', meaning: 'System-level failure', useFor: 'Fatal errors, Account lockouts' },
+      { name: 'Destructive', color: '#E01507', hex: '#E01507', meaning: 'Action cannot be undone', useFor: 'Delete workout, Leave round' },
+      { name: 'Blocking', color: '#E02B1D', hex: '#E02B1D', meaning: 'Immediate attention required', useFor: 'Data at risk, Severe failure' },
+      { name: 'Alert', color: '#FF5A4F', hex: '#FF5A4F', meaning: 'User cannot proceed', useFor: 'Permissions missing, Device disconnected' },
+      { name: 'Error', color: '#F0857D', hex: '#F0857D', meaning: 'Something failed', useFor: 'Workout failed, Sync error, Network error' },
+    ],
+  };
+
+  const glassLayers = {
+    neutral: [
+      { name: 'Light', color: '#FFFFFF', opacity: 4, blur: 14, useFor: 'Separating layers' },
+      { name: 'Medium', color: '#FFFFFF', opacity: 8, blur: 12, useFor: 'Stacking cards' },
+      { name: 'Heavy', color: '#FFFFFF', opacity: 12, blur: 10, useFor: 'Modal depth' },
+      { name: 'Slate', color: '#64748B', opacity: 10, blur: 8, useFor: 'Non-interactive surfaces' },
+    ],
+    primary: {
+      green: [
+        { opacity: 8, blur: 14, useFor: 'Background emphasis' },
+        { opacity: 10, blur: 12, useFor: 'Content panels' },
+        { opacity: 12, blur: 10, useFor: 'Active cards' },
+        { opacity: 14, blur: 8, useFor: 'Foreground focus' },
+      ],
+      blue: [
+        { opacity: 8, blur: 14, useFor: 'Background emphasis' },
+        { opacity: 10, blur: 12, useFor: 'Content panels' },
+        { opacity: 12, blur: 10, useFor: 'Active cards' },
+        { opacity: 14, blur: 8, useFor: 'Foreground focus' },
+      ],
+      purple: [
+        { opacity: 8, blur: 14, useFor: 'Background emphasis' },
+        { opacity: 10, blur: 12, useFor: 'Content panels' },
+        { opacity: 12, blur: 10, useFor: 'Active cards' },
+        { opacity: 14, blur: 8, useFor: 'Foreground focus' },
+      ],
+      red: [
+        { opacity: 8, blur: 14, useFor: 'Background emphasis' },
+        { opacity: 10, blur: 12, useFor: 'Content panels' },
+        { opacity: 12, blur: 10, useFor: 'Active cards' },
+        { opacity: 14, blur: 8, useFor: 'Foreground focus' },
+      ],
+    },
   };
 
   return (
@@ -238,6 +294,8 @@ const ChromaticGlassPage: NextPage = () => {
                 <nav className="hidden md:flex items-center gap-6">
                   <a href="#philosophy" className="text-zinc-400 hover:text-white text-sm transition-colors">Philosophy</a>
                   <a href="#colors" className="text-zinc-400 hover:text-white text-sm transition-colors">Colors</a>
+                  <a href="#glass-system" className="text-zinc-400 hover:text-white text-sm transition-colors">Glass</a>
+                  <a href="#effects" className="text-zinc-400 hover:text-white text-sm transition-colors">Effects</a>
                   <a href="#patterns" className="text-zinc-400 hover:text-white text-sm transition-colors">Patterns</a>
                   <a href="#components" className="text-zinc-400 hover:text-white text-sm transition-colors">Components</a>
                 </nav>
@@ -661,7 +719,7 @@ const ChromaticGlassPage: NextPage = () => {
             </div>
 
             {/* Foundation Colors */}
-            <div>
+            <div className="mb-16">
               <h3 className="text-xl font-semibold text-white mb-6 flex items-center gap-3">
                 <span className="w-8 h-[2px] bg-gradient-to-r from-zinc-500 to-transparent" />
                 Foundation Colors
@@ -671,6 +729,524 @@ const ChromaticGlassPage: NextPage = () => {
                 <ColorSwatch {...colors.foundation.charcoal} delay={0.2} />
                 <ColorSwatch {...colors.foundation.black} delay={0.3} />
                 <ColorSwatch {...colors.foundation.slate} delay={0.4} />
+              </div>
+              
+              {/* Foundation usage */}
+              <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-4">
+                {[
+                  { color: '#0D0D0D', label: 'App backgrounds', usage: 'Dark UI base' },
+                  { color: '#1C1C1E', label: 'Behind glass layers', usage: 'Card backgrounds' },
+                  { color: '#64748B', label: 'Non-interactive surfaces', usage: 'Structural UI' },
+                  { color: '#FAFAFA', label: 'Structural UI', usage: 'Dividers, containers' },
+                ].map((item, idx) => (
+                  <motion.div
+                    key={item.label}
+                    initial={{ opacity: 0, y: 20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: 0.5 + idx * 0.1 }}
+                    className="flex items-center gap-3 p-3 rounded-xl bg-zinc-900/50 border border-white/5"
+                  >
+                    <div className="w-8 h-8 rounded-lg border border-white/10" style={{ backgroundColor: item.color }} />
+                    <div>
+                      <p className="text-sm font-medium text-white">{item.label}</p>
+                      <p className="text-xs text-zinc-500">{item.usage}</p>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+
+            {/* Success Colors */}
+            <div className="mb-16">
+              <h3 className="text-xl font-semibold text-white mb-2 flex items-center gap-3">
+                <span className="w-8 h-[2px] bg-gradient-to-r from-[#18BE53] to-transparent" />
+                Success Colors
+              </h3>
+              <p className="text-zinc-500 text-sm mb-6">Positive outcomes, confirmations, and progress indicators</p>
+              
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                {colors.success.map((color, idx) => (
+                  <motion.div
+                    key={color.name}
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    whileInView={{ opacity: 1, scale: 1 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: idx * 0.1 }}
+                    className="group"
+                  >
+                    <div 
+                      className="h-24 rounded-t-xl transition-transform group-hover:scale-[1.02]"
+                      style={{ backgroundColor: color.color }}
+                    />
+                    <div className="p-3 rounded-b-xl bg-zinc-900/80 border-x border-b border-white/5">
+                      <p className="text-white text-sm font-medium">{color.name}</p>
+                      <p className="text-zinc-500 text-xs font-mono">{color.hex}</p>
+                      <p className="text-zinc-400 text-xs mt-1 leading-relaxed">{color.meaning}</p>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+
+            {/* Warning Colors */}
+            <div className="mb-16">
+              <h3 className="text-xl font-semibold text-white mb-2 flex items-center gap-3">
+                <span className="w-8 h-[2px] bg-gradient-to-r from-[#FFAD30] to-transparent" />
+                Warning Colors
+              </h3>
+              <p className="text-zinc-500 text-sm mb-6">Caution states, attention-grabbing, and non-critical alerts</p>
+              
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                {colors.warning.map((color, idx) => (
+                  <motion.div
+                    key={color.name}
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    whileInView={{ opacity: 1, scale: 1 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: idx * 0.1 }}
+                    className="group"
+                  >
+                    <div 
+                      className="h-24 rounded-t-xl transition-transform group-hover:scale-[1.02]"
+                      style={{ backgroundColor: color.color }}
+                    />
+                    <div className="p-3 rounded-b-xl bg-zinc-900/80 border-x border-b border-white/5">
+                      <p className="text-white text-sm font-medium">{color.name}</p>
+                      <p className="text-zinc-500 text-xs font-mono">{color.hex}</p>
+                      <p className="text-zinc-400 text-xs mt-1 leading-relaxed">{color.meaning}</p>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+
+            {/* Danger Colors */}
+            <div>
+              <h3 className="text-xl font-semibold text-white mb-2 flex items-center gap-3">
+                <span className="w-8 h-[2px] bg-gradient-to-r from-[#EF4444] to-transparent" />
+                Danger Colors
+              </h3>
+              <p className="text-zinc-500 text-sm mb-6">Destructive actions, errors, and critical system states</p>
+              
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                {colors.danger.map((color, idx) => (
+                  <motion.div
+                    key={color.name}
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    whileInView={{ opacity: 1, scale: 1 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: idx * 0.1 }}
+                    className="group"
+                  >
+                    <div 
+                      className="h-24 rounded-t-xl transition-transform group-hover:scale-[1.02]"
+                      style={{ backgroundColor: color.color }}
+                    />
+                    <div className="p-3 rounded-b-xl bg-zinc-900/80 border-x border-b border-white/5">
+                      <p className="text-white text-sm font-medium">{color.name}</p>
+                      <p className="text-zinc-500 text-xs font-mono">{color.hex}</p>
+                      <p className="text-zinc-400 text-xs mt-1 leading-relaxed">{color.meaning}</p>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Material / Chromatic Glass Section */}
+        <section id="glass-system" className="relative py-32 px-4">
+          <div className="max-w-6xl mx-auto">
+            <motion.div
+              initial={{ opacity: 0, y: 40 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.8 }}
+              className="text-center mb-20"
+            >
+              <span className="text-[#8B5CF6] text-sm font-semibold tracking-widest uppercase mb-4 block">
+                Material System
+              </span>
+              <h2 className="text-4xl md:text-6xl font-bold mb-6">
+                <span className="bg-gradient-to-r from-[#E0FE10] via-[#3B82F6] to-[#8B5CF6] bg-clip-text text-transparent">Chromatic</span> Glass
+              </h2>
+              <p className="text-zinc-400 text-lg max-w-2xl mx-auto">
+                A chromatic glass material system consisting of multiple blur depths, tint overlays, and elevation levels. 
+                Layers are logically separated to ensure clarity, depth, and accessibility across dark interfaces.
+              </p>
+            </motion.div>
+
+            {/* Glass Orb Visualization */}
+            <div className="flex justify-center mb-16">
+              <motion.div
+                animate={{ 
+                  boxShadow: [
+                    '0 0 60px rgba(224,254,16,0.3), 0 0 120px rgba(224,254,16,0.1)',
+                    '0 0 80px rgba(59,130,246,0.3), 0 0 140px rgba(59,130,246,0.1)',
+                    '0 0 60px rgba(139,92,246,0.3), 0 0 120px rgba(139,92,246,0.1)',
+                    '0 0 60px rgba(224,254,16,0.3), 0 0 120px rgba(224,254,16,0.1)',
+                  ]
+                }}
+                transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
+                className="w-32 h-32 rounded-full"
+                style={{
+                  background: 'radial-gradient(circle at 30% 30%, rgba(224,254,16,0.6) 0%, rgba(139,92,246,0.4) 50%, rgba(59,130,246,0.2) 100%)',
+                }}
+              />
+            </div>
+
+            {/* Neutral Elevation Modifiers */}
+            <div className="mb-16">
+              <h3 className="text-xl font-semibold text-white mb-2">Neutral Elevation Modifiers</h3>
+              <p className="text-zinc-500 text-sm mb-6">Use for separating layers, stacking cards, and modal depth</p>
+              
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                {glassLayers.neutral.map((layer, idx) => (
+                  <motion.div
+                    key={layer.name}
+                    initial={{ opacity: 0, y: 20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: idx * 0.1 }}
+                    className="text-center"
+                  >
+                    <div 
+                      className="h-32 rounded-2xl mb-4 border border-white/10"
+                      style={{ 
+                        backgroundColor: `rgba(255,255,255,${layer.opacity / 100})`,
+                        backdropFilter: `blur(${layer.blur}px)`,
+                      }}
+                    />
+                    <p className="text-white font-medium">{layer.name}</p>
+                    <p className="text-zinc-500 text-xs font-mono">{layer.color}</p>
+                    <p className="text-zinc-400 text-xs mt-1">Opacity {layer.opacity}% • Blur {layer.blur}</p>
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+
+            {/* Primary Glass Colors */}
+            <div className="mb-16">
+              <h3 className="text-xl font-semibold text-white mb-2">Primary Glass Layers</h3>
+              <p className="text-zinc-500 text-sm mb-6">
+                Primary glass is used only for emphasis, not for large surfaces. Lower opacity + higher blur = background emphasis. 
+                Higher opacity + lower blur = foreground focus.
+              </p>
+              
+              {/* Green Glass */}
+              <div className="mb-8">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-4 h-4 rounded-full bg-[#E0FE10]" />
+                  <span className="text-white font-medium">Glass Green</span>
+                  <span className="text-zinc-500 text-xs font-mono">#E0FE10</span>
+                </div>
+                <div className="grid grid-cols-4 gap-4">
+                  {glassLayers.primary.green.map((layer, idx) => (
+                    <motion.div
+                      key={idx}
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      whileInView={{ opacity: 1, scale: 1 }}
+                      viewport={{ once: true }}
+                      transition={{ delay: idx * 0.1 }}
+                      className="relative group"
+                    >
+                      <div 
+                        className="h-28 rounded-xl border border-[#E0FE10]/30 transition-transform group-hover:scale-105"
+                        style={{ 
+                          backgroundColor: `rgba(224,254,16,${layer.opacity / 100})`,
+                          backdropFilter: `blur(${layer.blur}px)`,
+                        }}
+                      />
+                      <p className="text-zinc-400 text-xs mt-2 text-center">
+                        Opacity {layer.opacity} • Blur {layer.blur}
+                      </p>
+                    </motion.div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Blue Glass */}
+              <div className="mb-8">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-4 h-4 rounded-full bg-[#3B82F6]" />
+                  <span className="text-white font-medium">Glass Blue</span>
+                  <span className="text-zinc-500 text-xs font-mono">#3B82F6</span>
+                </div>
+                <div className="grid grid-cols-4 gap-4">
+                  {glassLayers.primary.blue.map((layer, idx) => (
+                    <motion.div
+                      key={idx}
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      whileInView={{ opacity: 1, scale: 1 }}
+                      viewport={{ once: true }}
+                      transition={{ delay: idx * 0.1 }}
+                      className="relative group"
+                    >
+                      <div 
+                        className="h-28 rounded-xl border border-[#3B82F6]/30 transition-transform group-hover:scale-105"
+                        style={{ 
+                          backgroundColor: `rgba(59,130,246,${layer.opacity / 100})`,
+                          backdropFilter: `blur(${layer.blur}px)`,
+                        }}
+                      />
+                      <p className="text-zinc-400 text-xs mt-2 text-center">
+                        Opacity {layer.opacity} • Blur {layer.blur}
+                      </p>
+                    </motion.div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Purple Glass */}
+              <div className="mb-8">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-4 h-4 rounded-full bg-[#8B5CF6]" />
+                  <span className="text-white font-medium">Glass Purple</span>
+                  <span className="text-zinc-500 text-xs font-mono">#8B5CF6</span>
+                </div>
+                <div className="grid grid-cols-4 gap-4">
+                  {glassLayers.primary.purple.map((layer, idx) => (
+                    <motion.div
+                      key={idx}
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      whileInView={{ opacity: 1, scale: 1 }}
+                      viewport={{ once: true }}
+                      transition={{ delay: idx * 0.1 }}
+                      className="relative group"
+                    >
+                      <div 
+                        className="h-28 rounded-xl border border-[#8B5CF6]/30 transition-transform group-hover:scale-105"
+                        style={{ 
+                          backgroundColor: `rgba(139,92,246,${layer.opacity / 100})`,
+                          backdropFilter: `blur(${layer.blur}px)`,
+                        }}
+                      />
+                      <p className="text-zinc-400 text-xs mt-2 text-center">
+                        Opacity {layer.opacity} • Blur {layer.blur}
+                      </p>
+                    </motion.div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Red Glass */}
+              <div>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-4 h-4 rounded-full bg-[#EF4444]" />
+                  <span className="text-white font-medium">Glass Red</span>
+                  <span className="text-zinc-500 text-xs font-mono">#EF4444</span>
+                </div>
+                <div className="grid grid-cols-4 gap-4">
+                  {glassLayers.primary.red.map((layer, idx) => (
+                    <motion.div
+                      key={idx}
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      whileInView={{ opacity: 1, scale: 1 }}
+                      viewport={{ once: true }}
+                      transition={{ delay: idx * 0.1 }}
+                      className="relative group"
+                    >
+                      <div 
+                        className="h-28 rounded-xl border border-[#EF4444]/30 transition-transform group-hover:scale-105"
+                        style={{ 
+                          backgroundColor: `rgba(239,68,68,${layer.opacity / 100})`,
+                          backdropFilter: `blur(${layer.blur}px)`,
+                        }}
+                      />
+                      <p className="text-zinc-400 text-xs mt-2 text-center">
+                        Opacity {layer.opacity} • Blur {layer.blur}
+                      </p>
+                    </motion.div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Usage Guidelines */}
+            <GlassCard accentColor="#8B5CF6" hoverGlow={false}>
+              <div className="p-8">
+                <h4 className="text-lg font-semibold text-white mb-4">Glass Layer Guidelines</h4>
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div className="space-y-3">
+                    <div className="flex items-start gap-3">
+                      <span className="text-[#E0FE10] mt-1">1.</span>
+                      <div>
+                        <p className="text-white font-medium">Lower opacity + higher blur = Background emphasis</p>
+                        <p className="text-zinc-500 text-sm">Use for background cards, content panels, non-interactive surfaces</p>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <span className="text-[#E0FE10] mt-1">2.</span>
+                      <div>
+                        <p className="text-white font-medium">Higher opacity + lower blur = Foreground focus</p>
+                        <p className="text-zinc-500 text-sm">Use for active cards, modals, live workout controls, important feedback</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    <div className="p-4 rounded-xl bg-[#E0FE10]/5 border border-[#E0FE10]/20">
+                      <p className="text-white text-sm font-medium mb-1">Example: "Workout Complete" Card</p>
+                      <p className="text-zinc-400 text-xs">• Crisp enough to read</p>
+                      <p className="text-zinc-400 text-xs">• Solid enough to feel final</p>
+                      <p className="text-zinc-400 text-xs">• Still glass, but assertive</p>
+                    </div>
+                    <div className="p-4 rounded-xl bg-[#3B82F6]/5 border border-[#3B82F6]/20">
+                      <p className="text-white text-sm font-medium mb-1">Example: Stats Panel Behind Live Workout</p>
+                      <p className="text-zinc-400 text-xs">• Gives depth without competing</p>
+                      <p className="text-zinc-400 text-xs">• Never competes with the numbers</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </GlassCard>
+          </div>
+        </section>
+
+        {/* Effects Section */}
+        <section id="effects" className="relative py-32 px-4">
+          <div className="max-w-6xl mx-auto">
+            <motion.div
+              initial={{ opacity: 0, y: 40 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.8 }}
+              className="text-center mb-20"
+            >
+              <span className="text-[#E0FE10] text-sm font-semibold tracking-widest uppercase mb-4 block">
+                Visual Effects
+              </span>
+              <h2 className="text-4xl md:text-6xl font-bold mb-6">
+                Effects
+              </h2>
+              <p className="text-zinc-400 text-lg max-w-2xl mx-auto">
+                Shadows and borders that give Chromatic Glass its depth and premium feel.
+              </p>
+            </motion.div>
+
+            {/* Shadows */}
+            <div className="mb-16">
+              <h3 className="text-xl font-semibold text-white mb-2">Chromatic Shadows</h3>
+              <p className="text-zinc-500 text-sm mb-6">Colored shadows at 12% opacity that cast the hue of their source</p>
+              
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+                {[
+                  { color: '#E0FE10', name: 'Green Shadow' },
+                  { color: '#3B82F6', name: 'Blue Shadow' },
+                  { color: '#8B5CF6', name: 'Purple Shadow' },
+                  { color: '#EF4444', name: 'Red Shadow' },
+                ].map((shadow, idx) => (
+                  <motion.div
+                    key={shadow.name}
+                    initial={{ opacity: 0, y: 20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: idx * 0.1 }}
+                    className="text-center"
+                  >
+                    <div 
+                      className="h-40 rounded-2xl bg-zinc-900 border border-white/5 mb-4"
+                      style={{ 
+                        boxShadow: `0 20px 50px -10px ${shadow.color}1F, 0 10px 30px -5px ${shadow.color}14`,
+                      }}
+                    />
+                    <p className="text-white font-medium">{shadow.name}</p>
+                    <p className="text-zinc-500 text-xs font-mono">{shadow.color} (12%)</p>
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+
+            {/* Gradient Borders */}
+            <div>
+              <h3 className="text-xl font-semibold text-white mb-2">Gradient Borders</h3>
+              <p className="text-zinc-500 text-sm mb-6">Premium cards use gradient strokes that fade from vibrant to subtle, creating depth and dimension</p>
+              
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+                {[
+                  { color: '#E0FE10', name: 'Green Border' },
+                  { color: '#3B82F6', name: 'Blue Border' },
+                  { color: '#8B5CF6', name: 'Purple Border' },
+                  { color: '#EF4444', name: 'Red Border' },
+                ].map((border, idx) => (
+                  <motion.div
+                    key={border.name}
+                    initial={{ opacity: 0, y: 20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: idx * 0.1 }}
+                    className="text-center"
+                  >
+                    <div 
+                      className="relative h-40 rounded-2xl mb-4 p-[1px] overflow-hidden"
+                      style={{ 
+                        background: `linear-gradient(180deg, ${border.color}40 0%, ${border.color}10 50%, transparent 100%)`,
+                      }}
+                    >
+                      <div className="w-full h-full rounded-2xl bg-zinc-900" />
+                    </div>
+                    <p className="text-white font-medium">{border.name}</p>
+                    <p className="text-zinc-500 text-xs font-mono">{border.color} (12%)</p>
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+
+            {/* Combined Effect Example */}
+            <div className="mt-16">
+              <h3 className="text-xl font-semibold text-white mb-6">Combined Effects in Action</h3>
+              
+              <div className="grid md:grid-cols-3 gap-6">
+                {[
+                  { color: '#E0FE10', title: 'Lift Card', desc: 'Gradient border + shadow + glass tint' },
+                  { color: '#3B82F6', title: 'Run Card', desc: 'Gradient border + shadow + glass tint' },
+                  { color: '#8B5CF6', title: 'Stretch Card', desc: 'Gradient border + shadow + glass tint' },
+                ].map((card, idx) => (
+                  <motion.div
+                    key={card.title}
+                    initial={{ opacity: 0, y: 30 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: idx * 0.15 }}
+                    whileHover={{ y: -8, scale: 1.02 }}
+                    className="relative group cursor-pointer"
+                  >
+                    {/* Glow background */}
+                    <div 
+                      className="absolute -inset-4 rounded-3xl blur-2xl opacity-0 group-hover:opacity-40 transition-opacity duration-500"
+                      style={{ backgroundColor: card.color }}
+                    />
+                    
+                    {/* Gradient border wrapper */}
+                    <div 
+                      className="relative rounded-2xl p-[1px]"
+                      style={{ 
+                        background: `linear-gradient(180deg, ${card.color}50 0%, ${card.color}15 50%, transparent 100%)`,
+                        boxShadow: `0 20px 50px -10px ${card.color}1F`,
+                      }}
+                    >
+                      <div 
+                        className="rounded-2xl p-6"
+                        style={{ 
+                          backgroundColor: `rgba(${card.color === '#E0FE10' ? '224,254,16' : card.color === '#3B82F6' ? '59,130,246' : '139,92,246'},0.05)`,
+                          backdropFilter: 'blur(12px)',
+                        }}
+                      >
+                        {/* Glass inner card */}
+                        <div className="bg-zinc-900/80 rounded-xl p-4">
+                          <div 
+                            className="w-12 h-12 rounded-xl mb-4 flex items-center justify-center"
+                            style={{ backgroundColor: `${card.color}20`, border: `1px solid ${card.color}30` }}
+                          >
+                            <div className="w-6 h-6 rounded-full" style={{ backgroundColor: card.color }} />
+                          </div>
+                          <h4 className="text-white font-semibold mb-1">{card.title}</h4>
+                          <p className="text-zinc-500 text-sm">{card.desc}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                ))}
               </div>
             </div>
           </div>
