@@ -10,7 +10,8 @@ interface SerializablePageMetaDataForHead extends Omit<FirestorePageMetaData, 'l
 interface PageHeadProps {
   metaData?: SerializablePageMetaDataForHead | null; // Updated to use the serializable type
   pageOgUrl: string; // Canonical URL for the current page, should be absolute
-  // defaultTitle, defaultDescription, defaultOgImage are removed
+  /** Optional page-specific OG/social preview image path (e.g. /wunna-run-og.png). Takes precedence over metaData.ogImage when set. */
+  pageOgImage?: string;
 }
 
 const GLOBAL_DEFAULT_TITLE = "Pulse Community Fitness";
@@ -28,6 +29,7 @@ const generateDynamicOgImage = (title: string, subtitle?: string): string => {
 const PageHead: React.FC<PageHeadProps> = ({
   metaData,
   pageOgUrl,
+  pageOgImage,
 }) => {
   const title = metaData?.pageTitle || GLOBAL_DEFAULT_TITLE;
   const description = metaData?.metaDescription || GLOBAL_DEFAULT_DESCRIPTION;
@@ -38,8 +40,8 @@ const PageHead: React.FC<PageHeadProps> = ({
   const ogDescription = metaData?.ogDescription || description;
   
   // Ensure ogImage is always an absolute URL
-  // If no specific image is set, generate a dynamic branded OG image
-  let ogImage = metaData?.ogImage;
+  // pageOgImage (prop) takes precedence, then metaData.ogImage, else generate dynamic image
+  let ogImage = pageOgImage || metaData?.ogImage;
   if (ogImage && !ogImage.startsWith('http')) {
     ogImage = `https://fitwithpulse.ai${ogImage}`;
   } else if (!ogImage) {

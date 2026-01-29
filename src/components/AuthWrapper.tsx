@@ -73,7 +73,9 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     // Design language showcase
     '/chromatic-glass',
     // Business overview
-    '/one-pager'
+    '/one-pager',
+    // Wunna Run proposal (passcode-protected on the page itself)
+    '/WunnaRun'
   ].map(route => route?.toLowerCase());
  
   const publicPathPatterns = [

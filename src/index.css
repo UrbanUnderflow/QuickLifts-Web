@@ -112,3 +112,30 @@ code {
 .animation-delay-2000 {
   animation-delay: 2000ms;
 }
+
+/* Data slide: circuit background animation */
+@keyframes circuit-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes circuit-pulse {
+  0%, 100% {
+    opacity: 0.2;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.animate-circuit-draw {
+  animation: circuit-draw 2.5s ease-out infinite;
+}
+
+.animate-circuit-pulse {
+  animation: circuit-pulse 3s ease-in-out infinite;
+}

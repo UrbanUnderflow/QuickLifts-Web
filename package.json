@@ -3,6 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
     "@ffmpeg/core": "0.8.5",
     "@ffmpeg/ffmpeg": "0.8.3",
     "@getbrevo/brevo": "^2.2.0",
@@ -37,6 +39,7 @@
     "html2canvas": "^1.4.1",
     "html2pdf.js": "^0.10.3",
     "jsdom": "^25.0.1",
+    "jspdf": "^4.0.0",
     "lodash.debounce": "^4.0.8",
     "lucide-react": "^0.460.0",
     "mixpanel-browser": "^2.64.0",

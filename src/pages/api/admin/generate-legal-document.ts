@@ -180,10 +180,10 @@ Structure the document so it can serve as both a design spec and implementation 
     defaultTitle: 'System Design Document'
   },
   'custom': {
-    systemPrompt: `You are a legal document drafting assistant capable of creating various legal documents.
-Generate a comprehensive, professional legal document based on the user's requirements.
-Include appropriate sections, definitions, and standard legal provisions relevant to the document type.
-Use clear, professional legal language appropriate for business and legal contexts.`,
+    systemPrompt: `You are a document formatting assistant. The user will paste an existing document.
+Your job is to preserve the original wording, tone, and structure as much as possible while applying clean formatting.
+Do NOT rewrite sentences, alter voice, or add new content. Only fix obvious grammar/typo issues.
+Focus on presentation: headings, spacing, lists, numbering, and consistent formatting.`,
     defaultTitle: 'Legal Document'
   }
 };
@@ -209,6 +209,10 @@ export default async function handler(
   }
 
   const template = DOCUMENT_TEMPLATES[documentType] || DOCUMENT_TEMPLATES['custom'];
+  const preserveVerbiage =
+    documentType === 'custom'
+      ? `\n\nCRITICAL CONTENT PRESERVATION RULES:\n- Keep the original wording and tone intact.\n- Only fix clear grammar or spelling errors.\n- Do not paraphrase, expand, or shorten content.\n- Do not add new clauses, sections, or legal concepts unless explicitly present in the pasted text.`
+      : '';
 
   try {
     const wantsSignature = Boolean(requiresSignature);
@@ -266,7 +270,7 @@ The document should be ready to print as a professional document.`;
         messages: [
           {
             role: 'system',
-            content: `${template.systemPrompt}\n\n${formattingInstructions}`
+            content: `${template.systemPrompt}\n\n${formattingInstructions}${preserveVerbiage}`
           },
           {
             role: 'user',

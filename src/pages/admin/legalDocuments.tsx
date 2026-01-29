@@ -1287,10 +1287,20 @@ const LegalDocumentsAdmin: React.FC = () => {
     `).join('\n');
   };
 
+  const stripNumberedHeaders = (content: string): string => {
+    return content
+      .replace(/^(#{1,6})\s+\d+[\.\)]\s+(.+)$/gm, '$1 $2')
+      .replace(/^(#{1,6})\s+\d+\s*-\s+(.+)$/gm, '$1 $2');
+  };
+
   // Project/Planning style PDF (modern, readable)
   const generateProjectStylePdf = (document: LegalDocument, includeSignature: boolean, exhibits: LegalDocument[] = []): string => {
     const exhibitsHtml = generateExhibitsHtml(exhibits);
     const hasExhibits = exhibits.length > 0;
+    const showFooter = document.documentType !== 'custom';
+    const contentForPdf = document.documentType === 'custom'
+      ? stripNumberedHeaders(document.content)
+      : document.content;
     
     return `
       <!DOCTYPE html>
@@ -1492,13 +1502,12 @@ const LegalDocumentsAdmin: React.FC = () => {
         <body>
           <div class="header">
             <div class="company-name">Pulse Intelligence Labs, Inc.</div>
-            <div class="document-date">Created: ${formatDate(document.createdAt)}</div>
           </div>
           
           <h1>${document.title}</h1>
           
           <div class="content">
-            ${formatContentForPdf(document.content, true)}
+            ${formatContentForPdf(contentForPdf, true)}
           </div>
         
         ${hasExhibits ? `
@@ -1533,9 +1542,11 @@ const LegalDocumentsAdmin: React.FC = () => {
           </div>
         ` : ''}
           
+          ${showFooter ? `
           <div class="footer">
             <p>© ${new Date().getFullYear()} Pulse Intelligence Labs, Inc. All rights reserved.</p>
           </div>
+          ` : ''}
           
           ${exhibitsHtml}
         </body>
@@ -1547,6 +1558,7 @@ const LegalDocumentsAdmin: React.FC = () => {
   const generateLegalStylePdf = (document: LegalDocument, includeSignature: boolean, exhibits: LegalDocument[] = []): string => {
     const exhibitsHtml = generateExhibitsHtml(exhibits);
     const hasExhibits = exhibits.length > 0;
+    const showFooter = document.documentType !== 'custom';
     
     return `
       <!DOCTYPE html>
@@ -1723,7 +1735,6 @@ const LegalDocumentsAdmin: React.FC = () => {
         <body>
           <div class="header">
             <div class="company-name">PULSE INTELLIGENCE LABS, INC.</div>
-            <div class="document-date">Created: ${formatDate(document.createdAt)}</div>
           </div>
           
           <h1>${document.title}</h1>
@@ -1765,9 +1776,11 @@ const LegalDocumentsAdmin: React.FC = () => {
           </div>
         ` : ''}
           
+          ${showFooter ? `
           <div class="footer">
             <p>© ${new Date().getFullYear()} Pulse Intelligence Labs, Inc. All rights reserved.</p>
           </div>
+          ` : ''}
           
           <div class="confidential">
             CONFIDENTIAL - This document contains proprietary information.
