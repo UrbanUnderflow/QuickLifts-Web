@@ -36,7 +36,7 @@ const Header: React.FC<HeaderProps> = ({
       <div className="flex justify-between items-center w-full">
         <div className="flex items-center text-white font-bold">
           <img 
-            src={theme === 'dark' ? "/pulse-logo-white.svg" : "/pulse-logo.svg"} 
+            src={theme === 'dark' ? "/PulseWhite.png" : "/pulse-logo.svg"} 
             alt="Pulse Logo" 
             className="h-12" 
           />
