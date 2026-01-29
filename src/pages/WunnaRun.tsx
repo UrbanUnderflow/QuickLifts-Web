@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ChevronUp, ChevronDown, Users, Trophy, MessageCircle, BarChart3, Smartphone, Bell, MapPin, Globe, Zap, CheckCircle, Calendar, Phone, Mail, Download, Layers, Building2, Wrench, Dumbbell, Footprints, PersonStanding } from 'lucide-react';
+import { ChevronUp, ChevronDown, ChevronLeft, Users, Trophy, MessageCircle, BarChart3, BarChart2, Smartphone, Bell, MapPin, Globe, Zap, CheckCircle, Calendar, Phone, Mail, Download, Copy, Layers, Building2, Wrench, Dumbbell, Footprints, PersonStanding, X } from 'lucide-react';
 import Header from '../components/Header';
 import PageHead from '../components/PageHead';
 import { GetServerSideProps } from 'next';
 import { adminMethods } from '../api/firebase/admin/methods';
 import { PageMetaData as FirestorePageMetaData } from '../api/firebase/admin/types';
+import { auth } from '../api/firebase/config';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 
@@ -18,7 +19,9 @@ interface WunnaRunProps {
 }
 
 const WUNNA_PASSCODE = 'WUNNA';
+const ONEUP_PASSCODE = 'ONEUP';
 const WUNNA_UNLOCK_KEY = 'wunna-run-unlocked';
+const WUNNA_PASSCODE_USED_KEY = 'wunna-run-passcode-used'; // 'WUNNA' | 'ONEUP' — ONEUP shows analytics
 
 const WunnaRun = ({ metaData }: WunnaRunProps) => {
   const [activeSection, setActiveSection] = useState(0);
@@ -30,8 +33,18 @@ const WunnaRun = ({ metaData }: WunnaRunProps) => {
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [passcodeInput, setPasscodeInput] = useState('');
   const [passcodeError, setPasscodeError] = useState('');
-  const totalSections = 20;
+  const [copied, setCopied] = useState(false);
+  const [analyticsOpen, setAnalyticsOpen] = useState(false);
+  const [analyticsVisitors, setAnalyticsVisitors] = useState<Array<{ ip: string; location: string; count: number; lastSeen: string; firstSeen: string; visitorId: string | null }>>([]);
+  const [analyticsDetailIp, setAnalyticsDetailIp] = useState<string | null>(null);
+  const [analyticsLogs, setAnalyticsLogs] = useState<Array<{ id: string; timestamp: string; location: string | null; userAgent: string | null; visitorId: string | null }>>([]);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [analyticsError, setAnalyticsError] = useState<string | null>(null);
+  const totalSections = 22;
   const sectionRefs = useRef<(HTMLDivElement | null)[]>(Array(totalSections).fill(null));
+
+  const [passcodeUsed, setPasscodeUsed] = useState<'WUNNA' | 'ONEUP' | null>(null);
+  const showAnalyticsButton = passcodeUsed === 'ONEUP';
   
   // Brand colors for Wunna Run
   const wunnaGreen = '#E0FE10'; // Pulse green
@@ -49,11 +62,14 @@ const WunnaRun = ({ metaData }: WunnaRunProps) => {
     erik: 'https://www.linkedin.com/search/results/all/?keywords=Erik%20Edwards%20Cooley',
   } as const;
   
-  // Check sessionStorage for existing passcode unlock (client-side only)
+  // Check sessionStorage for existing passcode unlock and which passcode was used (client-side only)
   useEffect(() => {
     try {
-      const unlocked = typeof window !== 'undefined' && sessionStorage.getItem(WUNNA_UNLOCK_KEY) === 'true';
+      if (typeof window === 'undefined') return;
+      const unlocked = sessionStorage.getItem(WUNNA_UNLOCK_KEY) === 'true';
+      const used = sessionStorage.getItem(WUNNA_PASSCODE_USED_KEY) as 'WUNNA' | 'ONEUP' | null;
       setIsUnlocked(!!unlocked);
+      if (unlocked && (used === 'WUNNA' || used === 'ONEUP')) setPasscodeUsed(used);
     } catch {
       setIsUnlocked(false);
     }
@@ -66,15 +82,49 @@ const WunnaRun = ({ metaData }: WunnaRunProps) => {
     if (trimmed === WUNNA_PASSCODE) {
       try {
         sessionStorage.setItem(WUNNA_UNLOCK_KEY, 'true');
+        sessionStorage.setItem(WUNNA_PASSCODE_USED_KEY, 'WUNNA');
       } catch {
         // ignore
       }
+      setPasscodeUsed('WUNNA');
+      setIsUnlocked(true);
+      setPasscodeInput('');
+    } else if (trimmed === ONEUP_PASSCODE) {
+      try {
+        sessionStorage.setItem(WUNNA_UNLOCK_KEY, 'true');
+        sessionStorage.setItem(WUNNA_PASSCODE_USED_KEY, 'ONEUP');
+      } catch {
+        // ignore
+      }
+      setPasscodeUsed('ONEUP');
       setIsUnlocked(true);
       setPasscodeInput('');
     } else {
       setPasscodeError('Incorrect passcode. Please try again.');
     }
   };
+
+  // Record page view (IP / location / stable visitor ID) for analytics
+  useEffect(() => {
+    const visitorId = (() => {
+      try {
+        const key = 'wunna-run-visitor-id';
+        let id = typeof window !== 'undefined' ? localStorage.getItem(key) : null;
+        if (!id) {
+          id = `v_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 11)}`;
+          if (typeof window !== 'undefined') localStorage.setItem(key, id);
+        }
+        return id;
+      } catch {
+        return null;
+      }
+    })();
+    fetch('/api/wunna-run/record-view', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(visitorId ? { visitorId } : {}),
+    }).catch(() => {});
+  }, []);
 
   // Check if we're on mobile
   useEffect(() => {
@@ -201,6 +251,213 @@ const WunnaRun = ({ metaData }: WunnaRunProps) => {
       
       return () => clearTimeout(scrollTimer);
     }
+  };
+
+  const getPresentationAsText = () => {
+    const lines = [
+      '——— SLIDE 1: TITLE ———',
+      'WUNNA RUN x PULSE',
+      'Year-Round Community Infrastructure for the World\'s Fastest-Growing Run Club',
+      'fitwithpulse.ai',
+      '',
+      '——— SLIDE 2: THE OPPORTUNITY ———',
+      'We\'re offering Wunna Run more than a software vendor relationship.',
+      '1. Partnership — Wunna Run adopts Pulse as official community platform. Gunna receives equity in Pulse — aligned incentives.',
+      '2. Investment — Gunna invests in Pulse\'s pre-seed round via SAFE alongside institutional partners — ownership in the infrastructure powering the run club movement.',
+      '3. Both — Combined partnership and investment for maximum alignment and ownership — a true stake in the platform\'s success, not just a logo on a banner.',
+      'Details in the attached Investment Brief.',
+      '',
+      '——— SLIDE 3: WHAT GUNNA GETS ———',
+      '• Meaningful equity ownership in Pulse',
+      '• Input on product direction — especially run club and community features',
+      '• Technology infrastructure to scale Wunna Run globally without losing intimacy',
+      '• Rich data on his community for merch drops, pre-sales, VIP experiences, and sponsor activations',
+      '• Year-round engagement platform that keeps runners connected between events',
+      '• Philanthropic impact tracking — see how participation translates to community giveback',
+      '• A partner aligned with his mission of health, wellness, community, and philanthropy',
+      '',
+      '——— SLIDE 4: THE MISSION BEHIND THE MOVEMENT ———',
+      'Wunna Run started with a personal transformation.',
+      '',
+      'Gunna faced his own nutritional and health challenges. Through fitness, he found peace, accountability, and a sense of purpose. Running a marathon — and raising money for his community during it — became the spark for something bigger.',
+      '',
+      'Today, Wunna Run is a global movement rooted in four pillars:',
+      '• Health — Inspiring people to move, no matter where they start',
+      '• Wellness — Finding peace and balance through fitness',
+      '• Community — Real connections between Gunna and his fans',
+      '• Philanthropy — Giving back through Gunna\'s Great Giveaway',
+      '',
+      'Gunna invests over $3 million annually in the City of South Fulton — one of the most underserved communities in Georgia — because he believes health and economic opportunity go hand in hand.',
+      '',
+      'Pulse is built to support all four pillars — not just the runs, but the mission behind them.',
+      '',
+      '——— SLIDE 5: WUNNA RUN RECAP + NEXT ———',
+      '2025 proved the demand. 2026 turns it into a global movement.',
+      '',
+      'THE ORIGIN',
+      'Gunna\'s own health journey — overcoming nutritional challenges, finding peace through fitness, and transforming his life — inspired him to run a marathon and raise money for his community. That moment became Wunna Run: a movement to inspire others to be their best selves and run with purpose.',
+      '',
+      '2025 — WHAT WUNNA RUN DID',
+      '• 8 cities • 2,000+ runners per event • 20+ races worldwide',
+      '• Partners: Strava, Under Armour, House of Athlete, Symbiotica, Flourish, Path Water',
+      '• Proceeds supporting Gunna\'s Great Giveaway — investing in the City of South Fulton and communities that need it most',
+      '',
+      '2026 — GLOBAL EXPANSION',
+      '• Paris + London launch moments',
+      '• City-to-city continuity (points carry over)',
+      '• One global series experience',
+      '• Deeper philanthropic integration',
+      '',
+      'PROPOSAL',
+      'Technology installation — build on top of Pulse. Infrastructure for check-ins, run tracking, challenges, points, leaderboards, owned data, and philanthropic impact tracking across the entire series.',
+      'Result: A global series, year-round — with purpose.',
+      '',
+      '——— SLIDE 6: THE RUNNERS ———',
+      'The Problem:',
+      '1. Runners, fans, and community who physically showed up to Wunna Run had an incredible experience — but cannot take part again until the next in-person run.',
+      '2. Runners, fans, and community who cannot attend due to travel or not living in a major city still want to participate and contribute to the run community.',
+      '',
+      'What they want:',
+      '• Stay connected • Track progress • Earn recognition • Feel part of something bigger • Run with purpose',
+      '',
+      '——— SLIDE 7: THE SOLUTION: INTRODUCING PULSE — RUNS WITH GUNNA ———',
+      'Pulse is a community-first fitness platform that helps brands, athletes, and community leaders build deeper connection through digital group training. Backed by the same investors behind Uber, Calm, and Robinhood. This is your personalized operating system for your fitness community.',
+      '',
+      '——— SLIDE 8: THE RUNNER EXPERIENCE ———',
+      'Join → Download Pulse, join the Wunna Run community. Check-in → Scan at the run, earn points. Earn → Climb the leaderboard, unlock rewards. Stay connected → Engage between events. Come back → Show up to the next run, keep the streak alive.',
+      '',
+      '——— SLIDE 9: HOW IT WORKS — COMMUNITY ———',
+      'Run tracking & challenges build stronger community. Every run compounds — a connected journey. Track runs between events, community challenges, streaks/milestones, two-way communication (Gunna can message runners directly).',
+      '',
+      '——— SLIDES 10–12: HOW IT WORKS — CHECK-INS (3 parts) ———',
+      'Check-Ins Part 1: When participants arrive at the physical location, the QR code appears on their phone to be scanned by the host — or they scan a QR at the venue.',
+      'Check-Ins Part 2: Points and badges for scanning QR at the physical location. Collect badges across cities for additional points. Runs become a connected experience from city to city.',
+      'Check-Ins Part 3: How it works: We use check-ins to expand reach and make Gunna Runs accessible to everyone everywhere. The map shows physical check-ins and virtual runners. People can join virtually from any city and run from anywhere — unlocking scale that wasn\'t possible before.',
+      '',
+      '——— SLIDE 13: GAMIFICATION ———',
+      'Points as incentives. Each run compounds and leads to the next — a connected experience. Invites: earn points when friends join. Social: points encourage interaction. Loyalty: streaks, badges, city-to-city continuity. Gamification turns participation into belonging.',
+      '',
+      '——— SLIDE 14: BETWEEN EVENTS ———',
+      'Year-round engagement: challenges, streaks, communication, data that powers the next run. The community doesn\'t stop when the run ends.',
+      '',
+      '——— SLIDE 15: HOW IT WORKS — DATA ———',
+      'Wearable data collection — runs, activity, and engagement sync from Apple Watch, Garmin, Strava, and more. Rich member profiles for deeper fan experiences. Own the relationship, see who\'s most engaged, segment for merch/VIP, inform partnerships and sponsorships.',
+      'Good addition with wearables (Apple Watch, Garmin, Strava sync). Shows you complement, not compete.',
+      '',
+      '——— SLIDE 16: THE SERIES (NASCAR/PGA STYLE) ———',
+      'One global series with points, standings, and continuity across cities.',
+      '',
+      '——— SLIDE 17: WUNNA RUN TEAM EXPERIENCE ———',
+      'For the Wunna Run Team: Metrics by city, community management, one platform for events, check-ins, merch drops, challenges, and fan experiences.',
+      '',
+      '——— SLIDE 18: SCALE ———',
+      'Technology infrastructure to scale Wunna Run globally.',
+      '',
+      '——— SLIDE 19: WHO\'S BUILDING PULSE? ———',
+      'Core Team: Tremaine Grant (CEO & Founder), Bobby Nweke (Chief of Staff), Lola Oluwaladun (Design Lead).',
+      'Advisors: Marques Zak (CMO @ ACC), Valerie Alexander (Fortune 500 Consultant), DeRay Mckesson (Campaign Zero), Erik Edwards (Partner @ Cooley).',
+      'Partners: Cooley, AWS Startups, Techstars, Launch.',
+      '',
+      '——— SLIDE 20: TIMELINE ———',
+      'March 20 — Paris (potential soft launch)',
+      'March 31 — London (potential launch)',
+      'Q2 2026 — Full series rollout',
+      '',
+      '——— SLIDE 21: NEXT STEPS ———',
+      'Follow-up and next steps.',
+      '',
+      '——— SLIDE 22: LET\'S BUILD ———',
+      'Let\'s build. fitwithpulse.ai',
+      '',
+      '——— END ———',
+    ];
+    return lines.join('\n');
+  };
+
+  const handleCopyToClipboard = async () => {
+    try {
+      const text = getPresentationAsText();
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Fallback for older browsers or non-HTTPS
+      try {
+        const textArea = document.createElement('textarea');
+        textArea.value = getPresentationAsText();
+        textArea.style.position = 'fixed';
+        textArea.style.opacity = '0';
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } catch {
+        alert('Could not copy to clipboard.');
+      }
+    }
+  };
+
+  const getAnalyticsHeaders = async (): Promise<Record<string, string>> => {
+    if (auth.currentUser) {
+      const token = await auth.currentUser.getIdToken(true);
+      return { Authorization: `Bearer ${token}` };
+    }
+    if (passcodeUsed === 'ONEUP') {
+      return { 'X-Wunna-Run-Passcode': 'ONEUP' };
+    }
+    return {};
+  };
+
+  const fetchAnalyticsList = async () => {
+    setAnalyticsLoading(true);
+    setAnalyticsError(null);
+    try {
+      const headers = await getAnalyticsHeaders();
+      const res = await fetch('/api/wunna-run/analytics', { headers });
+      if (!res.ok) throw new Error('Failed to load analytics');
+      const data = await res.json();
+      setAnalyticsVisitors(data.visitors ?? []);
+    } catch (e) {
+      setAnalyticsError(e instanceof Error ? e.message : 'Failed to load analytics');
+      setAnalyticsVisitors([]);
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  };
+
+  const fetchAnalyticsDetail = async (ip: string) => {
+    setAnalyticsLoading(true);
+    setAnalyticsError(null);
+    setAnalyticsDetailIp(ip);
+    try {
+      const headers = await getAnalyticsHeaders();
+      const res = await fetch(`/api/wunna-run/analytics?ip=${encodeURIComponent(ip)}`, { headers });
+      if (!res.ok) throw new Error('Failed to load access log');
+      const data = await res.json();
+      setAnalyticsLogs(data.logs ?? []);
+    } catch (e) {
+      setAnalyticsError(e instanceof Error ? e.message : 'Failed to load access log');
+      setAnalyticsLogs([]);
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  };
+
+  const openAnalyticsModal = () => {
+    setAnalyticsOpen(true);
+    setAnalyticsDetailIp(null);
+    setAnalyticsLogs([]);
+    setAnalyticsError(null);
+    fetchAnalyticsList();
+  };
+
+  const closeAnalyticsModal = () => {
+    setAnalyticsOpen(false);
+    setAnalyticsDetailIp(null);
+    setAnalyticsLogs([]);
+    setAnalyticsVisitors([]);
   };
   
   const handleDownloadPDF = async () => {
@@ -440,7 +697,7 @@ const WunnaRun = ({ metaData }: WunnaRunProps) => {
   
   const getSectionClasses = (bgColor: string = 'bg-zinc-950') => {
     if (isMobile) {
-      return `w-full relative py-16 px-6 mb-24 ${bgColor}`;
+      return `w-full min-h-[100dvh] min-h-screen snap-start flex flex-col items-center justify-center relative ${bgColor} overflow-x-hidden overflow-y-visible pt-16 pb-10 px-4 box-border`;
     } else {
       return `w-full h-screen snap-start flex flex-col items-center justify-center relative ${bgColor}`;
     }
@@ -490,11 +747,12 @@ const WunnaRun = ({ metaData }: WunnaRunProps) => {
             type="password"
             value={passcodeInput}
             onChange={(e) => {
-              setPasscodeInput(e.target.value);
+              setPasscodeInput(e.target.value.toUpperCase());
               setPasscodeError('');
             }}
             placeholder="Passcode"
-            className="w-full px-4 py-3 rounded-xl bg-zinc-900 border border-zinc-700 text-white placeholder-zinc-500 focus:outline-none focus:border-[#E0FE10] focus:ring-1 focus:ring-[#E0FE10]"
+            className="w-full px-4 py-3 rounded-xl bg-zinc-900 border border-zinc-700 text-white placeholder-zinc-500 focus:outline-none focus:border-[#E0FE10] focus:ring-1 focus:ring-[#E0FE10] uppercase"
+            style={{ textTransform: 'uppercase' }}
             autoComplete="off"
             autoFocus
           />
@@ -567,12 +825,126 @@ const WunnaRun = ({ metaData }: WunnaRunProps) => {
         ))}
       </div>
       
-      {/* Fixed Slide Counter Badge - Top Right */}
-      <div className="fixed top-6 right-6 md:right-20 z-50">
+      {/* Fixed Slide Counter + Download + Copy - Top Right */}
+      <div className="fixed top-6 right-6 md:right-20 z-50 flex items-center gap-2 md:gap-3">
+        {showAnalyticsButton && (
+          <>
+            <button
+              onClick={openAnalyticsModal}
+              className={`flex items-center justify-center rounded-full shadow-lg transition-all bg-zinc-700 hover:bg-zinc-600 text-white ${isMobile ? 'w-9 h-9' : 'w-10 h-10'}`}
+              aria-label="View analytics"
+              title="View analytics (IP / access log)"
+            >
+              <BarChart2 size={isMobile ? 14 : 16} />
+            </button>
+            <button 
+              onClick={handleCopyToClipboard}
+              className={`flex items-center justify-center rounded-full shadow-lg transition-all ${copied ? 'bg-emerald-500 text-white' : 'bg-zinc-700 hover:bg-zinc-600 text-white'} ${isMobile ? 'w-9 h-9' : 'w-10 h-10'}`}
+              aria-label={copied ? 'Copied to clipboard' : 'Copy presentation as text'}
+              title={copied ? 'Copied!' : 'Copy presentation as text'}
+            >
+              {copied ? (
+                <CheckCircle size={isMobile ? 16 : 18} />
+              ) : (
+                <Copy size={isMobile ? 14 : 16} />
+              )}
+            </button>
+          </>
+        )}
+        <button 
+          onClick={handleDownloadPDF}
+          disabled={isGeneratingPDF}
+          className={`flex items-center bg-[#E0FE10] text-black font-medium ${isMobile ? 'text-xs px-2.5 py-1.5' : 'text-sm px-3 py-2'} rounded-full shadow-lg hover:bg-[#E0FE10]/90 transition-all disabled:opacity-70`}
+        >
+          {isGeneratingPDF ? (
+            <>
+              <div className="w-3 h-3 border-2 border-black border-t-transparent rounded-full animate-spin mr-1.5"></div>
+              {pdfProgress}%
+            </>
+          ) : (
+            <>
+              <Download size={isMobile ? 12 : 14} className="mr-1.5" />
+              {isMobile ? 'Download' : 'Download Presentation'}
+            </>
+          )}
+        </button>
         <div className="bg-[#E0FE10] text-black px-4 py-2 rounded-full font-bold text-sm shadow-lg">
           {activeSection + 1}/{totalSections}
         </div>
       </div>
+
+      {/* Analytics Modal (admin only) */}
+      {analyticsOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80" role="dialog" aria-modal="true" aria-labelledby="analytics-modal-title">
+          <div className="bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-zinc-700">
+              {analyticsDetailIp ? (
+                <button
+                  onClick={() => { setAnalyticsDetailIp(null); setAnalyticsLogs([]); fetchAnalyticsList(); }}
+                  className="flex items-center gap-2 text-zinc-400 hover:text-white transition-colors"
+                >
+                  <ChevronLeft size={20} />
+                  <span>Back</span>
+                </button>
+              ) : (
+                <h2 id="analytics-modal-title" className="text-lg font-bold text-white">Wunna Run Analytics</h2>
+              )}
+              <button
+                onClick={closeAnalyticsModal}
+                className="p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+                aria-label="Close"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-4 overflow-y-auto flex-1 min-h-0">
+              {analyticsError && (
+                <p className="text-red-400 text-sm mb-4">{analyticsError}</p>
+              )}
+              {analyticsLoading && !analyticsDetailIp && analyticsVisitors.length === 0 && (
+                <p className="text-zinc-400 text-sm">Loading visitors…</p>
+              )}
+              {analyticsLoading && analyticsDetailIp && analyticsLogs.length === 0 && (
+                <p className="text-zinc-400 text-sm">Loading access log…</p>
+              )}
+              {!analyticsDetailIp && analyticsVisitors.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-zinc-400 text-sm mb-3">Click an IP to see access times.</p>
+                  {analyticsVisitors.map((v) => (
+                    <button
+                      key={v.ip}
+                      onClick={() => fetchAnalyticsDetail(v.ip)}
+                      className="w-full text-left p-3 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 flex flex-wrap items-center justify-between gap-2"
+                    >
+                      <span className="font-mono text-[#E0FE10]">{v.ip}</span>
+                      {v.visitorId && <span className="text-zinc-500 text-xs font-mono" title="Stable visitor ID (same across IPs)">{v.visitorId}</span>}
+                      <span className="text-zinc-400 text-sm">{v.location}</span>
+                      <span className="text-white font-semibold">{v.count} visit{v.count !== 1 ? 's' : ''}</span>
+                      <span className="text-zinc-500 text-xs w-full md:w-auto">Last: {v.lastSeen ? new Date(v.lastSeen).toLocaleString() : '—'}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {analyticsDetailIp && (
+                <>
+                  <h3 className="text-white font-semibold mb-2 font-mono break-all">{analyticsDetailIp}</h3>
+                  <p className="text-zinc-400 text-sm mb-3">Access log ({analyticsLogs.length} entries)</p>
+                  <ul className="space-y-2">
+                    {analyticsLogs.map((log) => (
+                      <li key={log.id} className="p-3 rounded-lg bg-zinc-800 border border-zinc-700 text-sm">
+                        <span className="text-white">{new Date(log.timestamp).toLocaleString()}</span>
+                        {log.visitorId && <span className="text-zinc-500 text-xs font-mono ml-2" title="Stable visitor ID">({log.visitorId})</span>}
+                        {log.location && <span className="text-zinc-400 ml-2">— {log.location}</span>}
+                        {log.userAgent && <div className="text-zinc-500 text-xs mt-1 truncate" title={log.userAgent}>{log.userAgent}</div>}
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       
       {/* Navigation Arrows */}
       <div className={`fixed left-1/2 transform -translate-x-1/2 z-50 flex justify-between w-full max-w-7xl px-6 ${isMobile ? 'hidden' : ''}`}>
@@ -596,8 +968,12 @@ const WunnaRun = ({ metaData }: WunnaRunProps) => {
         </button>
       </div>
       
-      {/* Main content */}
-      <main id="main-content" className={isMobile ? "relative pb-24 overflow-visible" : "snap-y snap-mandatory h-screen overflow-y-scroll"}>
+      {/* Main content - full-screen slides on mobile with snap scroll */}
+      <main
+        id="main-content"
+        className={isMobile ? "snap-y snap-mandatory h-screen overflow-y-auto overflow-x-hidden overscroll-y-none" : "snap-y snap-mandatory h-screen overflow-y-scroll"}
+        style={isMobile ? { WebkitOverflowScrolling: 'touch' } : undefined}
+      >
         
         {/* Slide 1: Title */}
         <section 
@@ -619,22 +995,20 @@ const WunnaRun = ({ metaData }: WunnaRunProps) => {
           
           {/* Main Content */}
           <div className={`${getContentClasses()} z-10 flex flex-col items-center justify-center`}>
-            {/* WUNNA RUN x */}
-            <h1 className={`${isMobile ? 'text-4xl' : 'text-5xl md:text-7xl lg:text-8xl'} font-bold mb-4 text-white tracking-tight animate-fade-in-up`}>
-              WUNNA RUN <span className="text-zinc-400">x</span>
-            </h1>
-            
-            {/* Pulse Logo */}
-            <div className="flex items-center justify-center mb-8 animate-fade-in-up animation-delay-300">
+            {/* WUNNA RUN x Pulse — same line */}
+            <div className="flex flex-wrap items-center justify-center gap-3 md:gap-5 mb-8 animate-fade-in-up">
+              <h1 className={`${isMobile ? 'text-4xl' : 'text-5xl md:text-7xl lg:text-8xl'} font-bold text-white tracking-tight`}>
+                WUNNA RUN <span className="text-zinc-400">x</span>
+              </h1>
               <img 
                 src="/PulseGreen.png" 
                 alt="Pulse" 
-                className={`${isMobile ? 'h-16' : 'h-20 md:h-28'} w-auto`}
+                className={`${isMobile ? 'h-12 md:h-16' : 'h-16 md:h-24 lg:h-28'} w-auto`}
               />
             </div>
             
-            {/* Subtitle */}
-            <p className={`${isMobile ? 'text-base' : 'text-lg md:text-xl'} text-zinc-300 animate-fade-in-up animation-delay-600 max-w-2xl mx-auto text-center`}>
+            {/* Subtitle — wide container on large screens so tagline stays on one line */}
+            <p className={`${isMobile ? 'text-base' : 'text-lg md:text-xl'} text-zinc-300 animate-fade-in-up animation-delay-600 max-w-2xl lg:max-w-5xl xl:max-w-6xl mx-auto text-center`}>
               Year-Round Community Infrastructure for the World's Fastest-Growing Run Club
             </p>
           </div>
@@ -652,75 +1026,350 @@ const WunnaRun = ({ metaData }: WunnaRunProps) => {
           </div>
         </section>
         
-        {/* Slide 2: Executive Summary */}
+        {/* Slide 2: The Opportunity (moved up) */}
         <section 
           data-slide="1"
           ref={(el) => { sectionRefs.current[1] = el as HTMLDivElement; }}
+          className={getSectionClasses('bg-zinc-900')}
+        >
+          <div className={getContentClasses()}>
+            <h2 className={`${isMobile ? 'text-3xl' : 'text-4xl md:text-5xl'} font-bold mb-4 text-white animate-fade-in-up`}>
+              The <span className="text-[#E0FE10]">Opportunity</span>
+            </h2>
+            <p className="text-xl text-zinc-400 mb-8 animate-fade-in-up animation-delay-150">
+              We're offering Wunna Run more than a software vendor relationship.
+            </p>
+            
+            {/* Why Pulse - Compact Version */}
+            <div className="flex flex-wrap justify-center gap-3 mb-10 animate-fade-in-up animation-delay-200">
+              {[
+                'Community-first',
+                'Owned audience',
+                'Year-round engagement',
+                'Built for scale',
+                'Aligned mission',
+              ].map((item, index) => (
+                <div key={index} className="flex items-center gap-2 bg-zinc-950/80 px-4 py-2 rounded-full border border-zinc-800">
+                  <CheckCircle className="w-4 h-4 text-[#E0FE10]" />
+                  <span className="text-zinc-300 text-sm font-medium">{item}</span>
+                </div>
+              ))}
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 animate-fade-in-up animation-delay-300">
+              <GlassCard>
+                <div className="p-6 text-center">
+                  <div className="w-16 h-16 rounded-full bg-[#E0FE10]/20 flex items-center justify-center mx-auto mb-4">
+                    <span className="text-[#E0FE10] text-2xl font-bold">1</span>
+                  </div>
+                  <h3 className="text-white font-bold text-xl mb-3">Partnership</h3>
+                  <p className="text-zinc-400 text-sm">
+                    Wunna Run adopts Pulse as official community platform. <span className="text-[#E0FE10] font-bold">Gunna receives equity in Pulse</span> — aligned incentives.
+                  </p>
+                </div>
+              </GlassCard>
+              
+              <GlassCard accentColor={wunnaPurple}>
+                <div className="p-6 text-center">
+                  <div className="w-16 h-16 rounded-full bg-[#8B5CF6]/20 flex items-center justify-center mx-auto mb-4">
+                    <span className="text-[#8B5CF6] text-2xl font-bold">2</span>
+                  </div>
+                  <h3 className="text-white font-bold text-xl mb-3">Investment</h3>
+                  <p className="text-zinc-400 text-sm">
+                    Gunna invests in Pulse&apos;s pre-seed round via <span className="text-[#8B5CF6] font-bold">SAFE</span> alongside institutional partners — ownership in the infrastructure powering the run club movement.
+                  </p>
+                </div>
+              </GlassCard>
+              
+              <GlassCard accentColor={wunnaBlue}>
+                <div className="p-6 text-center">
+                  <div className="w-16 h-16 rounded-full bg-[#3B82F6]/20 flex items-center justify-center mx-auto mb-4">
+                    <span className="text-[#3B82F6] text-2xl font-bold">3</span>
+                  </div>
+                  <h3 className="text-white font-bold text-xl mb-3">Both</h3>
+                  <p className="text-zinc-400 text-sm">
+                    Combined partnership and investment for maximum alignment and ownership — a true stake in the platform&apos;s success, not just a logo on a banner.
+                  </p>
+                </div>
+              </GlassCard>
+            </div>
+            
+            <div className="bg-zinc-950 p-4 rounded-xl border border-[#E0FE10]/30 text-center animate-fade-in-up animation-delay-600">
+              <p className="text-zinc-400">Details in the attached <span className="text-[#E0FE10] font-bold">Investment Brief</span></p>
+            </div>
+          </div>
+        </section>
+        
+        {/* Slide 2: What Gunna Gets */}
+        <section 
+          data-slide="2"
+          ref={(el) => { sectionRefs.current[2] = el as HTMLDivElement; }}
           className={`${getSectionClasses()} overflow-hidden`}
         >
           {/* Background Image with Overlay */}
+          <div className="absolute inset-0">
+            <img 
+              src="/wunna-run-proclamation.png" 
+              alt="" 
+              className="absolute inset-0 w-full h-full object-cover"
+            />
+            <div className="absolute inset-0 bg-black/70"></div>
+          </div>
+          
+          <div className="relative z-10 w-full max-w-6xl mx-auto px-6 text-left md:text-center">
+            <h2 className={`${isMobile ? 'text-3xl' : 'text-4xl md:text-5xl'} font-bold mb-12 text-white animate-fade-in-up`}>
+              What <span className="text-[#E0FE10]">Gunna</span> Gets
+            </h2>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5 animate-fade-in-up animation-delay-300">
+              <div className="flex items-start gap-4 bg-gradient-to-r from-[#E0FE10]/20 to-zinc-900/50 p-5 rounded-xl border-2 border-[#E0FE10]/50 text-left">
+                <div className="w-10 h-10 rounded-full bg-[#E0FE10] flex items-center justify-center flex-shrink-0">
+                  <Trophy className="w-5 h-5 text-black" />
+                </div>
+                <p className="text-zinc-200 text-base font-semibold">Meaningful equity ownership in Pulse</p>
+              </div>
+              
+              <div className="flex items-start gap-4 bg-zinc-900/50 p-5 rounded-xl border border-zinc-800 text-left">
+                <div className="w-10 h-10 rounded-full bg-[#E0FE10]/20 flex items-center justify-center flex-shrink-0">
+                  <Zap className="w-5 h-5 text-[#E0FE10]" />
+                </div>
+                <p className="text-zinc-300 text-sm md:text-base">Input on product direction — especially run club and community features</p>
+              </div>
+              
+              <div className="flex items-start gap-4 bg-zinc-900/50 p-5 rounded-xl border border-zinc-800 text-left">
+                <div className="w-10 h-10 rounded-full bg-[#E0FE10]/20 flex items-center justify-center flex-shrink-0">
+                  <Globe className="w-5 h-5 text-[#E0FE10]" />
+                </div>
+                <p className="text-zinc-300 text-sm md:text-base">Technology infrastructure to scale Wunna Run globally without losing intimacy</p>
+              </div>
+              
+              <div className="flex items-start gap-4 bg-zinc-900/50 p-5 rounded-xl border border-zinc-800 text-left">
+                <div className="w-10 h-10 rounded-full bg-[#E0FE10]/20 flex items-center justify-center flex-shrink-0">
+                  <BarChart3 className="w-5 h-5 text-[#E0FE10]" />
+                </div>
+                <p className="text-zinc-300 text-sm md:text-base">Rich data on his community for merch drops, pre-sales, VIP experiences, and sponsor activations</p>
+              </div>
+              
+              <div className="flex items-start gap-4 bg-zinc-900/50 p-5 rounded-xl border border-zinc-800 text-left">
+                <div className="w-10 h-10 rounded-full bg-[#E0FE10]/20 flex items-center justify-center flex-shrink-0">
+                  <Calendar className="w-5 h-5 text-[#E0FE10]" />
+                </div>
+                <p className="text-zinc-300 text-sm md:text-base">Year-round engagement platform that keeps runners connected between events</p>
+              </div>
+              
+              <div className="flex items-start gap-4 bg-zinc-900/50 p-5 rounded-xl border border-zinc-800 text-left">
+                <div className="w-10 h-10 rounded-full bg-[#E0FE10]/20 flex items-center justify-center flex-shrink-0">
+                  <Users className="w-5 h-5 text-[#E0FE10]" />
+                </div>
+                <p className="text-zinc-300 text-sm md:text-base">Philanthropic impact tracking — see how participation translates to community giveback</p>
+              </div>
+              
+              <div className="flex items-start gap-4 bg-zinc-900/50 p-5 rounded-xl border border-[#E0FE10]/25 text-left md:col-span-2">
+                <div className="w-10 h-10 rounded-full bg-[#E0FE10]/20 flex items-center justify-center flex-shrink-0">
+                  <CheckCircle className="w-5 h-5 text-[#E0FE10]" />
+                </div>
+                <p className="text-zinc-300 text-sm md:text-base">A partner aligned with his mission of health, wellness, community, and philanthropy</p>
+              </div>
+            </div>
+          </div>
+        </section>
+        
+        {/* Slide 3: The Mission Behind the Movement */}
+        <section 
+          data-slide="3"
+          ref={(el) => { sectionRefs.current[3] = el as HTMLDivElement; }}
+          className={`${getSectionClasses()} overflow-hidden`}
+        >
+          {/* Background Image (from former Executive Summary slide) */}
           <div className="absolute inset-0">
             <img 
               src="/wunna-run-crowd.png" 
               alt="" 
               className="absolute inset-0 w-full h-full object-cover"
             />
-            <div className="absolute inset-0 bg-black/60"></div>
+            <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-black/70 to-black/85"></div>
+          </div>
+          <div className="relative z-10 w-full max-w-5xl mx-auto px-6">
+            {/* Header */}
+            <div className="text-center mb-8 animate-fade-in-up">
+              <h2 className={`${isMobile ? 'text-3xl' : 'text-4xl md:text-5xl'} font-bold text-white mb-3`}>
+                The Mission Behind the Movement
+              </h2>
+              <p className="text-[#E0FE10] text-lg md:text-xl font-medium">
+                Wunna Run started with a personal transformation.
+              </p>
+            </div>
+            
+            {/* Story Card */}
+            <div className="bg-black/60 backdrop-blur-sm border border-white/15 rounded-2xl p-6 md:p-8 mb-6 animate-fade-in-up animation-delay-150">
+              <p className="text-white text-base md:text-lg leading-relaxed text-center">
+                Gunna faced his own nutritional and health challenges. Through fitness, he found <span className="text-[#E0FE10] font-semibold">peace, accountability, and purpose</span>. Running a marathon — and raising money for his community — became the spark for something bigger.
+              </p>
+            </div>
+            
+            {/* Four Pillars */}
+            <div className="mb-6 animate-fade-in-up animation-delay-200">
+              <p className="text-zinc-400 text-xs uppercase tracking-widest mb-4 text-center">Wunna Run is rooted in four pillars</p>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+                <div className="bg-black/70 border-2 border-[#E0FE10]/40 rounded-xl p-4 text-center backdrop-blur-sm">
+                  <div className="w-10 h-10 rounded-full bg-[#E0FE10]/20 flex items-center justify-center mx-auto mb-3">
+                    <span className="text-[#E0FE10] text-xl">💪</span>
+                  </div>
+                  <p className="text-[#E0FE10] font-bold text-base mb-1">Health</p>
+                  <p className="text-zinc-300 text-xs md:text-sm">Inspiring people to move, no matter where they start</p>
+                </div>
+                <div className="bg-black/70 border-2 border-[#E0FE10]/40 rounded-xl p-4 text-center backdrop-blur-sm">
+                  <div className="w-10 h-10 rounded-full bg-[#E0FE10]/20 flex items-center justify-center mx-auto mb-3">
+                    <span className="text-[#E0FE10] text-xl">🧘</span>
+                  </div>
+                  <p className="text-[#E0FE10] font-bold text-base mb-1">Wellness</p>
+                  <p className="text-zinc-300 text-xs md:text-sm">Finding peace and balance through fitness</p>
+                </div>
+                <div className="bg-black/70 border-2 border-[#E0FE10]/40 rounded-xl p-4 text-center backdrop-blur-sm">
+                  <div className="w-10 h-10 rounded-full bg-[#E0FE10]/20 flex items-center justify-center mx-auto mb-3">
+                    <span className="text-[#E0FE10] text-xl">🤝</span>
+                  </div>
+                  <p className="text-[#E0FE10] font-bold text-base mb-1">Community</p>
+                  <p className="text-zinc-300 text-xs md:text-sm">Real connections between Gunna and his fans</p>
+                </div>
+                <div className="bg-black/70 border-2 border-[#E0FE10]/40 rounded-xl p-4 text-center backdrop-blur-sm">
+                  <div className="w-10 h-10 rounded-full bg-[#E0FE10]/20 flex items-center justify-center mx-auto mb-3">
+                    <span className="text-[#E0FE10] text-xl">❤️</span>
+                  </div>
+                  <p className="text-[#E0FE10] font-bold text-base mb-1">Philanthropy</p>
+                  <p className="text-zinc-300 text-xs md:text-sm">Giving back through <a href="https://gunnasgreatgiveawayfoundation.com/" target="_blank" rel="noopener noreferrer" className="text-[#E0FE10] hover:underline font-medium">Gunna&apos;s Great Giveaway</a></p>
+                </div>
+              </div>
+            </div>
+            
+            {/* $3M Investment Highlight */}
+            <div className="bg-gradient-to-r from-[#E0FE10]/15 to-transparent border-l-4 border-[#E0FE10] rounded-r-xl p-4 md:p-5 mb-5 animate-fade-in-up animation-delay-300">
+              <p className="text-white text-base md:text-lg">
+                Gunna invests over <span className="text-[#E0FE10] font-bold text-xl md:text-2xl">$3 million</span> annually in the City of South Fulton — one of the most underserved communities in Georgia — because he believes health and economic opportunity go hand in hand.
+              </p>
+            </div>
+            
+            {/* Closing Statement */}
+            <div className="text-center animate-fade-in-up animation-delay-450">
+              <p className="text-white text-lg md:text-xl font-bold">
+                Pulse is built to support all four pillars — <span className="text-[#E0FE10]">not just the runs, but the mission behind them.</span>
+              </p>
+            </div>
+          </div>
+          <div className="absolute bottom-6 left-6 z-20">
+            <span className="text-[#E0FE10] font-medium text-sm md:text-base">fitwithpulse.ai</span>
+          </div>
+          <div className="absolute bottom-6 right-6 md:right-20 z-20 flex items-center gap-4">
+            <Footprints className="w-5 h-5 md:w-6 md:h-6 text-zinc-400" aria-label="Running" />
+            <Dumbbell className="w-5 h-5 md:w-6 md:h-6 text-zinc-400" aria-label="Lifting" />
+            <PersonStanding className="w-5 h-5 md:w-6 md:h-6 text-zinc-400" aria-label="Mobility" />
+          </div>
+        </section>
+        
+        {/* Slide 4: Wunna Run Recap + Next */}
+        <section 
+          data-slide="4"
+          ref={(el) => { sectionRefs.current[4] = el as HTMLDivElement; }}
+          className={`${getSectionClasses()} overflow-hidden`}
+        >
+          {/* Background - Wunna Run 5K at start line */}
+          <div className="absolute inset-0">
+            <img 
+              src="/wunna-run-meet-wunna.png" 
+              alt="" 
+              className="absolute inset-0 w-full h-full object-cover"
+            />
+            <div className="absolute inset-0 bg-black/75"></div>
           </div>
           
           {/* Main Content */}
-          <div className={`${getContentClasses()} z-10`}>
-            <p className="text-[#E0FE10] text-sm uppercase tracking-widest mb-4 animate-fade-in-up">
-              Executive Summary
-            </p>
-            <h2 className={`${isMobile ? 'text-3xl' : 'text-4xl md:text-5xl'} font-bold mb-6 text-white animate-fade-in-up`}>
-              Build with <span className="text-[#E0FE10]">Gunna</span> — not a vendor relationship
-            </h2>
-            
-            <p className="text-lg md:text-xl text-zinc-200 max-w-3xl mx-auto leading-relaxed animate-fade-in-up animation-delay-150">
-              Wunna Run has built something special — authentic community, real connection, global reach. Pulse provides the
-              technology infrastructure to make this a <span className="text-white font-semibold">year-round series</span> instead of isolated events.
-            </p>
-            
-            <div className="mt-10 grid grid-cols-1 md:grid-cols-3 gap-5 max-w-5xl mx-auto animate-fade-in-up animation-delay-300">
-              {/* Equity + Alignment */}
-              <div className="bg-black/40 border border-[#E0FE10]/25 rounded-2xl p-6 text-left">
-                <p className="text-[#E0FE10] text-xs uppercase tracking-widest mb-3">Alignment</p>
-                <p className="text-white font-semibold text-lg mb-2">
-                  <span className="text-[#E0FE10]">Meaningful equity</span> in Pulse
-                </p>
-                <p className="text-zinc-300 text-sm leading-relaxed">
-                  We’re offering Wunna Run more than software — an opportunity to own equity in a high-tech platform we’re building together.
-                </p>
-              </div>
-              
-              {/* Category-defining tech */}
-              <div className="bg-black/40 border border-white/10 rounded-2xl p-6 text-left">
-                <p className="text-[#E0FE10] text-xs uppercase tracking-widest mb-3">Technology</p>
-                <p className="text-white font-semibold text-lg mb-2">Community-first Fitness App</p>
-                <p className="text-zinc-300 text-sm leading-relaxed">
-                  Built to rival category leaders like <span className="text-white font-medium">Trainerize</span> and <span className="text-white font-medium">Fitbod</span> — with the community infrastructure that platforms like <span className="text-white font-medium">Strava</span> don&apos;t offer.
-                </p>
-              </div>
-              
-              {/* What it unlocks */}
-              <div className="bg-black/40 border border-white/10 rounded-2xl p-6 text-left">
-                <p className="text-[#E0FE10] text-xs uppercase tracking-widest mb-3">What It Unlocks</p>
-                <p className="text-white font-semibold text-lg mb-2">A connected series</p>
-                <ul className="text-zinc-300 text-sm space-y-2">
-                  <li className="flex items-start gap-2">
-                    <span className="text-[#E0FE10] mt-1">•</span>
-                    Points, streaks, and standings that carry over run-to-run
+          <div className="relative z-10 w-full max-w-6xl mx-auto px-6">
+            {/* Title */}
+            <div className="text-center mb-8 animate-fade-in-up">
+              <h2 className={`${isMobile ? 'text-3xl' : 'text-4xl md:text-5xl'} font-bold text-white`}>
+                Wunna Run Recap + Next
+              </h2>
+              <p className="text-zinc-200 mt-3 text-lg md:text-xl font-medium">
+                2025 proved the demand. 2026 turns it into a global movement.
+              </p>
+            </div>
+
+            {/* Visual: 2025 / 2026 side by side */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+              {/* 2025 */}
+              <div className="bg-black/70 border border-white/20 rounded-2xl p-6 backdrop-blur-md animate-fade-in-up">
+                <p className="text-[#E0FE10] text-sm uppercase tracking-widest mb-4 font-bold">2025 — What Wunna Run Did</p>
+                <ul className="text-white text-base space-y-3">
+                  <li className="flex items-center gap-3">
+                    <span className="text-[#E0FE10] font-bold text-xl">8</span>
+                    <span>cities</span>
                   </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-[#E0FE10] mt-1">•</span>
-                    Owned community + direct communication with runners
+                  <li className="flex items-center gap-3">
+                    <span className="text-[#E0FE10] font-bold text-xl">2,000+</span>
+                    <span>runners per event</span>
                   </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-[#E0FE10] mt-1">•</span>
-                    Data that powers partnerships, drops, and VIP experiences
+                  <li className="flex items-center gap-3">
+                    <span className="text-[#E0FE10] font-bold text-xl">20+</span>
+                    <span>races worldwide</span>
+                  </li>
+                  <li className="pt-2 border-t border-white/10">
+                    <span className="text-zinc-300 text-sm">Partners: Strava, Under Armour, House of Athlete, Symbiotica, Flourish, Path Water</span>
+                  </li>
+                  <li>
+                    <span className="text-zinc-300 text-sm">Proceeds supporting <a href="https://gunnasgreatgiveawayfoundation.com/" target="_blank" rel="noopener noreferrer" className="text-[#E0FE10] hover:underline font-medium">Gunna&apos;s Great Giveaway</a> — investing in the City of South Fulton</span>
                   </li>
                 </ul>
+              </div>
+
+              {/* 2026 */}
+              <div className="bg-black/70 border-2 border-[#E0FE10]/40 rounded-2xl p-6 backdrop-blur-md animate-fade-in-up animation-delay-150">
+                <p className="text-[#E0FE10] text-sm uppercase tracking-widest mb-4 font-bold">2026 — Global Expansion</p>
+                <ul className="text-white text-base space-y-3">
+                  <li className="flex items-start gap-3">
+                    <span className="text-[#E0FE10] text-lg">•</span>
+                    <span>Paris + London launch moments</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <span className="text-[#E0FE10] text-lg">•</span>
+                    <span>City-to-city continuity (points carry over)</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <span className="text-[#E0FE10] text-lg">•</span>
+                    <span>One global series experience</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <span className="text-[#E0FE10] text-lg">•</span>
+                    <span>Deeper philanthropic integration</span>
+                  </li>
+                </ul>
+              </div>
+            </div>
+
+            {/* PROPOSAL */}
+            <div className="animate-fade-in-up animation-delay-300">
+              <div className="bg-gradient-to-r from-[#E0FE10]/15 to-black/60 border-2 border-[#E0FE10]/50 rounded-2xl p-6 backdrop-blur-md">
+                <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-5">
+                  <div className="flex items-start gap-4">
+                    <div className="w-12 h-12 rounded-xl bg-[#E0FE10]/20 border border-[#E0FE10]/50 flex items-center justify-center flex-shrink-0">
+                      <Wrench className="w-6 h-6 text-[#E0FE10]" />
+                    </div>
+                    <div>
+                      <p className="text-[#E0FE10] text-xs uppercase tracking-widest font-bold">Proposal</p>
+                      <p className="text-white font-bold text-xl mt-1">
+                        Technology installation — build on top of <span className="text-[#E0FE10] italic">Pulse</span>
+                      </p>
+                      <p className="text-zinc-200 text-base mt-2">
+                        Infrastructure for check-ins, run tracking, challenges, points, leaderboards, owned data, and philanthropic impact tracking.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-left md:text-right flex-shrink-0">
+                    <p className="text-white font-semibold text-sm">Result:</p>
+                    <p className="text-[#E0FE10] font-bold text-lg">
+                      A global series, year-round —<br />with purpose.
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -738,10 +1387,10 @@ const WunnaRun = ({ metaData }: WunnaRunProps) => {
           </div>
         </section>
         
-        {/* Slide 3: Meet the Runners */}
+        {/* Slide 5: Meet the Runners */}
         <section 
-          data-slide="2"
-          ref={(el) => { sectionRefs.current[2] = el as HTMLDivElement; }}
+          data-slide="5"
+          ref={(el) => { sectionRefs.current[5] = el as HTMLDivElement; }}
           className={`${getSectionClasses()} overflow-hidden`}
         >
           {/* Background Image with Blur Overlay */}
@@ -754,59 +1403,69 @@ const WunnaRun = ({ metaData }: WunnaRunProps) => {
             <div className="absolute inset-0 bg-black/60"></div>
           </div>
           
-          {/* Main Content - Two Column Layout */}
+          {/* Main Content - Problem-centered layout with image */}
           <div className="relative z-10 w-full max-w-6xl mx-auto px-6">
-            <div className="flex flex-col md:flex-row items-start gap-8 md:gap-16">
-              {/* Left Side */}
-              <div className="md:w-1/2 animate-fade-in-up">
-                <h2 className={`${isMobile ? 'text-3xl' : 'text-4xl md:text-5xl'} font-bold mb-8 text-white`}>
-                  The Runners
-                </h2>
+            {/* Title */}
+            <h2 className={`${isMobile ? 'text-3xl' : 'text-4xl md:text-5xl'} font-bold mb-6 text-white text-center animate-fade-in-up`}>
+              The Runners
+            </h2>
+            
+            <div className="flex flex-col lg:flex-row items-stretch gap-6 lg:gap-8">
+              {/* THE PROBLEM - Centerpiece (Left/Main) */}
+              <div className="lg:w-3/5 bg-black/50 backdrop-blur-sm border-2 border-[#E0FE10]/40 rounded-2xl p-6 md:p-8 animate-fade-in-up animation-delay-150 flex flex-col justify-center">
+                <p className="text-[#E0FE10] text-xs uppercase tracking-widest mb-4 text-center">The Runners Problem</p>
                 
-                {/* Runner Image Card */}
-                <div className="relative rounded-lg overflow-hidden mb-6 border-2 border-[#E0FE10]/50">
-                  <img 
-                    src="/wunna-run-runners.png" 
-                    alt="Wunna Run Runners" 
-                    className="w-full h-48 md:h-56 object-cover"
-                  />
-                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4">
-                    <span className="text-[#E0FE10] font-semibold">Fitness Seeker</span>
+                <div className="space-y-5">
+                  {/* Problem 1 */}
+                  <div className="flex gap-4">
+                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[#E0FE10]/20 flex items-center justify-center">
+                      <span className="text-[#E0FE10] font-bold">1</span>
+                    </div>
+                    <p className="text-white text-base md:text-lg leading-relaxed">
+                      Runners, fans, and community who physically showed up to Wunna Run had an incredible experience — <span className="text-[#E0FE10] font-semibold">but cannot take part again until the next in-person run.</span>
+                    </p>
                   </div>
-                </div>
-                
-                <div className="text-left">
-                  <h3 className="text-xl font-bold text-white mb-3">The Runners Problem:</h3>
-                  <p className="text-zinc-300 leading-relaxed">
-                    They showed up to Wunna Run, had an incredible experience, but cannot take part in this experience again until the next in-person run.
-                  </p>
+                  
+                  {/* Problem 2 */}
+                  <div className="flex gap-4">
+                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[#E0FE10]/20 flex items-center justify-center">
+                      <span className="text-[#E0FE10] font-bold">2</span>
+                    </div>
+                    <p className="text-white text-base md:text-lg leading-relaxed">
+                      Runners, fans, and community who cannot attend due to travel or not living in a major city <span className="text-[#E0FE10] font-semibold">still want to participate and contribute to the run community.</span>
+                    </p>
+                  </div>
                 </div>
               </div>
               
-              {/* Right Side */}
-              <div className="md:w-1/2 animate-fade-in-up animation-delay-300">
-                <h3 className={`${isMobile ? 'text-2xl' : 'text-3xl md:text-4xl'} font-bold text-white mb-8`}>
-                  They want to:
-                </h3>
-                
-                <ul className="space-y-4">
-                  <li className="flex items-start gap-3">
-                    <span className="text-white text-xl">•</span>
-                    <span className="text-white text-lg md:text-xl">Stay connected to the community</span>
-                  </li>
-                  <li className="flex items-start gap-3">
-                    <span className="text-white text-xl">•</span>
-                    <span className="text-white text-lg md:text-xl">Track their progress</span>
-                  </li>
-                  <li className="flex items-start gap-3">
-                    <span className="text-white text-xl">•</span>
-                    <span className="text-white text-lg md:text-xl">Earn recognition for showing up</span>
-                  </li>
-                  <li className="flex items-start gap-3">
-                    <span className="text-white text-xl">•</span>
-                    <span className="text-[#E0FE10] text-lg md:text-xl font-semibold italic">Feel like they're part of something bigger</span>
-                  </li>
-                </ul>
+              {/* Runner Image (Right) */}
+              <div className="lg:w-2/5 animate-fade-in-up animation-delay-300">
+                <div className="relative rounded-lg overflow-hidden border-2 border-[#E0FE10]/50 h-full min-h-[250px] md:min-h-[300px]">
+                  <img 
+                    src="/wunna-run-runners.png" 
+                    alt="Wunna Run Runners" 
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              </div>
+            </div>
+            
+            {/* What they want - compact row */}
+            <div className="animate-fade-in-up animation-delay-450 mt-6">
+              <p className="text-zinc-400 text-sm uppercase tracking-widest mb-3 text-center">What they want</p>
+              <div className="flex flex-wrap justify-center gap-2 md:gap-3">
+                {[
+                  'Stay connected',
+                  'Track progress',
+                  'Earn recognition',
+                  'Feel part of something bigger',
+                  'Run with purpose',
+                ].map((item, index) => (
+                  <div key={index} className="flex items-center gap-2 bg-black/40 px-3 py-1.5 rounded-full border border-white/10">
+                    <span className="text-[#E0FE10]">•</span>
+                    <span className="text-zinc-200 text-xs md:text-sm">{item}</span>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
@@ -824,134 +1483,10 @@ const WunnaRun = ({ metaData }: WunnaRunProps) => {
           </div>
         </section>
         
-        {/* Slide 4: Wunna Run 2025 Recap */}
+        {/* Slide 6: The Solution: Introducing Pulse - Runs with Gunna */}
         <section 
-          data-slide="3"
-          ref={(el) => { sectionRefs.current[3] = el as HTMLDivElement; }}
-          className={`${getSectionClasses()} overflow-hidden`}
-        >
-          {/* Background - Wunna Run 5K at start line */}
-          <div className="absolute inset-0">
-            <img 
-              src="/wunna-run-meet-wunna.png" 
-              alt="" 
-              className="absolute inset-0 w-full h-full object-cover"
-            />
-            <div className="absolute inset-0 bg-black/60"></div>
-          </div>
-          
-          {/* Main Content */}
-          <div className="relative z-10 w-full max-w-6xl mx-auto px-6">
-            {/* Title */}
-            <div className="text-center mb-10 animate-fade-in-up">
-              <h2 className={`${isMobile ? 'text-3xl' : 'text-4xl md:text-5xl'} font-bold text-white`}>
-                Wunna Run <span className="text-[#E0FE10]">Recap + Next</span>
-              </h2>
-              <p className="text-zinc-300 mt-3 text-lg md:text-xl">
-                2025 proved the demand. 2026 turns it into a global system.
-              </p>
-            </div>
-
-            {/* Visual: Build on top of Pulse (Stack) */}
-            <div className="relative mx-auto max-w-5xl">
-              {/* Subtle connector line */}
-              <div className="hidden md:block absolute left-1/2 -translate-x-1/2 top-6 bottom-20 w-px bg-gradient-to-b from-[#E0FE10]/0 via-[#E0FE10]/25 to-[#E0FE10]/0"></div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                {/* 2025 */}
-                <div className="bg-zinc-950/55 border border-white/10 rounded-2xl p-6 backdrop-blur-sm animate-fade-in-up text-left">
-                  <p className="text-[#E0FE10] text-xs uppercase tracking-widest mb-3">2025 — What Wunna Run did</p>
-                  <div className="flex items-center justify-start gap-3 mb-3">
-                    <Trophy className="w-7 h-7 text-[#E0FE10]" />
-                    <p className="text-white font-bold text-xl">Proven Momentum</p>
-                  </div>
-                  <div className="grid grid-cols-3 gap-3 text-left">
-                    <div className="bg-black/30 rounded-xl p-3 border border-white/5">
-                      <p className="text-white font-semibold">8</p>
-                      <p className="text-zinc-400 text-xs">cities</p>
-                    </div>
-                    <div className="bg-black/30 rounded-xl p-3 border border-white/5">
-                      <p className="text-white font-semibold">2,000+</p>
-                      <p className="text-zinc-400 text-xs">per event</p>
-                    </div>
-                    <div className="bg-black/30 rounded-xl p-3 border border-white/5">
-                      <p className="text-white font-semibold">Partners</p>
-                      <p className="text-zinc-400 text-xs">Strava, UA</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 2026 */}
-                <div className="bg-zinc-950/55 border border-[#E0FE10]/20 rounded-2xl p-6 backdrop-blur-sm animate-fade-in-up animation-delay-150 text-left">
-                  <p className="text-[#E0FE10] text-xs uppercase tracking-widest mb-3">2026 — Expansion</p>
-                  <div className="flex items-center justify-start gap-3 mb-3">
-                    <Globe className="w-7 h-7 text-[#E0FE10]" />
-                    <p className="text-white font-bold text-xl">Global Expansion</p>
-                  </div>
-                  <ul className="text-zinc-300 text-sm space-y-2">
-                    <li className="flex items-start gap-2">
-                      <span className="text-[#E0FE10] mt-1">•</span>
-                      Paris + London launch moments
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-[#E0FE10] mt-1">•</span>
-                      City-to-city continuity (points carry over)
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-[#E0FE10] mt-1">•</span>
-                      One global series experience
-                    </li>
-                  </ul>
-                </div>
-              </div>
-
-              {/* Technology installation → Build on top of Pulse */}
-              <div className="mt-6 md:mt-8 animate-fade-in-up animation-delay-450">
-                <div className="relative bg-gradient-to-r from-[#E0FE10]/12 via-black/40 to-black/40 border border-[#E0FE10]/35 rounded-2xl p-6 text-left">
-                  <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                    <div className="flex items-start gap-3 w-full md:w-auto">
-                      <div className="w-12 h-12 rounded-xl bg-[#E0FE10]/15 border border-[#E0FE10]/35 flex items-center justify-center flex-shrink-0">
-                        <Wrench className="w-6 h-6 text-[#E0FE10]" />
-                      </div>
-                      <div className="text-left min-w-0">
-                        <p className="text-[#E0FE10] text-xs uppercase tracking-widest">Proposal</p>
-                        <p className="text-white font-bold text-xl">
-                          Technology installation — build on top of <span className="text-[#E0FE10] italic">Pulse</span>
-                        </p>
-                        <p className="text-zinc-300 text-sm mt-1">
-                          Infrastructure for check-ins, run tracking, challenges, points, leaderboards, and owned data across the entire series.
-                        </p>
-                      </div>
-                    </div>
-                    <div className="w-full md:w-auto text-left md:text-right">
-                      <p className="text-white font-semibold">Result:</p>
-                      <p className="text-[#E0FE10] font-bold whitespace-nowrap md:whitespace-nowrap">
-                        A global series, year‑round
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          {/* Bottom Left - fitwithpulse.ai */}
-          <div className="absolute bottom-6 left-6 z-20">
-            <span className="text-[#E0FE10] font-medium text-sm md:text-base">fitwithpulse.ai</span>
-          </div>
-          
-          {/* Bottom Right - Fitness Icons */}
-          <div className="absolute bottom-6 right-6 md:right-20 z-20 flex items-center gap-4">
-            <Footprints className="w-5 h-5 md:w-6 md:h-6 text-zinc-400" aria-label="Running" />
-            <Dumbbell className="w-5 h-5 md:w-6 md:h-6 text-zinc-400" aria-label="Lifting" />
-            <PersonStanding className="w-5 h-5 md:w-6 md:h-6 text-zinc-400" aria-label="Mobility" />
-          </div>
-        </section>
-        
-        {/* Slide 5: Introducing Pulse */}
-        <section 
-          data-slide="4"
-          ref={(el) => { sectionRefs.current[4] = el as HTMLDivElement; }}
+          data-slide="6"
+          ref={(el) => { sectionRefs.current[6] = el as HTMLDivElement; }}
           className={`${getSectionClasses()} overflow-hidden`}
         >
           {/* Background - Dark gradient like chromatic-glass */}
@@ -961,8 +1496,8 @@ const WunnaRun = ({ metaData }: WunnaRunProps) => {
           <div className="relative z-10 w-full max-w-7xl mx-auto px-6 flex flex-col md:flex-row items-center gap-8 md:gap-12">
             {/* Left Side - Text Content */}
             <div className={`${isMobile ? 'w-full text-center' : 'md:w-1/2 text-left'} animate-fade-in-up`}>
-              <h2 className={`${isMobile ? 'text-3xl' : 'text-4xl md:text-5xl lg:text-6xl'} font-bold mb-8 text-white`}>
-                Introducing <span className="text-[#E0FE10] italic">Pulse</span>
+              <h2 className={`${isMobile ? 'text-2xl md:text-3xl' : 'text-3xl md:text-4xl lg:text-5xl'} font-bold mb-8 text-white`}>
+                The Solution: Introducing <span className="text-[#E0FE10] italic">Pulse</span> — Runs with Gunna
               </h2>
               
               <p className={`${isMobile ? 'text-lg' : 'text-xl md:text-2xl'} text-white leading-relaxed mb-8`}>
@@ -974,7 +1509,7 @@ const WunnaRun = ({ metaData }: WunnaRunProps) => {
               </p>
               
               <p className={`${isMobile ? 'text-base' : 'text-lg md:text-xl'} text-zinc-400`}>
-                Think of it as: <span className="text-[#E0FE10] font-semibold">The operating system for your fitness community.</span>
+                <span className="text-[#E0FE10] font-semibold">This is your personalized operating system for your fitness community.</span>
               </p>
             </div>
             
@@ -1008,133 +1543,59 @@ const WunnaRun = ({ metaData }: WunnaRunProps) => {
           </div>
         </section>
         
-        {/* Slide 6: How It Works — Check-Ins */}
-        <section 
-          data-slide="5"
-          ref={(el) => { sectionRefs.current[5] = el as HTMLDivElement; }}
-          className={`${getSectionClasses()} overflow-hidden`}
-        >
-          {/* Background - Dark with subtle image */}
-          <div className="absolute inset-0">
-            <img 
-              src="/wunna-run-gunna.png" 
-              alt="" 
-              className="absolute inset-0 w-full h-full object-cover opacity-30"
-            />
-            <div className="absolute inset-0 bg-gradient-to-r from-black via-black/90 to-black/70"></div>
-          </div>
-          
-          {/* Main Content - Two Column Layout */}
-          <div className="relative z-10 w-full max-w-7xl mx-auto px-6 flex flex-col md:flex-row items-center gap-8 md:gap-12">
-            {/* Left Side - Text Content */}
-            <div className={`${isMobile ? 'w-full text-center' : 'md:w-2/5 text-left'} animate-fade-in-up`}>
-              <h2 className={`${isMobile ? 'text-3xl' : 'text-4xl md:text-5xl'} font-bold mb-8 text-white`}>
-                How it works — <span className="text-[#E0FE10]">Check-Ins</span>
-              </h2>
-              
-              <p className={`${isMobile ? 'text-lg' : 'text-xl md:text-2xl'} text-white leading-relaxed mb-6`}>
-                Runners can <span className="text-[#E0FE10] font-semibold">join virtually or physically</span> through QR code scan
-              </p>
-              
-              <p className={`${isMobile ? 'text-base' : 'text-lg md:text-xl'} text-[#E0FE10] font-semibold leading-relaxed`}>
-                Point Incentive, and badges for physical check-in at locations
-              </p>
-            </div>
-            
-            {/* Right Side - Three Phone Mockups */}
-            <div className={`${isMobile ? 'w-full' : 'md:w-3/5'} relative animate-fade-in-up animation-delay-300`}>
-              <div className="flex items-end justify-center gap-2 md:gap-4">
-                {/* Phone 1 - QR Code */}
-                <img 
-                  src="/wunna-checkin-qr.png" 
-                  alt="QR Code Check-in" 
-                  className={`rounded-[32px] border-2 border-[#E0FE10]/60 ${isMobile ? 'h-72' : 'h-96 md:h-[420px] lg:h-[500px]'} w-auto object-contain`}
-                />
-                
-                {/* Phone 2 - You're In (center, slightly larger) */}
-                <img 
-                  src="/wunna-checkin-confirmation.png" 
-                  alt="Checked In Confirmation" 
-                  className={`rounded-[32px] border-2 border-[#E0FE10]/60 ${isMobile ? 'h-80' : 'h-[420px] md:h-[500px] lg:h-[560px]'} w-auto object-contain`}
-                />
-                
-                {/* Phone 3 - Global Runners */}
-                <img 
-                  src="/wunna-checkin-global.png" 
-                  alt="Global Runners Map" 
-                  className={`rounded-[32px] border-2 border-[#E0FE10]/60 ${isMobile ? 'h-72' : 'h-96 md:h-[420px] lg:h-[500px]'} w-auto object-contain`}
-                />
-              </div>
-            </div>
-          </div>
-          
-          {/* Bottom Left - fitwithpulse.ai */}
-          <div className="absolute bottom-6 left-6 z-20">
-            <span className="text-[#E0FE10] font-medium text-sm md:text-base">fitwithpulse.ai</span>
-          </div>
-        </section>
-        
-        {/* Slide 8: How It Works — Gamification */}
-        <section 
-          data-slide="6"
-          ref={(el) => { sectionRefs.current[6] = el as HTMLDivElement; }}
-          className={`${getSectionClasses()} overflow-hidden`}
-        >
-          {/* Background - Dark gradient */}
-          <div className="absolute inset-0 bg-gradient-to-br from-black via-zinc-950 to-zinc-900"></div>
-          
-          {/* Main Content - Two Column Layout */}
-          <div className="relative z-10 w-full max-w-7xl mx-auto px-6 flex flex-col md:flex-row items-center gap-8 md:gap-12">
-            {/* Left Side - Text Content */}
-            <div className="w-full md:w-2/5 text-left animate-fade-in-up">
-              <h2 className={`${isMobile ? 'text-3xl' : 'text-4xl md:text-5xl'} font-bold mb-8 text-white`}>
-                How it works — <span className="text-[#E0FE10]">Gamification</span>
-              </h2>
-              
-              <p className={`${isMobile ? 'text-lg' : 'text-xl md:text-2xl'} text-white leading-relaxed mb-6`}>
-                Earn Pulse Points on race day — from showing up to crossing the finish!
-              </p>
-              
-              <ul className="space-y-3 text-zinc-300">
-                <li className="flex items-start gap-2">
-                  <Trophy className="w-5 h-5 text-[#E0FE10] flex-shrink-0 mt-0.5" />
-                  <span>Points for attendance, city-to-city participation, streaks</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <BarChart3 className="w-5 h-5 text-[#E0FE10] flex-shrink-0 mt-0.5" />
-                  <span>Leaderboards by city, total runs, engagement</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <Zap className="w-5 h-5 text-[#E0FE10] flex-shrink-0 mt-0.5" />
-                  <span>Badges and rewards for milestones</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <Users className="w-5 h-5 text-[#E0FE10] flex-shrink-0 mt-0.5" />
-                  <span>Runners compete with each other — and themselves</span>
-                </li>
-              </ul>
-            </div>
-            
-            {/* Right Side - Rules & Scoring Phone */}
-            <div className={`${isMobile ? 'w-full' : 'md:w-3/5'} relative animate-fade-in-up animation-delay-300 flex justify-center`}>
-              <img 
-                src="/wunna-gamification-rules.png" 
-                alt="Rules & Scoring on Pulse" 
-                className={`rounded-[32px] border-2 border-[#E0FE10]/60 w-auto object-contain ${isMobile ? 'h-96' : 'h-[420px] md:h-[500px] lg:h-[560px]'}`}
-              />
-            </div>
-          </div>
-          
-          {/* Bottom Left - fitwithpulse.ai */}
-          <div className="absolute bottom-6 left-6 z-20">
-            <span className="text-[#E0FE10] font-medium text-sm md:text-base">fitwithpulse.ai</span>
-          </div>
-        </section>
-        
-        {/* Slide 9: How It Works — Community */}
+        {/* Slide 7: The Runner Experience */}
         <section 
           data-slide="7"
           ref={(el) => { sectionRefs.current[7] = el as HTMLDivElement; }}
+          className={`${getSectionClasses()} overflow-hidden`}
+        >
+          {/* Background Image with Overlay */}
+          <div className="absolute inset-0">
+            <img 
+              src="/wunna-run-runners-action.png" 
+              alt="" 
+              className="absolute inset-0 w-full h-full object-cover"
+            />
+            <div className="absolute inset-0 bg-black/65"></div>
+          </div>
+          
+          <div className="relative z-10 w-full max-w-6xl mx-auto px-6 text-center">
+            <h2 className={`${isMobile ? 'text-3xl' : 'text-4xl md:text-5xl'} font-bold mb-12 text-white animate-fade-in-up`}>
+              The <span className="text-[#E0FE10]">Runner</span> Experience
+            </h2>
+            
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4 animate-fade-in-up animation-delay-300">
+              {[
+                { step: '1', title: 'Join', desc: 'Download Pulse, join the Wunna Run community', icon: Smartphone },
+                { step: '2', title: 'Check In', desc: 'Arrive at the run, check in via the app', icon: CheckCircle },
+                { step: '3', title: 'Earn', desc: 'Get points, climb the leaderboard, unlock rewards', icon: Trophy },
+                { step: '4', title: 'Stay Connected', desc: 'Engage between events, see announcements', icon: MessageCircle },
+                { step: '5', title: 'Come Back', desc: 'Show up to the next run, keep the streak alive', icon: Zap },
+              ].map((item, index) => (
+                <div key={index} className="relative">
+                  <GlassCard>
+                    <div className="p-6 text-center">
+                      <div className="w-12 h-12 rounded-full bg-[#E0FE10] flex items-center justify-center mx-auto mb-4">
+                        <span className="text-black font-bold text-xl">{item.step}</span>
+                      </div>
+                      <item.icon className="w-8 h-8 text-[#E0FE10] mx-auto mb-3" />
+                      <h3 className="text-white font-bold mb-2">{item.title}</h3>
+                      <p className="text-zinc-400 text-sm">{item.desc}</p>
+                    </div>
+                  </GlassCard>
+                  {index < 4 && (
+                    <div className="hidden md:block absolute top-1/2 -right-2 w-4 h-0.5 bg-[#E0FE10]/50"></div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+        
+        {/* Slide 8: How It Works — Community */}
+        <section 
+          data-slide="8"
+          ref={(el) => { sectionRefs.current[8] = el as HTMLDivElement; }}
           className={`${getSectionClasses()} overflow-hidden`}
         >
           {/* Background - Dark gradient */}
@@ -1200,198 +1661,143 @@ const WunnaRun = ({ metaData }: WunnaRunProps) => {
           </div>
         </section>
         
-        {/* Slide 10: How It Works — Data (Rich data profile on each runner) */}
-        <section 
-          data-slide="8"
-          ref={(el) => { sectionRefs.current[8] = el as HTMLDivElement; }}
-          className={`${getSectionClasses()} overflow-hidden`}
-        >
-          {/* Background - Dark gradient */}
-          <div className="absolute inset-0 bg-gradient-to-br from-black via-zinc-950 to-zinc-900"></div>
-          
-          {/* Subtle animated circuit background - palette colors (hidden during PDF export) */}
-          {!isGeneratingPDF && (
-          <div className="absolute inset-0 pointer-events-none z-0 opacity-30">
-            <svg className="absolute inset-0 w-full h-full" viewBox="0 0 400 300" preserveAspectRatio="xMidYMid slice">
-              {/* Green circuit paths */}
-              <path pathLength="1" strokeDasharray="1" strokeDashoffset="1" stroke={wunnaGreen} strokeWidth="0.4" fill="none" className="animate-circuit-draw" style={{ animationDelay: '0s' }} d="M 40 60 L 120 60 L 120 100 L 200 100" />
-              <path pathLength="1" strokeDasharray="1" strokeDashoffset="1" stroke={wunnaGreen} strokeWidth="0.4" fill="none" className="animate-circuit-draw" style={{ animationDelay: '4s' }} d="M 280 80 L 360 80 L 360 140" />
-              <path pathLength="1" strokeDasharray="1" strokeDashoffset="1" stroke={wunnaGreen} strokeWidth="0.4" fill="none" className="animate-circuit-draw" style={{ animationDelay: '8s' }} d="M 60 200 L 140 200 L 140 240" />
-              {/* Purple circuit paths */}
-              <path pathLength="1" strokeDasharray="1" strokeDashoffset="1" stroke={wunnaPurple} strokeWidth="0.4" fill="none" className="animate-circuit-draw" style={{ animationDelay: '1.5s' }} d="M 80 120 L 160 120 L 160 180 L 80 180" />
-              <path pathLength="1" strokeDasharray="1" strokeDashoffset="1" stroke={wunnaPurple} strokeWidth="0.4" fill="none" className="animate-circuit-draw" style={{ animationDelay: '5.5s' }} d="M 240 40 L 320 40 L 320 100" />
-              <path pathLength="1" strokeDasharray="1" strokeDashoffset="1" stroke={wunnaPurple} strokeWidth="0.4" fill="none" className="animate-circuit-draw" style={{ animationDelay: '9.5s' }} d="M 200 220 L 320 220 L 320 260" />
-              {/* Blue circuit paths */}
-              <path pathLength="1" strokeDasharray="1" strokeDashoffset="1" stroke={wunnaBlue} strokeWidth="0.4" fill="none" className="animate-circuit-draw" style={{ animationDelay: '3s' }} d="M 20 140 L 100 140 L 100 220" />
-              <path pathLength="1" strokeDasharray="1" strokeDashoffset="1" stroke={wunnaBlue} strokeWidth="0.4" fill="none" className="animate-circuit-draw" style={{ animationDelay: '7s' }} d="M 180 60 L 260 60 L 260 160 L 340 160" />
-              <path pathLength="1" strokeDasharray="1" strokeDashoffset="1" stroke={wunnaBlue} strokeWidth="0.4" fill="none" className="animate-circuit-draw" style={{ animationDelay: '2s' }} d="M 300 180 L 380 180 L 380 260" />
-              {/* Small nodes - subtle pulse */}
-              <circle cx="120" cy="100" r="1.5" fill={wunnaGreen} className="animate-circuit-pulse" style={{ animationDelay: '0.5s' }} />
-              <circle cx="260" cy="60" r="1.5" fill={wunnaBlue} className="animate-circuit-pulse" style={{ animationDelay: '2.5s' }} />
-              <circle cx="160" cy="180" r="1.5" fill={wunnaPurple} className="animate-circuit-pulse" style={{ animationDelay: '4.5s' }} />
-              <circle cx="320" cy="220" r="1.5" fill={wunnaPurple} className="animate-circuit-pulse" style={{ animationDelay: '6.5s' }} />
-              <circle cx="360" cy="140" r="1.5" fill={wunnaGreen} className="animate-circuit-pulse" style={{ animationDelay: '8.5s' }} />
-            </svg>
-          </div>
-          )}
-          
-          {/* Main Content - Two Column Layout */}
-          <div className="relative z-10 w-full max-w-7xl mx-auto px-6 flex flex-col md:flex-row items-center gap-8 md:gap-12">
-            {/* Left Side - Text Content */}
-            <div className="w-full md:w-2/5 text-left animate-fade-in-up">
-              <h2 className={`${isMobile ? 'text-3xl' : 'text-4xl md:text-5xl'} font-bold mb-8 text-white`}>
-                How it works — <span className="text-[#E0FE10]">Data</span>
-              </h2>
-              <p className="text-[#E0FE10] text-sm uppercase tracking-widest mb-6">Know Your Runners</p>
-              
-              <h3 className="text-xl font-bold text-white mb-6">Rich member profiles for deeper fan experiences.</h3>
-              
-              <ul className="space-y-3 text-zinc-300">
-                <li className="flex items-start gap-2">
-                  <Users className="w-5 h-5 text-[#E0FE10] flex-shrink-0 mt-0.5" />
-                  <span>More than just email addresses — <span className="text-white font-semibold">you own the relationship</span></span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <BarChart3 className="w-5 h-5 text-[#E0FE10] flex-shrink-0 mt-0.5" />
-                  <span>See who your most engaged runners are</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <Zap className="w-5 h-5 text-[#E0FE10] flex-shrink-0 mt-0.5" />
-                  <span>Segment for merch drops, pre-sales, and VIP experiences</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <Trophy className="w-5 h-5 text-[#E0FE10] flex-shrink-0 mt-0.5" />
-                  <span>Data to inform partnerships and sponsorships</span>
-                </li>
-              </ul>
-            </div>
-            
-            {/* Right Side - Member Insights Phone */}
-            <div className={`${isMobile ? 'w-full' : 'md:w-3/5'} relative animate-fade-in-up animation-delay-300 flex justify-center`}>
-              <img 
-                src="/wunna-member-insights.png" 
-                alt="Member Insights - Rich data profile on each runner" 
-                className={`rounded-[32px] border-2 border-[#E0FE10]/60 w-auto object-contain ${isMobile ? 'h-96' : 'h-[420px] md:h-[500px] lg:h-[560px]'}`}
-              />
-            </div>
-          </div>
-          
-          {/* Bottom Left - fitwithpulse.ai */}
-          <div className="absolute bottom-6 left-6 z-20">
-            <span className="text-[#E0FE10] font-medium text-sm md:text-base">fitwithpulse.ai</span>
-          </div>
-        </section>
-        
-        {/* Slide 11: The Runner Experience */}
+        {/* Slide 9: How It Works — Check-Ins (Part 1: QR at venue) */}
         <section 
           data-slide="9"
           ref={(el) => { sectionRefs.current[9] = el as HTMLDivElement; }}
           className={`${getSectionClasses()} overflow-hidden`}
         >
-          {/* Background Image with Overlay */}
           <div className="absolute inset-0">
-            <img 
-              src="/wunna-run-runners-action.png" 
-              alt="" 
-              className="absolute inset-0 w-full h-full object-cover"
-            />
-            <div className="absolute inset-0 bg-black/65"></div>
+            <img src="/wunna-run-gunna.png" alt="" className="absolute inset-0 w-full h-full object-cover opacity-30" />
+            <div className="absolute inset-0 bg-gradient-to-r from-black via-black/90 to-black/70"></div>
           </div>
-          
-          <div className="relative z-10 w-full max-w-6xl mx-auto px-6 text-center">
-            <h2 className={`${isMobile ? 'text-3xl' : 'text-4xl md:text-5xl'} font-bold mb-12 text-white animate-fade-in-up`}>
-              The <span className="text-[#E0FE10]">Runner</span> Experience
-            </h2>
-            
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-4 animate-fade-in-up animation-delay-300">
-              {[
-                { step: '1', title: 'Join', desc: 'Download Pulse, join the Wunna Run community', icon: Smartphone },
-                { step: '2', title: 'Check In', desc: 'Arrive at the run, check in via the app', icon: CheckCircle },
-                { step: '3', title: 'Earn', desc: 'Get points, climb the leaderboard, unlock rewards', icon: Trophy },
-                { step: '4', title: 'Stay Connected', desc: 'Engage between events, see announcements', icon: MessageCircle },
-                { step: '5', title: 'Come Back', desc: 'Show up to the next run, keep the streak alive', icon: Zap },
-              ].map((item, index) => (
-                <div key={index} className="relative">
-                  <GlassCard>
-                    <div className="p-6 text-center">
-                      <div className="w-12 h-12 rounded-full bg-[#E0FE10] flex items-center justify-center mx-auto mb-4">
-                        <span className="text-black font-bold text-xl">{item.step}</span>
-                      </div>
-                      <item.icon className="w-8 h-8 text-[#E0FE10] mx-auto mb-3" />
-                      <h3 className="text-white font-bold mb-2">{item.title}</h3>
-                      <p className="text-zinc-400 text-sm">{item.desc}</p>
-                    </div>
-                  </GlassCard>
-                  {index < 4 && (
-                    <div className="hidden md:block absolute top-1/2 -right-2 w-4 h-0.5 bg-[#E0FE10]/50"></div>
-                  )}
-                </div>
-              ))}
+          <div className="relative z-10 w-full max-w-7xl mx-auto px-6 flex flex-col md:flex-row items-center gap-8 md:gap-12">
+            <div className={`${isMobile ? 'w-full text-center' : 'md:w-2/5 text-left'} animate-fade-in-up`}>
+              <h2 className={`${isMobile ? 'text-3xl' : 'text-4xl md:text-5xl'} font-bold mb-6 text-white`}>
+                How it works — <span className="text-[#E0FE10]">Check-Ins</span> <span className="text-zinc-400 text-2xl md:text-3xl">(1 of 3)</span>
+              </h2>
+              <p className={`${isMobile ? 'text-lg' : 'text-xl md:text-2xl'} text-white leading-relaxed mb-4`}>
+                When participants arrive at the <span className="text-[#E0FE10] font-semibold">physical location</span> of the run, the QR code appears on their phone — ready to be scanned by the host.
+              </p>
+              <p className={`${isMobile ? 'text-base' : 'text-lg md:text-xl'} text-zinc-300 leading-relaxed`}>
+                Or they can scan a QR code displayed at the venue to check in. Either way — they&apos;re in.
+              </p>
+            </div>
+            <div className={`${isMobile ? 'w-full' : 'md:w-3/5'} animate-fade-in-up animation-delay-300 flex justify-center`}>
+              <img src="/wunna-checkin-qr.png" alt="QR Code — show to host to check in" className={`rounded-[32px] border-2 border-[#E0FE10]/60 ${isMobile ? 'h-80' : 'h-[420px] md:h-[500px] lg:h-[560px]'} w-auto object-contain`} />
             </div>
           </div>
+          <div className="absolute bottom-6 left-6 z-20">
+            <span className="text-[#E0FE10] font-medium text-sm md:text-base">fitwithpulse.ai</span>
+          </div>
         </section>
-        
-        {/* Slide 12: The Wunna Run Team Experience */}
+
+        {/* Slide 10: How It Works — Check-Ins (Part 2: Points & badges) */}
         <section 
           data-slide="10"
           ref={(el) => { sectionRefs.current[10] = el as HTMLDivElement; }}
           className={`${getSectionClasses()} overflow-hidden`}
         >
-          {/* Background Image with Overlay */}
           <div className="absolute inset-0">
-            <img 
-              src="/wunna-run-team.png" 
-              alt="" 
-              className="absolute inset-0 w-full h-full object-cover"
-            />
-            <div className="absolute inset-0 bg-black/60"></div>
+            <img src="/wunna-run-gunna.png" alt="" className="absolute inset-0 w-full h-full object-cover opacity-30" />
+            <div className="absolute inset-0 bg-gradient-to-r from-black via-black/90 to-black/70"></div>
           </div>
-          
-          <div className="relative z-10 w-full max-w-6xl mx-auto px-6">
-            <h2 className={`${isMobile ? 'text-3xl' : 'text-4xl md:text-5xl'} font-bold mb-6 text-white animate-fade-in-up text-center`}>
-              For the <span className="text-[#E0FE10]">Wunna Run</span> Team
-            </h2>
-            <p className="text-xl text-zinc-400 mb-16 text-center animate-fade-in-up animation-delay-150">
-              Everything you need to manage and scale
-            </p>
-            
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-fade-in-up animation-delay-300">
-              {/* Card 1: Metrics by City */}
-              <div className="bg-zinc-900/60 p-8 rounded-2xl border border-zinc-800 h-full">
-                <div className="w-14 h-14 rounded-xl bg-[#E0FE10]/20 flex items-center justify-center mb-6">
-                  <BarChart3 className="w-7 h-7 text-[#E0FE10]" />
-                </div>
-                <h3 className="text-white font-bold text-xl mb-3">Metrics by City</h3>
-                <p className="text-zinc-400 leading-relaxed">
-                  Real-time attendance, engagement, and growth data across every city. See which markets are growing fastest.
-                </p>
-              </div>
-              
-              {/* Card 2: Community Management */}
-              <div className="bg-zinc-900/60 p-8 rounded-2xl border border-zinc-800 h-full">
-                <div className="w-14 h-14 rounded-xl bg-[#E0FE10]/20 flex items-center justify-center mb-6">
-                  <Users className="w-7 h-7 text-[#E0FE10]" />
-                </div>
-                <h3 className="text-white font-bold text-xl mb-3">Community Management</h3>
-                <p className="text-zinc-400 leading-relaxed">
-                  Direct messaging, push notifications, and community feed. Own the relationship with every runner.
-                </p>
-              </div>
-              
-              {/* Card 3: One Platform */}
-              <div className="bg-zinc-900/60 p-8 rounded-2xl border border-zinc-800 h-full">
-                <div className="w-14 h-14 rounded-xl bg-[#E0FE10]/20 flex items-center justify-center mb-6">
-                  <Layers className="w-7 h-7 text-[#E0FE10]" />
-                </div>
-                <h3 className="text-white font-bold text-xl mb-3">One Platform</h3>
-                <p className="text-zinc-400 leading-relaxed">
-                  Events, check-ins, merch drops, challenges, and fan experiences — all under one roof.
-                </p>
-              </div>
+          <div className="relative z-10 w-full max-w-7xl mx-auto px-6 flex flex-col md:flex-row items-center gap-8 md:gap-12">
+            <div className={`${isMobile ? 'w-full text-center' : 'md:w-2/5 text-left'} animate-fade-in-up`}>
+              <h2 className={`${isMobile ? 'text-3xl' : 'text-4xl md:text-5xl'} font-bold mb-6 text-white`}>
+                How it works — <span className="text-[#E0FE10]">Check-Ins</span> <span className="text-zinc-400 text-2xl md:text-3xl">(2 of 3)</span>
+              </h2>
+              <p className={`${isMobile ? 'text-lg' : 'text-xl md:text-2xl'} text-white leading-relaxed mb-4`}>
+                <span className="text-[#E0FE10] font-semibold">Points and badges</span> for scanning the QR code at the physical location — so showing up pays off.
+              </p>
+              <p className={`${isMobile ? 'text-base' : 'text-lg md:text-xl'} text-zinc-300 leading-relaxed mb-4`}>
+                Participants can collect badges across cities (e.g. Paris, London, Atlanta). More badges = more points — encouraging runners to show up run after run.
+              </p>
+              <p className={`${isMobile ? 'text-base' : 'text-lg'} text-[#E0FE10] font-semibold`}>
+                Runs are no longer one-off events. They become a <span className="text-white">connected experience</span> from city to city.
+              </p>
+            </div>
+            <div className={`${isMobile ? 'w-full' : 'md:w-3/5'} animate-fade-in-up animation-delay-300 flex justify-center`}>
+              <img src="/wunna-checkin-confirmation.png" alt="Checked in — badges and points" className={`rounded-[32px] border-2 border-[#E0FE10]/60 ${isMobile ? 'h-80' : 'h-[420px] md:h-[500px] lg:h-[560px]'} w-auto object-contain`} />
             </div>
           </div>
-          
-          {/* Bottom Left - fitwithpulse.ai */}
+          <div className="absolute bottom-6 left-6 z-20">
+            <span className="text-[#E0FE10] font-medium text-sm md:text-base">fitwithpulse.ai</span>
+          </div>
+        </section>
+
+        {/* Slide 11: How It Works — Check-Ins (Part 3: Map, physical + virtual) */}
+        <section 
+          data-slide="11"
+          ref={(el) => { sectionRefs.current[11] = el as HTMLDivElement; }}
+          className={`${getSectionClasses()} overflow-hidden`}
+        >
+          <div className="absolute inset-0">
+            <img src="/wunna-run-gunna.png" alt="" className="absolute inset-0 w-full h-full object-cover opacity-30" />
+            <div className="absolute inset-0 bg-gradient-to-r from-black via-black/90 to-black/70"></div>
+          </div>
+          <div className="relative z-10 w-full max-w-7xl mx-auto px-6 flex flex-col md:flex-row items-center gap-8 md:gap-12">
+            <div className={`${isMobile ? 'w-full text-center' : 'md:w-2/5 text-left'} animate-fade-in-up`}>
+              <h2 className={`${isMobile ? 'text-xl md:text-2xl' : 'text-2xl md:text-3xl lg:text-4xl'} font-bold mb-6 text-white leading-tight`}>
+                How it works: We use check-ins to expand reach and make <span className="text-[#E0FE10]">Gunna Runs</span> accessible to everyone everywhere.
+              </h2>
+              <p className={`${isMobile ? 'text-lg' : 'text-xl md:text-2xl'} text-white leading-relaxed mb-4`}>
+                The map shows <span className="text-[#E0FE10] font-semibold">physical check-ins</span> — and also <span className="text-[#E0FE10] font-semibold">virtual runners</span>.
+              </p>
+              <p className={`${isMobile ? 'text-base' : 'text-lg md:text-xl'} text-zinc-300 leading-relaxed mb-4`}>
+                People can join the run virtually from any city and run from wherever they are — and still take part in the same event, earn points, and feel part of the community.
+              </p>
+              <p className={`${isMobile ? 'text-base' : 'text-lg'} text-[#E0FE10] font-semibold`}>
+                That unlocks <span className="text-white">scale</span> that wasn&apos;t possible when every run was in-person only.
+              </p>
+            </div>
+            <div className={`${isMobile ? 'w-full' : 'md:w-3/5'} animate-fade-in-up animation-delay-300 flex justify-center`}>
+              <img src="/wunna-checkin-global.png" alt="Global runners — physical and virtual" className={`rounded-[32px] border-2 border-[#E0FE10]/60 ${isMobile ? 'h-80' : 'h-[420px] md:h-[500px] lg:h-[560px]'} w-auto object-contain`} />
+            </div>
+          </div>
+          <div className="absolute bottom-6 left-6 z-20">
+            <span className="text-[#E0FE10] font-medium text-sm md:text-base">fitwithpulse.ai</span>
+          </div>
+        </section>
+        
+        {/* Slide 12: How It Works — Gamification */}
+        <section 
+          data-slide="12"
+          ref={(el) => { sectionRefs.current[12] = el as HTMLDivElement; }}
+          className={`${getSectionClasses()} overflow-hidden`}
+        >
+          <div className="absolute inset-0 bg-gradient-to-br from-black via-zinc-950 to-zinc-900"></div>
+          <div className="relative z-10 w-full max-w-7xl mx-auto px-6 flex flex-col md:flex-row items-center gap-8 md:gap-12">
+            <div className="w-full md:w-2/5 text-left animate-fade-in-up">
+              <h2 className={`${isMobile ? 'text-3xl' : 'text-4xl md:text-5xl'} font-bold mb-6 text-white`}>
+                How it works — <span className="text-[#E0FE10]">Gamification</span>
+              </h2>
+              <p className={`${isMobile ? 'text-lg' : 'text-xl md:text-2xl'} text-white leading-relaxed mb-5`}>
+                <span className="text-[#E0FE10] font-semibold">Points as incentives.</span> Each run compounds and leads to the next — a connected experience, not isolated events.
+              </p>
+              <ul className="space-y-3 text-zinc-300 text-base md:text-lg">
+                <li className="flex items-start gap-2">
+                  <Trophy className="w-5 h-5 text-[#E0FE10] flex-shrink-0 mt-0.5" />
+                  <span><span className="text-white font-medium">Invites:</span> Earn points when friends join with your link — growth and community in one.</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <Users className="w-5 h-5 text-[#E0FE10] flex-shrink-0 mt-0.5" />
+                  <span><span className="text-white font-medium">Social:</span> Points encourage interaction — challenges, leaderboards, recognition.</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <Zap className="w-5 h-5 text-[#E0FE10] flex-shrink-0 mt-0.5" />
+                  <span><span className="text-white font-medium">Loyalty:</span> Streaks, badges, city-to-city continuity keep runners coming back.</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <BarChart3 className="w-5 h-5 text-[#E0FE10] flex-shrink-0 mt-0.5" />
+                  <span><span className="text-white font-medium">Deeper connection:</span> Gamification turns participation into belonging — not just one run, but a movement.</span>
+                </li>
+              </ul>
+            </div>
+            <div className={`${isMobile ? 'w-full' : 'md:w-3/5'} animate-fade-in-up animation-delay-300 flex justify-center`}>
+              <img src="/wunna-gamification-rules.png" alt="Rules & Scoring on Pulse" className={`rounded-[32px] border-2 border-[#E0FE10]/60 w-auto object-contain ${isMobile ? 'h-96' : 'h-[420px] md:h-[500px] lg:h-[560px]'}`} />
+            </div>
+          </div>
           <div className="absolute bottom-6 left-6 z-20">
             <span className="text-[#E0FE10] font-medium text-sm md:text-base">fitwithpulse.ai</span>
           </div>
@@ -1399,8 +1805,8 @@ const WunnaRun = ({ metaData }: WunnaRunProps) => {
         
         {/* Slide 13: Between Events */}
         <section 
-          data-slide="11"
-          ref={(el) => { sectionRefs.current[11] = el as HTMLDivElement; }}
+          data-slide="13"
+          ref={(el) => { sectionRefs.current[13] = el as HTMLDivElement; }}
           className={getSectionClasses('bg-zinc-950')}
         >
           <div className="relative z-10 w-full max-w-7xl mx-auto px-6">
@@ -1409,7 +1815,7 @@ const WunnaRun = ({ metaData }: WunnaRunProps) => {
               <h2 className={`${isMobile ? 'text-3xl' : 'text-4xl md:text-5xl'} font-bold text-white`}>
                 Between <span className="text-[#E0FE10]">Events</span>
               </h2>
-              <p className="text-xl text-zinc-400 mt-3">The community doesn't stop when the run ends.</p>
+              <p className="text-xl text-zinc-400 mt-3">The community doesn&apos;t stop when the run ends.</p>
             </div>
             
             {/* 3-Column Layout: Engagement - Run Summary - Engagement */}
@@ -1552,10 +1958,96 @@ const WunnaRun = ({ metaData }: WunnaRunProps) => {
           </div>
         </section>
         
-        {/* Slide 14: The Series - NASCAR/PGA Style */}
+        {/* Slide 14: How It Works — Data (Rich data profile on each runner) */}
         <section 
-          data-slide="12"
-          ref={(el) => { sectionRefs.current[12] = el as HTMLDivElement; }}
+          data-slide="14"
+          ref={(el) => { sectionRefs.current[14] = el as HTMLDivElement; }}
+          className={`${getSectionClasses()} overflow-hidden`}
+        >
+          {/* Background - Dark gradient */}
+          <div className="absolute inset-0 bg-gradient-to-br from-black via-zinc-950 to-zinc-900"></div>
+          
+          {/* Subtle animated circuit background - palette colors (hidden during PDF export) */}
+          {!isGeneratingPDF && (
+          <div className="absolute inset-0 pointer-events-none z-0 opacity-30">
+            <svg className="absolute inset-0 w-full h-full" viewBox="0 0 400 300" preserveAspectRatio="xMidYMid slice">
+              {/* Green circuit paths */}
+              <path pathLength="1" strokeDasharray="1" strokeDashoffset="1" stroke={wunnaGreen} strokeWidth="0.4" fill="none" className="animate-circuit-draw" style={{ animationDelay: '0s' }} d="M 40 60 L 120 60 L 120 100 L 200 100" />
+              <path pathLength="1" strokeDasharray="1" strokeDashoffset="1" stroke={wunnaGreen} strokeWidth="0.4" fill="none" className="animate-circuit-draw" style={{ animationDelay: '4s' }} d="M 280 80 L 360 80 L 360 140" />
+              <path pathLength="1" strokeDasharray="1" strokeDashoffset="1" stroke={wunnaGreen} strokeWidth="0.4" fill="none" className="animate-circuit-draw" style={{ animationDelay: '8s' }} d="M 60 200 L 140 200 L 140 240" />
+              {/* Purple circuit paths */}
+              <path pathLength="1" strokeDasharray="1" strokeDashoffset="1" stroke={wunnaPurple} strokeWidth="0.4" fill="none" className="animate-circuit-draw" style={{ animationDelay: '1.5s' }} d="M 80 120 L 160 120 L 160 180 L 80 180" />
+              <path pathLength="1" strokeDasharray="1" strokeDashoffset="1" stroke={wunnaPurple} strokeWidth="0.4" fill="none" className="animate-circuit-draw" style={{ animationDelay: '5.5s' }} d="M 240 40 L 320 40 L 320 100" />
+              <path pathLength="1" strokeDasharray="1" strokeDashoffset="1" stroke={wunnaPurple} strokeWidth="0.4" fill="none" className="animate-circuit-draw" style={{ animationDelay: '9.5s' }} d="M 200 220 L 320 220 L 320 260" />
+              {/* Blue circuit paths */}
+              <path pathLength="1" strokeDasharray="1" strokeDashoffset="1" stroke={wunnaBlue} strokeWidth="0.4" fill="none" className="animate-circuit-draw" style={{ animationDelay: '3s' }} d="M 20 140 L 100 140 L 100 220" />
+              <path pathLength="1" strokeDasharray="1" strokeDashoffset="1" stroke={wunnaBlue} strokeWidth="0.4" fill="none" className="animate-circuit-draw" style={{ animationDelay: '7s' }} d="M 180 60 L 260 60 L 260 160 L 340 160" />
+              <path pathLength="1" strokeDasharray="1" strokeDashoffset="1" stroke={wunnaBlue} strokeWidth="0.4" fill="none" className="animate-circuit-draw" style={{ animationDelay: '2s' }} d="M 300 180 L 380 180 L 380 260" />
+              {/* Small nodes - subtle pulse */}
+              <circle cx="120" cy="100" r="1.5" fill={wunnaGreen} className="animate-circuit-pulse" style={{ animationDelay: '0.5s' }} />
+              <circle cx="260" cy="60" r="1.5" fill={wunnaBlue} className="animate-circuit-pulse" style={{ animationDelay: '2.5s' }} />
+              <circle cx="160" cy="180" r="1.5" fill={wunnaPurple} className="animate-circuit-pulse" style={{ animationDelay: '4.5s' }} />
+              <circle cx="320" cy="220" r="1.5" fill={wunnaPurple} className="animate-circuit-pulse" style={{ animationDelay: '6.5s' }} />
+              <circle cx="360" cy="140" r="1.5" fill={wunnaGreen} className="animate-circuit-pulse" style={{ animationDelay: '8.5s' }} />
+            </svg>
+          </div>
+          )}
+          
+          {/* Main Content - Two Column Layout */}
+          <div className="relative z-10 w-full max-w-7xl mx-auto px-6 flex flex-col md:flex-row items-center gap-8 md:gap-12">
+            {/* Left Side - Text Content */}
+            <div className="w-full md:w-2/5 text-left animate-fade-in-up">
+              <h2 className={`${isMobile ? 'text-3xl' : 'text-4xl md:text-5xl'} font-bold mb-8 text-white`}>
+                How it works — <span className="text-[#E0FE10]">Data</span>
+              </h2>
+              <p className="text-[#E0FE10] text-sm uppercase tracking-widest mb-6">Know Your Runners</p>
+              
+              <h3 className="text-xl font-bold text-white mb-6">Rich member profiles for deeper fan experiences.</h3>
+              
+              <p className="text-zinc-400 text-sm mb-4">
+                <span className="text-[#E0FE10] font-semibold">Wearable data collection</span> — runs, activity, and engagement sync from Apple Watch, Garmin, Strava, and more.
+              </p>
+              
+              <ul className="space-y-3 text-zinc-300">
+                <li className="flex items-start gap-2">
+                  <Users className="w-5 h-5 text-[#E0FE10] flex-shrink-0 mt-0.5" />
+                  <span>More than just email addresses — <span className="text-white font-semibold">you own the relationship</span></span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <BarChart3 className="w-5 h-5 text-[#E0FE10] flex-shrink-0 mt-0.5" />
+                  <span>See who your most engaged runners are</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <Zap className="w-5 h-5 text-[#E0FE10] flex-shrink-0 mt-0.5" />
+                  <span>Segment for merch drops, pre-sales, and VIP experiences</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <Trophy className="w-5 h-5 text-[#E0FE10] flex-shrink-0 mt-0.5" />
+                  <span>Data to inform partnerships and sponsorships</span>
+                </li>
+              </ul>
+            </div>
+            
+            {/* Right Side - Member Insights Phone */}
+            <div className={`${isMobile ? 'w-full' : 'md:w-3/5'} relative animate-fade-in-up animation-delay-300 flex justify-center`}>
+              <img 
+                src="/wunna-member-insights.png" 
+                alt="Member Insights - Rich data profile on each runner" 
+                className={`rounded-[32px] border-2 border-[#E0FE10]/60 w-auto object-contain ${isMobile ? 'h-96' : 'h-[420px] md:h-[500px] lg:h-[560px]'}`}
+              />
+            </div>
+          </div>
+          
+          {/* Bottom Left - fitwithpulse.ai */}
+          <div className="absolute bottom-6 left-6 z-20">
+            <span className="text-[#E0FE10] font-medium text-sm md:text-base">fitwithpulse.ai</span>
+          </div>
+        </section>
+        
+        {/* Slide 15: The Series - NASCAR/PGA Style */}
+        <section 
+          data-slide="15"
+          ref={(el) => { sectionRefs.current[15] = el as HTMLDivElement; }}
           className={`${getSectionClasses()} overflow-hidden`}
         >
           {/* Background - Premium dark gradient */}
@@ -1729,10 +2221,76 @@ const WunnaRun = ({ metaData }: WunnaRunProps) => {
           </div>
         </section>
         
-        {/* Slide 15: Scale */}
+        {/* Slide 16: The Wunna Run Team Experience */}
         <section 
-          data-slide="13"
-          ref={(el) => { sectionRefs.current[13] = el as HTMLDivElement; }}
+          data-slide="16"
+          ref={(el) => { sectionRefs.current[16] = el as HTMLDivElement; }}
+          className={`${getSectionClasses()} overflow-hidden`}
+        >
+          {/* Background Image with Overlay */}
+          <div className="absolute inset-0">
+            <img 
+              src="/wunna-run-team.png" 
+              alt="" 
+              className="absolute inset-0 w-full h-full object-cover"
+            />
+            <div className="absolute inset-0 bg-black/60"></div>
+          </div>
+          
+          <div className="relative z-10 w-full max-w-6xl mx-auto px-6">
+            <h2 className={`${isMobile ? 'text-3xl' : 'text-4xl md:text-5xl'} font-bold mb-6 text-white animate-fade-in-up text-center`}>
+              For the <span className="text-[#E0FE10]">Wunna Run</span> Team
+            </h2>
+            <p className="text-xl text-zinc-400 mb-16 text-center animate-fade-in-up animation-delay-150">
+              Everything you need to manage and scale
+            </p>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-fade-in-up animation-delay-300">
+              {/* Card 1: Metrics by City */}
+              <div className="bg-zinc-900/60 p-8 rounded-2xl border border-zinc-800 h-full">
+                <div className="w-14 h-14 rounded-xl bg-[#E0FE10]/20 flex items-center justify-center mb-6">
+                  <BarChart3 className="w-7 h-7 text-[#E0FE10]" />
+                </div>
+                <h3 className="text-white font-bold text-xl mb-3">Metrics by City</h3>
+                <p className="text-zinc-400 leading-relaxed">
+                  Real-time attendance, engagement, and growth data across every city. See which markets are growing fastest.
+                </p>
+              </div>
+              
+              {/* Card 2: Community Management */}
+              <div className="bg-zinc-900/60 p-8 rounded-2xl border border-zinc-800 h-full">
+                <div className="w-14 h-14 rounded-xl bg-[#E0FE10]/20 flex items-center justify-center mb-6">
+                  <Users className="w-7 h-7 text-[#E0FE10]" />
+                </div>
+                <h3 className="text-white font-bold text-xl mb-3">Community Management</h3>
+                <p className="text-zinc-400 leading-relaxed">
+                  Direct messaging, push notifications, and community feed. Own the relationship with every runner.
+                </p>
+              </div>
+              
+              {/* Card 3: One Platform */}
+              <div className="bg-zinc-900/60 p-8 rounded-2xl border border-zinc-800 h-full">
+                <div className="w-14 h-14 rounded-xl bg-[#E0FE10]/20 flex items-center justify-center mb-6">
+                  <Layers className="w-7 h-7 text-[#E0FE10]" />
+                </div>
+                <h3 className="text-white font-bold text-xl mb-3">One Platform</h3>
+                <p className="text-zinc-400 leading-relaxed">
+                  Events, check-ins, merch drops, challenges, and fan experiences — all under one roof.
+                </p>
+              </div>
+            </div>
+          </div>
+          
+          {/* Bottom Left - fitwithpulse.ai */}
+          <div className="absolute bottom-6 left-6 z-20">
+            <span className="text-[#E0FE10] font-medium text-sm md:text-base">fitwithpulse.ai</span>
+          </div>
+        </section>
+        
+        {/* Slide 17: Scale */}
+        <section 
+          data-slide="17"
+          ref={(el) => { sectionRefs.current[17] = el as HTMLDivElement; }}
           className={`${getSectionClasses()} overflow-hidden`}
         >
           {/* Background - Clean gradient */}
@@ -1826,10 +2384,10 @@ const WunnaRun = ({ metaData }: WunnaRunProps) => {
           </div>
         </section>
         
-        {/* Slide 16: Who's Building Pulse? (Team) */}
+        {/* Slide 18: Who's Building Pulse? (Team) */}
         <section 
-          data-slide="14"
-          ref={(el) => { sectionRefs.current[14] = el as HTMLDivElement; }}
+          data-slide="18"
+          ref={(el) => { sectionRefs.current[18] = el as HTMLDivElement; }}
           className={`${getSectionClasses()} overflow-hidden`}
         >
           {/* Background - Dark gradient */}
@@ -1940,6 +2498,27 @@ const WunnaRun = ({ metaData }: WunnaRunProps) => {
                   <p className="text-zinc-400 text-xs">Partner @ Cooley</p>
                 </a>
               </div>
+              
+              {/* Partners */}
+              <div className="flex items-center gap-4 mt-10 mb-4">
+                <div className="flex-1 h-px bg-gradient-to-r from-transparent via-zinc-600 to-transparent"></div>
+                <span className="text-zinc-400 text-sm uppercase tracking-wider font-medium">Partners</span>
+                <div className="flex-1 h-px bg-gradient-to-r from-transparent via-zinc-600 to-transparent"></div>
+              </div>
+              <div className="flex flex-wrap justify-center items-center gap-8 md:gap-12">
+                <div className="flex items-center justify-center h-10 md:h-12 grayscale opacity-80 hover:opacity-100 hover:grayscale-0 transition-all">
+                  <img src="/cooley-logo.png" alt="Cooley" className="h-8 md:h-10 w-auto object-contain" />
+                </div>
+                <div className="flex items-center justify-center h-10 md:h-12 grayscale opacity-80 hover:opacity-100 hover:grayscale-0 transition-all">
+                  <img src="/awsstartups.png" alt="AWS Startups" className="h-8 md:h-10 w-auto object-contain" />
+                </div>
+                <div className="flex items-center justify-center h-10 md:h-12 grayscale opacity-80 hover:opacity-100 hover:grayscale-0 transition-all">
+                  <img src="/techstars.png" alt="Techstars" className="h-8 md:h-10 w-auto object-contain" />
+                </div>
+                <div className="flex items-center justify-center h-10 md:h-12 grayscale opacity-80 hover:opacity-100 hover:grayscale-0 transition-all">
+                  <img src="/Launch.png" alt="Launch" className="h-8 md:h-10 w-auto object-contain" />
+                </div>
+              </div>
             </div>
           </div>
           
@@ -1949,152 +2528,10 @@ const WunnaRun = ({ metaData }: WunnaRunProps) => {
           </div>
         </section>
         
-        {/* Slide 17: The Opportunity */}
-        <section 
-          data-slide="15"
-          ref={(el) => { sectionRefs.current[15] = el as HTMLDivElement; }}
-          className={getSectionClasses('bg-zinc-900')}
-        >
-          <div className={getContentClasses()}>
-            <h2 className={`${isMobile ? 'text-3xl' : 'text-4xl md:text-5xl'} font-bold mb-4 text-white animate-fade-in-up`}>
-              The <span className="text-[#E0FE10]">Opportunity</span>
-            </h2>
-            <p className="text-xl text-zinc-400 mb-8 animate-fade-in-up animation-delay-150">
-              We're offering Wunna Run more than a software vendor relationship.
-            </p>
-            
-            {/* Why Pulse - Compact Version */}
-            <div className="flex flex-wrap justify-center gap-3 mb-10 animate-fade-in-up animation-delay-200">
-              {[
-                'Community-first',
-                'Owned audience',
-                'Year-round engagement',
-                'Built for scale',
-                'Aligned mission',
-              ].map((item, index) => (
-                <div key={index} className="flex items-center gap-2 bg-zinc-950/80 px-4 py-2 rounded-full border border-zinc-800">
-                  <CheckCircle className="w-4 h-4 text-[#E0FE10]" />
-                  <span className="text-zinc-300 text-sm font-medium">{item}</span>
-                </div>
-              ))}
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 animate-fade-in-up animation-delay-300">
-              <GlassCard>
-                <div className="p-6 text-center">
-                  <div className="w-16 h-16 rounded-full bg-[#E0FE10]/20 flex items-center justify-center mx-auto mb-4">
-                    <span className="text-[#E0FE10] text-2xl font-bold">1</span>
-                  </div>
-                  <h3 className="text-white font-bold text-xl mb-3">Partnership</h3>
-                  <p className="text-zinc-400 text-sm">
-                    Wunna Run adopts Pulse as official community platform. Gunna receives <span className="text-[#E0FE10] font-bold text-base">equity in Pulse</span>.
-                  </p>
-                </div>
-              </GlassCard>
-              
-              <GlassCard accentColor={wunnaPurple}>
-                <div className="p-6 text-center">
-                  <div className="w-16 h-16 rounded-full bg-[#8B5CF6]/20 flex items-center justify-center mx-auto mb-4">
-                    <span className="text-[#8B5CF6] text-2xl font-bold">2</span>
-                  </div>
-                  <h3 className="text-white font-bold text-xl mb-3">Investment</h3>
-                  <p className="text-zinc-400 text-sm">
-                    Gunna invests in Pulse's pre-seed round via <span className="text-[#8B5CF6] font-bold">SAFE</span> alongside institutional partners.
-                  </p>
-                </div>
-              </GlassCard>
-              
-              <GlassCard accentColor={wunnaBlue}>
-                <div className="p-6 text-center">
-                  <div className="w-16 h-16 rounded-full bg-[#3B82F6]/20 flex items-center justify-center mx-auto mb-4">
-                    <span className="text-[#3B82F6] text-2xl font-bold">3</span>
-                  </div>
-                  <h3 className="text-white font-bold text-xl mb-3">Both</h3>
-                  <p className="text-zinc-400 text-sm">
-                    Combined partnership and investment for <span className="text-[#3B82F6] font-bold text-base">maximum alignment and ownership</span>.
-                  </p>
-                </div>
-              </GlassCard>
-            </div>
-            
-            <div className="bg-zinc-950 p-4 rounded-xl border border-[#E0FE10]/30 text-center animate-fade-in-up animation-delay-600">
-              <p className="text-zinc-400">Details in the attached <span className="text-[#E0FE10] font-bold">Investment Brief</span></p>
-            </div>
-          </div>
-        </section>
-        
-        {/* Slide 18: What Gunna Gets */}
-        <section 
-          data-slide="16"
-          ref={(el) => { sectionRefs.current[16] = el as HTMLDivElement; }}
-          className={`${getSectionClasses()} overflow-hidden`}
-        >
-          {/* Background Image with Overlay */}
-          <div className="absolute inset-0">
-            <img 
-              src="/wunna-run-proclamation.png" 
-              alt="" 
-              className="absolute inset-0 w-full h-full object-cover"
-            />
-            <div className="absolute inset-0 bg-black/70"></div>
-          </div>
-          
-          <div className="relative z-10 w-full max-w-6xl mx-auto px-6 text-left md:text-center">
-            <h2 className={`${isMobile ? 'text-3xl' : 'text-4xl md:text-5xl'} font-bold mb-12 text-white animate-fade-in-up`}>
-              What <span className="text-[#E0FE10]">Gunna</span> Gets
-            </h2>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fade-in-up animation-delay-300">
-              {/* First item - Equity highlighted prominently */}
-              <div className="flex items-start gap-4 bg-gradient-to-r from-[#E0FE10]/20 to-zinc-900/50 p-6 rounded-xl border-2 border-[#E0FE10]/50 text-left">
-                <div className="w-12 h-12 rounded-full bg-[#E0FE10] flex items-center justify-center flex-shrink-0">
-                  <Trophy className="w-6 h-6 text-black" />
-                </div>
-                <p className="text-white text-lg font-bold">Meaningful <span className="text-[#E0FE10] text-xl">equity ownership</span> in Pulse</p>
-              </div>
-              
-              <div className="flex items-start gap-4 bg-zinc-900/50 p-6 rounded-xl border border-zinc-800 text-left">
-                <div className="w-10 h-10 rounded-full bg-[#E0FE10]/20 flex items-center justify-center flex-shrink-0">
-                  <Zap className="w-5 h-5 text-[#E0FE10]" />
-                </div>
-                <p className="text-zinc-300 text-lg">Input on product direction, especially run club features</p>
-              </div>
-              
-              <div className="flex items-start gap-4 bg-zinc-900/50 p-6 rounded-xl border border-zinc-800 text-left">
-                <div className="w-10 h-10 rounded-full bg-[#E0FE10]/20 flex items-center justify-center flex-shrink-0">
-                  <Globe className="w-5 h-5 text-[#E0FE10]" />
-                </div>
-                <p className="text-zinc-300 text-lg">Technology infrastructure to scale Wunna Run globally</p>
-              </div>
-              
-              <div className="flex items-start gap-4 bg-zinc-900/50 p-6 rounded-xl border border-zinc-800 text-left">
-                <div className="w-10 h-10 rounded-full bg-[#E0FE10]/20 flex items-center justify-center flex-shrink-0">
-                  <BarChart3 className="w-5 h-5 text-[#E0FE10]" />
-                </div>
-                <p className="text-zinc-300 text-lg">Rich data on his community for merch, pre-sales, and fan experiences</p>
-              </div>
-              
-              <div className="flex items-start gap-4 bg-zinc-900/50 p-6 rounded-xl border border-zinc-800 text-left">
-                <div className="w-10 h-10 rounded-full bg-[#E0FE10]/20 flex items-center justify-center flex-shrink-0">
-                  <Calendar className="w-5 h-5 text-[#E0FE10]" />
-                </div>
-                <p className="text-zinc-300 text-lg">Year-round engagement platform beyond physical events</p>
-              </div>
-              
-              <div className="flex items-start gap-4 bg-zinc-900/50 p-6 rounded-xl border border-zinc-800 text-left">
-                <div className="w-10 h-10 rounded-full bg-[#E0FE10]/20 flex items-center justify-center flex-shrink-0">
-                  <Users className="w-5 h-5 text-[#E0FE10]" />
-                </div>
-                <p className="text-zinc-300 text-lg">A partner aligned with his mission of health, wellness, and community</p>
-              </div>
-            </div>
-          </div>
-        </section>
-        
         {/* Slide 19: Timeline */}
         <section 
-          data-slide="17"
-          ref={(el) => { sectionRefs.current[17] = el as HTMLDivElement; }}
+          data-slide="19"
+          ref={(el) => { sectionRefs.current[19] = el as HTMLDivElement; }}
           className={`${getSectionClasses()} overflow-hidden`}
         >
           {/* Background - Dark gradient */}
@@ -2192,8 +2629,8 @@ const WunnaRun = ({ metaData }: WunnaRunProps) => {
         
         {/* Slide 20: Next Steps */}
         <section 
-          data-slide="18"
-          ref={(el) => { sectionRefs.current[18] = el as HTMLDivElement; }}
+          data-slide="20"
+          ref={(el) => { sectionRefs.current[20] = el as HTMLDivElement; }}
           className={getSectionClasses('bg-zinc-950')}
         >
           <div className={getContentClasses('left')}>
@@ -2222,8 +2659,8 @@ const WunnaRun = ({ metaData }: WunnaRunProps) => {
         
         {/* Slide 21: Let's Build */}
         <section 
-          data-slide="19"
-          ref={(el) => { sectionRefs.current[19] = el as HTMLDivElement; }}
+          data-slide="21"
+          ref={(el) => { sectionRefs.current[21] = el as HTMLDivElement; }}
           className={`${getSectionClasses()} overflow-hidden`}
         >
           {/* Background - Clean gradient */}
@@ -2286,27 +2723,6 @@ const WunnaRun = ({ metaData }: WunnaRunProps) => {
           </div>
         </section>
       </main>
-      
-      {/* Download button */}
-      <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-50">
-        <button 
-          onClick={handleDownloadPDF}
-          disabled={isGeneratingPDF}
-          className={`flex items-center bg-[#E0FE10] text-black font-medium ${isMobile ? 'text-sm px-3 py-1.5' : 'px-4 py-2'} rounded-full shadow-lg hover:bg-[#E0FE10]/90 transition-all disabled:opacity-70`}
-        >
-          {isGeneratingPDF ? (
-            <>
-              <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin mr-2"></div>
-              Generating PDF... {pdfProgress}%
-            </>
-          ) : (
-            <>
-              <Download size={isMobile ? 14 : 16} className="mr-2" />
-              Download Presentation
-            </>
-          )}
-        </button>
-      </div>
     </div>
   );
 };

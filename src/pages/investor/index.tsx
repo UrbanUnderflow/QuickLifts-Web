@@ -3244,6 +3244,14 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                           <label className="text-zinc-400 text-xs font-medium mb-2 block">Incorporation Date</label>
                           <p className="text-white text-lg font-medium">December 11, 2025</p>
                         </div>
+                        
+                        <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-5">
+                          <label className="text-zinc-400 text-xs font-medium mb-2 block">SAM.gov Entity ID</label>
+                          <div className="flex items-center justify-between">
+                            <p className="text-white text-lg font-medium">H3WQVWXKEKP7</p>
+                            <CopyButton text="H3WQVWXKEKP7" />
+                          </div>
+                        </div>
                       </div>
                     </div>
 
