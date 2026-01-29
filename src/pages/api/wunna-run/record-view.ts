@@ -90,13 +90,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       .get();
 
     if (!sameIp.empty) {
-      let latestTs: Date | null = null;
+      let latestTimeMs: number | null = null;
       sameIp.docs.forEach((d) => {
         const data = d.data();
         const ts = data.timestamp?.toDate?.();
-        if (ts && (!latestTs || ts > latestTs)) latestTs = ts;
+        if (ts instanceof Date) {
+          const t = ts.getTime();
+          if (latestTimeMs === null || t > latestTimeMs) latestTimeMs = t;
+        }
       });
-      if (latestTs && Date.now() - latestTs.getTime() < COOLDOWN_MS) {
+      if (latestTimeMs !== null && Date.now() - latestTimeMs < COOLDOWN_MS) {
         return res.status(204).end();
       }
     }
