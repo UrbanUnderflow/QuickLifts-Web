@@ -331,10 +331,11 @@ const LegalDocumentsAdmin: React.FC = () => {
     setGenerating(true);
     setMessage(null);
 
+    let docRef: { id: string } | null = null;
     try {
       // Create placeholder document in Firestore
       const docType = DOCUMENT_TYPES.find(t => t.id === selectedType);
-      const docRef = await addDoc(collection(db, 'legal-documents'), {
+      docRef = await addDoc(collection(db, 'legal-documents'), {
         title: `${docType?.label || 'Legal Document'} - ${new Date().toLocaleDateString()}`,
         prompt: prompt,
         content: '',
@@ -360,9 +361,21 @@ const LegalDocumentsAdmin: React.FC = () => {
         })
       });
 
-      const result = await response.json();
+      let result: { error?: string; title?: string; content?: string } = {};
+      try {
+        result = await response.json();
+      } catch {
+        // 502/timeout often returns HTML or empty body
+        if (response.status === 502) {
+          throw new Error('Document generation timed out. Try again or use a shorter prompt.');
+        }
+        throw new Error('Failed to generate document');
+      }
 
       if (!response.ok) {
+        if (response.status === 502) {
+          throw new Error('Document generation timed out. Try again or use a shorter prompt.');
+        }
         throw new Error(result.error || 'Failed to generate document');
       }
 
@@ -380,6 +393,15 @@ const LegalDocumentsAdmin: React.FC = () => {
     } catch (error) {
       console.error('Error generating document:', error);
       setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Failed to generate document' });
+      // Mark placeholder doc as failed so it doesn't stay "generating"
+      if (docRef) {
+        try {
+          await updateDoc(doc(db, 'legal-documents', docRef.id), { status: 'failed' });
+        } catch (updateErr) {
+          console.warn('Could not update document status to failed:', updateErr);
+        }
+      }
+      loadDocuments();
     } finally {
       setGenerating(false);
     }

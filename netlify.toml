@@ -233,6 +233,13 @@
   # Unified sentiment analysis for web and iOS
   timeout = 30
 
+# Legal document generation (OpenAI can take 15–30s for long documents)
+[functions.generate-legal-document]
+  timeout = 26
+
+[functions.revise-legal-document]
+  timeout = 26
+
 # Review Automation Functions
 [functions.send-weekly-review-checkin]
   # Send weekly check-in email every Friday at 9am EST (14:00 UTC)
