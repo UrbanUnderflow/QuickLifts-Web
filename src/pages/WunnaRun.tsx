@@ -2272,7 +2272,7 @@ const WunnaRun = ({ metaData }: WunnaRunProps) => {
               <div className="flex flex-col items-center animate-fade-in-up animation-delay-600">
                 <div className="flex gap-8 items-center">
                   <div className="flex flex-col items-center">
-                    <img src="/PulseWhite.png" alt="Pulse Logo" className="h-12 w-auto mb-2" />
+                    <img src="/pulse-logo-white.svg" alt="Pulse Logo" className="h-12 w-auto mb-2" />
                     <p className="text-[#E0FE10] text-sm font-medium">Pulse</p>
                   </div>
                   <div className="text-white text-2xl">×</div>
