@@ -7,6 +7,8 @@ import { adminMethods } from '../api/firebase/admin/methods';
 import { PageMetaData as FirestorePageMetaData } from '../api/firebase/admin/types';
 import { FaTrophy, FaCoins, FaGamepad, FaChartLine, FaXmark, FaFire, FaStar, FaRocket, FaBolt, FaArrowRight } from 'react-icons/fa6';
 import { FaUser, FaCheck} from 'react-icons/fa';
+import DirectionsBikeIcon from '@mui/icons-material/DirectionsBike';
+import SelfImprovementIcon from '@mui/icons-material/SelfImprovement';
 import HomeContent from './HomeContent';
 import { useUser } from '../hooks/useUser';
 import SignInModal from '../components/SignInModal';
@@ -188,7 +190,7 @@ const MarketingContent: React.FC<{
       </header>
 
       {/* Hero Section - Video background (no carousel) */}
-      <section className="relative min-h-[calc(100vh-80px)] flex items-center justify-center px-4 sm:px-6 pt-20 sm:pt-24 pb-12 overflow-hidden">
+      <section className="relative w-full min-h-[calc(100vh-80px)] flex items-center justify-center px-4 sm:px-6 pt-20 sm:pt-24 pb-12 overflow-hidden">
         {/* Full-bleed video background */}
         <div className="absolute inset-0">
           <video
@@ -217,9 +219,9 @@ const MarketingContent: React.FC<{
         </div>
 
         {/* Content - Centered Apple Fitness+ style layout */}
-        <div className="relative z-20 flex flex-col items-center justify-between min-h-[calc(100vh-80px)] w-full max-w-4xl mx-auto px-4 sm:px-6 pt-4 pb-8 sm:pb-12">
+        <div className="relative z-20 flex flex-col items-center justify-between min-h-[calc(100vh-80px)] w-full max-w-4xl mx-auto px-4 sm:px-6 pt-4 pb-8 sm:pb-12 text-center">
           {/* Top: Logo + Headline (centered) */}
-          <div className="flex flex-col items-center text-center animate-fade-in-up">
+          <div className="flex flex-col items-center text-center w-full animate-fade-in-up">
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-[#E0FE10]/15 backdrop-blur-sm border border-[#E0FE10]/40 rounded-full mb-6 sm:mb-8">
               <FaGamepad className="h-4 w-4 text-[#E0FE10]" aria-hidden />
               <span className="text-[#E0FE10] text-sm sm:text-base font-medium">Gamified Fitness Platform</span>
@@ -229,17 +231,41 @@ const MarketingContent: React.FC<{
               alt="Pulse"
               className="h-14 sm:h-16 lg:h-20 w-auto mb-6 sm:mb-8"
             />
-            <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold text-white leading-tight tracking-tight max-w-3xl">
+            <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold text-white leading-tight tracking-tight max-w-3xl mx-auto">
               <span className="block">Gets you moving.</span>
               <span className="block mt-1">Keeps you going.</span>
             </h1>
-            <p className="mt-4 sm:mt-6 text-zinc-300 text-lg sm:text-xl md:text-2xl font-medium max-w-2xl">
+            <p className="mt-4 sm:mt-6 text-zinc-300 text-lg sm:text-xl md:text-2xl font-medium max-w-2xl mx-auto">
               Find it in the Pulse app.
             </p>
+            {/* Activity icons - exact colors from chromatic-glass (Run, Lift, Bike, Fat Burn, Stretch) */}
+            <div className="mt-6 sm:mt-8 flex flex-wrap items-center justify-center gap-6 sm:gap-8" role="img" aria-label="Run, Lift, Bike, Fat Burn, Stretch">
+              <span className="flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-[#3B82F6]/20 border border-[#3B82F6]/40" title="Run">
+                <svg className="w-5 h-5 sm:w-6 sm:h-6 text-[#3B82F6]" fill="currentColor" viewBox="0 0 24 24" aria-hidden>
+                  <path d="M13.49 5.48c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm-3.6 13.9l1-4.4 2.1 2v6h2v-7.5l-2.1-2 .6-3c1.3 1.5 3.3 2.5 5.5 2.5v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1l-5.2 2.2v4.7h2v-3.4l1.8-.7-1.6 8.1-4.9-1-.4 2 7 1.4z"/>
+                </svg>
+              </span>
+              <span className="flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-[#E0FE10]/20 border border-[#E0FE10]/40" title="Lift">
+                <svg className="w-5 h-5 sm:w-6 sm:h-6 text-[#E0FE10]" fill="currentColor" viewBox="0 0 24 24" aria-hidden>
+                  <path d="M20.57 14.86L22 13.43 20.57 12 17 15.57 8.43 7 12 3.43 10.57 2 9.14 3.43 7.71 2 5.57 4.14 4.14 2.71 2.71 4.14l1.43 1.43L2 7.71l1.43 1.43L2 10.57 3.43 12 7 8.43 15.57 17 12 20.57 13.43 22l1.43-1.43L16.29 22l2.14-2.14 1.43 1.43 1.43-1.43-1.43-1.43L22 16.29z"/>
+                </svg>
+              </span>
+              <span className="flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-[#06B6D4]/20 border border-[#06B6D4]/40" title="Bike">
+                <DirectionsBikeIcon className="w-5 h-5 sm:w-6 sm:h-6 text-[#06B6D4]" aria-hidden />
+              </span>
+              <span className="flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-[#EF4444]/20 border border-[#EF4444]/40" title="Fat Burn">
+                <svg className="w-5 h-5 sm:w-6 sm:h-6 text-[#EF4444]" fill="currentColor" viewBox="0 0 24 24" aria-hidden>
+                  <path d="M13.5.67s.74 2.65.74 4.8c0 2.06-1.35 3.73-3.41 3.73-2.07 0-3.63-1.67-3.63-3.73l.03-.36C5.21 7.51 4 10.62 4 14c0 4.42 3.58 8 8 8s8-3.58 8-8C20 8.61 17.41 3.8 13.5.67zM11.71 19c-1.78 0-3.22-1.4-3.22-3.14 0-1.62 1.05-2.76 2.81-3.12 1.77-.36 3.6-1.21 4.62-2.58.39 1.29.59 2.65.59 4.04 0 2.65-2.15 4.8-4.8 4.8z"/>
+                </svg>
+              </span>
+              <span className="flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-[#8B5CF6]/20 border border-[#8B5CF6]/40" title="Stretch">
+                <SelfImprovementIcon className="w-5 h-5 sm:w-6 sm:h-6 text-[#8B5CF6]" aria-hidden />
+              </span>
+            </div>
           </div>
 
           {/* Bottom: Traditional CTA buttons + trust (centered) */}
-          <div className="flex flex-col items-center text-center mt-auto pt-8 sm:pt-12 animate-fade-in-up animation-delay-300">
+          <div className="flex flex-col items-center text-center w-full mt-auto pt-8 sm:pt-12 animate-fade-in-up animation-delay-300">
             <div className="flex flex-col sm:flex-row gap-4 sm:gap-5 justify-center items-center w-full sm:w-auto">
               <button
                 onClick={onUseWebApp}

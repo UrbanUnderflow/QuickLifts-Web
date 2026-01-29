@@ -3,6 +3,8 @@ import type { NextPage } from 'next';
 import Head from 'next/head';
 import { motion, useScroll, useTransform } from 'framer-motion';
 import PageHead from '../components/PageHead';
+import DirectionsBikeIcon from '@mui/icons-material/DirectionsBike';
+import SelfImprovementIcon from '@mui/icons-material/SelfImprovement';
 
 // Custom hook for intersection observer animations
 const useInView = (threshold = 0.1) => {
@@ -174,6 +176,7 @@ const ChromaticGlassPage: NextPage = () => {
     primary: {
       green: { name: 'Primary Green', color: '#E0FE10', hex: '#E0FE10' },
       blue: { name: 'Primary Blue', color: '#3B82F6', hex: '#3B82F6' },
+      cyan: { name: 'Primary Cyan', color: '#06B6D4', hex: '#06B6D4' },
       purple: { name: 'Primary Purple', color: '#8B5CF6', hex: '#8B5CF6' },
       red: { name: 'Secondary Red', color: '#EF4444', hex: '#EF4444' },
     },
@@ -685,18 +688,20 @@ const ChromaticGlassPage: NextPage = () => {
                 <span className="w-8 h-[2px] bg-gradient-to-r from-[#E0FE10] to-transparent" />
                 Category Colors
               </h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
                 <ColorSwatch {...colors.primary.green} delay={0.1} />
                 <ColorSwatch {...colors.primary.blue} delay={0.2} />
-                <ColorSwatch {...colors.primary.purple} delay={0.3} />
-                <ColorSwatch {...colors.primary.red} delay={0.4} />
+                <ColorSwatch {...colors.primary.cyan} delay={0.3} />
+                <ColorSwatch {...colors.primary.purple} delay={0.4} />
+                <ColorSwatch {...colors.primary.red} delay={0.5} />
               </div>
               
               {/* Color meanings */}
-              <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="mt-8 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
                 {[
                   { color: '#E0FE10', label: 'Lift / Strength', icon: '🏋️' },
                   { color: '#3B82F6', label: 'Run / Cardio', icon: '🏃' },
+                  { color: '#06B6D4', label: 'Bike / Cycle', icon: '🚴' },
                   { color: '#8B5CF6', label: 'Stretch / Yoga', icon: '🧘' },
                   { color: '#EF4444', label: 'Fat Burn / HIIT', icon: '🔥' },
                 ].map((item, idx) => (
@@ -1411,7 +1416,7 @@ const ChromaticGlassPage: NextPage = () => {
               <h3 className="text-xl font-bold text-white mb-2">Workout Type Selector</h3>
               <p className="text-zinc-500 text-sm mb-6">Each category owns its chromatic identity</p>
               
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
                 {/* Lift */}
                 <motion.div
                   whileHover={{ scale: 1.03, y: -4 }}
@@ -1444,6 +1449,20 @@ const ChromaticGlassPage: NextPage = () => {
                   </div>
                 </motion.div>
 
+                {/* Bike */}
+                <motion.div
+                  whileHover={{ scale: 1.03, y: -4 }}
+                  className="relative group cursor-pointer"
+                >
+                  <div className="absolute inset-0 rounded-2xl bg-[#06B6D4]/20 blur-xl opacity-0 group-hover:opacity-60 transition-opacity" />
+                  <div className="relative h-40 rounded-2xl overflow-hidden bg-gradient-to-br from-[#06B6D4]/20 to-[#06B6D4]/5 border border-[#06B6D4]/30 flex flex-col items-center justify-center gap-3">
+                    <div className="w-14 h-14 rounded-full bg-[#06B6D4]/20 border border-[#06B6D4]/40 flex items-center justify-center">
+                      <DirectionsBikeIcon className="w-7 h-7 text-[#06B6D4]" />
+                    </div>
+                    <span className="text-white font-semibold">Bike</span>
+                  </div>
+                </motion.div>
+
                 {/* Fat Burn */}
                 <motion.div
                   whileHover={{ scale: 1.03, y: -4 }}
@@ -1468,9 +1487,7 @@ const ChromaticGlassPage: NextPage = () => {
                   <div className="absolute inset-0 rounded-2xl bg-[#8B5CF6]/20 blur-xl opacity-0 group-hover:opacity-60 transition-opacity" />
                   <div className="relative h-40 rounded-2xl overflow-hidden bg-gradient-to-br from-[#8B5CF6]/20 to-[#8B5CF6]/5 border border-[#8B5CF6]/30 flex flex-col items-center justify-center gap-3">
                     <div className="w-14 h-14 rounded-full bg-[#8B5CF6]/20 border border-[#8B5CF6]/40 flex items-center justify-center">
-                      <svg className="w-7 h-7 text-[#8B5CF6]" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M6 2v6h.01L6 8.01 10 12l-4 4 .01.01H6V22h12v-5.99h-.01L18 16l-4-4 4-3.99-.01-.01H18V2H6zm10 14.5V20H8v-3.5l4-4 4 4zm-4-5l-4-4V4h8v3.5l-4 4z"/>
-                      </svg>
+                      <SelfImprovementIcon className="w-7 h-7 text-[#8B5CF6]" />
                     </div>
                     <span className="text-white font-semibold">Stretch</span>
                   </div>
