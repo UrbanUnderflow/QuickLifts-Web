@@ -1095,7 +1095,11 @@ const WunnaRun = ({ metaData }: WunnaRunProps) => {
             </div>
             
             <div className="bg-zinc-950 p-4 rounded-xl border border-[#E0FE10]/30 text-center animate-fade-in-up animation-delay-600">
-              <p className="text-zinc-400">Details in the attached <span className="text-[#E0FE10] font-bold">Investment Brief</span></p>
+              <p className="text-zinc-400">Details in the attached{' '}
+                <a href="/Pulse_x_WunnaRun_Investment_Brief.pdf" target="_blank" rel="noopener noreferrer" className="text-[#E0FE10] font-bold hover:underline">
+                  Investment Brief
+                </a>
+              </p>
             </div>
           </div>
         </section>
