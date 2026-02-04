@@ -42,9 +42,16 @@ const WunnaRun = ({ metaData }: WunnaRunProps) => {
   const [analyticsError, setAnalyticsError] = useState<string | null>(null);
   const totalSections = 22;
   const sectionRefs = useRef<(HTMLDivElement | null)[]>(Array(totalSections).fill(null));
+  const activeSectionRef = useRef(0);
+  const mainRef = useRef<HTMLElement | null>(null);
 
   const [passcodeUsed, setPasscodeUsed] = useState<'WUNNA' | 'ONEUP' | null>(null);
   const showAnalyticsButton = passcodeUsed === 'ONEUP';
+  // Keep a ref in sync to avoid stale activeSection in observers/scroll handlers
+  useEffect(() => {
+    activeSectionRef.current = activeSection;
+  }, [activeSection]);
+
   
   // Brand colors for Wunna Run
   const wunnaGreen = '#E0FE10'; // Pulse green
@@ -159,11 +166,12 @@ const WunnaRun = ({ metaData }: WunnaRunProps) => {
     let isTransitioning = false;
     let transitionTimer: NodeJS.Timeout | undefined;
     let debounceTimer: NodeJS.Timeout | undefined;
+    const rootEl = mainRef.current;
     
     const setActiveWithDebounce = (newIndex: number) => {
       if (debounceTimer) clearTimeout(debounceTimer);
       
-      if (!isTransitioning && newIndex !== activeSection) {
+      if (!isTransitioning && newIndex !== activeSectionRef.current) {
         isTransitioning = true;
         setActiveSection(newIndex);
         
@@ -188,7 +196,7 @@ const WunnaRun = ({ metaData }: WunnaRunProps) => {
             section => section === mostVisibleEntry.target
           );
           
-          if (index !== -1 && index !== activeSection) {
+          if (index !== -1 && index !== activeSectionRef.current) {
             setActiveWithDebounce(index);
           }
         } else {
@@ -201,14 +209,14 @@ const WunnaRun = ({ metaData }: WunnaRunProps) => {
               section => section === bestEntry.target
             );
             
-            if (index !== -1 && index !== activeSection) {
+            if (index !== -1 && index !== activeSectionRef.current) {
               setActiveWithDebounce(index);
             }
           }
         }
       },
       {
-        root: null,
+        root: rootEl ?? null,
         rootMargin: '0px',
         threshold: [0.1, 0.5, 0.9],
       }
@@ -228,7 +236,51 @@ const WunnaRun = ({ metaData }: WunnaRunProps) => {
       clearTimeout(transitionTimer);
       observer.disconnect();
     };
-  }, [activeSection, totalSections, isNavigating]);
+  }, [totalSections, isNavigating]);
+
+  // Fallback scroll tracking (robust when IntersectionObserver misses)
+  useEffect(() => {
+    const container = mainRef.current ?? window;
+    let rafId: number | null = null;
+
+    const handleScroll = () => {
+      if (isNavigating) return;
+      if (rafId !== null) cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        const root = mainRef.current;
+        const containerRect = root ? root.getBoundingClientRect() : { top: 0, height: window.innerHeight };
+        const targetY = containerRect.top + containerRect.height / 2;
+        let bestIndex = activeSectionRef.current;
+        let bestDistance = Number.POSITIVE_INFINITY;
+
+        sectionRefs.current.forEach((section, idx) => {
+          if (!section) return;
+          const rect = section.getBoundingClientRect();
+          const centerY = rect.top + rect.height / 2;
+          const distance = Math.abs(centerY - targetY);
+          if (distance < bestDistance) {
+            bestDistance = distance;
+            bestIndex = idx;
+          }
+        });
+
+        if (bestIndex !== activeSectionRef.current) {
+          setActiveSection(bestIndex);
+        }
+      });
+    };
+
+    container.addEventListener('scroll', handleScroll, { passive: true });
+    window.addEventListener('resize', handleScroll);
+    // Initial sync
+    handleScroll();
+
+    return () => {
+      if (rafId !== null) cancelAnimationFrame(rafId);
+      container.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('resize', handleScroll);
+    };
+  }, [isNavigating]);
   
   const navigateToSection = (index: number) => {
     if (index >= 0 && index < totalSections && !isNavigating) {
@@ -739,7 +791,7 @@ const WunnaRun = ({ metaData }: WunnaRunProps) => {
           pageOgUrl="https://fitwithpulse.ai/WunnaRun"
           pageOgImage="/wunna-run-og.png"
         />
-        <img src="/PulseGreen.png" alt="Pulse" className="h-14 w-auto mb-6" />
+        <img src="/PulseWhite.png" alt="Pulse" className="h-14 w-auto mb-6" />
         <h1 className="text-xl font-bold text-white mb-1">Wunna Run</h1>
         <p className="text-zinc-400 text-sm mb-6">Enter passcode to view the presentation</p>
         <form onSubmit={handlePasscodeSubmit} className="flex flex-col gap-3 w-full max-w-[240px]">
@@ -787,6 +839,17 @@ const WunnaRun = ({ metaData }: WunnaRunProps) => {
         theme="dark"
         hideNav={true}
       />
+
+      {/* Fullscreen loader while generating PDF */}
+      {isGeneratingPDF && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/85">
+          <div className="flex flex-col items-center gap-4 text-center">
+            <div className="w-10 h-10 border-2 border-[#E0FE10] border-t-transparent rounded-full animate-spin"></div>
+            <div className="text-white text-lg font-semibold">Downloading PDF…</div>
+            <div className="text-zinc-400 text-sm">Capturing slides {pdfProgress}%</div>
+          </div>
+        </div>
+      )}
       
       <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:top-20 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:bg-[#E0FE10] focus:text-black focus:rounded-md">
         Skip to main content
@@ -970,6 +1033,7 @@ const WunnaRun = ({ metaData }: WunnaRunProps) => {
       
       {/* Main content - full-screen slides on mobile with snap scroll */}
       <main
+        ref={mainRef}
         id="main-content"
         className={isMobile ? "snap-y snap-mandatory h-screen overflow-y-auto overflow-x-hidden overscroll-y-none" : "snap-y snap-mandatory h-screen overflow-y-scroll"}
         style={isMobile ? { WebkitOverflowScrolling: 'touch' } : undefined}
@@ -2713,7 +2777,7 @@ const WunnaRun = ({ metaData }: WunnaRunProps) => {
               <div className="flex flex-col items-center animate-fade-in-up animation-delay-600">
                 <div className="flex gap-8 items-center">
                   <div className="flex flex-col items-center">
-                    <img src="/pulse-logo-white.svg" alt="Pulse Logo" className="h-12 w-auto mb-2" />
+                    <img src="/PulseWhite.png" alt="Pulse Logo" className="h-12 w-auto mb-2" />
                     <p className="text-[#E0FE10] text-sm font-medium">Pulse</p>
                   </div>
                   <div className="text-white text-2xl">×</div>
