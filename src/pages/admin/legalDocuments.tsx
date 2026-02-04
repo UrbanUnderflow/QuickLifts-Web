@@ -627,7 +627,13 @@ const LegalDocumentsAdmin: React.FC = () => {
           }
 
           if (!response.ok) {
-            throw new Error(result.error || `Failed to revise document (HTTP ${response.status})`);
+            // Include raw preview from AI if available for debugging
+            let errorMsg = result.error || `Failed to revise document (HTTP ${response.status})`;
+            if (result.rawPreview) {
+              console.error('[legalDocuments] AI returned invalid content:', result.rawPreview);
+              errorMsg += '\n\nAI returned: ' + result.rawPreview.substring(0, 150);
+            }
+            throw new Error(errorMsg);
           }
           return result;
         };
@@ -638,89 +644,43 @@ const LegalDocumentsAdmin: React.FC = () => {
           documentType: editingDocument.documentType,
           originalPrompt: editingDocument.prompt,
           requiresSignature: editRequiresSignature,
+          currentContent: editingDocument.content,
         };
 
-        // Attempt 1: patch-mode with small excerpts
-        const excerpts1 = buildRevisionExcerpts(editingDocument.content, editPrompt, { maxSections: 3, includeIntroOutro: false });
         let result: any;
         let debugInfo: typeof revisionDebugInfo = {
-          excerptsUsed: excerpts1.map((e, i) => `Excerpt ${i + 1}: ${e.substring(0, 100)}...`),
-          excerptCounts: { first: excerpts1.length },
-          mode: 'patches',
+          mode: 'sections',
         };
         
         try {
-          result = await requestOnce({ ...basePayload, mode: 'patches', excerpts: excerpts1 });
+          // Primary: Use section-based editing (fast, reliable)
+          // eslint-disable-next-line no-console
+          console.log('[legalDocuments] Using section-based editing mode');
+          result = await requestOnce({ ...basePayload, mode: 'sections' });
         } catch (e) {
-          // If the request itself failed (timeout/server), let it bubble up
           setRevisionDebugInfo({ ...debugInfo, mode: 'error' });
           throw e;
         }
 
-        // If patch-mode returns patches, apply locally; otherwise fall back to full content response.
-        if (Array.isArray(result?.patches) && result.patches.length > 0) {
-          const patches = result.patches as DocumentPatch[];
-          const applied = applyDocumentPatches(editingDocument.content, patches);
-          debugInfo.patchCounts = { first: patches.length };
-
-          if (applied.failures.length === 0) {
-            newContent = applied.text;
-            setRevisionDebugInfo(debugInfo);
-          } else {
-            // Automatic retry once with more context (more sections + intro/outro)
-            const excerpts2 = buildRevisionExcerpts(editingDocument.content, editPrompt, { maxSections: 6, includeIntroOutro: true });
-            debugInfo.excerptCounts = { first: debugInfo.excerptCounts?.first ?? 0, retry: excerpts2.length };
-            debugInfo.excerptsUsed = [
-              ...(debugInfo.excerptsUsed || []),
-              ...excerpts2.map((e, i) => `Retry Excerpt ${i + 1}: ${e.substring(0, 100)}...`),
-            ];
-            debugInfo.patchFailures = [{
-              attempt: 'first',
-              failures: applied.failures.slice(0, 10).map(f => ({ patchIndex: f.patchIndex, reason: f.reason })),
-            }];
-            
-            const retry = await requestOnce({ ...basePayload, mode: 'patches', excerpts: excerpts2 });
-            if (Array.isArray(retry?.patches) && retry.patches.length > 0) {
-              const retryApplied = applyDocumentPatches(editingDocument.content, retry.patches as DocumentPatch[]);
-              debugInfo.patchCounts = { ...debugInfo.patchCounts, retry: retry.patches.length };
-              
-              if (retryApplied.failures.length === 0) {
-                newContent = retryApplied.text;
-                setRevisionDebugInfo(debugInfo);
-              } else {
-                debugInfo.patchFailures.push({
-                  attempt: 'retry',
-                  failures: retryApplied.failures.slice(0, 10).map(f => ({ patchIndex: f.patchIndex, reason: f.reason })),
-                });
-                setRevisionDebugInfo(debugInfo);
-                // Graceful failure: include limited diagnostics in console (dev only)
-                if (process.env.NODE_ENV === 'development') {
-                  // eslint-disable-next-line no-console
-                  console.warn('[legalDocuments] Patch apply failed', {
-                    failures: retryApplied.failures.slice(0, 5),
-                    firstAttemptFailures: applied.failures.slice(0, 5),
-                  });
-                }
-                throw new Error('Could not apply AI changes to the document. Try a more specific revision instruction (e.g., name the exact section header) and retry.');
-              }
-            } else if (typeof retry?.content === 'string' && retry.content.trim().length > 0) {
-              // Back-compat: full revised content
-              debugInfo.mode = 'full';
-              setRevisionDebugInfo(debugInfo);
-              newContent = retry.content;
-            } else {
-              setRevisionDebugInfo(debugInfo);
-              throw new Error('AI did not return a usable patch or revised content.');
-            }
+        // Handle section mode response (content is already applied server-side)
+        if (result?.mode === 'sections' && typeof result?.content === 'string') {
+          // eslint-disable-next-line no-console
+          console.log('[legalDocuments] Section edits applied:', result.appliedCount, 'sections modified');
+          if (result.failures && result.failures.length > 0) {
+            // eslint-disable-next-line no-console
+            console.warn('[legalDocuments] Section edit warnings:', result.failures);
           }
+          debugInfo.mode = 'sections';
+          setRevisionDebugInfo(debugInfo);
+          newContent = result.content;
         } else if (typeof result?.content === 'string' && result.content.trim().length > 0) {
-          // Back-compat: full revised content
+          // Fallback: full document revision
           debugInfo.mode = 'full';
           setRevisionDebugInfo(debugInfo);
           newContent = result.content;
         } else {
           setRevisionDebugInfo(debugInfo);
-          throw new Error('AI did not return a usable patch or revised content.');
+          throw new Error('AI did not return revised content. Please try again.');
         }
       }
 

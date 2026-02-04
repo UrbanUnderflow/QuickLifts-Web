@@ -230,17 +230,46 @@ const CreatorOnboardingPage: React.FC = () => {
                       <p className="text-zinc-400 mb-4">{step.description}</p>
                       
                       {currentStep === step.number && (
-                        <div className="bg-zinc-800/50 rounded-xl p-4 mt-4">
-                          <p className="text-sm font-medium text-zinc-300 mb-3">Quick Tips:</p>
-                          <ul className="space-y-2">
-                            {step.tips.map((tip, tipIndex) => (
-                              <li key={tipIndex} className="flex items-center gap-2 text-sm text-zinc-400">
-                                <FaCheck className="h-3 w-3 text-[#E0FE10]" />
-                                {tip}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
+                        <>
+                          <div className="bg-zinc-800/50 rounded-xl p-4 mt-4">
+                            <p className="text-sm font-medium text-zinc-300 mb-3">Quick Tips:</p>
+                            <ul className="space-y-2">
+                              {step.tips.map((tip, tipIndex) => (
+                                <li key={tipIndex} className="flex items-center gap-2 text-sm text-zinc-400">
+                                  <FaCheck className="h-3 w-3 text-[#E0FE10]" />
+                                  {tip}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                          
+                          {/* Video tutorial embedded in Step 1 */}
+                          {step.number === 1 && (
+                            <div className="mt-6">
+                              <p className="text-sm font-medium text-zinc-300 mb-3">Watch How It's Done:</p>
+                              <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden aspect-video">
+                                <iframe
+                                  className="w-full h-full"
+                                  src={buildYouTubeEmbedSrc('FDqvrReKjyo')}
+                                  title="How to Upload a Move"
+                                  frameBorder="0"
+                                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                  allowFullScreen
+                                  loading="lazy"
+                                  referrerPolicy="strict-origin-when-cross-origin"
+                                />
+                              </div>
+                              <a
+                                href="https://www.youtube.com/watch?v=FDqvrReKjyo"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-block mt-2 text-zinc-400 hover:text-white text-xs underline underline-offset-4"
+                              >
+                                Having trouble? Open on YouTube
+                              </a>
+                            </div>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>

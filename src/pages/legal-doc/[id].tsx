@@ -16,6 +16,21 @@ interface LegalDocument {
   requiresSignature?: boolean;
 }
 
+type NoteColorKey = 'yellow' | 'pink' | 'blue' | 'green' | 'purple';
+
+const NOTE_COLORS: { key: NoteColorKey; bg: string; icon: string; tooltipBg: string; tooltipText: string }[] = [
+  { key: 'yellow', bg: 'bg-yellow-400', icon: 'text-yellow-800', tooltipBg: 'bg-yellow-100', tooltipText: 'text-yellow-900' },
+  { key: 'pink', bg: 'bg-pink-400', icon: 'text-pink-800', tooltipBg: 'bg-pink-100', tooltipText: 'text-pink-900' },
+  { key: 'blue', bg: 'bg-blue-400', icon: 'text-blue-800', tooltipBg: 'bg-blue-100', tooltipText: 'text-blue-900' },
+  { key: 'green', bg: 'bg-green-400', icon: 'text-green-800', tooltipBg: 'bg-green-100', tooltipText: 'text-green-900' },
+  { key: 'purple', bg: 'bg-purple-400', icon: 'text-purple-800', tooltipBg: 'bg-purple-100', tooltipText: 'text-purple-900' },
+];
+
+const getNoteColorStyles = (colorKey: NoteColorKey | undefined) => {
+  const row = NOTE_COLORS.find((c) => c.key === (colorKey || 'yellow')) ?? NOTE_COLORS[0];
+  return row;
+};
+
 interface DocumentNote {
   id: string;
   documentId: string;
@@ -25,6 +40,7 @@ interface DocumentNote {
   yOffset: number; // Position as pixels from top of content
   createdAt: Timestamp | Date;
   authorKey?: string; // Local key to identify the author for deletion
+  color?: NoteColorKey; // Sticky note color
 }
 
 // Get or generate a unique author key stored in localStorage
@@ -542,15 +558,41 @@ const LegalDocumentSharePage: React.FC = () => {
   const [noteFormPosition, setNoteFormPosition] = useState({ x: 0, y: 0, xPercent: 0, yOffset: 0 });
   const [newNoteName, setNewNoteName] = useState('');
   const [newNoteContent, setNewNoteContent] = useState('');
+  const [newNoteColor, setNewNoteColor] = useState<NoteColorKey>('yellow');
   const [savingNote, setSavingNote] = useState(false);
   const [deletingNoteId, setDeletingNoteId] = useState<string | null>(null);
   const [hoveredNoteId, setHoveredNoteId] = useState<string | null>(null);
   const [localAuthorKey, setLocalAuthorKey] = useState<string>('');
   const contentRef = useRef<HTMLDivElement>(null);
+  const hideNoteTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const HIDE_NOTE_DELAY_MS = 2500;
+
+  const scheduleHideNote = (noteId: string) => {
+    if (hideNoteTimeoutRef.current) clearTimeout(hideNoteTimeoutRef.current);
+    hideNoteTimeoutRef.current = setTimeout(() => {
+      setHoveredNoteId((current) => (current === noteId ? null : current));
+      hideNoteTimeoutRef.current = null;
+    }, HIDE_NOTE_DELAY_MS);
+  };
+
+  const cancelHideNote = () => {
+    if (hideNoteTimeoutRef.current) {
+      clearTimeout(hideNoteTimeoutRef.current);
+      hideNoteTimeoutRef.current = null;
+    }
+  };
   
   // Get the local author key on mount
   useEffect(() => {
     setLocalAuthorKey(getAuthorKey());
+  }, []);
+
+  // Clear hide-note timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (hideNoteTimeoutRef.current) clearTimeout(hideNoteTimeoutRef.current);
+    };
   }, []);
 
   useEffect(() => {
@@ -633,6 +675,7 @@ const LegalDocumentSharePage: React.FC = () => {
     setShowNoteForm(true);
     setNewNoteName('');
     setNewNoteContent('');
+    setNewNoteColor('yellow');
   };
 
   // Save new note
@@ -648,7 +691,8 @@ const LegalDocumentSharePage: React.FC = () => {
         xPercent: noteFormPosition.xPercent,
         yOffset: noteFormPosition.yOffset,
         createdAt: new Date(),
-        authorKey: localAuthorKey // Store the author key so they can delete their own notes
+        authorKey: localAuthorKey, // Store the author key so they can delete their own notes
+        color: newNoteColor
       };
       console.log('[DocumentNotes] Saving note:', noteData);
       const docRef = await addDoc(collection(db, 'document-notes'), noteData);
@@ -656,6 +700,7 @@ const LegalDocumentSharePage: React.FC = () => {
       setShowNoteForm(false);
       setNewNoteName('');
       setNewNoteContent('');
+      setNewNoteColor('yellow');
     } catch (err) {
       console.error('[DocumentNotes] Error saving note:', err);
     } finally {
@@ -773,18 +818,34 @@ const LegalDocumentSharePage: React.FC = () => {
                     top: `${note.yOffset}px`,
                     transform: 'translate(-50%, -50%)'
                   }}
-                  onMouseEnter={() => setHoveredNoteId(note.id)}
-                  onMouseLeave={() => setHoveredNoteId(null)}
+                  onMouseEnter={() => {
+                    cancelHideNote();
+                    setHoveredNoteId(note.id);
+                  }}
+                  onMouseLeave={() => scheduleHideNote(note.id)}
                 >
                   {/* Sticky note icon */}
-                  <div className={`w-8 h-8 bg-yellow-400 rounded shadow-lg cursor-pointer flex items-center justify-center transform transition-all duration-200 ${hoveredNoteId === note.id ? 'opacity-100 scale-110' : 'opacity-25 hover:opacity-100 hover:scale-110'}`}>
-                    <StickyNote className="w-5 h-5 text-yellow-800" />
-                  </div>
+                  {(() => {
+                    const styles = getNoteColorStyles(note.color);
+                    return (
+                      <div
+                        className={`w-8 h-8 ${styles.bg} rounded shadow-lg cursor-pointer flex items-center justify-center transform transition-all duration-200 ${hoveredNoteId === note.id ? 'opacity-100 scale-110' : 'opacity-25 hover:opacity-100 hover:scale-110'}`}
+                        onMouseEnter={() => {
+                          cancelHideNote();
+                          setHoveredNoteId(note.id);
+                        }}
+                      >
+                        <StickyNote className={`w-5 h-5 ${styles.icon}`} />
+                      </div>
+                    );
+                  })()}
                   
                   {/* Tooltip on hover */}
-                  {hoveredNoteId === note.id && (
+                  {hoveredNoteId === note.id && (() => {
+                    const styles = getNoteColorStyles(note.color);
+                    return (
                     <div 
-                      className="absolute z-20 bg-yellow-100 text-yellow-900 rounded-lg shadow-xl p-3 min-w-[200px] max-w-[300px]"
+                      className={`absolute z-20 ${styles.tooltipBg} ${styles.tooltipText} rounded-lg shadow-xl p-3 min-w-[200px] max-w-[300px]`}
                       style={{
                         left: note.xPercent > 70 ? 'auto' : '100%',
                         right: note.xPercent > 70 ? '100%' : 'auto',
@@ -793,6 +854,8 @@ const LegalDocumentSharePage: React.FC = () => {
                         marginLeft: note.xPercent > 70 ? 0 : '8px',
                         marginRight: note.xPercent > 70 ? '8px' : 0
                       }}
+                      onMouseEnter={cancelHideNote}
+                      onMouseLeave={() => scheduleHideNote(note.id)}
                     >
                       <div className="flex items-center justify-between gap-2 mb-1">
                         <div className="font-semibold text-sm">{note.authorName}</div>
@@ -815,13 +878,14 @@ const LegalDocumentSharePage: React.FC = () => {
                         )}
                       </div>
                       <div className="text-sm whitespace-pre-wrap">{note.content}</div>
-                      <div className="text-xs text-yellow-700 mt-2">
+                      <div className={`text-xs ${styles.tooltipText} opacity-80 mt-2`}>
                         {note.createdAt instanceof Date 
                           ? note.createdAt.toLocaleDateString() 
                           : (note.createdAt as Timestamp).toDate().toLocaleDateString()}
                       </div>
                     </div>
-                  )}
+                    );
+                  })()}
                 </div>
               ))}
             </div>
@@ -840,8 +904,8 @@ const LegalDocumentSharePage: React.FC = () => {
                 >
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 bg-yellow-400 rounded flex items-center justify-center">
-                        <StickyNote className="w-5 h-5 text-yellow-800" />
+                      <div className={`w-8 h-8 ${getNoteColorStyles(newNoteColor).bg} rounded flex items-center justify-center`}>
+                        <StickyNote className={`w-5 h-5 ${getNoteColorStyles(newNoteColor).icon}`} />
                       </div>
                       <h3 className="text-lg font-semibold text-white">Add Note</h3>
                     </div>
@@ -854,6 +918,26 @@ const LegalDocumentSharePage: React.FC = () => {
                   </div>
                   
                   <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-300 mb-1.5">
+                        Note color
+                      </label>
+                      <div className="flex gap-2 flex-wrap">
+                        {NOTE_COLORS.map(({ key, bg, icon }) => (
+                          <button
+                            key={key}
+                            type="button"
+                            onClick={() => setNewNoteColor(key)}
+                            className={`w-10 h-10 rounded-lg ${bg} flex items-center justify-center ring-2 transition-all ${
+                              newNoteColor === key ? 'ring-white ring-offset-2 ring-offset-[#1a1e24]' : 'ring-transparent hover:ring-zinc-500'
+                            }`}
+                            title={key.charAt(0).toUpperCase() + key.slice(1)}
+                          >
+                            <StickyNote className={`w-5 h-5 ${icon}`} />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                     <div>
                       <label className="block text-sm font-medium text-zinc-300 mb-1.5">
                         Your Name
