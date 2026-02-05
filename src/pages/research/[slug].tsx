@@ -90,6 +90,7 @@ const ResearchArticlePage: NextPage<ResearchArticlePageProps> = ({ slug }) => {
     <>
       <PageHead
         metaData={{
+          pageId: 'research-the-system',
           pageTitle:
             'The System: What Bodybuilding Taught Me About Glucose, Glycogen, Insulin, and Stress – Pulse Research',
           metaDescription:
