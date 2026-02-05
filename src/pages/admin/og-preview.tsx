@@ -15,25 +15,39 @@ const OgPreviewTool: React.FC = () => {
   const [slug, setSlug] = useState(DEFAULT_SLUG);
   const [title, setTitle] = useState(DEFAULT_TITLE);
   const [description, setDescription] = useState(DEFAULT_DESCRIPTION);
+  const [previewNonce, setPreviewNonce] = useState(0);
+  const [imageError, setImageError] = useState<string | null>(null);
+
+  const normalizedPageUrl = useMemo(() => {
+    const raw = pageUrl.trim();
+    if (!raw) return DEFAULT_PAGE_URL;
+    if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
+    return `https://${raw}`;
+  }, [pageUrl]);
 
   const ogImageUrl = useMemo(() => {
     const safeSlug = slug.trim() || DEFAULT_SLUG;
     return `https://fitwithpulse.ai/.netlify/functions/og-article?slug=${encodeURIComponent(safeSlug)}`;
   }, [slug]);
 
+  const previewImageUrl = useMemo(() => {
+    const divider = ogImageUrl.includes('?') ? '&' : '?';
+    return `${ogImageUrl}${divider}v=${previewNonce}`;
+  }, [ogImageUrl, previewNonce]);
+
   const ogTags = useMemo(() => {
     return [
       `<meta property="og:title" content="${title}" />`,
       `<meta property="og:description" content="${description}" />`,
       `<meta property="og:image" content="${ogImageUrl}" />`,
-      `<meta property="og:url" content="${pageUrl}" />`,
+      `<meta property="og:url" content="${normalizedPageUrl}" />`,
       `<meta property="og:type" content="article" />`,
       `<meta name="twitter:card" content="summary_large_image" />`,
       `<meta name="twitter:title" content="${title}" />`,
       `<meta name="twitter:description" content="${description}" />`,
       `<meta name="twitter:image" content="${ogImageUrl}" />`,
     ];
-  }, [description, ogImageUrl, pageUrl, title]);
+  }, [description, ogImageUrl, normalizedPageUrl, title]);
 
   const handleCopy = async (value: string) => {
     try {
@@ -41,9 +55,9 @@ const OgPreviewTool: React.FC = () => {
     } catch (_) {}
   };
 
-  const facebookDebugUrl = `https://developers.facebook.com/tools/debug/?q=${encodeURIComponent(pageUrl)}`;
-  const twitterDebugUrl = `https://cards-dev.twitter.com/validator?url=${encodeURIComponent(pageUrl)}`;
-  const linkedInDebugUrl = `https://www.linkedin.com/post-inspector/inspect/${encodeURIComponent(pageUrl)}`;
+  const facebookDebugUrl = `https://developers.facebook.com/tools/debug/?q=${encodeURIComponent(normalizedPageUrl)}`;
+  const twitterDebugUrl = `https://cards-dev.twitter.com/validator?url=${encodeURIComponent(normalizedPageUrl)}`;
+  const linkedInDebugUrl = `https://www.linkedin.com/post-inspector/inspect/${encodeURIComponent(normalizedPageUrl)}`;
 
   return (
     <AdminRouteGuard>
@@ -52,7 +66,7 @@ const OgPreviewTool: React.FC = () => {
       </Head>
 
       <div className="min-h-screen bg-[#0a0a0b] text-white p-8">
-        <div className="max-w-5xl mx-auto">
+        <div className="max-w-6xl w-full mx-auto">
           <div className="flex items-start justify-between gap-4 mb-8">
             <div>
               <h1 className="text-3xl font-bold flex items-center gap-3">
@@ -67,7 +81,7 @@ const OgPreviewTool: React.FC = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-[1.1fr_0.9fr] gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className="rounded-2xl bg-zinc-900/40 border border-white/10 backdrop-blur-xl p-6">
               <div className="space-y-4">
                 <div>
@@ -77,9 +91,10 @@ const OgPreviewTool: React.FC = () => {
                       value={pageUrl}
                       onChange={(e) => setPageUrl(e.target.value)}
                       className="flex-1 px-4 py-3 rounded-xl bg-zinc-800 border border-zinc-700 text-white focus:outline-none focus:ring-2 focus:ring-white/10"
+                      placeholder="https://fitwithpulse.ai/research/the-system?v=2"
                     />
                     <button
-                      onClick={() => handleCopy(pageUrl)}
+                      onClick={() => handleCopy(normalizedPageUrl)}
                       className="px-3 py-3 rounded-xl bg-zinc-800 border border-zinc-700 hover:bg-zinc-700"
                       title="Copy URL"
                     >
@@ -176,7 +191,32 @@ const OgPreviewTool: React.FC = () => {
               </div>
 
               <div className="rounded-xl overflow-hidden border border-white/10 bg-black">
-                <img src={ogImageUrl} alt="OG Preview" className="w-full h-auto" />
+                <img
+                  key={previewImageUrl}
+                  src={previewImageUrl}
+                  alt="OG Preview"
+                  className="w-full h-auto"
+                  onError={() => setImageError('Preview image failed to load. Try refreshing the image.')}
+                  onLoad={() => setImageError(null)}
+                />
+              </div>
+
+              <div className="mt-3 flex items-center gap-3">
+                <button
+                  onClick={() => setPreviewNonce((prev) => prev + 1)}
+                  className="text-xs text-zinc-400 hover:text-white flex items-center gap-1"
+                >
+                  <ExternalLink className="w-3 h-3" /> Refresh Image
+                </button>
+                <a
+                  href={previewImageUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-xs text-zinc-400 hover:text-white flex items-center gap-1"
+                >
+                  <ExternalLink className="w-3 h-3" /> Open Image
+                </a>
+                {imageError && <span className="text-xs text-red-400">{imageError}</span>}
               </div>
 
               <div className="mt-6">
