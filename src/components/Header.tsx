@@ -1,4 +1,5 @@
 import React from 'react';
+import Link from 'next/link';
 
 export type Section = 'home' | 'creator' | 'subscribe' | 'support' | 'contact';
 export type Theme = 'light' | 'dark';
@@ -54,6 +55,14 @@ const Header: React.FC<HeaderProps> = ({
             <button className={getClassName('support')} onClick={() => onSectionChange('support')}>
               Support
             </button>
+            <Link
+              href="/research"
+              className={`text-base font-medium capitalize ${
+                theme === 'dark' ? 'text-white hover:text-[#E0FE10]' : 'text-gray-700 hover:text-[#14B8A6]'
+              }`}
+            >
+              Research
+            </Link>
             <a href="mailto:pulsefitnessapp@gmail.com" className={getClassName('contact')}>
               Contact Us
             </a>
