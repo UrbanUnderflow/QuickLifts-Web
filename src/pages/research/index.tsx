@@ -29,8 +29,8 @@ interface Article {
 const articles: Article[] = [
   {
     slug: 'the-system',
-    title: 'What Bodybuilding Taught Me About Glucose, Glycogen, Insulin, and Stress',
-    subtitle: 'The System',
+    title: 'Think Like an Athlete. Decoding Your Metabolism.',
+    subtitle: "Hacking your body's ability to burn fat",
     author: 'Tremaine',
     date: 'Feb 5, 2026',
     category: 'Metabolic Health',
