@@ -149,6 +149,7 @@ const ResearchPage: NextPage = () => {
     <>
       <PageHead
         metaData={{
+          pageId: 'research',
           pageTitle: 'Research – Pulse',
           metaDescription:
             'Articles, whitepapers, and deep dives from the Pulse team on metabolic health, performance science, wearable technology, and the future of fitness.',
