@@ -3,15 +3,48 @@ import sharp from 'sharp';
 
 const handler: Handler = async (event) => {
   try {
-    const { title = 'Pulse' } = event.queryStringParameters || {};
-    
-    // Decode URL-encoded parameters
+    const params = event.queryStringParameters || {};
+    const { title = 'Pulse', template } = params;
+
+    // Research template: black background, "Research" text, Pulse logo (wordmark) under
+    if (template === 'research') {
+      const svg = Buffer.from(`<svg width="1200" height="630" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="630" fill="#000000"/>
+  <text x="600" y="280"
+        font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Arial, Helvetica, sans-serif"
+        font-size="72"
+        font-weight="700"
+        fill="#FFFFFF"
+        text-anchor="middle">Research</text>
+  <text x="600" y="380"
+        font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Arial, Helvetica, sans-serif"
+        font-size="32"
+        font-weight="600"
+        fill="#FFFFFF"
+        text-anchor="middle" letter-spacing="0.15em">PULSE</text>
+</svg>`);
+      const pngBuffer = await sharp(svg)
+        .png()
+        .toBuffer();
+      return {
+        statusCode: 200,
+        headers: {
+          'Content-Type': 'image/png',
+          'Cache-Control': 'public, max-age=31536000, s-maxage=31536000, immutable',
+          'Access-Control-Allow-Origin': '*',
+        },
+        body: pngBuffer.toString('base64'),
+        isBase64Encoded: true,
+      };
+    }
+
+    // Decode URL-encoded parameters (default template)
     const decodedTitle = decodeURIComponent(title);
-    
+
     // Calculate text positioning and sizing based on title length
     const titleFontSize = decodedTitle.length > 30 ? 52 : decodedTitle.length > 20 ? 58 : 64;
     const displayTitle = decodedTitle.length > 45 ? decodedTitle.substring(0, 42) + '...' : decodedTitle;
-    
+
     // SVG template with Pulse branding
     // Using system fonts for better compatibility
     const svg = Buffer.from(`<svg width="1200" height="630" xmlns="http://www.w3.org/2000/svg">

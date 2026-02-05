@@ -769,10 +769,22 @@ const LegalDocumentSharePage: React.FC = () => {
                   <FileText className="w-6 h-6 text-[#d7ff00]" />
                 </div>
                 <div>
-                  <h1 className="text-2xl font-bold text-white">{document.title}</h1>
-                  <p className="text-sm text-zinc-400 mt-1">
-                    Created: {formatDate(document.createdAt)}
-                  </p>
+                  {(() => {
+                    const titleLines = (document.title || '').split(/\n/).filter(Boolean);
+                    const mainTitle = titleLines[0] ?? document.title;
+                    const subtitle = titleLines.length > 1 ? titleLines.slice(1).join('\n') : null;
+                    return (
+                      <>
+                        <h1 className="text-2xl font-bold text-white">{mainTitle}</h1>
+                        <p className="text-sm text-zinc-400 mt-1">
+                          Created: {formatDate(document.createdAt)}
+                        </p>
+                        {subtitle ? (
+                          <p className="text-lg font-bold text-white mt-1">{subtitle}</p>
+                        ) : null}
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
               <button

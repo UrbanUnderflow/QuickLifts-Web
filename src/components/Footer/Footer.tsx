@@ -11,6 +11,7 @@ const Footer = () => {
 
   const footerLinks = [
     { name: 'About', href: '/about' },
+    { name: 'Research', href: '/research' },
     { name: 'Press Kit', href: '/press' },
     { name: 'Privacy', href: '/privacy' },
     { name: 'Terms', href: '/terms' },
