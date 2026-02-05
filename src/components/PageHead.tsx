@@ -90,6 +90,8 @@ const PageHead: React.FC<PageHeadProps> = ({
     twitterImage = `https://fitwithpulse.ai${twitterImage}`;
   }
 
+  const isGeneratedOgImage = ogImage?.includes('/og-image.png');
+
   return (
     <Head>
       <title>{title}</title>
@@ -100,9 +102,9 @@ const PageHead: React.FC<PageHeadProps> = ({
       <meta property="og:description" content={ogDescription} />
       {ogImage && <meta property="og:image" content={ogImage} />}
       {ogImage && <meta property="og:image:secure_url" content={ogImage} />}
-      {ogImage && <meta property="og:image:type" content="image/png" />}
-      {ogImage && <meta property="og:image:width" content="1200" />}
-      {ogImage && <meta property="og:image:height" content="630" />}
+      {ogImage && isGeneratedOgImage && <meta property="og:image:type" content="image/png" />}
+      {ogImage && isGeneratedOgImage && <meta property="og:image:width" content="1200" />}
+      {ogImage && isGeneratedOgImage && <meta property="og:image:height" content="630" />}
       {ogImage && <meta property="og:image:alt" content={ogTitle} />}
       <meta property="og:url" content={ogUrl} />
       <meta property="og:type" content={ogType} />

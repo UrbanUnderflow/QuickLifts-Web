@@ -60,6 +60,7 @@ const sections: Section[] = [
       { name: 'Admin Home', url: '/admin' },
       { name: 'Coach Invite Links', url: '/admin/coachInvites' },
       { name: 'Manage Meta', url: '/admin/manageMeta' },
+      { name: 'OG Preview Tester', url: '/admin/og-preview' },
       { name: 'Subscriptions', url: '/admin/subscriptions' },
       { name: 'Programming Access', url: '/admin/programmingAccess' },
       { name: 'Project Management', url: '/admin/projectManagement' },

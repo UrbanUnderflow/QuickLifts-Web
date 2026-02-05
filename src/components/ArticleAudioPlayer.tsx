@@ -234,58 +234,46 @@ const ArticleAudioPlayer: React.FC<ArticleAudioPlayerProps> = ({
   };
 
   return (
-    <div className="sticky top-16 z-40 bg-white/95 backdrop-blur-md border-b border-stone-200/80 shadow-sm">
-      <div className="max-w-4xl mx-auto px-6 md:px-8 py-4">
-        <div className="flex items-center gap-4">
-          {/* Play/Pause button */}
-          <button
-            onClick={handlePlayPause}
-            disabled={isLoading}
-            className="flex-shrink-0 w-10 h-10 rounded-full bg-stone-900 hover:bg-stone-800 disabled:bg-stone-400 flex items-center justify-center text-white transition-colors"
-            aria-label={isPlaying ? 'Pause' : 'Play'}
-          >
-            {isLoading ? (
-              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-            ) : isPlaying ? (
-              <Pause className="w-4 h-4" />
-            ) : (
-              <Play className="w-4 h-4 ml-0.5" />
-            )}
-          </button>
+    <div className="flex items-center gap-3 py-2">
+      {/* Play/Pause button */}
+      <button
+        onClick={handlePlayPause}
+        disabled={isLoading}
+        className="flex-shrink-0 w-8 h-8 rounded-full bg-stone-900 hover:bg-stone-800 disabled:bg-stone-400 flex items-center justify-center text-white transition-colors"
+        aria-label={isPlaying ? 'Pause' : 'Play'}
+      >
+        {isLoading ? (
+          <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+        ) : isPlaying ? (
+          <Pause className="w-3 h-3" />
+        ) : (
+          <Play className="w-3 h-3 ml-0.5" />
+        )}
+      </button>
 
-          {/* Audio icon + label */}
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <Volume2 className="w-4 h-4 text-stone-400" />
-            <span className="text-sm font-medium text-stone-700">Listen to article</span>
-          </div>
-
-          {/* Progress bar */}
-          <div className="flex-1 h-1 bg-stone-200 rounded-full relative overflow-hidden">
-            <div
-              className="h-full bg-stone-900 transition-all duration-200"
-              style={{ width: `${progress}%` }}
-            />
-          </div>
-
-          {/* Progress percentage */}
-          <span className="text-xs text-stone-400 flex-shrink-0 w-10 text-right">
-            {Math.round(progress)}%
-          </span>
-
-          {/* Stop button */}
-          {(isPlaying || progress > 0) && (
-            <button
-              onClick={handleStop}
-              className="flex-shrink-0 w-8 h-8 rounded-full hover:bg-stone-100 flex items-center justify-center text-stone-400 hover:text-stone-700 transition-colors"
-              aria-label="Stop"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          )}
-        </div>
-
-        {error && <p className="text-xs text-red-600 mt-2">{error}</p>}
+      {/* Label + time */}
+      <div className="flex items-center gap-2">
+        <span className="text-sm text-stone-500">Listen to article</span>
+        {progress > 0 && (
+          <>
+            <span className="text-stone-300">·</span>
+            <span className="text-xs text-stone-400">{Math.round(progress)}%</span>
+          </>
+        )}
       </div>
+
+      {/* Stop button (only show when playing) */}
+      {(isPlaying || progress > 0) && (
+        <button
+          onClick={handleStop}
+          className="flex-shrink-0 w-6 h-6 rounded-full hover:bg-stone-100 flex items-center justify-center text-stone-400 hover:text-stone-700 transition-colors ml-1"
+          aria-label="Stop"
+        >
+          <X className="w-3 h-3" />
+        </button>
+      )}
+
+      {error && <span className="text-xs text-red-600">{error}</span>}
     </div>
   );
 };

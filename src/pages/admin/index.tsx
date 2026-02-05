@@ -167,6 +167,12 @@ const adminCardsData = [
     link: "/admin/manageMeta"
   },
   {
+    title: "OG Preview Tester",
+    description: "Generate and validate Open Graph previews for Pulse pages.",
+    icon: <ImageIcon className="w-5 h-5" />,
+    link: "/admin/og-preview"
+  },
+  {
     title: "Creator Prospects",
     description: "Track and manage inbound/outbound creator opportunities and onboarding.",
     icon: <Users2 className="w-5 h-5" />,

@@ -91,7 +91,7 @@ const FeaturedArticleCard: React.FC<{ article: Article }> = ({ article }) => {
     >
       <Link href={`/research/${article.slug}`} className="block group">
         <article className="relative border-t-2 border-stone-900 pt-8 md:pt-10 transition-all duration-300">
-          <div className="flex flex-col gap-5">
+          <div className="flex flex-col gap-6">
             {/* Meta row */}
             <div className="flex items-center gap-3">
               <span className="text-xs font-semibold uppercase tracking-wider text-stone-400">
@@ -102,6 +102,17 @@ const FeaturedArticleCard: React.FC<{ article: Article }> = ({ article }) => {
               <span className="text-stone-300">·</span>
               <span className="text-sm text-stone-400">{article.date}</span>
             </div>
+
+            {/* Featured Image */}
+            {article.slug === 'the-system' && (
+              <div className="relative aspect-[16/10] rounded-xl overflow-hidden bg-stone-100 group-hover:shadow-lg transition-shadow duration-300">
+                <img
+                  src="/research-the-system-featured.png"
+                  alt={article.title}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            )}
 
             {/* Content */}
             <div>
