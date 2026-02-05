@@ -259,8 +259,8 @@ const ResearchArticlePage: NextPage<ResearchArticlePageProps> = ({ slug }) => {
             'Bodybuilding is applied physiology at its most extreme. The same systems we manipulate for aesthetics are the exact systems that break down in metabolic disease.',
           lastUpdated: '2026-02-05T00:00:00.000Z',
         }}
-        pageOgUrl="https://fitwithpulse.ai/research/the-system"
-        pageOgImage="/og-image.png?title=The%20System"
+        pageOgUrl={`https://fitwithpulse.ai/research/${slug}`}
+        pageOgImage={`https://fitwithpulse.ai/.netlify/functions/og-article?slug=${slug}`}
       />
 
       <ReadingProgress />
@@ -339,7 +339,7 @@ const ResearchArticlePage: NextPage<ResearchArticlePageProps> = ({ slug }) => {
             </p>
 
             <h1
-              className="text-3xl md:text-4xl lg:text-5xl font-bold text-stone-900 leading-[1.15] tracking-tight mb-6"
+              className="text-3xl md:text-4xl lg:text-5xl font-bold text-stone-900 leading-[1.15] tracking-tight mb-4"
               style={{
                 fontFamily:
                   "'HK Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
@@ -348,7 +348,13 @@ const ResearchArticlePage: NextPage<ResearchArticlePageProps> = ({ slug }) => {
               What Bodybuilding Taught Me About Glucose, Glycogen, Insulin, and Stress
             </h1>
 
-            <div className="flex items-center gap-4 pt-2">
+            <ArticleAudioPlayer
+              articleText={THE_SYSTEM_ARTICLE_TEXT}
+              title="The System: What Bodybuilding Taught Me About Glucose, Glycogen, Insulin, and Stress"
+              author="Tremaine"
+            />
+
+            <div className="flex items-center gap-4 pt-4">
               <div className="w-10 h-10 rounded-full bg-stone-900 flex items-center justify-center">
                 <span className="text-sm font-bold text-[#E0FE10]">T</span>
               </div>
@@ -360,11 +366,21 @@ const ResearchArticlePage: NextPage<ResearchArticlePageProps> = ({ slug }) => {
           </motion.div>
         </header>
 
-        <ArticleAudioPlayer
-          articleText={THE_SYSTEM_ARTICLE_TEXT}
-          title="The System: What Bodybuilding Taught Me About Glucose, Glycogen, Insulin, and Stress"
-          author="Tremaine"
-        />
+        {/* Featured Image */}
+        <div className="max-w-4xl mx-auto px-6 md:px-8 mb-12">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.3 }}
+            className="relative aspect-[16/10] rounded-2xl overflow-hidden bg-stone-100"
+          >
+            <img
+              src="/research-the-system-featured.png"
+              alt="Metabolic system illustration showing the relationship between glucose, glycogen, insulin, and stress"
+              className="w-full h-full object-cover"
+            />
+          </motion.div>
+        </div>
 
         <div className="max-w-4xl mx-auto px-6 md:px-8">
           <div className="h-px bg-stone-200 mb-12" />

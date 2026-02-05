@@ -26,3 +26,9 @@ Last Updated: February 5, 2026
 | User Dashboard | `/user-dashboard` | Authenticated user dashboard |
 | Coach Dashboard | `/coach/dashboard` | Coach management dashboard |
 | Directory | `/directory` | Trainer/coach directory |
+
+## Admin Tools
+
+| Page | Route | Description |
+|------|-------|-------------|
+| OG Preview Tester | `/admin/og-preview` | Generate and validate Open Graph previews for Pulse pages |
