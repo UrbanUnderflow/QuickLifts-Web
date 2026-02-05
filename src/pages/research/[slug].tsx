@@ -250,11 +250,11 @@ const ResearchArticlePage: NextPage<ResearchArticlePageProps> = ({ slug }) => {
         metaData={{
           pageId: 'research-the-system',
           pageTitle:
-            'The System: What Bodybuilding Taught Me About Glucose, Glycogen, Insulin, and Stress – Pulse Research',
+            'Think Like an Athlete. Decoding Your Metabolism. – Pulse Research',
           metaDescription:
             'A deep dive into metabolic systems through the lens of competitive bodybuilding. Understanding glucose, glycogen, insulin, cortisol, and how the same systems athletes manipulate are the ones that break down in metabolic disease.',
           ogTitle:
-            'The System: What Bodybuilding Taught Me About Glucose, Glycogen, Insulin, and Stress',
+            'Think Like an Athlete. Decoding Your Metabolism.',
           ogDescription:
             'Bodybuilding is applied physiology at its most extreme. The same systems we manipulate for aesthetics are the exact systems that break down in metabolic disease.',
           lastUpdated: '2026-02-05T00:00:00.000Z',
@@ -335,7 +335,7 @@ const ResearchArticlePage: NextPage<ResearchArticlePageProps> = ({ slug }) => {
               className="text-sm font-semibold uppercase tracking-widest text-stone-400 mb-3"
               style={{ letterSpacing: '0.15em' }}
             >
-              The System
+              Hacking your body&apos;s ability to burn fat
             </p>
 
             <h1
@@ -345,7 +345,7 @@ const ResearchArticlePage: NextPage<ResearchArticlePageProps> = ({ slug }) => {
                   "'HK Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
               }}
             >
-              What Bodybuilding Taught Me About Glucose, Glycogen, Insulin, and Stress
+              Think Like an Athlete. Decoding Your Metabolism.
             </h1>
 
             <div className="flex items-center gap-4 pt-2">
@@ -360,7 +360,7 @@ const ResearchArticlePage: NextPage<ResearchArticlePageProps> = ({ slug }) => {
 
             <ArticleAudioPlayer
               articleText={THE_SYSTEM_ARTICLE_TEXT}
-              title="The System: What Bodybuilding Taught Me About Glucose, Glycogen, Insulin, and Stress"
+              title="Think Like an Athlete. Decoding Your Metabolism."
               author="Tremaine"
             />
           </motion.div>
