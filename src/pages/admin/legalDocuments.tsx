@@ -175,7 +175,7 @@ const LegalDocumentsAdmin: React.FC = () => {
     excerptCounts?: { first: number; retry?: number };
     patchCounts?: { first: number; retry?: number };
     patchFailures?: Array<{ attempt: 'first' | 'retry'; failures: Array<{ patchIndex: number; reason: string }> }>;
-    mode?: 'patches' | 'full' | 'error';
+    mode?: 'patches' | 'full' | 'error' | 'sections';
   } | null>(null);
   const [showRevisionDebug, setShowRevisionDebug] = useState(false);
   
@@ -2364,7 +2364,7 @@ const LegalDocumentsAdmin: React.FC = () => {
                       <div>
                         <p className="text-xs font-semibold text-zinc-400 mb-1">Mode:</p>
                         <p className="text-xs text-zinc-500 font-mono">
-                          {revisionDebugInfo.mode === 'patches' ? '✅ Patch-based' : revisionDebugInfo.mode === 'full' ? '📄 Full document' : '❌ Error'}
+                          {revisionDebugInfo.mode === 'patches' ? '✅ Patch-based' : revisionDebugInfo.mode === 'full' ? '📄 Full document' : revisionDebugInfo.mode === 'sections' ? '📑 Section-based' : '❌ Error'}
                         </p>
                       </div>
                       
