@@ -171,8 +171,6 @@ const ResearchArticlePage: NextPage<ResearchArticlePageProps> = ({ slug }) => {
               <span className="text-sm font-medium text-stone-500">Metabolic Health</span>
               <span className="text-stone-300">·</span>
               <span className="text-sm text-stone-400">Feb 5, 2026</span>
-              <span className="text-stone-300">·</span>
-              <span className="text-sm text-stone-400">22 min read</span>
             </div>
 
             <p
