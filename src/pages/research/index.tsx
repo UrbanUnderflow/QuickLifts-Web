@@ -159,7 +159,7 @@ const ResearchPage: NextPage = () => {
           lastUpdated: new Date().toISOString(),
         }}
         pageOgUrl="https://fitwithpulse.ai/research"
-        pageOgImage="/og-image.png?template=research"
+        pageOgImage="/og-image.png?title=Research"
       />
 
       <div className="min-h-screen bg-[#FAFAF7]">

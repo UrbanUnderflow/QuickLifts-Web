@@ -17,12 +17,39 @@ interface PageHeadProps {
 const GLOBAL_DEFAULT_TITLE = "Pulse Community Fitness";
 const GLOBAL_DEFAULT_DESCRIPTION = "Real workouts, Real people, move together.";
 
-// Generate dynamic OG image URL based on page title
-const generateDynamicOgImage = (title: string, subtitle?: string): string => {
+/**
+ * Generate a dynamic OG image URL via the /og-image.png Netlify function.
+ * Produces: black background, short title in white, "PULSE" wordmark below.
+ *
+ * Extracts a short label from the page title:
+ *   "Research – Pulse"                        → "Research"
+ *   "Coach Dashboard – Pulse"                 → "Coach"
+ *   "Pulse Community Fitness"                 → "Pulse"
+ */
+const generateDynamicOgImage = (title: string, _subtitle?: string): string => {
   const baseUrl = 'https://fitwithpulse.ai/og-image.png';
-  const params = new URLSearchParams({ title });
-  // NOTE: intentionally not sending subtitle. Social previews should be title-only.
-  // (subtitle is accepted for backwards compat but omitted from the URL)
+
+  // Try to extract a clean, short label from the title
+  let label = title;
+
+  // Strip " – Pulse", " - Pulse", " | Pulse" suffixes
+  label = label.replace(/\s*[–\-|]\s*Pulse.*$/i, '').trim();
+
+  // If it's the global default, just use "Pulse"
+  if (label === GLOBAL_DEFAULT_TITLE || !label) {
+    label = 'Pulse';
+  }
+
+  // Take only the first word or two for a clean OG image (max ~20 chars)
+  const words = label.split(/\s+/);
+  if (label.length > 20) {
+    label = words.slice(0, 2).join(' ');
+    if (label.length > 20) {
+      label = words[0];
+    }
+  }
+
+  const params = new URLSearchParams({ title: label });
   return `${baseUrl}?${params.toString()}`;
 };
 
