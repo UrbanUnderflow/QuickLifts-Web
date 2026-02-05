@@ -234,20 +234,20 @@ const ArticleAudioPlayer: React.FC<ArticleAudioPlayerProps> = ({
   };
 
   return (
-    <div className="flex items-center gap-3 py-2">
-      {/* Play/Pause button */}
+    <div className="flex items-center gap-4 py-2">
+      {/* Play/Pause button — w-10 h-10 to align with author avatar on article page */}
       <button
         onClick={handlePlayPause}
         disabled={isLoading}
-        className="flex-shrink-0 w-8 h-8 rounded-full bg-stone-900 hover:bg-stone-800 disabled:bg-stone-400 flex items-center justify-center text-white transition-colors"
+        className="flex-shrink-0 w-10 h-10 rounded-full bg-stone-900 hover:bg-stone-800 disabled:bg-stone-400 flex items-center justify-center text-white transition-colors"
         aria-label={isPlaying ? 'Pause' : 'Play'}
       >
         {isLoading ? (
-          <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+          <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
         ) : isPlaying ? (
-          <Pause className="w-3 h-3" />
+          <Pause className="w-4 h-4" />
         ) : (
-          <Play className="w-3 h-3 ml-0.5" />
+          <Play className="w-4 h-4 ml-0.5" />
         )}
       </button>
 
@@ -266,10 +266,10 @@ const ArticleAudioPlayer: React.FC<ArticleAudioPlayerProps> = ({
       {(isPlaying || progress > 0) && (
         <button
           onClick={handleStop}
-          className="flex-shrink-0 w-6 h-6 rounded-full hover:bg-stone-100 flex items-center justify-center text-stone-400 hover:text-stone-700 transition-colors ml-1"
+          className="flex-shrink-0 w-8 h-8 rounded-full hover:bg-stone-100 flex items-center justify-center text-stone-400 hover:text-stone-700 transition-colors ml-1"
           aria-label="Stop"
         >
-          <X className="w-3 h-3" />
+          <X className="w-4 h-4" />
         </button>
       )}
 

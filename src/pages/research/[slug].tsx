@@ -335,7 +335,7 @@ const ResearchArticlePage: NextPage<ResearchArticlePageProps> = ({ slug }) => {
               className="text-sm font-semibold uppercase tracking-widest text-stone-400 mb-3"
               style={{ letterSpacing: '0.15em' }}
             >
-              Hacking your body&apos;s ability to burn fat
+              My understanding of fat burning through bodybuilding
             </p>
 
             <h1
