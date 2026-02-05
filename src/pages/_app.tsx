@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import type { AppProps } from 'next/app';
+import Head from 'next/head';
 import { Provider, useSelector } from 'react-redux';
 import { store, persistor } from '../redux/store'; 
 import { PersistGate } from 'redux-persist/integration/react';
@@ -15,6 +16,15 @@ import Toast from '../components/common/Toast';
 import GlobalLoader from '../components/common/GlobalLoader';
 import ErrorBoundary from '../components/ErrorBoundary';
 import RouterErrorBoundary from '../components/RouterErrorBoundary';
+
+// ─── Default OG fallback ───────────────────────────────────────────
+// These are rendered on EVERY page via _app. If a page sets its own
+// og:title / og:image via <PageHead> or raw <Head>, Next.js will
+// append both — but crawlers pick the LAST occurrence, so page-level
+// tags win. Pages that set nothing get this baseline.
+const DEFAULT_OG_IMAGE = 'https://fitwithpulse.ai/og-image.png?title=Pulse';
+const DEFAULT_TITLE = 'Pulse Community Fitness';
+const DEFAULT_DESCRIPTION = 'Real workouts, Real people, move together.';
 
 // Only import in development mode
 const isDev = process.env.NODE_ENV === 'development';
@@ -92,6 +102,21 @@ const MyApp: React.FC<AppProps> = ({ Component, pageProps }) => {
 
   return (
     <>
+      {/* Default OG meta tags – page-level <Head> tags override these */}
+      <Head>
+        <meta property="og:site_name" content="Pulse Fitness" />
+        <meta property="og:type" content="website" />
+        <meta property="og:title" content={DEFAULT_TITLE} />
+        <meta property="og:description" content={DEFAULT_DESCRIPTION} />
+        <meta property="og:image" content={DEFAULT_OG_IMAGE} />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={DEFAULT_TITLE} />
+        <meta name="twitter:description" content={DEFAULT_DESCRIPTION} />
+        <meta name="twitter:image" content={DEFAULT_OG_IMAGE} />
+      </Head>
+
       {/* Google Analytics */}
       <Script
         src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"
