@@ -97,10 +97,10 @@ const PageHead: React.FC<PageHeadProps> = ({
       <title>{title}</title>
       <meta name="description" content={description} />
 
-      {/* OpenGraph Meta Tags */}
-      <meta property="og:title" content={ogTitle} />
-      <meta property="og:description" content={ogDescription} />
-      {ogImage && <meta property="og:image" content={ogImage} />}
+      {/* OpenGraph Meta Tags (same keys as _app so page-level overrides defaults) */}
+      <meta property="og:title" content={ogTitle} key="og:title" />
+      <meta property="og:description" content={ogDescription} key="og:description" />
+      {ogImage && <meta property="og:image" content={ogImage} key="og:image" />}
       {ogImage && <meta property="og:image:secure_url" content={ogImage} />}
       {ogImage && isGeneratedOgImage && <meta property="og:image:type" content="image/png" />}
       {ogImage && isGeneratedOgImage && <meta property="og:image:width" content="1200" />}
@@ -110,11 +110,11 @@ const PageHead: React.FC<PageHeadProps> = ({
       <meta property="og:type" content={ogType} />
       <meta property="og:site_name" content="Pulse Fitness" />
 
-      {/* Twitter Card Tags */}
+      {/* Twitter Card Tags (same keys as _app so page-level overrides defaults) */}
       <meta name="twitter:card" content={twitterCard} />
-      <meta name="twitter:title" content={twitterTitle} />
-      <meta name="twitter:description" content={twitterDescription} />
-      {twitterImage && <meta name="twitter:image" content={twitterImage} />}
+      <meta name="twitter:title" content={twitterTitle} key="twitter:title" />
+      <meta name="twitter:description" content={twitterDescription} key="twitter:description" />
+      {twitterImage && <meta name="twitter:image" content={twitterImage} key="twitter:image" />}
       {twitterImage && <meta name="twitter:image:alt" content={twitterTitle} />}
       
       {/* Additional Meta Tags */}

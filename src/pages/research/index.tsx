@@ -30,7 +30,7 @@ const articles: Article[] = [
   {
     slug: 'the-system',
     title: 'Think Like an Athlete. Decoding Your Metabolism.',
-    subtitle: "Hacking your body's ability to burn fat",
+    subtitle: "How bodybuilding helped me understand metabolic health.",
     author: 'Tremaine',
     date: 'Feb 5, 2026',
     category: 'Metabolic Health',

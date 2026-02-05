@@ -106,15 +106,15 @@ const MyApp: React.FC<AppProps> = ({ Component, pageProps }) => {
       <Head>
         <meta property="og:site_name" content="Pulse Fitness" />
         <meta property="og:type" content="website" />
-        <meta property="og:title" content={DEFAULT_TITLE} />
-        <meta property="og:description" content={DEFAULT_DESCRIPTION} />
-        <meta property="og:image" content={DEFAULT_OG_IMAGE} />
+        <meta property="og:title" content={DEFAULT_TITLE} key="og:title" />
+        <meta property="og:description" content={DEFAULT_DESCRIPTION} key="og:description" />
+        <meta property="og:image" content={DEFAULT_OG_IMAGE} key="og:image" />
         <meta property="og:image:width" content="1200" />
         <meta property="og:image:height" content="630" />
         <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content={DEFAULT_TITLE} />
-        <meta name="twitter:description" content={DEFAULT_DESCRIPTION} />
-        <meta name="twitter:image" content={DEFAULT_OG_IMAGE} />
+        <meta name="twitter:title" content={DEFAULT_TITLE} key="twitter:title" />
+        <meta name="twitter:description" content={DEFAULT_DESCRIPTION} key="twitter:description" />
+        <meta name="twitter:image" content={DEFAULT_OG_IMAGE} key="twitter:image" />
       </Head>
 
       {/* Google Analytics */}
