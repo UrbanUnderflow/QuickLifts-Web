@@ -763,7 +763,7 @@ const LegalDocumentSharePage: React.FC = () => {
         <div className="max-w-4xl mx-auto">
           {/* Header */}
           <div className="bg-[#1a1e24] rounded-xl border border-zinc-800 p-6 mb-6">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-4">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 rounded-lg bg-[#d7ff00]/10 flex items-center justify-center">
                   <FileText className="w-6 h-6 text-[#d7ff00]" />
@@ -777,7 +777,7 @@ const LegalDocumentSharePage: React.FC = () => {
               </div>
               <button
                 onClick={() => generatePdf(document)}
-                className="flex items-center gap-2 px-6 py-3 bg-[#d7ff00] text-black hover:bg-[#c5eb00] rounded-xl font-semibold transition-colors"
+                className="flex items-center justify-center gap-2 px-6 py-3 w-full md:w-auto bg-[#d7ff00] text-black hover:bg-[#c5eb00] rounded-xl font-semibold transition-colors"
               >
                 <Download className="w-5 h-5" />
                 Download PDF
@@ -788,13 +788,13 @@ const LegalDocumentSharePage: React.FC = () => {
           {/* Document Content */}
           <div className="bg-[#1a1e24] rounded-xl border border-zinc-800 p-8 relative">
             {/* Hint for adding notes */}
-            <div className="mb-4 pb-4 border-b border-zinc-700/50 flex items-center justify-between">
+            <div className="mb-4 pb-4 border-b border-zinc-700/50 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-xs text-zinc-500 flex items-center gap-2">
                 <StickyNote className="w-4 h-4 text-yellow-500" />
                 Double-click anywhere on the document to add a note
               </p>
               {notes.length > 0 && (
-                <span className="text-xs text-yellow-500 bg-yellow-500/10 px-2 py-1 rounded-full">
+                <span className="text-xs text-yellow-500 bg-yellow-500/10 px-2 py-1 rounded-full self-start sm:self-auto">
                   {notes.length} note{notes.length !== 1 ? 's' : ''}
                 </span>
               )}
