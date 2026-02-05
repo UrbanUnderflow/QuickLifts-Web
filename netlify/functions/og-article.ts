@@ -1,6 +1,4 @@
 import type { Handler } from '@netlify/functions';
-import fs from 'fs/promises';
-import path from 'path';
 import sharp from 'sharp';
 
 const corsHeaders = {
@@ -11,25 +9,15 @@ const corsHeaders = {
 
 const OG_SIZE = { width: 1200, height: 630 };
 
-const ARTICLE_IMAGE_MAP: Record<string, string> = {
-  'the-system': 'public/research-the-system-featured.png',
-};
+const BASE_URL = process.env.URL || 'https://fitwithpulse.ai';
 
-async function resolveArticleImagePath(slug: string): Promise<string | null> {
-  // First check explicit map for custom overrides
-  if (ARTICLE_IMAGE_MAP[slug]) {
-    return ARTICLE_IMAGE_MAP[slug];
-  }
-
-  // Then fallback to a standard naming convention:
-  // public/research-{slug}-featured.png
-  const candidate = `public/research-${slug}-featured.png`;
-  try {
-    await fs.access(path.join(process.cwd(), candidate));
-    return candidate;
-  } catch {
-    return null;
-  }
+/**
+ * Resolve slug to the public URL of the featured image.
+ * Uses same convention as frontend: /research-{slug}-featured.png
+ */
+function getImageUrlForSlug(slug: string): string {
+  const safe = slug.replace(/[^a-z0-9-]/gi, '');
+  return `${BASE_URL.replace(/\/$/, '')}/research-${safe}-featured.png`;
 }
 
 export const handler: Handler = async (event) => {
@@ -46,19 +34,28 @@ export const handler: Handler = async (event) => {
   }
 
   const slug = event.queryStringParameters?.slug?.trim();
-  const filePath = slug ? await resolveArticleImagePath(slug) : null;
-
-  if (!filePath) {
+  if (!slug) {
     return {
       statusCode: 400,
       headers: { 'Content-Type': 'application/json', ...corsHeaders },
-      body: JSON.stringify({ error: 'Missing or invalid slug' }),
+      body: JSON.stringify({ error: 'Missing slug' }),
     };
   }
 
+  const imageUrl = getImageUrlForSlug(slug);
+
   try {
-    const absolutePath = path.join(process.cwd(), filePath);
-    const sourceBuffer = await fs.readFile(absolutePath);
+    const res = await fetch(imageUrl);
+    if (!res.ok) {
+      return {
+        statusCode: 404,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        body: JSON.stringify({ error: `Image not found: ${imageUrl}` }),
+      };
+    }
+
+    const arrayBuffer = await res.arrayBuffer();
+    const sourceBuffer = Buffer.from(arrayBuffer);
 
     const ogBuffer = await sharp(sourceBuffer)
       .resize(OG_SIZE.width, OG_SIZE.height, { fit: 'cover', position: 'center' })
@@ -75,7 +72,7 @@ export const handler: Handler = async (event) => {
       body: ogBuffer.toString('base64'),
       isBase64Encoded: true,
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[og-article] failed', error);
     return {
       statusCode: 500,

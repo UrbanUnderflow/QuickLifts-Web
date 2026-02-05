@@ -348,13 +348,7 @@ const ResearchArticlePage: NextPage<ResearchArticlePageProps> = ({ slug }) => {
               What Bodybuilding Taught Me About Glucose, Glycogen, Insulin, and Stress
             </h1>
 
-            <ArticleAudioPlayer
-              articleText={THE_SYSTEM_ARTICLE_TEXT}
-              title="The System: What Bodybuilding Taught Me About Glucose, Glycogen, Insulin, and Stress"
-              author="Tremaine"
-            />
-
-            <div className="flex items-center gap-4 pt-4">
+            <div className="flex items-center gap-4 pt-2">
               <div className="w-10 h-10 rounded-full bg-stone-900 flex items-center justify-center">
                 <span className="text-sm font-bold text-[#E0FE10]">T</span>
               </div>
@@ -363,21 +357,27 @@ const ResearchArticlePage: NextPage<ResearchArticlePageProps> = ({ slug }) => {
                 <p className="text-xs text-stone-400">Founder, Pulse · Software Engineer · Clinical Research</p>
               </div>
             </div>
+
+            <ArticleAudioPlayer
+              articleText={THE_SYSTEM_ARTICLE_TEXT}
+              title="The System: What Bodybuilding Taught Me About Glucose, Glycogen, Insulin, and Stress"
+              author="Tremaine"
+            />
           </motion.div>
         </header>
 
         {/* Featured Image */}
-        <div className="max-w-4xl mx-auto px-6 md:px-8 mb-12">
+        <div className="max-w-2xl mx-auto px-6 md:px-8 mb-10">
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
             transition={{ duration: 0.6, delay: 0.3 }}
-            className="relative aspect-[16/10] rounded-2xl overflow-hidden bg-stone-100"
+            className="relative max-w-sm mx-auto opacity-80"
           >
             <img
               src="/research-the-system-featured.png"
-              alt="Metabolic system illustration showing the relationship between glucose, glycogen, insulin, and stress"
-              className="w-full h-full object-cover"
+              alt="Metabolic system illustration"
+              className="w-full h-auto"
             />
           </motion.div>
         </div>
