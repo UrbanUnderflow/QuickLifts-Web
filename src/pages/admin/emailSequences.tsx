@@ -42,6 +42,70 @@ const SEQUENCES: SequenceRow[] = [
     templateDocId: 'new-follower-v1',
   },
   {
+    id: 'coach-connection-v1',
+    name: 'Coach Connection Notification',
+    trigger: 'When an athlete subscribes and connects with a coach',
+    defaultSubject: '{{athleteName}} just connected with you on PulseCheck',
+    functionPath: '/.netlify/functions/send-coach-connection-email',
+    templateDocId: 'coach-connection-v1',
+  },
+  {
+    id: 'winner-notification-v1',
+    name: 'Winner Notification',
+    trigger: 'When prize distribution is confirmed for challenge winners',
+    defaultSubject: '🏆 You won ${{prizeAmount}} in {{challengeTitle}}!',
+    functionPath: '/.netlify/functions/send-winner-notification-email',
+    templateDocId: 'winner-notification-v1',
+  },
+  {
+    id: 'approval-v1',
+    name: 'Approval Notification',
+    trigger: 'When a creator / coach application is approved',
+    defaultSubject: "Congratulations, {{firstName}}! You're approved for Pulse Programming",
+    functionPath: '/.netlify/functions/send-approval-email',
+    templateDocId: 'approval-v1',
+  },
+  {
+    id: 'joined-round-no-workout-v1',
+    name: 'Joined Round, No First Workout',
+    trigger: '24h after joining a Round with no completed workouts',
+    defaultSubject: 'Your Round is waiting - start your first workout',
+    functionPath: '/.netlify/functions/send-joined-round-no-workout-email',
+    templateDocId: 'joined-round-no-workout-v1',
+  },
+  {
+    id: 'first-workout-celebration-v1',
+    name: 'First Workout Completion Celebration',
+    trigger: 'On first completed workout in a Round',
+    defaultSubject: 'You completed your first workout - keep it rolling',
+    functionPath: '/.netlify/functions/send-first-workout-celebration-email',
+    templateDocId: 'first-workout-celebration-v1',
+  },
+  {
+    id: 'streak-milestone-v1',
+    name: 'Streak Milestones',
+    trigger: 'When user reaches a 3, 7, 14, or 30-day streak',
+    defaultSubject: '🔥 {{milestone}}-day streak - keep it alive',
+    functionPath: '/.netlify/functions/send-streak-milestone-email',
+    templateDocId: 'streak-milestone-v1',
+  },
+  {
+    id: 'challenge-ending-soon-v1',
+    name: 'Challenge Ending Soon',
+    trigger: '72h and 24h before challenge end',
+    defaultSubject: '{{hoursRemaining}}h left in {{challengeTitle}} - finish strong',
+    functionPath: '/.netlify/functions/send-challenge-ending-soon-email',
+    templateDocId: 'challenge-ending-soon-v1',
+  },
+  {
+    id: 'inactivity-winback-v1',
+    name: 'Inactivity Winback',
+    trigger: '3d, 7d, and 14d since last meaningful activity',
+    defaultSubject: "Let's get you back in motion on Pulse",
+    functionPath: '/.netlify/functions/send-inactivity-winback-email',
+    templateDocId: 'inactivity-winback-v1',
+  },
+  {
     id: 'password-reset-v1',
     name: 'Password Reset',
     trigger: 'When user requests password reset',
@@ -171,7 +235,7 @@ const EmailSequencesAdmin: React.FC = () => {
         setTemplateSubject(seq.defaultSubject);
         setTemplateHtml('');
       }
-    } catch (e) {
+    } catch (_e) {
       setTemplateSubject(seq.defaultSubject);
       setTemplateHtml('');
       setMessage({ type: 'error', text: 'Failed to load email template' });
@@ -229,7 +293,7 @@ const EmailSequencesAdmin: React.FC = () => {
       }
       await navigator.clipboard.writeText(text);
       setMessage({ type: 'success', text: 'HTML copied to clipboard.' });
-    } catch (e) {
+    } catch (_e) {
       // Fallback for older browsers / denied permissions
       try {
         const el = document.createElement('textarea');
@@ -684,4 +748,3 @@ const EmailSequencesAdmin: React.FC = () => {
 };
 
 export default EmailSequencesAdmin;
-
